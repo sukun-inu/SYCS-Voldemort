@@ -1,0 +1,7 @@
+discord.py
+aiohttp
+requests
+orjson
+psutil
+colorthief
+flask
