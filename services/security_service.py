@@ -127,7 +127,6 @@ async def moderate_message_content(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        # "temperature": 0,
     }
 
     try:

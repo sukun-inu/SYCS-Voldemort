@@ -56,7 +56,7 @@ class ChatGPT:
             }
             data = {
                 # OpenAIの検索機能付きモデル（必要に応じて mini 版などに変更可能）
-                "model": "gpt-5-mini",
+                "model": "gpt-4.1-mini",
                 "messages": messages,
                 "temperature": 0.45,
             }
