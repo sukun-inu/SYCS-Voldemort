@@ -59,8 +59,6 @@ class ChatGPT:
                 "model": "gpt-5-mini",
                 "messages": messages,
                 "temperature": 0.45,
-                # モデル側で必要に応じてWeb検索を行わせる
-                "web_search_options": {}
             }
 
             logging.debug("OpenAI APIリクエスト: url=%s, headers=%s, data=%s", url, headers, json.dumps(data, ensure_ascii=False))
