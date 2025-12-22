@@ -56,10 +56,6 @@ def is_spam(user_id: int) -> bool:
 # VirusTotal URL チェック
 # =========================
 async def vt_check_url(target_url: str) -> Dict:
-    """
-    Discord 添付ファイルも含め、認証付き URL そのままで VT に送信
-    ファイルをダウンロードせず URL スキャンのみ行う
-    """
     key = hash_text(target_url)
     now = time.time()
     if key in _vt_cache and now - _vt_cache[key]["time"] < VT_CACHE_TTL:
@@ -72,7 +68,7 @@ async def vt_check_url(target_url: str) -> Dict:
             async with session.post(
                 "https://www.virustotal.com/api/v3/urls",
                 headers=headers,
-                json={"url": target_url},  # JSON 形式で URL を送る
+                json={"url": target_url},
             ) as r:
                 resp_json = await r.json()
                 print(f"[VT] URL submission response: {r.status} {resp_json}")
@@ -80,7 +76,6 @@ async def vt_check_url(target_url: str) -> Dict:
                     return {"status": "error"}
                 analysis_id = resp_json["data"]["id"]
 
-            # 簡単な待機後に結果を取得
             await asyncio.sleep(2)
             async with session.get(
                 f"https://www.virustotal.com/api/v3/analyses/{analysis_id}",
@@ -99,26 +94,34 @@ async def vt_check_url(target_url: str) -> Dict:
             }
             _vt_cache[key] = {"time": now, "data": result}
             return result
-
         except Exception as e:
             print(f"[VT] Exception: {e}")
             return {"status": "error"}
 
 # =========================
-# GPT 補助判定
+# GPT 補助判定（VT 結果も渡す）
 # =========================
-async def gpt_assess(text: str) -> str:
+async def gpt_assess(content: str, vt_summary: str = "") -> str:
+    if not content.strip():
+        content = "(内容なし)"
     headers = {
         "Authorization": f"Bearer {OPENAI_API_KEY}",
         "Content-Type": "application/json",
     }
+    prompt_text = f"以下の投稿内容とVirusTotalの結果をもとに危険度を判定してください。\n"
+    if vt_summary:
+        prompt_text += f"VT結果: {vt_summary}\n"
+    prompt_text += f"投稿内容: {content}\n"
+    prompt_text += "SAFE / SUSPICIOUS / DANGEROUS のいずれか一語で答えてください。"
+
     payload = {
         "model": "gpt-5-mini",
         "messages": [
             {"role": "system", "content": "You are a security moderation AI."},
-            {"role": "user", "content": f"以下の投稿が危険か判定してください。\nSAFE / SUSPICIOUS / DANGEROUS のいずれか一語で答えてください。\n\n{text}"}
+            {"role": "user", "content": prompt_text},
         ],
     }
+
     async with aiohttp.ClientSession() as session:
         try:
             async with session.post(
@@ -159,13 +162,10 @@ async def handle_security_for_message(message: discord.Message):
         print("[SECURITY] CLEAN")
         return
 
-    # 🔍 検査中メッセージ
-    attach_list = "\n".join([a.filename for a in attachments])
     wait_msg = await message.channel.send(
         "🔍 **セキュリティ検査中**\n"
         "以下のファイル・リンクを確認しています。\n"
-        "**検査が完了するまでクリック・ダウンロードしないでください**\n"
-        f"{attach_list}"
+        "**検査完了までクリック・ダウンロードしないでください**"
     )
 
     reasons = []
@@ -181,17 +181,24 @@ async def handle_security_for_message(message: discord.Message):
     if UNICODE_TRICK_REGEX.search(content):
         reasons.append("不可視Unicode検出")
 
-    # 添付・URL VT検査
-    all_urls = links + [a.url for a in attachments]  # 添付も URL スキャン
+    # VT チェック
+    all_urls = links + [a.url for a in attachments]
+    vt_results = []
     for url in all_urls:
         vt = await vt_check_url(url)
+        vt_results.append(vt)
         if vt.get("status") == "ok" and (vt["malicious"] > 0 or vt["suspicious"] > 0):
             danger = True
             reasons.append(f"VT検出 ({url})")
 
-    # GPT補助判定
+    # VT 結果サマリ文字列
+    vt_summary = ", ".join(
+        [f"{url}: M={vt.get('malicious',0)}, S={vt.get('suspicious',0)}" for url, vt in zip(all_urls, vt_results)]
+    ) if vt_results else ""
+
+    # GPT 判定（VT結果を渡す）
     if not danger:
-        gpt = await gpt_assess(content)
+        gpt = await gpt_assess(content, vt_summary=vt_summary)
         if gpt == "DANGEROUS":
             danger = True
             reasons.append("GPT危険判定")
