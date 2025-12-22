@@ -207,13 +207,32 @@ async def strip_all_roles_and_warn(
     reason: str,
 ) -> None:
     """ユーザーの全ロールを剥奪し、ログと注意喚起メッセージを出す。"""
-    # ロール剥奪 (@everyone 以外)
+    from datetime import datetime, timezone, timedelta
+    import discord
+    _JST = timezone(timedelta(hours=9))
+    now_jst = datetime.now(_JST).strftime("%Y-%m-%d %H:%M:%S")
+
+    # 剥奪前・後ロール
+    before_roles = [r.name for r in member.roles if r.name != "@everyone"]
     roles_to_remove = [r for r in member.roles if r.name != "@everyone"]
     removed_role_names = ", ".join(r.name for r in roles_to_remove) if roles_to_remove else "(対象ロールなし)"
+    after_roles = []
+
+    channel_name = getattr(channel, "name", str(channel))
+    channel_mention = getattr(channel, "mention", channel_name)
+    executor = bot.user.name if hasattr(bot, "user") and bot.user else "Bot"
+    guild_name = guild.name if hasattr(guild, "name") else str(guild.id)
+    guild_id = guild.id
+    joined_at = member.joined_at.astimezone(_JST).strftime("%Y-%m-%d %H:%M:%S") if member.joined_at else "(不明)"
+    created_at = member.created_at.astimezone(_JST).strftime("%Y-%m-%d %H:%M:%S") if hasattr(member, "created_at") else "(不明)"
+
+    # 危険内容（reason詳細）
+    danger_detail = reason
 
     if roles_to_remove:
         try:
             await member.remove_roles(*roles_to_remove, reason=f"Security action: {reason}")
+            after_roles = [r.name for r in member.roles if r.name != "@everyone"]
         except Exception as e:
             await log_action(
                 bot,
@@ -222,9 +241,18 @@ async def strip_all_roles_and_warn(
                 "ロール剥奪中にエラー",
                 user=member,
                 fields={
+                    "対象ユーザー": f"{member.mention}（ID: {member.id})",
+                    "実行者": executor,
+                    "対象チャンネル": channel_mention,
+                    "サーバー": f"{guild_name}（ID: {guild_id})",
+                    "参加日時": joined_at,
+                    "アカウント作成日時": created_at,
+                    "剥奪前ロール": ", ".join(before_roles) if before_roles else "(なし)",
+                    "剥奪後ロール": ", ".join(after_roles) if after_roles else "(なし)",
                     "エラー": str(e),
                     "剥奪理由": reason,
-                    "対象ロール": removed_role_names,
+                    "危険内容": danger_detail,
+                    "実行時刻": now_jst,
                 },
                 embed_color=discord.Color.red(),
             )
@@ -237,8 +265,17 @@ async def strip_all_roles_and_warn(
         "危険ユーザー検出。ロール剥奪を実行",
         user=member,
         fields={
+            "対象ユーザー": f"{member.mention}（ID: {member.id})",
+            "実行者": executor,
+            "対象チャンネル": channel_mention,
+            "サーバー": f"{guild_name}（ID: {guild_id})",
+            "参加日時": joined_at,
+            "アカウント作成日時": created_at,
+            "剥奪前ロール": ", ".join(before_roles) if before_roles else "(なし)",
+            "剥奪後ロール": ", ".join(after_roles) if after_roles else "(なし)",
             "理由": reason,
-            "対象ロール": removed_role_names,
+            "危険内容": danger_detail,
+            "実行時刻": now_jst,
         },
         embed_color=discord.Color.red(),
     )
