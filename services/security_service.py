@@ -78,25 +78,31 @@ async def vt_check(target: str) -> Dict:
         return _vt_cache[key]["data"]
 
     headers = {"x-apikey": VIRUSTOTAL_API_KEY}
+    print(f"[VT] Sending URL to VT: {target}")
 
     async with aiohttp.ClientSession() as session:
+        # URL登録
         async with session.post(
             "https://www.virustotal.com/api/v3/urls",
             headers=headers,
             data={"url": target},
         ) as r:
             if r.status != 200:
+                print(f"[VT] URL submission failed ({r.status})")
                 return {"status": "error"}
 
             analysis_id = (await r.json())["data"]["id"]
+            print(f"[VT] Analysis ID: {analysis_id}")
 
         await asyncio.sleep(2)
 
+        # 結果取得
         async with session.get(
             f"https://www.virustotal.com/api/v3/analyses/{analysis_id}",
             headers=headers,
         ) as r:
             if r.status != 200:
+                print(f"[VT] Analysis fetch failed ({r.status})")
                 return {"status": "error"}
 
             stats = (await r.json())["data"]["attributes"]["stats"]
@@ -108,6 +114,7 @@ async def vt_check(target: str) -> Dict:
     }
 
     _vt_cache[key] = {"time": now, "data": result}
+    print(f"[VT] Result: {result}")
     return result
 
 # =========================
@@ -144,9 +151,11 @@ SAFE / SUSPICIOUS / DANGEROUS のいずれか一語で答えてください。
             json=payload,
         ) as r:
             if r.status != 200:
+                print(f"[GPT] API call failed ({r.status})")
                 return "SUSPICIOUS"
 
             reply = (await r.json())["choices"][0]["message"]["content"].upper()
+            print(f"[GPT] Assessment: {reply}")
 
     if "DANGEROUS" in reply:
         return "DANGEROUS"
@@ -169,28 +178,23 @@ async def handle_security_for_message(message: discord.Message):
 
     print("[SECURITY]", member, "links:", links, "files:", [a.filename for a in attachments])
 
-    # 🔥 危険要素がないなら即終了
     if not links and not attachments:
         print("[SECURITY] CLEAN")
         return
 
-    # ① 元メッセージ削除
-    try:
-        await message.delete()
-    except discord.Forbidden:
-        return
-
-    # ② 検査中メッセージ
+    # ① 検査中メッセージ（ファイルは残す）
+    attach_list = "\n".join([a.filename for a in attachments])
     wait_msg = await message.channel.send(
         "🔍 **セキュリティ検査中**\n"
-        "リンク・添付ファイルを確認しています。\n"
-        "しばらくお待ちください…"
+        "以下のファイル・リンクを確認しています。\n"
+        "**検査が完了するまでクリック・ダウンロードしないでください**\n"
+        f"{attach_list}"
     )
 
     reasons = []
     danger = False
 
-    # ③ 荒らし判定
+    # ② 荒らし判定
     if is_spam(member.id):
         danger = True
         reasons.append("スパム行為")
@@ -199,18 +203,19 @@ async def handle_security_for_message(message: discord.Message):
         danger = True
         reasons.append("過剰リンク")
 
-    # ④ Unicode トリック
+    # ③ Unicode トリック
     if UNICODE_TRICK_REGEX.search(content):
         reasons.append("不可視Unicode検出")
 
-    # ⑤ 添付・URL VT検査
-    for url in links + [a.url for a in attachments if any(a.filename.lower().endswith(e) for e in DANGEROUS_EXTENSIONS)]:
+    # ④ VT検査
+    urls_to_check = links + [a.url for a in attachments if any(a.filename.lower().endswith(e) for e in DANGEROUS_EXTENSIONS)]
+    for url in urls_to_check:
         vt = await vt_check(url)
         if vt.get("status") == "ok" and (vt["malicious"] > 0 or vt["suspicious"] > 0):
             danger = True
             reasons.append(f"VT検出 ({url})")
 
-    # ⑥ GPT補助
+    # ⑤ GPT補助
     if not danger:
         gpt = await gpt_assess(content)
         if gpt == "DANGEROUS":
@@ -219,25 +224,30 @@ async def handle_security_for_message(message: discord.Message):
         elif gpt == "SUSPICIOUS":
             reasons.append("GPT要注意")
 
-    # ⑦ 新規参加者補正
+    # ⑥ 新規参加者補正
     if is_new_member(member):
         danger = True
         reasons.append("新規参加者による投稿")
 
-    # ⑧ 結果処理
+    # ⑦ 結果処理
     if danger:
+        try:
+            await message.delete()
+        except discord.Forbidden:
+            print("[SECURITY] Delete failed:", message.id)
+
         await wait_msg.edit(
             content="🚨 **危険なコンテンツを検出しました**\n"
-                    "セキュリティ上の理由により隔離されました。"
+                    "セキュリティ上の理由により隔離・削除されました。\n"
+                    "ファイルのダウンロードは推奨されません。"
         )
-        await member.ban(reason=" / ".join(reasons), delete_message_days=1)
+        try:
+            await member.ban(reason=" / ".join(reasons), delete_message_days=1)
+        except discord.Forbidden:
+            print("[SECURITY] Ban failed:", member)
         print("[SECURITY] BLOCKED:", reasons)
         return
 
-    # SAFE
+    # SAFE の場合は元投稿残し、検査中メッセージ削除
     await wait_msg.delete()
-    await message.channel.send(
-        "✅ **セキュリティ検査通過**\n" +
-        "\n".join(links + [a.url for a in attachments])
-    )
     print("[SECURITY] SAFE")
