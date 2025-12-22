@@ -5,3 +5,4 @@ orjson
 psutil
 colorthief
 flask
+vt-py
