@@ -1,13 +1,16 @@
 import asyncio
 import time
+import base64
+import re
 from collections import defaultdict, deque
 from typing import Deque, Dict, List, Tuple, Optional, Union, TypedDict
 
 import aiohttp
 import discord
 import unicodedata
+import datetime
 
-from config import OPENAI_API_KEY
+from config import OPENAI_API_KEY, VIRUSTOTAL_API_KEY
 from services.logging_service import log_action
 from services.settings_store import get_trusted_user_ids, get_bypass_role_ids
 
@@ -22,33 +25,75 @@ class ModerationResult(TypedDict):
 # -------------------------------
 # グローバル変数
 # -------------------------------
-# メッセージレート監視用: { (guild_id, user_id): deque[timestamps_sec] }
 _message_timestamps: Dict[Tuple[int, int], Deque[float]] = defaultdict(lambda: deque(maxlen=10))
-
-# VCレイド検知用: { (guild_id, channel_id): deque[(joined_at, member_name)] }
 _voice_joins: Dict[Tuple[int, int], Deque[Tuple[float, str]]] = defaultdict(lambda: deque(maxlen=50))
 
-# レートリミット閾値
-MAX_MESSAGES_PER_SEC = 2  # 1秒間に3件以上
-VOICE_SIMILAR_JOIN_THRESHOLD = 3  # 似た名前のユーザーが5人以上
-VOICE_JOIN_WINDOW_SEC = 20  # 何秒間の窓で見るか
+# -------------------------------
+# 定数
+# -------------------------------
+MAX_MESSAGES_PER_SEC = 2
+VOICE_SIMILAR_JOIN_THRESHOLD = 3
+VOICE_JOIN_WINDOW_SEC = 20
 
-# Unicode 的に怪しいとみなす閾値
 MAX_MESSAGE_LENGTH_SUSPICIOUS = 4000
 MAX_REPEATED_CHAR_RUN = 100
 MAX_WEIRD_CHAR_COUNT = 16
-MAX_WEIRD_CHAR_RATIO = 0.15  # 全体の15%を超えると怪しい
+MAX_WEIRD_CHAR_RATIO = 0.15
+
+VT_URL_LOOKUP = "https://www.virustotal.com/api/v3/urls"
+MAX_VT_URLS_PER_MESSAGE = 3
+NEW_MEMBER_LINK_SEC = 3600
+
+URL_REGEX = re.compile(r"(https?://[^\s]+|www\.[^\s]+)", re.IGNORECASE)
+
+# -------------------------------
+# ユーティリティ
+# -------------------------------
+def extract_links(text: str) -> List[str]:
+    return URL_REGEX.findall(text or "")
+
+def _encode_vt_url(url: str) -> str:
+    return base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
+
+# -------------------------------
+# VirusTotal URL チェック
+# -------------------------------
+async def check_url_virustotal(url: str) -> Dict:
+    if not VIRUSTOTAL_API_KEY:
+        return {"status": "disabled"}
+
+    headers = {
+        "x-apikey": VIRUSTOTAL_API_KEY,
+        "accept": "application/json",
+    }
+
+    url_id = _encode_vt_url(url)
+    lookup_url = f"{VT_URL_LOOKUP}/{url_id}"
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(lookup_url, headers=headers) as resp:
+            if resp.status == 404:
+                return {"status": "unknown"}
+            if resp.status != 200:
+                return {"status": "error"}
+            data = await resp.json()
+
+    stats = data["data"]["attributes"]["last_analysis_stats"]
+    return {
+        "status": "ok",
+        "malicious": stats.get("malicious", 0),
+        "suspicious": stats.get("suspicious", 0),
+        "harmless": stats.get("harmless", 0),
+        "undetected": stats.get("undetected", 0),
+    }
 
 # -------------------------------
 # メッセージレート監視
 # -------------------------------
 def register_message_rate(guild_id: int, user_id: int) -> bool:
-    """メッセージレートを記録し、スパム閾値を超えたかどうかを返す。"""
     now = time.time()
-    key = (guild_id, user_id)
-    dq = _message_timestamps[key]
+    dq = _message_timestamps[(guild_id, user_id)]
     dq.append(now)
-    # 1秒より前のものを削除
     while dq and now - dq[0] > 1.0:
         dq.popleft()
     return len(dq) >= MAX_MESSAGES_PER_SEC
@@ -57,7 +102,6 @@ def register_message_rate(guild_id: int, user_id: int) -> bool:
 # 名前類似度
 # -------------------------------
 def _name_similarity(a: str, b: str) -> float:
-    """非常に簡易的な名前類似度（共通プレフィックス長 / 長い方の長さ）。"""
     a = a.lower()
     b = b.lower()
     max_len = max(len(a), len(b)) or 1
@@ -73,22 +117,15 @@ def _name_similarity(a: str, b: str) -> float:
 # VC参加監視
 # -------------------------------
 def register_voice_join(guild_id: int, channel_id: int, member_name: str) -> bool:
-    """VC参加イベントを記録し、短時間に似た名前が5人以上かどうかを返す。"""
     now = time.time()
-    key = (guild_id, channel_id)
-    dq = _voice_joins[key]
+    dq = _voice_joins[(guild_id, channel_id)]
     dq.append((now, member_name))
 
-    # 古いものを消す
     while dq and now - dq[0][0] > VOICE_JOIN_WINDOW_SEC:
         dq.popleft()
 
-    # 類似名のカウント
-    similar_count = 0
-    for _, name in dq:
-        if _name_similarity(member_name, name) >= 0.7:
-            similar_count += 1
-    return similar_count >= VOICE_SIMILAR_JOIN_THRESHOLD
+    similar = sum(1 for _, name in dq if _name_similarity(member_name, name) >= 0.7)
+    return similar >= VOICE_SIMILAR_JOIN_THRESHOLD
 
 # -------------------------------
 # GPTによるメッセージ判定
@@ -97,30 +134,22 @@ async def moderate_message_content(
     content: str,
     joined_at: Optional[discord.utils.snowflake_time] = None,
 ) -> ModerationResult:
-    """メッセージ内容をGPTに投げて安全性を判定してもらう。"""
     system_prompt = (
         "貴様はDiscordサーバーのセキュリティ監査役だ。"
-        "ユーザーの投稿内容が危険かどうか(フィッシング、マルウェアリンク、詐欺、荒らし、スパム等)を判定せよ。"
-        "出力は必ず次のJSON一行のみとする: "
-        "{""danger"": ""true"" または ""false"", ""reason"": ""理由"", ""category"": ""カテゴリ""}"
+        "投稿内容が危険かどうか(フィッシング、マルウェア、詐欺、荒らし、スパム等)を判定せよ。"
+        "出力は必ずJSON一行のみ:"
+        "{""danger"":true/false,""reason"":""理由"",""category"":""カテゴリ""}"
     )
 
     joined_info = ""
-    if joined_at is not None:
-        joined_info = f"\nサーバー参加日時(UTC): {joined_at.isoformat()}"
+    if joined_at:
+        joined_info = f"\n参加日時(UTC): {joined_at.isoformat()}"
 
     user_prompt = (
-        "以下のメッセージが安全かどうか判定せよ。\n"
-        "危険な場合はdanger=trueとし、安全ならfalseとする。\n"
-        f"メッセージ本文:\n{content}\n"
-        f"{joined_info}"
+        "以下のメッセージを審査せよ。\n"
+        f"{joined_info}\n\n本文:\n{content}"
     )
 
-    url = "https://api.openai.com/v1/chat/completions"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-    }
     data = {
         "model": "gpt-5-mini",
         "messages": [
@@ -131,44 +160,40 @@ async def moderate_message_content(
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data) as resp:
+            async with session.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {OPENAI_API_KEY}",
+                },
+                json=data,
+            ) as resp:
                 j = await resp.json()
-                message = j["choices"][0]["message"]["content"]
+                raw = j["choices"][0]["message"]["content"]
     except Exception:
-        # 解析に失敗した場合は安全側に倒す
         return {"danger": False, "reason": "moderation_error", "category": "error"}
 
-    message = message.strip()
-    result: Dict[str, Union[str, bool]] = {"danger": False, "reason": "", "category": ""}
-
     try:
-        import json as _json
-        result.update(_json.loads(message))
+        import json
+        result = json.loads(raw)
     except Exception:
-        result["danger"] = False
-        result["reason"] = "parse_error"
-        result["category"] = "error"
+        return {"danger": False, "reason": "parse_error", "category": "error"}
 
-    # --- danger を必ず bool に正規化 ---
-    danger_raw = result.get("danger", False)
-    if isinstance(danger_raw, str):
-        result["danger"] = danger_raw.strip().lower() == "true"
-    else:
-        result["danger"] = bool(danger_raw)
-
+    result["danger"] = (
+        result["danger"].lower() == "true"
+        if isinstance(result.get("danger"), str)
+        else bool(result.get("danger"))
+    )
     return result  # type: ignore
 
 # -------------------------------
 # 信頼済み判定
 # -------------------------------
 def _is_trusted_member(guild_id: int, member_id: int) -> bool:
-    trusted = set(get_trusted_user_ids(guild_id))
-    return member_id in trusted
+    return member_id in set(get_trusted_user_ids(guild_id))
 
 def _has_bypass_role(guild: discord.Guild, member: discord.Member) -> bool:
     bypass_ids = set(get_bypass_role_ids(guild.id))
-    if not bypass_ids:
-        return False
     return any(r.id in bypass_ids for r in member.roles)
 
 # -------------------------------
@@ -179,31 +204,23 @@ def is_suspicious_unicode(text: str) -> tuple[bool, str]:
         return False, ""
 
     if len(text) >= MAX_MESSAGE_LENGTH_SUSPICIOUS:
-        longest_run = 0
-        current_run = 1
-        prev_char = None
+        run = longest = 1
+        prev = None
         for ch in text:
-            if ch == prev_char:
-                current_run += 1
-            else:
-                longest_run = max(longest_run, current_run)
-                current_run = 1
-                prev_char = ch
-        longest_run = max(longest_run, current_run)
-        if longest_run >= MAX_REPEATED_CHAR_RUN:
-            return True, "極端に長いメッセージと同一文字の大量連続"
+            run = run + 1 if ch == prev else 1
+            longest = max(longest, run)
+            prev = ch
+        if longest >= MAX_REPEATED_CHAR_RUN:
+            return True, "同一文字の異常連続"
 
-    dangerous_codepoints = {0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF, 0x202A, 0x202B, 0x202D, 0x202E, 0x202C}
+    weird = sum(
+        1 for ch in text
+        if ord(ch) in {0x200B,0x200C,0x200D,0x2060,0xFEFF,0x202A,0x202B,0x202D,0x202E,0x202C}
+        or unicodedata.category(ch).startswith("C")
+    )
 
-    weird_count = 0
-    for ch in text:
-        cp = ord(ch)
-        cat = unicodedata.category(ch)
-        if cp in dangerous_codepoints or cat.startswith("C"):
-            weird_count += 1
-
-    if weird_count >= MAX_WEIRD_CHAR_COUNT and weird_count / max(len(text), 1) >= MAX_WEIRD_CHAR_RATIO:
-        return True, "制御文字やゼロ幅文字が異常に多い"
+    if weird >= MAX_WEIRD_CHAR_COUNT and weird / max(len(text), 1) >= MAX_WEIRD_CHAR_RATIO:
+        return True, "制御文字が異常に多い"
 
     return False, ""
 
@@ -217,119 +234,96 @@ async def strip_all_roles_and_warn(
     channel: discord.abc.Messageable,
     reason: str,
 ) -> None:
-    from datetime import datetime, timezone, timedelta
-    _JST = timezone(timedelta(hours=9))
-    now_jst = datetime.now(_JST).strftime("%Y-%m-%d %H:%M:%S")
+    from datetime import timezone, timedelta
+    JST = timezone(timedelta(hours=9))
+    now = datetime.datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S")
 
-    before_roles = [r.name for r in member.roles if r.name != "@everyone"]
-    roles_to_remove = [r for r in member.roles if r.name != "@everyone"]
-    after_roles = []
-
-    channel_name = getattr(channel, "name", str(channel))
-    channel_mention = getattr(channel, "mention", channel_name)
-    executor = bot.user.name if hasattr(bot, "user") and bot.user else "Bot"
-    guild_name = guild.name if hasattr(guild, "name") else str(guild.id)
-    guild_id = guild.id
-    joined_at = member.joined_at.astimezone(_JST).strftime("%Y-%m-%d %H:%M:%S") if member.joined_at else "(不明)"
-    created_at = member.created_at.astimezone(_JST).strftime("%Y-%m-%d %H:%M:%S") if hasattr(member, "created_at") else "(不明)"
-
-    danger_detail = reason
-
-    if roles_to_remove:
-        try:
-            await member.remove_roles(*roles_to_remove, reason=f"Security action: {reason}")
-            after_roles = [r.name for r in member.roles if r.name != "@everyone"]
-        except Exception as e:
-            await log_action(
-                bot,
-                guild.id,
-                "ERROR",
-                "ロール剥奪中にエラー",
-                user=member,
-                fields={
-                    "対象ユーザー": f"{member.mention}（ID: {member.id})",
-                    "実行者": executor,
-                    "対象チャンネル": channel_mention,
-                    "サーバー": f"{guild_name}（ID: {guild_id})",
-                    "参加日時": joined_at,
-                    "アカウント作成日時": created_at,
-                    "剥奪前ロール": ", ".join(before_roles) if before_roles else "(なし)",
-                    "剥奪後ロール": ", ".join(after_roles) if after_roles else "(なし)",
-                    "エラー": str(e),
-                    "剥奪理由": reason,
-                    "危険内容": danger_detail,
-                    "実行時刻": now_jst,
-                },
-                embed_color=discord.Color.red(),
-            )
+    roles = [r for r in member.roles if r.name != "@everyone"]
+    if roles:
+        await member.remove_roles(*roles, reason=reason)
 
     await log_action(
         bot,
         guild.id,
         "ERROR",
-        "危険ユーザー検出。ロール剥奪を実行",
+        "危険行為検出",
         user=member,
         fields={
-            "対象ユーザー": f"{member.mention}（ID: {member.id})",
-            "実行者": executor,
-            "対象チャンネル": channel_mention,
-            "サーバー": f"{guild_name}（ID: {guild_id})",
-            "参加日時": joined_at,
-            "アカウント作成日時": created_at,
-            "剥奪前ロール": ", ".join(before_roles) if before_roles else "(なし)",
-            "剥奪後ロール": ", ".join(after_roles) if after_roles else "(なし)",
             "理由": reason,
-            "危険内容": danger_detail,
-            "実行時刻": now_jst,
+            "時刻": now,
         },
         embed_color=discord.Color.red(),
     )
 
     try:
-        warning = (
-            f"⚠️ {member.mention} による危険なコンテンツ/リンクが検出された。\n"
-            "絶対にリンクや添付ファイルを開かないように。サーバー管理者は状況を確認せよ。"
+        await channel.send(
+            f"⚠️ {member.mention} による危険なリンク/コンテンツを検出。\n"
+            "リンクを開かないよう注意してください。"
         )
-        await channel.send(warning)
     except Exception:
         pass
 
 # -------------------------------
-# メッセージ単体のセキュリティ処理
+# メッセージセキュリティ処理
 # -------------------------------
 async def handle_security_for_message(message: discord.Message, bot: discord.Client) -> None:
-    if message.guild is None or not isinstance(message.author, discord.Member):
+    if not message.guild or not isinstance(message.author, discord.Member):
         return
 
     guild = message.guild
-    member: discord.Member = message.author
+    member = message.author
 
     if _is_trusted_member(guild.id, member.id) or _has_bypass_role(guild, member):
         return
 
-    is_spam_rate = register_message_rate(guild.id, member.id)
-    suspicious_unicode, unicode_reason = is_suspicious_unicode(message.content or "")
-    joined_at = getattr(member, "joined_at", None)
-    moderation = await moderate_message_content(message.content or "", joined_at)
-    if not isinstance(moderation, dict):
-        moderation = {"danger": False, "reason": "moderation_error", "category": "error"}
+    content = message.content or ""
+    links = extract_links(content)
 
-    is_danger: bool = moderation["danger"]
+    is_spam = register_message_rate(guild.id, member.id)
+    suspicious_unicode, unicode_reason = is_suspicious_unicode(content)
 
-    if is_danger or is_spam_rate or suspicious_unicode:
-        reason_parts = []
-        if is_danger:
-            reason_parts.append(f"GPT判定: {moderation.get('category', '')}: {moderation.get('reason', '')}")
-        if is_spam_rate:
-            reason_parts.append("高頻度メッセージ")
-        if suspicious_unicode:
-            reason_parts.append(f"Unicode異常: {unicode_reason}")
-        reason = " | ".join(reason_parts) or "不明"
+    joined_at = member.joined_at
+    is_danger = False
+    reasons = []
 
-        await strip_all_roles_and_warn(bot, guild, member, message.channel, reason)
+    # VirusTotal 検問
+    vt_unknown = False
+    for url in links[:MAX_VT_URLS_PER_MESSAGE]:
+        vt = await check_url_virustotal(url)
+        if vt.get("status") == "ok" and (vt["malicious"] > 0 or vt["suspicious"] > 0):
+            is_danger = True
+            reasons.append(
+                f"VirusTotal検出 {url} (malicious={vt['malicious']}, suspicious={vt['suspicious']})"
+            )
+        elif vt.get("status") == "unknown":
+            vt_unknown = True
+
+    # VT 未判定のみ GPT
+    if links and not is_danger and vt_unknown:
+        moderation = await moderate_message_content(content, joined_at)
+        if moderation["danger"]:
+            is_danger = True
+            reasons.append(f"GPT判定: {moderation['reason']}")
+
+    # 新規参加者リンク
+    if links and joined_at:
+        age = (datetime.datetime.utcnow() - joined_at.replace(tzinfo=None)).total_seconds()
+        if age < NEW_MEMBER_LINK_SEC:
+            is_danger = True
+            reasons.append("新規参加ユーザーのリンク投稿")
+
+    if is_spam:
+        reasons.append("高頻度メッセージ")
+    if suspicious_unicode:
+        reasons.append(f"Unicode異常: {unicode_reason}")
+
+    if is_danger or is_spam or suspicious_unicode:
+        await strip_all_roles_and_warn(
+            bot, guild, member, message.channel, " | ".join(reasons)
+        )
 
 # -------------------------------
-# VC参加時のセキュリティ処理
+# VC参加時セキュリティ処理
 # -------------------------------
 async def handle_security_for_voice_join(
     member: discord.Member,
@@ -337,23 +331,18 @@ async def handle_security_for_voice_join(
     after: discord.VoiceState,
     bot: discord.Client,
 ) -> None:
-    guild = member.guild
-    if guild is None:
+    if not member.guild:
         return
 
-    if _is_trusted_member(guild.id, member.id) or _has_bypass_role(guild, member):
+    if _is_trusted_member(member.guild.id, member.id) or _has_bypass_role(member.guild, member):
         return
 
-    before_ch = before.channel
-    after_ch = after.channel
-
-    if before_ch is None and after_ch is not None:
-        suspicious = register_voice_join(guild.id, after_ch.id, member.display_name)
-        if suspicious:
+    if before.channel is None and after.channel is not None:
+        if register_voice_join(member.guild.id, after.channel.id, member.display_name):
             await strip_all_roles_and_warn(
                 bot,
-                guild,
+                member.guild,
                 member,
-                after_ch,
-                "VCレイドと判断 (短時間に似た名前のユーザーが多数参加)",
+                after.channel,
+                "VCレイド検出（類似名大量参加）",
             )

@@ -4,6 +4,7 @@ import os
 DISCORD_BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
 METALPRICE_API_KEY = os.environ.get("METALPRICE_API_KEY")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+VIRUSTOTAL_API_KEY = os.environ.get("VIRUSTOTAL_API_KEY")
 
 # API エンドポイント
 METALPRICE_BASE_URL = 'https://api.metalpriceapi.com/v1/latest'
