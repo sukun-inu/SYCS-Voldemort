@@ -1,4 +1,3 @@
-
 import discord
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
@@ -22,7 +21,7 @@ def create_bot() -> Bot:
 
 def setup_events(bot: Bot) -> None:
     """ボットイベントを設定"""
-    
+
     @tasks.loop(seconds=5)
     async def update_status():
         """ボットのステータスを定期的に更新"""
@@ -46,6 +45,20 @@ def setup_events(bot: Bot) -> None:
                 update_status.start()
         except Exception as e:
             print(f"同期中のエラー: {e}")
+
+    # --------------------------
+    # メッセージ関連
+    # --------------------------
+    @bot.event
+    async def on_message(message: discord.Message):
+        """メッセージ受信時の監査 + コマンド処理"""
+        if message.guild is None or not isinstance(message.author, discord.Member):
+            return
+        # コマンド処理
+        await bot.process_commands(message)
+        # セキュリティチェック
+        from services.security_service import handle_security_for_message
+        await handle_security_for_message(message, bot)
 
     @bot.event
     async def on_message_delete(message: discord.Message):
@@ -111,6 +124,9 @@ def setup_events(bot: Bot) -> None:
             fields=fields,
         )
 
+    # --------------------------
+    # VC関連
+    # --------------------------
     @bot.event
     async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         """ボイスチャンネル参加/退出/移動などのログ + セキュリティチェック"""
@@ -120,7 +136,6 @@ def setup_events(bot: Bot) -> None:
 
         # セキュリティチェック（VCレイド検知）
         from services.security_service import handle_security_for_voice_join  # 遅延インポートで循環回避
-
         await handle_security_for_voice_join(member, before, after, bot)
 
         before_ch = before.channel
@@ -135,14 +150,7 @@ def setup_events(bot: Bot) -> None:
                 "参加後メンバー数": str(after_count),
                 "ユーザーID": str(member.id),
             }
-            await log_action(
-                bot,
-                guild.id,
-                "INFO",
-                description,
-                user=member,
-                fields=fields,
-            )
+            await log_action(bot, guild.id, "INFO", description, user=member, fields=fields)
             return
         # 退出
         if before_ch is not None and after_ch is None:
@@ -153,14 +161,7 @@ def setup_events(bot: Bot) -> None:
                 "退出後メンバー数": str(before_count - 1) if isinstance(before_count, int) else "?",
                 "ユーザーID": str(member.id),
             }
-            await log_action(
-                bot,
-                guild.id,
-                "INFO",
-                description,
-                user=member,
-                fields=fields,
-            )
+            await log_action(bot, guild.id, "INFO", description, user=member, fields=fields)
             return
         # 移動
         if before_ch is not None and after_ch is not None and before_ch.id != after_ch.id:
@@ -174,14 +175,7 @@ def setup_events(bot: Bot) -> None:
                 "移動先メンバー数": str(after_count) if isinstance(after_count, int) else "?",
                 "ユーザーID": str(member.id),
             }
-            await log_action(
-                bot,
-                guild.id,
-                "INFO",
-                description,
-                user=member,
-                fields=fields,
-            )
+            await log_action(bot, guild.id, "INFO", description, user=member, fields=fields)
             return
         # ミュート/デフン等の変化
         changes = []
@@ -205,36 +199,26 @@ def setup_events(bot: Bot) -> None:
             user=member,
             fields={"変更内容": "\n".join(changes), "チャンネル": before_ch.name if before_ch else "None", "ユーザーID": str(member.id)},
         )
-        return
 
+    # --------------------------
+    # メンバー関連
+    # --------------------------
     @bot.event
     async def on_member_join(member: discord.Member):
-        """メンバー参加ログ（詳細日本語）"""
+        """メンバー参加ログ"""
         joined_at = member.joined_at.astimezone(_JST).strftime("%Y年%m月%d日 %H:%M") if member.joined_at else "(不明)"
         log_msg = f"{member.mention} がサーバーに参加しました。\n参加日時: {joined_at}\nユーザーID: {member.id}"
-        await log_action(
-            bot,
-            member.guild.id,
-            "INFO",
-            log_msg,
-            user=member,
-        )
+        await log_action(bot, member.guild.id, "INFO", log_msg, user=member)
 
     @bot.event
     async def on_member_remove(member: discord.Member):
-        """メンバー退出ログ（詳細日本語）"""
+        """メンバー退出ログ"""
         log_msg = f"{member.mention} がサーバーから退出しました。\nユーザーID: {member.id}"
-        await log_action(
-            bot,
-            member.guild.id,
-            "INFO",
-            log_msg,
-            user=member,
-        )
+        await log_action(bot, member.guild.id, "INFO", log_msg, user=member)
 
     @bot.event
     async def on_member_update(before: discord.Member, after: discord.Member):
-        """ロール変更やニックネーム変更などのログ（詳細日本語）"""
+        """ロール変更やニックネ変更などのログ"""
         guild = after.guild
         if guild is None:
             return
@@ -247,15 +231,7 @@ def setup_events(bot: Bot) -> None:
                 "新": after.nick or after.name,
                 "ユーザーID": str(after.id),
             }
-            await log_action(
-                bot,
-                guild.id,
-                "INFO",
-                description,
-                user=after,
-                fields=fields,
-            )
-            # ニックネーム変更時はロール変更も同時に起こることがあるので、ここでreturnしない
+            await log_action(bot, guild.id, "INFO", description, user=after, fields=fields)
 
         # ロール変更
         before_roles = set(r for r in before.roles if r.name != "@everyone")
@@ -271,43 +247,23 @@ def setup_events(bot: Bot) -> None:
             if removed:
                 fields["剥奪されたロール"] = ", ".join(r.name for r in removed)
             fields["ユーザーID"] = str(after.id)
-            await log_action(
-                bot,
-                guild.id,
-                "INFO",
-                description,
-                user=after,
-                fields=fields,
-            )
-        if (before.nick == after.nick) and not (added or removed):
-            return
+            await log_action(bot, guild.id, "INFO", description, user=after, fields=fields)
 
+    # --------------------------
+    # チャンネル関連
+    # --------------------------
     @bot.event
     async def on_guild_channel_create(channel: discord.abc.GuildChannel):
-        """チャンネル作成ログ"""
         guild = channel.guild
-        await log_action(
-            bot,
-            guild.id,
-            "INFO",
-            "チャンネル作成",
-            fields={
-                "チャンネル": getattr(channel, "mention", channel.name),
-                "種別": str(getattr(channel, "type", "unknown")),
-            },
-        )
+        await log_action(bot, guild.id, "INFO", "チャンネル作成", fields={
+            "チャンネル": getattr(channel, "mention", channel.name),
+            "種別": str(getattr(channel, "type", "unknown")),
+        })
 
     @bot.event
     async def on_guild_channel_delete(channel: discord.abc.GuildChannel):
-        """チャンネル削除ログ"""
         guild = channel.guild
-        await log_action(
-            bot,
-            guild.id,
-            "INFO",
-            "チャンネル削除",
-            fields={
-                "チャンネル名": channel.name,
-                "種別": str(getattr(channel, "type", "unknown")),
-            },
-        )
+        await log_action(bot, guild.id, "INFO", "チャンネル削除", fields={
+            "チャンネル名": channel.name,
+            "種別": str(getattr(channel, "type", "unknown")),
+        })

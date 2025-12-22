@@ -1,7 +1,7 @@
 import asyncio
 import time
 from collections import defaultdict, deque
-from typing import Deque, Dict, List, Tuple, Optional
+from typing import Deque, Dict, List, Tuple, Optional, Union, TypedDict
 
 import aiohttp
 import discord
@@ -11,7 +11,17 @@ from config import OPENAI_API_KEY
 from services.logging_service import log_action
 from services.settings_store import get_trusted_user_ids, get_bypass_role_ids
 
+# -------------------------------
+# 型定義
+# -------------------------------
+class ModerationResult(TypedDict):
+    danger: bool
+    reason: str
+    category: str
 
+# -------------------------------
+# グローバル変数
+# -------------------------------
 # メッセージレート監視用: { (guild_id, user_id): deque[timestamps_sec] }
 _message_timestamps: Dict[Tuple[int, int], Deque[float]] = defaultdict(lambda: deque(maxlen=10))
 
@@ -19,8 +29,8 @@ _message_timestamps: Dict[Tuple[int, int], Deque[float]] = defaultdict(lambda: d
 _voice_joins: Dict[Tuple[int, int], Deque[Tuple[float, str]]] = defaultdict(lambda: deque(maxlen=50))
 
 # レートリミット閾値
-MAX_MESSAGES_PER_SEC = 3  # 1秒間に3件以上
-VOICE_SIMILAR_JOIN_THRESHOLD = 5  # 似た名前のユーザーが5人以上
+MAX_MESSAGES_PER_SEC = 2  # 1秒間に3件以上
+VOICE_SIMILAR_JOIN_THRESHOLD = 3  # 似た名前のユーザーが5人以上
 VOICE_JOIN_WINDOW_SEC = 20  # 何秒間の窓で見るか
 
 # Unicode 的に怪しいとみなす閾値
@@ -29,7 +39,9 @@ MAX_REPEATED_CHAR_RUN = 100
 MAX_WEIRD_CHAR_COUNT = 16
 MAX_WEIRD_CHAR_RATIO = 0.15  # 全体の15%を超えると怪しい
 
-
+# -------------------------------
+# メッセージレート監視
+# -------------------------------
 def register_message_rate(guild_id: int, user_id: int) -> bool:
     """メッセージレートを記録し、スパム閾値を超えたかどうかを返す。"""
     now = time.time()
@@ -41,7 +53,9 @@ def register_message_rate(guild_id: int, user_id: int) -> bool:
         dq.popleft()
     return len(dq) >= MAX_MESSAGES_PER_SEC
 
-
+# -------------------------------
+# 名前類似度
+# -------------------------------
 def _name_similarity(a: str, b: str) -> float:
     """非常に簡易的な名前類似度（共通プレフィックス長 / 長い方の長さ）。"""
     a = a.lower()
@@ -55,7 +69,9 @@ def _name_similarity(a: str, b: str) -> float:
             break
     return prefix / max_len
 
-
+# -------------------------------
+# VC参加監視
+# -------------------------------
 def register_voice_join(guild_id: int, channel_id: int, member_name: str) -> bool:
     """VC参加イベントを記録し、短時間に似た名前が5人以上かどうかを返す。"""
     now = time.time()
@@ -74,13 +90,14 @@ def register_voice_join(guild_id: int, channel_id: int, member_name: str) -> boo
             similar_count += 1
     return similar_count >= VOICE_SIMILAR_JOIN_THRESHOLD
 
-
-async def moderate_message_content(content: str, joined_at: Optional[discord.utils.snowflake_time] = None) -> Dict[str, str]:
-    """メッセージ内容をGPTに投げて安全性を判定してもらう。
-
-    戻り値例:
-    {"danger": "true"/"false", "reason": "...", "category": "spam/phishing/..."}
-    """
+# -------------------------------
+# GPTによるメッセージ判定
+# -------------------------------
+async def moderate_message_content(
+    content: str,
+    joined_at: Optional[discord.utils.snowflake_time] = None,
+) -> ModerationResult:
+    """メッセージ内容をGPTに投げて安全性を判定してもらう。"""
     system_prompt = (
         "貴様はDiscordサーバーのセキュリティ監査役だ。"
         "ユーザーの投稿内容が危険かどうか(フィッシング、マルウェアリンク、詐欺、荒らし、スパム等)を判定せよ。"
@@ -120,50 +137,49 @@ async def moderate_message_content(content: str, joined_at: Optional[discord.uti
                 message = j["choices"][0]["message"]["content"]
     except Exception:
         # 解析に失敗した場合は安全側に倒す
-        return {"danger": "false", "reason": "moderation_error", "category": "error"}
+        return {"danger": False, "reason": "moderation_error", "category": "error"}
 
     message = message.strip()
-    # JSON風文字列を雑にパース
-    result: Dict[str, str] = {"danger": "false", "reason": "", "category": ""}
+    result: Dict[str, Union[str, bool]] = {"danger": False, "reason": "", "category": ""}
+
     try:
         import json as _json
-
         result.update(_json.loads(message))
     except Exception:
-        # 期待どおりでない場合も安全側
-        result["danger"] = "false"
+        result["danger"] = False
         result["reason"] = "parse_error"
         result["category"] = "error"
-    return result
 
+    # --- danger を必ず bool に正規化 ---
+    danger_raw = result.get("danger", False)
+    if isinstance(danger_raw, str):
+        result["danger"] = danger_raw.strip().lower() == "true"
+    else:
+        result["danger"] = bool(danger_raw)
 
+    return result  # type: ignore
+
+# -------------------------------
+# 信頼済み判定
+# -------------------------------
 def _is_trusted_member(guild_id: int, member_id: int) -> bool:
-    """信頼済みユーザーかどうかを判定。"""
     trusted = set(get_trusted_user_ids(guild_id))
     return member_id in trusted
 
-
 def _has_bypass_role(guild: discord.Guild, member: discord.Member) -> bool:
-    """バイパス対象ロールを1つ以上持っているか。"""
     bypass_ids = set(get_bypass_role_ids(guild.id))
     if not bypass_ids:
         return False
     return any(r.id in bypass_ids for r in member.roles)
 
-
+# -------------------------------
+# Unicode異常判定
+# -------------------------------
 def is_suspicious_unicode(text: str) -> tuple[bool, str]:
-    """Unicode 的に怪しい文字列かどうかの簡易フィルタ。
-
-    - 非常に長く、かつ同一文字の連続が極端に長い
-    - 制御文字・ゼロ幅・Bidi制御などが異常に多い
-    などの条件を満たす場合に True を返す。
-    """
     if not text:
         return False, ""
 
-    # 長さチェック
     if len(text) >= MAX_MESSAGE_LENGTH_SUSPICIOUS:
-        # 同じ文字の連続を検出
         longest_run = 0
         current_run = 1
         prev_char = None
@@ -178,13 +194,7 @@ def is_suspicious_unicode(text: str) -> tuple[bool, str]:
         if longest_run >= MAX_REPEATED_CHAR_RUN:
             return True, "極端に長いメッセージと同一文字の大量連続"
 
-    # 危険寄りの特殊コードポイント
-    dangerous_codepoints = {
-        # ゼロ幅系
-        0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF,
-        # Bidi制御文字
-        0x202A, 0x202B, 0x202D, 0x202E, 0x202C,
-    }
+    dangerous_codepoints = {0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF, 0x202A, 0x202B, 0x202D, 0x202E, 0x202C}
 
     weird_count = 0
     for ch in text:
@@ -198,7 +208,9 @@ def is_suspicious_unicode(text: str) -> tuple[bool, str]:
 
     return False, ""
 
-
+# -------------------------------
+# ロール剥奪 + 警告
+# -------------------------------
 async def strip_all_roles_and_warn(
     bot: discord.Client,
     guild: discord.Guild,
@@ -206,16 +218,12 @@ async def strip_all_roles_and_warn(
     channel: discord.abc.Messageable,
     reason: str,
 ) -> None:
-    """ユーザーの全ロールを剥奪し、ログと注意喚起メッセージを出す。"""
     from datetime import datetime, timezone, timedelta
-    import discord
     _JST = timezone(timedelta(hours=9))
     now_jst = datetime.now(_JST).strftime("%Y-%m-%d %H:%M:%S")
 
-    # 剥奪前・後ロール
     before_roles = [r.name for r in member.roles if r.name != "@everyone"]
     roles_to_remove = [r for r in member.roles if r.name != "@everyone"]
-    removed_role_names = ", ".join(r.name for r in roles_to_remove) if roles_to_remove else "(対象ロールなし)"
     after_roles = []
 
     channel_name = getattr(channel, "name", str(channel))
@@ -226,7 +234,6 @@ async def strip_all_roles_and_warn(
     joined_at = member.joined_at.astimezone(_JST).strftime("%Y-%m-%d %H:%M:%S") if member.joined_at else "(不明)"
     created_at = member.created_at.astimezone(_JST).strftime("%Y-%m-%d %H:%M:%S") if hasattr(member, "created_at") else "(不明)"
 
-    # 危険内容（reason詳細）
     danger_detail = reason
 
     if roles_to_remove:
@@ -257,7 +264,6 @@ async def strip_all_roles_and_warn(
                 embed_color=discord.Color.red(),
             )
 
-    # ログに記録
     await log_action(
         bot,
         guild.id,
@@ -280,7 +286,6 @@ async def strip_all_roles_and_warn(
         embed_color=discord.Color.red(),
     )
 
-    # チャンネルに注意喚起
     try:
         warning = (
             f"⚠️ {member.mention} による危険なコンテンツ/リンクが検出された。\n"
@@ -290,33 +295,28 @@ async def strip_all_roles_and_warn(
     except Exception:
         pass
 
-
+# -------------------------------
+# メッセージ単体のセキュリティ処理
+# -------------------------------
 async def handle_security_for_message(message: discord.Message, bot: discord.Client) -> None:
-    """メッセージ1件に対するセキュリティチェックを実行する。"""
     if message.guild is None or not isinstance(message.author, discord.Member):
         return
 
     guild = message.guild
     member: discord.Member = message.author
 
-    # 信頼済みユーザー、またはバイパスロール所持者はセキュリティチェック対象外
     if _is_trusted_member(guild.id, member.id) or _has_bypass_role(guild, member):
         return
 
-    # 1) レートチェック
     is_spam_rate = register_message_rate(guild.id, member.id)
-
-    # 2) Unicode 的に怪しいパターン検出
     suspicious_unicode, unicode_reason = is_suspicious_unicode(message.content or "")
-
-    # 3) GPTによるコンテンツ判定
     joined_at = getattr(member, "joined_at", None)
     moderation = await moderate_message_content(message.content or "", joined_at)
     if not isinstance(moderation, dict):
-        moderation = {"danger": "false", "reason": "moderation_error", "category": "error"}
-    is_danger = moderation.get("danger", "false").lower() == "true"
+        moderation = {"danger": False, "reason": "moderation_error", "category": "error"}
 
-    # 4) 判断ロジック
+    is_danger: bool = moderation["danger"]
+
     if is_danger or is_spam_rate or suspicious_unicode:
         reason_parts = []
         if is_danger:
@@ -329,30 +329,28 @@ async def handle_security_for_message(message: discord.Message, bot: discord.Cli
 
         await strip_all_roles_and_warn(bot, guild, member, message.channel, reason)
 
-
+# -------------------------------
+# VC参加時のセキュリティ処理
+# -------------------------------
 async def handle_security_for_voice_join(
     member: discord.Member,
     before: discord.VoiceState,
     after: discord.VoiceState,
     bot: discord.Client,
 ) -> None:
-    """VC参加時のセキュリティチェック(似た名前レイド検知)"""
     guild = member.guild
     if guild is None:
         return
 
-    # 信頼済みユーザー、またはバイパスロール所持者はセキュリティチェック対象外
     if _is_trusted_member(guild.id, member.id) or _has_bypass_role(guild, member):
         return
 
     before_ch = before.channel
     after_ch = after.channel
 
-    # 参加イベントのみ対象
     if before_ch is None and after_ch is not None:
         suspicious = register_voice_join(guild.id, after_ch.id, member.display_name)
         if suspicious:
-            # 同じVCに短時間で似た名前が多数参加 -> このメンバーも含め危険と判断
             await strip_all_roles_and_warn(
                 bot,
                 guild,
