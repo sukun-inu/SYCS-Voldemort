@@ -5,26 +5,27 @@ import psutil
 from datetime import timezone, timedelta
 from services.logging_service import log_action
 
-# 日本標準時タイムゾーン
+# 日本標準時
 _JST = timezone(timedelta(hours=9))
 
+
 def create_bot() -> Bot:
-    """Discordボットを初期化して返す"""
     intents = discord.Intents.default()
-    # メッセージ内容、ボイス状態、メンバーなどサーバーアクティビティを拾うためのインテント
     intents.message_content = True
     intents.members = True
     intents.voice_states = True
+
     bot = commands.Bot(command_prefix="!", intents=intents)
     return bot
 
 
 def setup_events(bot: Bot) -> None:
-    """ボットイベントを設定"""
 
+    # --------------------------
+    # ステータス更新
+    # --------------------------
     @tasks.loop(seconds=5)
     async def update_status():
-        """ボットのステータスを定期的に更新"""
         try:
             cpu_percent = psutil.cpu_percent()
             memory_percent = psutil.virtual_memory().percent
@@ -36,234 +37,131 @@ def setup_events(bot: Bot) -> None:
 
     @bot.event
     async def on_ready():
-        """ボット起動時のイベント"""
         print(f'Logged in as {bot.user}')
         try:
             await bot.tree.sync()
-            print("グローバルコマンドが同期されました。")
+            print("グローバルコマンド同期完了")
             if not update_status.is_running():
                 update_status.start()
         except Exception as e:
-            print(f"同期中のエラー: {e}")
+            print(f"起動時エラー: {e}")
 
     # --------------------------
-    # メッセージ関連
+    # メッセージ監査 + セキュリティ
     # --------------------------
     @bot.event
     async def on_message(message: discord.Message):
-        """メッセージ受信時の監査 + コマンド処理"""
-        if message.guild is None or not isinstance(message.author, discord.Member):
+        if message.guild is None:
             return
-        # コマンド処理
-        await bot.process_commands(message)
-        # セキュリティチェック
+        if message.author.bot:
+            return
+
+        # === セキュリティ最優先 ===
         from services.security_service import handle_security_for_message
         await handle_security_for_message(message, bot)
 
+        # === コマンド処理 ===
+        await bot.process_commands(message)
+
+    # --------------------------
+    # メッセージ削除
+    # --------------------------
     @bot.event
     async def on_message_delete(message: discord.Message):
-        """メッセージ削除ログ（詳細日本語）"""
         if message.guild is None:
             return
-        content = message.content or "(内容なし / キャッシュ外)"
-        author_mention = message.author.mention if message.author else "(不明)"
-        channel_mention = message.channel.mention if hasattr(message.channel, 'mention') else str(message.channel)
-        sent_at = message.created_at.astimezone(_JST).strftime("%Y年%m月%d日 %H:%M") if message.created_at else "(不明)"
-        msg_id = str(message.id)
-        user_id = str(message.author.id) if message.author else "(不明)"
-        attachment_info = None
-        if message.attachments:
-            urls = "\n".join(a.url for a in message.attachments)
-            attachment_info = urls
 
-        description = f"{author_mention} のメッセージが {channel_mention} で削除されました。"
+        content = message.content or "(内容なし / キャッシュ外)"
+        author = message.author.mention if message.author else "(不明)"
+        channel = message.channel.mention if hasattr(message.channel, "mention") else str(message.channel)
+        sent_at = message.created_at.astimezone(_JST).strftime("%Y/%m/%d %H:%M") if message.created_at else "(不明)"
+
         fields = {
             "送信日時": sent_at,
             "内容": content,
-            "ユーザーID": user_id + " | メッセージID: " + msg_id,
+            "ユーザーID": str(message.author.id) if message.author else "不明",
+            "メッセージID": str(message.id),
         }
-        if attachment_info:
-            fields["添付ファイル"] = attachment_info
+
+        if message.attachments:
+            fields["添付ファイル"] = "\n".join(a.url for a in message.attachments)
 
         await log_action(
             bot,
             message.guild.id,
             "INFO",
-            description,
+            f"{author} のメッセージが {channel} で削除されました。",
             user=message.author,
             fields=fields,
         )
 
+    # --------------------------
+    # メッセージ編集
+    # --------------------------
     @bot.event
     async def on_message_edit(before: discord.Message, after: discord.Message):
-        """メッセージ編集ログ（詳細日本語）"""
         if before.guild is None:
             return
-        before_content = before.content or "(内容なし / キャッシュ外)"
-        after_content = after.content or "(内容なし)"
-        author_mention = before.author.mention if before.author else "(不明)"
-        channel_mention = before.channel.mention if hasattr(before.channel, 'mention') else str(before.channel)
-        sent_at = before.created_at.astimezone(_JST).strftime("%Y年%m月%d日 %H:%M") if before.created_at else "(不明)"
-        msg_id = str(before.id)
-        user_id = str(before.author.id) if before.author else "(不明)"
-
-        description = f"{author_mention} のメッセージが {channel_mention} で編集されました。"
-        fields = {
-            "送信日時": sent_at,
-            "編集前": before_content,
-            "編集後": after_content,
-            "ユーザーID": user_id + " | メッセージID: " + msg_id,
-        }
 
         await log_action(
             bot,
             before.guild.id,
             "INFO",
-            description,
+            f"{before.author.mention} のメッセージが編集されました。",
             user=before.author,
-            fields=fields,
+            fields={
+                "編集前": before.content or "(なし)",
+                "編集後": after.content or "(なし)",
+                "ユーザーID": str(before.author.id),
+                "メッセージID": str(before.id),
+            },
         )
 
     # --------------------------
-    # VC関連
+    # VC セキュリティ & ログ
     # --------------------------
     @bot.event
-    async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
-        """ボイスチャンネル参加/退出/移動などのログ + セキュリティチェック"""
-        guild = member.guild
-        if guild is None:
+    async def on_voice_state_update(member, before, after):
+        if member.guild is None:
             return
 
-        # セキュリティチェック（VCレイド検知）
-        from services.security_service import handle_security_for_voice_join  # 遅延インポートで循環回避
+        from services.security_service import handle_security_for_voice_join
         await handle_security_for_voice_join(member, before, after, bot)
 
-        before_ch = before.channel
-        after_ch = after.channel
-
-        # 参加
-        if before_ch is None and after_ch is not None:
-            description = f"{member.mention}（{member.display_name}）がボイスチャンネルに参加しました。"
-            after_count = len(after_ch.members) if hasattr(after_ch, 'members') else "?"
-            fields = {
-                "チャンネル": after_ch.name,
-                "参加後メンバー数": str(after_count),
-                "ユーザーID": str(member.id),
-            }
-            await log_action(bot, guild.id, "INFO", description, user=member, fields=fields)
-            return
-        # 退出
-        if before_ch is not None and after_ch is None:
-            description = f"{member.mention}（{member.display_name}）がボイスチャンネルから退出しました。"
-            before_count = len(before_ch.members) if hasattr(before_ch, 'members') else "?"
-            fields = {
-                "チャンネル": before_ch.name,
-                "退出後メンバー数": str(before_count - 1) if isinstance(before_count, int) else "?",
-                "ユーザーID": str(member.id),
-            }
-            await log_action(bot, guild.id, "INFO", description, user=member, fields=fields)
-            return
-        # 移動
-        if before_ch is not None and after_ch is not None and before_ch.id != after_ch.id:
-            description = f"{member.mention}（{member.display_name}）がボイスチャンネルを移動しました。"
-            before_count = len(before_ch.members) if hasattr(before_ch, 'members') else "?"
-            after_count = len(after_ch.members) if hasattr(after_ch, 'members') else "?"
-            fields = {
-                "移動元": before_ch.name,
-                "移動先": after_ch.name,
-                "移動元メンバー数": str(before_count - 1) if isinstance(before_count, int) else "?",
-                "移動先メンバー数": str(after_count) if isinstance(after_count, int) else "?",
-                "ユーザーID": str(member.id),
-            }
-            await log_action(bot, guild.id, "INFO", description, user=member, fields=fields)
-            return
-        # ミュート/デフン等の変化
-        changes = []
-        if before.self_mute != after.self_mute:
-            changes.append(f"self_mute: {before.self_mute} -> {after.self_mute}")
-        if before.self_deaf != after.self_deaf:
-            changes.append(f"self_deaf: {before.self_deaf} -> {after.self_deaf}")
-        if before.mute != after.mute:
-            changes.append(f"server_mute: {before.mute} -> {after.mute}")
-        if before.deaf != after.deaf:
-            changes.append(f"server_deaf: {before.deaf} -> {after.deaf}")
-
-        if not changes:
-            return
-
-        await log_action(
-            bot,
-            guild.id,
-            "DEBUG",
-            f"{member.mention}（{member.display_name}）のボイス状態が更新されました。",
-            user=member,
-            fields={"変更内容": "\n".join(changes), "チャンネル": before_ch.name if before_ch else "None", "ユーザーID": str(member.id)},
-        )
-
     # --------------------------
-    # メンバー関連
+    # メンバー参加・退出
     # --------------------------
     @bot.event
     async def on_member_join(member: discord.Member):
-        """メンバー参加ログ"""
-        joined_at = member.joined_at.astimezone(_JST).strftime("%Y年%m月%d日 %H:%M") if member.joined_at else "(不明)"
-        log_msg = f"{member.mention} がサーバーに参加しました。\n参加日時: {joined_at}\nユーザーID: {member.id}"
-        await log_action(bot, member.guild.id, "INFO", log_msg, user=member)
+        await log_action(
+            bot,
+            member.guild.id,
+            "INFO",
+            f"{member.mention} がサーバーに参加しました。",
+            user=member,
+        )
 
     @bot.event
     async def on_member_remove(member: discord.Member):
-        """メンバー退出ログ"""
-        log_msg = f"{member.mention} がサーバーから退出しました。\nユーザーID: {member.id}"
-        await log_action(bot, member.guild.id, "INFO", log_msg, user=member)
+        await log_action(
+            bot,
+            member.guild.id,
+            "INFO",
+            f"{member.mention} がサーバーから退出しました。",
+            user=member,
+        )
 
+    # --------------------------
+    # ロール・ニックネ変更
+    # --------------------------
     @bot.event
     async def on_member_update(before: discord.Member, after: discord.Member):
-        """ロール変更やニックネ変更などのログ"""
-        guild = after.guild
-        if guild is None:
-            return
-
-        # ニックネーム変更
         if before.nick != after.nick:
-            description = f"{after.mention}（{before.nick or before.name}）のニックネームが変更されました。"
-            fields = {
-                "旧": before.nick or before.name,
-                "新": after.nick or after.name,
-                "ユーザーID": str(after.id),
-            }
-            await log_action(bot, guild.id, "INFO", description, user=after, fields=fields)
-
-        # ロール変更
-        before_roles = set(r for r in before.roles if r.name != "@everyone")
-        after_roles = set(r for r in after.roles if r.name != "@everyone")
-        added = after_roles - before_roles
-        removed = before_roles - after_roles
-
-        if added or removed:
-            description = f"{after.mention} のロールが更新されました。"
-            fields = {}
-            if added:
-                fields["付与されたロール"] = ", ".join(r.name for r in added)
-            if removed:
-                fields["剥奪されたロール"] = ", ".join(r.name for r in removed)
-            fields["ユーザーID"] = str(after.id)
-            await log_action(bot, guild.id, "INFO", description, user=after, fields=fields)
-
-    # --------------------------
-    # チャンネル関連
-    # --------------------------
-    @bot.event
-    async def on_guild_channel_create(channel: discord.abc.GuildChannel):
-        guild = channel.guild
-        await log_action(bot, guild.id, "INFO", "チャンネル作成", fields={
-            "チャンネル": getattr(channel, "mention", channel.name),
-            "種別": str(getattr(channel, "type", "unknown")),
-        })
-
-    @bot.event
-    async def on_guild_channel_delete(channel: discord.abc.GuildChannel):
-        guild = channel.guild
-        await log_action(bot, guild.id, "INFO", "チャンネル削除", fields={
-            "チャンネル名": channel.name,
-            "種別": str(getattr(channel, "type", "unknown")),
-        })
+            await log_action(
+                bot,
+                after.guild.id,
+                "INFO",
+                f"{after.mention} のニックネームが変更されました。",
+                user=after,
+                fields={"旧": before.nick, "新": after.nick},
+            )
