@@ -1,338 +1,305 @@
+# Security_Service.py
+import re
 import asyncio
 import time
-import base64
 import hashlib
-import re
-import unicodedata
-import datetime
-from collections import defaultdict, deque
-from typing import Deque, Dict, List, Tuple, Optional, Union, TypedDict
+from typing import List, Dict
 
 import aiohttp
 import discord
 
-from config import OPENAI_API_KEY, VIRUSTOTAL_API_KEY
-from services.logging_service import log_action
-from services.settings_store import get_trusted_user_ids, get_bypass_role_ids
+# =========================
+# 設定値
+# =========================
 
-# ============================================================
-# 型定義
-# ============================================================
-class ModerationResult(TypedDict):
-    danger: bool
-    reason: str
-    category: str
+VIRUSTOTAL_API_KEY = "YOUR_VT_API_KEY"
+OPENAI_API_KEY = "YOUR_OPENAI_API_KEY"
 
-# ============================================================
-# グローバル状態
-# ============================================================
-_message_timestamps: Dict[Tuple[int, int], Deque[float]] = defaultdict(lambda: deque(maxlen=10))
-_voice_joins: Dict[Tuple[int, int], Deque[Tuple[float, str]]] = defaultdict(lambda: deque(maxlen=50))
+# 危険とみなす拡張子
+DANGEROUS_EXTENSIONS = {
+    ".exe", ".scr", ".bat", ".cmd", ".ps1",
+    ".vbs", ".js", ".jar", ".msi",
+    ".lnk", ".iso", ".img"
+}
 
-# hashキャッシュ (sha256 -> vt_result)
-_HASH_CACHE: Dict[str, Dict] = {}
+# 新規参加者とみなす日数
+NEW_MEMBER_THRESHOLD_DAYS = 7
 
-# ============================================================
-# 定数
-# ============================================================
-MAX_MESSAGES_PER_SEC = 2
-VOICE_SIMILAR_JOIN_THRESHOLD = 3
-VOICE_JOIN_WINDOW_SEC = 20
+# 荒らし検知用
+MAX_MENTIONS = 5
+MAX_LINKS = 5
+SPAM_REPEAT_THRESHOLD = 4
+SPAM_TIME_WINDOW = 15  # 秒
 
-MAX_MESSAGE_LENGTH_SUSPICIOUS = 4000
-MAX_REPEATED_CHAR_RUN = 100
-MAX_WEIRD_CHAR_COUNT = 16
-MAX_WEIRD_CHAR_RATIO = 0.15
+# キャッシュ（VT/API負荷対策）
+VT_CACHE_TTL = 60 * 60 * 6  # 6時間
 
-NEW_MEMBER_LINK_SEC = 3600
+# =========================
+# 内部キャッシュ
+# =========================
 
-DANGEROUS_EXTENSIONS = {".exe", ".lnk", ".iso"}
+_vt_cache: Dict[str, Dict] = {}
+_user_message_history: Dict[int, List[float]] = {}
 
-URL_REGEX = re.compile(r"(https?://[^\s]+|www\.[^\s]+)", re.IGNORECASE)
+# =========================
+# 正規表現
+# =========================
 
-VT_URL_LOOKUP = "https://www.virustotal.com/api/v3/urls"
-VT_FILE_LOOKUP = "https://www.virustotal.com/api/v3/files"
+URL_REGEX = re.compile(
+    r"(https?://[^\s]+)",
+    re.IGNORECASE
+)
 
-# ============================================================
+SUSPICIOUS_UNICODE_REGEX = re.compile(
+    r"[\u202A-\u202E\u2066-\u2069]"
+)
+
+# =========================
 # ユーティリティ
-# ============================================================
+# =========================
+
 def extract_links(text: str) -> List[str]:
     return URL_REGEX.findall(text or "")
 
-def _encode_vt_url(url: str) -> str:
-    return base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
+def is_new_member(member: discord.Member) -> bool:
+    if not member.joined_at:
+        return False
+    delta = discord.utils.utcnow() - member.joined_at
+    return delta.days < NEW_MEMBER_THRESHOLD_DAYS
 
-def _file_extension(filename: str) -> str:
-    return "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+def hash_url(url: str) -> str:
+    return hashlib.sha256(url.encode("utf-8")).hexdigest()
 
-# ============================================================
-# VirusTotal URL チェック
-# ============================================================
+# =========================
+# VirusTotal
+# =========================
+
 async def check_url_virustotal(url: str) -> Dict:
-    if not VIRUSTOTAL_API_KEY:
-        return {"status": "disabled"}
+    key = hash_url(url)
+    now = time.time()
+
+    if key in _vt_cache and now - _vt_cache[key]["time"] < VT_CACHE_TTL:
+        return _vt_cache[key]["data"]
 
     headers = {
-        "x-apikey": VIRUSTOTAL_API_KEY,
-        "accept": "application/json",
+        "x-apikey": VIRUSTOTAL_API_KEY
     }
 
-    url_id = _encode_vt_url(url)
     async with aiohttp.ClientSession() as session:
-        async with session.get(f"{VT_URL_LOOKUP}/{url_id}", headers=headers) as resp:
-            if resp.status == 404:
-                return {"status": "unknown"}
+        async with session.post(
+            "https://www.virustotal.com/api/v3/urls",
+            headers=headers,
+            data={"url": url}
+        ) as resp:
             if resp.status != 200:
                 return {"status": "error"}
-            data = await resp.json()
 
-    stats = data["data"]["attributes"]["last_analysis_stats"]
-    return {
-        "status": "ok",
-        "malicious": stats.get("malicious", 0),
-        "suspicious": stats.get("suspicious", 0),
+            data = await resp.json()
+            analysis_id = data["data"]["id"]
+
+        await asyncio.sleep(2)
+
+        async with session.get(
+            f"https://www.virustotal.com/api/v3/analyses/{analysis_id}",
+            headers=headers
+        ) as resp:
+            if resp.status != 200:
+                return {"status": "error"}
+
+            result = await resp.json()
+            stats = result["data"]["attributes"]["stats"]
+
+            parsed = {
+                "status": "ok",
+                "malicious": stats.get("malicious", 0),
+                "suspicious": stats.get("suspicious", 0),
+                "harmless": stats.get("harmless", 0),
+                "undetected": stats.get("undetected", 0)
+            }
+
+            _vt_cache[key] = {
+                "time": now,
+                "data": parsed
+            }
+
+            return parsed
+
+# =========================
+# GPT 評価（軽量）
+# =========================
+
+async def gpt_risk_assessment(text: str) -> str:
+    """
+    戻り値: SAFE / SUSPICIOUS / DANGEROUS
+    """
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
     }
 
-# ============================================================
-# VirusTotal FILE(hash) チェック
-# ============================================================
-async def check_file_hash_virustotal(sha256: str) -> Dict:
-    if sha256 in _HASH_CACHE:
-        return _HASH_CACHE[sha256]
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a security moderation AI."
+            },
+            {
+                "role": "user",
+                "content": f"""
+次のメッセージは荒らし・詐欺・マルウェア配布の可能性があるか判定してください。
+SAFE / SUSPICIOUS / DANGEROUS のどれか一語で答えてください。
 
-    if not VIRUSTOTAL_API_KEY:
-        return {"status": "disabled"}
-
-    headers = {
-        "x-apikey": VIRUSTOTAL_API_KEY,
-        "accept": "application/json",
+{text}
+"""
+            }
+        ],
+        "temperature": 0
     }
 
     async with aiohttp.ClientSession() as session:
-        async with session.get(f"{VT_FILE_LOOKUP}/{sha256}", headers=headers) as resp:
-            if resp.status == 404:
-                result = {"status": "unknown"}
-            elif resp.status != 200:
-                result = {"status": "error"}
-            else:
-                data = await resp.json()
-                stats = data["data"]["attributes"]["last_analysis_stats"]
-                result = {
-                    "status": "ok",
-                    "malicious": stats.get("malicious", 0),
-                    "suspicious": stats.get("suspicious", 0),
-                }
+        async with session.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers=headers,
+            json=payload
+        ) as resp:
+            if resp.status != 200:
+                return "SUSPICIOUS"
 
-    _HASH_CACHE[sha256] = result
-    return result
+            data = await resp.json()
+            content = data["choices"][0]["message"]["content"].strip().upper()
 
-# ============================================================
-# GPT補助評価（BAN不可）
-# ============================================================
-async def gpt_risk_assessment(name: str, context: str) -> ModerationResult:
-    system = (
-        "貴様はDiscordサーバーのセキュリティ分析官だ。"
-        "以下の情報が危険な兆候を持つかを判定せよ。"
-        "出力はJSONのみ:"
-        '{"danger":true/false,"reason":"理由","category":"type"}'
-    )
+            if "DANGEROUS" in content:
+                return "DANGEROUS"
+            if "SUSPICIOUS" in content:
+                return "SUSPICIOUS"
+            return "SAFE"
 
-    user = f"対象: {name}\n内容:\n{context}"
+# =========================
+# 荒らし検知
+# =========================
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {OPENAI_API_KEY}",
-                },
-                json={
-                    "model": "gpt-5-mini",
-                    "messages": [
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user},
-                    ],
-                },
-            ) as resp:
-                j = await resp.json()
-                raw = j["choices"][0]["message"]["content"]
-
-        import json
-        result = json.loads(raw)
-        result["danger"] = bool(result.get("danger"))
-        return result
-    except Exception:
-        return {"danger": False, "reason": "gpt_error", "category": "error"}
-
-# ============================================================
-# 荒らし対策
-# ============================================================
-def register_message_rate(guild_id: int, user_id: int) -> bool:
+def check_spam(author_id: int) -> bool:
     now = time.time()
-    dq = _message_timestamps[(guild_id, user_id)]
-    dq.append(now)
-    while dq and now - dq[0] > 1.0:
-        dq.popleft()
-    return len(dq) >= MAX_MESSAGES_PER_SEC
+    history = _user_message_history.setdefault(author_id, [])
+    history.append(now)
 
-def is_suspicious_unicode(text: str) -> Tuple[bool, str]:
-    if not text:
-        return False, ""
+    history[:] = [t for t in history if now - t < SPAM_TIME_WINDOW]
 
-    if len(text) >= MAX_MESSAGE_LENGTH_SUSPICIOUS:
-        run = longest = 1
-        prev = None
-        for ch in text:
-            run = run + 1 if ch == prev else 1
-            longest = max(longest, run)
-            prev = ch
-        if longest >= MAX_REPEATED_CHAR_RUN:
-            return True, "同一文字の大量連続"
+    return len(history) >= SPAM_REPEAT_THRESHOLD
 
-    weird = sum(
-        1 for ch in text
-        if unicodedata.category(ch).startswith("C")
-    )
-    if weird >= MAX_WEIRD_CHAR_COUNT and weird / max(len(text), 1) >= MAX_WEIRD_CHAR_RATIO:
-        return True, "制御文字異常"
+# =========================
+# メイン処理
+# =========================
 
-    return False, ""
-
-# ============================================================
-# 信頼判定（※処罰免除のみ）
-# ============================================================
-def _is_trusted_member(guild_id: int, member_id: int) -> bool:
-    return member_id in set(get_trusted_user_ids(guild_id))
-
-def _has_bypass_role(guild: discord.Guild, member: discord.Member) -> bool:
-    return any(r.id in set(get_bypass_role_ids(guild.id)) for r in member.roles)
-
-# ============================================================
-# 処罰
-# ============================================================
-async def punish_member(
-    bot: discord.Client,
-    guild: discord.Guild,
-    member: discord.Member,
-    channel: discord.abc.Messageable,
-    reason: str,
-) -> None:
-    roles = [r for r in member.roles if r.name != "@everyone"]
-    if roles:
-        await member.remove_roles(*roles, reason=reason)
-
-    await log_action(
-        bot,
-        guild.id,
-        "ERROR",
-        "危険行為検出",
-        user=member,
-        fields={"理由": reason},
-        embed_color=discord.Color.red(),
-    )
-
-    try:
-        await channel.send(
-            f"⚠️ {member.mention} による危険な行為を検出。\nリンクやファイルを開かないでください。"
-        )
-    except Exception:
-        pass
-
-# ============================================================
-# メッセージ処理（核心）
-# ============================================================
-async def handle_security_for_message(message: discord.Message, bot: discord.Client) -> None:
-    if not message.guild or not isinstance(message.author, discord.Member):
+async def handle_security_for_message(
+    message: discord.Message,
+    *,
+    ban_on_malware: bool = True
+):
+    # BOT無視
+    if message.author.bot:
         return
 
-    guild = message.guild
-    member = message.author
-    trusted = _is_trusted_member(guild.id, member.id) or _has_bypass_role(guild, member)
+    member = message.author if isinstance(message.author, discord.Member) else None
+    content = message.content or ""
+    links = extract_links(content)
+    attachments = message.attachments or []
 
-    reasons: List[str] = []
-    ban = False
+    reasons = []
+    is_danger = False
 
-    # ---------- 添付ファイル検査 ----------
-    for att in message.attachments:
-        ext = _file_extension(att.filename)
-        if ext in DANGEROUS_EXTENSIONS:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(att.url) as resp:
-                    data = await resp.read()
+    # ===== デバッグログ =====
+    print(
+        "[SECURITY]",
+        "author:", message.author,
+        "content_len:", len(content),
+        "links:", links,
+        "attachments:", [a.filename for a in attachments]
+    )
 
-            sha256 = hashlib.sha256(data).hexdigest()
-            vt = await check_file_hash_virustotal(sha256)
+    # =========================
+    # ① 荒らし（スパム）
+    # =========================
+    if check_spam(message.author.id):
+        is_danger = True
+        reasons.append("短時間での連投（スパム）")
 
+    if message.mentions and len(message.mentions) >= MAX_MENTIONS:
+        is_danger = True
+        reasons.append("過剰メンション")
+
+    if len(links) >= MAX_LINKS:
+        is_danger = True
+        reasons.append("過剰リンク")
+
+    # =========================
+    # ② Unicode トリック
+    # =========================
+    if SUSPICIOUS_UNICODE_REGEX.search(content):
+        reasons.append("不可視Unicode検出")
+
+    # =========================
+    # ③ 添付ファイル検査
+    # =========================
+    dangerous_files = []
+
+    for a in attachments:
+        filename = (a.filename or "").lower()
+        if any(filename.endswith(ext) for ext in DANGEROUS_EXTENSIONS):
+            dangerous_files.append(a)
+
+    if dangerous_files:
+        for a in dangerous_files:
+            vt = await check_url_virustotal(a.url)
             if vt.get("status") == "ok" and (vt["malicious"] > 0 or vt["suspicious"] > 0):
-                ban = True
-                reasons.append(f"VT FILE検出 {att.filename}")
-            elif vt.get("status") == "unknown":
-                gpt = await gpt_risk_assessment(att.filename, "Executable attachment")
-                if gpt["danger"]:
-                    reasons.append(f"GPT警告: {gpt['reason']}")
+                is_danger = True
+                reasons.append(
+                    f"危険ファイル: {a.filename} (malicious={vt['malicious']})"
+                )
 
-    # ---------- URL検査 ----------
-    for url in extract_links(message.content or ""):
+    # =========================
+    # ④ URL検査
+    # =========================
+    for url in links:
         vt = await check_url_virustotal(url)
         if vt.get("status") == "ok" and (vt["malicious"] > 0 or vt["suspicious"] > 0):
-            ban = True
-            reasons.append(f"VT URL検出 {url}")
+            is_danger = True
+            reasons.append(
+                f"危険URL: {url} (malicious={vt['malicious']})"
+            )
 
-    # ---------- 荒らし ----------
-    if register_message_rate(guild.id, member.id):
-        reasons.append("高頻度メッセージ")
+    # =========================
+    # ⑤ GPT評価（補助）
+    # =========================
+    if not is_danger and (links or dangerous_files):
+        gpt_result = await gpt_risk_assessment(content)
+        if gpt_result == "DANGEROUS":
+            is_danger = True
+            reasons.append("GPT危険判定")
+        elif gpt_result == "SUSPICIOUS":
+            reasons.append("GPT要注意判定")
 
-    suspicious, u_reason = is_suspicious_unicode(message.content or "")
-    if suspicious:
-        reasons.append(f"Unicode異常: {u_reason}")
+    # =========================
+    # ⑥ 新規参加者補正
+    # =========================
+    if member and is_new_member(member) and (links or dangerous_files):
+        is_danger = True
+        reasons.append("新規参加者によるリンク/ファイル投稿")
 
-    # ---------- 実行 ----------
-    if ban and not trusted:
-        await punish_member(bot, guild, member, message.channel, " | ".join(reasons))
-    elif reasons:
-        await log_action(
-            bot,
-            guild.id,
-            "WARN",
-            "セキュリティ警告",
-            user=member,
-            fields={"詳細": " | ".join(reasons)},
-            embed_color=discord.Color.orange(),
-        )
+    # =========================
+    # ⑦ 実行
+    # =========================
+    if is_danger:
+        await message.delete()
 
-# ============================================================
-# VCレイド対策
-# ============================================================
-def _name_similarity(a: str, b: str) -> float:
-    a = a.lower()
-    b = b.lower()
-    m = max(len(a), len(b)) or 1
-    return sum(1 for x, y in zip(a, b) if x == y) / m
+        if ban_on_malware and member:
+            await member.ban(
+                reason=" / ".join(reasons),
+                delete_message_days=1
+            )
 
-async def handle_security_for_voice_join(
-    member: discord.Member,
-    before: discord.VoiceState,
-    after: discord.VoiceState,
-    bot: discord.Client,
-) -> None:
-    if not member.guild:
-        return
+        print("[SECURITY] BLOCKED:", reasons)
 
-    if before.channel is None and after.channel is not None:
-        dq = _voice_joins[(member.guild.id, after.channel.id)]
-        now = time.time()
-        dq.append((now, member.display_name))
-        while dq and now - dq[0][0] > VOICE_JOIN_WINDOW_SEC:
-            dq.popleft()
-
-        similar = sum(1 for _, n in dq if _name_similarity(member.display_name, n) >= 0.7)
-        if similar >= VOICE_SIMILAR_JOIN_THRESHOLD:
-            if not _is_trusted_member(member.guild.id, member.id):
-                await punish_member(
-                    bot,
-                    member.guild,
-                    member,
-                    after.channel,
-                    "VCレイド検出",
-                )
+    else:
+        print("[SECURITY] OK")
