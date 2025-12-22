@@ -59,10 +59,14 @@ def is_spam(user_id: int) -> bool:
     return len(history) >= SPAM_REPEAT_THRESHOLD
 
 # =========================
-# VirusTotal
+# VirusTotal URL スキャン専用
 # =========================
-async def vt_check(target: str, is_file=False) -> Dict:
-    key = hash_text(target)
+async def vt_check(target_url: str) -> Dict:
+    """
+    VirusTotal URL スキャンのみ。ファイルアップロードは行わない。
+    通信ログは必ず print で残す。
+    """
+    key = hash_text(target_url)
     now = time.time()
     if key in _vt_cache and now - _vt_cache[key]["time"] < VT_CACHE_TTL:
         return _vt_cache[key]["data"]
@@ -71,58 +75,41 @@ async def vt_check(target: str, is_file=False) -> Dict:
 
     async with aiohttp.ClientSession() as session:
         try:
-            if is_file:
-                print(f"[VT] Downloading file: {target}")
-                async with session.get(target) as r:
-                    print(f"[VT] File download response: {r.status}")
-                    file_bytes = await r.read() if r.status == 200 else None
-                if not file_bytes:
-                    print(f"[VT] File download failed: {target}")
+            print(f"[VT] Sending URL to VT: {target_url}")
+            data = {"url": target_url}
+            async with session.post(
+                "https://www.virustotal.com/api/v3/urls",
+                headers=headers,
+                data=data
+            ) as r:
+                resp_json = await r.json()
+                print(f"[VT] URL submission response: {r.status} {resp_json}")
+                if r.status != 200 or "data" not in resp_json:
                     return {"status": "error"}
-                data = aiohttp.FormData()
-                data.add_field("file", file_bytes, filename="upload")
-                print(f"[VT] Uploading file to VT")
-                async with session.post(
-                    "https://www.virustotal.com/api/v3/files",
-                    headers=headers,
-                    data=data,
-                ) as r:
-                    resp_json = await r.json()
-                    print(f"[VT] File submission response: {r.status} {resp_json}")
-                    if r.status != 200:
-                        return {"status": "error"}
-                    analysis_id = resp_json["data"]["id"]
-            else:
-                print(f"[VT] Sending URL to VT: {target}")
-                async with session.post(
-                    "https://www.virustotal.com/api/v3/urls",
-                    headers=headers,
-                    data={"url": target},
-                ) as r:
-                    resp_json = await r.json()
-                    print(f"[VT] URL submission response: {r.status} {resp_json}")
-                    if r.status != 200:
-                        return {"status": "error"}
-                    analysis_id = resp_json["data"]["id"]
 
-            await asyncio.sleep(2)
+                analysis_id = resp_json["data"]["id"]
+
+            await asyncio.sleep(2)  # VT 側の処理待ち
+
             async with session.get(
                 f"https://www.virustotal.com/api/v3/analyses/{analysis_id}",
-                headers=headers,
+                headers=headers
             ) as r:
                 resp_json = await r.json()
                 print(f"[VT] Analysis fetch response: {r.status} {resp_json}")
                 if r.status != 200:
                     return {"status": "error"}
-                stats = resp_json["data"]["attributes"]["stats"]
 
-            result = {
-                "status": "ok",
-                "malicious": stats.get("malicious", 0),
-                "suspicious": stats.get("suspicious", 0),
-            }
+                stats = resp_json.get("data", {}).get("attributes", {}).get("stats", {})
+                result = {
+                    "status": "ok",
+                    "malicious": stats.get("malicious", 0),
+                    "suspicious": stats.get("suspicious", 0),
+                }
+
             _vt_cache[key] = {"time": now, "data": result}
             return result
+
         except Exception as e:
             print(f"[VT] Exception: {e}")
             return {"status": "error"}
@@ -206,19 +193,18 @@ async def handle_security_for_message(message: discord.Message):
     if UNICODE_TRICK_REGEX.search(content):
         reasons.append("不可視Unicode検出")
 
-    # 添付・URL VT検査
+    # URL VT検査
     for url in links:
         vt = await vt_check(url)
         if vt.get("status") == "ok" and (vt["malicious"] > 0 or vt["suspicious"] > 0):
             danger = True
             reasons.append(f"VT検出 ({url})")
 
+    # 添付ファイルは拡張子判定のみ（URLスキャンは行わない）
     for a in attachments:
         if any(a.filename.lower().endswith(e) for e in DANGEROUS_EXTENSIONS):
-            vt = await vt_check(a.url, is_file=True)
-            if vt.get("status") == "ok" and (vt["malicious"] > 0 or vt["suspicious"] > 0):
-                danger = True
-                reasons.append(f"VT検出 ({a.filename})")
+            reasons.append(f"危険拡張子 ({a.filename})")
+            danger = True
 
     # GPT補助判定
     if not danger:
