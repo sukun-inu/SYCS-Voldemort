@@ -13,6 +13,7 @@ services:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - METALPRICE_API_KEY=${METALPRICE_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
     ports:
       - "8080:8080"
     volumes:
