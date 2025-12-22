@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  sycs-voldemort:
+    build:
+      context: .
+    image: sycs-voldemort:latest
+    container_name: sycs-voldemort
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Tokyo
+      # Discord Bot は環境変数でトークンを渡す
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - METALPRICE_API_KEY=${METALPRICE_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
