@@ -4,7 +4,6 @@ import asyncio
 import time
 import hashlib
 from typing import List, Dict
-from urllib.parse import urlparse, urlunparse
 
 import aiohttp
 import discord
@@ -53,33 +52,27 @@ def is_spam(user_id: int) -> bool:
     history[:] = [t for t in history if now - t < SPAM_TIME_WINDOW]
     return len(history) >= SPAM_REPEAT_THRESHOLD
 
-def normalize_discord_url(url: str) -> str:
-    """
-    Discord 添付 URL の余計なクエリを削除
-    """
-    parsed = urlparse(url)
-    return urlunparse(parsed._replace(query=""))
-
 # =========================
-# VirusTotal
+# VirusTotal URL チェック
 # =========================
-async def vt_check(target: str) -> Dict:
-    key = hash_text(target)
+async def vt_check_url(target_url: str) -> Dict:
+    """
+    Discord 添付ファイルも含め、認証付き URL そのままで VT に送信
+    ファイルをダウンロードせず URL スキャンのみ行う
+    """
+    key = hash_text(target_url)
     now = time.time()
     if key in _vt_cache and now - _vt_cache[key]["time"] < VT_CACHE_TTL:
         return _vt_cache[key]["data"]
 
     headers = {"x-apikey": VIRUSTOTAL_API_KEY}
-
     async with aiohttp.ClientSession() as session:
         try:
-            print(f"[VT] Sending file URL to VT: {target}")
-            # URL スキャンで送る
-            data = {"url": target}
+            print(f"[VT] Sending file URL to VT: {target_url}")
             async with session.post(
                 "https://www.virustotal.com/api/v3/urls",
                 headers=headers,
-                data=data,
+                json={"url": target_url},  # JSON 形式で URL を送る
             ) as r:
                 resp_json = await r.json()
                 print(f"[VT] URL submission response: {r.status} {resp_json}")
@@ -87,7 +80,7 @@ async def vt_check(target: str) -> Dict:
                     return {"status": "error"}
                 analysis_id = resp_json["data"]["id"]
 
-            # 少し待って分析結果を取得
+            # 簡単な待機後に結果を取得
             await asyncio.sleep(2)
             async with session.get(
                 f"https://www.virustotal.com/api/v3/analyses/{analysis_id}",
@@ -106,6 +99,7 @@ async def vt_check(target: str) -> Dict:
             }
             _vt_cache[key] = {"time": now, "data": result}
             return result
+
         except Exception as e:
             print(f"[VT] Exception: {e}")
             return {"status": "error"}
@@ -114,13 +108,10 @@ async def vt_check(target: str) -> Dict:
 # GPT 補助判定
 # =========================
 async def gpt_assess(text: str) -> str:
-    if not text.strip():
-        text = "(内容なし)"
     headers = {
         "Authorization": f"Bearer {OPENAI_API_KEY}",
         "Content-Type": "application/json",
     }
-
     payload = {
         "model": "gpt-5-mini",
         "messages": [
@@ -128,7 +119,6 @@ async def gpt_assess(text: str) -> str:
             {"role": "user", "content": f"以下の投稿が危険か判定してください。\nSAFE / SUSPICIOUS / DANGEROUS のいずれか一語で答えてください。\n\n{text}"}
         ],
     }
-
     async with aiohttp.ClientSession() as session:
         try:
             async with session.post(
@@ -191,20 +181,13 @@ async def handle_security_for_message(message: discord.Message):
     if UNICODE_TRICK_REGEX.search(content):
         reasons.append("不可視Unicode検出")
 
-    # URL VT検査
-    for url in links:
-        vt = await vt_check(url)
+    # 添付・URL VT検査
+    all_urls = links + [a.url for a in attachments]  # 添付も URL スキャン
+    for url in all_urls:
+        vt = await vt_check_url(url)
         if vt.get("status") == "ok" and (vt["malicious"] > 0 or vt["suspicious"] > 0):
             danger = True
             reasons.append(f"VT検出 ({url})")
-
-    # 添付ファイルも URL スキャン
-    for a in attachments:
-        normalized_url = normalize_discord_url(a.url)
-        vt = await vt_check(normalized_url)
-        if vt.get("status") == "ok" and (vt["malicious"] > 0 or vt["suspicious"] > 0):
-            danger = True
-            reasons.append(f"VT検出 ({a.filename})")
 
     # GPT補助判定
     if not danger:
