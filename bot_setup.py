@@ -14,9 +14,7 @@ def create_bot() -> Bot:
     intents.message_content = True
     intents.members = True
     intents.voice_states = True
-
-    bot = commands.Bot(command_prefix="!", intents=intents)
-    return bot
+    return commands.Bot(command_prefix="!", intents=intents)
 
 
 def setup_events(bot: Bot) -> None:
@@ -27,40 +25,41 @@ def setup_events(bot: Bot) -> None:
     @tasks.loop(seconds=5)
     async def update_status():
         try:
-            cpu_percent = psutil.cpu_percent()
-            memory_percent = psutil.virtual_memory().percent
+            cpu = psutil.cpu_percent()
+            mem = psutil.virtual_memory().percent
             latency = round(bot.latency * 1000)
-            status = f'Ping: {latency}ms | CPU: {cpu_percent}% | MEM: {memory_percent}%'
-            await bot.change_presence(activity=discord.Game(name=status))
+            await bot.change_presence(
+                activity=discord.Game(
+                    name=f"Ping: {latency}ms | CPU: {cpu}% | MEM: {mem}%"
+                )
+            )
         except Exception as e:
             print(f"ステータス更新エラー: {e}")
 
     @bot.event
     async def on_ready():
-        print(f'Logged in as {bot.user}')
-        try:
-            await bot.tree.sync()
-            print("グローバルコマンド同期完了")
-            if not update_status.is_running():
-                update_status.start()
-        except Exception as e:
-            print(f"起動時エラー: {e}")
+        print(f"Logged in as {bot.user}")
+        await bot.tree.sync()
+        if not update_status.is_running():
+            update_status.start()
 
     # --------------------------
-    # メッセージ監査 + セキュリティ
+    # メッセージ（司令塔）
     # --------------------------
     @bot.event
     async def on_message(message: discord.Message):
-        if message.guild is None:
-            return
-        if message.author.bot:
+        if message.guild is None or message.author.bot:
             return
 
-        # === セキュリティ最優先 ===
+        # ① セキュリティ（最優先）
         from services.security_service import handle_security_for_message
-        await handle_security_for_message(message, bot)
+        await handle_security_for_message(message)
 
-        # === コマンド処理 ===
+        # ② ChatGPT
+        from commands.chat_commands import handle_chatgpt_message
+        await handle_chatgpt_message(bot, message)
+
+        # ③ コマンド
         await bot.process_commands(message)
 
     # --------------------------
@@ -71,14 +70,10 @@ def setup_events(bot: Bot) -> None:
         if message.guild is None:
             return
 
-        content = message.content or "(内容なし / キャッシュ外)"
-        author = message.author.mention if message.author else "(不明)"
-        channel = message.channel.mention if hasattr(message.channel, "mention") else str(message.channel)
-        sent_at = message.created_at.astimezone(_JST).strftime("%Y/%m/%d %H:%M") if message.created_at else "(不明)"
-
         fields = {
-            "送信日時": sent_at,
-            "内容": content,
+            "送信日時": message.created_at.astimezone(_JST).strftime("%Y/%m/%d %H:%M")
+            if message.created_at else "(不明)",
+            "内容": message.content or "(内容なし)",
             "ユーザーID": str(message.author.id) if message.author else "不明",
             "メッセージID": str(message.id),
         }
@@ -90,7 +85,7 @@ def setup_events(bot: Bot) -> None:
             bot,
             message.guild.id,
             "INFO",
-            f"{author} のメッセージが {channel} で削除されました。",
+            f"{message.author.mention} のメッセージが削除されました。",
             user=message.author,
             fields=fields,
         )
@@ -118,7 +113,7 @@ def setup_events(bot: Bot) -> None:
         )
 
     # --------------------------
-    # VC セキュリティ & ログ
+    # VC セキュリティ
     # --------------------------
     @bot.event
     async def on_voice_state_update(member, before, after):
@@ -126,7 +121,7 @@ def setup_events(bot: Bot) -> None:
             return
 
         from services.security_service import handle_security_for_voice_join
-        await handle_security_for_voice_join(member, before, after, bot)
+        await handle_security_for_voice_join(member, before, after)
 
     # --------------------------
     # メンバー参加・退出
@@ -152,7 +147,7 @@ def setup_events(bot: Bot) -> None:
         )
 
     # --------------------------
-    # ロール・ニックネ変更
+    # ニックネーム変更
     # --------------------------
     @bot.event
     async def on_member_update(before: discord.Member, after: discord.Member):
@@ -163,5 +158,5 @@ def setup_events(bot: Bot) -> None:
                 "INFO",
                 f"{after.mention} のニックネームが変更されました。",
                 user=after,
-                fields={"旧": before.nick, "新": after.nick},
+                fields={"旧": before.nick or "(なし)", "新": after.nick or "(なし)"},
             )
