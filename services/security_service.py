@@ -65,53 +65,26 @@ async def vt_check(target: str, is_file=False) -> Dict:
 
     async with aiohttp.ClientSession() as session:
         try:
-            if is_file:
-                print(f"[VT] Downloading file: {target}")
-                async with session.get(target) as r:
-                    print(f"[VT] File download response: {r.status}")
-                    file_bytes = await r.read() if r.status == 200 else None
-                if not file_bytes:
-                    print(f"[VT] File download failed: {target}")
+            data = aiohttp.FormData()
+            data.add_field("url", target)  # ここで URL をそのまま送る
+            async with session.post(
+                "https://www.virustotal.com/api/v3/urls",
+                headers=headers,
+                data=data,
+            ) as r:
+                resp_json = await r.json()
+                print(f"[VT] URL submission response: {r.status} {resp_json}")
+                if r.status != 200:
                     return {"status": "error"}
+                analysis_id = resp_json["data"]["id"]
 
-                data = aiohttp.FormData()
-                data.add_field("file", file_bytes, filename="upload")
-                print(f"[VT] Uploading file to VT")
-                async with session.post(
-                    "https://www.virustotal.com/api/v3/files",
-                    headers=headers,
-                    data=data,
-                ) as r:
-                    resp_json = await r.json()
-                    print(f"[VT] File submission response: {r.status} {resp_json}")
-                    if r.status != 200:
-                        return {"status": "error"}
-                    analysis_id = resp_json["data"]["id"]
-            else:
-                print(f"[VT] Sending URL to VT: {target}")
-                data = aiohttp.FormData()
-                data.add_field("url", target)
-                async with session.post(
-                    "https://www.virustotal.com/api/v3/urls",
-                    headers=headers,
-                    data=data,
-                ) as r:
-                    resp_json = await r.json()
-                    print(f"[VT] URL submission response: {r.status} {resp_json}")
-                    if r.status != 200:
-                        return {"status": "error"}
-                    analysis_id = resp_json["data"]["id"]
-
-            # 少し待ってから分析結果を取得
+            # 結果取得
             await asyncio.sleep(2)
             async with session.get(
                 f"https://www.virustotal.com/api/v3/analyses/{analysis_id}",
                 headers=headers,
             ) as r:
                 resp_json = await r.json()
-                print(f"[VT] Analysis fetch response: {r.status} {resp_json}")
-                if r.status != 200:
-                    return {"status": "error"}
                 stats = resp_json["data"]["attributes"]["stats"]
 
             result = {
