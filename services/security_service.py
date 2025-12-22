@@ -122,12 +122,12 @@ async def moderate_message_content(
         "Authorization": f"Bearer {OPENAI_API_KEY}",
     }
     data = {
-        "model": "gpt-4o-mini",
+        "model": "gpt-5-mini",
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        "temperature": 0,
+        # "temperature": 0,
     }
 
     try:
