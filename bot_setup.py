@@ -59,11 +59,21 @@ def setup_events(bot: Bot) -> None:
 
         # ① セキュリティ（最優先）
         from services.security_service import handle_security_for_message
-        await handle_security_for_message(bot, message)
+        try:
+            await handle_security_for_message(bot, message)
+        except Exception as e:
+            print(f"[BOT_SETUP] handle_security_for_message error: {e}")
+            import traceback
+            traceback.print_exc()
 
         # ② ChatGPT
         from commands.chat_commands import handle_chatgpt_message
-        await handle_chatgpt_message(bot, message)
+        try:
+            await handle_chatgpt_message(bot, message)
+        except Exception as e:
+            print(f"[BOT_SETUP] handle_chatgpt_message error: {e}")
+            import traceback
+            traceback.print_exc()
 
         # ③ コマンド
         await bot.process_commands(message)

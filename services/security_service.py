@@ -201,7 +201,7 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     print(
         f"[SECURITY] recv message author={message.author} ch={getattr(message.channel, 'id', 'unknown')} "
         f"attachments={len(message.attachments or [])} links={len(extract_links(message.content or ''))}"
-    )
+    , flush=True)
     logger.info(
         "[SECURITY] recv message: author=%s channel=%s attachments=%s links=%s",
         message.author,
