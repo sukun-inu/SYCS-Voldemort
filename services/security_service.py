@@ -26,6 +26,7 @@ VT_CACHE_TTL = 60 * 60 * 6
 VC_RAID_WINDOW_SEC = 20
 VC_RAID_SIMILAR_PREFIX = 4
 VC_RAID_THRESHOLD = 5
+MALICIOUS_THRESHOLD = 10  # VTのMalicious件数で削除対象とする閾値
 
 # ==================================================
 # 内部キャッシュ
@@ -298,7 +299,7 @@ def reason_icon(reason: str) -> str:
     return mapping.get(reason, "ℹ️")
 
 def build_final_embed(vt_results: List[Dict], gpt_result: str, reasons: List[str], logs: List[str]) -> discord.Embed:
-    if "DANGEROUS" in reasons or gpt_result == "DANGEROUS":
+    if "VT_DETECTED" in reasons:
         color = discord.Color.red()
         title = "🚨 危険な投稿を検出"
     elif "SUSPICIOUS" in reasons or gpt_result == "SUSPICIOUS":
@@ -354,7 +355,7 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     attachments = message.attachments or []
 
     logs: List[str] = [f"🔍 {now_jst()} にスキャン開始"]
-    reasons: List[str] = []
+    reason_flags: List[str] = []
     danger = False
 
     bypassed, _ = is_security_bypassed(member)
@@ -366,19 +367,17 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
 
     # SPAM判定
     if is_spam(member.id):
-        danger = True
-        reasons.append("SPAM")
+        reason_flags.append("SPAM")
         logs.append("⚠️ スパム検出")
 
     # リンク数過多
     if len(links) >= MAX_LINKS:
-        danger = True
-        reasons.append("TOO_MANY_LINKS")
+        reason_flags.append("TOO_MANY_LINKS")
         logs.append("⚠️ リンク数過多")
 
     # Unicode trick
     if UNICODE_TRICK_REGEX.search(content):
-        reasons.append("UNICODE_TRICK")
+        reason_flags.append("UNICODE_TRICK")
         logs.append("⚠️ ユニコードトリック検出")
 
     progress_msg = None
@@ -397,11 +396,11 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
                 icon = vt_icon(res.get("malicious", 0), res.get("suspicious", 0))
                 logs.append(f"{icon} {url} をスキャン: Malicious={res.get('malicious')} Suspicious={res.get('suspicious')}")
 
-                # ★変更点★ Malicious 10件以上で危険判定
+                # Malicious 件数が閾値以上なら danger に設定
                 if res.get("malicious", 0) >= 10:
                     danger = True
-                    reasons.append("VT_DETECTED")
-                
+                    reason_flags.append("VT_DETECTED")
+
                 if progress_msg:
                     bar = build_progress_bar(idx, len(targets))
                     await progress_msg.edit(embed=discord.Embed(
@@ -412,20 +411,17 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
 
     # GPT判定
     gpt_result = await gpt_assess(content, vt_results)
+    reason_flags.append("GPT")
     if gpt_result == "DANGEROUS":
-        danger = True
-        reasons.append("GPT")
         logs.append("⚠️ GPT判定: DANGEROUS")
     elif gpt_result == "SUSPICIOUS":
-        reasons.append("GPT")
         logs.append("⚠️ GPT判定: SUSPICIOUS")
     else:
         logs.append("🤖 GPT判定: SAFE")
 
     # 新規メンバー
     if is_new_member(member):
-        danger = True
-        reasons.append("NEW_MEMBER")
+        reason_flags.append("NEW_MEMBER")
         logs.append("🆕 新規メンバー")
 
     # VCレイド判定
@@ -433,10 +429,10 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
         channel_id = message.author.voice.channel.id
         if check_vc_raid(member, channel_id):
             danger = True
-            reasons.append("VC_RAID")
+            reason_flags.append("VC_RAID")
             logs.append("🎵 VCレイド検出")
 
-    # 削除・役職除去
+    # 削除・役職除去は danger 条件のみ
     if danger:
         try:
             await message.delete()
@@ -445,7 +441,7 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
         await strip_roles(member)
 
     # 最終結果Embed送信
-    embed = build_final_embed(vt_results, gpt_result, reasons, logs)
+    embed = build_final_embed(vt_results, gpt_result, reason_flags, logs)
     if progress_msg:
         try:
             await progress_msg.edit(embed=embed)
