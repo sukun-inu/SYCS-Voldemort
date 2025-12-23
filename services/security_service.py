@@ -110,10 +110,12 @@ async def _strip_roles(member: discord.Member) -> Tuple[bool, str]:
         return False, str(e)
 
 # =========================
-# VirusTotal URL チェック (非同期 vt-py)
+# VirusTotal URL チェック (vt-py v0.22.0)
 # =========================
 async def vt_check_url(url: str) -> Dict:
-    """VirusTotal で URL をスキャン（キャッシュ付き）。"""
+    """vt-py v0.22.0 で URL をスキャン（非同期ラップ付き、キャッシュ対応）"""
+    import vt
+
     key = hash_text(url)
     now = time.time()
     if key in _vt_cache and now - _vt_cache[key]["time"] < VT_CACHE_TTL:
@@ -124,33 +126,28 @@ async def vt_check_url(url: str) -> Dict:
         return {"status": "skip", "reason": "no_api_key", "malicious": 0, "suspicious": 0}
 
     try:
-        # vt-py が未インストールの場合に import 例外を遅延で拾う
-        from vt import AsyncClient  # type: ignore
-    except Exception as e:
-        logger.error(f"[VT] Import error: {e}")
-        return {"status": "error", "reason": f"vt_import:{e}", "malicious": 0, "suspicious": 0}
+        def sync_scan():
+            with vt.Client(VIRUSTOTAL_API_KEY) as client:
+                logger.info(f"[VT] Sending URL to VT: {url}")
+                url_obj = client.url(url)
+                url_obj.get_analysis()
+                stats = url_obj.last_analysis_stats
+                return {
+                    "status": "ok",
+                    "malicious": stats.get("malicious", 0),
+                    "suspicious": stats.get("suspicious", 0),
+                }
 
-    try:
-        async with AsyncClient(VIRUSTOTAL_API_KEY) as client:
-            logger.info(f"[VT] Sending URL to VT: {url}")
-            analysis = await client.async_scan_url(url)
-            # VT からの結果反映を待機（非同期）。失敗時は後続で例外へ。
-            await asyncio.sleep(2)
-            await analysis.async_update()
-            stats = analysis.last_analysis_stats
-            result = {
-                "status": "ok",
-                "malicious": stats.get("malicious", 0),
-                "suspicious": stats.get("suspicious", 0),
-            }
-            _vt_cache[key] = {"time": now, "data": result}
-            return result
+        result = await asyncio.to_thread(sync_scan)
+        _vt_cache[key] = {"time": now, "data": result}
+        return result
+
     except Exception as e:
         logger.error(f"[VT] Exception: {e}")
         return {"status": "error", "reason": str(e), "malicious": 0, "suspicious": 0}
 
 # =========================
-# GPT 補助判定
+# GPT 補助判定（変更なし）
 # =========================
 async def gpt_assess(text: str, vt_results: List[Dict]) -> str:
     # VT 検出がある場合は即 DANGEROUS
