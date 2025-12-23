@@ -53,7 +53,7 @@ def setup_events(bot: Bot) -> None:
 
         # ① セキュリティ（最優先）
         from services.security_service import handle_security_for_message
-        await handle_security_for_message(message)
+        await handle_security_for_message(bot, message)
 
         # ② ChatGPT
         from commands.chat_commands import handle_chatgpt_message
@@ -121,7 +121,7 @@ def setup_events(bot: Bot) -> None:
             return
 
         from services.security_service import handle_security_for_voice_join
-        await handle_security_for_voice_join(member, before, after)
+        await handle_security_for_voice_join(bot, member, before, after)
 
     # --------------------------
     # メンバー参加・退出
