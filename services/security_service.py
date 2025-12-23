@@ -126,6 +126,11 @@ async def vt_check_url(url: str) -> Dict:
     try:
         # vt-py が未インストールの場合に import 例外を遅延で拾う
         from vt import AsyncClient  # type: ignore
+    except Exception as e:
+        logger.error(f"[VT] Import error: {e}")
+        return {"status": "error", "reason": f"vt_import:{e}", "malicious": 0, "suspicious": 0}
+
+    try:
         async with AsyncClient(VIRUSTOTAL_API_KEY) as client:
             logger.info(f"[VT] Sending URL to VT: {url}")
             analysis = await client.async_scan_url(url)

@@ -63,7 +63,12 @@ class ChatGPT:
 
             logger.debug("OpenAI APIリクエスト: url=%s, headers=%s, data=%s", url, headers, json.dumps(data, ensure_ascii=False))
             async with session.post(url, headers=headers, json=data) as resp:
-                result = await resp.json()
+                try:
+                    result = await resp.json()
+                except aiohttp.ContentTypeError:
+                    text = await resp.text()
+                    raise RuntimeError(f"OpenAI API error ({resp.status}): unexpected content-type, body={text[:300]}")
+
                 logger.debug("OpenAI APIレスポンス: status=%s, body=%s", resp.status, json.dumps(result, ensure_ascii=False))
                 # エラー時は例外を投げる
                 if resp.status != 200:
