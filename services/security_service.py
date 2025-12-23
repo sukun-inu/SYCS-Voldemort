@@ -113,7 +113,7 @@ async def _strip_roles(member: discord.Member) -> Tuple[bool, str]:
 # VirusTotal URL チェック (vt-py v0.22.0)
 # =========================
 async def vt_check_url(url: str) -> Dict:
-    """vt-py v0.22.0 で URL をスキャン（非同期ラップ付き、キャッシュ対応）"""
+    """vt-py v0.22.0 で URL を同期スキャン（wait_for_completion=True）"""
     import vt
 
     key = hash_text(url)
@@ -129,8 +129,8 @@ async def vt_check_url(url: str) -> Dict:
         def sync_scan():
             with vt.Client(VIRUSTOTAL_API_KEY) as client:
                 logger.info(f"[VT] Sending URL to VT: {url}")
-                # URL スキャン
-                analysis = client.scan_url(url)
+                # URLをスキャンして完了まで待機
+                analysis = client.scan_url(url, wait_for_completion=True)
                 stats = analysis.last_analysis_stats
                 return {
                     "status": "ok",
