@@ -302,6 +302,15 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
                 )
             except Exception as e:
                 logger.error("[SECURITY] failed to edit wait message: %s", e)
+        else:
+            try:
+                wait_msg = await message.channel.send(
+                    "🚨 **危険なコンテンツを検出しました**\n"
+                    "セキュリティ上の理由により隔離・削除されました。\n"
+                    "ファイルのダウンロードは推奨されません。"
+                )
+            except Exception as e:
+                logger.error("[SECURITY] failed to send danger message: %s", e)
         ban_reason = " / ".join(reasons) or "危険なコンテンツ"
         stripped, reason = await _strip_roles(member)
         if not stripped:
@@ -321,9 +330,17 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     else:
         if wait_msg:
             try:
-                await wait_msg.delete()
+                await wait_msg.edit(
+                    content="✅ **セキュリティ検査完了: 問題なし**\n"
+                            "ご利用を続けてください。"
+                )
             except Exception as e:
-                logger.error("[SECURITY] failed to delete wait message: %s", e)
+                logger.error("[SECURITY] failed to edit safe message: %s", e)
+        else:
+            try:
+                await message.channel.send("✅ **セキュリティ検査完了: 問題なし**")
+            except Exception as e:
+                logger.error("[SECURITY] failed to send safe message: %s", e)
         await _log(
             "INFO",
             "セキュリティ検査：安全",
