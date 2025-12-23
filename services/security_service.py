@@ -197,6 +197,8 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     if message.author.bot or message.guild is None:
         return
 
+    print("[SECURITY] entered handle_security_for_message", flush=True)
+
     # ログが無効化されている環境でも目視できるよう print を併用
     print(
         f"[SECURITY] recv message author={message.author} ch={getattr(message.channel, 'id', 'unknown')} "
@@ -217,6 +219,7 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
 
     bypassed, bypass_reason = is_security_bypassed(member)
     if bypassed:
+        print(f"[SECURITY] bypassed: {member} ({bypass_reason})", flush=True)
         logger.info("[SECURITY] bypassed: %s (%s)", member, bypass_reason)
         return
 

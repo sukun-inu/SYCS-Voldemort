@@ -60,7 +60,9 @@ def setup_events(bot: Bot) -> None:
         # ① セキュリティ（最優先）
         from services.security_service import handle_security_for_message
         try:
+            print("[BOT_SETUP] calling handle_security_for_message", flush=True)
             await handle_security_for_message(bot, message)
+            print("[BOT_SETUP] returned handle_security_for_message", flush=True)
         except Exception as e:
             print(f"[BOT_SETUP] handle_security_for_message error: {e}")
             import traceback
