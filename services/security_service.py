@@ -164,7 +164,7 @@ async def vt_check_url(url: str) -> Dict:
                     url,
                     wait_for_completion=True
                 )
-                stats = analysis.last_analysis_stats
+                stats = analysis.stats
                 return {
                     "status": "ok",
                     "malicious": stats.get("malicious", 0),
@@ -207,7 +207,7 @@ async def vt_check_file_from_content(content: bytes) -> Dict:
                         f,
                         wait_for_completion=True
                     )
-                stats = analysis.last_analysis_stats
+                stats = analysis.stats
                 return {
                     "status": "ok",
                     "malicious": stats.get("malicious", 0),
