@@ -5,7 +5,6 @@ import psutil
 from datetime import timezone, timedelta
 from services.logging_service import log_action
 
-# 日本標準時
 _JST = timezone(timedelta(hours=9))
 
 
@@ -34,11 +33,11 @@ def setup_events(bot: Bot) -> None:
                 )
             )
         except Exception as e:
-            print(f"ステータス更新エラー: {e}")
+            print(f"ステータス更新エラー: {e}", flush=True)
 
     @bot.event
     async def on_ready():
-        print(f"Logged in as {bot.user}")
+        print(f"[BOT] Logged in as {bot.user}", flush=True)
         await bot.tree.sync()
         if not update_status.is_running():
             update_status.start()
@@ -51,45 +50,35 @@ def setup_events(bot: Bot) -> None:
         if message.guild is None or message.author.bot:
             return
 
-        # on_message が確実に動いているかの簡易ログ
-        try:
-            print(f"[BOT_SETUP] on_message triggered guild={message.guild.id} ch={message.channel.id} author={message.author}", flush=True)
-        except Exception:
-            pass
+        print(
+            f"[BOT_SETUP] on_message triggered "
+            f"guild={message.guild.id} "
+            f"ch={message.channel.id} "
+            f"author={message.author}",
+            flush=True,
+        )
 
         # ① セキュリティ（最優先）
         try:
             from services.security_service import handle_security_for_message
+            print("[BOT_SETUP] calling handle_security_for_message", flush=True)
+            await handle_security_for_message(bot, message)
+            print("[BOT_SETUP] returned handle_security_for_message", flush=True)
         except Exception as e:
-            print(f"[BOT_SETUP] import security_service failed: {e}", flush=True)
+            print(f"[BOT_SETUP] security_service error: {e}", flush=True)
             import traceback
             traceback.print_exc()
-        else:
-            try:
-                print("[BOT_SETUP] calling handle_security_for_message", flush=True)
-                await handle_security_for_message(bot, message)
-                print("[BOT_SETUP] returned handle_security_for_message", flush=True)
-            except Exception as e:
-                print(f"[BOT_SETUP] handle_security_for_message error: {e}", flush=True)
-                import traceback
-                traceback.print_exc()
 
         # ② ChatGPT
         try:
             from commands.chat_commands import handle_chatgpt_message
+            print("[BOT_SETUP] calling handle_chatgpt_message", flush=True)
+            await handle_chatgpt_message(bot, message)
+            print("[BOT_SETUP] returned handle_chatgpt_message", flush=True)
         except Exception as e:
-            print(f"[BOT_SETUP] import chat_commands failed: {e}", flush=True)
+            print(f"[BOT_SETUP] chat_commands error: {e}", flush=True)
             import traceback
             traceback.print_exc()
-        else:
-            try:
-                print("[BOT_SETUP] calling handle_chatgpt_message", flush=True)
-                await handle_chatgpt_message(bot, message)
-                print("[BOT_SETUP] returned handle_chatgpt_message", flush=True)
-            except Exception as e:
-                print(f"[BOT_SETUP] handle_chatgpt_message error: {e}", flush=True)
-                import traceback
-                traceback.print_exc()
 
         # ③ コマンド
         await bot.process_commands(message)
@@ -152,8 +141,11 @@ def setup_events(bot: Bot) -> None:
         if member.guild is None:
             return
 
-        from services.security_service import handle_security_for_voice_join
-        await handle_security_for_voice_join(bot, member, before, after)
+        try:
+            from services.security_service import handle_security_for_voice_join
+            await handle_security_for_voice_join(bot, member, before, after)
+        except Exception as e:
+            print(f"[BOT_SETUP] VC security error: {e}", flush=True)
 
     # --------------------------
     # メンバー参加・退出
@@ -190,5 +182,8 @@ def setup_events(bot: Bot) -> None:
                 "INFO",
                 f"{after.mention} のニックネームが変更されました。",
                 user=after,
-                fields={"旧": before.nick or "(なし)", "新": after.nick or "(なし)"},
+                fields={
+                    "旧": before.nick or "(なし)",
+                    "新": after.nick or "(なし)",
+                },
             )
