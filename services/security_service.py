@@ -44,7 +44,11 @@ UNICODE_TRICK_REGEX = re.compile(r"[\u202A-\u202E\u2066-\u2069]")
 # ロガー
 # =========================
 logger = logging.getLogger("security_service")
-logging.basicConfig(level=logging.INFO)
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
+    logger.addHandler(handler)
+logger.setLevel(logging.INFO)
 
 # =========================
 # ユーティリティ
@@ -191,6 +195,14 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     if message.author.bot or message.guild is None:
         return
 
+    logger.info(
+        "[SECURITY] recv message: author=%s channel=%s attachments=%s links=%s",
+        message.author,
+        getattr(message.channel, "id", "unknown"),
+        len(message.attachments or []),
+        len(extract_links(message.content or "")),
+    )
+
     content = message.content or ""
     links = extract_links(content)
     attachments = message.attachments or []
@@ -202,7 +214,7 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
         return
 
     logger.info(
-        "[SECURITY] %s links: %s files: %s",
+        "[SECURITY] start scan member=%s links=%s files=%s",
         member,
         links,
         [a.filename for a in attachments],
@@ -224,6 +236,8 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     except Exception as e:
         logger.error("[SECURITY] failed to send wait message: %s", e)
         wait_msg = None
+    else:
+        logger.info("[SECURITY] wait message sent: %s", getattr(wait_msg, "id", "unknown"))
 
     reasons: List[str] = []
     danger = False
@@ -293,6 +307,8 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
             await message.delete()
         except discord.Forbidden:
             logger.error("[SECURITY] Delete failed: %s", message.id)
+        except Exception as e:
+            logger.error("[SECURITY] Delete failed (other): %s", e)
         if wait_msg:
             try:
                 await wait_msg.edit(
