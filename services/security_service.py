@@ -5,7 +5,7 @@ import time
 import os
 import re
 import tempfile
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple
 
 import aiohttp
 import discord
@@ -132,7 +132,7 @@ def is_file_content_type(content_type: str) -> bool:
     return False
 
 # ==================================================
-# VirusTotal URL チェック（vt-py 0.22.0）
+# VirusTotal URL チェック
 # ==================================================
 async def vt_check_url(url: str) -> Dict:
     key = hash_text(url)
@@ -148,7 +148,7 @@ async def vt_check_url(url: str) -> Dict:
         def sync():
             with vt.Client(VIRUSTOTAL_API_KEY) as client:
                 analysis = client.scan_url(url)
-                analysis = client.wait_for_analysis(analysis)
+                analysis.wait()
                 stats = analysis.stats
                 return {
                     "status": "ok",
@@ -172,7 +172,7 @@ async def vt_check_url(url: str) -> Dict:
         }
 
 # ==================================================
-# VirusTotal FILE チェック（vt-py 0.22.0）
+# VirusTotal FILE チェック
 # ==================================================
 async def vt_check_file(content: bytes) -> Dict:
     if not VIRUSTOTAL_API_KEY:
@@ -189,7 +189,7 @@ async def vt_check_file(content: bytes) -> Dict:
             with vt.Client(VIRUSTOTAL_API_KEY) as client:
                 with open(tmp_path, "rb") as f:
                     analysis = client.scan_file(f)
-                analysis = client.wait_for_analysis(analysis)
+                analysis.wait()
                 stats = analysis.stats
                 return {
                     "status": "ok",
@@ -220,6 +220,9 @@ async def vt_check_file(content: bytes) -> Dict:
 async def vt_scan_target(session: aiohttp.ClientSession, url: str) -> Dict:
     content_type = await fetch_content_type(session, url)
     logger.info("[VT] Content-Type %s -> %s", url, content_type)
+
+    if content_type.startswith("image/"):
+        return {"status": "skip", "type": "image", "malicious": 0, "suspicious": 0}
 
     if is_file_content_type(content_type):
         async with session.get(url, timeout=20) as r:
@@ -319,6 +322,15 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     if UNICODE_TRICK_REGEX.search(content):
         reasons.append("UNICODE_TRICK")
 
+    progress_msg = None
+    if links or attachments:
+        try:
+            progress_msg = await message.channel.send(
+                "🔍 **セキュリティ検査中です…**\nVirusTotal で解析しています"
+            )
+        except Exception:
+            pass
+
     vt_results: List[Dict] = []
     async with aiohttp.ClientSession() as session:
         for url in links + [a.url for a in attachments]:
@@ -345,20 +357,30 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
 
         await strip_roles(member)
 
-        try:
-            embed = build_vt_embed(vt_results)
-            await message.channel.send(
-                "🚨 **危険な投稿をブロックしました**\n理由: " + " / ".join(reasons),
-                embed=embed
-            )
-        except Exception as e:
-            logger.error("[SECURITY] notify failed: %s", e)
+        if progress_msg:
+            try:
+                await progress_msg.delete()
+            except Exception:
+                pass
 
+        embed = build_vt_embed(vt_results)
+        await message.channel.send(
+            "🚨 **危険な投稿をブロックしました**\n理由: " + " / ".join(sorted(set(reasons))),
+            embed=embed
+        )
     else:
+        if progress_msg:
+            try:
+                await progress_msg.edit(
+                    content="✅ **検査完了：問題は見つかりませんでした**"
+                )
+            except Exception:
+                pass
+
         logger.info("[SECURITY] SAFE")
 
 # ==================================================
-# VC レイド検知（bot_setup.py 対応）
+# VC レイド検知
 # ==================================================
 async def handle_security_for_voice_join(
     bot: discord.Client,
