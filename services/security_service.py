@@ -180,19 +180,38 @@ async def vt_check_file(content: bytes) -> Dict:
     if not VIRUSTOTAL_API_KEY:
         return {"status": "skip", "type": "file", "malicious": 0, "suspicious": 0}
 
+    sha256 = hashlib.sha256(content).hexdigest()
     tmp_path = None
 
     try:
+        def sync_lookup():
+            with vt.Client(VIRUSTOTAL_API_KEY) as client:
+                try:
+                    obj = client.get_object(f"/files/{sha256}")
+                    stats = obj.last_analysis_stats
+                    return {
+                        "status": "cached",
+                        "type": "file",
+                        "malicious": stats.get("malicious", 0),
+                        "suspicious": stats.get("suspicious", 0),
+                    }
+                except vt.error.APIError:
+                    return None
+
+        cached = await asyncio.to_thread(sync_lookup)
+        if cached:
+            return cached
+
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             tmp.write(content)
             tmp_path = tmp.name
 
-        def sync():
+        def sync_scan():
             with vt.Client(VIRUSTOTAL_API_KEY) as client:
                 with open(tmp_path, "rb") as f:
                     analysis = client.scan_file(
                         f,
-                        wait_for_completion=True  # ✅ 公式
+                        wait_for_completion=True
                     )
                 stats = analysis.stats
                 return {
@@ -202,7 +221,25 @@ async def vt_check_file(content: bytes) -> Dict:
                     "suspicious": stats.get("suspicious", 0),
                 }
 
-        return await asyncio.to_thread(sync)
+        return await asyncio.to_thread(sync_scan)
+
+    except vt.error.ConflictError:
+        # 🔁 競合した場合は既存解析を再取得
+        try:
+            def sync_fallback():
+                with vt.Client(VIRUSTOTAL_API_KEY) as client:
+                    obj = client.get_object(f"/files/{sha256}")
+                    stats = obj.last_analysis_stats
+                    return {
+                        "status": "conflict_fallback",
+                        "type": "file",
+                        "malicious": stats.get("malicious", 0),
+                        "suspicious": stats.get("suspicious", 0),
+                    }
+
+            return await asyncio.to_thread(sync_fallback)
+        except Exception as e:
+            raise e
 
     except Exception as e:
         logger.error("[VT] File scan exception: %s", e)
