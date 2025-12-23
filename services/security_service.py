@@ -136,17 +136,15 @@ def is_file_content_type(content_type: str) -> bool:
         return False
 
     ct = content_type.lower()
-
     if ct.startswith("application/"):
         return True
-
     if ct == "binary/octet-stream":
         return True
 
     return False
 
 # =========================
-# VirusTotal URL チェック
+# VirusTotal URL チェック（修正版）
 # =========================
 async def vt_check_url(url: str) -> Dict:
     key = hash_text(url)
@@ -162,11 +160,11 @@ async def vt_check_url(url: str) -> Dict:
         def sync_scan():
             with vt.Client(VIRUSTOTAL_API_KEY) as client:
                 logger.info(f"[VT] URL scan: {url}")
-                analysis = client.urls.scan(
+                analysis = client.scan_url(
                     url,
                     wait_for_completion=True
                 )
-                stats = analysis.stats
+                stats = analysis.last_analysis_stats
                 return {
                     "status": "ok",
                     "malicious": stats.get("malicious", 0),
@@ -187,7 +185,7 @@ async def vt_check_url(url: str) -> Dict:
         }
 
 # =========================
-# VirusTotal FILE チェック
+# VirusTotal FILE チェック（修正版）
 # =========================
 async def vt_check_file_from_content(content: bytes) -> Dict:
     if not VIRUSTOTAL_API_KEY:
@@ -205,11 +203,11 @@ async def vt_check_file_from_content(content: bytes) -> Dict:
         def sync_scan():
             with vt.Client(VIRUSTOTAL_API_KEY) as client:
                 with open(tmp_path, "rb") as f:
-                    analysis = client.files.scan(
+                    analysis = client.scan_file(
                         f,
                         wait_for_completion=True
                     )
-                stats = analysis.stats
+                stats = analysis.last_analysis_stats
                 return {
                     "status": "ok",
                     "malicious": stats.get("malicious", 0),
@@ -325,9 +323,9 @@ async def handle_security_for_message(
     attachments = message.attachments or []
     member = message.author
 
-    bypassed, reason = is_security_bypassed(member)
+    bypassed, bypass_reason = is_security_bypassed(member)
     if bypassed:
-        logger.info("[SECURITY] bypassed: %s (%s)", member, reason)
+        logger.info("[SECURITY] bypassed: %s (%s)", member, bypass_reason)
         return
 
     targets = links + [a.url for a in attachments]
