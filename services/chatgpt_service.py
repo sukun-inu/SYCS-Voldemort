@@ -5,8 +5,8 @@ import logging
 from datetime import datetime
 from config import OPENAI_API_KEY, CHATGPT_SYSTEM_MESSAGE
 
-# デバッグログ設定（必要に応じてmain等で再設定可）
-logging.basicConfig(level=logging.DEBUG)
+# ルートロガーを汚染しないようにモジュール専用ロガーを使用
+logger = logging.getLogger(__name__)
 
 
 class ChatGPT:
@@ -34,7 +34,7 @@ class ChatGPT:
 
         try:
             reply = await self._call_chat_api(messages)
-            logging.debug("Chat API Reply: %s", json.dumps(reply, ensure_ascii=False))
+            logger.debug("Chat API Reply: %s", json.dumps(reply, ensure_ascii=False))
             final = reply.get("content") or "返答が得られなかった。"
         except Exception as e:
             traceback.print_exc()
@@ -43,7 +43,7 @@ class ChatGPT:
         # アシスタントの返答も履歴に積む
         self.history.append({"role": "assistant", "content": final})
 
-        logging.debug("最終返答: %s", final)
+        logger.debug("最終返答: %s", final)
         return final
 
     async def _call_chat_api(self, messages: list) -> dict:
@@ -61,10 +61,10 @@ class ChatGPT:
                 "temperature": 0.45,
             }
 
-            logging.debug("OpenAI APIリクエスト: url=%s, headers=%s, data=%s", url, headers, json.dumps(data, ensure_ascii=False))
+            logger.debug("OpenAI APIリクエスト: url=%s, headers=%s, data=%s", url, headers, json.dumps(data, ensure_ascii=False))
             async with session.post(url, headers=headers, json=data) as resp:
                 result = await resp.json()
-                logging.debug("OpenAI APIレスポンス: status=%s, body=%s", resp.status, json.dumps(result, ensure_ascii=False))
+                logger.debug("OpenAI APIレスポンス: status=%s, body=%s", resp.status, json.dumps(result, ensure_ascii=False))
                 # エラー時は例外を投げる
                 if resp.status != 200:
                     message = result.get("error", {}).get("message", str(result))

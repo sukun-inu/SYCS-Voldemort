@@ -6,8 +6,10 @@ from config import METALPRICE_BASE_URL, METALPRICE_API_KEY
 def get_metal_price(metal_code: str) -> float:
     """金属の現在価格をAPIから取得"""
     try:
+        if not METALPRICE_API_KEY:
+            raise ValueError("METALPRICE_API_KEY が設定されていない。")
         url = f'{METALPRICE_BASE_URL}?api_key={METALPRICE_API_KEY}&base=JPY&currencies={metal_code}'
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         data = response.json()
         print("DEBUG: 金属API Response: " + json.dumps(data, ensure_ascii=False))
         

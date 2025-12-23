@@ -53,29 +53,43 @@ def setup_events(bot: Bot) -> None:
 
         # on_message が確実に動いているかの簡易ログ
         try:
-            print(f"[BOT_SETUP] on_message triggered guild={message.guild.id} ch={message.channel.id} author={message.author}")
+            print(f"[BOT_SETUP] on_message triggered guild={message.guild.id} ch={message.channel.id} author={message.author}", flush=True)
         except Exception:
             pass
 
         # ① セキュリティ（最優先）
-        from services.security_service import handle_security_for_message
         try:
-            print("[BOT_SETUP] calling handle_security_for_message", flush=True)
-            await handle_security_for_message(bot, message)
-            print("[BOT_SETUP] returned handle_security_for_message", flush=True)
+            from services.security_service import handle_security_for_message
         except Exception as e:
-            print(f"[BOT_SETUP] handle_security_for_message error: {e}")
+            print(f"[BOT_SETUP] import security_service failed: {e}", flush=True)
             import traceback
             traceback.print_exc()
+        else:
+            try:
+                print("[BOT_SETUP] calling handle_security_for_message", flush=True)
+                await handle_security_for_message(bot, message)
+                print("[BOT_SETUP] returned handle_security_for_message", flush=True)
+            except Exception as e:
+                print(f"[BOT_SETUP] handle_security_for_message error: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
 
         # ② ChatGPT
-        from commands.chat_commands import handle_chatgpt_message
         try:
-            await handle_chatgpt_message(bot, message)
+            from commands.chat_commands import handle_chatgpt_message
         except Exception as e:
-            print(f"[BOT_SETUP] handle_chatgpt_message error: {e}")
+            print(f"[BOT_SETUP] import chat_commands failed: {e}", flush=True)
             import traceback
             traceback.print_exc()
+        else:
+            try:
+                print("[BOT_SETUP] calling handle_chatgpt_message", flush=True)
+                await handle_chatgpt_message(bot, message)
+                print("[BOT_SETUP] returned handle_chatgpt_message", flush=True)
+            except Exception as e:
+                print(f"[BOT_SETUP] handle_chatgpt_message error: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
 
         # ③ コマンド
         await bot.process_commands(message)

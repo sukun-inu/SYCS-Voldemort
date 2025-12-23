@@ -7,7 +7,6 @@ from typing import List, Dict, Tuple, Optional
 
 import aiohttp
 import discord
-from vt import AsyncClient
 from config import VIRUSTOTAL_API_KEY, OPENAI_API_KEY
 from services.settings_store import (
     get_trusted_user_ids,
@@ -125,6 +124,8 @@ async def vt_check_url(url: str) -> Dict:
         return {"status": "skip", "reason": "no_api_key", "malicious": 0, "suspicious": 0}
 
     try:
+        # vt-py が未インストールの場合に import 例外を遅延で拾う
+        from vt import AsyncClient  # type: ignore
         async with AsyncClient(VIRUSTOTAL_API_KEY) as client:
             logger.info(f"[VT] Sending URL to VT: {url}")
             analysis = await client.async_scan_url(url)
@@ -216,6 +217,8 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     links = extract_links(content)
     attachments = message.attachments or []
     member = message.author
+
+    print(f"[SECURITY] links={len(links)} attachments={len(attachments)}", flush=True)
 
     bypassed, bypass_reason = is_security_bypassed(member)
     if bypassed:

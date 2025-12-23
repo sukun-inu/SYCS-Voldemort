@@ -22,6 +22,8 @@ async def main():
 
     # ボット起動
     async with bot:
+        if not DISCORD_BOT_TOKEN:
+            raise RuntimeError("DISCORD_BOT_TOKEN が設定されていません。環境変数または .env を確認してください。")
         await bot.start(DISCORD_BOT_TOKEN)
 
 
