@@ -147,7 +147,8 @@ async def vt_check_url(url: str) -> Dict:
     try:
         def sync():
             with vt.Client(VIRUSTOTAL_API_KEY) as client:
-                analysis = client.urls.scan(url, wait_for_completion=True)
+                analysis = client.scan_url(url)
+                analysis = client.wait_for_analysis(analysis)
                 stats = analysis.stats
                 return {
                     "status": "ok",
@@ -162,7 +163,13 @@ async def vt_check_url(url: str) -> Dict:
 
     except Exception as e:
         logger.error("[VT] URL scan exception: %s", e)
-        return {"status": "error", "type": "url", "reason": str(e), "malicious": 0, "suspicious": 0}
+        return {
+            "status": "error",
+            "type": "url",
+            "reason": str(e),
+            "malicious": -1,
+            "suspicious": -1,
+        }
 
 # ==================================================
 # VirusTotal FILE チェック（vt-py 0.22.0）
@@ -181,7 +188,8 @@ async def vt_check_file(content: bytes) -> Dict:
         def sync():
             with vt.Client(VIRUSTOTAL_API_KEY) as client:
                 with open(tmp_path, "rb") as f:
-                    analysis = client.files.scan(f, wait_for_completion=True)
+                    analysis = client.scan_file(f)
+                analysis = client.wait_for_analysis(analysis)
                 stats = analysis.stats
                 return {
                     "status": "ok",
@@ -194,7 +202,13 @@ async def vt_check_file(content: bytes) -> Dict:
 
     except Exception as e:
         logger.error("[VT] File scan exception: %s", e)
-        return {"status": "error", "type": "file", "reason": str(e), "malicious": 0, "suspicious": 0}
+        return {
+            "status": "error",
+            "type": "file",
+            "reason": str(e),
+            "malicious": -1,
+            "suspicious": -1,
+        }
 
     finally:
         if tmp_path and os.path.exists(tmp_path):
