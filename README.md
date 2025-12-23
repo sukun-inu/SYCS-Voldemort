@@ -69,7 +69,7 @@
 ## 2. プロジェクト構成
 
 ```text
-discord_volchang/
+/
 ├── main.py
 ├── config.py
 ├── bot_setup.py
@@ -84,7 +84,9 @@ discord_volchang/
 │   ├── logging_service.py
 │   ├── settings_store.py
 │   └── security_service.py
-└── requirements.txt
+├── requirements.txt
+├── Dockerfile
+└── docker-compose.yml
 ```
 
 ---
