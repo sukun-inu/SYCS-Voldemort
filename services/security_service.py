@@ -129,9 +129,9 @@ async def vt_check_url(url: str) -> Dict:
         def sync_scan():
             with vt.Client(VIRUSTOTAL_API_KEY) as client:
                 logger.info(f"[VT] Sending URL to VT: {url}")
-                url_obj = client.url(url)
-                url_obj.get_analysis()
-                stats = url_obj.last_analysis_stats
+                # URL スキャン
+                analysis = client.scan_url(url)
+                stats = analysis.last_analysis_stats
                 return {
                     "status": "ok",
                     "malicious": stats.get("malicious", 0),
