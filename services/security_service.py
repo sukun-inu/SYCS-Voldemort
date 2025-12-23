@@ -396,9 +396,12 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
                 vt_results.append(res)
                 icon = vt_icon(res.get("malicious", 0), res.get("suspicious", 0))
                 logs.append(f"{icon} {url} をスキャン: Malicious={res.get('malicious')} Suspicious={res.get('suspicious')}")
-                if res.get("malicious", 0) > 0 or res.get("suspicious", 0) > 0:
+
+                # ★変更点★ Malicious 10件以上で危険判定
+                if res.get("malicious", 0) >= 10:
                     danger = True
                     reasons.append("VT_DETECTED")
+                
                 if progress_msg:
                     bar = build_progress_bar(idx, len(targets))
                     await progress_msg.edit(embed=discord.Embed(
