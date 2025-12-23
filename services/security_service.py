@@ -49,6 +49,8 @@ if not logger.handlers:
     handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
     logger.addHandler(handler)
 logger.setLevel(logging.INFO)
+logger.propagate = True
+logger.disabled = False
 
 # =========================
 # ユーティリティ
@@ -195,6 +197,11 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     if message.author.bot or message.guild is None:
         return
 
+    # ログが無効化されている環境でも目視できるよう print を併用
+    print(
+        f"[SECURITY] recv message author={message.author} ch={getattr(message.channel, 'id', 'unknown')} "
+        f"attachments={len(message.attachments or [])} links={len(extract_links(message.content or ''))}"
+    )
     logger.info(
         "[SECURITY] recv message: author=%s channel=%s attachments=%s links=%s",
         message.author,

@@ -51,6 +51,12 @@ def setup_events(bot: Bot) -> None:
         if message.guild is None or message.author.bot:
             return
 
+        # on_message が確実に動いているかの簡易ログ
+        try:
+            print(f"[BOT_SETUP] on_message triggered guild={message.guild.id} ch={message.channel.id} author={message.author}")
+        except Exception:
+            pass
+
         # ① セキュリティ（最優先）
         from services.security_service import handle_security_for_message
         await handle_security_for_message(bot, message)
