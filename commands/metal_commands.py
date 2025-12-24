@@ -30,7 +30,7 @@ async def _handle_single_metal(interaction: discord.Interaction, grams: float, s
 
     try:
         price_map = await calculate_metal_value(grams, spec.code, spec.purity)
-        text = _format_prices(price_map if isinstance(price_map, dict) else {spec.display_name: price_map})
+        text = _format_prices(price_map if isinstance(price_map, dict) else {spec.display_name: int(price_map)})
         embed = create_embed(
             f"{grams}グラムの{spec.display_name}価格",
             spec.description,
@@ -54,24 +54,28 @@ async def _handle_single_metal(interaction: discord.Interaction, grams: float, s
 def register_metal_commands(bot: discord.Client) -> None:
     """金属価格コマンドを登録"""
 
-    for spec in METAL_COMMANDS.values():
-
+    def _create_single_command(spec: MetalSpec):
         @bot.tree.command(name=spec.key, description=f"{spec.display_name}のリアルタイムレート価格を取得")
         @app_commands.describe(g="計算するグラム数を入力してください")
-        async def _cmd(interaction: discord.Interaction, g: float, _spec: MetalSpec = spec):
+        async def _cmd(interaction: discord.Interaction, g: float):
             if interaction.guild is not None:
                 await log_action(
                     interaction.client,
                     interaction.guild.id,
                     "INFO",
-                    f"/{_spec.display_name} 実行",
+                    f"/{spec.display_name} 実行",
                     user=interaction.user,
                     fields={
                         "チャンネル": interaction.channel.mention if hasattr(interaction.channel, "mention") else str(interaction.channel),
                         "グラム数": str(g),
                     },
                 )
-            await _handle_single_metal(interaction, g, _spec)
+            await _handle_single_metal(interaction, g, spec)
+
+        return _cmd
+
+    for spec in METAL_COMMANDS.values():
+        _create_single_command(spec)
 
     @bot.tree.command(name="all", description="金、銀、プラチナのリアルタイムレート価格を取得")
     @app_commands.describe(g="計算するグラム数を入力してください")
