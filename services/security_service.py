@@ -14,7 +14,7 @@ import vt
 
 from config import OPENAI_API_KEY, VIRUSTOTAL_API_KEY
 from services.logging_service import log_action
-from services.settings_store import get_bypass_role_ids, get_trusted_user_ids
+from services.settings_store import get_bypass_role_ids, get_trusted_user_ids, get_response_channel_id
 
 # ==================================================
 # 設定
@@ -391,6 +391,14 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     content = message.content or ""
     links = extract_links(content)
     attachments: Sequence[discord.Attachment] = message.attachments or []
+
+    # GPT応答チャンネルではリンク・添付が無い場合はセキュリティ検査をスキップ
+    try:
+        resp_ch_id = get_response_channel_id(message.guild.id)
+        if resp_ch_id and message.channel.id == resp_ch_id and not links and not attachments:
+            return
+    except Exception:
+        logger.debug("failed to check response_channel_id", exc_info=True)
 
     logs: List[str] = [f"[{now_jst()}] スキャン開始"]
     reason_flags: List[str] = []
