@@ -16,18 +16,26 @@ from services.settings_store import (
 )
 
 
+async def _ensure_admin_in_guild(interaction: discord.Interaction) -> bool:
+    """ギルド内かつ管理者であることを確認"""
+    if interaction.guild is None:
+        await interaction.response.send_message("ギルド内でのみ使用可能だ。", ephemeral=True)
+        return False
+
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("このコマンドは管理者のみが実行できる。", ephemeral=True)
+        return False
+
+    return True
+
+
 def register_logging_commands(bot: Bot) -> None:
     """ログ/設定関連のスラッシュコマンドを登録"""
 
     @bot.tree.command(name="set_log_channel", description="ボットの動作ログを送信するチャンネルを設定（管理者専用）")
     @app_commands.describe(channel="ログを投稿するテキストチャンネル")
     async def set_log_channel_cmd(interaction: discord.Interaction, channel: discord.TextChannel):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("このコマンドは管理者のみが実行できる。", ephemeral=True)
-            return
-
-        if interaction.guild is None:
-            await interaction.response.send_message("ギルド内でのみ使用可能だ。", ephemeral=True)
+        if not await _ensure_admin_in_guild(interaction):
             return
 
         set_log_channel(interaction.guild.id, channel.id)
@@ -40,12 +48,7 @@ def register_logging_commands(bot: Bot) -> None:
     @bot.tree.command(name="set_log_level", description="ボットの動作ログレベルを設定（管理者専用）")
     @app_commands.describe(level="NONE / ERROR / INFO / DEBUG のいずれか")
     async def set_log_level_cmd(interaction: discord.Interaction, level: str):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("このコマンドは管理者のみが実行できる。", ephemeral=True)
-            return
-
-        if interaction.guild is None:
-            await interaction.response.send_message("ギルド内でのみ使用可能だ。", ephemeral=True)
+        if not await _ensure_admin_in_guild(interaction):
             return
 
         try:
@@ -65,12 +68,7 @@ def register_logging_commands(bot: Bot) -> None:
     @bot.tree.command(name="set_response_channel", description="ChatGPT応答チャンネルを設定（管理者専用）")
     @app_commands.describe(channel="ChatGPTが応答するテキストチャンネル")
     async def set_response_channel_cmd(interaction: discord.Interaction, channel: discord.TextChannel):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("このコマンドは管理者のみが実行できる。", ephemeral=True)
-            return
-
-        if interaction.guild is None:
-            await interaction.response.send_message("ギルド内でのみ使用可能だ。", ephemeral=True)
+        if not await _ensure_admin_in_guild(interaction):
             return
 
         set_response_channel_id(interaction.guild.id, channel.id)
@@ -82,12 +80,7 @@ def register_logging_commands(bot: Bot) -> None:
 
     @bot.tree.command(name="clear_response_channel", description="ChatGPT応答チャンネル設定を解除（管理者専用）")
     async def clear_response_channel_cmd(interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("このコマンドは管理者のみが実行できる。", ephemeral=True)
-            return
-
-        if interaction.guild is None:
-            await interaction.response.send_message("ギルド内でのみ使用可能だ。", ephemeral=True)
+        if not await _ensure_admin_in_guild(interaction):
             return
 
         set_response_channel_id(interaction.guild.id, None)
@@ -112,12 +105,7 @@ def register_logging_commands(bot: Bot) -> None:
         member4: Optional[discord.Member] = None,
         member5: Optional[discord.Member] = None,
     ):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("このコマンドは管理者のみが実行できる。", ephemeral=True)
-            return
-
-        if interaction.guild is None:
-            await interaction.response.send_message("ギルド内でのみ使用可能だ。", ephemeral=True)
+        if not await _ensure_admin_in_guild(interaction):
             return
 
         members = [m for m in [member1, member2, member3, member4, member5] if m is not None]
@@ -145,12 +133,7 @@ def register_logging_commands(bot: Bot) -> None:
         member4: Optional[discord.Member] = None,
         member5: Optional[discord.Member] = None,
     ):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("このコマンドは管理者のみが実行できる。", ephemeral=True)
-            return
-
-        if interaction.guild is None:
-            await interaction.response.send_message("ギルド内でのみ使用可能だ。", ephemeral=True)
+        if not await _ensure_admin_in_guild(interaction):
             return
 
         members = [m for m in [member1, member2, member3, member4, member5] if m is not None]
@@ -164,12 +147,7 @@ def register_logging_commands(bot: Bot) -> None:
 
     @bot.tree.command(name="list_trusted_members", description="信頼済みユーザー一覧を表示（管理者専用）")
     async def list_trusted_members_cmd(interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("このコマンドは管理者のみが実行できる。", ephemeral=True)
-            return
-
-        if interaction.guild is None:
-            await interaction.response.send_message("ギルド内でのみ使用可能だ。", ephemeral=True)
+        if not await _ensure_admin_in_guild(interaction):
             return
 
         ids = get_trusted_user_ids(interaction.guild.id)
@@ -200,12 +178,7 @@ def register_logging_commands(bot: Bot) -> None:
         role2: Optional[discord.Role] = None,
         role3: Optional[discord.Role] = None,
     ):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("このコマンドは管理者のみが実行できる。", ephemeral=True)
-            return
-
-        if interaction.guild is None:
-            await interaction.response.send_message("ギルド内でのみ使用可能だ。", ephemeral=True)
+        if not await _ensure_admin_in_guild(interaction):
             return
 
         roles = [r for r in [role1, role2, role3] if r is not None]
@@ -229,12 +202,7 @@ def register_logging_commands(bot: Bot) -> None:
         role2: Optional[discord.Role] = None,
         role3: Optional[discord.Role] = None,
     ):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("このコマンドは管理者のみが実行できる。", ephemeral=True)
-            return
-
-        if interaction.guild is None:
-            await interaction.response.send_message("ギルド内でのみ使用可能だ。", ephemeral=True)
+        if not await _ensure_admin_in_guild(interaction):
             return
 
         roles = [r for r in [role1, role2, role3] if r is not None]
@@ -248,12 +216,7 @@ def register_logging_commands(bot: Bot) -> None:
 
     @bot.tree.command(name="list_bypass_roles", description="バイパスロール一覧を表示（管理者専用）")
     async def list_bypass_roles_cmd(interaction: discord.Interaction):
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("このコマンドは管理者のみが実行できる。", ephemeral=True)
-            return
-
-        if interaction.guild is None:
-            await interaction.response.send_message("ギルド内でのみ使用可能だ。", ephemeral=True)
+        if not await _ensure_admin_in_guild(interaction):
             return
 
         ids = get_bypass_role_ids(interaction.guild.id)

@@ -1,9 +1,10 @@
-import discord
+import logging
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Optional, Mapping
 from io import BytesIO
+from typing import Dict, Mapping, Optional
 
 import aiohttp
+import discord
 
 try:
     from colorthief import ColorThief  # type: ignore[import]
@@ -11,6 +12,8 @@ except ImportError:  # ライブラリ未導入時は色抽出をスキップ
     ColorThief = None  # type: ignore[assignment]
 
 from services.settings_store import get_guild_settings, update_guild_settings
+
+logger = logging.getLogger(__name__)
 
 # ログレベルの優先度
 _LEVEL_PRIORITY = {
@@ -57,7 +60,7 @@ def set_log_level(guild_id: int, level: str) -> None:
 
 def _should_log(guild_id: int, level: str) -> bool:
     settings = get_log_settings(guild_id)
-    current_level = settings.get("level", "INFO") or "INFO"
+    current_level = str(settings.get("level", "INFO") or "INFO").upper()
     return _LEVEL_PRIORITY.get(level, 0) <= _LEVEL_PRIORITY.get(current_level, 2)
 
 
@@ -115,6 +118,21 @@ async def _user_avatar_color(user: Optional[discord.abc.User]) -> Optional[disco
     return discord.Color.from_rgb(r, g, b)
 
 
+def _get_log_channel(bot: discord.Client, guild_id: int) -> Optional[discord.TextChannel]:
+    """設定からログチャンネルを取得。未設定や型不一致の場合はNone。"""
+    settings = get_log_settings(guild_id)
+    channel_id = settings.get("channel_id")
+    if not channel_id:
+        logger.debug("ログチャンネル未設定 guild_id=%s", guild_id)
+        return None
+
+    channel = bot.get_channel(int(channel_id))
+    if not isinstance(channel, discord.TextChannel):
+        logger.debug("ログチャンネルがTextChannelでない guild_id=%s channel_id=%s", guild_id, channel_id)
+        return None
+    return channel
+
+
 async def log_action(
     bot: discord.Client,
     guild_id: int,
@@ -139,13 +157,8 @@ async def log_action(
     if not _should_log(guild_id, level):
         return
 
-    settings = get_log_settings(guild_id)
-    channel_id = settings.get("channel_id")
-    if not channel_id:
-        return
-
-    channel = bot.get_channel(channel_id)
-    if not isinstance(channel, discord.TextChannel):
+    channel = _get_log_channel(bot, guild_id)
+    if channel is None:
         return
 
     jst_now = datetime.now(_JST)

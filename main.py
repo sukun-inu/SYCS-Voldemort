@@ -1,11 +1,17 @@
 import asyncio
+import logging
 import threading
 
-from config import DISCORD_BOT_TOKEN
 from bot_setup import create_bot, setup_events
-from commands.metal_commands import register_metal_commands
-from commands.logging_commands import register_logging_commands
 from bot_status_server import start_status_server
+from commands.logging_commands import register_logging_commands
+from commands.metal_commands import register_metal_commands
+from config import DISCORD_BOT_TOKEN
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 
 async def main():

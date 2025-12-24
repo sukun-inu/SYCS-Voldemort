@@ -1,19 +1,20 @@
 import asyncio
+import datetime
 import hashlib
 import logging
-import time
 import os
 import re
 import tempfile
-import datetime
-from typing import List, Dict, Tuple
+import time
+from typing import Any, Dict, List, Sequence, Tuple
 
 import aiohttp
 import discord
 import vt
 
-from config import VIRUSTOTAL_API_KEY, OPENAI_API_KEY
-from services.settings_store import get_trusted_user_ids, get_bypass_role_ids
+from config import OPENAI_API_KEY, VIRUSTOTAL_API_KEY
+from services.logging_service import log_action
+from services.settings_store import get_bypass_role_ids, get_trusted_user_ids
 
 # ==================================================
 # 設定
@@ -31,7 +32,7 @@ MALICIOUS_THRESHOLD = 10  # VTのMalicious件数で削除対象とする閾値
 # ==================================================
 # 内部キャッシュ
 # ==================================================
-_vt_cache: Dict[str, Dict] = {}
+_vt_cache: Dict[str, Dict[str, Any]] = {}
 _user_message_times: Dict[int, List[float]] = {}
 _vc_join_history: Dict[int, List[Tuple[float, str, int]]] = {}
 
@@ -44,7 +45,7 @@ UNICODE_TRICK_REGEX = re.compile(r"[\u202A-\u202E\u2066-\u2069]")
 # ==================================================
 # ロガー
 # ==================================================
-logger = logging.getLogger("security_service")
+logger = logging.getLogger(__name__)
 if not logger.handlers:
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
@@ -52,19 +53,27 @@ if not logger.handlers:
 logger.setLevel(logging.INFO)
 logger.propagate = True
 
+
 # ==================================================
-# ユーティリティ
+# 共通ユーティリティ
 # ==================================================
+def now_jst() -> str:
+    return datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def extract_links(text: str) -> List[str]:
     return URL_REGEX.findall(text or "")
 
+
 def hash_text(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
+
 
 def is_new_member(member: discord.Member) -> bool:
     if not member.joined_at:
         return False
     return (discord.utils.utcnow() - member.joined_at).days < NEW_MEMBER_THRESHOLD_DAYS
+
 
 def is_spam(user_id: int) -> bool:
     now = time.time()
@@ -73,7 +82,9 @@ def is_spam(user_id: int) -> bool:
     history[:] = [t for t in history if now - t < SPAM_TIME_WINDOW]
     return len(history) >= SPAM_REPEAT_THRESHOLD
 
+
 def is_security_bypassed(member: discord.Member) -> Tuple[bool, str]:
+    """信頼済みユーザーまたはバイパスロールであればTrue"""
     try:
         trusted = get_trusted_user_ids(member.guild.id)
         if member.id in trusted:
@@ -86,6 +97,7 @@ def is_security_bypassed(member: discord.Member) -> Tuple[bool, str]:
         logger.error("[SECURITY] bypass check failed: %s", e)
 
     return False, ""
+
 
 async def strip_roles(member: discord.Member) -> Tuple[bool, str]:
     try:
@@ -102,22 +114,24 @@ async def strip_roles(member: discord.Member) -> Tuple[bool, str]:
         logger.error("[SECURITY] strip roles failed: %s", e)
         return False, str(e)
 
+
 # ==================================================
 # Content-Type 判定
 # ==================================================
 async def fetch_content_type(session: aiohttp.ClientSession, url: str) -> str:
     try:
-        async with session.head(url, allow_redirects=True, timeout=10) as r:
+        async with session.head(url, allow_redirects=True) as r:
             if r.status < 400:
                 return r.headers.get("Content-Type", "")
     except Exception:
         pass
 
     try:
-        async with session.get(url, allow_redirects=True, timeout=10) as r:
+        async with session.get(url, allow_redirects=True) as r:
             return r.headers.get("Content-Type", "")
     except Exception:
         return ""
+
 
 def is_file_content_type(content_type: str) -> bool:
     if not content_type:
@@ -129,10 +143,11 @@ def is_file_content_type(content_type: str) -> bool:
         return True
     return False
 
+
 # ==================================================
 # VirusTotal URL / FILE チェック
 # ==================================================
-async def vt_check_url(url: str) -> Dict:
+async def vt_check_url(url: str) -> Dict[str, Any]:
     key = hash_text(url)
     now = time.time()
 
@@ -162,7 +177,8 @@ async def vt_check_url(url: str) -> Dict:
         logger.error("[VT] URL scan exception: %s", e)
         return {"status": "error", "type": "url", "reason": str(e), "malicious": -1, "suspicious": -1}
 
-async def vt_check_file(content: bytes) -> Dict:
+
+async def vt_check_file(content: bytes) -> Dict[str, Any]:
     if not VIRUSTOTAL_API_KEY:
         return {"status": "skip", "type": "file", "malicious": 0, "suspicious": 0}
 
@@ -216,7 +232,8 @@ async def vt_check_file(content: bytes) -> Dict:
         if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
 
-async def vt_scan_target(session: aiohttp.ClientSession, url: str) -> Dict:
+
+async def vt_scan_target(session: aiohttp.ClientSession, url: str) -> Dict[str, Any]:
     content_type = await fetch_content_type(session, url)
     logger.info("[VT] Content-Type %s -> %s", url, content_type)
 
@@ -224,16 +241,21 @@ async def vt_scan_target(session: aiohttp.ClientSession, url: str) -> Dict:
         return {"status": "skip", "type": "image", "malicious": 0, "suspicious": 0}
 
     if is_file_content_type(content_type):
-        async with session.get(url, timeout=20) as r:
-            data = await r.read()
+        try:
+            async with session.get(url) as r:
+                data = await r.read()
+        except Exception as e:
+            logger.error("[VT] file download failed: %s", e)
+            return {"status": "error", "type": "file", "reason": str(e), "malicious": -1, "suspicious": -1}
         return await vt_check_file(data)
 
     return await vt_check_url(url)
 
+
 # ==================================================
 # GPT 判定
 # ==================================================
-async def gpt_assess(text: str, vt_results: List[Dict]) -> str:
+async def gpt_assess(text: str, vt_results: List[Dict[str, Any]]) -> str:
     for r in vt_results:
         if r.get("malicious", 0) > 0 or r.get("suspicious", 0) > 0:
             return "DANGEROUS"
@@ -246,76 +268,90 @@ async def gpt_assess(text: str, vt_results: List[Dict]) -> str:
         "model": "gpt-5-mini",
         "messages": [
             {"role": "system", "content": "You are a security moderation AI."},
-            {"role": "user", "content": f"以下の投稿を判定してください:\n{text}"}
+            {"role": "user", "content": f"以下の投稿を判定してください:\n{text}"},
         ],
     }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) as r:
-            data = await r.json()
-            reply = data["choices"][0]["message"]["content"].upper()
+    timeout = aiohttp.ClientTimeout(total=20)
+    try:
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) as r:
+                data = await r.json()
+                reply = data["choices"][0]["message"]["content"].upper()
+    except Exception as e:
+        logger.warning("[SECURITY] GPT判定失敗: %s", e)
+        return "UNKNOWN"
 
     if "DANGEROUS" in reply:
         return "DANGEROUS"
-    if "SUSPICIOUS" in reply:
+    if "SUSPICIOUS" in reply or "WARNING" in reply:
         return "SUSPICIOUS"
     return "SAFE"
+
 
 # ==================================================
 # Embedユーティリティ
 # ==================================================
-def now_jst() -> str:
-    return datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S")
+SAFE_ICON = "[SAFE]"
+WARN_ICON = "[WARN]"
+ALERT_ICON = "[ALERT]"
+REASON_ICONS = {
+    "SPAM": "[SPAM]",
+    "TOO_MANY_LINKS": "[LINKS]",
+    "UNICODE_TRICK": "[UNICODE]",
+    "NEW_MEMBER": "[NEW]",
+    "GPT": "[GPT]",
+    "VT_DETECTED": "[VT]",
+    "VC_RAID": "[VC]",
+}
+
 
 def build_progress_bar(current: int, total: int, length: int = 10) -> str:
     filled_len = int(length * current / total)
-    bar = "█" * filled_len + "░" * (length - filled_len)
+    bar = "#" * filled_len + "-" * (length - filled_len)
     return f"[{bar}] {current}/{total}"
+
 
 def vt_icon(malicious: int, suspicious: int) -> str:
     if malicious > 0:
-        return "🔴"
+        return ALERT_ICON
     if suspicious > 0:
-        return "🟡"
-    return "🟢"
+        return WARN_ICON
+    return SAFE_ICON
+
 
 def gpt_icon(result: str) -> str:
     if result == "DANGEROUS":
-        return "🔴"
+        return ALERT_ICON
     if result == "SUSPICIOUS":
-        return "🟡"
-    return "🟢"
+        return WARN_ICON
+    return SAFE_ICON
+
 
 def reason_icon(reason: str) -> str:
-    mapping = {
-        "SPAM": "⚠️",
-        "TOO_MANY_LINKS": "⚠️",
-        "UNICODE_TRICK": "⚠️",
-        "NEW_MEMBER": "🆕",
-        "GPT": "🤖",
-        "VT_DETECTED": "🛡",
-        "VC_RAID": "🎵",
-    }
-    return mapping.get(reason, "ℹ️")
+    return REASON_ICONS.get(reason, "[INFO]")
 
-def build_final_embed(vt_results: List[Dict], gpt_result: str, reasons: List[str], logs: List[str]) -> discord.Embed:
-    if "VT_DETECTED" in reasons:
+
+def build_final_embed(vt_results: List[Dict[str, Any]], gpt_result: str, reasons: List[str], logs: List[str]) -> discord.Embed:
+    if "VT_DETECTED" in reasons or gpt_result == "DANGEROUS":
         color = discord.Color.red()
-        title = "🚨 危険な投稿を検出"
+        title = "危険な投稿を検出"
     elif "SUSPICIOUS" in reasons or gpt_result == "SUSPICIOUS":
         color = discord.Color.orange()
-        title = "⚠️ 注意：投稿に問題の可能性"
+        title = "注意：投稿に問題の可能性"
     else:
         color = discord.Color.green()
-        title = "✅ 検査完了：問題なし"
+        title = "検査完了：問題なし"
 
     embed = discord.Embed(title=title, description="\n".join(logs), color=color)
 
     for idx, r in enumerate(vt_results, 1):
         icon = vt_icon(r.get("malicious", 0), r.get("suspicious", 0))
-        embed.add_field(name=f"{icon} ターゲット {idx} ({r.get('type')})",
-                        value=f"Status: `{r.get('status')}` | Malicious: `{r.get('malicious')}` | Suspicious: `{r.get('suspicious')}`",
-                        inline=False)
+        embed.add_field(
+            name=f"{icon} ターゲット {idx} ({r.get('type')})",
+            value=f"Status: `{r.get('status')}` | Malicious: `{r.get('malicious')}` | Suspicious: `{r.get('suspicious')}`",
+            inline=False,
+        )
 
     embed.add_field(name=f"{gpt_icon(gpt_result)} GPT判定", value=f"結果: `{gpt_result}`", inline=False)
 
@@ -326,6 +362,7 @@ def build_final_embed(vt_results: List[Dict], gpt_result: str, reasons: List[str
     embed.set_footer(text=f"実行時間: {now_jst()}")
     return embed
 
+
 # ==================================================
 # VCレイド検知
 # ==================================================
@@ -335,12 +372,13 @@ def check_vc_raid(member: discord.Member, channel_id: int) -> bool:
     history.append((now, member.display_name[:VC_RAID_SIMILAR_PREFIX], member.id))
     history[:] = [h for h in history if now - h[0] < VC_RAID_WINDOW_SEC]
 
-    name_counter = {}
+    name_counter: Dict[str, int] = {}
     for _, prefix, _ in history:
         name_counter[prefix] = name_counter.get(prefix, 0) + 1
         if name_counter[prefix] >= VC_RAID_THRESHOLD:
             return True
     return False
+
 
 # ==================================================
 # メッセージセキュリティ
@@ -352,15 +390,16 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     member = message.author
     content = message.content or ""
     links = extract_links(content)
-    attachments = message.attachments or []
+    attachments: Sequence[discord.Attachment] = message.attachments or []
 
-    logs: List[str] = [f"🔍 {now_jst()} にスキャン開始"]
+    logs: List[str] = [f"[{now_jst()}] スキャン開始"]
     reason_flags: List[str] = []
     danger = False
+    vt_results: List[Dict[str, Any]] = []
 
-    bypassed, _ = is_security_bypassed(member)
+    bypassed, bypass_reason = is_security_bypassed(member)
     if bypassed:
-        logs.append("🔹 信頼済みユーザー / バイパスロール検出")
+        logs.append(f"バイパス適用: {bypass_reason}")
         embed = build_final_embed([], "SAFE", [], logs)
         await message.channel.send(embed=embed)
         return
@@ -368,27 +407,27 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     # SPAM判定
     if is_spam(member.id):
         reason_flags.append("SPAM")
-        logs.append("⚠️ スパム検出")
+        logs.append("スパム検出")
 
     # リンク数過多
     if len(links) >= MAX_LINKS:
         reason_flags.append("TOO_MANY_LINKS")
-        logs.append("⚠️ リンク数過多")
+        logs.append("リンク数過多")
 
     # Unicode trick
     if UNICODE_TRICK_REGEX.search(content):
         reason_flags.append("UNICODE_TRICK")
-        logs.append("⚠️ ユニコードトリック検出")
+        logs.append("ユニコードトリック検出")
 
-    progress_msg = None
-    vt_results: List[Dict] = []
+    progress_msg: discord.Message | None = None
 
     # VT解析
     if links or attachments:
         progress_msg = await message.channel.send(
-            embed=discord.Embed(title="🔍 セキュリティ検査中", description="VirusTotal解析中…", color=discord.Color.blurple())
+            embed=discord.Embed(title="セキュリティ検査中", description="VirusTotal解析中…", color=discord.Color.blurple())
         )
-        async with aiohttp.ClientSession() as session:
+        timeout = aiohttp.ClientTimeout(total=25)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             targets = links + [a.url for a in attachments]
             for idx, url in enumerate(targets, 1):
                 res = await vt_scan_target(session, url)
@@ -396,41 +435,38 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
                 icon = vt_icon(res.get("malicious", 0), res.get("suspicious", 0))
                 logs.append(f"{icon} {url} をスキャン: Malicious={res.get('malicious')} Suspicious={res.get('suspicious')}")
 
-                # Malicious 件数が閾値以上なら danger に設定
-                if res.get("malicious", 0) >= 10:
+                if res.get("malicious", 0) >= MALICIOUS_THRESHOLD:
                     danger = True
                     reason_flags.append("VT_DETECTED")
 
                 if progress_msg:
                     bar = build_progress_bar(idx, len(targets))
-                    await progress_msg.edit(embed=discord.Embed(
-                        title="🔍 セキュリティ検査中",
-                        description="\n".join(logs) + f"\n{bar}",
-                        color=discord.Color.blurple()
-                    ))
+                    await progress_msg.edit(
+                        embed=discord.Embed(
+                            title="セキュリティ検査中",
+                            description="\n".join(logs) + f"\n{bar}",
+                            color=discord.Color.blurple(),
+                        )
+                    )
 
     # GPT判定
     gpt_result = await gpt_assess(content, vt_results)
-    reason_flags.append("GPT")
-    if gpt_result == "DANGEROUS":
-        logs.append("⚠️ GPT判定: DANGEROUS")
-    elif gpt_result == "SUSPICIOUS":
-        logs.append("⚠️ GPT判定: SUSPICIOUS")
-    else:
-        logs.append("🤖 GPT判定: SAFE")
+    if gpt_result != "SAFE":
+        reason_flags.append("GPT")
+    logs.append(f"GPT判定: {gpt_result}")
 
     # 新規メンバー
     if is_new_member(member):
         reason_flags.append("NEW_MEMBER")
-        logs.append("🆕 新規メンバー")
+        logs.append("新規メンバー")
 
-    # VCレイド判定
+    # VCレイド判定（VC参加中のみ）
     if message.author.voice and message.author.voice.channel:
         channel_id = message.author.voice.channel.id
         if check_vc_raid(member, channel_id):
             danger = True
             reason_flags.append("VC_RAID")
-            logs.append("🎵 VCレイド検出")
+            logs.append("VCレイド検出")
 
     # 削除・役職除去は danger 条件のみ
     if danger:
@@ -450,4 +486,65 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     else:
         await message.channel.send(embed=embed)
 
+    try:
+        await log_action(
+            bot,
+            message.guild.id,
+            "ERROR" if danger else "INFO",
+            "メッセージセキュリティ検査",
+            user=member,
+            fields={
+                "理由": ", ".join(reason_flags) or "なし",
+                "GPT判定": gpt_result,
+                "リンク数": str(len(links)),
+            },
+            embed_color=discord.Color.red() if danger else discord.Color.green(),
+        )
+    except Exception:
+        logger.debug("log_action failed", exc_info=True)
+
     logger.info("[SECURITY] SAFE" if not danger else "[SECURITY] DANGER")
+
+
+# ==================================================
+# VCセキュリティ
+# ==================================================
+async def handle_security_for_voice_join(
+    bot: discord.Client,
+    member: discord.Member,
+    before: discord.VoiceState,
+    after: discord.VoiceState,
+) -> None:
+    if member.bot or member.guild is None:
+        return
+
+    # 参加時のみ検知（退出やミュート変更は無視）
+    if before.channel == after.channel or after.channel is None:
+        return
+
+    bypassed, _ = is_security_bypassed(member)
+    if bypassed:
+        return
+
+    channel = after.channel
+    if channel and check_vc_raid(member, channel.id):
+        logs = [f"[{now_jst()}] VCレイド検出", f"チャンネル: {channel.name}"]
+        await strip_roles(member)
+
+        try:
+            await channel.send(embed=discord.Embed(title="VCレイド検出", description="\n".join(logs), color=discord.Color.red()))
+        except Exception:
+            pass
+
+        try:
+            await log_action(
+                bot,
+                member.guild.id,
+                "ERROR",
+                "VCレイド検出",
+                user=member,
+                fields={"チャンネル": channel.mention},
+                embed_color=discord.Color.red(),
+            )
+        except Exception:
+            logger.debug("log_action failed on VC raid", exc_info=True)

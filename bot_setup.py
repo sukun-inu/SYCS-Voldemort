@@ -1,11 +1,16 @@
+import logging
+from datetime import timezone, timedelta
+
 import discord
+import psutil
+from commands.chat_commands import handle_chatgpt_message
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
-import psutil
-from datetime import timezone, timedelta
 from services.logging_service import log_action
+from services.security_service import handle_security_for_message, handle_security_for_voice_join
 
 _JST = timezone(timedelta(hours=9))
+logger = logging.getLogger(__name__)
 
 
 def create_bot() -> Bot:
@@ -33,11 +38,11 @@ def setup_events(bot: Bot) -> None:
                 )
             )
         except Exception as e:
-            print(f"ステータス更新エラー: {e}", flush=True)
+            logger.exception("ステータス更新エラー: %s", e)
 
     @bot.event
     async def on_ready():
-        print(f"[BOT] Logged in as {bot.user}", flush=True)
+        logger.info("[BOT] Logged in as %s", bot.user)
         await bot.tree.sync()
         if not update_status.is_running():
             update_status.start()
@@ -50,35 +55,24 @@ def setup_events(bot: Bot) -> None:
         if message.guild is None or message.author.bot:
             return
 
-        print(
-            f"[BOT_SETUP] on_message triggered "
-            f"guild={message.guild.id} "
-            f"ch={message.channel.id} "
-            f"author={message.author}",
-            flush=True,
+        logger.debug(
+            "[BOT_SETUP] on_message guild=%s ch=%s author=%s",
+            message.guild.id,
+            message.channel.id,
+            message.author,
         )
 
         # ① セキュリティ（最優先）
         try:
-            from services.security_service import handle_security_for_message
-            print("[BOT_SETUP] calling handle_security_for_message", flush=True)
             await handle_security_for_message(bot, message)
-            print("[BOT_SETUP] returned handle_security_for_message", flush=True)
         except Exception as e:
-            print(f"[BOT_SETUP] security_service error: {e}", flush=True)
-            import traceback
-            traceback.print_exc()
+            logger.exception("[BOT_SETUP] security_service error: %s", e)
 
         # ② ChatGPT
         try:
-            from commands.chat_commands import handle_chatgpt_message
-            print("[BOT_SETUP] calling handle_chatgpt_message", flush=True)
             await handle_chatgpt_message(bot, message)
-            print("[BOT_SETUP] returned handle_chatgpt_message", flush=True)
         except Exception as e:
-            print(f"[BOT_SETUP] chat_commands error: {e}", flush=True)
-            import traceback
-            traceback.print_exc()
+            logger.exception("[BOT_SETUP] chat_commands error: %s", e)
 
         # ③ コマンド
         await bot.process_commands(message)
@@ -137,15 +131,14 @@ def setup_events(bot: Bot) -> None:
     # VC セキュリティ
     # --------------------------
     @bot.event
-    async def on_voice_state_update(member, before, after):
-        if member.guild is None:
+    async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        if member.guild is None or member.bot:
             return
 
         try:
-            from services.security_service import handle_security_for_voice_join
             await handle_security_for_voice_join(bot, member, before, after)
         except Exception as e:
-            print(f"[BOT_SETUP] VC security error: {e}", flush=True)
+            logger.exception("[BOT_SETUP] VC security error: %s", e)
 
     # --------------------------
     # メンバー参加・退出
