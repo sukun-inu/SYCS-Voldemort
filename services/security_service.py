@@ -392,11 +392,14 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     content = message.content or ""
     links = extract_links(content)
     attachments: Sequence[discord.Attachment] = message.attachments or []
+    resp_ch_id = 0
+    is_chat_channel = False
 
     # GPT応答チャンネルではリンク・添付が無い場合はセキュリティ検査をスキップ
     try:
         resp_ch_id = get_response_channel_id(message.guild.id)
-        if resp_ch_id and message.channel.id == resp_ch_id and not links and not attachments:
+        is_chat_channel = bool(resp_ch_id and message.channel.id == resp_ch_id)
+        if is_chat_channel and not links and not attachments:
             return
     except Exception:
         logger.debug("failed to check response_channel_id", exc_info=True)
@@ -409,8 +412,21 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     bypassed, bypass_reason = is_security_bypassed(member)
     if bypassed:
         logs.append(f"バイパス適用: {bypass_reason}")
-        embed = build_final_embed([], "SAFE", [], logs)
-        await message.channel.send(embed=embed)
+        if is_chat_channel:
+            try:
+                await log_action(
+                    bot,
+                    message.guild.id,
+                    "INFO",
+                    "セキュリティ検査スキップ",
+                    user=member,
+                    fields={"理由": bypass_reason or "bypass"},
+                )
+            except Exception:
+                logger.debug("log_action failed", exc_info=True)
+        else:
+            embed = build_final_embed([], "SAFE", [], logs)
+            await message.channel.send(embed=embed)
         return
 
     # SPAM判定
@@ -432,9 +448,10 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
 
     # VT解析
     if links or attachments:
-        progress_msg = await message.channel.send(
-            embed=discord.Embed(title="セキュリティ検査中", description="VirusTotal解析中…", color=discord.Color.blurple())
-        )
+        if not is_chat_channel:
+            progress_msg = await message.channel.send(
+                embed=discord.Embed(title="セキュリティ検査中", description="VirusTotal解析中…", color=discord.Color.blurple())
+            )
         timeout = aiohttp.ClientTimeout(total=25)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             targets = links + [a.url for a in attachments]
@@ -486,13 +503,14 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
 
     # 最終結果Embed送信
     embed = build_final_embed(vt_results, gpt_result, reason_flags, logs)
-    if progress_msg:
-        try:
-            await progress_msg.edit(embed=embed)
-        except Exception:
+    if not is_chat_channel:
+        if progress_msg:
+            try:
+                await progress_msg.edit(embed=embed)
+            except Exception:
+                await message.channel.send(embed=embed)
+        else:
             await message.channel.send(embed=embed)
-    else:
-        await message.channel.send(embed=embed)
 
     try:
         await log_action(
