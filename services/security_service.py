@@ -329,7 +329,8 @@ def gpt_icon(result: str) -> str:
 
 
 def reason_icon(reason: str) -> str:
-    return REASON_ICONS.get(reason, "[INFO]")
+    base = reason.split(":")[0]
+    return REASON_ICONS.get(base, "[INFO]")
 
 
 def build_final_embed(vt_results: List[Dict[str, Any]], gpt_result: str, reasons: List[str], logs: List[str]) -> discord.Embed:
@@ -459,8 +460,7 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
 
     # GPT判定
     gpt_result = await gpt_assess(content, vt_results)
-    if gpt_result != "SAFE":
-        reason_flags.append("GPT")
+    reason_flags.append(f"GPT:{gpt_result}")
     logs.append(f"GPT判定: {gpt_result}")
 
     # 新規メンバー
