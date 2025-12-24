@@ -412,21 +412,17 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     bypassed, bypass_reason = is_security_bypassed(member)
     if bypassed:
         logs.append(f"バイパス適用: {bypass_reason}")
-        if is_chat_channel:
-            try:
-                await log_action(
-                    bot,
-                    message.guild.id,
-                    "INFO",
-                    "セキュリティ検査スキップ",
-                    user=member,
-                    fields={"理由": bypass_reason or "bypass"},
-                )
-            except Exception:
-                logger.debug("log_action failed", exc_info=True)
-        else:
-            embed = build_final_embed([], "SAFE", [], logs)
-            await message.channel.send(embed=embed)
+        try:
+            await log_action(
+                bot,
+                message.guild.id,
+                "INFO",
+                "セキュリティ検査スキップ",
+                user=member,
+                fields={"理由": bypass_reason or "bypass"},
+            )
+        except Exception:
+            logger.debug("log_action failed", exc_info=True)
         return
 
     # SPAM判定
@@ -444,14 +440,8 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
         reason_flags.append("UNICODE_TRICK")
         logs.append("ユニコードトリック検出")
 
-    progress_msg: discord.Message | None = None
-
     # VT解析
     if links or attachments:
-        if not is_chat_channel:
-            progress_msg = await message.channel.send(
-                embed=discord.Embed(title="セキュリティ検査中", description="VirusTotal解析中…", color=discord.Color.blurple())
-            )
         timeout = aiohttp.ClientTimeout(total=25)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             targets = links + [a.url for a in attachments]
@@ -464,16 +454,6 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
                 if res.get("malicious", 0) >= MALICIOUS_THRESHOLD:
                     danger = True
                     reason_flags.append("VT_DETECTED")
-
-                if progress_msg:
-                    bar = build_progress_bar(idx, len(targets))
-                    await progress_msg.edit(
-                        embed=discord.Embed(
-                            title="セキュリティ検査中",
-                            description="\n".join(logs) + f"\n{bar}",
-                            color=discord.Color.blurple(),
-                        )
-                    )
 
     # GPT判定
     gpt_result = await gpt_assess(content, vt_results)
@@ -503,14 +483,12 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
 
     # 最終結果Embed送信
     embed = build_final_embed(vt_results, gpt_result, reason_flags, logs)
-    if not is_chat_channel:
-        if progress_msg:
-            try:
-                await progress_msg.edit(embed=embed)
-            except Exception:
-                await message.channel.send(embed=embed)
-        else:
+    if danger:
+        # 危険判定のみチャンネルへ通知（安全時はログチャンネルへのみ記録）
+        try:
             await message.channel.send(embed=embed)
+        except Exception:
+            pass
 
     try:
         await log_action(
