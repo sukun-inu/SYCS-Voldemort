@@ -6,14 +6,14 @@ import os
 import re
 import tempfile
 import time
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import aiohttp
 import discord
 import vt
 
 from config import OPENAI_API_KEY, VIRUSTOTAL_API_KEY
-from services.logging_service import log_action
+from services.logging_service import log_action, send_log_embed
 from services.settings_store import get_bypass_role_ids, get_trusted_user_ids, get_response_channel_id
 
 # ==================================================
@@ -440,8 +440,16 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
         reason_flags.append("UNICODE_TRICK")
         logs.append("ユニコードトリック検出")
 
+    progress_msg: Optional[discord.Message] = None
+
     # VT解析
     if links or attachments:
+        progress_msg = await send_log_embed(
+            bot,
+            message.guild.id,
+            "INFO",
+            embed=discord.Embed(title="セキュリティ検査中", description="VirusTotal解析中…", color=discord.Color.blurple()),
+        )
         timeout = aiohttp.ClientTimeout(total=25)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             targets = links + [a.url for a in attachments]
@@ -454,6 +462,19 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
                 if res.get("malicious", 0) >= MALICIOUS_THRESHOLD:
                     danger = True
                     reason_flags.append("VT_DETECTED")
+
+                if progress_msg:
+                    bar = build_progress_bar(idx, len(targets))
+                    try:
+                        await progress_msg.edit(
+                            embed=discord.Embed(
+                                title="セキュリティ検査中",
+                                description="\n".join(logs) + f"\n{bar}",
+                                color=discord.Color.blurple(),
+                            )
+                        )
+                    except Exception:
+                        progress_msg = None
 
     # GPT判定
     gpt_result = await gpt_assess(content, vt_results)
@@ -483,6 +504,12 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
 
     # 最終結果Embed送信
     embed = build_final_embed(vt_results, gpt_result, reason_flags, logs)
+    if links or attachments:
+        try:
+            if progress_msg:
+                await progress_msg.edit(embed=embed)
+        except Exception:
+            pass
     if danger:
         # 危険判定のみチャンネルへ通知（安全時はログチャンネルへのみ記録）
         try:

@@ -194,3 +194,32 @@ async def log_action(
     embed.set_footer(text=f"時刻 (JST): {jst_now.strftime('%Y-%m-%d %H:%M:%S')}")
 
     await channel.send(embed=embed)
+
+
+async def send_log_embed(
+    bot: discord.Client,
+    guild_id: int,
+    level: str,
+    embed: discord.Embed,
+) -> Optional[discord.Message]:
+    """ログチャンネルにEmbedを送信し、メッセージを返す（進捗更新用）
+
+    - ログレベル設定に従って送信する
+    - ログチャンネル未設定などの場合は None を返す
+    """
+    level = level.upper()
+    if level not in _LEVEL_PRIORITY:
+        return None
+
+    if not _should_log(guild_id, level):
+        return None
+
+    channel = _get_log_channel(bot, guild_id)
+    if channel is None:
+        return None
+
+    try:
+        return await channel.send(embed=embed)
+    except Exception:
+        logger.debug("send_log_embed failed", exc_info=True)
+        return None
