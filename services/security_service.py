@@ -61,8 +61,33 @@ def now_jst() -> str:
     return datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def normalize_url(url: str) -> str:
+    """Discordの<...>形式や末尾句読点を除去し、VT向けのURLを正規化する。"""
+    if not url:
+        return ""
+    u = url.strip()
+    if u.startswith("<") and u.endswith(">"):
+        u = u[1:-1].strip()
+    # stray wrapper chars (e.g., <https://...> or https://...>)
+    u = u.strip("<>")
+    # trailing punctuation often breaks VT URL parsing
+    u = u.rstrip(".,!?;:")
+    return u
+
+
 def extract_links(text: str) -> List[str]:
-    return URL_REGEX.findall(text or "")
+    raw = URL_REGEX.findall(text or "")
+    links: List[str] = []
+    seen: set[str] = set()
+    for u in raw:
+        u = normalize_url(u)
+        if not u:
+            continue
+        if u in seen:
+            continue
+        seen.add(u)
+        links.append(u)
+    return links
 
 
 def hash_text(text: str) -> str:
@@ -155,7 +180,7 @@ async def vt_check_url(url: str) -> Dict[str, Any]:
         return _vt_cache[key]["data"]
 
     if not VIRUSTOTAL_API_KEY:
-        return {"status": "skip", "type": "url", "malicious": 0, "suspicious": 0}
+        return {"status": "skip", "type": "url", "reason": "no_api_key", "malicious": 0, "suspicious": 0}
 
     try:
         def sync():
@@ -180,7 +205,7 @@ async def vt_check_url(url: str) -> Dict[str, Any]:
 
 async def vt_check_file(content: bytes) -> Dict[str, Any]:
     if not VIRUSTOTAL_API_KEY:
-        return {"status": "skip", "type": "file", "malicious": 0, "suspicious": 0}
+        return {"status": "skip", "type": "file", "reason": "no_api_key", "malicious": 0, "suspicious": 0}
 
     sha256 = hashlib.sha256(content).hexdigest()
     tmp_path = None
@@ -238,7 +263,7 @@ async def vt_scan_target(session: aiohttp.ClientSession, url: str) -> Dict[str, 
     logger.info("[VT] Content-Type %s -> %s", url, content_type)
 
     if content_type.startswith("image/"):
-        return {"status": "skip", "type": "image", "malicious": 0, "suspicious": 0}
+        return {"status": "skip", "type": "image", "reason": "image", "malicious": 0, "suspicious": 0}
 
     if is_file_content_type(content_type):
         try:
@@ -257,8 +282,12 @@ async def vt_scan_target(session: aiohttp.ClientSession, url: str) -> Dict[str, 
 # ==================================================
 async def gpt_assess(text: str, vt_results: List[Dict[str, Any]]) -> str:
     for r in vt_results:
-        if r.get("malicious", 0) > 0 or r.get("suspicious", 0) > 0:
+        mal = int(r.get("malicious", 0) or 0)
+        sus = int(r.get("suspicious", 0) or 0)
+        if mal >= MALICIOUS_THRESHOLD:
             return "DANGEROUS"
+        if mal > 0 or sus > 0:
+            return "SUSPICIOUS"
 
     if not OPENAI_API_KEY:
         return "SAFE"
@@ -301,7 +330,8 @@ REASON_ICONS = {
     "UNICODE_TRICK": "[UNICODE]",
     "NEW_MEMBER": "[NEW]",
     "GPT": "[GPT]",
-    "VT_DETECTED": "[VT]",
+    "VT_DANGEROUS": "[VT]",
+    "VT_SUSPICIOUS": "[VT]",
     "VC_RAID": "[VC]",
 }
 
@@ -312,7 +342,9 @@ def build_progress_bar(current: int, total: int, length: int = 10) -> str:
     return f"[{bar}] {current}/{total}"
 
 
-def vt_icon(malicious: int, suspicious: int) -> str:
+def vt_icon(malicious: int, suspicious: int, status: Optional[str] = None) -> str:
+    if status in ("error", "skip"):
+        return WARN_ICON
     if malicious > 0:
         return ALERT_ICON
     if suspicious > 0:
@@ -334,10 +366,10 @@ def reason_icon(reason: str) -> str:
 
 
 def build_final_embed(vt_results: List[Dict[str, Any]], gpt_result: str, reasons: List[str], logs: List[str]) -> discord.Embed:
-    if "VT_DETECTED" in reasons or gpt_result == "DANGEROUS":
+    if "VT_DANGEROUS" in reasons or gpt_result == "DANGEROUS":
         color = discord.Color.red()
         title = "危険な投稿を検出"
-    elif "SUSPICIOUS" in reasons or gpt_result == "SUSPICIOUS":
+    elif "VT_SUSPICIOUS" in reasons or gpt_result == "SUSPICIOUS":
         color = discord.Color.orange()
         title = "注意：投稿に問題の可能性"
     else:
@@ -347,7 +379,7 @@ def build_final_embed(vt_results: List[Dict[str, Any]], gpt_result: str, reasons
     embed = discord.Embed(title=title, description="\n".join(logs), color=color)
 
     for idx, r in enumerate(vt_results, 1):
-        icon = vt_icon(r.get("malicious", 0), r.get("suspicious", 0))
+        icon = vt_icon(r.get("malicious", 0), r.get("suspicious", 0), r.get("status"))
         embed.add_field(
             name=f"{icon} ターゲット {idx} ({r.get('type')})",
             value=f"Status: `{r.get('status')}` | Malicious: `{r.get('malicious')}` | Suspicious: `{r.get('suspicious')}`",
@@ -441,6 +473,8 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
         logs.append("ユニコードトリック検出")
 
     progress_msg: Optional[discord.Message] = None
+    vt_malicious_max = 0
+    vt_suspicious_max = 0
 
     # VT解析
     if links or attachments:
@@ -456,12 +490,18 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
             for idx, url in enumerate(targets, 1):
                 res = await vt_scan_target(session, url)
                 vt_results.append(res)
-                icon = vt_icon(res.get("malicious", 0), res.get("suspicious", 0))
-                logs.append(f"{icon} {url} をスキャン: Malicious={res.get('malicious')} Suspicious={res.get('suspicious')}")
-
-                if res.get("malicious", 0) >= MALICIOUS_THRESHOLD:
-                    danger = True
-                    reason_flags.append("VT_DETECTED")
+                mal = int(res.get("malicious", 0) or 0)
+                sus = int(res.get("suspicious", 0) or 0)
+                status = res.get("status") or "unknown"
+                icon = vt_icon(mal, sus, status)
+                if mal > vt_malicious_max:
+                    vt_malicious_max = mal
+                if sus > vt_suspicious_max:
+                    vt_suspicious_max = sus
+                log_line = f"{icon} {url} をスキャン: status={status} Malicious={mal} Suspicious={sus}"
+                if res.get("reason"):
+                    log_line += f" reason={res.get('reason')}"
+                logs.append(log_line)
 
                 if progress_msg:
                     bar = build_progress_bar(idx, len(targets))
@@ -475,6 +515,12 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
                         )
                     except Exception:
                         progress_msg = None
+
+        if vt_malicious_max >= MALICIOUS_THRESHOLD:
+            danger = True
+            reason_flags.append("VT_DANGEROUS")
+        elif vt_malicious_max > 0 or vt_suspicious_max > 0:
+            reason_flags.append("VT_SUSPICIOUS")
 
     # GPT判定
     gpt_result = await gpt_assess(content, vt_results)
