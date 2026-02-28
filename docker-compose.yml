@@ -14,6 +14,5 @@ services:
       - METALPRICE_API_KEY=${METALPRICE_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
-    ports:
     volumes:
       - ./data:/app/data
