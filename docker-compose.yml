@@ -4,7 +4,6 @@ services:
   sycs-voldemort:
     build:
       context: .
-    image: sycs-voldemort:latest
     container_name: sycs-voldemort
     restart: unless-stopped
     environment:
