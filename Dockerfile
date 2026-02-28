@@ -16,7 +16,5 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 ENV TZ=Asia/Tokyo
 
-# コンテナ内で吐き出すポート（bot_status_server が使う可能性あり）
-EXPOSE 8080
 
 CMD ["python", "main.py"]

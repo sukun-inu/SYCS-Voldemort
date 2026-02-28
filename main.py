@@ -1,9 +1,6 @@
 import asyncio
 import logging
-import threading
-
 from bot_setup import create_bot, setup_events
-from bot_status_server import start_status_server
 from commands.logging_commands import register_logging_commands
 from commands.metal_commands import register_metal_commands
 from config import DISCORD_BOT_TOKEN
@@ -34,12 +31,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    # Flask ステータスサーバー起動
-    flask_thread = threading.Thread(
-        target=start_status_server,
-        daemon=True
-    )
-    flask_thread.start()
-
     # Discord Bot 起動
     asyncio.run(main())
