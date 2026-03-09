@@ -262,8 +262,8 @@ python web_main.py
 ```
 
 アクセス先:
-- `http://localhost:8000/`
-- API: `http://localhost:8000/api/prices/history?days=365`
+- `http://localhost:${WEB_HOST_PORT:-8001}/`
+- API: `http://localhost:${WEB_HOST_PORT:-8001}/api/prices/history?days=365`
 
 ### 10.4 必須環境変数（Web）
 - `METALPRICE_API_KEY`
@@ -279,6 +279,7 @@ python web_main.py
 任意:
 - `API_RATE_LIMIT_PER_MINUTE`（デフォルト: 120）
 - `ALLOWED_HOSTS`（カンマ区切り）
+- `WEB_HOST_PORT`（デフォルト: 8001）
 
 ### 10.5 Docker Compose 起動
 `docker-compose.yml` には以下サービスを定義済みです。

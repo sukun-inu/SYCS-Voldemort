@@ -68,7 +68,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${WEB_HOST_PORT:-8001}:8000"
     environment:
       - TZ=Asia/Tokyo
       - METALPRICE_API_KEY=${METALPRICE_API_KEY}
