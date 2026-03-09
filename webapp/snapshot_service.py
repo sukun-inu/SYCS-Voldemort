@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import METAL_COMMANDS
@@ -51,43 +51,40 @@ async def _fetch_all_prices() -> dict[str, Decimal]:
     return prices
 
 
-async def _latest_before(session: AsyncSession, metal_key: str, snapshot_date: date) -> MetalPriceDaily | None:
-    stmt = (
-        select(MetalPriceDaily)
-        .where(
-            MetalPriceDaily.metal_key == metal_key,
-            MetalPriceDaily.snapshot_date < snapshot_date,
+async def _rows_for_date(session: AsyncSession, snapshot_date: date) -> dict[str, MetalPriceDaily]:
+    stmt = select(MetalPriceDaily).where(MetalPriceDaily.snapshot_date == snapshot_date)
+    rows = list((await session.scalars(stmt)).all())
+    return {row.metal_key: row for row in rows}
+
+
+async def _latest_rows_before(session: AsyncSession, snapshot_date: date) -> dict[str, MetalPriceDaily]:
+    latest_date_subq = (
+        select(
+            MetalPriceDaily.metal_key,
+            func.max(MetalPriceDaily.snapshot_date).label("latest_date"),
         )
-        .order_by(MetalPriceDaily.snapshot_date.desc())
-        .limit(1)
+        .where(MetalPriceDaily.snapshot_date < snapshot_date)
+        .group_by(MetalPriceDaily.metal_key)
+        .subquery()
     )
-    return (await session.scalars(stmt)).first()
-
-
-async def _same_date_record(session: AsyncSession, metal_key: str, snapshot_date: date) -> MetalPriceDaily | None:
-    stmt = select(MetalPriceDaily).where(
-        MetalPriceDaily.metal_key == metal_key,
-        MetalPriceDaily.snapshot_date == snapshot_date,
+    stmt = select(MetalPriceDaily).join(
+        latest_date_subq,
+        and_(
+            MetalPriceDaily.metal_key == latest_date_subq.c.metal_key,
+            MetalPriceDaily.snapshot_date == latest_date_subq.c.latest_date,
+        ),
     )
-    return (await session.scalars(stmt)).first()
-
-
-async def _has_all_metals_for_date(session: AsyncSession, snapshot_date: date) -> bool:
-    stmt = select(func.count(MetalPriceDaily.id)).where(MetalPriceDaily.snapshot_date == snapshot_date)
-    count = (await session.scalar(stmt)) or 0
-    return count >= len(TRACKED_METALS)
+    rows = list((await session.scalars(stmt)).all())
+    return {row.metal_key: row for row in rows}
 
 
 async def store_snapshot(session: AsyncSession, snapshot_date: date, *, skip_if_exists: bool = True) -> list[MetalPriceDaily]:
-    if skip_if_exists and await _has_all_metals_for_date(session, snapshot_date):
-        stmt = (
-            select(MetalPriceDaily)
-            .where(MetalPriceDaily.snapshot_date == snapshot_date)
-            .order_by(MetalPriceDaily.metal_key.asc())
-        )
-        return list((await session.scalars(stmt)).all())
+    existing_rows = await _rows_for_date(session, snapshot_date)
+    if skip_if_exists and len(existing_rows) >= len(TRACKED_METALS):
+        return sorted(existing_rows.values(), key=lambda row: row.metal_key)
 
     prices = await _fetch_all_prices()
+    previous_rows = await _latest_rows_before(session, snapshot_date)
     records: list[MetalPriceDaily] = []
 
     for metal in TRACKED_METALS:
@@ -95,10 +92,10 @@ async def store_snapshot(session: AsyncSession, snapshot_date: date, *, skip_if_
             continue
 
         price = prices[metal.key]
-        previous = await _latest_before(session, metal.key, snapshot_date)
+        previous = previous_rows.get(metal.key)
         delta = (price - previous.price_per_gram).quantize(PRICE_SCALE, rounding=ROUND_HALF_UP) if previous else None
 
-        existing = await _same_date_record(session, metal.key, snapshot_date)
+        existing = existing_rows.get(metal.key)
         if existing:
             existing.price_per_gram = price
             existing.delta_from_previous = delta
@@ -127,35 +124,55 @@ async def store_today_snapshot(session: AsyncSession, *, skip_if_exists: bool = 
 async def load_history(session: AsyncSession, days: int) -> dict[str, list[dict[str, float | str | None]]]:
     start_date = jst_today() - timedelta(days=days - 1)
     stmt = (
-        select(MetalPriceDaily)
+        select(
+            MetalPriceDaily.metal_key,
+            MetalPriceDaily.snapshot_date,
+            MetalPriceDaily.price_per_gram,
+            MetalPriceDaily.delta_from_previous,
+        )
         .where(MetalPriceDaily.snapshot_date >= start_date)
         .order_by(MetalPriceDaily.snapshot_date.asc())
     )
-    rows = list((await session.scalars(stmt)).all())
+    rows = (await session.execute(stmt)).all()
 
     history: dict[str, list[dict[str, float | str | None]]] = {metal.key: [] for metal in TRACKED_METALS}
-    for row in rows:
-        history.setdefault(row.metal_key, []).append(
+    for metal_key, snapshot_date, price_per_gram, delta_from_previous in rows:
+        history.setdefault(metal_key, []).append(
             {
-                "date": row.snapshot_date.isoformat(),
-                "price_per_gram": float(row.price_per_gram),
-                "delta_from_previous": float(row.delta_from_previous) if row.delta_from_previous is not None else None,
+                "date": snapshot_date.isoformat(),
+                "price_per_gram": float(price_per_gram),
+                "delta_from_previous": float(delta_from_previous) if delta_from_previous is not None else None,
             }
         )
     return history
 
 
+async def load_latest_rows(session: AsyncSession) -> dict[str, MetalPriceDaily]:
+    latest_date_subq = (
+        select(
+            MetalPriceDaily.metal_key,
+            func.max(MetalPriceDaily.snapshot_date).label("latest_date"),
+        )
+        .group_by(MetalPriceDaily.metal_key)
+        .subquery()
+    )
+    stmt = select(MetalPriceDaily).join(
+        latest_date_subq,
+        and_(
+            MetalPriceDaily.metal_key == latest_date_subq.c.metal_key,
+            MetalPriceDaily.snapshot_date == latest_date_subq.c.latest_date,
+        ),
+    )
+    rows = list((await session.scalars(stmt)).all())
+    return {row.metal_key: row for row in rows}
+
+
 async def load_latest(session: AsyncSession) -> dict[str, dict[str, float | str | None]]:
+    latest_rows = await load_latest_rows(session)
     latest: dict[str, dict[str, float | str | None]] = {}
 
     for metal in TRACKED_METALS:
-        stmt = (
-            select(MetalPriceDaily)
-            .where(MetalPriceDaily.metal_key == metal.key)
-            .order_by(MetalPriceDaily.snapshot_date.desc())
-            .limit(1)
-        )
-        row = (await session.scalars(stmt)).first()
+        row = latest_rows.get(metal.key)
         if row is None:
             latest[metal.key] = {
                 "date": None,
@@ -170,4 +187,3 @@ async def load_latest(session: AsyncSession) -> dict[str, dict[str, float | str 
         }
 
     return latest
-

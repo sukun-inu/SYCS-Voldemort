@@ -240,12 +240,16 @@ OpenAI API:
 
 Discord Bot とは別に、金・銀・プラチナの価格を **JST 0:00 に日次保存** し、  
 Web画面でチャート表示できる機能を追加しています。
+さらに、Bot ロジック準拠で金属の純度別価格計算も可能です。
+PWA 対応により、Web Push 通知で日次の価格変動を受け取れます。
 
 ### 10.1 追加技術スタック
 - FastAPI
 - PostgreSQL（`asyncpg` + SQLAlchemy）
 - APScheduler（JST 0:00 実行）
 - Chart.js（価格推移 + 前日差）
+- 純度計算 API（`/api/prices/calculate`）
+- Web Push（JST 11:00 に前日差最大の金属を通知）
 
 ### 10.2 保存データ
 `metal_price_daily` テーブルに以下を保存します。
@@ -278,6 +282,17 @@ python web_main.py
 
 任意:
 - `API_RATE_LIMIT_PER_MINUTE`（デフォルト: 120）
+- `API_CALCULATE_RATE_LIMIT_PER_MINUTE`（デフォルト: 60）
+- `API_RESPONSE_CACHE_SECONDS`（デフォルト: 20）
+- `PURITY_OPTIONS_CACHE_SECONDS`（デフォルト: 3600）
+- `PUSH_PUBLIC_KEY_CACHE_SECONDS`（デフォルト: 3600）
+- `PUSH_NOTIFY_HOUR_JST`（デフォルト: 11）
+- `PUSH_NOTIFY_MINUTE_JST`（デフォルト: 0）
+- `VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_SUBJECT`（例: `mailto:admin@example.com`）
+- `TRUST_CF_HEADERS`（デフォルト: true）
+- `REQUIRE_CF_CONNECTING_IP`（デフォルト: false）
 - `ALLOWED_HOSTS`（カンマ区切り）
 - `WEB_HOST_PORT`（デフォルト: 8001）
 
@@ -297,3 +312,9 @@ docker compose up -d --build
 - 初回起動時、`postgres-secret-init` がランダムな PostgreSQL パスワードを生成します。
 - パスワードは Docker Volume `shared_secrets` 内の `/shared/postgres_password` に保存されます。
 - `postgres` / `sycs-voldemort-web` は毎回このファイルを読み込むため、再起動後も同じパスワードで動作します。
+
+### 10.7 PWA と Push 通知
+- `manifest.webmanifest` と `service worker` を実装済みです。
+- ブラウザで「Push通知を有効化」を押すと購読登録されます。
+- サーバーは JST 毎日 11:00 に「前日差が最大の金属」を通知します。
+- 通知は `notification_dispatch` テーブルで同日重複送信を防止します。

@@ -10,3 +10,4 @@ uvicorn
 SQLAlchemy
 asyncpg
 apscheduler
+pywebpush

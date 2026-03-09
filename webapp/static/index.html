@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#10212a" />
   <title>貴金属価格トラッカー</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet" />
@@ -30,9 +32,27 @@
         <option value="365" selected>365日</option>
       </select>
       <button id="reloadButton" type="button">更新</button>
+      <button id="pushButton" type="button">Push通知を有効化</button>
+      <span id="pushStatus" class="meta inline-meta">Push初期化中...</span>
     </section>
 
     <section id="summaryCards" class="summary-grid" aria-label="最新価格"></section>
+
+    <section class="calculator-card" aria-label="純度計算">
+      <div class="calculator-head">
+        <h2>純度計算</h2>
+        <p>Botロジック準拠: 最新の日次価格 × グラム × 純度係数</p>
+      </div>
+      <div class="calculator-form">
+        <label for="calcMetal">金属</label>
+        <select id="calcMetal"></select>
+        <label for="calcGrams">グラム</label>
+        <input id="calcGrams" type="number" min="0.1" step="0.1" value="10" />
+        <button id="calcButton" type="button">計算</button>
+      </div>
+      <p id="calcMeta" class="meta">読み込み中...</p>
+      <div id="calcResult" class="calc-result"></div>
+    </section>
 
     <section class="chart-grid" aria-label="価格チャート">
       <article class="chart-card">
@@ -53,4 +73,3 @@
   <script src="/static/app.js"></script>
 </body>
 </html>
-

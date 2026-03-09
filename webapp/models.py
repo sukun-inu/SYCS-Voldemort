@@ -29,3 +29,45 @@ class MetalPriceDaily(Base):
         server_default=func.now(),
     )
 
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscription"
+    __table_args__ = (
+        UniqueConstraint("endpoint", name="uq_push_subscription_endpoint"),
+        Index("ix_push_subscription_created_at", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    endpoint: Mapped[str] = mapped_column(String(1024), nullable=False)
+    p256dh_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    auth_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class NotificationDispatch(Base):
+    __tablename__ = "notification_dispatch"
+    __table_args__ = (
+        UniqueConstraint("notification_type", "snapshot_date", name="uq_notification_dispatch_type_date"),
+        Index("ix_notification_dispatch_created_at", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    notification_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    detail: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )

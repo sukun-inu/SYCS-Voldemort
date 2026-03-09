@@ -98,6 +98,10 @@ body {
   cursor: pointer;
 }
 
+.inline-meta {
+  margin: 0;
+}
+
 .summary-grid {
   margin-top: 18px;
   display: grid;
@@ -139,6 +143,87 @@ body {
   color: #bc4631;
 }
 
+.calculator-card {
+  margin-top: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  backdrop-filter: blur(6px);
+}
+
+.calculator-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.calculator-head h2 {
+  margin: 0;
+  font-size: 1.06rem;
+}
+
+.calculator-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.calculator-form {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.calculator-form label {
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.calculator-form select,
+.calculator-form input,
+.calculator-form button {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  padding: 8px 12px;
+  font: inherit;
+}
+
+.calculator-form input {
+  width: 120px;
+}
+
+.calculator-form button {
+  cursor: pointer;
+}
+
+.calc-result {
+  margin-top: 10px;
+}
+
+.calc-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.calc-table th,
+.calc-table td {
+  text-align: left;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.calc-table th {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 .chart-grid {
   margin-top: 18px;
   display: grid;
@@ -174,4 +259,3 @@ body {
     height: 240px;
   }
 }
-
