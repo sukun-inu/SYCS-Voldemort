@@ -1,4 +1,4 @@
-const CACHE_NAME = "metal-tracker-v2";
+const CACHE_NAME = "metal-tracker-v3";
 
 function scopedUrl(path) {
   return new URL(path, self.registration.scope).toString();
@@ -9,7 +9,6 @@ const APP_SHELL = [
   scopedUrl("index.html"),
   scopedUrl("manifest.webmanifest"),
   scopedUrl("static/styles.css"),
-  scopedUrl("static/app.js"),
   scopedUrl("static/icons/metal-logo.svg"),
 ];
 
@@ -46,6 +45,34 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  const inScopePath = url.pathname.startsWith(scopePath)
+    ? url.pathname.slice(scopePath.length)
+    : url.pathname.replace(/^\//, "");
+  const useNetworkFirst =
+    request.mode === "navigate" ||
+    inScopePath === "" ||
+    inScopePath === "index.html" ||
+    inScopePath === "manifest.webmanifest" ||
+    inScopePath === "static/app.js";
+
+  if (useNetworkFirst) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok && response.type === "basic") {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(async () => {
+          const cached = await caches.match(request);
+          return cached || caches.match(scopedUrl("./"));
+        })
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) {
@@ -53,8 +80,10 @@ self.addEventListener("fetch", (event) => {
       }
       return fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          if (response.ok && response.type === "basic") {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
           return response;
         })
         .catch(() => caches.match(scopedUrl("./")));
