@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from fastapi import Depends, FastAPI, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse
@@ -21,6 +21,8 @@ from .snapshot_service import JST, load_history, load_latest, store_today_snapsh
 logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
+INDEX_FILE = STATIC_DIR / "index.html"
+RESERVED_TOP_LEVEL_PATHS = {"api", "static", "health", "docs", "redoc", "openapi.json"}
 
 
 async def get_db_session():
@@ -66,6 +68,7 @@ app = FastAPI(
     description="JST midnight snapshots for gold, silver, and platinum.",
     version="1.0.0",
     lifespan=lifespan,
+    root_path=os.getenv("APP_ROOT_PATH", ""),
 )
 
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=load_allowed_hosts())
@@ -82,7 +85,12 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/", include_in_schema=False)
 async def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(INDEX_FILE)
+
+
+@app.get("/index.html", include_in_schema=False)
+async def index_html() -> FileResponse:
+    return FileResponse(INDEX_FILE)
 
 
 @app.get("/health")
@@ -105,3 +113,10 @@ async def price_history(
         "latest": latest,
     }
 
+
+@app.get("/{page_path:path}", include_in_schema=False)
+async def fallback_page(page_path: str) -> FileResponse:
+    first = page_path.split("/", 1)[0] if page_path else ""
+    if first in RESERVED_TOP_LEVEL_PATHS:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return FileResponse(INDEX_FILE)
