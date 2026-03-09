@@ -1,30 +1,35 @@
 import asyncio
 import json
 import logging
-import os
 
 from pywebpush import WebPushException, webpush
 
+from .vapid_service import VapidConfig, load_vapid_config
+
 logger = logging.getLogger(__name__)
+_cached_config: VapidConfig | None = None
+
+
+def refresh_vapid_config() -> VapidConfig:
+    global _cached_config
+    _cached_config = load_vapid_config()
+    return _cached_config
+
+
+def _get_vapid_config() -> VapidConfig:
+    global _cached_config
+    if _cached_config is None:
+        _cached_config = load_vapid_config()
+    return _cached_config
 
 
 def get_vapid_public_key() -> str | None:
-    value = os.getenv("VAPID_PUBLIC_KEY")
-    return value.strip() if value else None
-
-
-def _get_vapid_private_key() -> str | None:
-    value = os.getenv("VAPID_PRIVATE_KEY")
-    return value.strip() if value else None
-
-
-def _get_vapid_subject() -> str | None:
-    value = os.getenv("VAPID_SUBJECT")
-    return value.strip() if value else None
+    return _get_vapid_config().public_key
 
 
 def is_push_enabled() -> bool:
-    return bool(get_vapid_public_key() and _get_vapid_private_key() and _get_vapid_subject())
+    config = _get_vapid_config()
+    return bool(config.public_key and config.private_key and config.subject)
 
 
 def build_push_payload(*, title: str, body: str, url: str = "/") -> str:
@@ -43,9 +48,8 @@ async def send_push(subscription: dict, payload: str) -> tuple[bool, bool]:
       - success: 送信成功
       - remove_subscription: 404/410 等で購読削除すべき
     """
-    vapid_private_key = _get_vapid_private_key()
-    vapid_subject = _get_vapid_subject()
-    if not vapid_private_key or not vapid_subject:
+    config = _get_vapid_config()
+    if not config.private_key or not config.subject:
         return False, False
 
     try:
@@ -53,8 +57,8 @@ async def send_push(subscription: dict, payload: str) -> tuple[bool, bool]:
             webpush,
             subscription_info=subscription,
             data=payload,
-            vapid_private_key=vapid_private_key,
-            vapid_claims={"sub": vapid_subject},
+            vapid_private_key=config.private_key,
+            vapid_claims={"sub": config.subject},
         )
         return True, False
     except WebPushException as exc:
@@ -67,4 +71,3 @@ async def send_push(subscription: dict, payload: str) -> tuple[bool, bool]:
     except Exception:
         logger.exception("WebPush送信中に想定外エラー")
         return False, False
-

@@ -84,15 +84,17 @@ services:
       - PUSH_PUBLIC_KEY_CACHE_SECONDS=${PUSH_PUBLIC_KEY_CACHE_SECONDS:-3600}
       - PUSH_NOTIFY_HOUR_JST=${PUSH_NOTIFY_HOUR_JST:-11}
       - PUSH_NOTIFY_MINUTE_JST=${PUSH_NOTIFY_MINUTE_JST:-0}
+      - VAPID_AUTO_GENERATE=${VAPID_AUTO_GENERATE:-true}
+      - VAPID_KEYS_DIR=/shared/vapid
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
-      - VAPID_SUBJECT=${VAPID_SUBJECT}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:admin@example.com}
       - TRUST_CF_HEADERS=${TRUST_CF_HEADERS:-true}
       - REQUIRE_CF_CONNECTING_IP=${REQUIRE_CF_CONNECTING_IP:-false}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
     volumes:
       - ./data:/app/data
-      - shared_secrets:/shared:ro
+      - shared_secrets:/shared
 
 volumes:
   postgres_data:

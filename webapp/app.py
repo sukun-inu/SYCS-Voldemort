@@ -21,7 +21,13 @@ from config import METAL_COMMANDS
 from .cache import TTLCache
 from .db import SessionLocal, close_db, init_db
 from .models import NotificationDispatch, PushSubscription
-from .push_service import build_push_payload, get_vapid_public_key, is_push_enabled, send_push
+from .push_service import (
+    build_push_payload,
+    get_vapid_public_key,
+    is_push_enabled,
+    refresh_vapid_config,
+    send_push,
+)
 from .security import RateLimitMiddleware, SecurityHeadersMiddleware, load_allowed_hosts, read_env_bool
 from .snapshot_service import JST, load_history, load_latest_rows, store_today_snapshot
 
@@ -244,6 +250,7 @@ async def collect_daily_snapshot() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await init_db()
+    refresh_vapid_config()
     await collect_daily_snapshot()
     await dispatch_top_delta_notification(enforce_schedule_time=True)
 

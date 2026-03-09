@@ -288,9 +288,11 @@ python web_main.py
 - `PUSH_PUBLIC_KEY_CACHE_SECONDS`（デフォルト: 3600）
 - `PUSH_NOTIFY_HOUR_JST`（デフォルト: 11）
 - `PUSH_NOTIFY_MINUTE_JST`（デフォルト: 0）
-- `VAPID_PUBLIC_KEY`
-- `VAPID_PRIVATE_KEY`
-- `VAPID_SUBJECT`（例: `mailto:admin@example.com`）
+- `VAPID_AUTO_GENERATE`（デフォルト: true）
+- `VAPID_KEYS_DIR`（デフォルト: `/shared/vapid`）
+- `VAPID_PUBLIC_KEY`（手動指定する場合）
+- `VAPID_PRIVATE_KEY`（手動指定する場合）
+- `VAPID_SUBJECT`（デフォルト: `mailto:admin@example.com`）
 - `TRUST_CF_HEADERS`（デフォルト: true）
 - `REQUIRE_CF_CONNECTING_IP`（デフォルト: false）
 - `ALLOWED_HOSTS`（カンマ区切り）
@@ -318,3 +320,4 @@ docker compose up -d --build
 - ブラウザで「Push通知を有効化」を押すと購読登録されます。
 - サーバーは JST 毎日 11:00 に「前日差が最大の金属」を通知します。
 - 通知は `notification_dispatch` テーブルで同日重複送信を防止します。
+- `VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY` が未設定でも、初回起動時に `/shared/vapid` へ自動生成して再利用します。
