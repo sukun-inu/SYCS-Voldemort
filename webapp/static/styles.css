@@ -28,8 +28,9 @@ body {
 body {
   min-height: 100vh;
   background:
-    radial-gradient(1000px 400px at 20% -10%, #d9e9ff 0%, transparent 65%),
-    radial-gradient(900px 350px at 80% -20%, #ffe8c9 0%, transparent 60%),
+    linear-gradient(165deg, #fbfcff 0%, #f6f7fb 48%, #f8f5ef 100%),
+    radial-gradient(1080px 420px at 20% -10%, #e2ecff 0%, transparent 64%),
+    radial-gradient(960px 360px at 80% -18%, #fff2de 0%, transparent 58%),
     var(--bg);
   color: var(--ink);
   font-family:
