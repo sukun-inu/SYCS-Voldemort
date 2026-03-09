@@ -39,6 +39,9 @@ const CHART_CDN_LIST = [
   "https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js",
   "https://unpkg.com/chart.js@4.5.0/dist/chart.umd.min.js",
 ];
+const CHART_MIN_WIDTH_PX = 720;
+const CHART_PX_PER_DAY_DESKTOP = 8;
+const CHART_PX_PER_DAY_MOBILE = 6;
 
 function appUrl(path) {
   return new URL(path.replace(/^\/+/, ""), APP_BASE).toString();
@@ -232,7 +235,22 @@ function renderMetalChart(metalKey, history, dailyAxis) {
   const prices = dailyAxis.map((date) => dailyMap.get(date)?.price_per_gram ?? null);
   const deltas = dailyAxis.map((date) => dailyMap.get(date)?.delta_from_previous ?? null);
   const tickStep = Math.max(1, Math.ceil(dailyAxis.length / 9));
-  const context = document.getElementById(meta.canvasId).getContext("2d");
+  const canvas = document.getElementById(meta.canvasId);
+  if (!canvas) {
+    return;
+  }
+  const chartTrack = canvas.closest(".chart-track");
+  const isMobile = window.matchMedia("(max-width: 1080px)").matches;
+  const pxPerDay = isMobile ? CHART_PX_PER_DAY_MOBILE : CHART_PX_PER_DAY_DESKTOP;
+  const chartWidth = Math.max(CHART_MIN_WIDTH_PX, dailyAxis.length * pxPerDay);
+  if (chartTrack) {
+    chartTrack.style.width = `${chartWidth}px`;
+  }
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return;
+  }
 
   if (charts[metalKey]) {
     charts[metalKey].destroy();
@@ -268,6 +286,7 @@ function renderMetalChart(metalKey, history, dailyAxis) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
       interaction: { mode: "index", intersect: false },
       scales: {
         yPrice: {
@@ -289,6 +308,8 @@ function renderMetalChart(metalKey, history, dailyAxis) {
           type: "category",
           ticks: {
             autoSkip: false,
+            maxRotation: 0,
+            minRotation: 0,
             callback: (_, index) => (index % tickStep === 0 || index === labels.length - 1 ? labels[index] : ""),
           },
         },

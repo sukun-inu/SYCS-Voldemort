@@ -295,9 +295,25 @@ button:disabled {
   font-weight: 640;
 }
 
+.chart-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chart-track {
+  min-width: 100%;
+}
+
 .chart-card canvas {
   width: 100%;
   height: 280px;
+  display: block;
+  padding: 8px;
 }
 
 @media (max-width: 1080px) {
@@ -312,6 +328,6 @@ button:disabled {
 
   .chart-card canvas {
     height: 235px;
+    padding: 6px;
   }
 }
-

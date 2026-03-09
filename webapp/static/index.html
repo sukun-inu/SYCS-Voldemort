@@ -8,7 +8,7 @@
   <title>Metal Daily | 金属価格ダッシュボード</title>
   <link rel="manifest" href="manifest.webmanifest?v=20260310-1" />
   <link rel="icon" type="image/svg+xml" href="static/icons/metal-logo.svg" />
-  <link rel="stylesheet" href="static/styles.css?v=20260310-1" />
+  <link rel="stylesheet" href="static/styles.css?v=20260310-2" />
 </head>
 <body>
   <main class="app-shell">
@@ -62,20 +62,32 @@
     <section class="chart-grid" aria-label="価格チャート">
       <article class="chart-card">
         <h2>金 (Gold)</h2>
-        <canvas id="goldChart"></canvas>
+        <div class="chart-scroll">
+          <div class="chart-track">
+            <canvas id="goldChart"></canvas>
+          </div>
+        </div>
       </article>
       <article class="chart-card">
         <h2>銀 (Silver)</h2>
-        <canvas id="silverChart"></canvas>
+        <div class="chart-scroll">
+          <div class="chart-track">
+            <canvas id="silverChart"></canvas>
+          </div>
+        </div>
       </article>
       <article class="chart-card">
         <h2>プラチナ (Platinum)</h2>
-        <canvas id="platinumChart"></canvas>
+        <div class="chart-scroll">
+          <div class="chart-track">
+            <canvas id="platinumChart"></canvas>
+          </div>
+        </div>
       </article>
     </section>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js" defer></script>
-  <script src="static/app.js?v=20260310-1" defer></script>
+  <script src="static/app.js?v=20260310-2" defer></script>
 </body>
 </html>
