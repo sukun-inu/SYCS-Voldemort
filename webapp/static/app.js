@@ -339,8 +339,6 @@ function renderMetalChart(metalKey, history, dailyAxis) {
       ],
     },
     options: {
-      parsing: false,
-      normalized: true,
       devicePixelRatio: chartDpr,
       responsive: true,
       maintainAspectRatio: false,
