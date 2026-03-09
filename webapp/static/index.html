@@ -3,37 +3,42 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#10212a" />
-  <title>貴金属価格トラッカー</title>
-  <link rel="manifest" href="/manifest.webmanifest" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
+  <base href="./" />
+  <meta name="theme-color" content="#f5f5f7" />
+  <title>Metal Daily | 金属価格ダッシュボード</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="static/icons/metal-logo.svg" />
+  <link rel="stylesheet" href="static/styles.css" />
 </head>
 <body>
-  <div class="bg-shape bg-shape-a"></div>
-  <div class="bg-shape bg-shape-b"></div>
-
-  <main class="container">
-    <header class="hero">
-      <p class="eyebrow">METAL TRACKING / JST 00:00 SNAPSHOT</p>
-      <h1>金・銀・プラチナ 日次価格ダッシュボード</h1>
-      <p id="generatedAt" class="meta">読み込み中...</p>
+  <main class="app-shell">
+    <header class="hero-card">
+      <div class="hero-title-wrap">
+        <p class="eyebrow">METAL DAILY SNAPSHOT</p>
+        <h1>金・銀・プラチナ 価格ダッシュボード</h1>
+        <p id="generatedAt" class="meta">読み込み中...</p>
+      </div>
+      <div class="hero-chips">
+        <span class="chip">更新: JST 00:00</span>
+        <span id="notifyTimeChip" class="chip">通知: JST 11:00</span>
+      </div>
     </header>
 
-    <section class="toolbar" aria-label="表示設定">
-      <label for="daysSelect">表示期間</label>
-      <select id="daysSelect">
-        <option value="30">30日</option>
-        <option value="90">90日</option>
-        <option value="180">180日</option>
-        <option value="365" selected>365日</option>
-      </select>
-      <button id="reloadButton" type="button">更新</button>
-      <button id="pushButton" type="button">Push通知を有効化</button>
-      <span id="pushStatus" class="meta inline-meta">Push初期化中...</span>
+    <section class="controls-card" aria-label="操作パネル">
+      <div class="control-row">
+        <label for="daysSelect">表示期間</label>
+        <select id="daysSelect">
+          <option value="30">30日</option>
+          <option value="90">90日</option>
+          <option value="180">180日</option>
+          <option value="365" selected>365日</option>
+        </select>
+        <button id="reloadButton" type="button" class="button-secondary">更新</button>
+      </div>
+      <div class="control-row">
+        <button id="pushButton" type="button" class="button-primary">Push通知を有効化</button>
+        <span id="pushStatus" class="meta inline-meta">Push初期化中...</span>
+      </div>
     </section>
 
     <section id="summaryCards" class="summary-grid" aria-label="最新価格"></section>
@@ -41,14 +46,14 @@
     <section class="calculator-card" aria-label="純度計算">
       <div class="calculator-head">
         <h2>純度計算</h2>
-        <p>Botロジック準拠: 最新の日次価格 × グラム × 純度係数</p>
+        <p>最新の日次価格 × グラム × 純度係数</p>
       </div>
       <div class="calculator-form">
         <label for="calcMetal">金属</label>
         <select id="calcMetal"></select>
         <label for="calcGrams">グラム</label>
         <input id="calcGrams" type="number" min="0.1" step="0.1" value="10" />
-        <button id="calcButton" type="button">計算</button>
+        <button id="calcButton" type="button" class="button-secondary">計算</button>
       </div>
       <p id="calcMeta" class="meta">読み込み中...</p>
       <div id="calcResult" class="calc-result"></div>
@@ -70,6 +75,6 @@
     </section>
   </main>
 
-  <script src="/static/app.js"></script>
+  <script src="static/app.js" defer></script>
 </body>
 </html>

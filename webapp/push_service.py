@@ -32,7 +32,7 @@ def is_push_enabled() -> bool:
     return bool(config.public_key and config.private_key and config.subject)
 
 
-def build_push_payload(*, title: str, body: str, url: str = "/") -> str:
+def build_push_payload(*, title: str, body: str, url: str = "./") -> str:
     payload = {
         "title": title,
         "body": body,

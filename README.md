@@ -288,6 +288,8 @@ python web_main.py
 - `PUSH_PUBLIC_KEY_CACHE_SECONDS`（デフォルト: 3600）
 - `PUSH_NOTIFY_HOUR_JST`（デフォルト: 11）
 - `PUSH_NOTIFY_MINUTE_JST`（デフォルト: 0）
+- `APP_ROOT_PATH`（サブパス配信時のみ。例: `/metal`）
+- `APP_PUBLIC_PATH`（Push通知クリック先のベース。デフォルト: `/`）
 - `VAPID_AUTO_GENERATE`（デフォルト: true）
 - `VAPID_KEYS_DIR`（デフォルト: `/shared/vapid`）
 - `VAPID_PUBLIC_KEY`（手動指定する場合）

@@ -1,10 +1,16 @@
-const CACHE_NAME = "metal-tracker-v1";
+const CACHE_NAME = "metal-tracker-v2";
+
+function scopedUrl(path) {
+  return new URL(path, self.registration.scope).toString();
+}
+
 const APP_SHELL = [
-  "/",
-  "/index.html",
-  "/manifest.webmanifest",
-  "/static/styles.css",
-  "/static/app.js",
+  scopedUrl("./"),
+  scopedUrl("index.html"),
+  scopedUrl("manifest.webmanifest"),
+  scopedUrl("static/styles.css"),
+  scopedUrl("static/app.js"),
+  scopedUrl("static/icons/metal-logo.svg"),
 ];
 
 self.addEventListener("install", (event) => {
@@ -30,11 +36,13 @@ self.addEventListener("fetch", (event) => {
   }
 
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin) {
+  const scopeUrl = new URL(self.registration.scope);
+  if (url.origin !== scopeUrl.origin) {
     return;
   }
 
-  if (url.pathname.startsWith("/api/")) {
+  const scopePath = scopeUrl.pathname.endsWith("/") ? scopeUrl.pathname : `${scopeUrl.pathname}/`;
+  if (url.pathname.startsWith(`${scopePath}api/`)) {
     return;
   }
 
@@ -49,13 +57,13 @@ self.addEventListener("fetch", (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
           return response;
         })
-        .catch(() => caches.match("/"));
+        .catch(() => caches.match(scopedUrl("./")));
     })
   );
 });
 
 self.addEventListener("push", (event) => {
-  let payload = { title: "価格通知", body: "本日の通知があります。", url: "/" };
+  let payload = { title: "価格通知", body: "本日の通知があります。", url: "./" };
   if (event.data) {
     try {
       payload = event.data.json();
@@ -67,9 +75,9 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title || "価格通知", {
       body: payload.body || "",
-      icon: "/static/icons/metal-logo.svg",
-      badge: "/static/icons/metal-logo.svg",
-      data: { url: payload.url || "/" },
+      icon: scopedUrl("static/icons/metal-logo.svg"),
+      badge: scopedUrl("static/icons/metal-logo.svg"),
+      data: { url: payload.url || "./" },
       tag: payload.tag || "metal-notify",
     })
   );
@@ -77,16 +85,16 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const targetUrl = event.notification?.data?.url || "/";
+  const targetUrl = event.notification?.data?.url || "./";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {
         if ("focus" in client) {
-          client.navigate(targetUrl);
+          client.navigate(new URL(targetUrl, self.registration.scope).toString());
           return client.focus();
         }
       }
-      return self.clients.openWindow(targetUrl);
+      return self.clients.openWindow(new URL(targetUrl, self.registration.scope).toString());
     })
   );
 });

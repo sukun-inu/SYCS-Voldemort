@@ -2,15 +2,15 @@
   "name": "SYCS Metal Price Tracker",
   "short_name": "MetalTracker",
   "description": "金・銀・プラチナの日次価格と純度計算を扱うPWA",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#f4f7f2",
   "theme_color": "#10212a",
   "lang": "ja",
   "icons": [
     {
-      "src": "/static/icons/metal-logo.svg",
+      "src": "static/icons/metal-logo.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"

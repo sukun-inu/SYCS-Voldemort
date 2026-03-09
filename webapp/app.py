@@ -44,6 +44,19 @@ PUSH_PUBLIC_KEY_CACHE_SECONDS = max(300, int(os.getenv("PUSH_PUBLIC_KEY_CACHE_SE
 PUSH_NOTIFY_HOUR_JST = max(0, min(23, int(os.getenv("PUSH_NOTIFY_HOUR_JST", "11"))))
 PUSH_NOTIFY_MINUTE_JST = max(0, min(59, int(os.getenv("PUSH_NOTIFY_MINUTE_JST", "0"))))
 NOTIFY_TOP_DELTA_TYPE = "daily_top_delta"
+APP_PUBLIC_PATH = (os.getenv("APP_PUBLIC_PATH") or os.getenv("APP_ROOT_PATH") or "/").strip() or "/"
+
+
+def _normalize_public_path(path: str) -> str:
+    if path in {"", "/"}:
+        return "/"
+    normalized = path if path.startswith("/") else f"/{path}"
+    if not normalized.endswith("/"):
+        normalized += "/"
+    return normalized
+
+
+APP_PUBLIC_ROOT = _normalize_public_path(APP_PUBLIC_PATH)
 
 history_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=64)
 latest_prices_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=8)
@@ -192,7 +205,7 @@ async def dispatch_top_delta_notification(*, enforce_schedule_time: bool = False
         payload = build_push_payload(
             title="本日の価格変動通知 (JST 11:00)",
             body=f"{spec.display_name}の前日差が最大: {delta_sign}{delta_value:.2f} 円/g ({snapshot_date})",
-            url="/",
+            url=APP_PUBLIC_ROOT,
         )
 
         stale_endpoints: list[str] = []
@@ -320,7 +333,10 @@ async def service_worker() -> FileResponse:
     return FileResponse(
         SW_FILE,
         media_type="application/javascript",
-        headers={"Cache-Control": "no-cache"},
+        headers={
+            "Cache-Control": "no-cache",
+            "Service-Worker-Allowed": APP_PUBLIC_ROOT,
+        },
     )
 
 
@@ -375,11 +391,13 @@ async def purity_options() -> JSONResponse:
 async def push_public_key() -> JSONResponse:
     public_key = get_vapid_public_key()
     enabled = is_push_enabled() and public_key is not None
+    reason = None if enabled else "vapid_not_configured_or_generation_failed"
     return JSONResponse(
         {
             "enabled": enabled,
             "public_key": public_key if enabled else None,
             "notify_time_jst": f"{PUSH_NOTIFY_HOUR_JST:02d}:{PUSH_NOTIFY_MINUTE_JST:02d}",
+            "reason": reason,
         },
         headers=_cache_headers(PUSH_PUBLIC_KEY_CACHE_SECONDS),
     )
