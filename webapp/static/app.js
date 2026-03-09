@@ -39,9 +39,10 @@ const CHART_CDN_LIST = [
   "https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js",
   "https://unpkg.com/chart.js@4.5.0/dist/chart.umd.min.js",
 ];
-const CHART_MIN_WIDTH_PX = 720;
+const CHART_MIN_WIDTH_DESKTOP_PX = 720;
+const CHART_MIN_WIDTH_MOBILE_PX = 480;
 const CHART_PX_PER_DAY_DESKTOP = 8;
-const CHART_PX_PER_DAY_MOBILE = 6;
+const CHART_PX_PER_DAY_MOBILE = 4;
 
 function appUrl(path) {
   return new URL(path.replace(/^\/+/, ""), APP_BASE).toString();
@@ -240,9 +241,10 @@ function renderMetalChart(metalKey, history, dailyAxis) {
     return;
   }
   const chartTrack = canvas.closest(".chart-track");
-  const isMobile = window.matchMedia("(max-width: 1080px)").matches;
+  const isMobile = window.matchMedia("(max-width: 860px)").matches;
   const pxPerDay = isMobile ? CHART_PX_PER_DAY_MOBILE : CHART_PX_PER_DAY_DESKTOP;
-  const chartWidth = Math.max(CHART_MIN_WIDTH_PX, dailyAxis.length * pxPerDay);
+  const minWidth = isMobile ? CHART_MIN_WIDTH_MOBILE_PX : CHART_MIN_WIDTH_DESKTOP_PX;
+  const chartWidth = Math.max(minWidth, dailyAxis.length * pxPerDay);
   if (chartTrack) {
     chartTrack.style.width = `${chartWidth}px`;
   }

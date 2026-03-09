@@ -1,10 +1,10 @@
 :root {
-  --bg: #f5f5f7;
-  --surface: #ffffffcc;
-  --surface-strong: #ffffff;
+  --bg: #f7f0e6;
+  --surface: rgba(255, 250, 243, 0.58);
+  --surface-strong: rgba(255, 252, 247, 0.78);
   --ink: #1d1d1f;
   --ink-soft: #515154;
-  --line: #d2d2d7;
+  --line: #e2d7ca;
   --accent: #0071e3;
   --accent-dark: #005bb5;
   --gold: #b28704;
@@ -28,9 +28,10 @@ body {
 body {
   min-height: 100vh;
   background:
-    linear-gradient(165deg, #fbfcff 0%, #f6f7fb 48%, #f8f5ef 100%),
-    radial-gradient(1080px 420px at 20% -10%, #e2ecff 0%, transparent 64%),
-    radial-gradient(960px 360px at 80% -18%, #fff2de 0%, transparent 58%),
+    linear-gradient(165deg, #fffaf3 0%, #fff1e2 52%, #f7e7d8 100%),
+    radial-gradient(1080px 420px at 18% -10%, #ffe8c9 0%, transparent 62%),
+    radial-gradient(980px 360px at 84% -16%, #ffdcbc 0%, transparent 56%),
+    radial-gradient(820px 340px at 50% 120%, #f9d8c2 0%, transparent 62%),
     var(--bg);
   color: var(--ink);
   font-family:
@@ -46,7 +47,7 @@ body {
 
 .app-shell {
   width: min(1240px, calc(100% - 32px));
-  margin: 20px auto 36px;
+  margin: 18px auto 30px;
   display: grid;
   gap: 14px;
 }
@@ -57,11 +58,11 @@ body {
 .calculator-card,
 .chart-card {
   background: var(--surface);
-  border: 1px solid #ffffff80;
+  border: 1px solid #fff8f0cc;
   border-radius: var(--radius);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  box-shadow: 0 8px 30px #00000010;
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  box-shadow: 0 10px 32px #7b4d1a12;
 }
 
 .hero-card {
@@ -103,7 +104,7 @@ body {
   align-items: center;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.56);
   color: var(--ink-soft);
   font-size: 0.78rem;
   padding: 6px 10px;
@@ -131,6 +132,7 @@ select,
 input,
 button {
   font: inherit;
+  min-height: 42px;
 }
 
 select,
@@ -138,7 +140,7 @@ input {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 10px 12px;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.68);
   color: var(--ink);
 }
 
@@ -170,7 +172,7 @@ button:disabled {
 }
 
 .button-secondary {
-  background: #fff;
+  background: rgba(255, 255, 255, 0.74);
   color: var(--ink);
   border-color: var(--line);
 }
@@ -302,7 +304,7 @@ button:disabled {
   overflow-y: hidden;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.54);
   -webkit-overflow-scrolling: touch;
 }
 
@@ -318,17 +320,161 @@ button:disabled {
 }
 
 @media (max-width: 1080px) {
-  .summary-grid,
+  .app-shell {
+    width: calc(100% - 22px);
+    margin: 14px auto 22px;
+    gap: 10px;
+  }
+
+  .hero-card {
+    padding: 14px;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .chart-grid {
     grid-template-columns: 1fr;
   }
 
-  .hero-card {
+  .calculator-head {
     flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
   }
 
   .chart-card canvas {
-    height: 235px;
+    height: 224px;
     padding: 6px;
+  }
+}
+
+@media (max-width: 760px) {
+  :root {
+    --radius: 16px;
+  }
+
+  .app-shell {
+    width: calc(100% - 14px);
+    margin: 10px auto 18px;
+    gap: 8px;
+  }
+
+  .hero-card,
+  .controls-card,
+  .summary-card,
+  .calculator-card,
+  .chart-card {
+    box-shadow: 0 6px 20px #5a381210;
+  }
+
+  .hero-card {
+    padding: 12px;
+  }
+
+  .hero-title-wrap h1 {
+    font-size: 1.2rem;
+    line-height: 1.3;
+  }
+
+  .eyebrow {
+    font-size: 0.66rem;
+  }
+
+  .meta {
+    margin-top: 6px;
+    font-size: 0.83rem;
+    line-height: 1.35;
+  }
+
+  .chip {
+    font-size: 0.72rem;
+    padding: 5px 8px;
+  }
+
+  .controls-card {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .control-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .control-row select,
+  .control-row input,
+  .control-row button {
+    width: 100%;
+  }
+
+  .inline-meta {
+    font-size: 0.8rem;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .summary-card {
+    padding: 12px;
+  }
+
+  .summary-price {
+    margin-top: 6px;
+    font-size: 1.24rem;
+  }
+
+  .calculator-card {
+    padding: 12px;
+  }
+
+  .calculator-form {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .calculator-form input {
+    width: 100%;
+  }
+
+  .calc-table th,
+  .calc-table td {
+    padding: 8px 9px;
+    font-size: 0.86rem;
+  }
+
+  .chart-card {
+    padding: 10px;
+  }
+
+  .chart-card h2 {
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+  }
+
+  .chart-scroll {
+    border-radius: 10px;
+  }
+
+  .chart-card canvas {
+    height: 204px;
+    padding: 4px;
+  }
+}
+
+@media (max-width: 420px) {
+  .hero-title-wrap h1 {
+    font-size: 1.08rem;
+  }
+
+  .chart-card canvas {
+    height: 188px;
   }
 }
