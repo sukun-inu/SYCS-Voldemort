@@ -1,10 +1,10 @@
 :root {
-  --bg: #f7f0e6;
-  --surface: rgba(255, 250, 243, 0.58);
-  --surface-strong: rgba(255, 252, 247, 0.78);
+  --bg: #f6e8d1;
+  --surface: rgba(255, 248, 235, 0.56);
+  --surface-strong: rgba(255, 249, 238, 0.76);
   --ink: #1d1d1f;
   --ink-soft: #515154;
-  --line: #e2d7ca;
+  --line: #e4cfaf;
   --accent: #0071e3;
   --accent-dark: #005bb5;
   --gold: #b28704;
@@ -28,10 +28,10 @@ body {
 body {
   min-height: 100vh;
   background:
-    linear-gradient(165deg, #fffaf3 0%, #fff1e2 52%, #f7e7d8 100%),
-    radial-gradient(1080px 420px at 18% -10%, #ffe8c9 0%, transparent 62%),
-    radial-gradient(980px 360px at 84% -16%, #ffdcbc 0%, transparent 56%),
-    radial-gradient(820px 340px at 50% 120%, #f9d8c2 0%, transparent 62%),
+    linear-gradient(165deg, #fff9e8 0%, #f8e2be 52%, #f0cc98 100%),
+    radial-gradient(1080px 420px at 18% -10%, #ffd98f 0%, transparent 62%),
+    radial-gradient(980px 360px at 84% -16%, #f8c985 0%, transparent 56%),
+    radial-gradient(840px 360px at 50% 118%, #efbb72 0%, transparent 64%),
     var(--bg);
   color: var(--ink);
   font-family:

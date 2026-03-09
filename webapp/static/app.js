@@ -35,16 +35,19 @@ let pushEnabledByServer = false;
 let pushPublicKey = null;
 let pushNotifyTimeJst = "11:00";
 let latestHistoryPayload = null;
-let resizeTimerId = null;
+let lastChartMobileMode = null;
 
 const CHART_CDN_LIST = [
   "https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js",
   "https://unpkg.com/chart.js@4.5.0/dist/chart.umd.min.js",
 ];
-const CHART_MIN_WIDTH_DESKTOP_PX = 720;
-const CHART_MIN_WIDTH_MOBILE_PX = 480;
-const CHART_PX_PER_DAY_DESKTOP = 8;
-const CHART_PX_PER_DAY_MOBILE = 4;
+const CHART_MIN_WIDTH_DESKTOP_PX = 640;
+const CHART_MAX_WIDTH_DESKTOP_PX = 2000;
+const CHART_MIN_WIDTH_MOBILE_PX = 420;
+const CHART_MAX_WIDTH_MOBILE_PX = 1200;
+const CHART_PX_PER_DAY_DESKTOP = 5;
+const CHART_PX_PER_DAY_MOBILE = 3;
+const CHART_DPR_CAP = 1.75;
 
 function appUrl(path) {
   return new URL(path.replace(/^\/+/, ""), APP_BASE).toString();
@@ -52,6 +55,17 @@ function appUrl(path) {
 
 function appScopePath() {
   return new URL("./", APP_BASE).pathname;
+}
+
+function isMobileChartViewport() {
+  return window.matchMedia("(max-width: 860px)").matches;
+}
+
+function resolveChartTrackWidth(days, isMobile) {
+  const pxPerDay = isMobile ? CHART_PX_PER_DAY_MOBILE : CHART_PX_PER_DAY_DESKTOP;
+  const minWidth = isMobile ? CHART_MIN_WIDTH_MOBILE_PX : CHART_MIN_WIDTH_DESKTOP_PX;
+  const maxWidth = isMobile ? CHART_MAX_WIDTH_MOBILE_PX : CHART_MAX_WIDTH_DESKTOP_PX;
+  return Math.min(maxWidth, Math.max(minWidth, days * pxPerDay));
 }
 
 function loadExternalScript(src) {
@@ -237,16 +251,13 @@ function renderMetalChart(metalKey, history, dailyAxis) {
   const labels = dailyAxis.map((date) => formatDailyLabel(date));
   const prices = dailyAxis.map((date) => dailyMap.get(date)?.price_per_gram ?? null);
   const deltas = dailyAxis.map((date) => dailyMap.get(date)?.delta_from_previous ?? null);
-  const tickStep = Math.max(1, Math.ceil(dailyAxis.length / 9));
   const canvas = document.getElementById(meta.canvasId);
   if (!canvas) {
     return;
   }
   const chartTrack = canvas.closest(".chart-track");
-  const isMobile = window.matchMedia("(max-width: 860px)").matches;
-  const pxPerDay = isMobile ? CHART_PX_PER_DAY_MOBILE : CHART_PX_PER_DAY_DESKTOP;
-  const minWidth = isMobile ? CHART_MIN_WIDTH_MOBILE_PX : CHART_MIN_WIDTH_DESKTOP_PX;
-  const chartWidth = Math.max(minWidth, dailyAxis.length * pxPerDay);
+  const isMobile = isMobileChartViewport();
+  const chartWidth = resolveChartTrackWidth(dailyAxis.length, isMobile);
   if (chartTrack) {
     chartTrack.style.width = `${chartWidth}px`;
   }
@@ -255,9 +266,20 @@ function renderMetalChart(metalKey, history, dailyAxis) {
   if (!context) {
     return;
   }
+  const xMaxTicks = isMobile ? 7 : 11;
+  const chartDpr = Math.min(window.devicePixelRatio || 1, CHART_DPR_CAP);
 
-  if (charts[metalKey]) {
-    charts[metalKey].destroy();
+  const existing = charts[metalKey];
+  if (existing) {
+    existing.data.labels = labels;
+    existing.data.datasets[0].data = prices;
+    existing.data.datasets[0].pointRadius = dailyAxis.length <= 120 ? 1 : 0;
+    existing.data.datasets[1].data = deltas;
+    existing.options.devicePixelRatio = chartDpr;
+    existing.options.scales.x.ticks.maxTicksLimit = xMaxTicks;
+    existing.options.plugins.tooltip.callbacks.title = (items) => (items.length ? dailyAxis[items[0].dataIndex] : "");
+    existing.update("none");
+    return;
   }
 
   charts[metalKey] = new window.Chart(context, {
@@ -288,6 +310,9 @@ function renderMetalChart(metalKey, history, dailyAxis) {
       ],
     },
     options: {
+      parsing: false,
+      normalized: true,
+      devicePixelRatio: chartDpr,
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
@@ -311,10 +336,10 @@ function renderMetalChart(metalKey, history, dailyAxis) {
         x: {
           type: "category",
           ticks: {
-            autoSkip: false,
+            autoSkip: true,
+            maxTicksLimit: xMaxTicks,
             maxRotation: 0,
             minRotation: 0,
-            callback: (_, index) => (index % tickStep === 0 || index === labels.length - 1 ? labels[index] : ""),
           },
         },
       },
@@ -347,6 +372,7 @@ function renderDashboardFromPayload(payload) {
   if (!payload) {
     return;
   }
+  lastChartMobileMode = isMobileChartViewport();
   const dailyAxis = enumerateDailyAxis(payload.range_start, payload.range_end);
   document.getElementById("generatedAt").textContent =
     `更新頻度: 1日1回 (JST 00:00) / 表示期間: ${payload.range_start} - ${payload.range_end}`;
@@ -548,18 +574,15 @@ document.getElementById("pushButton").addEventListener("click", async () => {
 });
 
 window.addEventListener("resize", () => {
-  if (resizeTimerId) {
-    window.clearTimeout(resizeTimerId);
+  const mode = isMobileChartViewport();
+  if (lastChartMobileMode === null) {
+    lastChartMobileMode = mode;
+    return;
   }
-  resizeTimerId = window.setTimeout(() => {
+  if (mode !== lastChartMobileMode) {
+    lastChartMobileMode = mode;
     renderDashboardFromPayload(latestHistoryPayload);
-  }, 220);
-});
-
-window.addEventListener("orientationchange", () => {
-  window.setTimeout(() => {
-    renderDashboardFromPayload(latestHistoryPayload);
-  }, 250);
+  }
 });
 
 loadDashboard().catch((err) => {
