@@ -5,3 +5,8 @@ orjson
 psutil
 colorthief
 vt-py
+fastapi
+uvicorn
+SQLAlchemy
+asyncpg
+apscheduler

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>貴金属価格トラッカー</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="bg-shape bg-shape-a"></div>
+  <div class="bg-shape bg-shape-b"></div>
+
+  <main class="container">
+    <header class="hero">
+      <p class="eyebrow">METAL TRACKING / JST 00:00 SNAPSHOT</p>
+      <h1>金・銀・プラチナ 日次価格ダッシュボード</h1>
+      <p id="generatedAt" class="meta">読み込み中...</p>
+    </header>
+
+    <section class="toolbar" aria-label="表示設定">
+      <label for="daysSelect">表示期間</label>
+      <select id="daysSelect">
+        <option value="30">30日</option>
+        <option value="90">90日</option>
+        <option value="180">180日</option>
+        <option value="365" selected>365日</option>
+      </select>
+      <button id="reloadButton" type="button">更新</button>
+    </section>
+
+    <section id="summaryCards" class="summary-grid" aria-label="最新価格"></section>
+
+    <section class="chart-grid" aria-label="価格チャート">
+      <article class="chart-card">
+        <h2>金 (Gold)</h2>
+        <canvas id="goldChart"></canvas>
+      </article>
+      <article class="chart-card">
+        <h2>銀 (Silver)</h2>
+        <canvas id="silverChart"></canvas>
+      </article>
+      <article class="chart-card">
+        <h2>プラチナ (Platinum)</h2>
+        <canvas id="platinumChart"></canvas>
+      </article>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
+

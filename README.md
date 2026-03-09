@@ -235,3 +235,52 @@ OpenAI API:
    - `/list_bypass_roles`
 
 ---
+
+## 10. 貴金属Webトラッカー（追加機能）
+
+Discord Bot とは別に、金・銀・プラチナの価格を **JST 0:00 に日次保存** し、  
+Web画面でチャート表示できる機能を追加しています。
+
+### 10.1 追加技術スタック
+- FastAPI
+- PostgreSQL（`asyncpg` + SQLAlchemy）
+- APScheduler（JST 0:00 実行）
+- Chart.js（価格推移 + 前日差）
+
+### 10.2 保存データ
+`metal_price_daily` テーブルに以下を保存します。
+
+- 金属キー（`gold/silver/platinum`）
+- 取得日（JST 日付）
+- 1gあたり価格（円）
+- 前日差分（円）
+
+### 10.3 Web 起動
+
+```bash
+python web_main.py
+```
+
+アクセス先:
+- `http://localhost:8000/`
+- API: `http://localhost:8000/api/prices/history?days=365`
+
+### 10.4 必須環境変数（Web）
+- `METALPRICE_API_KEY`
+- `POSTGRES_DSN`
+  - 例: `postgresql+asyncpg://metal_user:metal_password@localhost:5432/metal_prices`
+
+任意:
+- `API_RATE_LIMIT_PER_MINUTE`（デフォルト: 120）
+- `ALLOWED_HOSTS`（カンマ区切り）
+
+### 10.5 Docker Compose 起動
+`docker-compose.yml` には以下 3 サービスを定義済みです。
+
+- `postgres`
+- `sycs-voldemort`（Discord Bot）
+- `sycs-voldemort-web`（Webトラッカー）
+
+```bash
+docker compose up -d --build
+```

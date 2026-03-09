@@ -1,6 +1,21 @@
-version: "3.8"
-
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sycs-voldemort-postgres
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Tokyo
+      - POSTGRES_USER=${POSTGRES_USER:-metal_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-metal_password}
+      - POSTGRES_DB=${POSTGRES_DB:-metal_prices}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-metal_user} -d ${POSTGRES_DB:-metal_prices}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   sycs-voldemort:
     build:
       context: .
@@ -15,3 +30,26 @@ services:
       - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
     volumes:
       - ./data:/app/data
+
+  sycs-voldemort-web:
+    build:
+      context: .
+    container_name: sycs-voldemort-web
+    restart: unless-stopped
+    command: python web_main.py
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      - TZ=Asia/Tokyo
+      - METALPRICE_API_KEY=${METALPRICE_API_KEY}
+      - POSTGRES_DSN=postgresql+asyncpg://${POSTGRES_USER:-metal_user}:${POSTGRES_PASSWORD:-metal_password}@postgres:5432/${POSTGRES_DB:-metal_prices}
+      - API_RATE_LIMIT_PER_MINUTE=${API_RATE_LIMIT_PER_MINUTE:-120}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+    volumes:
+      - ./data:/app/data
+
+volumes:
+  postgres_data:
