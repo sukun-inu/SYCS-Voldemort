@@ -267,16 +267,23 @@ python web_main.py
 
 ### 10.4 必須環境変数（Web）
 - `METALPRICE_API_KEY`
-- `POSTGRES_DSN`
-  - 例: `postgresql+asyncpg://metal_user:metal_password@localhost:5432/metal_prices`
+
+`POSTGRES_DSN` は任意です。未指定時は以下を組み合わせて自動構成します。
+
+- `POSTGRES_HOST`（デフォルト: `localhost`）
+- `POSTGRES_PORT`（デフォルト: `5432`）
+- `POSTGRES_DB`（デフォルト: `metal_prices`）
+- `POSTGRES_USER`（デフォルト: `postgres`）
+- `POSTGRES_PASSWORD` または `POSTGRES_PASSWORD_FILE`
 
 任意:
 - `API_RATE_LIMIT_PER_MINUTE`（デフォルト: 120）
 - `ALLOWED_HOSTS`（カンマ区切り）
 
 ### 10.5 Docker Compose 起動
-`docker-compose.yml` には以下 3 サービスを定義済みです。
+`docker-compose.yml` には以下サービスを定義済みです。
 
+- `postgres-secret-init`（初回のみランダムパスワード生成）
 - `postgres`
 - `sycs-voldemort`（Discord Bot）
 - `sycs-voldemort-web`（Webトラッカー）
@@ -284,3 +291,8 @@ python web_main.py
 ```bash
 docker compose up -d --build
 ```
+
+### 10.6 PostgreSQL パスワード自動生成
+- 初回起動時、`postgres-secret-init` がランダムな PostgreSQL パスワードを生成します。
+- パスワードは Docker Volume `shared_secrets` 内の `/shared/postgres_password` に保存されます。
+- `postgres` / `sycs-voldemort-web` は毎回このファイルを読み込むため、再起動後も同じパスワードで動作します。

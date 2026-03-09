@@ -6,13 +6,29 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from .models import Base
 
 
+def _read_secret_file(path: str | None) -> str | None:
+    if not path:
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            value = f.read().strip()
+            return value or None
+    except OSError:
+        return None
+
+
 def _build_database_url() -> str:
     dsn = os.getenv("POSTGRES_DSN")
     if dsn:
         return dsn
 
     user = quote_plus(os.getenv("POSTGRES_USER", "postgres"))
-    password = quote_plus(os.getenv("POSTGRES_PASSWORD", "postgres"))
+    password_raw = (
+        os.getenv("POSTGRES_PASSWORD")
+        or _read_secret_file(os.getenv("POSTGRES_PASSWORD_FILE"))
+        or "postgres"
+    )
+    password = quote_plus(password_raw)
     host = os.getenv("POSTGRES_HOST", "localhost")
     port = os.getenv("POSTGRES_PORT", "5432")
     db_name = os.getenv("POSTGRES_DB", "metal_prices")
@@ -40,4 +56,3 @@ async def init_db() -> None:
 
 async def close_db() -> None:
     await engine.dispose()
-

@@ -1,15 +1,39 @@
 services:
+  postgres-secret-init:
+    image: alpine:3.21
+    container_name: sycs-voldemort-postgres-secret-init
+    restart: "no"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        mkdir -p /shared
+        if [ ! -s /shared/postgres_password ]; then
+          tr -dc 'A-Za-z0-9' </dev/urandom | head -c 48 > /shared/postgres_password
+          chmod 600 /shared/postgres_password
+          echo "Generated PostgreSQL password at first startup."
+        else
+          echo "PostgreSQL password already exists. Reusing it."
+        fi
+    volumes:
+      - shared_secrets:/shared
+
   postgres:
     image: postgres:16-alpine
     container_name: sycs-voldemort-postgres
     restart: unless-stopped
+    depends_on:
+      postgres-secret-init:
+        condition: service_completed_successfully
     environment:
       - TZ=Asia/Tokyo
       - POSTGRES_USER=${POSTGRES_USER:-metal_user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-metal_password}
       - POSTGRES_DB=${POSTGRES_DB:-metal_prices}
+      - POSTGRES_PASSWORD_FILE=/shared/postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - shared_secrets:/shared:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-metal_user} -d ${POSTGRES_DB:-metal_prices}"]
       interval: 10s
@@ -21,6 +45,9 @@ services:
       context: .
     container_name: sycs-voldemort
     restart: unless-stopped
+    depends_on:
+      postgres-secret-init:
+        condition: service_completed_successfully
     environment:
       - TZ=Asia/Tokyo
       # Discord Bot は環境変数でトークンを渡す
@@ -45,11 +72,17 @@ services:
     environment:
       - TZ=Asia/Tokyo
       - METALPRICE_API_KEY=${METALPRICE_API_KEY}
-      - POSTGRES_DSN=postgresql+asyncpg://${POSTGRES_USER:-metal_user}:${POSTGRES_PASSWORD:-metal_password}@postgres:5432/${POSTGRES_DB:-metal_prices}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-metal_prices}
+      - POSTGRES_USER=${POSTGRES_USER:-metal_user}
+      - POSTGRES_PASSWORD_FILE=/shared/postgres_password
       - API_RATE_LIMIT_PER_MINUTE=${API_RATE_LIMIT_PER_MINUTE:-120}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
     volumes:
       - ./data:/app/data
+      - shared_secrets:/shared:ro
 
 volumes:
   postgres_data:
+  shared_secrets:
