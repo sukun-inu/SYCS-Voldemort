@@ -272,11 +272,40 @@ function renderMetalChart(metalKey, history, dailyAxis) {
   const existing = charts[metalKey];
   if (existing) {
     existing.data.labels = labels;
-    existing.data.datasets[0].data = prices;
-    existing.data.datasets[0].pointRadius = dailyAxis.length <= 120 ? 1 : 0;
-    existing.data.datasets[1].data = deltas;
+    if (existing.data.datasets?.[0]) {
+      existing.data.datasets[0].data = prices;
+      existing.data.datasets[0].pointRadius = dailyAxis.length <= 120 ? 1 : 0;
+    }
+    if (existing.data.datasets?.[1]) {
+      existing.data.datasets[1].data = deltas;
+    }
+    if (!existing.options) {
+      existing.options = {};
+    }
     existing.options.devicePixelRatio = chartDpr;
+    if (!existing.options.scales) {
+      existing.options.scales = {};
+    }
+    if (!existing.options.scales.x) {
+      existing.options.scales.x = { type: "category", ticks: {} };
+    }
+    if (!existing.options.scales.x.ticks) {
+      existing.options.scales.x.ticks = {};
+    }
+    existing.options.scales.x.ticks.autoSkip = true;
     existing.options.scales.x.ticks.maxTicksLimit = xMaxTicks;
+    existing.options.scales.x.ticks.maxRotation = 0;
+    existing.options.scales.x.ticks.minRotation = 0;
+
+    if (!existing.options.plugins) {
+      existing.options.plugins = {};
+    }
+    if (!existing.options.plugins.tooltip) {
+      existing.options.plugins.tooltip = {};
+    }
+    if (!existing.options.plugins.tooltip.callbacks) {
+      existing.options.plugins.tooltip.callbacks = {};
+    }
     existing.options.plugins.tooltip.callbacks.title = (items) => (items.length ? dailyAxis[items[0].dataIndex] : "");
     existing.update("none");
     return;
