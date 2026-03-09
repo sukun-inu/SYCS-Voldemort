@@ -52,6 +52,10 @@ body {
   gap: 14px;
 }
 
+.app-shell > * {
+  min-width: 0;
+}
+
 .hero-card,
 .controls-card,
 .summary-card,
@@ -187,6 +191,10 @@ button:disabled {
   gap: 12px;
 }
 
+.summary-grid > * {
+  min-width: 0;
+}
+
 .summary-card {
   padding: 14px;
 }
@@ -288,8 +296,13 @@ button:disabled {
   gap: 12px;
 }
 
+.chart-grid > * {
+  min-width: 0;
+}
+
 .chart-card {
   padding: 14px;
+  min-width: 0;
 }
 
 .chart-card h2 {
@@ -300,12 +313,14 @@ button:disabled {
 
 .chart-scroll {
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.54);
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
 
 .chart-track {

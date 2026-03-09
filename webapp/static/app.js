@@ -34,6 +34,8 @@ let swRegistration = null;
 let pushEnabledByServer = false;
 let pushPublicKey = null;
 let pushNotifyTimeJst = "11:00";
+let latestHistoryPayload = null;
+let resizeTimerId = null;
 
 const CHART_CDN_LIST = [
   "https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js",
@@ -337,6 +339,14 @@ async function loadDashboard() {
   }
 
   const payload = await response.json();
+  latestHistoryPayload = payload;
+  renderDashboardFromPayload(payload);
+}
+
+function renderDashboardFromPayload(payload) {
+  if (!payload) {
+    return;
+  }
   const dailyAxis = enumerateDailyAxis(payload.range_start, payload.range_end);
   document.getElementById("generatedAt").textContent =
     `更新頻度: 1日1回 (JST 00:00) / 表示期間: ${payload.range_start} - ${payload.range_end}`;
@@ -535,6 +545,21 @@ document.getElementById("pushButton").addEventListener("click", async () => {
   } finally {
     button.disabled = !pushEnabledByServer;
   }
+});
+
+window.addEventListener("resize", () => {
+  if (resizeTimerId) {
+    window.clearTimeout(resizeTimerId);
+  }
+  resizeTimerId = window.setTimeout(() => {
+    renderDashboardFromPayload(latestHistoryPayload);
+  }, 220);
+});
+
+window.addEventListener("orientationchange", () => {
+  window.setTimeout(() => {
+    renderDashboardFromPayload(latestHistoryPayload);
+  }, 250);
 });
 
 loadDashboard().catch((err) => {
