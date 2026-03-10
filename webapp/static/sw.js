@@ -9,7 +9,7 @@ const APP_SHELL = [
   scopedUrl("index.html"),
   scopedUrl("manifest.webmanifest"),
   scopedUrl("static/styles.css"),
-  scopedUrl("static/icons/metal-logo.svg"),
+  scopedUrl("static/icons/metal-logo.png"),
 ];
 
 self.addEventListener("install", (event) => {
@@ -104,8 +104,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title || "価格通知", {
       body: payload.body || "",
-      icon: scopedUrl("static/icons/metal-logo.svg"),
-      badge: scopedUrl("static/icons/metal-logo.svg"),
+      icon: scopedUrl("static/icons/metal-logo.png"),
+      badge: scopedUrl("static/icons/metal-logo.png"),
       data: { url: payload.url || "./" },
       tag: payload.tag || "metal-notify",
     })
