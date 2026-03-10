@@ -59,6 +59,11 @@ def _normalize_public_path(path: str) -> str:
 
 
 APP_PUBLIC_ROOT = _normalize_public_path(APP_PUBLIC_PATH)
+STARTUP_TEST_MODE = read_env_bool("STARTUP_TEST_MODE", False)
+STARTUP_TEST_REQUIRE_DOCKER = read_env_bool("STARTUP_TEST_REQUIRE_DOCKER", True)
+STARTUP_TEST_RUN_PUSH_ON_BOOT = read_env_bool("STARTUP_TEST_RUN_PUSH_ON_BOOT", False)
+STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT = read_env_bool("STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT", False)
+STARTUP_TEST_FORCE_SNAPSHOT_REFRESH = read_env_bool("STARTUP_TEST_FORCE_SNAPSHOT_REFRESH", True)
 
 history_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=64)
 latest_prices_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=8)
@@ -254,12 +259,119 @@ async def dispatch_top_delta_notification(*, enforce_schedule_time: bool = False
         )
 
 
-async def collect_daily_snapshot() -> None:
+def _running_in_container() -> bool:
+    if Path("/.dockerenv").exists():
+        return True
+    cgroup_file = Path("/proc/1/cgroup")
+    if not cgroup_file.exists():
+        return False
+    try:
+        cgroup_text = cgroup_file.read_text(encoding="utf-8", errors="ignore").lower()
+    except OSError:
+        return False
+    return "docker" in cgroup_text or "containerd" in cgroup_text or "kubepods" in cgroup_text
+
+
+def _startup_test_enabled() -> bool:
+    if not STARTUP_TEST_MODE:
+        if STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT or STARTUP_TEST_RUN_PUSH_ON_BOOT:
+            logger.warning(
+                "起動テスト設定を検出したが STARTUP_TEST_MODE=false のため無効化。"
+            )
+        return False
+    if STARTUP_TEST_REQUIRE_DOCKER and not _running_in_container():
+        logger.warning("起動テストモードをスキップ: コンテナ外で STARTUP_TEST_REQUIRE_DOCKER=true")
+        return False
+    return True
+
+
+async def _dispatch_startup_test_push_notification() -> None:
+    # 起動時テスト通知は通常運用の重複判定・送信履歴に影響させない。
+    if not is_push_enabled():
+        logger.warning("起動時テストPushをスキップ: Push通知が未設定")
+        return
+
+    async with SessionLocal() as session:
+        latest_snapshot = await _get_latest_prices(session)
+        top = _pick_top_delta(latest_snapshot)
+        if top is None:
+            logger.warning("起動時テストPushをスキップ: 送信対象データが未取得")
+            return
+
+        metal_key, delta_value, snapshot_date = top
+        subscriptions = list((await session.scalars(select(PushSubscription))).all())
+        if not subscriptions:
+            logger.warning("起動時テストPushをスキップ: 購読ユーザーが存在しない")
+            return
+
+        spec = METAL_COMMANDS[metal_key]
+        delta_sign = "+" if delta_value >= 0 else ""
+        payload = build_push_payload(
+            title="【テスト】起動時 Push 通知",
+            body=f"{spec.display_name} 変動テスト: {delta_sign}{delta_value:.2f} 円/g ({snapshot_date})",
+            url=APP_PUBLIC_ROOT,
+        )
+
+        stale_endpoints: list[str] = []
+        success_count = 0
+        for sub in subscriptions:
+            ok, should_remove = await send_push(
+                {
+                    "endpoint": sub.endpoint,
+                    "keys": {
+                        "p256dh": sub.p256dh_key,
+                        "auth": sub.auth_key,
+                    },
+                },
+                payload,
+            )
+            if ok:
+                success_count += 1
+            elif should_remove:
+                stale_endpoints.append(sub.endpoint)
+
+        if stale_endpoints:
+            await session.execute(delete(PushSubscription).where(PushSubscription.endpoint.in_(stale_endpoints)))
+            await session.commit()
+
+        logger.warning(
+            "起動時テストPushを送信した。snapshot=%s success=%s stale_removed=%s",
+            snapshot_date,
+            success_count,
+            len(stale_endpoints),
+        )
+
+
+async def _run_startup_test_jobs() -> None:
+    if not _startup_test_enabled():
+        return
+    logger.warning(
+        "起動テストモード有効: midnight_job=%s push=%s force_snapshot=%s",
+        STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT,
+        STARTUP_TEST_RUN_PUSH_ON_BOOT,
+        STARTUP_TEST_FORCE_SNAPSHOT_REFRESH,
+    )
+
+    if STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT:
+        try:
+            await collect_daily_data(force_snapshot_refresh=STARTUP_TEST_FORCE_SNAPSHOT_REFRESH)
+            logger.warning("起動時テスト: 0時更新ジョブを即時実行した。")
+        except Exception:
+            logger.exception("起動時テスト: 0時更新ジョブの即時実行に失敗した。")
+
+    if STARTUP_TEST_RUN_PUSH_ON_BOOT:
+        try:
+            await _dispatch_startup_test_push_notification()
+        except Exception:
+            logger.exception("起動時テスト: Push通知の即時送信に失敗した。")
+
+
+async def collect_daily_snapshot(*, force_refresh: bool = False) -> None:
     async with SessionLocal() as session:
         try:
-            await store_today_snapshot(session, skip_if_exists=True)
+            await store_today_snapshot(session, skip_if_exists=not force_refresh)
             await _clear_response_caches()
-            logger.info("日次価格スナップショットを保存した。")
+            logger.info("日次価格スナップショットを保存した。force_refresh=%s", force_refresh)
         except Exception:
             logger.exception("日次価格スナップショット保存に失敗した。")
 
@@ -274,8 +386,8 @@ async def collect_weekly_forecast_cache() -> None:
             logger.exception("7日予測データの更新保存に失敗した。")
 
 
-async def collect_daily_data() -> None:
-    await collect_daily_snapshot()
+async def collect_daily_data(*, force_snapshot_refresh: bool = False) -> None:
+    await collect_daily_snapshot(force_refresh=force_snapshot_refresh)
     await collect_weekly_forecast_cache()
 
 
@@ -285,6 +397,7 @@ async def lifespan(_: FastAPI):
     refresh_vapid_config()
     await collect_daily_data()
     await dispatch_top_delta_notification(enforce_schedule_time=True)
+    await _run_startup_test_jobs()
 
     scheduler = AsyncIOScheduler(timezone=JST)
     scheduler.add_job(

@@ -299,6 +299,17 @@ python web_main.py
 - `REQUIRE_CF_CONNECTING_IP`（デフォルト: false）
 - `ALLOWED_HOSTS`（カンマ区切り）
 - `WEB_HOST_PORT`（デフォルト: 8001）
+- `STARTUP_TEST_MODE`（デフォルト: false）
+- `STARTUP_TEST_REQUIRE_DOCKER`（デフォルト: true）
+- `STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT`（デフォルト: false）
+- `STARTUP_TEST_FORCE_SNAPSHOT_REFRESH`（デフォルト: true）
+- `STARTUP_TEST_RUN_PUSH_ON_BOOT`（デフォルト: false）
+
+起動テスト機能の注意:
+- `STARTUP_TEST_MODE=true` かつ各実行フラグが有効なときのみ、コンテナ起動時にテスト処理を実行します。
+- `STARTUP_TEST_REQUIRE_DOCKER=true` の場合、コンテナ外プロセスではテスト処理を強制的に無効化します。
+- テスト起動処理はサーバー起動フック内のみで実行し、HTTP API は提供しません。
+  そのためブラウザの JS コンソールや外部リクエストからは実行できません。
 
 ### 10.5 Docker Compose 起動
 `docker-compose.yml` には以下サービスを定義済みです。
@@ -310,6 +321,15 @@ python web_main.py
 
 ```bash
 docker compose up -d --build
+```
+
+起動時テストを有効化する例（必要なときだけ設定）:
+
+```bash
+STARTUP_TEST_MODE=true \
+STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT=true \
+STARTUP_TEST_RUN_PUSH_ON_BOOT=true \
+docker compose up -d --build sycs-voldemort-web
 ```
 
 ### 10.6 PostgreSQL パスワード自動生成
