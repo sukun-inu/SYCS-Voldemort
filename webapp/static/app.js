@@ -35,6 +35,7 @@ let pushEnabledByServer = false;
 let pushPublicKey = null;
 let pushNotifyTimeJst = "11:00";
 let latestHistoryPayload = null;
+let latestForecastPayload = null;
 let lastChartMobileMode = null;
 
 const CHART_CDN_LIST = [
@@ -165,6 +166,13 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function compareIsoDate(a, b) {
+  if (a === b) {
+    return 0;
+  }
+  return a < b ? -1 : 1;
+}
+
 function buildSummary(latest) {
   const root = document.getElementById("summaryCards");
   root.innerHTML = "";
@@ -246,8 +254,7 @@ async function loadWeeklyForecast() {
     } catch (_) {}
     throw new Error(message);
   }
-  const payload = await response.json();
-  renderWeeklyForecast(payload);
+  return await response.json();
 }
 
 function fillMetalSelector() {
@@ -315,7 +322,7 @@ async function calculatePurityPrice() {
   renderPurityResult(payload);
 }
 
-function renderMetalChart(metalKey, history, dailyAxis) {
+function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, historyEndDate = null) {
   const meta = METALS[metalKey];
   if (!meta || !window.Chart) {
     return;
@@ -325,6 +332,23 @@ function renderMetalChart(metalKey, history, dailyAxis) {
   const labels = dailyAxis.map((date) => formatDailyLabel(date));
   const prices = dailyAxis.map((date) => dailyMap.get(date)?.price_per_gram ?? null);
   const deltas = dailyAxis.map((date) => dailyMap.get(date)?.delta_from_previous ?? null);
+  const forecastMap = new Map(
+    Array.isArray(forecastItem?.daily)
+      ? forecastItem.daily.map((item) => [item.date, item.price_per_gram])
+      : []
+  );
+  const forecastPrices = dailyAxis.map(() => null);
+  const anchorDate = historyEndDate || (history.length ? history[history.length - 1].date : null);
+  const anchorIndex = anchorDate ? dailyAxis.indexOf(anchorDate) : -1;
+  if (anchorIndex >= 0 && prices[anchorIndex] !== null && prices[anchorIndex] !== undefined && forecastMap.size > 0) {
+    forecastPrices[anchorIndex] = prices[anchorIndex];
+  }
+  dailyAxis.forEach((date, index) => {
+    const value = forecastMap.get(date);
+    if (value !== undefined) {
+      forecastPrices[index] = value;
+    }
+  });
   const canvas = document.getElementById(meta.canvasId);
   if (!canvas) {
     return;
@@ -352,6 +376,9 @@ function renderMetalChart(metalKey, history, dailyAxis) {
     }
     if (existing.data.datasets?.[1]) {
       existing.data.datasets[1].data = deltas;
+    }
+    if (existing.data.datasets?.[2]) {
+      existing.data.datasets[2].data = forecastPrices;
     }
     if (!existing.options) {
       existing.options = {};
@@ -410,6 +437,20 @@ function renderMetalChart(metalKey, history, dailyAxis) {
           borderWidth: 0,
           yAxisID: "yDelta",
         },
+        {
+          label: "7日予測 (円/g)",
+          data: forecastPrices,
+          borderColor: meta.borderColor,
+          backgroundColor: "transparent",
+          borderDash: [6, 5],
+          borderWidth: 2,
+          tension: 0,
+          spanGaps: false,
+          fill: false,
+          pointRadius: 1.5,
+          pointHoverRadius: 3,
+          yAxisID: "yPrice",
+        },
       ],
     },
     options: {
@@ -466,25 +507,51 @@ async function loadDashboard() {
 
   const payload = await response.json();
   latestHistoryPayload = payload;
-  renderDashboardFromPayload(payload);
-  loadWeeklyForecast().catch((error) => {
+  renderDashboardFromPayload(payload, null);
+
+  try {
+    const forecastPayload = await loadWeeklyForecast();
+    latestForecastPayload = forecastPayload;
+    renderWeeklyForecast(forecastPayload);
+    renderDashboardFromPayload(payload, forecastPayload);
+  } catch (error) {
     console.error(error);
+    latestForecastPayload = null;
     setForecastError(error.message || "1週間予測の取得に失敗しました。");
-  });
+  }
 }
 
-function renderDashboardFromPayload(payload) {
+function renderDashboardFromPayload(payload, forecastPayload = latestForecastPayload) {
   if (!payload) {
     return;
   }
   lastChartMobileMode = isMobileChartViewport();
-  const dailyAxis = enumerateDailyAxis(payload.range_start, payload.range_end);
+  let axisEnd = payload.range_end;
+  if (forecastPayload?.forecast) {
+    Object.keys(METALS).forEach((metalKey) => {
+      const daily = forecastPayload.forecast?.[metalKey]?.daily;
+      if (!Array.isArray(daily) || daily.length === 0) {
+        return;
+      }
+      const lastDate = daily[daily.length - 1]?.date;
+      if (lastDate && compareIsoDate(lastDate, axisEnd) > 0) {
+        axisEnd = lastDate;
+      }
+    });
+  }
+  const dailyAxis = enumerateDailyAxis(payload.range_start, axisEnd);
   document.getElementById("generatedAt").textContent =
     `更新頻度: 1日1回 (JST 00:00) / 表示期間: ${payload.range_start} - ${payload.range_end}`;
   buildSummary(payload.latest || {});
 
   Object.keys(METALS).forEach((key) => {
-    renderMetalChart(key, payload.metals?.[key] || [], dailyAxis);
+    renderMetalChart(
+      key,
+      payload.metals?.[key] || [],
+      dailyAxis,
+      forecastPayload?.forecast?.[key] || null,
+      payload.range_end
+    );
   });
 }
 
@@ -686,7 +753,7 @@ window.addEventListener("resize", () => {
   }
   if (mode !== lastChartMobileMode) {
     lastChartMobileMode = mode;
-    renderDashboardFromPayload(latestHistoryPayload);
+    renderDashboardFromPayload(latestHistoryPayload, latestForecastPayload);
   }
 });
 

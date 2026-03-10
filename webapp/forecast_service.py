@@ -1,23 +1,29 @@
 import asyncio
+import json
 import logging
 import math
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 from statistics import pstdev
 from typing import Any
 from urllib.parse import quote_plus
 from xml.etree import ElementTree
 
 import aiohttp
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import METAL_COMMANDS
 
+from .models import WeeklyForecastDaily, WeeklyForecastMeta
 from .snapshot_service import JST, load_history
 
 logger = logging.getLogger(__name__)
 
 USDJPY_DAILY_CSV_URL = "https://stooq.com/q/d/l/?s=usdjpy&i=d"
 GOOGLE_NEWS_RSS_URL = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
+PRICE_SCALE = Decimal("0.0001")
+PCT_SCALE = Decimal("0.000001")
 
 NEWS_QUERY_BY_METAL = {
     "gold": "gold price xau bullion federal reserve inflation usd jpy",
@@ -85,6 +91,26 @@ def _safe_float(raw: Any) -> float | None:
     if math.isnan(value) or math.isinf(value):
         return None
     return value
+
+
+def _as_decimal(raw: Any, scale: Decimal = PRICE_SCALE) -> Decimal | None:
+    value = _safe_float(raw)
+    if value is None:
+        return None
+    return Decimal(str(value)).quantize(scale, rounding=ROUND_HALF_UP)
+
+
+def _json_dumps(data: Any) -> str:
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+
+
+def _json_loads(text: str | None, default: Any) -> Any:
+    if not text:
+        return default
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return default
 
 
 async def _fetch_usdjpy_signal(session: aiohttp.ClientSession) -> dict[str, Any]:
@@ -379,3 +405,221 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
         },
         "forecast": forecast,
     }
+
+
+def _forecast_payload_from_db(
+    *,
+    meta: WeeklyForecastMeta,
+    rows: list[WeeklyForecastDaily],
+) -> dict[str, Any]:
+    by_metal: dict[str, list[WeeklyForecastDaily]] = {}
+    for row in rows:
+        by_metal.setdefault(row.metal_key, []).append(row)
+
+    forecast: dict[str, Any] = {}
+    for metal_key, metal_rows in by_metal.items():
+        sorted_rows = sorted(metal_rows, key=lambda row: row.forecast_date)
+        first = sorted_rows[0]
+        daily = [
+            {
+                "date": row.forecast_date.isoformat(),
+                "price_per_gram": float(row.price_per_gram),
+                "delta_from_previous": float(row.delta_from_previous) if row.delta_from_previous is not None else None,
+            }
+            for row in sorted_rows
+        ]
+        forecast[metal_key] = {
+            "start_price_per_gram": float(first.start_price_per_gram),
+            "projected_price_per_gram": float(first.projected_price_per_gram),
+            "projected_change_pct_7d": float(first.projected_change_pct_7d),
+            "confidence": float(first.confidence),
+            "implied_daily_return_pct": float(first.implied_daily_return_pct),
+            "daily": daily,
+            "drivers": _json_loads(first.drivers_json, []),
+        }
+
+    return {
+        "timezone": "Asia/Tokyo",
+        "as_of_date": meta.as_of_date.isoformat(),
+        "generated_at": meta.generated_at.isoformat(),
+        "horizon_days": int(meta.horizon_days),
+        "model": {
+            "name": meta.model_name,
+            "description": meta.model_description,
+        },
+        "signals": {
+            "usd_jpy": {
+                "available": bool(meta.usd_jpy_available),
+                "source": meta.usd_jpy_source,
+                "latest": float(meta.usd_jpy_latest) if meta.usd_jpy_latest is not None else None,
+                "weekly_change_pct": float(meta.usd_jpy_weekly_change_pct) if meta.usd_jpy_weekly_change_pct is not None else 0.0,
+            },
+            "news": {
+                "available": bool(meta.news_available),
+                "source": meta.news_source,
+                "sentiment": _json_loads(meta.news_sentiment_json, {}),
+                "article_counts": _json_loads(meta.news_article_counts_json, {}),
+                "sample_headlines": _json_loads(meta.news_headlines_json, {}),
+            },
+        },
+        "forecast": forecast,
+    }
+
+
+def _trim_payload_to_days(payload: dict[str, Any], days: int) -> dict[str, Any]:
+    horizon = int(payload.get("horizon_days", 7))
+    if days >= horizon:
+        return payload
+
+    trimmed = json.loads(_json_dumps(payload))
+    trimmed["horizon_days"] = days
+    for metal_key, item in (trimmed.get("forecast", {}) or {}).items():
+        daily = list(item.get("daily", []))[:days]
+        item["daily"] = daily
+        if not daily:
+            continue
+        item["projected_price_per_gram"] = daily[-1].get("price_per_gram")
+        start_price = _safe_float(item.get("start_price_per_gram"))
+        projected = _safe_float(item.get("projected_price_per_gram"))
+        if start_price and projected:
+            projected_change = ((projected - start_price) / start_price) * 100
+            item["projected_change_pct_7d"] = round(projected_change, 3)
+    return trimmed
+
+
+async def load_stored_weekly_forecast(session: AsyncSession, *, days: int = 7) -> dict[str, Any] | None:
+    meta = (
+        await session.scalars(
+            select(WeeklyForecastMeta).order_by(WeeklyForecastMeta.generated_at.desc())
+        )
+    ).first()
+    if meta is None:
+        return None
+
+    rows = list(
+        (
+            await session.scalars(
+                select(WeeklyForecastDaily).where(WeeklyForecastDaily.as_of_date == meta.as_of_date)
+            )
+        ).all()
+    )
+    if not rows:
+        return None
+
+    payload = _forecast_payload_from_db(meta=meta, rows=rows)
+    return _trim_payload_to_days(payload, days=days)
+
+
+async def store_weekly_forecast(
+    session: AsyncSession,
+    payload: dict[str, Any],
+    *,
+    horizon_days: int = 7,
+) -> None:
+    as_of_raw = payload.get("as_of_date")
+    if not isinstance(as_of_raw, str):
+        raise RuntimeError("as_of_date が予測payloadに存在しません。")
+    as_of_date = date.fromisoformat(as_of_raw)
+    horizon = max(1, min(horizon_days, int(payload.get("horizon_days", horizon_days))))
+    horizon_end = as_of_date + timedelta(days=horizon)
+
+    desired: dict[tuple[str, date], dict[str, Any]] = {}
+    forecast_map = payload.get("forecast", {}) if isinstance(payload.get("forecast"), dict) else {}
+    for metal_key, item in forecast_map.items():
+        if metal_key not in METAL_COMMANDS:
+            continue
+        daily = item.get("daily", []) if isinstance(item.get("daily"), list) else []
+        for daily_item in daily:
+            forecast_date_raw = daily_item.get("date")
+            if not isinstance(forecast_date_raw, str):
+                continue
+            forecast_date = date.fromisoformat(forecast_date_raw)
+            if forecast_date <= as_of_date or forecast_date > horizon_end:
+                continue
+            desired[(metal_key, forecast_date)] = {
+                "as_of_date": as_of_date,
+                "start_price_per_gram": _as_decimal(item.get("start_price_per_gram"), PRICE_SCALE),
+                "projected_price_per_gram": _as_decimal(item.get("projected_price_per_gram"), PRICE_SCALE),
+                "price_per_gram": _as_decimal(daily_item.get("price_per_gram"), PRICE_SCALE),
+                "delta_from_previous": _as_decimal(daily_item.get("delta_from_previous"), PRICE_SCALE),
+                "projected_change_pct_7d": _as_decimal(item.get("projected_change_pct_7d"), PCT_SCALE),
+                "confidence": _as_decimal(item.get("confidence"), PCT_SCALE),
+                "implied_daily_return_pct": _as_decimal(item.get("implied_daily_return_pct"), PCT_SCALE),
+                "drivers_json": _json_dumps(item.get("drivers", [])),
+            }
+
+    if not desired:
+        raise RuntimeError("保存可能な予測データがありません。")
+
+    existing_rows = list((await session.scalars(select(WeeklyForecastDaily))).all())
+    existing_by_key = {(row.metal_key, row.forecast_date): row for row in existing_rows}
+
+    for row_key, row_payload in desired.items():
+        metal_key, forecast_date = row_key
+        row = existing_by_key.get(row_key)
+        if row is None:
+            row = WeeklyForecastDaily(metal_key=metal_key, forecast_date=forecast_date)
+            session.add(row)
+        row.as_of_date = row_payload["as_of_date"]
+        row.start_price_per_gram = row_payload["start_price_per_gram"] or Decimal("0")
+        row.projected_price_per_gram = row_payload["projected_price_per_gram"] or Decimal("0")
+        row.price_per_gram = row_payload["price_per_gram"] or Decimal("0")
+        row.delta_from_previous = row_payload["delta_from_previous"]
+        row.projected_change_pct_7d = row_payload["projected_change_pct_7d"] or Decimal("0")
+        row.confidence = row_payload["confidence"] or Decimal("0")
+        row.implied_daily_return_pct = row_payload["implied_daily_return_pct"] or Decimal("0")
+        row.drivers_json = row_payload["drivers_json"]
+
+    for row in existing_rows:
+        if (row.metal_key, row.forecast_date) not in desired:
+            await session.delete(row)
+
+    generated_at_raw = payload.get("generated_at")
+    generated_at = datetime.now(JST)
+    if isinstance(generated_at_raw, str):
+        try:
+            generated_at = datetime.fromisoformat(generated_at_raw)
+        except ValueError:
+            pass
+
+    meta = (await session.scalars(select(WeeklyForecastMeta).order_by(WeeklyForecastMeta.id.asc()))).first()
+    if meta is None:
+        meta = WeeklyForecastMeta()
+        session.add(meta)
+
+    model_data = payload.get("model", {}) if isinstance(payload.get("model"), dict) else {}
+    signal_data = payload.get("signals", {}) if isinstance(payload.get("signals"), dict) else {}
+    usd_jpy = signal_data.get("usd_jpy", {}) if isinstance(signal_data.get("usd_jpy"), dict) else {}
+    news = signal_data.get("news", {}) if isinstance(signal_data.get("news"), dict) else {}
+
+    meta.as_of_date = as_of_date
+    meta.generated_at = generated_at
+    meta.horizon_days = horizon
+    meta.model_name = str(model_data.get("name", "heuristic_fx_news_v1"))
+    meta.model_description = str(
+        model_data.get("description", "直近価格トレンド + USD/JPY + ニュース見出し極性を合成した簡易予測。")
+    )
+    meta.usd_jpy_available = bool(usd_jpy.get("available"))
+    meta.usd_jpy_source = str(usd_jpy.get("source", "Stooq"))
+    meta.usd_jpy_latest = _as_decimal(usd_jpy.get("latest"), Decimal("0.000001"))
+    meta.usd_jpy_weekly_change_pct = _as_decimal(usd_jpy.get("weekly_change_pct"), Decimal("0.000001"))
+    meta.news_available = bool(news.get("available"))
+    meta.news_source = str(news.get("source", "Google News RSS"))
+    meta.news_sentiment_json = _json_dumps(news.get("sentiment", {}))
+    meta.news_article_counts_json = _json_dumps(news.get("article_counts", {}))
+    meta.news_headlines_json = _json_dumps(news.get("sample_headlines", {}))
+
+    # 念のため古いメタ行が複数残っている場合は最新1件以外を削除する。
+    await session.flush()
+    await session.execute(delete(WeeklyForecastMeta).where(WeeklyForecastMeta.id != meta.id))
+    await session.commit()
+
+
+async def refresh_weekly_forecast_cache(
+    session: AsyncSession,
+    *,
+    horizon_days: int = 7,
+) -> dict[str, Any]:
+    payload = await build_weekly_forecast(session, horizon_days=horizon_days)
+    await store_weekly_forecast(session, payload, horizon_days=horizon_days)
+    return payload

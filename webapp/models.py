@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, Index, Numeric, String, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, Index, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -70,4 +70,71 @@ class NotificationDispatch(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+
+
+class WeeklyForecastMeta(Base):
+    __tablename__ = "weekly_forecast_meta"
+    __table_args__ = (
+        Index("ix_weekly_forecast_meta_as_of_date", "as_of_date"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    horizon_days: Mapped[int] = mapped_column(nullable=False, default=7)
+    model_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    model_description: Mapped[str] = mapped_column(String(255), nullable=False)
+    usd_jpy_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    usd_jpy_source: Mapped[str] = mapped_column(String(64), nullable=False, default="Stooq")
+    usd_jpy_latest: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
+    usd_jpy_weekly_change_pct: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
+    news_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    news_source: Mapped[str] = mapped_column(String(64), nullable=False, default="Google News RSS")
+    news_sentiment_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    news_article_counts_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    news_headlines_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class WeeklyForecastDaily(Base):
+    __tablename__ = "weekly_forecast_daily"
+    __table_args__ = (
+        UniqueConstraint("metal_key", "forecast_date", name="uq_weekly_forecast_daily_key_date"),
+        Index("ix_weekly_forecast_daily_as_of_date", "as_of_date"),
+        Index("ix_weekly_forecast_daily_forecast_date", "forecast_date"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    metal_key: Mapped[str] = mapped_column(String(32), nullable=False)
+    as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
+    forecast_date: Mapped[date] = mapped_column(Date, nullable=False)
+    start_price_per_gram: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    projected_price_per_gram: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    price_per_gram: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    delta_from_previous: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    projected_change_pct_7d: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    confidence: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    implied_daily_return_pct: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    drivers_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )

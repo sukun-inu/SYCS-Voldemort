@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import METAL_COMMANDS
 from .cache import TTLCache
 from .db import SessionLocal, close_db, init_db
-from .forecast_service import build_weekly_forecast
+from .forecast_service import load_stored_weekly_forecast, refresh_weekly_forecast_cache
 from .models import NotificationDispatch, PushSubscription
 from .push_service import (
     build_push_payload,
@@ -264,18 +264,33 @@ async def collect_daily_snapshot() -> None:
             logger.exception("日次価格スナップショット保存に失敗した。")
 
 
+async def collect_weekly_forecast_cache() -> None:
+    async with SessionLocal() as session:
+        try:
+            await refresh_weekly_forecast_cache(session, horizon_days=7)
+            await forecast_cache.clear()
+            logger.info("7日予測データを更新し、DBに保存した。")
+        except Exception:
+            logger.exception("7日予測データの更新保存に失敗した。")
+
+
+async def collect_daily_data() -> None:
+    await collect_daily_snapshot()
+    await collect_weekly_forecast_cache()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await init_db()
     refresh_vapid_config()
-    await collect_daily_snapshot()
+    await collect_daily_data()
     await dispatch_top_delta_notification(enforce_schedule_time=True)
 
     scheduler = AsyncIOScheduler(timezone=JST)
     scheduler.add_job(
-        collect_daily_snapshot,
+        collect_daily_data,
         CronTrigger(hour=0, minute=0, timezone=JST),
-        id="jst_daily_metal_snapshot",
+        id="jst_daily_metal_snapshot_and_forecast",
         replace_existing=True,
         coalesce=True,
         max_instances=1,
@@ -388,7 +403,7 @@ async def price_history(
 
 @app.get("/api/prices/forecast-weekly")
 async def weekly_forecast(
-    days: int = Query(default=7, ge=3, le=14),
+    days: int = Query(default=7, ge=1, le=7),
     session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
     cache_key = f"forecast:{datetime.now(JST).date().isoformat()}:{days}"
@@ -396,10 +411,16 @@ async def weekly_forecast(
     if cached is not None:
         return JSONResponse(cached, headers=_cache_headers(FORECAST_CACHE_SECONDS))
 
-    try:
-        payload = await build_weekly_forecast(session, horizon_days=days)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+    payload = await load_stored_weekly_forecast(session, days=days)
+    if payload is None:
+        try:
+            await refresh_weekly_forecast_cache(session, horizon_days=7)
+            payload = await load_stored_weekly_forecast(session, days=days)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc))
+    if payload is None:
+        raise HTTPException(status_code=503, detail="予測データがまだありません。")
+
     await forecast_cache.set(cache_key, payload)
     return JSONResponse(payload, headers=_cache_headers(FORECAST_CACHE_SECONDS))
 
