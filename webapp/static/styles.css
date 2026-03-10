@@ -98,6 +98,28 @@ body {
   font-size: 0.91rem;
 }
 
+.loading-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loading-spinner {
+  width: 0.86rem;
+  height: 0.86rem;
+  border-radius: 999px;
+  border: 2px solid #d4bf9f;
+  border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite;
+  flex: 0 0 auto;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .hero-chips {
   display: flex;
   flex-wrap: wrap;
@@ -200,6 +222,58 @@ button:disabled {
   padding: 14px;
 }
 
+.skeleton-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-line {
+  border-radius: 999px;
+  background: linear-gradient(
+    110deg,
+    rgba(255, 255, 255, 0.18) 8%,
+    rgba(255, 255, 255, 0.62) 20%,
+    rgba(255, 255, 255, 0.18) 34%
+  );
+  background-size: 220% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+.skeleton-title {
+  width: 54%;
+  height: 0.88rem;
+}
+
+.skeleton-price {
+  width: 72%;
+  height: 1.58rem;
+  margin-top: 12px;
+}
+
+.skeleton-delta {
+  width: 44%;
+  height: 0.92rem;
+  margin-top: 9px;
+}
+
+.skeleton-meta {
+  width: 62%;
+  height: 0.84rem;
+  margin-top: 11px;
+}
+
+.skeleton-driver {
+  width: 88%;
+  height: 0.78rem;
+  margin-top: 10px;
+}
+
+@keyframes shimmer {
+  to {
+    background-position-x: -220%;
+  }
+}
+
 .forecast-card {
   padding: 16px;
 }
@@ -281,6 +355,14 @@ button:disabled {
   margin-top: 10px;
 }
 
+.calc-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+}
+
 .calc-table {
   width: 100%;
   border-collapse: collapse;
@@ -328,6 +410,7 @@ button:disabled {
 }
 
 .chart-scroll {
+  position: relative;
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
@@ -337,6 +420,27 @@ button:disabled {
   background: rgba(255, 255, 255, 0.54);
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
+}
+
+.chart-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+  background:
+    linear-gradient(120deg, rgba(255, 247, 232, 0.68) 0%, rgba(255, 255, 255, 0.82) 38%, rgba(255, 247, 232, 0.68) 100%);
+}
+
+.chart-card.is-loading .chart-loading-overlay {
+  opacity: 1;
 }
 
 .chart-track {
@@ -365,6 +469,17 @@ button:disabled {
 .app-footer small {
   font-size: 0.74rem;
   line-height: 1.35;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner,
+  .skeleton-line {
+    animation: none;
+  }
+
+  .chart-loading-overlay {
+    transition: none;
+  }
 }
 
 @media (max-width: 1080px) {

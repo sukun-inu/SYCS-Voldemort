@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from statistics import pstdev
@@ -13,7 +14,7 @@ import aiohttp
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import METAL_COMMANDS
+from config import METAL_COMMANDS, OPENAI_API_KEY
 
 from .models import WeeklyForecastDaily, WeeklyForecastMeta
 from .snapshot_service import JST, load_history
@@ -22,8 +23,26 @@ logger = logging.getLogger(__name__)
 
 USDJPY_DAILY_CSV_URL = "https://stooq.com/q/d/l/?s=usdjpy&i=d"
 GOOGLE_NEWS_RSS_URL = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
+OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
 PRICE_SCALE = Decimal("0.0001")
 PCT_SCALE = Decimal("0.000001")
+
+
+def _read_env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    value = raw.strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+FORECAST_LLM_ENABLED = _read_env_bool("FORECAST_LLM_ENABLED", True)
+FORECAST_LLM_MODEL = (os.getenv("FORECAST_LLM_MODEL") or "gpt-4.1-mini").strip() or "gpt-4.1-mini"
+FORECAST_LLM_TIMEOUT_SECONDS = max(8, int(os.getenv("FORECAST_LLM_TIMEOUT_SECONDS", "20")))
 
 NEWS_QUERY_BY_METAL = {
     "gold": "gold price xau bullion federal reserve inflation usd jpy",
@@ -239,6 +258,168 @@ async def _fetch_news_signals(session: aiohttp.ClientSession) -> dict[str, Any]:
     }
 
 
+def _extract_first_json_object(text: str) -> dict[str, Any] | None:
+    raw = text.strip()
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else None
+    except json.JSONDecodeError:
+        pass
+
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    snippet = raw[start : end + 1]
+    try:
+        parsed = json.loads(snippet)
+        return parsed if isinstance(parsed, dict) else None
+    except json.JSONDecodeError:
+        return None
+
+
+def _clip_text(text: str, max_chars: int = 180) -> str:
+    trimmed = " ".join((text or "").split())
+    if len(trimmed) <= max_chars:
+        return trimmed
+    return f"{trimmed[: max_chars - 1]}…"
+
+
+async def _fetch_llm_signal(
+    session: aiohttp.ClientSession,
+    *,
+    history_by_metal: dict[str, list[dict[str, Any]]],
+    fx_signal: dict[str, Any],
+    news_signal: dict[str, Any],
+) -> dict[str, Any]:
+    if not FORECAST_LLM_ENABLED:
+        return {
+            "available": False,
+            "source": "OpenAI Chat Completions",
+            "model": FORECAST_LLM_MODEL,
+            "scores": {key: 0.0 for key in METAL_COMMANDS.keys()},
+            "confidences": {key: 0.0 for key in METAL_COMMANDS.keys()},
+            "rationales": {key: "" for key in METAL_COMMANDS.keys()},
+            "global_comment": "FORECAST_LLM_ENABLED=false",
+        }
+    if not OPENAI_API_KEY:
+        return {
+            "available": False,
+            "source": "OpenAI Chat Completions",
+            "model": FORECAST_LLM_MODEL,
+            "scores": {key: 0.0 for key in METAL_COMMANDS.keys()},
+            "confidences": {key: 0.0 for key in METAL_COMMANDS.keys()},
+            "rationales": {key: "" for key in METAL_COMMANDS.keys()},
+            "global_comment": "OPENAI_API_KEY not configured",
+        }
+
+    metal_input: dict[str, Any] = {}
+    for metal_key in METAL_COMMANDS.keys():
+        prices = _extract_prices(history_by_metal.get(metal_key, []))
+        headlines = list((news_signal.get("sample_headlines", {}) or {}).get(metal_key, []))[:4]
+        metal_input[metal_key] = {
+            "latest_price_per_gram": round(prices[-1], 2) if prices else None,
+            "trend_14d_pct_per_day": round(_daily_trend(prices) * 100, 4) if prices else 0.0,
+            "volatility_14d_pct": round(_daily_volatility(prices) * 100, 4) if prices else 0.0,
+            "news_sentiment": float((news_signal.get("sentiment", {}) or {}).get(metal_key, 0.0)),
+            "news_article_count": int((news_signal.get("article_counts", {}) or {}).get(metal_key, 0)),
+            "headlines": [_clip_text(item, 140) for item in headlines],
+        }
+
+    user_payload = {
+        "fx": {
+            "usd_jpy_weekly_change_pct": float(fx_signal.get("weekly_change_pct", 0.0)),
+            "usd_jpy_latest": fx_signal.get("latest"),
+            "available": bool(fx_signal.get("available")),
+        },
+        "metals": metal_input,
+    }
+
+    system_prompt = (
+        "You are a conservative financial signal analyst for precious metals. "
+        "Use only provided inputs. Return STRICT JSON only, no markdown. "
+        "For each metal (gold, silver, platinum), output sentiment score [-1,1], "
+        "confidence [0,1], and a short rationale."
+    )
+    user_prompt = (
+        "Inputs JSON:\n"
+        f"{_json_dumps(user_payload)}\n"
+        "Return JSON schema:\n"
+        "{"
+        "\"global_comment\":\"...\","
+        "\"metals\":{"
+        "\"gold\":{\"score\":0.0,\"confidence\":0.0,\"rationale\":\"...\"},"
+        "\"silver\":{\"score\":0.0,\"confidence\":0.0,\"rationale\":\"...\"},"
+        "\"platinum\":{\"score\":0.0,\"confidence\":0.0,\"rationale\":\"...\"}"
+        "}"
+        "}"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": FORECAST_LLM_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.15,
+        "max_tokens": 420,
+    }
+
+    try:
+        async with session.post(OPENAI_CHAT_COMPLETIONS_URL, headers=headers, json=payload) as response:
+            result = await response.json()
+            if response.status != 200:
+                message = result.get("error", {}).get("message", str(result))
+                raise RuntimeError(f"status={response.status} message={message}")
+    except Exception as exc:
+        logger.warning("LLM予測判定の取得に失敗: %s", exc)
+        return {
+            "available": False,
+            "source": "OpenAI Chat Completions",
+            "model": FORECAST_LLM_MODEL,
+            "scores": {key: 0.0 for key in METAL_COMMANDS.keys()},
+            "confidences": {key: 0.0 for key in METAL_COMMANDS.keys()},
+            "rationales": {key: "" for key in METAL_COMMANDS.keys()},
+            "global_comment": "LLM call failed",
+        }
+
+    content = (
+        result.get("choices", [{}])[0]
+        .get("message", {})
+        .get("content", "")
+    )
+    parsed = _extract_first_json_object(str(content)) or {}
+    metal_result = parsed.get("metals", {}) if isinstance(parsed.get("metals"), dict) else {}
+
+    scores: dict[str, float] = {}
+    confidences: dict[str, float] = {}
+    rationales: dict[str, str] = {}
+    for metal_key in METAL_COMMANDS.keys():
+        item = metal_result.get(metal_key, {}) if isinstance(metal_result.get(metal_key), dict) else {}
+        raw_score = _safe_float(item.get("score")) or 0.0
+        raw_confidence = _safe_float(item.get("confidence")) or 0.0
+        rationale = _clip_text(str(item.get("rationale", "")).strip(), 140)
+        scores[metal_key] = round(_clamp(raw_score, -1.0, 1.0), 4)
+        confidences[metal_key] = round(_clamp(raw_confidence, 0.0, 1.0), 4)
+        rationales[metal_key] = rationale
+
+    return {
+        "available": True,
+        "source": "OpenAI Chat Completions",
+        "model": FORECAST_LLM_MODEL,
+        "scores": scores,
+        "confidences": confidences,
+        "rationales": rationales,
+        "global_comment": _clip_text(str(parsed.get("global_comment", "")).strip(), 180),
+    }
+
+
 def _extract_prices(history_items: list[dict[str, Any]]) -> list[float]:
     prices: list[float] = []
     for item in history_items:
@@ -287,6 +468,10 @@ def _forecast_for_metal(
     news_score: float,
     article_count: int,
     fx_available: bool,
+    llm_score: float,
+    llm_confidence: float,
+    llm_rationale: str,
+    llm_available: bool,
 ) -> dict[str, Any]:
     start_price = prices[-1]
     trend = _daily_trend(prices)
@@ -295,7 +480,8 @@ def _forecast_for_metal(
     trend_component = trend * 0.60
     fx_component = fx_daily_factor * FX_BETA_BY_METAL.get(metal_key, 0.35)
     news_component = news_score * 0.0025
-    implied_daily_return = _clamp(trend_component + fx_component + news_component, -0.04, 0.04)
+    llm_component = llm_score * llm_confidence * 0.0035
+    implied_daily_return = _clamp(trend_component + fx_component + news_component + llm_component, -0.04, 0.04)
 
     daily: list[dict[str, Any]] = []
     current = start_price
@@ -326,6 +512,8 @@ def _forecast_for_metal(
         confidence += 0.15
     elif article_count >= 3:
         confidence += 0.08
+    if llm_available:
+        confidence += 0.07 * _clamp(llm_confidence, 0.0, 1.0)
     confidence -= min(0.20, volatility * 6.0)
     if abs(implied_daily_return) > 0.025:
         confidence -= 0.05
@@ -335,7 +523,10 @@ def _forecast_for_metal(
         f"直近トレンド: {trend * 100:+.3f}%/日",
         f"USD/JPY感応: {fx_component * 100:+.3f}%/日",
         f"ニュース感応: {news_component * 100:+.3f}%/日 (score={news_score:+.3f})",
+        f"AI判定感応: {llm_component * 100:+.3f}%/日 (score={llm_score:+.3f}, conf={llm_confidence:.3f})",
     ]
+    if llm_rationale:
+        drivers.append(f"AI判定所見: {llm_rationale}")
     return {
         "start_price_per_gram": round(start_price, 2),
         "projected_price_per_gram": round(current, 2),
@@ -351,11 +542,17 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
     history_window_days = max(45, horizon_days * 8)
     history_by_metal = await load_history(session, history_window_days)
 
-    timeout = aiohttp.ClientTimeout(total=14)
+    timeout = aiohttp.ClientTimeout(total=max(FORECAST_LLM_TIMEOUT_SECONDS, 16))
     async with aiohttp.ClientSession(timeout=timeout) as client:
         fx_task = asyncio.create_task(_fetch_usdjpy_signal(client))
         news_task = asyncio.create_task(_fetch_news_signals(client))
         fx_signal, news_signal = await asyncio.gather(fx_task, news_task)
+        llm_signal = await _fetch_llm_signal(
+            client,
+            history_by_metal=history_by_metal,
+            fx_signal=fx_signal,
+            news_signal=news_signal,
+        )
 
     today = datetime.now(JST)
     forecast: dict[str, Any] = {}
@@ -365,6 +562,9 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
             continue
         metal_news_score = float(news_signal["sentiment"].get(metal_key, 0.0))
         metal_article_count = int(news_signal["article_counts"].get(metal_key, 0))
+        metal_llm_score = float((llm_signal.get("scores", {}) or {}).get(metal_key, 0.0))
+        metal_llm_confidence = float((llm_signal.get("confidences", {}) or {}).get(metal_key, 0.0))
+        metal_llm_rationale = str((llm_signal.get("rationales", {}) or {}).get(metal_key, ""))
         forecast[metal_key] = _forecast_for_metal(
             metal_key=metal_key,
             prices=prices,
@@ -374,6 +574,10 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
             news_score=metal_news_score,
             article_count=metal_article_count,
             fx_available=bool(fx_signal.get("available")),
+            llm_score=metal_llm_score,
+            llm_confidence=metal_llm_confidence,
+            llm_rationale=metal_llm_rationale,
+            llm_available=bool(llm_signal.get("available")),
         )
 
     if not forecast:
@@ -401,6 +605,15 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
                 "sentiment": news_signal.get("sentiment", {}),
                 "article_counts": news_signal.get("article_counts", {}),
                 "sample_headlines": news_signal.get("sample_headlines", {}),
+            },
+            "llm": {
+                "available": bool(llm_signal.get("available")),
+                "source": llm_signal.get("source", "OpenAI Chat Completions"),
+                "model": llm_signal.get("model", FORECAST_LLM_MODEL),
+                "scores": llm_signal.get("scores", {}),
+                "confidences": llm_signal.get("confidences", {}),
+                "rationales": llm_signal.get("rationales", {}),
+                "global_comment": llm_signal.get("global_comment", ""),
             },
         },
         "forecast": forecast,
@@ -438,6 +651,29 @@ def _forecast_payload_from_db(
             "drivers": _json_loads(first.drivers_json, []),
         }
 
+    headlines_payload = _json_loads(meta.news_headlines_json, {})
+    sample_headlines: dict[str, Any]
+    llm_payload: dict[str, Any]
+    if isinstance(headlines_payload, dict) and "sample_headlines" in headlines_payload:
+        sample_raw = headlines_payload.get("sample_headlines", {})
+        llm_raw = headlines_payload.get("llm", {})
+        sample_headlines = sample_raw if isinstance(sample_raw, dict) else {}
+        llm_payload = llm_raw if isinstance(llm_raw, dict) else {}
+    else:
+        sample_headlines = headlines_payload if isinstance(headlines_payload, dict) else {}
+        llm_payload = {}
+
+    if not llm_payload:
+        llm_payload = {
+            "available": False,
+            "source": "OpenAI Chat Completions",
+            "model": FORECAST_LLM_MODEL,
+            "scores": {},
+            "confidences": {},
+            "rationales": {},
+            "global_comment": "",
+        }
+
     return {
         "timezone": "Asia/Tokyo",
         "as_of_date": meta.as_of_date.isoformat(),
@@ -459,8 +695,9 @@ def _forecast_payload_from_db(
                 "source": meta.news_source,
                 "sentiment": _json_loads(meta.news_sentiment_json, {}),
                 "article_counts": _json_loads(meta.news_article_counts_json, {}),
-                "sample_headlines": _json_loads(meta.news_headlines_json, {}),
+                "sample_headlines": sample_headlines,
             },
+            "llm": llm_payload,
         },
         "forecast": forecast,
     }
@@ -591,6 +828,7 @@ async def store_weekly_forecast(
     signal_data = payload.get("signals", {}) if isinstance(payload.get("signals"), dict) else {}
     usd_jpy = signal_data.get("usd_jpy", {}) if isinstance(signal_data.get("usd_jpy"), dict) else {}
     news = signal_data.get("news", {}) if isinstance(signal_data.get("news"), dict) else {}
+    llm = signal_data.get("llm", {}) if isinstance(signal_data.get("llm"), dict) else {}
 
     meta.as_of_date = as_of_date
     meta.generated_at = generated_at
@@ -607,7 +845,20 @@ async def store_weekly_forecast(
     meta.news_source = str(news.get("source", "Google News RSS"))
     meta.news_sentiment_json = _json_dumps(news.get("sentiment", {}))
     meta.news_article_counts_json = _json_dumps(news.get("article_counts", {}))
-    meta.news_headlines_json = _json_dumps(news.get("sample_headlines", {}))
+    meta.news_headlines_json = _json_dumps(
+        {
+            "sample_headlines": news.get("sample_headlines", {}),
+            "llm": {
+                "available": bool(llm.get("available")),
+                "source": str(llm.get("source", "OpenAI Chat Completions")),
+                "model": str(llm.get("model", FORECAST_LLM_MODEL)),
+                "scores": llm.get("scores", {}),
+                "confidences": llm.get("confidences", {}),
+                "rationales": llm.get("rationales", {}),
+                "global_comment": str(llm.get("global_comment", "")),
+            },
+        }
+    )
 
     # 念のため古いメタ行が複数残っている場合は最新1件以外を削除する。
     await session.flush()

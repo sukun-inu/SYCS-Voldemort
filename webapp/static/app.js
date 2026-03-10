@@ -166,6 +166,10 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function loadingInlineMarkup(text) {
+  return `<span class="loading-inline"><span class="loading-spinner" aria-hidden="true"></span>${escapeHtml(text)}</span>`;
+}
+
 function compareIsoDate(a, b) {
   if (a === b) {
     return 0;
@@ -173,9 +177,97 @@ function compareIsoDate(a, b) {
   return a < b ? -1 : 1;
 }
 
+function renderSummarySkeleton() {
+  const root = document.getElementById("summaryCards");
+  if (!root) {
+    return;
+  }
+  root.setAttribute("aria-busy", "true");
+  root.innerHTML = "";
+  Object.keys(METALS).forEach(() => {
+    const card = document.createElement("article");
+    card.className = "summary-card skeleton-card";
+    card.innerHTML = `
+      <div class="skeleton-line skeleton-title"></div>
+      <div class="skeleton-line skeleton-price"></div>
+      <div class="skeleton-line skeleton-delta"></div>
+      <div class="skeleton-line skeleton-meta"></div>
+    `;
+    root.appendChild(card);
+  });
+}
+
+function renderForecastSkeleton() {
+  const root = document.getElementById("forecastCards");
+  if (!root) {
+    return;
+  }
+  root.setAttribute("aria-busy", "true");
+  root.innerHTML = "";
+  Object.keys(METALS).forEach(() => {
+    const card = document.createElement("article");
+    card.className = "summary-card skeleton-card";
+    card.innerHTML = `
+      <div class="skeleton-line skeleton-title"></div>
+      <div class="skeleton-line skeleton-price"></div>
+      <div class="skeleton-line skeleton-delta"></div>
+      <div class="skeleton-line skeleton-meta"></div>
+      <div class="skeleton-line skeleton-driver"></div>
+    `;
+    root.appendChild(card);
+  });
+}
+
+function setChartLoadingState(isLoading) {
+  Object.values(METALS).forEach(({ canvasId }) => {
+    const canvas = document.getElementById(canvasId);
+    const card = canvas?.closest(".chart-card");
+    if (!card) {
+      return;
+    }
+    card.classList.toggle("is-loading", !!isLoading);
+    card.setAttribute("aria-busy", isLoading ? "true" : "false");
+  });
+}
+
+function setForecastLoadingState() {
+  const meta = document.getElementById("forecastMeta");
+  if (meta) {
+    meta.innerHTML = loadingInlineMarkup("予測データを読み込み中...");
+  }
+  renderForecastSkeleton();
+  const source = document.getElementById("forecastSource");
+  if (source) {
+    source.innerHTML = loadingInlineMarkup("予想ソースを取得中...");
+  }
+}
+
+function setDashboardLoadingState() {
+  const generated = document.getElementById("generatedAt");
+  if (generated) {
+    generated.innerHTML = loadingInlineMarkup("価格データを読み込み中...");
+  }
+  renderSummarySkeleton();
+  setForecastLoadingState();
+  setChartLoadingState(true);
+}
+
+function setCalcLoadingState() {
+  const meta = document.getElementById("calcMeta");
+  const result = document.getElementById("calcResult");
+  if (meta) {
+    meta.innerHTML = loadingInlineMarkup("純度計算データを読み込み中...");
+  }
+  if (result) {
+    result.setAttribute("aria-busy", "true");
+    result.innerHTML = '<div class="calc-loading"><span class="loading-spinner" aria-hidden="true"></span>計算中...</div>';
+  }
+}
+
 function buildSummary(latest) {
   const root = document.getElementById("summaryCards");
   root.innerHTML = "";
+  root.setAttribute("aria-busy", "false");
   Object.entries(METALS).forEach(([key, meta]) => {
     const data = latest[key] || {};
     const delta = data.delta_from_previous;
@@ -199,6 +291,7 @@ function setForecastError(message) {
     meta.textContent = message;
   }
   if (root) {
+    root.setAttribute("aria-busy", "false");
     root.innerHTML = "";
   }
   const source = document.getElementById("forecastSource");
@@ -214,8 +307,12 @@ function updateForecastSourceFooter(payload) {
   }
   const usdSource = payload?.signals?.usd_jpy?.source || "Stooq";
   const newsSource = payload?.signals?.news?.source || "Google News RSS";
+  const llm = payload?.signals?.llm || {};
+  const llmLabel = llm?.available
+    ? `・AI判定(${llm.model || "gpt-4.1-mini"})`
+    : "";
   const asOfDate = payload?.as_of_date || "-";
-  source.textContent = `予想ソース: USD/JPY(${usdSource})・ニュース(${newsSource}) / 基準日: ${asOfDate}`;
+  source.textContent = `予想ソース: USD/JPY(${usdSource})・ニュース(${newsSource})${llmLabel} / 基準日: ${asOfDate}`;
 }
 
 function renderWeeklyForecast(payload) {
@@ -225,6 +322,7 @@ function renderWeeklyForecast(payload) {
     return;
   }
 
+  root.setAttribute("aria-busy", "false");
   const usdJpy = payload?.signals?.usd_jpy || {};
   const horizonDays = Number(payload?.horizon_days || 7);
   const generatedAt = payload?.generated_at || "-";
@@ -315,11 +413,13 @@ async function calculatePurityPrice() {
   const metal = document.getElementById("calcMetal").value;
   const grams = Number(document.getElementById("calcGrams").value);
   const meta = document.getElementById("calcMeta");
+  const result = document.getElementById("calcResult");
   if (!metal || Number.isNaN(grams) || grams <= 0) {
     meta.textContent = "グラムは 0 より大きい値を入力してください。";
     return;
   }
 
+  setCalcLoadingState();
   const query = new URLSearchParams({ metal, grams: String(grams) });
   const response = await fetch(`${appUrl("api/prices/calculate")}?${query.toString()}`);
   if (!response.ok) {
@@ -334,6 +434,7 @@ async function calculatePurityPrice() {
   }
 
   const payload = await response.json();
+  result?.setAttribute("aria-busy", "false");
   meta.textContent = `基準価格日: ${payload.snapshot_date} / 単価: ${formatYen(payload.price_per_gram)} / グラム: ${payload.grams}g`;
   renderPurityResult(payload);
 }
@@ -514,26 +615,32 @@ function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, his
 }
 
 async function loadDashboard() {
-  await ensureChartLibrary();
-  const days = Number(document.getElementById("daysSelect").value || 30);
-  const response = await fetch(`${appUrl("api/prices/history")}?days=${days}`);
-  if (!response.ok) {
-    throw new Error("データ取得に失敗しました。");
-  }
-
-  const payload = await response.json();
-  latestHistoryPayload = payload;
-  renderDashboardFromPayload(payload, null);
-
+  setDashboardLoadingState();
   try {
-    const forecastPayload = await loadWeeklyForecast();
-    latestForecastPayload = forecastPayload;
-    renderWeeklyForecast(forecastPayload);
-    renderDashboardFromPayload(payload, forecastPayload);
-  } catch (error) {
-    console.error(error);
-    latestForecastPayload = null;
-    setForecastError(error.message || "1週間予測の取得に失敗しました。");
+    await ensureChartLibrary();
+    const days = Number(document.getElementById("daysSelect").value || 30);
+    const response = await fetch(`${appUrl("api/prices/history")}?days=${days}`);
+    if (!response.ok) {
+      throw new Error("データ取得に失敗しました。");
+    }
+
+    const payload = await response.json();
+    latestHistoryPayload = payload;
+    renderDashboardFromPayload(payload, null);
+    setChartLoadingState(false);
+
+    try {
+      const forecastPayload = await loadWeeklyForecast();
+      latestForecastPayload = forecastPayload;
+      renderWeeklyForecast(forecastPayload);
+      renderDashboardFromPayload(payload, forecastPayload);
+    } catch (error) {
+      console.error(error);
+      latestForecastPayload = null;
+      setForecastError(error.message || "1週間予測の取得に失敗しました。");
+    }
+  } finally {
+    setChartLoadingState(false);
   }
 }
 
@@ -736,6 +843,8 @@ document.getElementById("calcButton").addEventListener("click", () => {
   calculatePurityPrice().catch((err) => {
     console.error(err);
     document.getElementById("calcMeta").textContent = err.message || "純度計算でエラーが発生しました。";
+    document.getElementById("calcResult").setAttribute("aria-busy", "false");
+    document.getElementById("calcResult").innerHTML = "";
   });
 });
 
@@ -778,11 +887,14 @@ loadDashboard().catch((err) => {
   alert(err.message || "初期ロードに失敗しました。");
 });
 
+setCalcLoadingState();
 loadPurityOptions()
   .then(() => calculatePurityPrice())
   .catch((err) => {
     console.error(err);
     document.getElementById("calcMeta").textContent = err.message || "純度計算の初期化に失敗しました。";
+    document.getElementById("calcResult").setAttribute("aria-busy", "false");
+    document.getElementById("calcResult").innerHTML = "";
   });
 
 initializePwaAndPush().catch((err) => {
