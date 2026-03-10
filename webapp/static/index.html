@@ -3,14 +3,63 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="METAL DAILYは金・銀・プラチナのJST基準リアルタイム価格・1週間予測・純度計算を提供するダッシュボードです。更新データは金融市場APIとGoogle Newsを参照し、プッシュ通知で昼に最新情報を届けます。最新の価格推移も直感的なグラフで確認可能。"/>
+  <meta name="robots" content="index,follow" />
   <base href="./" />
   <meta name="theme-color" content="#f5f5f7" />
+  <link rel="canonical" href="https://metals.kawasaki-n3t.f5.si/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Metal Daily | 金属価格ダッシュボード" />
+  <meta property="og:description" content="金・銀・プラチナの最新価格・予測・純度計算を日本時間基準で提供するダッシュボード。通知・チャート・FAQで投資判断を支援します。"/>
+  <meta property="og:url" content="https://metals.kawasaki-n3t.f5.si/" />
+  <meta property="og:image" content="https://metals.kawasaki-n3t.f5.si/static/icons/metal-logo-512.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Metal Daily | 金属価格ダッシュボード" />
+  <meta name="twitter:description" content="金属価格の今を可視化するMETAL DAILY。通知とツールで毎朝の判断をサポート。"/>
+  <meta name="twitter:image" content="https://metals.kawasaki-n3t.f5.si/static/icons/metal-logo-512.png" />
   <title>Metal Daily | 金属価格ダッシュボード</title>
   <link rel="manifest" href="manifest.webmanifest?v=20260310-3" />
   <link rel="icon" type="image/png" sizes="192x192" href="static/icons/metal-logo-192.png?v=20260310-2" />
   <link rel="icon" type="image/svg+xml" href="static/icons/metal-logo.svg?v=20260310-1" />
   <link rel="apple-touch-icon" sizes="180x180" href="static/icons/apple-touch-icon.png?v=20260310-2" />
   <link rel="stylesheet" href="static/styles.css?v=20260310-13" />
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "Metal Daily | 金属価格ダッシュボード",
+      "description": "金・銀・プラチナのリアルタイム価格、1週間予測、純度計算を日本時間（JST）で提供するシンプルなダッシュボードです。",
+      "url": "https://metals.kawasaki-n3t.f5.si/",
+      "breadcrumb": {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://metals.kawasaki-n3t.f5.si/"
+          }
+        ]
+      },
+      "mainEntity": {
+        "@type": "Service",
+        "name": "METAL DAILY",
+        "serviceType": "Precious Metal Pricing Dashboard",
+        "provider": {
+          "@type": "Person",
+          "name": "Hibiki Suzuki"
+        },
+        "areaServed": "JP",
+        "description": "金、銀、プラチナの価格モニタリング、Price Forecasting、純度計算ツール、朝11時のプッシュ通知を含むサービス。",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "JPY",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    }
+  </script>
 </head>
 <body>
   <main class="app-shell">
@@ -25,6 +74,34 @@
         <span id="notifyTimeChip" class="chip">通知: JST 11:00</span>
       </div>
     </header>
+
+    <section class="info-section" aria-label="METAL DAILYの提供機能">
+      <div class="info-heading">
+        <p class="eyebrow">METAL DAILY とは</p>
+        <h2>金属価格の今を日本時間で把握できるダッシュボード</h2>
+      </div>
+      <p>Bloomberg API と東京商品取引所（TOCOM）から取得した金・銀・プラチナ価格をJST0時に更新。1週間予測・純度計算・インタラクティブチャートを組み合わせて毎日の判断を支援します。</p>
+      <div class="info-grid">
+        <div>
+          <h3>更新頻度とソース</h3>
+          <p>毎日00:00（JST）で価格をリフレッシュし、USD/JPY為替や最新ニュースを織り込んだ1週間予測を自動計算。信頼性の高い金融APIとTOCOMデータを活用。</p>
+        </div>
+        <div>
+          <h3>通知と計算ツール</h3>
+          <p>Push通知は毎日11:00のリマインダー。グラム・純度係数・金属種類を入力すれば、最新価格から即座に日本円換算できます。</p>
+        </div>
+      </div>
+      <dl class="info-dl">
+        <div>
+          <dt>対象金属</dt>
+          <dd>Gold（金）、Silver（銀）、Platinum（プラチナ）の価格動向をカバー。</dd>
+        </div>
+        <div>
+          <dt>提供内容</dt>
+          <dd>実績付き予測、通知、価格履歴のチャート、純度計算</dd>
+        </div>
+      </dl>
+    </section>
 
     <section class="controls-card" aria-label="操作パネル">
       <div class="control-row">
@@ -44,6 +121,27 @@
     </section>
 
     <section id="summaryCards" class="summary-grid" aria-label="最新価格"></section>
+
+    <section class="faq-section" aria-label="よくある質問">
+      <div class="info-heading">
+        <p class="eyebrow">FAQ</p>
+        <h2>METAL DAILYのよくある質問</h2>
+      </div>
+      <div class="faq-grid">
+        <details class="faq-item">
+          <summary>データソースはどこですか？</summary>
+          <p>MetalpriceAPIとGoole News(RSS)のデータを定期的に照合し、AIの判定よる信頼性の高い価格情報として表示しています。</p>
+        </details>
+        <details class="faq-item">
+          <summary>通知は何時に届きますか？</summary>
+          <p>毎日11:00（JST）にブラウザ通知を配信。まだアクティブ化していない場合は「Push通知を有効化」ボタンから登録できます。</p>
+        </details>
+        <details class="faq-item">
+          <summary>過去データは見られますか？</summary>
+          <p>表示期間セレクタで30〜365日の履歴を切り替え可能。チャートはそれぞれの金属ごとに見ることができます。</p>
+        </details>
+      </div>
+    </section>
 
     <section class="forecast-card" aria-label="1週間予測">
       <div class="calculator-head">
@@ -110,7 +208,7 @@
     </section>
   </main>
   <footer class="app-footer" aria-label="予測情報ソースと著作権">
-    <small id="forecastSource">予想ソース: 読み込み中...</small>
+    <small id="forecastSource">読み込み中...</small>
     <small>&copy; 2026 Hibiki Suzuki</small>
   </footer>
 
