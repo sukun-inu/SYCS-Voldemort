@@ -525,11 +525,6 @@ async def weekly_forecast(
     days: int = Query(default=7, ge=1, le=7),
     session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
-    cache_key = f"forecast:{datetime.now(JST).date().isoformat()}:{days}"
-    cached = await forecast_cache.get(cache_key)
-    if cached is not None:
-        return JSONResponse(cached, headers=_cache_headers(FORECAST_CACHE_SECONDS))
-
     payload = await load_stored_weekly_forecast(session, days=days)
     if payload is None:
         try:
@@ -540,8 +535,10 @@ async def weekly_forecast(
     if payload is None:
         raise HTTPException(status_code=503, detail="予測データがまだありません。")
 
-    await forecast_cache.set(cache_key, payload)
-    return JSONResponse(payload, headers=_cache_headers(FORECAST_CACHE_SECONDS))
+    return JSONResponse(
+        payload,
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
 
 
 @app.get("/api/purity/options")
