@@ -350,11 +350,32 @@ button:disabled {
   padding: 8px;
 }
 
+.app-footer {
+  width: min(1240px, calc(100% - 32px));
+  margin: 0 auto 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ink-soft);
+  opacity: 0.86;
+  padding: 0 2px;
+}
+
+.app-footer small {
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
 @media (max-width: 1080px) {
   .app-shell {
     width: calc(100% - 22px);
     margin: 14px auto 22px;
     gap: 10px;
+  }
+
+  .app-footer {
+    width: calc(100% - 22px);
   }
 
   .hero-card {
@@ -392,6 +413,18 @@ button:disabled {
     width: calc(100% - 14px);
     margin: 10px auto 18px;
     gap: 8px;
+  }
+
+  .app-footer {
+    width: calc(100% - 14px);
+    margin-bottom: 10px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .app-footer small {
+    font-size: 0.7rem;
   }
 
   .hero-card,

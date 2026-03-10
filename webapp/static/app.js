@@ -201,6 +201,21 @@ function setForecastError(message) {
   if (root) {
     root.innerHTML = "";
   }
+  const source = document.getElementById("forecastSource");
+  if (source) {
+    source.textContent = "予想ソース: 取得に失敗しました";
+  }
+}
+
+function updateForecastSourceFooter(payload) {
+  const source = document.getElementById("forecastSource");
+  if (!source) {
+    return;
+  }
+  const usdSource = payload?.signals?.usd_jpy?.source || "Stooq";
+  const newsSource = payload?.signals?.news?.source || "Google News RSS";
+  const asOfDate = payload?.as_of_date || "-";
+  source.textContent = `予想ソース: USD/JPY(${usdSource})・ニュース(${newsSource}) / 基準日: ${asOfDate}`;
 }
 
 function renderWeeklyForecast(payload) {
@@ -217,6 +232,7 @@ function renderWeeklyForecast(payload) {
     ? `USD/JPY 週次: ${formatPercent(Number(usdJpy.weekly_change_pct || 0), 3)}`
     : "USD/JPY: 取得失敗";
   meta.textContent = `生成時刻: ${generatedAt} / 予測期間: ${horizonDays}日 / ${fxText}`;
+  updateForecastSourceFooter(payload);
 
   root.innerHTML = "";
   Object.entries(METALS).forEach(([key, metal]) => {
