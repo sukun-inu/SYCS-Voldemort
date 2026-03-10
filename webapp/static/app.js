@@ -121,6 +121,14 @@ function formatDelta(value) {
   return `${sign}${new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 }).format(value)} 円`;
 }
 
+function formatPercent(value, digits = 2) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "-";
+  }
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${new Intl.NumberFormat("ja-JP", { maximumFractionDigits: digits }).format(value)}%`;
+}
+
 function parseIsoDate(isoDate) {
   const [year, month, day] = isoDate.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, day));
@@ -174,6 +182,72 @@ function buildSummary(latest) {
     `;
     root.appendChild(card);
   });
+}
+
+function setForecastError(message) {
+  const meta = document.getElementById("forecastMeta");
+  const root = document.getElementById("forecastCards");
+  if (meta) {
+    meta.textContent = message;
+  }
+  if (root) {
+    root.innerHTML = "";
+  }
+}
+
+function renderWeeklyForecast(payload) {
+  const root = document.getElementById("forecastCards");
+  const meta = document.getElementById("forecastMeta");
+  if (!root || !meta) {
+    return;
+  }
+
+  const usdJpy = payload?.signals?.usd_jpy || {};
+  const horizonDays = Number(payload?.horizon_days || 7);
+  const generatedAt = payload?.generated_at || "-";
+  const fxText = usdJpy.available
+    ? `USD/JPY 週次: ${formatPercent(Number(usdJpy.weekly_change_pct || 0), 3)}`
+    : "USD/JPY: 取得失敗";
+  meta.textContent = `生成時刻: ${generatedAt} / 予測期間: ${horizonDays}日 / ${fxText}`;
+
+  root.innerHTML = "";
+  Object.entries(METALS).forEach(([key, metal]) => {
+    const item = payload?.forecast?.[key];
+    if (!item) {
+      return;
+    }
+    const changePct = Number(item.projected_change_pct_7d || 0);
+    const deltaClass = changePct > 0 ? "delta-up" : changePct < 0 ? "delta-down" : "";
+    const confidencePct = Number(item.confidence || 0) * 100;
+    const drivers = Array.isArray(item.drivers) ? item.drivers.slice(0, 2) : [];
+
+    const card = document.createElement("article");
+    card.className = "summary-card";
+    card.innerHTML = `
+      <h3>${metal.label} / 7日予測</h3>
+      <div class="summary-price">${formatYen(item.projected_price_per_gram)}</div>
+      <div class="summary-delta ${deltaClass}">予測変化: ${formatPercent(changePct, 3)}</div>
+      <div class="meta">信頼度: ${new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 }).format(confidencePct)}%</div>
+      <div class="forecast-driver">${drivers.map((line) => escapeHtml(line)).join("<br>")}</div>
+    `;
+    root.appendChild(card);
+  });
+}
+
+async function loadWeeklyForecast() {
+  const response = await fetch(appUrl("api/prices/forecast-weekly?days=7"));
+  if (!response.ok) {
+    let message = "1週間予測データの取得に失敗しました。";
+    try {
+      const payload = await response.json();
+      if (payload?.detail) {
+        message = String(payload.detail);
+      }
+    } catch (_) {}
+    throw new Error(message);
+  }
+  const payload = await response.json();
+  renderWeeklyForecast(payload);
 }
 
 function fillMetalSelector() {
@@ -393,6 +467,10 @@ async function loadDashboard() {
   const payload = await response.json();
   latestHistoryPayload = payload;
   renderDashboardFromPayload(payload);
+  loadWeeklyForecast().catch((error) => {
+    console.error(error);
+    setForecastError(error.message || "1週間予測の取得に失敗しました。");
+  });
 }
 
 function renderDashboardFromPayload(payload) {

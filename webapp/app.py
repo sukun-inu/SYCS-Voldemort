@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import METAL_COMMANDS
 from .cache import TTLCache
 from .db import SessionLocal, close_db, init_db
+from .forecast_service import build_weekly_forecast
 from .models import NotificationDispatch, PushSubscription
 from .push_service import (
     build_push_payload,
@@ -41,6 +42,7 @@ RESERVED_TOP_LEVEL_PATHS = {"api", "static", "health", "docs", "redoc", "openapi
 API_RESPONSE_CACHE_SECONDS = max(1, int(os.getenv("API_RESPONSE_CACHE_SECONDS", "20")))
 PURITY_OPTIONS_CACHE_SECONDS = max(60, int(os.getenv("PURITY_OPTIONS_CACHE_SECONDS", "3600")))
 PUSH_PUBLIC_KEY_CACHE_SECONDS = max(300, int(os.getenv("PUSH_PUBLIC_KEY_CACHE_SECONDS", "3600")))
+FORECAST_CACHE_SECONDS = max(60, int(os.getenv("FORECAST_CACHE_SECONDS", "1800")))
 PUSH_NOTIFY_HOUR_JST = max(0, min(23, int(os.getenv("PUSH_NOTIFY_HOUR_JST", "11"))))
 PUSH_NOTIFY_MINUTE_JST = max(0, min(59, int(os.getenv("PUSH_NOTIFY_MINUTE_JST", "0"))))
 NOTIFY_TOP_DELTA_TYPE = "daily_top_delta"
@@ -61,6 +63,7 @@ APP_PUBLIC_ROOT = _normalize_public_path(APP_PUBLIC_PATH)
 history_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=64)
 latest_prices_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=8)
 calculate_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=1024)
+forecast_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=FORECAST_CACHE_SECONDS, max_items=32)
 PURITY_OPTIONS_PAYLOAD = {
     "metals": {
         key: {
@@ -102,6 +105,7 @@ async def _clear_response_caches() -> None:
     await history_cache.clear()
     await latest_prices_cache.clear()
     await calculate_cache.clear()
+    await forecast_cache.clear()
 
 
 async def _get_latest_prices(session: AsyncSession) -> dict[str, dict[str, str | None]]:
@@ -380,6 +384,24 @@ async def price_history(
     }
     await history_cache.set(cache_key, payload)
     return JSONResponse(payload, headers=_cache_headers(API_RESPONSE_CACHE_SECONDS))
+
+
+@app.get("/api/prices/forecast-weekly")
+async def weekly_forecast(
+    days: int = Query(default=7, ge=3, le=14),
+    session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    cache_key = f"forecast:{datetime.now(JST).date().isoformat()}:{days}"
+    cached = await forecast_cache.get(cache_key)
+    if cached is not None:
+        return JSONResponse(cached, headers=_cache_headers(FORECAST_CACHE_SECONDS))
+
+    try:
+        payload = await build_weekly_forecast(session, horizon_days=days)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    await forecast_cache.set(cache_key, payload)
+    return JSONResponse(payload, headers=_cache_headers(FORECAST_CACHE_SECONDS))
 
 
 @app.get("/api/purity/options")

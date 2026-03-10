@@ -10,7 +10,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="static/icons/metal-logo-192.png?v=20260310-2" />
   <link rel="icon" type="image/svg+xml" href="static/icons/metal-logo.svg?v=20260310-1" />
   <link rel="apple-touch-icon" sizes="180x180" href="static/icons/apple-touch-icon.png?v=20260310-2" />
-  <link rel="stylesheet" href="static/styles.css?v=20260310-10" />
+  <link rel="stylesheet" href="static/styles.css?v=20260310-11" />
 </head>
 <body>
   <main class="app-shell">
@@ -44,6 +44,15 @@
     </section>
 
     <section id="summaryCards" class="summary-grid" aria-label="最新価格"></section>
+
+    <section class="forecast-card" aria-label="1週間予測">
+      <div class="calculator-head">
+        <h2>1週間予測</h2>
+        <p>ニュースとUSD/JPYを加味した簡易予測</p>
+      </div>
+      <p id="forecastMeta" class="meta">予測データを読み込み中...</p>
+      <div id="forecastCards" class="summary-grid forecast-grid"></div>
+    </section>
 
     <section class="calculator-card" aria-label="純度計算">
       <div class="calculator-head">
@@ -90,6 +99,6 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js" defer></script>
-  <script src="static/app.js?v=20260310-12" defer></script>
+  <script src="static/app.js?v=20260310-13" defer></script>
 </body>
 </html>
