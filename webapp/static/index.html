@@ -159,42 +159,36 @@
     </section>
 
     <section class="info-section" aria-label="METAL DAILYの提供機能">
-      <div class="info-heading">
+      <div class="section-heading">
         <p class="eyebrow">METAL DAILY とは</p>
         <h2>金属価格の今を日本時間で把握できるダッシュボード</h2>
       </div>
-      <p>MetalpriceAPIとGoole News(RSS)から取得した金・銀・プラチナ価格をJST0時に更新。1週間予測・純度計算・インタラクティブチャートを組み合わせて毎日の判断を支援します。</p>
+      <p class="section-lead">MetalpriceAPIとGoogle News（RSS）から取得した金・銀・プラチナ価格をJST 00:00基準で更新し、予測・換算・履歴確認を1画面で完結できます。</p>
       <div class="info-grid">
-        <div>
+        <article class="info-card">
           <h3>更新頻度とソース</h3>
-          <p>毎日00:00（JST）で価格をリフレッシュし、USD/JPY為替や最新ニュースを織り込んだ1週間予測を自動計算。信頼性の高い金融APIとTOCOMデータを活用。</p>
-        </div>
-        <div>
+          <p>毎日00:00（JST）に価格を更新。USD/JPYと関連ニュースを加味して1週間予測を再計算します。</p>
+        </article>
+        <article class="info-card">
           <h3>通知と計算ツール</h3>
-          <p>Push通知は毎日11:00のリマインダー。グラム・純度係数・金属種類を入力すれば、最新価格から即座に日本円換算できます。</p>
-        </div>
+          <p>毎日11:00（JST）にブラウザ通知を配信。重量と純度を入力するだけで最新価格から即座に円換算できます。</p>
+        </article>
       </div>
-      <dl class="info-dl">
-        <div>
-          <dt>対象金属</dt>
-          <dd>Gold（金）、Silver（銀）、Platinum（プラチナ）の価格動向をカバー。</dd>
-        </div>
-        <div>
-          <dt>提供内容</dt>
-          <dd>実績付き予測、通知、価格履歴のチャート、純度計算</dd>
-        </div>
-      </dl>
+      <div class="info-meta">
+        <p><span>対象金属</span>Gold（金） / Silver（銀） / Platinum（プラチナ）</p>
+        <p><span>提供機能</span>価格推移チャート / 1週間予測 / 純度計算 / Push通知</p>
+      </div>
     </section>
 
     <section class="faq-section" aria-label="よくある質問">
-      <div class="info-heading">
+      <div class="section-heading">
         <p class="eyebrow">FAQ</p>
         <h2>METAL DAILYのよくある質問</h2>
       </div>
-      <div class="faq-grid">
+      <div class="faq-stack">
         <details class="faq-item">
           <summary>データソースはどこですか？</summary>
-          <p>MetalpriceAPIとGoole News(RSS)のデータを定期的に照合し、AIの判定よる信頼性の高い価格情報として表示しています。</p>
+          <p>MetalpriceAPIとGoogle News（RSS）を参照し、価格データとニュースデータを突合して表示しています。</p>
         </details>
         <details class="faq-item">
           <summary>通知は何時に届きますか？</summary>
@@ -202,7 +196,7 @@
         </details>
         <details class="faq-item">
           <summary>過去データは見られますか？</summary>
-          <p>表示期間セレクタで30〜365日の履歴を切り替え可能。チャートはそれぞれの金属ごとに見ることができます。</p>
+          <p>表示期間セレクタで30日、90日、180日、365日の履歴を切り替えて確認できます。</p>
         </details>
       </div>
     </section>
