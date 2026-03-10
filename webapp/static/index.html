@@ -75,34 +75,6 @@
       </div>
     </header>
 
-    <section class="info-section" aria-label="METAL DAILYの提供機能">
-      <div class="info-heading">
-        <p class="eyebrow">METAL DAILY とは</p>
-        <h2>金属価格の今を日本時間で把握できるダッシュボード</h2>
-      </div>
-      <p>Bloomberg API と東京商品取引所（TOCOM）から取得した金・銀・プラチナ価格をJST0時に更新。1週間予測・純度計算・インタラクティブチャートを組み合わせて毎日の判断を支援します。</p>
-      <div class="info-grid">
-        <div>
-          <h3>更新頻度とソース</h3>
-          <p>毎日00:00（JST）で価格をリフレッシュし、USD/JPY為替や最新ニュースを織り込んだ1週間予測を自動計算。信頼性の高い金融APIとTOCOMデータを活用。</p>
-        </div>
-        <div>
-          <h3>通知と計算ツール</h3>
-          <p>Push通知は毎日11:00のリマインダー。グラム・純度係数・金属種類を入力すれば、最新価格から即座に日本円換算できます。</p>
-        </div>
-      </div>
-      <dl class="info-dl">
-        <div>
-          <dt>対象金属</dt>
-          <dd>Gold（金）、Silver（銀）、Platinum（プラチナ）の価格動向をカバー。</dd>
-        </div>
-        <div>
-          <dt>提供内容</dt>
-          <dd>実績付き予測、通知、価格履歴のチャート、純度計算</dd>
-        </div>
-      </dl>
-    </section>
-
     <section class="controls-card" aria-label="操作パネル">
       <div class="control-row">
         <label for="daysSelect">表示期間</label>
@@ -121,27 +93,6 @@
     </section>
 
     <section id="summaryCards" class="summary-grid" aria-label="最新価格"></section>
-
-    <section class="faq-section" aria-label="よくある質問">
-      <div class="info-heading">
-        <p class="eyebrow">FAQ</p>
-        <h2>METAL DAILYのよくある質問</h2>
-      </div>
-      <div class="faq-grid">
-        <details class="faq-item">
-          <summary>データソースはどこですか？</summary>
-          <p>MetalpriceAPIとGoole News(RSS)のデータを定期的に照合し、AIの判定よる信頼性の高い価格情報として表示しています。</p>
-        </details>
-        <details class="faq-item">
-          <summary>通知は何時に届きますか？</summary>
-          <p>毎日11:00（JST）にブラウザ通知を配信。まだアクティブ化していない場合は「Push通知を有効化」ボタンから登録できます。</p>
-        </details>
-        <details class="faq-item">
-          <summary>過去データは見られますか？</summary>
-          <p>表示期間セレクタで30〜365日の履歴を切り替え可能。チャートはそれぞれの金属ごとに見ることができます。</p>
-        </details>
-      </div>
-    </section>
 
     <section class="forecast-card" aria-label="1週間予測">
       <div class="calculator-head">
@@ -205,6 +156,55 @@
           </div>
         </div>
       </article>
+    </section>
+
+    <section class="info-section" aria-label="METAL DAILYの提供機能">
+      <div class="info-heading">
+        <p class="eyebrow">METAL DAILY とは</p>
+        <h2>金属価格の今を日本時間で把握できるダッシュボード</h2>
+      </div>
+      <p>MetalpriceAPIとGoole News(RSS)から取得した金・銀・プラチナ価格をJST0時に更新。1週間予測・純度計算・インタラクティブチャートを組み合わせて毎日の判断を支援します。</p>
+      <div class="info-grid">
+        <div>
+          <h3>更新頻度とソース</h3>
+          <p>毎日00:00（JST）で価格をリフレッシュし、USD/JPY為替や最新ニュースを織り込んだ1週間予測を自動計算。信頼性の高い金融APIとTOCOMデータを活用。</p>
+        </div>
+        <div>
+          <h3>通知と計算ツール</h3>
+          <p>Push通知は毎日11:00のリマインダー。グラム・純度係数・金属種類を入力すれば、最新価格から即座に日本円換算できます。</p>
+        </div>
+      </div>
+      <dl class="info-dl">
+        <div>
+          <dt>対象金属</dt>
+          <dd>Gold（金）、Silver（銀）、Platinum（プラチナ）の価格動向をカバー。</dd>
+        </div>
+        <div>
+          <dt>提供内容</dt>
+          <dd>実績付き予測、通知、価格履歴のチャート、純度計算</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="faq-section" aria-label="よくある質問">
+      <div class="info-heading">
+        <p class="eyebrow">FAQ</p>
+        <h2>METAL DAILYのよくある質問</h2>
+      </div>
+      <div class="faq-grid">
+        <details class="faq-item">
+          <summary>データソースはどこですか？</summary>
+          <p>MetalpriceAPIとGoole News(RSS)のデータを定期的に照合し、AIの判定よる信頼性の高い価格情報として表示しています。</p>
+        </details>
+        <details class="faq-item">
+          <summary>通知は何時に届きますか？</summary>
+          <p>毎日11:00（JST）にブラウザ通知を配信。まだアクティブ化していない場合は「Push通知を有効化」ボタンから登録できます。</p>
+        </details>
+        <details class="faq-item">
+          <summary>過去データは見られますか？</summary>
+          <p>表示期間セレクタで30〜365日の履歴を切り替え可能。チャートはそれぞれの金属ごとに見ることができます。</p>
+        </details>
+      </div>
     </section>
   </main>
   <footer class="app-footer" aria-label="予測情報ソースと著作権">
