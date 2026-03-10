@@ -1,4 +1,4 @@
-const CACHE_NAME = "metal-tracker-v5";
+const CACHE_NAME = "metal-tracker-v6";
 
 function scopedUrl(path) {
   return new URL(path, self.registration.scope).toString();
@@ -8,7 +8,6 @@ const APP_SHELL = [
   scopedUrl("./"),
   scopedUrl("index.html"),
   scopedUrl("manifest.webmanifest"),
-  scopedUrl("static/styles.css"),
   scopedUrl("static/icons/metal-logo-192.png"),
   scopedUrl("static/icons/metal-logo-512.png"),
   scopedUrl("static/icons/metal-logo-maskable-192.png"),
@@ -58,7 +57,8 @@ self.addEventListener("fetch", (event) => {
     inScopePath === "" ||
     inScopePath === "index.html" ||
     inScopePath === "manifest.webmanifest" ||
-    inScopePath === "static/app.js";
+    inScopePath === "static/app.js" ||
+    inScopePath === "static/styles.css";
 
   if (useNetworkFirst) {
     event.respondWith(

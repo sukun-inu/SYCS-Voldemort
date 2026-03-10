@@ -339,12 +339,18 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/", include_in_schema=False)
 async def index() -> FileResponse:
-    return FileResponse(INDEX_FILE)
+    return FileResponse(
+        INDEX_FILE,
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
 
 
 @app.get("/index.html", include_in_schema=False)
 async def index_html() -> FileResponse:
-    return FileResponse(INDEX_FILE)
+    return FileResponse(
+        INDEX_FILE,
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
 
 
 @app.get("/sw.js", include_in_schema=False)
@@ -353,7 +359,7 @@ async def service_worker() -> FileResponse:
         SW_FILE,
         media_type="application/javascript",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
             "Service-Worker-Allowed": APP_PUBLIC_ROOT,
         },
     )

@@ -49,6 +49,7 @@ const CHART_MAX_WIDTH_MOBILE_PX = 1200;
 const CHART_PX_PER_DAY_DESKTOP = 5;
 const CHART_PX_PER_DAY_MOBILE = 3;
 const CHART_DPR_CAP = 1.75;
+const SW_SCRIPT_VERSION = "20260310-2";
 
 function appUrl(path) {
   return new URL(path.replace(/^\/+/, ""), APP_BASE).toString();
@@ -816,7 +817,10 @@ async function initializePwaAndPush() {
   }
 
   try {
-    swRegistration = await navigator.serviceWorker.register(appUrl("sw.js"), { scope: appScopePath() });
+    swRegistration = await navigator.serviceWorker.register(
+      appUrl(`sw.js?v=${SW_SCRIPT_VERSION}`),
+      { scope: appScopePath() }
+    );
     await navigator.serviceWorker.ready;
   } catch (error) {
     console.error(error);
