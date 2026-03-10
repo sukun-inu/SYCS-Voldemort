@@ -354,7 +354,10 @@ async def _run_startup_test_jobs() -> None:
 
     if STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT:
         try:
-            await collect_daily_data(force_snapshot_refresh=STARTUP_TEST_FORCE_SNAPSHOT_REFRESH)
+            await collect_daily_data(
+                force_snapshot_refresh=STARTUP_TEST_FORCE_SNAPSHOT_REFRESH,
+                force_forecast_refresh=STARTUP_TEST_FORCE_SNAPSHOT_REFRESH,
+            )
             logger.warning("起動時テスト: 0時更新ジョブを即時実行した。")
         except Exception:
             logger.exception("起動時テスト: 0時更新ジョブの即時実行に失敗した。")
@@ -376,9 +379,15 @@ async def collect_daily_snapshot(*, force_refresh: bool = False) -> None:
             logger.exception("日次価格スナップショット保存に失敗した。")
 
 
-async def collect_weekly_forecast_cache() -> None:
+async def collect_weekly_forecast_cache(*, force_refresh: bool = False) -> None:
     async with SessionLocal() as session:
         try:
+            today_iso = datetime.now(JST).date().isoformat()
+            if not force_refresh:
+                existing_payload = await load_stored_weekly_forecast(session, days=7)
+                if existing_payload and existing_payload.get("as_of_date") == today_iso:
+                    logger.info("7日予測データは最新のため更新をスキップした。as_of_date=%s", today_iso)
+                    return
             await refresh_weekly_forecast_cache(session, horizon_days=7)
             await forecast_cache.clear()
             logger.info("7日予測データを更新し、DBに保存した。")
@@ -386,9 +395,9 @@ async def collect_weekly_forecast_cache() -> None:
             logger.exception("7日予測データの更新保存に失敗した。")
 
 
-async def collect_daily_data(*, force_snapshot_refresh: bool = False) -> None:
+async def collect_daily_data(*, force_snapshot_refresh: bool = False, force_forecast_refresh: bool = False) -> None:
     await collect_daily_snapshot(force_refresh=force_snapshot_refresh)
-    await collect_weekly_forecast_cache()
+    await collect_weekly_forecast_cache(force_refresh=force_forecast_refresh)
 
 
 @asynccontextmanager
@@ -527,13 +536,7 @@ async def weekly_forecast(
 ) -> JSONResponse:
     payload = await load_stored_weekly_forecast(session, days=days)
     if payload is None:
-        try:
-            await refresh_weekly_forecast_cache(session, horizon_days=7)
-            payload = await load_stored_weekly_forecast(session, days=days)
-        except RuntimeError as exc:
-            raise HTTPException(status_code=503, detail=str(exc))
-    if payload is None:
-        raise HTTPException(status_code=503, detail="予測データがまだありません。")
+        raise HTTPException(status_code=503, detail="予測データがまだありません。次回の0時更新後に利用できます。")
 
     return JSONResponse(
         payload,
