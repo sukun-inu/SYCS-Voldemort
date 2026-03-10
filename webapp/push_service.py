@@ -3,6 +3,7 @@ import json
 import logging
 
 from pywebpush import WebPushException, webpush
+from py_vapid import VapidException
 
 from .vapid_service import VapidConfig, load_vapid_config
 
@@ -67,6 +68,9 @@ async def send_push(subscription: dict, payload: str) -> tuple[bool, bool]:
         if status_code in {404, 410}:
             return False, True
         logger.warning("WebPush送信エラー: status=%s message=%s", status_code, str(exc))
+        return False, False
+    except VapidException as exc:
+        logger.warning("WebPush VAPID設定エラー: %s", str(exc))
         return False, False
     except Exception:
         logger.exception("WebPush送信中に想定外エラー")

@@ -1,10 +1,20 @@
 import base64
+import logging
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+
+logger = logging.getLogger(__name__)
+DEFAULT_VAPID_SUBJECT = "mailto:admin@example.com"
+_VAPID_SUBJECT_PATTERN = re.compile(
+    r"^(mailto:.+@((localhost|[%\w-]+(\.[%\w-]+)+|([0-9a-f]{1,4}):+([0-9a-f]{1,4})?)))"
+    r"|https:\/\/(localhost|[\w-]+\.[\w\.-]+|([0-9a-f]{1,4}:+)+([0-9a-f]{1,4})?)$",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -74,8 +84,31 @@ def _ensure_generated_keys() -> tuple[str, str]:
     return public_key, str(private_key_file)
 
 
+def _is_valid_vapid_subject(subject: str) -> bool:
+    return _VAPID_SUBJECT_PATTERN.match(subject) is not None
+
+
+def _normalize_vapid_subject(raw_subject: str | None) -> str:
+    subject = (raw_subject or "").strip()
+    if not subject:
+        return DEFAULT_VAPID_SUBJECT
+
+    if ":" not in subject and "@" in subject:
+        subject = f"mailto:{subject}"
+
+    if _is_valid_vapid_subject(subject):
+        return subject
+
+    logger.warning(
+        "VAPID_SUBJECT format is invalid (%s). Falling back to default subject: %s",
+        subject,
+        DEFAULT_VAPID_SUBJECT,
+    )
+    return DEFAULT_VAPID_SUBJECT
+
+
 def load_vapid_config() -> VapidConfig:
-    subject = (os.getenv("VAPID_SUBJECT") or "mailto:admin@example.com").strip()
+    subject = _normalize_vapid_subject(os.getenv("VAPID_SUBJECT"))
     env_public = (os.getenv("VAPID_PUBLIC_KEY") or "").strip()
     env_private = (os.getenv("VAPID_PRIVATE_KEY") or "").strip()
     if env_public and env_private:
@@ -86,4 +119,3 @@ def load_vapid_config() -> VapidConfig:
 
     generated_public, generated_private = _ensure_generated_keys()
     return VapidConfig(public_key=generated_public, private_key=generated_private, subject=subject)
-

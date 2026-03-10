@@ -294,7 +294,7 @@ python web_main.py
 - `VAPID_KEYS_DIR`（デフォルト: `/shared/vapid`）
 - `VAPID_PUBLIC_KEY`（手動指定する場合）
 - `VAPID_PRIVATE_KEY`（手動指定する場合）
-- `VAPID_SUBJECT`（デフォルト: `mailto:admin@example.com`）
+- `VAPID_SUBJECT`（デフォルト: `mailto:admin@example.com`。`admin@example.com` を指定した場合は `mailto:` を自動補完。不正形式はデフォルトへフォールバック）
 - `TRUST_CF_HEADERS`（デフォルト: true）
 - `REQUIRE_CF_CONNECTING_IP`（デフォルト: false）
 - `ALLOWED_HOSTS`（カンマ区切り）
