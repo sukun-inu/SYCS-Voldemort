@@ -384,7 +384,7 @@ function renderMetalChart(metalKey, history, dailyAxis) {
 
 async function loadDashboard() {
   await ensureChartLibrary();
-  const days = Number(document.getElementById("daysSelect").value || 365);
+  const days = Number(document.getElementById("daysSelect").value || 30);
   const response = await fetch(`${appUrl("api/prices/history")}?days=${days}`);
   if (!response.ok) {
     throw new Error("データ取得に失敗しました。");

@@ -6,8 +6,10 @@
   <base href="./" />
   <meta name="theme-color" content="#f5f5f7" />
   <title>Metal Daily | 金属価格ダッシュボード</title>
-  <link rel="manifest" href="manifest.webmanifest?v=20260310-1" />
+  <link rel="manifest" href="manifest.webmanifest?v=20260310-2" />
+  <link rel="icon" type="image/png" sizes="192x192" href="static/icons/metal-logo-192.png?v=20260310-1" />
   <link rel="icon" type="image/svg+xml" href="static/icons/metal-logo.svg?v=20260310-0" />
+  <link rel="apple-touch-icon" sizes="180x180" href="static/icons/apple-touch-icon.png?v=20260310-1" />
   <link rel="stylesheet" href="static/styles.css?v=20260310-9" />
 </head>
 <body>
@@ -28,10 +30,10 @@
       <div class="control-row">
         <label for="daysSelect">表示期間</label>
         <select id="daysSelect">
-          <option value="30">30日</option>
+          <option value="30" selected>30日</option>
           <option value="90">90日</option>
           <option value="180">180日</option>
-          <option value="365" selected>365日</option>
+          <option value="365">365日</option>
         </select>
         <button id="reloadButton" type="button" class="button-secondary">更新</button>
       </div>
@@ -52,7 +54,7 @@
         <label for="calcMetal">金属</label>
         <select id="calcMetal"></select>
         <label for="calcGrams">グラム</label>
-        <input id="calcGrams" type="number" min="0.1" step="0.1" value="10" />
+        <input id="calcGrams" type="number" min="0.1" step="0.1" value="1" />
         <button id="calcButton" type="button" class="button-secondary">計算</button>
       </div>
       <p id="calcMeta" class="meta">読み込み中...</p>
@@ -88,6 +90,6 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js" defer></script>
-  <script src="static/app.js?v=20260310-10" defer></script>
+  <script src="static/app.js?v=20260310-11" defer></script>
 </body>
 </html>

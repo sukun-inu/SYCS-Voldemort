@@ -1,4 +1,4 @@
-const CACHE_NAME = "metal-tracker-v4";
+const CACHE_NAME = "metal-tracker-v5";
 
 function scopedUrl(path) {
   return new URL(path, self.registration.scope).toString();
@@ -9,6 +9,11 @@ const APP_SHELL = [
   scopedUrl("index.html"),
   scopedUrl("manifest.webmanifest"),
   scopedUrl("static/styles.css"),
+  scopedUrl("static/icons/metal-logo-192.png"),
+  scopedUrl("static/icons/metal-logo-512.png"),
+  scopedUrl("static/icons/metal-logo-maskable-192.png"),
+  scopedUrl("static/icons/metal-logo-maskable-512.png"),
+  scopedUrl("static/icons/apple-touch-icon.png"),
   scopedUrl("static/icons/metal-logo.svg"),
 ];
 
@@ -104,8 +109,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title || "価格通知", {
       body: payload.body || "",
-      icon: scopedUrl("static/icons/metal-logo.svg"),
-      badge: scopedUrl("static/icons/metal-logo.svg"),
+      icon: scopedUrl("static/icons/metal-logo-192.png"),
+      badge: scopedUrl("static/icons/metal-logo-192.png"),
       data: { url: payload.url || "./" },
       tag: payload.tag || "metal-notify",
     })
