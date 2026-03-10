@@ -98,21 +98,46 @@
         </div>
       </section>
 
-      <section class="summary-panel panel-card" aria-label="最新価格サマリー">
-        <div class="section-heading">
-          <h2>最新価格</h2>
-          <p>各金属の円/g価格と前日差</p>
+      <section class="market-panel panel-card" aria-label="最新価格と1週間予測">
+        <div class="market-panel-head">
+          <div class="section-heading">
+            <h2>マーケットビュー</h2>
+            <p>最新価格と1週間予測を切り替えて表示</p>
+          </div>
+          <div class="market-toggle" role="tablist" aria-label="表示切り替え">
+            <button
+              id="marketViewSummary"
+              class="market-toggle-button is-active"
+              type="button"
+              role="tab"
+              aria-selected="true"
+              aria-controls="marketPaneSummary"
+              data-market-view="summary"
+            >
+              最新価格
+            </button>
+            <button
+              id="marketViewForecast"
+              class="market-toggle-button"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="marketPaneForecast"
+              data-market-view="forecast"
+            >
+              1週間予測
+            </button>
+          </div>
         </div>
-        <div id="summaryCards" class="summary-grid" aria-label="最新価格"></div>
-      </section>
 
-      <section class="forecast-card panel-card" aria-label="1週間予測">
-        <div class="section-heading">
-          <h2>1週間予測</h2>
-          <p>ニュースとUSD/JPYを加味した簡易予測</p>
-        </div>
-        <p id="forecastMeta" class="meta">予測データを読み込み中...</p>
-        <div id="forecastCards" class="summary-grid forecast-grid"></div>
+        <section id="marketPaneSummary" class="market-pane" role="tabpanel" aria-labelledby="marketViewSummary">
+          <div id="summaryCards" class="summary-grid" aria-label="最新価格"></div>
+        </section>
+
+        <section id="marketPaneForecast" class="market-pane" role="tabpanel" aria-labelledby="marketViewForecast" hidden>
+          <p id="forecastMeta" class="meta">予測データを読み込み中...</p>
+          <div id="forecastCards" class="summary-grid forecast-grid"></div>
+        </section>
       </section>
 
       <section class="calculator-card panel-card" aria-label="純度計算">

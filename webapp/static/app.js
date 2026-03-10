@@ -170,6 +170,51 @@ function loadingInlineMarkup(text) {
   return `<span class="loading-inline"><span class="loading-spinner" aria-hidden="true"></span>${escapeHtml(text)}</span>`;
 }
 
+function setMarketView(view) {
+  const summaryButton = document.getElementById("marketViewSummary");
+  const forecastButton = document.getElementById("marketViewForecast");
+  const summaryPane = document.getElementById("marketPaneSummary");
+  const forecastPane = document.getElementById("marketPaneForecast");
+  if (!summaryButton || !forecastButton || !summaryPane || !forecastPane) {
+    return;
+  }
+
+  const normalizedView = view === "forecast" ? "forecast" : "summary";
+  const isSummary = normalizedView === "summary";
+  summaryButton.classList.toggle("is-active", isSummary);
+  forecastButton.classList.toggle("is-active", !isSummary);
+  summaryButton.setAttribute("aria-selected", isSummary ? "true" : "false");
+  forecastButton.setAttribute("aria-selected", isSummary ? "false" : "true");
+  summaryButton.setAttribute("tabindex", isSummary ? "0" : "-1");
+  forecastButton.setAttribute("tabindex", isSummary ? "-1" : "0");
+  summaryPane.hidden = !isSummary;
+  forecastPane.hidden = isSummary;
+}
+
+function initializeMarketToggle() {
+  const buttons = document.querySelectorAll(".market-toggle-button[data-market-view]");
+  if (!buttons.length) {
+    return;
+  }
+
+  buttons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setMarketView(button.dataset.marketView);
+    });
+    button.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+        return;
+      }
+      event.preventDefault();
+      const nextView = event.key === "ArrowRight" ? "forecast" : "summary";
+      setMarketView(nextView);
+      document.querySelector(`.market-toggle-button[data-market-view="${nextView}"]`)?.focus();
+    });
+  });
+
+  setMarketView("summary");
+}
+
 function compareIsoDate(a, b) {
   if (a === b) {
     return 0;
@@ -881,6 +926,8 @@ window.addEventListener("resize", () => {
     renderDashboardFromPayload(latestHistoryPayload, latestForecastPayload);
   }
 });
+
+initializeMarketToggle();
 
 loadDashboard().catch((err) => {
   console.error(err);
