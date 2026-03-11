@@ -43,6 +43,7 @@ API_RESPONSE_CACHE_SECONDS = max(1, int(os.getenv("API_RESPONSE_CACHE_SECONDS", 
 PURITY_OPTIONS_CACHE_SECONDS = max(60, int(os.getenv("PURITY_OPTIONS_CACHE_SECONDS", "3600")))
 PUSH_PUBLIC_KEY_CACHE_SECONDS = max(300, int(os.getenv("PUSH_PUBLIC_KEY_CACHE_SECONDS", "3600")))
 FORECAST_CACHE_SECONDS = max(60, int(os.getenv("FORECAST_CACHE_SECONDS", "1800")))
+FORECAST_REFRESH_MINUTE_JST = max(0, min(59, int(os.getenv("FORECAST_REFRESH_MINUTE_JST", "5"))))
 PUSH_NOTIFY_HOUR_JST = max(0, min(23, int(os.getenv("PUSH_NOTIFY_HOUR_JST", "11"))))
 PUSH_NOTIFY_MINUTE_JST = max(0, min(59, int(os.getenv("PUSH_NOTIFY_MINUTE_JST", "0"))))
 NOTIFY_TOP_DELTA_TYPE = "daily_top_delta"
@@ -390,7 +391,7 @@ async def collect_weekly_forecast_cache(*, force_refresh: bool = False) -> None:
                     return
             await refresh_weekly_forecast_cache(session, horizon_days=7)
             await forecast_cache.clear()
-            logger.info("7日予測データを更新し、DBに保存した。")
+            logger.info("7日予測データを更新し、DBに保存した。force_refresh=%s", force_refresh)
         except Exception:
             logger.exception("7日予測データの更新保存に失敗した。")
 
@@ -417,6 +418,16 @@ async def lifespan(_: FastAPI):
         coalesce=True,
         max_instances=1,
         misfire_grace_time=3600,
+    )
+    scheduler.add_job(
+        collect_weekly_forecast_cache,
+        CronTrigger(minute=FORECAST_REFRESH_MINUTE_JST, timezone=JST),
+        kwargs={"force_refresh": True},
+        id="jst_hourly_forecast_refresh",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=1800,
     )
     scheduler.add_job(
         dispatch_top_delta_notification,
@@ -536,7 +547,7 @@ async def weekly_forecast(
 ) -> JSONResponse:
     payload = await load_stored_weekly_forecast(session, days=days)
     if payload is None:
-        raise HTTPException(status_code=503, detail="予測データがまだありません。次回の0時更新後に利用できます。")
+        raise HTTPException(status_code=503, detail="予測データがまだありません。次回の予測更新後に利用できます。")
 
     return JSONResponse(
         payload,

@@ -21,6 +21,14 @@ from .snapshot_service import JST, load_history
 
 logger = logging.getLogger(__name__)
 
+try:
+    from statsmodels.tsa.statespace.sarimax import SARIMAX  # type: ignore
+
+    SARIMAX_AVAILABLE = True
+except Exception:
+    SARIMAX = None
+    SARIMAX_AVAILABLE = False
+
 USDJPY_DAILY_CSV_URL = "https://stooq.com/q/d/l/?s=usdjpy&i=d"
 GOOGLE_NEWS_RSS_URL = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
 OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
@@ -43,6 +51,8 @@ def _read_env_bool(name: str, default: bool) -> bool:
 FORECAST_LLM_ENABLED = _read_env_bool("FORECAST_LLM_ENABLED", True)
 FORECAST_LLM_MODEL = (os.getenv("FORECAST_LLM_MODEL") or "gpt-4.1-mini").strip() or "gpt-4.1-mini"
 FORECAST_LLM_TIMEOUT_SECONDS = max(8, int(os.getenv("FORECAST_LLM_TIMEOUT_SECONDS", "20")))
+FORECAST_SARIMAX_ENABLED = _read_env_bool("FORECAST_SARIMAX_ENABLED", True)
+FORECAST_SARIMAX_MIN_HISTORY = max(14, int(os.getenv("FORECAST_SARIMAX_MIN_HISTORY", "24")))
 
 NEWS_QUERY_BY_METAL = {
     "gold": "gold price xau bullion federal reserve inflation usd jpy",
@@ -458,6 +468,39 @@ def _daily_volatility(prices: list[float], *, window: int = 14) -> float:
     return float(pstdev(returns))
 
 
+def _sarimax_baseline_returns(prices: list[float], horizon_days: int) -> list[float] | None:
+    if not FORECAST_SARIMAX_ENABLED or not SARIMAX_AVAILABLE:
+        return None
+    if len(prices) < FORECAST_SARIMAX_MIN_HISTORY:
+        return None
+
+    log_returns: list[float] = []
+    for previous, current in zip(prices, prices[1:]):
+        if previous <= 0 or current <= 0:
+            continue
+        log_returns.append(math.log(current / previous))
+
+    if len(log_returns) < (FORECAST_SARIMAX_MIN_HISTORY - 1):
+        return None
+
+    seasonal_order = (1, 0, 0, 7) if len(log_returns) >= 21 else (0, 0, 0, 0)
+    try:
+        model = SARIMAX(
+            log_returns,
+            order=(1, 0, 1),
+            seasonal_order=seasonal_order,
+            trend="c",
+            enforce_stationarity=False,
+            enforce_invertibility=False,
+        )
+        fitted = model.fit(disp=False, maxiter=120)
+        forecast_returns = fitted.forecast(steps=horizon_days)
+        return [_clamp(float(value), -0.06, 0.06) for value in forecast_returns]
+    except Exception as exc:
+        logger.warning("SARIMAX予測の計算に失敗。heuristicへフォールバック err=%s", exc)
+        return None
+
+
 def _forecast_for_metal(
     *,
     metal_key: str,
@@ -476,19 +519,29 @@ def _forecast_for_metal(
     start_price = prices[-1]
     trend = _daily_trend(prices)
     volatility = _daily_volatility(prices)
+    sarimax_returns = _sarimax_baseline_returns(prices, horizon_days)
+    uses_stat_model = sarimax_returns is not None
 
     trend_component = trend * 0.60
     fx_component = fx_daily_factor * FX_BETA_BY_METAL.get(metal_key, 0.35)
     news_component = news_score * 0.0025
     llm_component = llm_score * llm_confidence * 0.0035
-    implied_daily_return = _clamp(trend_component + fx_component + news_component + llm_component, -0.04, 0.04)
+    signal_component = fx_component + news_component + llm_component
+    implied_daily_return = _clamp(trend_component + signal_component, -0.04, 0.04)
 
     daily: list[dict[str, Any]] = []
+    projected_returns: list[float] = []
     current = start_price
     for offset in range(1, horizon_days + 1):
         decay = max(0.65, 1.0 - ((offset - 1) * 0.07))
-        projected_return = implied_daily_return * decay
-        next_value = max(0.01, current * (1.0 + projected_return))
+        if uses_stat_model and sarimax_returns is not None:
+            baseline_return = sarimax_returns[offset - 1]
+            projected_return = _clamp(baseline_return + (signal_component * decay), -0.05, 0.05)
+            next_value = max(0.01, current * math.exp(projected_return))
+        else:
+            projected_return = implied_daily_return * decay
+            next_value = max(0.01, current * (1.0 + projected_return))
+        projected_returns.append(projected_return)
         forecast_date = (today + timedelta(days=offset)).date().isoformat()
         daily.append(
             {
@@ -500,6 +553,11 @@ def _forecast_for_metal(
         current = next_value
 
     projected_change = ((current - start_price) / start_price) if start_price > 0 else 0.0
+    effective_daily_return = (
+        (sum(projected_returns) / len(projected_returns))
+        if projected_returns
+        else implied_daily_return
+    )
 
     confidence = 0.35
     if len(prices) >= 30:
@@ -514,17 +572,27 @@ def _forecast_for_metal(
         confidence += 0.08
     if llm_available:
         confidence += 0.07 * _clamp(llm_confidence, 0.0, 1.0)
+    if uses_stat_model:
+        confidence += 0.08
     confidence -= min(0.20, volatility * 6.0)
-    if abs(implied_daily_return) > 0.025:
+    if abs(effective_daily_return) > 0.025:
         confidence -= 0.05
     confidence = _clamp(confidence, 0.1, 0.95)
 
-    drivers = [
+    drivers = []
+    if uses_stat_model and sarimax_returns:
+        avg_baseline = sum(sarimax_returns) / len(sarimax_returns)
+        drivers.append(f"統計モデル: SARIMAX(1,0,1)基準 {avg_baseline * 100:+.3f}%/日")
+    else:
+        drivers.append("統計モデル: ヒューリスティックへフォールバック")
+    drivers.extend(
+        [
         f"直近トレンド: {trend * 100:+.3f}%/日",
         f"USD/JPY感応: {fx_component * 100:+.3f}%/日",
         f"ニュース感応: {news_component * 100:+.3f}%/日 (score={news_score:+.3f})",
         f"AI判定感応: {llm_component * 100:+.3f}%/日 (score={llm_score:+.3f}, conf={llm_confidence:.3f})",
-    ]
+        ]
+    )
     if llm_rationale:
         drivers.append(f"AI判定所見: {llm_rationale}")
     return {
@@ -532,7 +600,8 @@ def _forecast_for_metal(
         "projected_price_per_gram": round(current, 2),
         "projected_change_pct_7d": round(projected_change * 100, 3),
         "confidence": round(confidence, 3),
-        "implied_daily_return_pct": round(implied_daily_return * 100, 4),
+        "implied_daily_return_pct": round(effective_daily_return * 100, 4),
+        "model_variant": "sarimax_hybrid_v2" if uses_stat_model else "heuristic_fx_news_v1",
         "daily": daily,
         "drivers": drivers,
     }
@@ -583,14 +652,26 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
     if not forecast:
         raise RuntimeError("予測に必要な価格履歴データがありません。")
 
+    uses_sarimax = any(
+        (item.get("model_variant") == "sarimax_hybrid_v2")
+        for item in forecast.values()
+        if isinstance(item, dict)
+    )
+    model_name = "sarimax_hybrid_v2" if uses_sarimax else "heuristic_fx_news_v1"
+    model_description = (
+        "SARIMAXで推定した基準リターンに、USD/JPY・ニュース・AI判定シグナルを加味した予測。"
+        if uses_sarimax
+        else "直近価格トレンド + USD/JPY + ニュース見出し極性を合成した簡易予測。"
+    )
+
     return {
         "timezone": "Asia/Tokyo",
         "as_of_date": today.date().isoformat(),
         "generated_at": today.isoformat(),
         "horizon_days": horizon_days,
         "model": {
-            "name": "heuristic_fx_news_v1",
-            "description": "直近価格トレンド + USD/JPY + ニュース見出し極性を合成した簡易予測。",
+            "name": model_name,
+            "description": model_description,
         },
         "signals": {
             "usd_jpy": {
@@ -614,6 +695,11 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
                 "confidences": llm_signal.get("confidences", {}),
                 "rationales": llm_signal.get("rationales", {}),
                 "global_comment": llm_signal.get("global_comment", ""),
+            },
+            "stat_model": {
+                "enabled": FORECAST_SARIMAX_ENABLED,
+                "available": SARIMAX_AVAILABLE,
+                "min_history": FORECAST_SARIMAX_MIN_HISTORY,
             },
         },
         "forecast": forecast,
@@ -654,14 +740,18 @@ def _forecast_payload_from_db(
     headlines_payload = _json_loads(meta.news_headlines_json, {})
     sample_headlines: dict[str, Any]
     llm_payload: dict[str, Any]
+    stat_model_payload: dict[str, Any]
     if isinstance(headlines_payload, dict) and "sample_headlines" in headlines_payload:
         sample_raw = headlines_payload.get("sample_headlines", {})
         llm_raw = headlines_payload.get("llm", {})
+        stat_model_raw = headlines_payload.get("stat_model", {})
         sample_headlines = sample_raw if isinstance(sample_raw, dict) else {}
         llm_payload = llm_raw if isinstance(llm_raw, dict) else {}
+        stat_model_payload = stat_model_raw if isinstance(stat_model_raw, dict) else {}
     else:
         sample_headlines = headlines_payload if isinstance(headlines_payload, dict) else {}
         llm_payload = {}
+        stat_model_payload = {}
 
     if not llm_payload:
         llm_payload = {
@@ -672,6 +762,12 @@ def _forecast_payload_from_db(
             "confidences": {},
             "rationales": {},
             "global_comment": "",
+        }
+    if not stat_model_payload:
+        stat_model_payload = {
+            "enabled": FORECAST_SARIMAX_ENABLED,
+            "available": SARIMAX_AVAILABLE,
+            "min_history": FORECAST_SARIMAX_MIN_HISTORY,
         }
 
     return {
@@ -698,6 +794,7 @@ def _forecast_payload_from_db(
                 "sample_headlines": sample_headlines,
             },
             "llm": llm_payload,
+            "stat_model": stat_model_payload,
         },
         "forecast": forecast,
     }
@@ -829,6 +926,7 @@ async def store_weekly_forecast(
     usd_jpy = signal_data.get("usd_jpy", {}) if isinstance(signal_data.get("usd_jpy"), dict) else {}
     news = signal_data.get("news", {}) if isinstance(signal_data.get("news"), dict) else {}
     llm = signal_data.get("llm", {}) if isinstance(signal_data.get("llm"), dict) else {}
+    stat_model = signal_data.get("stat_model", {}) if isinstance(signal_data.get("stat_model"), dict) else {}
 
     meta.as_of_date = as_of_date
     meta.generated_at = generated_at
@@ -856,6 +954,11 @@ async def store_weekly_forecast(
                 "confidences": llm.get("confidences", {}),
                 "rationales": llm.get("rationales", {}),
                 "global_comment": str(llm.get("global_comment", "")),
+            },
+            "stat_model": {
+                "enabled": bool(stat_model.get("enabled", FORECAST_SARIMAX_ENABLED)),
+                "available": bool(stat_model.get("available", SARIMAX_AVAILABLE)),
+                "min_history": int(_safe_float(stat_model.get("min_history")) or FORECAST_SARIMAX_MIN_HISTORY),
             },
         }
     )

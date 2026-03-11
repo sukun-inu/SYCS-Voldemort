@@ -286,6 +286,9 @@ python web_main.py
 - `API_RESPONSE_CACHE_SECONDS`（デフォルト: 20）
 - `PURITY_OPTIONS_CACHE_SECONDS`（デフォルト: 3600）
 - `PUSH_PUBLIC_KEY_CACHE_SECONDS`（デフォルト: 3600）
+- `FORECAST_REFRESH_MINUTE_JST`（デフォルト: 5。毎時この分に予測のみ再計算）
+- `FORECAST_SARIMAX_ENABLED`（デフォルト: true。統計モデルを有効化）
+- `FORECAST_SARIMAX_MIN_HISTORY`（デフォルト: 24。SARIMAXを使う最小履歴件数）
 - `PUSH_NOTIFY_HOUR_JST`（デフォルト: 11）
 - `PUSH_NOTIFY_MINUTE_JST`（デフォルト: 0）
 - `APP_ROOT_PATH`（サブパス配信時のみ。例: `/metal`）
@@ -340,6 +343,10 @@ docker compose up -d --build sycs-voldemort-web
 ### 10.7 PWA と Push 通知
 - `manifest.webmanifest` と `service worker` を実装済みです。
 - ブラウザで「Push通知を有効化」を押すと購読登録されます。
+- 価格スナップショット取得（MetalPriceAPI）は JST 0:00 の日次実行です。
+- 価格予測は毎時 `FORECAST_REFRESH_MINUTE_JST` 分に再計算し、最新結果を API に反映します。
+- 予測は SARIMAX + シグナル（USD/JPY・ニュース・AI判定）のハイブリッドで算出します（履歴不足時は自動フォールバック）。
+- フロントは予測APIを約5分間隔で自動再フェッチし、生成時刻が更新されると表示を自動反映します。
 - サーバーは JST 毎日 11:00 に「前日差が最大の金属」を通知します。
 - 通知は `notification_dispatch` テーブルで同日重複送信を防止します。
 - `VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY` が未設定でも、初回起動時に `/shared/vapid` へ自動生成して再利用します。

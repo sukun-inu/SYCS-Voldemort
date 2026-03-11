@@ -37,6 +37,9 @@ let pushNotifyTimeJst = "11:00";
 let latestHistoryPayload = null;
 let latestForecastPayload = null;
 let lastChartMobileMode = null;
+let lastForecastGeneratedAt = null;
+let forecastRefreshTimerId = null;
+let forecastRefreshInFlight = false;
 
 const CHART_CDN_LIST = [
   "https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js",
@@ -50,6 +53,7 @@ const CHART_PX_PER_DAY_DESKTOP = 5;
 const CHART_PX_PER_DAY_MOBILE = 3;
 const CHART_DPR_CAP = 1.75;
 const SW_SCRIPT_VERSION = "20260310-2";
+const FORECAST_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 function appUrl(path) {
   return new URL(path.replace(/^\/+/, ""), APP_BASE).toString();
@@ -417,6 +421,42 @@ async function loadWeeklyForecast() {
   return await response.json();
 }
 
+async function refreshForecastSnapshot({ forceApply = false } = {}) {
+  if (forecastRefreshInFlight || !latestHistoryPayload) {
+    return;
+  }
+  forecastRefreshInFlight = true;
+  try {
+    const forecastPayload = await loadWeeklyForecast();
+    const generatedAt = String(forecastPayload?.generated_at || "");
+    const hasChanged = forceApply || !latestForecastPayload || generatedAt !== lastForecastGeneratedAt;
+    latestForecastPayload = forecastPayload;
+    lastForecastGeneratedAt = generatedAt;
+    if (hasChanged) {
+      renderWeeklyForecast(forecastPayload);
+      renderDashboardFromPayload(latestHistoryPayload, forecastPayload);
+    }
+  } catch (error) {
+    console.error(error);
+  } finally {
+    forecastRefreshInFlight = false;
+  }
+}
+
+function startForecastAutoRefresh() {
+  if (forecastRefreshTimerId !== null) {
+    window.clearInterval(forecastRefreshTimerId);
+  }
+  forecastRefreshTimerId = window.setInterval(() => {
+    if (document.visibilityState !== "visible") {
+      return;
+    }
+    refreshForecastSnapshot().catch((error) => {
+      console.error(error);
+    });
+  }, FORECAST_AUTO_REFRESH_INTERVAL_MS);
+}
+
 function fillMetalSelector() {
   const selector = document.getElementById("calcMetal");
   selector.innerHTML = "";
@@ -678,11 +718,13 @@ async function loadDashboard() {
     try {
       const forecastPayload = await loadWeeklyForecast();
       latestForecastPayload = forecastPayload;
+      lastForecastGeneratedAt = String(forecastPayload?.generated_at || "");
       renderWeeklyForecast(forecastPayload);
       renderDashboardFromPayload(payload, forecastPayload);
     } catch (error) {
       console.error(error);
       latestForecastPayload = null;
+      lastForecastGeneratedAt = null;
       setForecastError(error.message || "1週間予測の取得に失敗しました。");
     }
   } finally {
@@ -931,7 +973,16 @@ window.addEventListener("resize", () => {
   }
 });
 
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    refreshForecastSnapshot().catch((error) => {
+      console.error(error);
+    });
+  }
+});
+
 initializeMarketToggle();
+startForecastAutoRefresh();
 
 loadDashboard().catch((err) => {
   console.error(err);
