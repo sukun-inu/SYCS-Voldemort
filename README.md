@@ -20,14 +20,14 @@
 
 ---
 
-### 1.2 ChatGPT 会話 Bot
+### 1.2 LLM 会話 Bot
 - 日本語限定・ヴォルデモート人格
 - ユーザーごとに会話履歴を保持し、文脈の続いた会話が可能
-- OpenAI の検索機能付きモデルを使用
+- Groq API を使用（OpenAI 互換エンドポイント）
 
 使用モデル:
-- `gpt-4o-search-preview`（会話）
-- `gpt-4o-mini`（セキュリティ補助判定）
+- `llama-3.3-70b-versatile`（会話・予測シグナル）
+- `llama-3.1-8b-instant`（セキュリティ補助判定）
 
 ---
 
@@ -96,11 +96,11 @@
 ```bash
 DISCORD_BOT_TOKEN=your_bot_token
 METALPRICE_API_KEY=your_metalprice_api_key
-OPENAI_API_KEY=your_openai_api_key
+GROQ_API_KEY=your_groq_api_key
 VIRUSTOTAL_API_KEY=your_virustotal_api_key
 ```
 
-※ VirusTotal を使用しない場合は未設定でも可。
+※ VirusTotal / Groq を使用しない場合は未設定でも可。Groq 未設定時は LLM 機能が無効化されます。
 
 ---
 
@@ -141,7 +141,7 @@ python main.py
 
 ---
 
-## 6. ChatGPT 会話仕様
+## 6. LLM 会話仕様
 
 - 指定された応答チャンネルでのみ反応
 - ユーザー ID ごとに会話履歴を保持
@@ -151,9 +151,9 @@ python main.py
   - 威圧的・尊大な口調
   - 現在日時（JST）
 
-OpenAI API:
-- Endpoint: `https://api.openai.com/v1/chat/completions`
-- Model: `gpt-4.1-mini`
+Groq API:
+- Endpoint: `https://api.groq.com/openai/v1/chat/completions`
+- Model: `llama-3.3-70b-versatile`
 - Temperature: `0.45`
 
 ---
@@ -190,8 +190,8 @@ OpenAI API:
    - 同一文字の連続
    - ゼロ幅 / Bidi / 制御文字の大量使用
 
-3. **GPT モデレーション**
-   - モデル: `gpt-5-mini`
+3. **LLM モデレーション**
+   - モデル: `llama-3.1-8b-instant`（Groq）
    - 危険判定・理由・カテゴリを JSON で取得
 
 4. **VirusTotal**
@@ -346,6 +346,7 @@ docker compose up -d --build sycs-voldemort-web
 - 価格スナップショット取得（MetalPriceAPI）は JST 0:00 の日次実行です。
 - 価格予測は毎時 `FORECAST_REFRESH_MINUTE_JST` 分に再計算し、最新結果を API に反映します。
 - 予測は USD/JPY・ニュース・AI判定を合算した外生シグナルを含む SARIMAX で算出します（履歴不足時は自動フォールバック）。
+- ニュースシグナルは Google News RSS を取得します。User-Agent を設定しブロック回避済み。XML は bytes のままパースし encoding 宣言を正しく処理します。
 - フロントは予測APIを約5分間隔で自動再フェッチし、生成時刻が更新されると表示を自動反映します。
 - サーバーは JST 毎日 11:00 に「前日差が最大の金属」を通知します。
 - 通知は `notification_dispatch` テーブルで同日重複送信を防止します。
