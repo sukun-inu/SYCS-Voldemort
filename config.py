@@ -16,6 +16,7 @@ def _read_env(key: str) -> Optional[str]:
 DISCORD_BOT_TOKEN = _read_env("DISCORD_BOT_TOKEN")
 METALPRICE_API_KEY = _read_env("METALPRICE_API_KEY")
 OPENAI_API_KEY = _read_env("OPENAI_API_KEY")
+GROQ_API_KEY = _read_env("GROQ_API_KEY")
 VIRUSTOTAL_API_KEY = _read_env("VIRUSTOTAL_API_KEY")
 
 # API エンドポイント

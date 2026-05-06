@@ -8,10 +8,10 @@ from xml.etree import ElementTree
 
 import aiohttp
 
-from config import METAL_COMMANDS, OPENAI_API_KEY
+from config import GROQ_API_KEY, METAL_COMMANDS
 from .forecast_utils import (
     GOOGLE_NEWS_RSS_URL,
-    OPENAI_CHAT_COMPLETIONS_URL,
+    LLM_CHAT_COMPLETIONS_URL,
     USDJPY_DAILY_CSV_URL,
     clip_text,
     clamp,
@@ -25,7 +25,7 @@ from .forecast_models import daily_trend, daily_volatility, extract_prices
 logger = logging.getLogger(__name__)
 
 FORECAST_LLM_ENABLED = read_env_bool("FORECAST_LLM_ENABLED", True)
-FORECAST_LLM_MODEL = (os.getenv("FORECAST_LLM_MODEL") or "gpt-4.1-mini").strip() or "gpt-4.1-mini"
+FORECAST_LLM_MODEL = (os.getenv("FORECAST_LLM_MODEL") or "llama-3.3-70b-versatile").strip() or "llama-3.3-70b-versatile"
 FORECAST_LLM_TIMEOUT_SECONDS = max(8, int(os.getenv("FORECAST_LLM_TIMEOUT_SECONDS", "20")))
 
 NEWS_QUERY_BY_METAL = {
@@ -50,9 +50,9 @@ NEGATIVE_TOKENS = (
 async def fetch_usdjpy_signal(session: aiohttp.ClientSession) -> dict[str, Any]:
     try:
         async with session.get(USDJPY_DAILY_CSV_URL) as response:
-            text = await response.text()
             if response.status != 200:
                 raise RuntimeError(f"status={response.status}")
+            text = await response.text()
     except Exception as exc:
         logger.warning("USD/JPYデータ取得に失敗: %s", exc)
         return {"available": False, "source": "Stooq", "latest": None, "weekly_change_pct": 0.0, "daily_factor": 0.0, "daily_returns": []}
@@ -105,17 +105,17 @@ async def _fetch_news_for_query(
     url = GOOGLE_NEWS_RSS_URL.format(query=quote_plus(query))
     try:
         async with session.get(url) as response:
-            body = await response.text()
             if response.status != 200:
-                raise RuntimeError(f"status={response.status}")
+                raise RuntimeError(f"status={response.status} url={url}")
+            body = await response.read()
     except Exception as exc:
         logger.warning("ニュースRSS取得に失敗 query=%s err=%s", query, exc)
         return [], 0.0
 
     try:
         root = ElementTree.fromstring(body)
-    except ElementTree.ParseError:
-        logger.warning("ニュースRSSパースに失敗 query=%s", query)
+    except ElementTree.ParseError as exc:
+        logger.warning("ニュースRSSパースに失敗 query=%s err=%s body_head=%r", query, exc, body[:300])
         return [], 0.0
 
     titles: list[str] = []
@@ -177,8 +177,8 @@ async def fetch_llm_signal(
 
     if not FORECAST_LLM_ENABLED:
         return {**_empty, "global_comment": "FORECAST_LLM_ENABLED=false"}
-    if not OPENAI_API_KEY:
-        return {**_empty, "global_comment": "OPENAI_API_KEY not configured"}
+    if not GROQ_API_KEY:
+        return {**_empty, "global_comment": "GROQ_API_KEY not configured"}
 
     metal_input: dict[str, Any] = {}
     for metal_key in METAL_COMMANDS.keys():
@@ -222,7 +222,7 @@ async def fetch_llm_signal(
         "}"
     )
 
-    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     payload = {
         "model": FORECAST_LLM_MODEL,
         "messages": [
@@ -234,7 +234,7 @@ async def fetch_llm_signal(
     }
 
     try:
-        async with session.post(OPENAI_CHAT_COMPLETIONS_URL, headers=headers, json=payload) as response:
+        async with session.post(LLM_CHAT_COMPLETIONS_URL, headers=headers, json=payload) as response:
             result = await response.json()
             if response.status != 200:
                 message = result.get("error", {}).get("message", str(result))

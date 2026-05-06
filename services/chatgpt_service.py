@@ -6,7 +6,7 @@ from typing import Dict, List
 
 import aiohttp
 
-from config import CHATGPT_SYSTEM_MESSAGE, OPENAI_API_KEY
+from config import CHATGPT_SYSTEM_MESSAGE, GROQ_API_KEY
 
 # ルートロガーを汚染しないようにモジュール専用ロガーを使用
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ class ChatGPT:
             final = reply.get("content") or "返答が得られなかった。"
         except Exception as e:
             traceback.print_exc()
-            final = f"OpenAI API 呼び出し中にエラー発生: {e}"
+            final = f"Groq API 呼び出し中にエラー発生: {e}"
 
         # アシスタントの返答も履歴に積む
         self.history.append({"role": "assistant", "content": final})
@@ -61,18 +61,17 @@ class ChatGPT:
         return final
 
     async def _call_chat_api(self, messages: List[Dict[str, str]]) -> Dict:
-        """OpenAI Chat APIを呼び出す（OpenAIの検索機能付きモデルを使用）"""
-        if not OPENAI_API_KEY:
-            raise RuntimeError("OPENAI_API_KEY が設定されていない。")
+        """Groq Chat APIを呼び出す"""
+        if not GROQ_API_KEY:
+            raise RuntimeError("GROQ_API_KEY が設定されていない。")
 
-        url = "https://api.openai.com/v1/chat/completions"
+        url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Authorization": f"Bearer {GROQ_API_KEY}",
         }
         data = {
-            # OpenAIの検索機能付きモデル（必要に応じて mini 版などに変更可能）
-            "model": "gpt-4.1-mini",
+            "model": "llama-3.3-70b-versatile",
             "messages": messages,
             "temperature": 0.45,
         }
@@ -86,12 +85,11 @@ class ChatGPT:
                 except aiohttp.ContentTypeError:
                     text = await resp.text()
                     raise RuntimeError(
-                        f"OpenAI API error ({resp.status}): unexpected content-type, body={text[:300]}"
+                        f"Groq API error ({resp.status}): unexpected content-type, body={text[:300]}"
                     )
 
-                logger.debug("OpenAI APIレスポンス: status=%s, body=%s", resp.status, json.dumps(result, ensure_ascii=False))
-                # エラー時は例外を投げる
+                logger.debug("Groq APIレスポンス: status=%s, body=%s", resp.status, json.dumps(result, ensure_ascii=False))
                 if resp.status != 200:
                     message = result.get("error", {}).get("message", str(result))
-                    raise RuntimeError(f"OpenAI API error ({resp.status}): {message}")
+                    raise RuntimeError(f"Groq API error ({resp.status}): {message}")
                 return result["choices"][0]["message"]

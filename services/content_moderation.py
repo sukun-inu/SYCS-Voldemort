@@ -3,7 +3,7 @@ from typing import Any, Dict, List
 
 import aiohttp
 
-from config import OPENAI_API_KEY
+from config import GROQ_API_KEY
 from services.virustotal_service import MALICIOUS_THRESHOLD
 
 logger = logging.getLogger(__name__)
@@ -18,12 +18,12 @@ async def gpt_assess(text: str, vt_results: List[Dict[str, Any]]) -> str:
         if mal > 0 or sus > 0:
             return "SUSPICIOUS"
 
-    if not OPENAI_API_KEY:
+    if not GROQ_API_KEY:
         return "SAFE"
 
-    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     payload = {
-        "model": "gpt-5-mini",
+        "model": "llama-3.1-8b-instant",
         "messages": [
             {"role": "system", "content": "You are a security moderation AI."},
             {"role": "user", "content": f"以下の投稿を判定してください:\n{text}"},
@@ -33,7 +33,7 @@ async def gpt_assess(text: str, vt_results: List[Dict[str, Any]]) -> str:
     timeout = aiohttp.ClientTimeout(total=20)
     try:
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload) as r:
+            async with session.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload) as r:
                 data = await r.json()
                 reply = data["choices"][0]["message"]["content"].upper()
     except Exception as e:

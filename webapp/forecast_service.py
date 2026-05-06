@@ -35,8 +35,19 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
     history_window_days = max(45, horizon_days * 8)
     history_by_metal = await load_history(session, history_window_days)
 
-    timeout = aiohttp.ClientTimeout(total=max(FORECAST_LLM_TIMEOUT_SECONDS, 16))
-    async with aiohttp.ClientSession(timeout=timeout) as client:
+    timeout = aiohttp.ClientTimeout(
+        total=max(FORECAST_LLM_TIMEOUT_SECONDS + 10, 30),
+        connect=8,
+        sock_read=max(FORECAST_LLM_TIMEOUT_SECONDS, 20),
+    )
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        )
+    }
+    async with aiohttp.ClientSession(timeout=timeout, headers=headers) as client:
         fx_task = asyncio.create_task(fetch_usdjpy_signal(client))
         news_task = asyncio.create_task(fetch_news_signals(client))
         fx_signal, news_signal = await asyncio.gather(fx_task, news_task)
