@@ -221,6 +221,59 @@ def register_logging_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
+    @bot.tree.command(name="settings", description="現在のBot設定を一覧表示（管理者専用）")
+    async def settings_cmd(interaction: discord.Interaction):
+        if not await _ensure_admin_in_guild(interaction):
+            return
+
+        guild_id = interaction.guild.id
+
+        log_settings = get_log_settings(guild_id)
+        log_ch_id = log_settings.get("channel_id")
+        log_level = log_settings.get("level", "INFO")
+        log_ch_text = f"<#{log_ch_id}>" if log_ch_id else "未設定"
+
+        resp_ch_id = get_response_channel_id(guild_id)
+        resp_ch_text = f"<#{resp_ch_id}>" if resp_ch_id else "未設定"
+
+        trusted_ids = get_trusted_user_ids(guild_id)
+        if not trusted_ids:
+            trusted_text = "なし"
+        else:
+            mentions = [f"<@{uid}>" for uid in trusted_ids[:15]]
+            trusted_text = ", ".join(mentions)
+            if len(trusted_ids) > 15:
+                trusted_text += f" …他{len(trusted_ids) - 15}名"
+
+        bypass_ids = get_bypass_role_ids(guild_id)
+        if not bypass_ids:
+            bypass_text = "なし"
+        else:
+            mentions = [f"<@&{rid}>" for rid in bypass_ids[:15]]
+            bypass_text = ", ".join(mentions)
+            if len(bypass_ids) > 15:
+                bypass_text += f" …他{len(bypass_ids) - 15}個"
+
+        embed = discord.Embed(
+            title="現在のBot設定",
+            description=f"サーバーID: `{guild_id}`",
+            color=discord.Color.blurple(),
+        )
+        embed.add_field(name="ログチャンネル", value=log_ch_text, inline=True)
+        embed.add_field(name="ログレベル", value=log_level, inline=True)
+        embed.add_field(name="ChatGPT応答チャンネル", value=resp_ch_text, inline=True)
+        embed.add_field(
+            name=f"信頼済みユーザー（{len(trusted_ids)}名）",
+            value=trusted_text,
+            inline=False,
+        )
+        embed.add_field(
+            name=f"バイパスロール（{len(bypass_ids)}個）",
+            value=bypass_text,
+            inline=False,
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
     @bot.tree.command(name="help", description="このボットで利用可能なスラッシュコマンド一覧を表示")
     async def help_cmd(interaction: discord.Interaction):
         commands = {}

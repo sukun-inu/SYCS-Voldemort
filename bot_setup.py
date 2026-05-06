@@ -18,6 +18,7 @@ def create_bot() -> Bot:
     intents.message_content = True
     intents.members = True
     intents.voice_states = True
+    intents.moderation = True
     return commands.Bot(command_prefix="!", intents=intents)
 
 
@@ -115,6 +116,10 @@ def setup_events(bot: Bot) -> None:
     async def on_message_edit(before: discord.Message, after: discord.Message):
         if before.guild is None:
             return
+        if before.content == after.content:
+            return
+
+        ch_mention = before.channel.mention if hasattr(before.channel, "mention") else str(before.channel)
 
         try:
             await log_action(
@@ -124,9 +129,9 @@ def setup_events(bot: Bot) -> None:
                 f"{before.author.mention} のメッセージが編集されました。",
                 user=before.author,
                 fields={
-                    "編集前": before.content or "(なし)",
-                    "編集後": after.content or "(なし)",
-                    "ユーザーID": str(before.author.id),
+                    "チャンネル": ch_mention,
+                    "編集前": (before.content or "(なし)")[:1000],
+                    "編集後": (after.content or "(なし)")[:1000],
                     "メッセージID": str(before.id),
                 },
             )
@@ -134,7 +139,7 @@ def setup_events(bot: Bot) -> None:
             logger.exception("[BOT_SETUP] on_message_edit log_action error: %s", e)
 
     # --------------------------
-    # VC セキュリティ
+    # VC 参加・退出・移動 + セキュリティ
     # --------------------------
     @bot.event
     async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
@@ -146,11 +151,46 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.exception("[BOT_SETUP] VC security error: %s", e)
 
+        # VC 参加 / 退出 / 移動 をログ
+        try:
+            if before.channel is None and after.channel is not None:
+                await log_action(
+                    bot, member.guild.id, "INFO",
+                    f"{member.mention} が VC に参加しました。",
+                    user=member,
+                    fields={"チャンネル": after.channel.mention},
+                )
+            elif before.channel is not None and after.channel is None:
+                await log_action(
+                    bot, member.guild.id, "INFO",
+                    f"{member.mention} が VC から退出しました。",
+                    user=member,
+                    fields={"チャンネル": before.channel.mention},
+                )
+            elif (
+                before.channel is not None
+                and after.channel is not None
+                and before.channel.id != after.channel.id
+            ):
+                await log_action(
+                    bot, member.guild.id, "INFO",
+                    f"{member.mention} が VC を移動しました。",
+                    user=member,
+                    fields={
+                        "移動前": before.channel.mention,
+                        "移動後": after.channel.mention,
+                    },
+                )
+        except Exception as e:
+            logger.exception("[BOT_SETUP] VC log_action error: %s", e)
+
     # --------------------------
     # メンバー参加・退出
     # --------------------------
     @bot.event
     async def on_member_join(member: discord.Member):
+        joined_at = member.joined_at.astimezone(_JST).strftime("%Y/%m/%d %H:%M") if member.joined_at else "(不明)"
+        created_at = member.created_at.astimezone(_JST).strftime("%Y/%m/%d %H:%M") if member.created_at else "(不明)"
         try:
             await log_action(
                 bot,
@@ -158,12 +198,19 @@ def setup_events(bot: Bot) -> None:
                 "INFO",
                 f"{member.mention} がサーバーに参加しました。",
                 user=member,
+                fields={
+                    "ユーザーID": str(member.id),
+                    "アカウント作成日": created_at,
+                    "参加日時": joined_at,
+                    "メンバー数": str(member.guild.member_count),
+                },
             )
         except Exception as e:
             logger.exception("[BOT_SETUP] on_member_join log_action error: %s", e)
 
     @bot.event
     async def on_member_remove(member: discord.Member):
+        roles = [r.mention for r in member.roles if not r.is_default()]
         try:
             await log_action(
                 bot,
@@ -171,15 +218,21 @@ def setup_events(bot: Bot) -> None:
                 "INFO",
                 f"{member.mention} がサーバーから退出しました。",
                 user=member,
+                fields={
+                    "ユーザーID": str(member.id),
+                    "保有ロール": " ".join(roles) if roles else "なし",
+                    "メンバー数": str(member.guild.member_count),
+                },
             )
         except Exception as e:
             logger.exception("[BOT_SETUP] on_member_remove log_action error: %s", e)
 
     # --------------------------
-    # ニックネーム変更
+    # メンバー情報変更（ニックネーム・ロール・タイムアウト）
     # --------------------------
     @bot.event
     async def on_member_update(before: discord.Member, after: discord.Member):
+        # ニックネーム変更
         if before.nick != after.nick:
             try:
                 await log_action(
@@ -194,4 +247,96 @@ def setup_events(bot: Bot) -> None:
                     },
                 )
             except Exception as e:
-                logger.exception("[BOT_SETUP] on_member_update log_action error: %s", e)
+                logger.exception("[BOT_SETUP] on_member_update nickname log_action error: %s", e)
+
+        # ロール変更
+        before_roles = set(r.id for r in before.roles if not r.is_default())
+        after_roles = set(r.id for r in after.roles if not r.is_default())
+        added_roles = [r for r in after.roles if r.id in (after_roles - before_roles)]
+        removed_roles = [r for r in before.roles if r.id in (before_roles - after_roles)]
+
+        if added_roles or removed_roles:
+            fields = {}
+            if added_roles:
+                fields["追加されたロール"] = " ".join(r.mention for r in added_roles)
+            if removed_roles:
+                fields["削除されたロール"] = " ".join(r.mention for r in removed_roles)
+            try:
+                await log_action(
+                    bot,
+                    after.guild.id,
+                    "INFO",
+                    f"{after.mention} のロールが変更されました。",
+                    user=after,
+                    fields=fields,
+                )
+            except Exception as e:
+                logger.exception("[BOT_SETUP] on_member_update role log_action error: %s", e)
+
+        # タイムアウト
+        before_timeout = before.timed_out_until
+        after_timeout = after.timed_out_until
+        if before_timeout != after_timeout:
+            if after_timeout is not None:
+                until_jst = after_timeout.astimezone(_JST).strftime("%Y/%m/%d %H:%M")
+                try:
+                    await log_action(
+                        bot,
+                        after.guild.id,
+                        "ERROR",
+                        f"{after.mention} がタイムアウトされました。",
+                        user=after,
+                        fields={"解除日時 (JST)": until_jst},
+                        embed_color=discord.Color.orange(),
+                    )
+                except Exception as e:
+                    logger.exception("[BOT_SETUP] on_member_update timeout log_action error: %s", e)
+            else:
+                try:
+                    await log_action(
+                        bot,
+                        after.guild.id,
+                        "INFO",
+                        f"{after.mention} のタイムアウトが解除されました。",
+                        user=after,
+                    )
+                except Exception as e:
+                    logger.exception("[BOT_SETUP] on_member_update timeout_clear log_action error: %s", e)
+
+    # --------------------------
+    # BAN / BAN 解除
+    # --------------------------
+    @bot.event
+    async def on_member_ban(guild: discord.Guild, user: discord.User):
+        try:
+            await log_action(
+                bot,
+                guild.id,
+                "ERROR",
+                f"{user.mention} が BAN されました。",
+                user=user,
+                fields={
+                    "ユーザーID": str(user.id),
+                    "ユーザー名": str(user),
+                },
+                embed_color=discord.Color.red(),
+            )
+        except Exception as e:
+            logger.exception("[BOT_SETUP] on_member_ban log_action error: %s", e)
+
+    @bot.event
+    async def on_member_unban(guild: discord.Guild, user: discord.User):
+        try:
+            await log_action(
+                bot,
+                guild.id,
+                "INFO",
+                f"{user.mention} の BAN が解除されました。",
+                user=user,
+                fields={
+                    "ユーザーID": str(user.id),
+                    "ユーザー名": str(user),
+                },
+            )
+        except Exception as e:
+            logger.exception("[BOT_SETUP] on_member_unban log_action error: %s", e)

@@ -56,8 +56,10 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GROQ_API_KEY=${GROQ_API_KEY}
       - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
+      # Bot 設定ファイルの保存先（ボリュームマウント先に合わせる）
+      - SETTINGS_DIR=/app/data
     volumes:
-      - ./data:/app/data
+      - /home/kawasaki/SYCS-Voldemort:/app/data
 
   sycs-voldemort-web:
     build:
