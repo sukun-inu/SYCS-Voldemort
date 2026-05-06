@@ -1,35 +1,29 @@
-import json
 import logging
 import traceback
 from datetime import datetime
 from typing import Dict, List
 
-import aiohttp
+from groq import AsyncGroq
 
 from config import CHATGPT_SYSTEM_MESSAGE, GROQ_API_KEY
 
-# ルートロガーを汚染しないようにモジュール専用ロガーを使用
 logger = logging.getLogger(__name__)
 
-MAX_HISTORY_ENTRIES = 20  # user/assistant のペア数上限
+MAX_HISTORY_ENTRIES = 20
 
 
 class ChatGPT:
-    """ChatGPT統合クラス（ユーザーごとに会話履歴を保持）"""
+    """Groq LLM統合クラス（ユーザーごとに会話履歴を保持）"""
 
     def __init__(self, system_setting: str = CHATGPT_SYSTEM_MESSAGE) -> None:
-        # ベースのシステムメッセージ（現在時刻は毎回付け直す）
         self.system_content = system_setting
-        # user / assistant のみを積んでいく履歴
         self.history: List[Dict[str, str]] = []
 
     def _trim_history(self) -> None:
-        """履歴を上限数に収める"""
         if len(self.history) > MAX_HISTORY_ENTRIES:
             self.history = self.history[-MAX_HISTORY_ENTRIES:]
 
     async def input_message(self, input_text: str) -> str:
-        """ユーザーメッセージを処理してChatGPTからの応答を取得（会話継続）"""
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         system_with_time = {
             "role": "system",
@@ -39,21 +33,16 @@ class ChatGPT:
             ),
         }
 
-        # 履歴にユーザーメッセージを追加
         self.history.append({"role": "user", "content": input_text})
-
-        # 先頭にその回のsystemだけを付けてAPIに投げる
         messages = [system_with_time] + self.history
 
         try:
             reply = await self._call_chat_api(messages)
-            logger.debug("Chat API Reply: %s", json.dumps(reply, ensure_ascii=False))
             final = reply.get("content") or "返答が得られなかった。"
         except Exception as e:
             traceback.print_exc()
             final = f"Groq API 呼び出し中にエラー発生: {e}"
 
-        # アシスタントの返答も履歴に積む
         self.history.append({"role": "assistant", "content": final})
         self._trim_history()
 
@@ -61,35 +50,15 @@ class ChatGPT:
         return final
 
     async def _call_chat_api(self, messages: List[Dict[str, str]]) -> Dict:
-        """Groq Chat APIを呼び出す"""
         if not GROQ_API_KEY:
             raise RuntimeError("GROQ_API_KEY が設定されていない。")
 
-        url = "https://api.groq.com/openai/v1/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-        }
-        data = {
-            "model": "llama-3.3-70b-versatile",
-            "messages": messages,
-            "temperature": 0.45,
-        }
-
-        timeout = aiohttp.ClientTimeout(total=30)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            logger.debug("OpenAI APIリクエスト: url=%s, data=%s", url, json.dumps(data, ensure_ascii=False))
-            async with session.post(url, headers=headers, json=data) as resp:
-                try:
-                    result = await resp.json()
-                except aiohttp.ContentTypeError:
-                    text = await resp.text()
-                    raise RuntimeError(
-                        f"Groq API error ({resp.status}): unexpected content-type, body={text[:300]}"
-                    )
-
-                logger.debug("Groq APIレスポンス: status=%s, body=%s", resp.status, json.dumps(result, ensure_ascii=False))
-                if resp.status != 200:
-                    message = result.get("error", {}).get("message", str(result))
-                    raise RuntimeError(f"Groq API error ({resp.status}): {message}")
-                return result["choices"][0]["message"]
+        client = AsyncGroq(api_key=GROQ_API_KEY, timeout=30.0)
+        response = await client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages,
+            temperature=0.45,
+        )
+        msg = response.choices[0].message
+        logger.debug("Groq APIレスポンス: %s", msg.content)
+        return {"role": msg.role, "content": msg.content}

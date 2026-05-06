@@ -8,10 +8,11 @@ from xml.etree import ElementTree
 
 import aiohttp
 
+from groq import AsyncGroq
+
 from config import GROQ_API_KEY, METAL_COMMANDS
 from .forecast_utils import (
     GOOGLE_NEWS_RSS_URL,
-    LLM_CHAT_COMPLETIONS_URL,
     USDJPY_DAILY_CSV_URL,
     clip_text,
     clamp,
@@ -160,7 +161,6 @@ async def fetch_news_signals(session: aiohttp.ClientSession) -> dict[str, Any]:
 
 
 async def fetch_llm_signal(
-    session: aiohttp.ClientSession,
     *,
     history_by_metal: dict[str, list[dict[str, Any]]],
     fx_signal: dict[str, Any],
@@ -222,28 +222,21 @@ async def fetch_llm_signal(
         "}"
     )
 
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-    payload = {
-        "model": FORECAST_LLM_MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "temperature": 0.15,
-        "max_tokens": 420,
-    }
-
+    groq_client = AsyncGroq(api_key=GROQ_API_KEY, timeout=float(FORECAST_LLM_TIMEOUT_SECONDS))
     try:
-        async with session.post(LLM_CHAT_COMPLETIONS_URL, headers=headers, json=payload) as response:
-            result = await response.json()
-            if response.status != 200:
-                message = result.get("error", {}).get("message", str(result))
-                raise RuntimeError(f"status={response.status} message={message}")
+        response = await groq_client.chat.completions.create(
+            model=FORECAST_LLM_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.15,
+            max_tokens=420,
+        )
+        content = response.choices[0].message.content or ""
     except Exception as exc:
         logger.warning("LLM予測判定の取得に失敗: %s", exc)
         return {**_empty, "global_comment": "LLM call failed"}
-
-    content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
     parsed = extract_first_json_object(str(content)) or {}
     metal_result = parsed.get("metals", {}) if isinstance(parsed.get("metals"), dict) else {}
 

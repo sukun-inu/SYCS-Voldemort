@@ -52,7 +52,6 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
         news_task = asyncio.create_task(fetch_news_signals(client))
         fx_signal, news_signal = await asyncio.gather(fx_task, news_task)
         llm_signal = await fetch_llm_signal(
-            client,
             history_by_metal=history_by_metal,
             fx_signal=fx_signal,
             news_signal=news_signal,

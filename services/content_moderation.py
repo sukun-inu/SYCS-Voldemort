@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, List
 
-import aiohttp
+from groq import AsyncGroq
 
 from config import GROQ_API_KEY
 from services.virustotal_service import MALICIOUS_THRESHOLD
@@ -21,23 +21,18 @@ async def gpt_assess(text: str, vt_results: List[Dict[str, Any]]) -> str:
     if not GROQ_API_KEY:
         return "SAFE"
 
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-    payload = {
-        "model": "llama-3.1-8b-instant",
-        "messages": [
-            {"role": "system", "content": "You are a security moderation AI."},
-            {"role": "user", "content": f"以下の投稿を判定してください:\n{text}"},
-        ],
-    }
-
-    timeout = aiohttp.ClientTimeout(total=20)
+    client = AsyncGroq(api_key=GROQ_API_KEY, timeout=20.0)
     try:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload) as r:
-                data = await r.json()
-                reply = data["choices"][0]["message"]["content"].upper()
+        response = await client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": "You are a security moderation AI."},
+                {"role": "user", "content": f"以下の投稿を判定してください:\n{text}"},
+            ],
+        )
+        reply = response.choices[0].message.content.upper()
     except Exception as e:
-        logger.warning("[SECURITY] GPT判定失敗: %s", e)
+        logger.warning("[SECURITY] Groq判定失敗: %s", e)
         return "UNKNOWN"
 
     if "DANGEROUS" in reply:

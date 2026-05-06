@@ -9,7 +9,6 @@ PCT_SCALE = Decimal("0.000001")
 
 USDJPY_DAILY_CSV_URL = "https://stooq.com/q/d/l/?s=usdjpy&i=d"
 GOOGLE_NEWS_RSS_URL = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
-LLM_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
 def read_env_bool(name: str, default: bool) -> bool:
