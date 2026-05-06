@@ -190,7 +190,7 @@ async def _already_dispatched(session: AsyncSession, *, snapshot_date: str) -> b
 
 async def _send_push_to_subscriptions(
     subscriptions: list,
-    payload: dict,
+    payload: str,
     session: AsyncSession,
 ) -> tuple[int, list[str]]:
     stale_endpoints: list[str] = []
@@ -530,10 +530,16 @@ async def weekly_forecast(
     days: int = Query(default=7, ge=1, le=7),
     session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
+    cache_key = f"forecast:{datetime.now(JST).date().isoformat()}:{days}"
+    cached = await forecast_cache.get(cache_key)
+    if cached is not None:
+        return JSONResponse(cached, headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
+
     payload = await load_stored_weekly_forecast(session, days=days)
     if payload is None:
         raise HTTPException(status_code=503, detail="予測データがまだありません。次回の予測更新後に利用できます。")
 
+    await forecast_cache.set(cache_key, payload)
     return JSONResponse(
         payload,
         headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},

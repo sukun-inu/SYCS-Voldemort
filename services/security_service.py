@@ -256,6 +256,7 @@ async def _run_vt_scans(
                         )
                     )
                 except Exception:
+                    logger.debug("[SECURITY] プログレスメッセージ更新に失敗", exc_info=True)
                     progress_msg = None
 
     if vt_malicious_max >= MALICIOUS_THRESHOLD:

@@ -96,14 +96,17 @@ def setup_events(bot: Bot) -> None:
         if message.attachments:
             fields["添付ファイル"] = "\n".join(a.url for a in message.attachments)
 
-        await log_action(
-            bot,
-            message.guild.id,
-            "INFO",
-            f"{message.author.mention} のメッセージが削除されました。",
-            user=message.author,
-            fields=fields,
-        )
+        try:
+            await log_action(
+                bot,
+                message.guild.id,
+                "INFO",
+                f"{message.author.mention} のメッセージが削除されました。",
+                user=message.author,
+                fields=fields,
+            )
+        except Exception as e:
+            logger.exception("[BOT_SETUP] on_message_delete log_action error: %s", e)
 
     # --------------------------
     # メッセージ編集
@@ -113,19 +116,22 @@ def setup_events(bot: Bot) -> None:
         if before.guild is None:
             return
 
-        await log_action(
-            bot,
-            before.guild.id,
-            "INFO",
-            f"{before.author.mention} のメッセージが編集されました。",
-            user=before.author,
-            fields={
-                "編集前": before.content or "(なし)",
-                "編集後": after.content or "(なし)",
-                "ユーザーID": str(before.author.id),
-                "メッセージID": str(before.id),
-            },
-        )
+        try:
+            await log_action(
+                bot,
+                before.guild.id,
+                "INFO",
+                f"{before.author.mention} のメッセージが編集されました。",
+                user=before.author,
+                fields={
+                    "編集前": before.content or "(なし)",
+                    "編集後": after.content or "(なし)",
+                    "ユーザーID": str(before.author.id),
+                    "メッセージID": str(before.id),
+                },
+            )
+        except Exception as e:
+            logger.exception("[BOT_SETUP] on_message_edit log_action error: %s", e)
 
     # --------------------------
     # VC セキュリティ
@@ -145,23 +151,29 @@ def setup_events(bot: Bot) -> None:
     # --------------------------
     @bot.event
     async def on_member_join(member: discord.Member):
-        await log_action(
-            bot,
-            member.guild.id,
-            "INFO",
-            f"{member.mention} がサーバーに参加しました。",
-            user=member,
-        )
+        try:
+            await log_action(
+                bot,
+                member.guild.id,
+                "INFO",
+                f"{member.mention} がサーバーに参加しました。",
+                user=member,
+            )
+        except Exception as e:
+            logger.exception("[BOT_SETUP] on_member_join log_action error: %s", e)
 
     @bot.event
     async def on_member_remove(member: discord.Member):
-        await log_action(
-            bot,
-            member.guild.id,
-            "INFO",
-            f"{member.mention} がサーバーから退出しました。",
-            user=member,
-        )
+        try:
+            await log_action(
+                bot,
+                member.guild.id,
+                "INFO",
+                f"{member.mention} がサーバーから退出しました。",
+                user=member,
+            )
+        except Exception as e:
+            logger.exception("[BOT_SETUP] on_member_remove log_action error: %s", e)
 
     # --------------------------
     # ニックネーム変更
@@ -169,14 +181,17 @@ def setup_events(bot: Bot) -> None:
     @bot.event
     async def on_member_update(before: discord.Member, after: discord.Member):
         if before.nick != after.nick:
-            await log_action(
-                bot,
-                after.guild.id,
-                "INFO",
-                f"{after.mention} のニックネームが変更されました。",
-                user=after,
-                fields={
-                    "旧": before.nick or "(なし)",
-                    "新": after.nick or "(なし)",
-                },
-            )
+            try:
+                await log_action(
+                    bot,
+                    after.guild.id,
+                    "INFO",
+                    f"{after.mention} のニックネームが変更されました。",
+                    user=after,
+                    fields={
+                        "旧": before.nick or "(なし)",
+                        "新": after.nick or "(なし)",
+                    },
+                )
+            except Exception as e:
+                logger.exception("[BOT_SETUP] on_member_update log_action error: %s", e)

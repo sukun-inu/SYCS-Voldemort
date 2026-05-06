@@ -26,8 +26,9 @@ _LEVEL_PRIORITY = {
 # JST（日本時間）
 _JST = timezone(timedelta(hours=9))
 
-# ユーザーごとの代表色キャッシュ {user_id: 0xRRGGBB}
+# ユーザーごとの代表色キャッシュ {user_id: 0xRRGGBB}（最大1024件でLRU）
 _USER_COLOR_CACHE: Dict[int, int] = {}
+_USER_COLOR_CACHE_MAX = 1024
 
 
 def _get_default_settings() -> Dict[str, Optional[int | str]]:
@@ -113,6 +114,8 @@ async def _user_avatar_color(user: Optional[discord.abc.User]) -> Optional[disco
         return None
 
     if isinstance(user_id, int):
+        if len(_USER_COLOR_CACHE) >= _USER_COLOR_CACHE_MAX:
+            _USER_COLOR_CACHE.pop(next(iter(_USER_COLOR_CACHE)))
         _USER_COLOR_CACHE[user_id] = (r << 16) + (g << 8) + b
 
     return discord.Color.from_rgb(r, g, b)
@@ -181,10 +184,10 @@ async def log_action(
     # ユーザー情報があればAuthorとして表示（アイコン付き）
     if user is not None:
         try:
-            avatar_url = user.display_avatar.url  # type: ignore[attr-defined]
+            avatar_url = str(user.display_avatar.url)  # type: ignore[attr-defined]
+            embed.set_author(name=str(user), icon_url=avatar_url)
         except Exception:
-            avatar_url = discord.Embed.Empty  # type: ignore[attr-defined]
-        embed.set_author(name=str(user), icon_url=avatar_url)
+            embed.set_author(name=str(user))
 
     # 追加フィールド
     if fields:

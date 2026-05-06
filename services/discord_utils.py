@@ -1,6 +1,8 @@
 import discord
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Mapping, Sequence
+
+_JST = timezone(timedelta(hours=9))
 
 
 def _resolve_color(color: str | int | discord.Color) -> discord.Color:
@@ -23,7 +25,7 @@ def create_embed(title: str, description: str, data: Mapping[str, str], color: s
         embed.add_field(name=name, value=value, inline=True)
 
     embed.set_footer(
-        text=f"タイムスタンプ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Powered by MetalpriceAPI Free"
+        text=f"タイムスタンプ: {datetime.now(_JST).strftime('%Y-%m-%d %H:%M:%S')} | Powered by MetalpriceAPI Free"
     )
     return embed
 
@@ -38,5 +40,5 @@ async def send_large_message(channel: discord.TextChannel, text: str) -> None:
             split_at = chunk.rfind("\n")
             if split_at > 1000:
                 chunk = chunk[:split_at]
-        remaining = remaining[len(chunk):].lstrip()
+        remaining = remaining[len(chunk):].lstrip("\n")
         await channel.send(chunk)

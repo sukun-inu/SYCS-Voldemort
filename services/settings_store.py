@@ -3,8 +3,10 @@ from typing import Any, Dict
 
 try:
     import orjson as _json
-except ImportError:  # フォールバック（orjson が入っていない場合）
+    _ORJSON = True
+except ImportError:
     import json as _json  # type: ignore
+    _ORJSON = False
 
 
 # プロジェクトルート直下に settings.json を作成
@@ -35,11 +37,10 @@ def _load_all() -> Dict[str, Any]:
 
 def _save_all(data: Dict[str, Any]) -> None:
     """settings.json 全体を書き出す。"""
-    if hasattr(_json, "dumps") and _json.__name__ == "orjson":  # type: ignore[attr-defined]
+    if _ORJSON:
         _SETTINGS_FILE.write_bytes(_json.dumps(data, option=_json.OPT_INDENT_2))  # type: ignore[attr-defined]
     else:
-        text = _json.dumps(data, indent=2, ensure_ascii=False)
-        _SETTINGS_FILE.write_text(text, encoding="utf-8")
+        _SETTINGS_FILE.write_text(_json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def get_guild_settings(guild_id: int) -> Dict[str, Any]:

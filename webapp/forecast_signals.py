@@ -25,6 +25,16 @@ from .forecast_models import daily_trend, daily_volatility, extract_prices
 
 logger = logging.getLogger(__name__)
 
+_groq_client: AsyncGroq | None = None
+
+
+def _get_groq_client(timeout: float) -> AsyncGroq:
+    global _groq_client
+    if _groq_client is None:
+        _groq_client = AsyncGroq(api_key=GROQ_API_KEY, timeout=timeout)
+    return _groq_client
+
+
 FORECAST_LLM_ENABLED = read_env_bool("FORECAST_LLM_ENABLED", True)
 FORECAST_LLM_MODEL = (os.getenv("FORECAST_LLM_MODEL") or "llama-3.3-70b-versatile").strip() or "llama-3.3-70b-versatile"
 FORECAST_LLM_TIMEOUT_SECONDS = max(8, int(os.getenv("FORECAST_LLM_TIMEOUT_SECONDS", "20")))
@@ -222,9 +232,8 @@ async def fetch_llm_signal(
         "}"
     )
 
-    groq_client = AsyncGroq(api_key=GROQ_API_KEY, timeout=float(FORECAST_LLM_TIMEOUT_SECONDS))
     try:
-        response = await groq_client.chat.completions.create(
+        response = await _get_groq_client(float(FORECAST_LLM_TIMEOUT_SECONDS)).chat.completions.create(
             model=FORECAST_LLM_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},

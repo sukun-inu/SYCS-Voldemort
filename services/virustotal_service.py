@@ -92,7 +92,7 @@ async def vt_check_url(url: str) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error("[VT] URL scan exception: %s", e)
-        return {"status": "error", "type": "url", "reason": str(e), "malicious": -1, "suspicious": -1}
+        return {"status": "error", "type": "url", "reason": str(e), "malicious": 0, "suspicious": 0}
 
 
 async def vt_check_file(content: bytes) -> Dict[str, Any]:
@@ -153,16 +153,19 @@ async def vt_check_file(content: bytes) -> Dict[str, Any]:
                     }
 
             return await asyncio.to_thread(sync_fallback)
-        except Exception as e:
-            raise e
+        except Exception:
+            raise
 
     except Exception as e:
         logger.error("[VT] File scan exception: %s", e)
-        return {"status": "error", "type": "file", "reason": str(e), "malicious": -1, "suspicious": -1}
+        return {"status": "error", "type": "file", "reason": str(e), "malicious": 0, "suspicious": 0}
 
     finally:
         if tmp_path and os.path.exists(tmp_path):
-            os.remove(tmp_path)
+            try:
+                os.remove(tmp_path)
+            except OSError as e:
+                logger.warning("[VT] 一時ファイルの削除に失敗: %s", e)
 
 
 async def vt_scan_target(session: aiohttp.ClientSession, url: str) -> Dict[str, Any]:

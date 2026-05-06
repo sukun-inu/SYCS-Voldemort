@@ -1,3 +1,5 @@
+import asyncio
+
 import discord
 from discord import app_commands
 
@@ -84,9 +86,15 @@ def register_metal_commands(bot: discord.Client) -> None:
             if g <= 0:
                 raise ValueError("グラム数は正の値で指定せよ。")
 
+            specs = list(METAL_COMMANDS.values())
+            results = await asyncio.gather(
+                *[calculate_metal_value(g, spec.code, spec.purity) for spec in specs],
+                return_exceptions=True,
+            )
             data = {}
-            for spec in METAL_COMMANDS.values():
-                prices = await calculate_metal_value(g, spec.code, spec.purity)
+            for spec, prices in zip(specs, results):
+                if isinstance(prices, Exception):
+                    raise prices
                 data[f"{spec.display_name} ({spec.key.title()})"] = _format_prices(prices if isinstance(prices, dict) else {spec.display_name: prices})
 
             embed = create_embed(

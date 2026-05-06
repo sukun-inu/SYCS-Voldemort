@@ -226,8 +226,7 @@ def _trim_payload_to_days(payload: dict[str, Any], days: int) -> dict[str, Any]:
     if days >= horizon:
         return payload
 
-    import json
-    trimmed = json.loads(json_dumps(payload))
+    trimmed = json_loads(json_dumps(payload), {})
     trimmed["horizon_days"] = days
     for metal_key, item in (trimmed.get("forecast", {}) or {}).items():
         daily = list(item.get("daily", []))[:days]

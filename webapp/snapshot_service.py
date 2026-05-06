@@ -42,7 +42,7 @@ async def _fetch_all_prices() -> dict[str, Decimal]:
     prices: dict[str, Decimal] = {}
     for metal, result in zip(TRACKED_METALS, results):
         if isinstance(result, Exception):
-            logger.exception("価格取得に失敗: %s (%s)", metal.key, metal.code, exc_info=result)
+            logger.error("価格取得に失敗: %s (%s)", metal.key, metal.code, exc_info=result)
             continue
         prices[metal.key] = _as_decimal(result)
 

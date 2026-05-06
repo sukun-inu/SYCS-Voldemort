@@ -8,6 +8,15 @@ from services.virustotal_service import MALICIOUS_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
+_groq_client: AsyncGroq | None = None
+
+
+def _get_groq_client() -> AsyncGroq:
+    global _groq_client
+    if _groq_client is None:
+        _groq_client = AsyncGroq(api_key=GROQ_API_KEY, timeout=20.0)
+    return _groq_client
+
 
 async def gpt_assess(text: str, vt_results: List[Dict[str, Any]]) -> str:
     for r in vt_results:
@@ -21,9 +30,8 @@ async def gpt_assess(text: str, vt_results: List[Dict[str, Any]]) -> str:
     if not GROQ_API_KEY:
         return "SAFE"
 
-    client = AsyncGroq(api_key=GROQ_API_KEY, timeout=20.0)
     try:
-        response = await client.chat.completions.create(
+        response = await _get_groq_client().chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
                 {"role": "system", "content": "You are a security moderation AI."},

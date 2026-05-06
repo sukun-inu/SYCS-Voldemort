@@ -1,7 +1,8 @@
 import logging
-import traceback
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List
+
+_JST = timezone(timedelta(hours=9))
 
 from groq import AsyncGroq
 
@@ -10,6 +11,17 @@ from config import CHATGPT_SYSTEM_MESSAGE, GROQ_API_KEY
 logger = logging.getLogger(__name__)
 
 MAX_HISTORY_ENTRIES = 20
+
+_groq_client: AsyncGroq | None = None
+
+
+def _get_groq_client() -> AsyncGroq:
+    global _groq_client
+    if _groq_client is None:
+        if not GROQ_API_KEY:
+            raise RuntimeError("GROQ_API_KEY が設定されていない。")
+        _groq_client = AsyncGroq(api_key=GROQ_API_KEY, timeout=30.0)
+    return _groq_client
 
 
 class ChatGPT:
@@ -24,7 +36,7 @@ class ChatGPT:
             self.history = self.history[-MAX_HISTORY_ENTRIES:]
 
     async def input_message(self, input_text: str) -> str:
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        current_time = datetime.now(_JST).strftime("%Y-%m-%d %H:%M:%S")
         system_with_time = {
             "role": "system",
             "content": (
@@ -40,7 +52,7 @@ class ChatGPT:
             reply = await self._call_chat_api(messages)
             final = reply.get("content") or "返答が得られなかった。"
         except Exception as e:
-            traceback.print_exc()
+            logger.exception("Groq API 呼び出し中にエラー発生")
             final = f"Groq API 呼び出し中にエラー発生: {e}"
 
         self.history.append({"role": "assistant", "content": final})
@@ -50,10 +62,7 @@ class ChatGPT:
         return final
 
     async def _call_chat_api(self, messages: List[Dict[str, str]]) -> Dict:
-        if not GROQ_API_KEY:
-            raise RuntimeError("GROQ_API_KEY が設定されていない。")
-
-        client = AsyncGroq(api_key=GROQ_API_KEY, timeout=30.0)
+        client = _get_groq_client()
         response = await client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=messages,

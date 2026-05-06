@@ -17,7 +17,6 @@ except Exception:
     SARIMAX = None
     SARIMAX_AVAILABLE = False
 
-FORECAST_SARIMAX_ENABLED = clamp.__module__ and True  # evaluated at import; overridden below
 FORECAST_SARIMAX_ENABLED = (os.getenv("FORECAST_SARIMAX_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"})
 FORECAST_SARIMAX_MIN_HISTORY = max(14, int(os.getenv("FORECAST_SARIMAX_MIN_HISTORY", "24")))
 
