@@ -594,7 +594,11 @@ async def push_subscribe(
             )
         )
 
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        logger.debug("push_subscribe: 同一エンドポイントの重複リクエストを無視")
     return {"ok": True}
 
 

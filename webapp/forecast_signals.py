@@ -178,7 +178,7 @@ async def fetch_llm_signal(
 ) -> dict[str, Any]:
     _empty = {
         "available": False,
-        "source": "OpenAI Chat Completions",
+        "source": "Groq",
         "model": FORECAST_LLM_MODEL,
         "scores": {key: 0.0 for key in METAL_COMMANDS.keys()},
         "confidences": {key: 0.0 for key in METAL_COMMANDS.keys()},
@@ -263,7 +263,7 @@ async def fetch_llm_signal(
 
     return {
         "available": True,
-        "source": "OpenAI Chat Completions",
+        "source": "Groq",
         "model": FORECAST_LLM_MODEL,
         "scores": scores,
         "confidences": confidences,

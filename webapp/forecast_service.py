@@ -119,7 +119,7 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
             },
             "llm": {
                 "available": bool(llm_signal.get("available")),
-                "source": llm_signal.get("source", "OpenAI Chat Completions"),
+                "source": llm_signal.get("source", "Groq"),
                 "model": llm_signal.get("model", FORECAST_LLM_MODEL),
                 "scores": llm_signal.get("scores", {}),
                 "confidences": llm_signal.get("confidences", {}),
@@ -180,7 +180,7 @@ def _forecast_payload_from_db(
     if not llm_payload:
         llm_payload = {
             "available": False,
-            "source": "OpenAI Chat Completions",
+            "source": "Groq",
             "model": FORECAST_LLM_MODEL,
             "scores": {},
             "confidences": {},
@@ -365,7 +365,7 @@ async def store_weekly_forecast(
         "sample_headlines": news.get("sample_headlines", {}),
         "llm": {
             "available": bool(llm.get("available")),
-            "source": str(llm.get("source", "OpenAI Chat Completions")),
+            "source": str(llm.get("source", "Groq")),
             "model": str(llm.get("model", FORECAST_LLM_MODEL)),
             "scores": llm.get("scores", {}),
             "confidences": llm.get("confidences", {}),
