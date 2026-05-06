@@ -151,10 +151,11 @@ python main.py
   - 威圧的・尊大な口調
   - 現在日時（JST）
 
-Groq API:
-- Endpoint: `https://api.groq.com/openai/v1/chat/completions`
+Groq SDK（`groq` パッケージ）:
+- Client: `AsyncGroq`
 - Model: `llama-3.3-70b-versatile`
 - Temperature: `0.45`
+- Timeout: `30.0` 秒
 
 ---
 
@@ -191,7 +192,8 @@ Groq API:
    - ゼロ幅 / Bidi / 制御文字の大量使用
 
 3. **LLM モデレーション**
-   - モデル: `llama-3.1-8b-instant`（Groq）
+   - Groq SDK `AsyncGroq` を使用
+   - モデル: `llama-3.1-8b-instant`
    - 危険判定・理由・カテゴリを JSON で取得
 
 4. **VirusTotal**
@@ -289,6 +291,8 @@ python web_main.py
 - `FORECAST_REFRESH_MINUTE_JST`（デフォルト: 5。毎時この分に予測のみ再計算）
 - `FORECAST_SARIMAX_ENABLED`（デフォルト: true。統計モデルを有効化）
 - `FORECAST_SARIMAX_MIN_HISTORY`（デフォルト: 24。SARIMAXを使う最小履歴件数）
+- `FORECAST_LLM_MODEL`（デフォルト: `llama-3.3-70b-versatile`。Groq モデルを変更する場合に指定）
+- `FORECAST_LLM_TIMEOUT_SECONDS`（デフォルト: 20。Groq API タイムアウト秒数）
 - `PUSH_NOTIFY_HOUR_JST`（デフォルト: 11）
 - `PUSH_NOTIFY_MINUTE_JST`（デフォルト: 0）
 - `APP_ROOT_PATH`（サブパス配信時のみ。例: `/metal`）
