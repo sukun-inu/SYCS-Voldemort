@@ -9,6 +9,7 @@ fastapi
 uvicorn
 SQLAlchemy
 asyncpg
+alembic
 apscheduler
 pywebpush
 cryptography

@@ -1,648 +1,34 @@
 import asyncio
-import json
 import logging
-import math
-import os
 from datetime import date, datetime, timedelta
-from decimal import Decimal, ROUND_HALF_UP
-from statistics import pstdev
+from decimal import Decimal
 from typing import Any
-from urllib.parse import quote_plus
-from xml.etree import ElementTree
 
 import aiohttp
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import METAL_COMMANDS, OPENAI_API_KEY
+from config import METAL_COMMANDS
 
+from .forecast_models import (
+    FORECAST_SARIMAX_ENABLED,
+    FORECAST_SARIMAX_MIN_HISTORY,
+    SARIMAX_AVAILABLE,
+    extract_prices,
+    forecast_for_metal,
+)
+from .forecast_signals import (
+    FORECAST_LLM_MODEL,
+    FORECAST_LLM_TIMEOUT_SECONDS,
+    fetch_llm_signal,
+    fetch_news_signals,
+    fetch_usdjpy_signal,
+)
+from .forecast_utils import PCT_SCALE, PRICE_SCALE, as_decimal, json_dumps, json_loads, safe_float
 from .models import WeeklyForecastDaily, WeeklyForecastMeta
 from .snapshot_service import JST, load_history
 
 logger = logging.getLogger(__name__)
-
-try:
-    from statsmodels.tsa.statespace.sarimax import SARIMAX  # type: ignore
-
-    SARIMAX_AVAILABLE = True
-except Exception:
-    SARIMAX = None
-    SARIMAX_AVAILABLE = False
-
-USDJPY_DAILY_CSV_URL = "https://stooq.com/q/d/l/?s=usdjpy&i=d"
-GOOGLE_NEWS_RSS_URL = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
-OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
-PRICE_SCALE = Decimal("0.0001")
-PCT_SCALE = Decimal("0.000001")
-
-
-def _read_env_bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    value = raw.strip().lower()
-    if value in {"1", "true", "yes", "on"}:
-        return True
-    if value in {"0", "false", "no", "off"}:
-        return False
-    return default
-
-
-FORECAST_LLM_ENABLED = _read_env_bool("FORECAST_LLM_ENABLED", True)
-FORECAST_LLM_MODEL = (os.getenv("FORECAST_LLM_MODEL") or "gpt-4.1-mini").strip() or "gpt-4.1-mini"
-FORECAST_LLM_TIMEOUT_SECONDS = max(8, int(os.getenv("FORECAST_LLM_TIMEOUT_SECONDS", "20")))
-FORECAST_SARIMAX_ENABLED = _read_env_bool("FORECAST_SARIMAX_ENABLED", True)
-FORECAST_SARIMAX_MIN_HISTORY = max(14, int(os.getenv("FORECAST_SARIMAX_MIN_HISTORY", "24")))
-
-NEWS_QUERY_BY_METAL = {
-    "gold": "gold price xau bullion federal reserve inflation usd jpy",
-    "silver": "silver price xag bullion industrial demand usd jpy",
-    "platinum": "platinum price xpt auto catalyst industrial demand usd jpy",
-}
-
-POSITIVE_TOKENS = (
-    "surge",
-    "rise",
-    "rises",
-    "up",
-    "gain",
-    "gains",
-    "record high",
-    "bullish",
-    "safe haven",
-    "demand jumps",
-    "demand grows",
-    "weaker dollar",
-    "dollar weakens",
-    "cuts rates",
-    "inflation fears",
-    "上昇",
-    "高騰",
-    "最高値",
-)
-
-NEGATIVE_TOKENS = (
-    "fall",
-    "falls",
-    "drop",
-    "drops",
-    "down",
-    "loss",
-    "losses",
-    "bearish",
-    "selloff",
-    "strong dollar",
-    "dollar strengthens",
-    "yields rise",
-    "rate hike",
-    "recession hopes",
-    "下落",
-    "急落",
-    "安値",
-)
-
-FX_BETA_BY_METAL = {
-    "gold": 0.30,
-    "silver": 0.45,
-    "platinum": 0.40,
-}
-
-
-def _clamp(value: float, lower: float, upper: float) -> float:
-    return max(lower, min(upper, value))
-
-
-def _safe_float(raw: Any) -> float | None:
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return None
-    if math.isnan(value) or math.isinf(value):
-        return None
-    return value
-
-
-def _as_decimal(raw: Any, scale: Decimal = PRICE_SCALE) -> Decimal | None:
-    value = _safe_float(raw)
-    if value is None:
-        return None
-    return Decimal(str(value)).quantize(scale, rounding=ROUND_HALF_UP)
-
-
-def _json_dumps(data: Any) -> str:
-    return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-
-
-def _json_loads(text: str | None, default: Any) -> Any:
-    if not text:
-        return default
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return default
-
-
-async def _fetch_usdjpy_signal(session: aiohttp.ClientSession) -> dict[str, Any]:
-    try:
-        async with session.get(USDJPY_DAILY_CSV_URL) as response:
-            text = await response.text()
-            if response.status != 200:
-                raise RuntimeError(f"status={response.status}")
-    except Exception as exc:
-        logger.warning("USD/JPYデータ取得に失敗: %s", exc)
-        return {
-            "available": False,
-            "source": "Stooq",
-            "latest": None,
-            "weekly_change_pct": 0.0,
-            "daily_factor": 0.0,
-            "daily_returns": [],
-        }
-
-    closes: list[float] = []
-    lines = text.splitlines()
-    for line in lines[1:]:
-        parts = [part.strip() for part in line.split(",")]
-        if len(parts) < 5:
-            continue
-        close_value = _safe_float(parts[4])
-        if close_value is None or close_value <= 0:
-            continue
-        closes.append(close_value)
-
-    if len(closes) < 2:
-        return {
-            "available": False,
-            "source": "Stooq",
-            "latest": None,
-            "weekly_change_pct": 0.0,
-            "daily_factor": 0.0,
-            "daily_returns": [],
-        }
-
-    latest = closes[-1]
-    anchor = closes[-6] if len(closes) >= 6 else closes[0]
-    weekly_change = ((latest - anchor) / anchor) if anchor > 0 else 0.0
-    daily_factor = weekly_change / 5.0
-    daily_returns: list[float] = []
-    for previous, current in zip(closes, closes[1:]):
-        if previous <= 0:
-            continue
-        daily_returns.append((current - previous) / previous)
-    return {
-        "available": True,
-        "source": "Stooq",
-        "latest": round(latest, 4),
-        "weekly_change_pct": round(weekly_change * 100, 3),
-        "daily_factor": daily_factor,
-        "daily_returns": daily_returns[-240:],
-    }
-
-
-def _news_score(text: str) -> int:
-    normalized = text.lower()
-    score = 0
-    for token in POSITIVE_TOKENS:
-        if token in normalized:
-            score += 1
-    for token in NEGATIVE_TOKENS:
-        if token in normalized:
-            score -= 1
-    return score
-
-
-async def _fetch_news_for_query(
-    session: aiohttp.ClientSession,
-    query: str,
-    *,
-    limit: int = 18,
-) -> tuple[list[str], float]:
-    url = GOOGLE_NEWS_RSS_URL.format(query=quote_plus(query))
-    try:
-        async with session.get(url) as response:
-            body = await response.text()
-            if response.status != 200:
-                raise RuntimeError(f"status={response.status}")
-    except Exception as exc:
-        logger.warning("ニュースRSS取得に失敗 query=%s err=%s", query, exc)
-        return [], 0.0
-
-    try:
-        root = ElementTree.fromstring(body)
-    except ElementTree.ParseError:
-        logger.warning("ニュースRSSパースに失敗 query=%s", query)
-        return [], 0.0
-
-    items = root.findall("./channel/item")
-    titles: list[str] = []
-    raw_score = 0
-    for item in items[:limit]:
-        title = (item.findtext("title") or "").strip()
-        description = (item.findtext("description") or "").strip()
-        if not title:
-            continue
-        titles.append(title)
-        raw_score += _news_score(f"{title} {description}")
-
-    if not titles:
-        return [], 0.0
-
-    normalized_score = math.tanh(raw_score / max(2.0, len(titles) * 1.4))
-    return titles, normalized_score
-
-
-async def _fetch_news_signals(session: aiohttp.ClientSession) -> dict[str, Any]:
-    tasks = {
-        metal_key: asyncio.create_task(_fetch_news_for_query(session, query))
-        for metal_key, query in NEWS_QUERY_BY_METAL.items()
-    }
-
-    sentiment: dict[str, float] = {}
-    article_counts: dict[str, int] = {}
-    sample_headlines: dict[str, list[str]] = {}
-    for metal_key, task in tasks.items():
-        titles, score = await task
-        sentiment[metal_key] = score
-        article_counts[metal_key] = len(titles)
-        sample_headlines[metal_key] = titles[:3]
-
-    available = any(count > 0 for count in article_counts.values())
-    return {
-        "available": available,
-        "source": "Google News RSS",
-        "sentiment": {key: round(value, 4) for key, value in sentiment.items()},
-        "article_counts": article_counts,
-        "sample_headlines": sample_headlines,
-    }
-
-
-def _extract_first_json_object(text: str) -> dict[str, Any] | None:
-    raw = text.strip()
-    if not raw:
-        return None
-    try:
-        parsed = json.loads(raw)
-        return parsed if isinstance(parsed, dict) else None
-    except json.JSONDecodeError:
-        pass
-
-    start = raw.find("{")
-    end = raw.rfind("}")
-    if start < 0 or end <= start:
-        return None
-    snippet = raw[start : end + 1]
-    try:
-        parsed = json.loads(snippet)
-        return parsed if isinstance(parsed, dict) else None
-    except json.JSONDecodeError:
-        return None
-
-
-def _clip_text(text: str, max_chars: int = 180) -> str:
-    trimmed = " ".join((text or "").split())
-    if len(trimmed) <= max_chars:
-        return trimmed
-    return f"{trimmed[: max_chars - 1]}…"
-
-
-async def _fetch_llm_signal(
-    session: aiohttp.ClientSession,
-    *,
-    history_by_metal: dict[str, list[dict[str, Any]]],
-    fx_signal: dict[str, Any],
-    news_signal: dict[str, Any],
-) -> dict[str, Any]:
-    if not FORECAST_LLM_ENABLED:
-        return {
-            "available": False,
-            "source": "OpenAI Chat Completions",
-            "model": FORECAST_LLM_MODEL,
-            "scores": {key: 0.0 for key in METAL_COMMANDS.keys()},
-            "confidences": {key: 0.0 for key in METAL_COMMANDS.keys()},
-            "rationales": {key: "" for key in METAL_COMMANDS.keys()},
-            "global_comment": "FORECAST_LLM_ENABLED=false",
-        }
-    if not OPENAI_API_KEY:
-        return {
-            "available": False,
-            "source": "OpenAI Chat Completions",
-            "model": FORECAST_LLM_MODEL,
-            "scores": {key: 0.0 for key in METAL_COMMANDS.keys()},
-            "confidences": {key: 0.0 for key in METAL_COMMANDS.keys()},
-            "rationales": {key: "" for key in METAL_COMMANDS.keys()},
-            "global_comment": "OPENAI_API_KEY not configured",
-        }
-
-    metal_input: dict[str, Any] = {}
-    for metal_key in METAL_COMMANDS.keys():
-        prices = _extract_prices(history_by_metal.get(metal_key, []))
-        headlines = list((news_signal.get("sample_headlines", {}) or {}).get(metal_key, []))[:4]
-        metal_input[metal_key] = {
-            "latest_price_per_gram": round(prices[-1], 2) if prices else None,
-            "trend_14d_pct_per_day": round(_daily_trend(prices) * 100, 4) if prices else 0.0,
-            "volatility_14d_pct": round(_daily_volatility(prices) * 100, 4) if prices else 0.0,
-            "news_sentiment": float((news_signal.get("sentiment", {}) or {}).get(metal_key, 0.0)),
-            "news_article_count": int((news_signal.get("article_counts", {}) or {}).get(metal_key, 0)),
-            "headlines": [_clip_text(item, 140) for item in headlines],
-        }
-
-    user_payload = {
-        "fx": {
-            "usd_jpy_weekly_change_pct": float(fx_signal.get("weekly_change_pct", 0.0)),
-            "usd_jpy_latest": fx_signal.get("latest"),
-            "available": bool(fx_signal.get("available")),
-        },
-        "metals": metal_input,
-    }
-
-    system_prompt = (
-        "You are a conservative financial signal analyst for precious metals. "
-        "Use only provided inputs. Return STRICT JSON only, no markdown. "
-        "For each metal (gold, silver, platinum), output sentiment score [-1,1], "
-        "confidence [0,1], and a short rationale."
-    )
-    user_prompt = (
-        "Inputs JSON:\n"
-        f"{_json_dumps(user_payload)}\n"
-        "Return JSON schema:\n"
-        "{"
-        "\"global_comment\":\"...\","
-        "\"metals\":{"
-        "\"gold\":{\"score\":0.0,\"confidence\":0.0,\"rationale\":\"...\"},"
-        "\"silver\":{\"score\":0.0,\"confidence\":0.0,\"rationale\":\"...\"},"
-        "\"platinum\":{\"score\":0.0,\"confidence\":0.0,\"rationale\":\"...\"}"
-        "}"
-        "}"
-    )
-
-    headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": FORECAST_LLM_MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "temperature": 0.15,
-        "max_tokens": 420,
-    }
-
-    try:
-        async with session.post(OPENAI_CHAT_COMPLETIONS_URL, headers=headers, json=payload) as response:
-            result = await response.json()
-            if response.status != 200:
-                message = result.get("error", {}).get("message", str(result))
-                raise RuntimeError(f"status={response.status} message={message}")
-    except Exception as exc:
-        logger.warning("LLM予測判定の取得に失敗: %s", exc)
-        return {
-            "available": False,
-            "source": "OpenAI Chat Completions",
-            "model": FORECAST_LLM_MODEL,
-            "scores": {key: 0.0 for key in METAL_COMMANDS.keys()},
-            "confidences": {key: 0.0 for key in METAL_COMMANDS.keys()},
-            "rationales": {key: "" for key in METAL_COMMANDS.keys()},
-            "global_comment": "LLM call failed",
-        }
-
-    content = (
-        result.get("choices", [{}])[0]
-        .get("message", {})
-        .get("content", "")
-    )
-    parsed = _extract_first_json_object(str(content)) or {}
-    metal_result = parsed.get("metals", {}) if isinstance(parsed.get("metals"), dict) else {}
-
-    scores: dict[str, float] = {}
-    confidences: dict[str, float] = {}
-    rationales: dict[str, str] = {}
-    for metal_key in METAL_COMMANDS.keys():
-        item = metal_result.get(metal_key, {}) if isinstance(metal_result.get(metal_key), dict) else {}
-        raw_score = _safe_float(item.get("score")) or 0.0
-        raw_confidence = _safe_float(item.get("confidence")) or 0.0
-        rationale = _clip_text(str(item.get("rationale", "")).strip(), 140)
-        scores[metal_key] = round(_clamp(raw_score, -1.0, 1.0), 4)
-        confidences[metal_key] = round(_clamp(raw_confidence, 0.0, 1.0), 4)
-        rationales[metal_key] = rationale
-
-    return {
-        "available": True,
-        "source": "OpenAI Chat Completions",
-        "model": FORECAST_LLM_MODEL,
-        "scores": scores,
-        "confidences": confidences,
-        "rationales": rationales,
-        "global_comment": _clip_text(str(parsed.get("global_comment", "")).strip(), 180),
-    }
-
-
-def _extract_prices(history_items: list[dict[str, Any]]) -> list[float]:
-    prices: list[float] = []
-    for item in history_items:
-        value = _safe_float(item.get("price_per_gram"))
-        if value is None or value <= 0:
-            continue
-        prices.append(value)
-    return prices
-
-
-def _daily_trend(prices: list[float], *, window: int = 14) -> float:
-    if len(prices) < 2:
-        return 0.0
-    sampled = prices[-min(window, len(prices)) :]
-    first = sampled[0]
-    last = sampled[-1]
-    if first <= 0:
-        return 0.0
-    if len(sampled) == 2:
-        return _clamp((last - first) / first, -0.03, 0.03)
-    geometric_daily = (last / first) ** (1.0 / (len(sampled) - 1)) - 1.0
-    return _clamp(geometric_daily, -0.03, 0.03)
-
-
-def _daily_volatility(prices: list[float], *, window: int = 14) -> float:
-    if len(prices) < 3:
-        return 0.004
-    sampled = prices[-min(window, len(prices)) :]
-    returns: list[float] = []
-    for previous, current in zip(sampled, sampled[1:]):
-        if previous <= 0:
-            continue
-        returns.append((current - previous) / previous)
-    if not returns:
-        return 0.004
-    return float(pstdev(returns))
-
-
-def _sarimax_fused_returns(
-    prices: list[float],
-    horizon_days: int,
-    *,
-    exog_history: list[float],
-    exog_future: list[float],
-) -> list[float] | None:
-    if not FORECAST_SARIMAX_ENABLED or not SARIMAX_AVAILABLE:
-        return None
-    if len(prices) < FORECAST_SARIMAX_MIN_HISTORY:
-        return None
-
-    log_returns: list[float] = []
-    for previous, current in zip(prices, prices[1:]):
-        if previous <= 0 or current <= 0:
-            continue
-        log_returns.append(math.log(current / previous))
-
-    if len(log_returns) < (FORECAST_SARIMAX_MIN_HISTORY - 1):
-        return None
-
-    expected_len = len(log_returns)
-    history = list(exog_history[-expected_len:])
-    if len(history) < expected_len:
-        history = ([0.0] * (expected_len - len(history))) + history
-    future = list(exog_future[:horizon_days])
-    if len(future) < horizon_days:
-        fallback = future[-1] if future else 0.0
-        future = future + ([fallback] * (horizon_days - len(future)))
-
-    exog_train = [[value] for value in history]
-    exog_forecast = [[value] for value in future]
-    seasonal_order = (1, 0, 0, 7) if len(log_returns) >= 21 else (0, 0, 0, 0)
-    try:
-        model = SARIMAX(
-            log_returns,
-            exog=exog_train,
-            order=(1, 0, 1),
-            seasonal_order=seasonal_order,
-            trend="c",
-            enforce_stationarity=False,
-            enforce_invertibility=False,
-        )
-        fitted = model.fit(disp=False, maxiter=120)
-        forecast_returns = fitted.forecast(steps=horizon_days, exog=exog_forecast)
-        return [_clamp(float(value), -0.06, 0.06) for value in forecast_returns]
-    except Exception as exc:
-        logger.warning("SARIMAX予測の計算に失敗。heuristicへフォールバック err=%s", exc)
-        return None
-
-
-def _forecast_for_metal(
-    *,
-    metal_key: str,
-    prices: list[float],
-    horizon_days: int,
-    today: datetime,
-    fx_daily_factor: float,
-    fx_history_returns: list[float],
-    news_score: float,
-    article_count: int,
-    fx_available: bool,
-    llm_score: float,
-    llm_confidence: float,
-    llm_rationale: str,
-    llm_available: bool,
-) -> dict[str, Any]:
-    start_price = prices[-1]
-    trend = _daily_trend(prices)
-    volatility = _daily_volatility(prices)
-
-    fx_beta = FX_BETA_BY_METAL.get(metal_key, 0.35)
-    fx_component = fx_daily_factor * fx_beta
-    news_component = news_score * 0.0025
-    llm_component = llm_score * llm_confidence * 0.0035
-    signal_component = fx_component + news_component + llm_component
-    heuristic_daily_return = _clamp((trend * 0.60) + signal_component, -0.04, 0.04)
-    history_steps = max(0, len(prices) - 1)
-    fx_hist = list((fx_history_returns or [])[-history_steps:])
-    if len(fx_hist) < history_steps:
-        fx_hist = ([0.0] * (history_steps - len(fx_hist))) + fx_hist
-    exog_history = [_clamp(value * fx_beta, -0.08, 0.08) for value in fx_hist]
-    exog_future = [_clamp(signal_component, -0.08, 0.08) for _ in range(horizon_days)]
-    sarimax_returns = _sarimax_fused_returns(
-        prices,
-        horizon_days,
-        exog_history=exog_history,
-        exog_future=exog_future,
-    )
-    uses_stat_model = sarimax_returns is not None
-
-    daily: list[dict[str, Any]] = []
-    projected_returns: list[float] = []
-    current = start_price
-    for offset in range(1, horizon_days + 1):
-        if uses_stat_model and sarimax_returns is not None:
-            # 厳密計算モード: 価格パスはSARIMAXの予測リターンのみで更新する。
-            projected_return = _clamp(sarimax_returns[offset - 1], -0.05, 0.05)
-            next_value = max(0.01, current * math.exp(projected_return))
-        else:
-            projected_return = heuristic_daily_return
-            next_value = max(0.01, current * (1.0 + projected_return))
-        projected_returns.append(projected_return)
-        forecast_date = (today + timedelta(days=offset)).date().isoformat()
-        daily.append(
-            {
-                "date": forecast_date,
-                "price_per_gram": round(next_value, 2),
-                "delta_from_previous": round(next_value - current, 2),
-            }
-        )
-        current = next_value
-
-    projected_change = ((current - start_price) / start_price) if start_price > 0 else 0.0
-    effective_daily_return = (
-        (sum(projected_returns) / len(projected_returns))
-        if projected_returns
-        else heuristic_daily_return
-    )
-
-    confidence = 0.35
-    if len(prices) >= 30:
-        confidence += 0.25
-    elif len(prices) >= 14:
-        confidence += 0.12
-    if fx_available:
-        confidence += 0.15
-    if article_count >= 8:
-        confidence += 0.15
-    elif article_count >= 3:
-        confidence += 0.08
-    if llm_available:
-        confidence += 0.07 * _clamp(llm_confidence, 0.0, 1.0)
-    if uses_stat_model:
-        confidence += 0.12
-    confidence -= min(0.20, volatility * 6.0)
-    if abs(effective_daily_return) > 0.025:
-        confidence -= 0.05
-    confidence = _clamp(confidence, 0.1, 0.95)
-
-    drivers = []
-    if uses_stat_model and sarimax_returns:
-        avg_baseline = sum(sarimax_returns) / len(sarimax_returns)
-        drivers.append(f"統計モデル: SARIMAX(1,0,1)+合算シグナル(exog) {avg_baseline * 100:+.3f}%/日")
-        drivers.append(f"合算シグナル入力: {signal_component * 100:+.3f}%/日")
-    else:
-        drivers.append("統計モデル: ヒューリスティックへフォールバック")
-    drivers.extend(
-        [
-            f"直近トレンド: {trend * 100:+.3f}%/日",
-            f"USD/JPY感応: {fx_component * 100:+.3f}%/日",
-            f"ニュース感応: {news_component * 100:+.3f}%/日 (score={news_score:+.3f})",
-            f"AI判定感応: {llm_component * 100:+.3f}%/日 (score={llm_score:+.3f}, conf={llm_confidence:.3f})",
-        ]
-    )
-    if llm_rationale:
-        drivers.append(f"AI判定所見: {llm_rationale}")
-    return {
-        "start_price_per_gram": round(start_price, 2),
-        "projected_price_per_gram": round(current, 2),
-        "projected_change_pct_7d": round(projected_change * 100, 3),
-        "confidence": round(confidence, 3),
-        "implied_daily_return_pct": round(effective_daily_return * 100, 4),
-        "model_variant": "sarimax_fused_v1" if uses_stat_model else "heuristic_fx_news_v1",
-        "daily": daily,
-        "drivers": drivers,
-    }
 
 
 async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7) -> dict[str, Any]:
@@ -651,10 +37,10 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
 
     timeout = aiohttp.ClientTimeout(total=max(FORECAST_LLM_TIMEOUT_SECONDS, 16))
     async with aiohttp.ClientSession(timeout=timeout) as client:
-        fx_task = asyncio.create_task(_fetch_usdjpy_signal(client))
-        news_task = asyncio.create_task(_fetch_news_signals(client))
+        fx_task = asyncio.create_task(fetch_usdjpy_signal(client))
+        news_task = asyncio.create_task(fetch_news_signals(client))
         fx_signal, news_signal = await asyncio.gather(fx_task, news_task)
-        llm_signal = await _fetch_llm_signal(
+        llm_signal = await fetch_llm_signal(
             client,
             history_by_metal=history_by_metal,
             fx_signal=fx_signal,
@@ -664,30 +50,25 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
     today = datetime.now(JST)
     forecast: dict[str, Any] = {}
     for metal_key in METAL_COMMANDS.keys():
-        prices = _extract_prices(history_by_metal.get(metal_key, []))
+        prices = extract_prices(history_by_metal.get(metal_key, []))
         if not prices:
             continue
-        metal_news_score = float(news_signal["sentiment"].get(metal_key, 0.0))
-        metal_article_count = int(news_signal["article_counts"].get(metal_key, 0))
-        metal_llm_score = float((llm_signal.get("scores", {}) or {}).get(metal_key, 0.0))
-        metal_llm_confidence = float((llm_signal.get("confidences", {}) or {}).get(metal_key, 0.0))
-        metal_llm_rationale = str((llm_signal.get("rationales", {}) or {}).get(metal_key, ""))
-        forecast[metal_key] = _forecast_for_metal(
+        forecast[metal_key] = forecast_for_metal(
             metal_key=metal_key,
             prices=prices,
             horizon_days=horizon_days,
             today=today,
             fx_daily_factor=float(fx_signal.get("daily_factor", 0.0)),
             fx_history_returns=[
-                _safe_float(value) or 0.0
+                safe_float(value) or 0.0
                 for value in list(fx_signal.get("daily_returns", []) or [])
             ],
-            news_score=metal_news_score,
-            article_count=metal_article_count,
+            news_score=float(news_signal["sentiment"].get(metal_key, 0.0)),
+            article_count=int(news_signal["article_counts"].get(metal_key, 0)),
             fx_available=bool(fx_signal.get("available")),
-            llm_score=metal_llm_score,
-            llm_confidence=metal_llm_confidence,
-            llm_rationale=metal_llm_rationale,
+            llm_score=float((llm_signal.get("scores", {}) or {}).get(metal_key, 0.0)),
+            llm_confidence=float((llm_signal.get("confidences", {}) or {}).get(metal_key, 0.0)),
+            llm_rationale=str((llm_signal.get("rationales", {}) or {}).get(metal_key, "")),
             llm_available=bool(llm_signal.get("available")),
         )
 
@@ -695,7 +76,7 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
         raise RuntimeError("予測に必要な価格履歴データがありません。")
 
     uses_sarimax = any(
-        (item.get("model_variant") == "sarimax_fused_v1")
+        item.get("model_variant") == "sarimax_fused_v1"
         for item in forecast.values()
         if isinstance(item, dict)
     )
@@ -711,10 +92,7 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
         "as_of_date": today.date().isoformat(),
         "generated_at": today.isoformat(),
         "horizon_days": horizon_days,
-        "model": {
-            "name": model_name,
-            "description": model_description,
-        },
+        "model": {"name": model_name, "description": model_description},
         "signals": {
             "usd_jpy": {
                 "available": bool(fx_signal.get("available")),
@@ -776,20 +154,14 @@ def _forecast_payload_from_db(
             "confidence": float(first.confidence),
             "implied_daily_return_pct": float(first.implied_daily_return_pct),
             "daily": daily,
-            "drivers": _json_loads(first.drivers_json, []),
+            "drivers": json_loads(first.drivers_json, []),
         }
 
-    headlines_payload = _json_loads(meta.news_headlines_json, {})
-    sample_headlines: dict[str, Any]
-    llm_payload: dict[str, Any]
-    stat_model_payload: dict[str, Any]
+    headlines_payload = json_loads(meta.news_headlines_json, {})
     if isinstance(headlines_payload, dict) and "sample_headlines" in headlines_payload:
-        sample_raw = headlines_payload.get("sample_headlines", {})
-        llm_raw = headlines_payload.get("llm", {})
-        stat_model_raw = headlines_payload.get("stat_model", {})
-        sample_headlines = sample_raw if isinstance(sample_raw, dict) else {}
-        llm_payload = llm_raw if isinstance(llm_raw, dict) else {}
-        stat_model_payload = stat_model_raw if isinstance(stat_model_raw, dict) else {}
+        sample_headlines = headlines_payload.get("sample_headlines") or {}
+        llm_payload = headlines_payload.get("llm") or {}
+        stat_model_payload = headlines_payload.get("stat_model") or {}
     else:
         sample_headlines = headlines_payload if isinstance(headlines_payload, dict) else {}
         llm_payload = {}
@@ -817,10 +189,7 @@ def _forecast_payload_from_db(
         "as_of_date": meta.as_of_date.isoformat(),
         "generated_at": meta.generated_at.isoformat(),
         "horizon_days": int(meta.horizon_days),
-        "model": {
-            "name": meta.model_name,
-            "description": meta.model_description,
-        },
+        "model": {"name": meta.model_name, "description": meta.model_description},
         "signals": {
             "usd_jpy": {
                 "available": bool(meta.usd_jpy_available),
@@ -831,8 +200,8 @@ def _forecast_payload_from_db(
             "news": {
                 "available": bool(meta.news_available),
                 "source": meta.news_source,
-                "sentiment": _json_loads(meta.news_sentiment_json, {}),
-                "article_counts": _json_loads(meta.news_article_counts_json, {}),
+                "sentiment": json_loads(meta.news_sentiment_json, {}),
+                "article_counts": json_loads(meta.news_article_counts_json, {}),
                 "sample_headlines": sample_headlines,
             },
             "llm": llm_payload,
@@ -847,7 +216,8 @@ def _trim_payload_to_days(payload: dict[str, Any], days: int) -> dict[str, Any]:
     if days >= horizon:
         return payload
 
-    trimmed = json.loads(_json_dumps(payload))
+    import json
+    trimmed = json.loads(json_dumps(payload))
     trimmed["horizon_days"] = days
     for metal_key, item in (trimmed.get("forecast", {}) or {}).items():
         daily = list(item.get("daily", []))[:days]
@@ -855,11 +225,10 @@ def _trim_payload_to_days(payload: dict[str, Any], days: int) -> dict[str, Any]:
         if not daily:
             continue
         item["projected_price_per_gram"] = daily[-1].get("price_per_gram")
-        start_price = _safe_float(item.get("start_price_per_gram"))
-        projected = _safe_float(item.get("projected_price_per_gram"))
+        start_price = safe_float(item.get("start_price_per_gram"))
+        projected = safe_float(item.get("projected_price_per_gram"))
         if start_price and projected:
-            projected_change = ((projected - start_price) / start_price) * 100
-            item["projected_change_pct_7d"] = round(projected_change, 3)
+            item["projected_change_pct_7d"] = round(((projected - start_price) / start_price) * 100, 3)
     return trimmed
 
 
@@ -914,14 +283,14 @@ async def store_weekly_forecast(
                 continue
             desired[(metal_key, forecast_date)] = {
                 "as_of_date": as_of_date,
-                "start_price_per_gram": _as_decimal(item.get("start_price_per_gram"), PRICE_SCALE),
-                "projected_price_per_gram": _as_decimal(item.get("projected_price_per_gram"), PRICE_SCALE),
-                "price_per_gram": _as_decimal(daily_item.get("price_per_gram"), PRICE_SCALE),
-                "delta_from_previous": _as_decimal(daily_item.get("delta_from_previous"), PRICE_SCALE),
-                "projected_change_pct_7d": _as_decimal(item.get("projected_change_pct_7d"), PCT_SCALE),
-                "confidence": _as_decimal(item.get("confidence"), PCT_SCALE),
-                "implied_daily_return_pct": _as_decimal(item.get("implied_daily_return_pct"), PCT_SCALE),
-                "drivers_json": _json_dumps(item.get("drivers", [])),
+                "start_price_per_gram": as_decimal(item.get("start_price_per_gram"), PRICE_SCALE),
+                "projected_price_per_gram": as_decimal(item.get("projected_price_per_gram"), PRICE_SCALE),
+                "price_per_gram": as_decimal(daily_item.get("price_per_gram"), PRICE_SCALE),
+                "delta_from_previous": as_decimal(daily_item.get("delta_from_previous"), PRICE_SCALE),
+                "projected_change_pct_7d": as_decimal(item.get("projected_change_pct_7d"), PCT_SCALE),
+                "confidence": as_decimal(item.get("confidence"), PCT_SCALE),
+                "implied_daily_return_pct": as_decimal(item.get("implied_daily_return_pct"), PCT_SCALE),
+                "drivers_json": json_dumps(item.get("drivers", [])),
             }
 
     if not desired:
@@ -974,38 +343,33 @@ async def store_weekly_forecast(
     meta.generated_at = generated_at
     meta.horizon_days = horizon
     meta.model_name = str(model_data.get("name", "heuristic_fx_news_v1"))
-    meta.model_description = str(
-        model_data.get("description", "直近価格トレンド + USD/JPY + ニュース見出し極性を合成した簡易予測。")
-    )
+    meta.model_description = str(model_data.get("description", "直近価格トレンド + USD/JPY + ニュース見出し極性を合成した簡易予測。"))
     meta.usd_jpy_available = bool(usd_jpy.get("available"))
     meta.usd_jpy_source = str(usd_jpy.get("source", "Stooq"))
-    meta.usd_jpy_latest = _as_decimal(usd_jpy.get("latest"), Decimal("0.000001"))
-    meta.usd_jpy_weekly_change_pct = _as_decimal(usd_jpy.get("weekly_change_pct"), Decimal("0.000001"))
+    meta.usd_jpy_latest = as_decimal(usd_jpy.get("latest"), Decimal("0.000001"))
+    meta.usd_jpy_weekly_change_pct = as_decimal(usd_jpy.get("weekly_change_pct"), Decimal("0.000001"))
     meta.news_available = bool(news.get("available"))
     meta.news_source = str(news.get("source", "Google News RSS"))
-    meta.news_sentiment_json = _json_dumps(news.get("sentiment", {}))
-    meta.news_article_counts_json = _json_dumps(news.get("article_counts", {}))
-    meta.news_headlines_json = _json_dumps(
-        {
-            "sample_headlines": news.get("sample_headlines", {}),
-            "llm": {
-                "available": bool(llm.get("available")),
-                "source": str(llm.get("source", "OpenAI Chat Completions")),
-                "model": str(llm.get("model", FORECAST_LLM_MODEL)),
-                "scores": llm.get("scores", {}),
-                "confidences": llm.get("confidences", {}),
-                "rationales": llm.get("rationales", {}),
-                "global_comment": str(llm.get("global_comment", "")),
-            },
-            "stat_model": {
-                "enabled": bool(stat_model.get("enabled", FORECAST_SARIMAX_ENABLED)),
-                "available": bool(stat_model.get("available", SARIMAX_AVAILABLE)),
-                "min_history": int(_safe_float(stat_model.get("min_history")) or FORECAST_SARIMAX_MIN_HISTORY),
-            },
-        }
-    )
+    meta.news_sentiment_json = json_dumps(news.get("sentiment", {}))
+    meta.news_article_counts_json = json_dumps(news.get("article_counts", {}))
+    meta.news_headlines_json = json_dumps({
+        "sample_headlines": news.get("sample_headlines", {}),
+        "llm": {
+            "available": bool(llm.get("available")),
+            "source": str(llm.get("source", "OpenAI Chat Completions")),
+            "model": str(llm.get("model", FORECAST_LLM_MODEL)),
+            "scores": llm.get("scores", {}),
+            "confidences": llm.get("confidences", {}),
+            "rationales": llm.get("rationales", {}),
+            "global_comment": str(llm.get("global_comment", "")),
+        },
+        "stat_model": {
+            "enabled": bool(stat_model.get("enabled", FORECAST_SARIMAX_ENABLED)),
+            "available": bool(stat_model.get("available", SARIMAX_AVAILABLE)),
+            "min_history": int(safe_float(stat_model.get("min_history")) or FORECAST_SARIMAX_MIN_HISTORY),
+        },
+    })
 
-    # 念のため古いメタ行が複数残っている場合は最新1件以外を削除する。
     await session.flush()
     await session.execute(delete(WeeklyForecastMeta).where(WeeklyForecastMeta.id != meta.id))
     await session.commit()

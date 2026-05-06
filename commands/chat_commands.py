@@ -1,3 +1,5 @@
+import time
+
 import discord
 
 from services.chatgpt_service import ChatGPT
@@ -5,23 +7,34 @@ from services.discord_utils import send_large_message
 from services.logging_service import log_action
 from services.settings_store import get_response_channel_id
 
-# ユーザー・ギルドごとのChatGPTインスタンス
+_CHATGPT_TTL_SECONDS = 3600
+
 user_chatgpt: dict[tuple[int, int], ChatGPT] = {}
+_user_last_used: dict[tuple[int, int], float] = {}
+_cleanup_counter = 0
+_CLEANUP_INTERVAL = 20
+
+
+def _cleanup_stale_instances() -> None:
+    global _cleanup_counter
+    _cleanup_counter += 1
+    if _cleanup_counter < _CLEANUP_INTERVAL:
+        return
+    _cleanup_counter = 0
+    now = time.time()
+    stale = [key for key, t in list(_user_last_used.items()) if now - t > _CHATGPT_TTL_SECONDS]
+    for key in stale:
+        user_chatgpt.pop(key, None)
+        _user_last_used.pop(key, None)
 
 
 async def handle_chatgpt_message(bot, message: discord.Message):
-    """
-    ChatGPT応答処理（セキュリティ・ログは bot_setup 側で実施）
-    """
-
-    # BOT自身は無視
     if message.author == bot.user:
         return
 
     if message.guild is None:
         return
 
-    # 応答対象チャンネル取得
     target_channel_id = get_response_channel_id(message.guild.id)
 
     if target_channel_id == 0 or message.channel.id != target_channel_id:
@@ -29,11 +42,12 @@ async def handle_chatgpt_message(bot, message: discord.Message):
 
     key = (message.guild.id, message.author.id)
 
-    # ChatGPTインスタンス生成
     if key not in user_chatgpt:
         user_chatgpt[key] = ChatGPT()
 
-    # ログ：入力
+    _user_last_used[key] = time.time()
+    _cleanup_stale_instances()
+
     await log_action(
         bot,
         message.guild.id,
@@ -61,7 +75,6 @@ async def handle_chatgpt_message(bot, message: discord.Message):
             await message.channel.send(f"ヴォルデモートでも手こずるとはな… {e}")
             return
 
-        # ログ：出力（プレビュー）
         preview = response[:1800] + ("..." if len(response) > 1800 else "")
         await log_action(
             bot,

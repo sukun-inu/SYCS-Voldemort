@@ -1,9 +1,17 @@
+import asyncio
+import logging
 import os
+from pathlib import Path
 from urllib.parse import quote_plus
 
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from .models import Base
+
+logger = logging.getLogger(__name__)
+
+MIGRATIONS_DIR = Path(__file__).parent.parent / "migrations"
 
 
 def _read_secret_file(path: str | None) -> str | None:
@@ -49,9 +57,54 @@ engine: AsyncEngine = create_async_engine(
 SessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
 
+async def _detect_legacy_db() -> bool:
+    """create_all で作られた旧式DBかどうかを確認する。
+
+    alembic_version テーブルがなく、既存テーブルが存在する場合は旧式DB。
+    """
+    async with engine.connect() as conn:
+        has_alembic = await conn.run_sync(
+            lambda c: inspect(c).has_table("alembic_version")
+        )
+        has_metal = await conn.run_sync(
+            lambda c: inspect(c).has_table("metal_price_daily")
+        )
+    return has_metal and not has_alembic
+
+
+def _run_alembic_upgrade() -> None:
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config()
+    cfg.set_main_option("script_location", str(MIGRATIONS_DIR))
+    cfg.set_main_option("sqlalchemy.url", DATABASE_URL)
+    command.upgrade(cfg, "head")
+
+
+def _run_alembic_stamp_head() -> None:
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config()
+    cfg.set_main_option("script_location", str(MIGRATIONS_DIR))
+    cfg.set_main_option("sqlalchemy.url", DATABASE_URL)
+    command.stamp(cfg, "head")
+
+
 async def init_db() -> None:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    is_legacy = await _detect_legacy_db()
+
+    if is_legacy:
+        logger.warning(
+            "旧式DB（create_all 作成）を検出。Alembic の初期リビジョンをスタンプします。"
+        )
+        await asyncio.to_thread(_run_alembic_stamp_head)
+        logger.info("スタンプ完了。以降のマイグレーションは Alembic で管理されます。")
+    else:
+        logger.info("Alembic マイグレーションを実行します。")
+        await asyncio.to_thread(_run_alembic_upgrade)
+        logger.info("マイグレーション完了。")
 
 
 async def close_db() -> None:

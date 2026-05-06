@@ -188,6 +188,29 @@ async def _already_dispatched(session: AsyncSession, *, snapshot_date: str) -> b
     return (await session.scalar(stmt)) is not None
 
 
+async def _send_push_to_subscriptions(
+    subscriptions: list,
+    payload: dict,
+    session: AsyncSession,
+) -> tuple[int, list[str]]:
+    stale_endpoints: list[str] = []
+    success_count = 0
+    for sub in subscriptions:
+        ok, should_remove = await send_push(
+            {"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh_key, "auth": sub.auth_key}},
+            payload,
+        )
+        if ok:
+            success_count += 1
+        elif should_remove:
+            stale_endpoints.append(sub.endpoint)
+
+    if stale_endpoints:
+        await session.execute(delete(PushSubscription).where(PushSubscription.endpoint.in_(stale_endpoints)))
+
+    return success_count, stale_endpoints
+
+
 async def dispatch_top_delta_notification(*, enforce_schedule_time: bool = False) -> None:
     if not is_push_enabled():
         return
@@ -218,26 +241,7 @@ async def dispatch_top_delta_notification(*, enforce_schedule_time: bool = False
             url=APP_PUBLIC_ROOT,
         )
 
-        stale_endpoints: list[str] = []
-        success_count = 0
-        for sub in subscriptions:
-            ok, should_remove = await send_push(
-                {
-                    "endpoint": sub.endpoint,
-                    "keys": {
-                        "p256dh": sub.p256dh_key,
-                        "auth": sub.auth_key,
-                    },
-                },
-                payload,
-            )
-            if ok:
-                success_count += 1
-            elif should_remove:
-                stale_endpoints.append(sub.endpoint)
-
-        if stale_endpoints:
-            await session.execute(delete(PushSubscription).where(PushSubscription.endpoint.in_(stale_endpoints)))
+        success_count, stale_endpoints = await _send_push_to_subscriptions(subscriptions, payload, session)
 
         session.add(
             NotificationDispatch(
@@ -313,27 +317,8 @@ async def _dispatch_startup_test_push_notification() -> None:
             url=APP_PUBLIC_ROOT,
         )
 
-        stale_endpoints: list[str] = []
-        success_count = 0
-        for sub in subscriptions:
-            ok, should_remove = await send_push(
-                {
-                    "endpoint": sub.endpoint,
-                    "keys": {
-                        "p256dh": sub.p256dh_key,
-                        "auth": sub.auth_key,
-                    },
-                },
-                payload,
-            )
-            if ok:
-                success_count += 1
-            elif should_remove:
-                stale_endpoints.append(sub.endpoint)
-
-        if stale_endpoints:
-            await session.execute(delete(PushSubscription).where(PushSubscription.endpoint.in_(stale_endpoints)))
-            await session.commit()
+        success_count, stale_endpoints = await _send_push_to_subscriptions(subscriptions, payload, session)
+        await session.commit()
 
         logger.warning(
             "起動時テストPushを送信した。snapshot=%s success=%s stale_removed=%s",

@@ -1,23 +1,23 @@
+from typing import Callable, List, Optional
+
 import discord
 from discord import app_commands
 from discord.ext.commands import Bot
-from typing import Optional
 
-from services.logging_service import set_log_channel, set_log_level, get_log_settings
+from services.logging_service import get_log_settings, set_log_channel, set_log_level
 from services.settings_store import (
-    set_response_channel_id,
-    get_response_channel_id,
-    add_trusted_users,
-    remove_trusted_users,
-    get_trusted_user_ids,
     add_bypass_roles,
-    remove_bypass_roles,
+    add_trusted_users,
     get_bypass_role_ids,
+    get_response_channel_id,
+    get_trusted_user_ids,
+    remove_bypass_roles,
+    remove_trusted_users,
+    set_response_channel_id,
 )
 
 
 async def _ensure_admin_in_guild(interaction: discord.Interaction) -> bool:
-    """ギルド内かつ管理者であることを確認"""
     if interaction.guild is None:
         await interaction.response.send_message("ギルド内でのみ使用可能だ。", ephemeral=True)
         return False
@@ -29,8 +29,23 @@ async def _ensure_admin_in_guild(interaction: discord.Interaction) -> bool:
     return True
 
 
+async def _update_entity_list(
+    interaction: discord.Interaction,
+    entities: list,
+    update_fn: Callable,
+    action_text: str,
+    count_label: str,
+) -> None:
+    ids = [e.id for e in entities]
+    updated = update_fn(interaction.guild.id, ids)
+    mentions = ", ".join(e.mention for e in entities)
+    await interaction.response.send_message(
+        f"{action_text}: {mentions}\n現在の{count_label}: {len(updated)}",
+        ephemeral=True,
+    )
+
+
 def register_logging_commands(bot: Bot) -> None:
-    """ログ/設定関連のスラッシュコマンドを登録"""
 
     @bot.tree.command(name="set_log_channel", description="ボットの動作ログを送信するチャンネルを設定（管理者専用）")
     @app_commands.describe(channel="ログを投稿するテキストチャンネル")
@@ -84,10 +99,7 @@ def register_logging_commands(bot: Bot) -> None:
             return
 
         set_response_channel_id(interaction.guild.id, None)
-        await interaction.response.send_message(
-            "ChatGPT応答チャンネル設定を解除しました。",
-            ephemeral=True,
-        )
+        await interaction.response.send_message("ChatGPT応答チャンネル設定を解除しました。", ephemeral=True)
 
     @bot.tree.command(name="add_trusted_members", description="信頼済みユーザーとして追加（セキュリティチェック対象外・管理者専用）")
     @app_commands.describe(
@@ -109,13 +121,7 @@ def register_logging_commands(bot: Bot) -> None:
             return
 
         members = [m for m in [member1, member2, member3, member4, member5] if m is not None]
-        ids = [m.id for m in members]
-        updated = add_trusted_users(interaction.guild.id, ids)
-        mentions = ", ".join(m.mention for m in members)
-        await interaction.response.send_message(
-            f"信頼済みユーザーに追加: {mentions}\n現在の信頼済みユーザー数: {len(updated)}",
-            ephemeral=True,
-        )
+        await _update_entity_list(interaction, members, add_trusted_users, "信頼済みユーザーに追加", "信頼済みユーザー数")
 
     @bot.tree.command(name="remove_trusted_members", description="信頼済みユーザーから削除（管理者専用）")
     @app_commands.describe(
@@ -137,13 +143,7 @@ def register_logging_commands(bot: Bot) -> None:
             return
 
         members = [m for m in [member1, member2, member3, member4, member5] if m is not None]
-        ids = [m.id for m in members]
-        updated = remove_trusted_users(interaction.guild.id, ids)
-        mentions = ", ".join(m.mention for m in members)
-        await interaction.response.send_message(
-            f"信頼済みユーザーから削除: {mentions}\n現在の信頼済みユーザー数: {len(updated)}",
-            ephemeral=True,
-        )
+        await _update_entity_list(interaction, members, remove_trusted_users, "信頼済みユーザーから削除", "信頼済みユーザー数")
 
     @bot.tree.command(name="list_trusted_members", description="信頼済みユーザー一覧を表示（管理者専用）")
     async def list_trusted_members_cmd(interaction: discord.Interaction):
@@ -155,8 +155,7 @@ def register_logging_commands(bot: Bot) -> None:
             await interaction.response.send_message("信頼済みユーザーは登録されていない。", ephemeral=True)
             return
 
-        # 実在するメンバーだけ mention する
-        members: list[str] = []
+        members: List[str] = []
         for uid in ids:
             m = interaction.guild.get_member(uid)
             members.append(m.mention if m else f"<@{uid}>")
@@ -182,13 +181,7 @@ def register_logging_commands(bot: Bot) -> None:
             return
 
         roles = [r for r in [role1, role2, role3] if r is not None]
-        ids = [r.id for r in roles]
-        updated = add_bypass_roles(interaction.guild.id, ids)
-        names = ", ".join(r.mention for r in roles)
-        await interaction.response.send_message(
-            f"バイパスロールに追加: {names}\n現在のバイパスロール数: {len(updated)}",
-            ephemeral=True,
-        )
+        await _update_entity_list(interaction, roles, add_bypass_roles, "バイパスロールに追加", "バイパスロール数")
 
     @bot.tree.command(name="remove_bypass_roles", description="バイパスロールから削除（管理者専用）")
     @app_commands.describe(
@@ -206,13 +199,7 @@ def register_logging_commands(bot: Bot) -> None:
             return
 
         roles = [r for r in [role1, role2, role3] if r is not None]
-        ids = [r.id for r in roles]
-        updated = remove_bypass_roles(interaction.guild.id, ids)
-        names = ", ".join(r.mention for r in roles)
-        await interaction.response.send_message(
-            f"バイパスロールから削除: {names}\n現在のバイパスロール数: {len(updated)}",
-            ephemeral=True,
-        )
+        await _update_entity_list(interaction, roles, remove_bypass_roles, "バイパスロールから削除", "バイパスロール数")
 
     @bot.tree.command(name="list_bypass_roles", description="バイパスロール一覧を表示（管理者専用）")
     async def list_bypass_roles_cmd(interaction: discord.Interaction):
@@ -224,7 +211,7 @@ def register_logging_commands(bot: Bot) -> None:
             await interaction.response.send_message("バイパスロールは登録されていない。", ephemeral=True)
             return
 
-        role_mentions: list[str] = []
+        role_mentions: List[str] = []
         for rid in ids:
             r = interaction.guild.get_role(rid)
             role_mentions.append(r.mention if r else f"<@&{rid}>")
@@ -236,14 +223,10 @@ def register_logging_commands(bot: Bot) -> None:
 
     @bot.tree.command(name="help", description="このボットで利用可能なスラッシュコマンド一覧を表示")
     async def help_cmd(interaction: discord.Interaction):
-        """/help で全スラッシュコマンドと説明を一覧表示"""
-        # bot.tree からスラッシュコマンドを列挙
         commands = {}
         for cmd in bot.tree.walk_commands():
-            # 同名コマンドは上書き（最後の定義を優先）
             commands[cmd.name] = cmd.description or "(説明なし)"
 
-        # 名前順にソート
         items = sorted(commands.items(), key=lambda x: x[0])
 
         embed = discord.Embed(
