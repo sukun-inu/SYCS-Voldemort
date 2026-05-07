@@ -32,8 +32,8 @@ def create_bot() -> Bot:
 
 def setup_events(bot: Bot) -> None:
     _ws_task: asyncio.Task | None = None
-    _vc_join_times: dict[tuple[int, int], float] = {}   # (guild_id, user_id) → Unix timestamp
-    _vc_last_notify: dict[tuple[int, int], float] = {}  # (guild_id, user_id) → Unix timestamp
+    _vc_join_times: dict[tuple[int, int], float] = {}  # (guild_id, user_id) → 入室時刻
+    _vc_last_mention: dict[int, float] = {}            # guild_id → 最後にロールメンションを送った時刻
 
     # --------------------------
     # ステータス更新
@@ -195,16 +195,16 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.exception("[BOT_SETUP] VC security error: %s", e)
 
-        # 通話時間追跡
-        key = (member.guild.id, member.id)
-        now_ts = time.time()
-        is_join = before.channel is None and after.channel is not None
-        is_leave = before.channel is not None and after.channel is None
-        is_move = (
-            before.channel is not None
-            and after.channel is not None
-            and before.channel.id != after.channel.id
-        )
+        # チャンネル参照を一度だけ取得（プロパティ再ルックアップによる None 化を防ぐ）
+        before_ch = before.channel
+        after_ch  = after.channel
+
+        key      = (member.guild.id, member.id)
+        now_ts   = time.time()
+        is_join  = before_ch is None and after_ch is not None
+        is_leave = before_ch is not None and after_ch is None
+        is_move  = before_ch is not None and after_ch is not None and before_ch.id != after_ch.id
+
         if is_join:
             _vc_join_times[key] = now_ts
         duration_str = ""
@@ -223,14 +223,14 @@ def setup_events(bot: Bot) -> None:
                     bot, member.guild.id, "INFO",
                     f"{member.mention} が VC に参加しました。",
                     user=member,
-                    fields={"チャンネル": after.channel.mention},
+                    fields={"チャンネル": after_ch.mention},
                 )
             elif is_leave:
                 await log_action(
                     bot, member.guild.id, "INFO",
                     f"{member.mention} が VC から退出しました。",
                     user=member,
-                    fields={"チャンネル": before.channel.mention},
+                    fields={"チャンネル": before_ch.mention},
                 )
             elif is_move:
                 await log_action(
@@ -238,8 +238,8 @@ def setup_events(bot: Bot) -> None:
                     f"{member.mention} が VC を移動しました。",
                     user=member,
                     fields={
-                        "移動前": before.channel.mention,
-                        "移動後": after.channel.mention,
+                        "移動前": before_ch.mention,
+                        "移動後": after_ch.mention,
                     },
                 )
         except Exception as e:
@@ -256,23 +256,18 @@ def setup_events(bot: Bot) -> None:
             if not isinstance(notify_ch, discord.TextChannel):
                 return
 
-            # スパム防止: 同一ユーザーの直前通知から 10 秒以内はスキップ
-            if now_ts - _vc_last_notify.get(key, 0.0) < 10:
-                return
-            _vc_last_notify[key] = now_ts
-
             if is_join:
-                title = "🎙️ VCに参加しました"
-                description = f"**{after.channel.name}** に参加しました"
-                color = discord.Color.green()
+                title       = "🎙️ VCに参加しました"
+                description = f"**{after_ch.name}** に参加しました"
+                color       = discord.Color.green()
             elif is_leave:
-                title = "🚪 VCから退出しました"
-                description = f"**{before.channel.name}** から退出しました"
-                color = discord.Color.red()
+                title       = "🚪 VCから退出しました"
+                description = f"**{before_ch.name}** から退出しました"
+                color       = discord.Color.red()
             else:
-                title = "🔀 VCを移動しました"
-                description = f"**{before.channel.name}** → **{after.channel.name}**"
-                color = discord.Color.blurple()
+                title       = "🔀 VCを移動しました"
+                description = f"**{before_ch.name}** → **{after_ch.name}**"
+                color       = discord.Color.blurple()
 
             embed = discord.Embed(
                 title=title,
@@ -284,8 +279,15 @@ def setup_events(bot: Bot) -> None:
             if duration_str:
                 embed.add_field(name="通話時間", value=duration_str, inline=False)
 
+            # ロールメンション: 同ギルドで直近 10 分以内に送信済みならスキップ
+            content = None
             role_id = get_vc_notify_role_id(member.guild.id)
-            content = f"<@&{role_id}>" if role_id else None
+            if role_id:
+                gid = member.guild.id
+                if now_ts - _vc_last_mention.get(gid, 0.0) >= 600:
+                    content = f"<@&{role_id}>"
+                    _vc_last_mention[gid] = now_ts
+
             await notify_ch.send(content=content, embed=embed)
         except Exception as e:
             logger.exception("[BOT_SETUP] VC notify error: %s", e)
