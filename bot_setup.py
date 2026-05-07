@@ -13,7 +13,7 @@ from services.reaction_role_service import handle_reaction_add, handle_reaction_
 from services.security_service import handle_security_for_message, handle_security_for_voice_join
 from config import JST as _JST
 from services.settings_store import get_vc_notify_channel_id
-from services.sticky_service import handle_sticky
+from services.sticky_service import handle_sticky, process_pending_stickies
 from services.welcome_service import send_goodbye, send_welcome
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,16 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.exception("[BOT_SETUP] news_feed_task error: %s", e)
 
+    # --------------------------
+    # スティッキー pending 処理（30秒ごと）
+    # --------------------------
+    @tasks.loop(seconds=30)
+    async def pending_sticky_task():
+        try:
+            await process_pending_stickies(bot)
+        except Exception as e:
+            logger.exception("[BOT_SETUP] pending_sticky_task error: %s", e)
+
     @bot.event
     async def on_ready():
         nonlocal _ws_task
@@ -68,6 +78,8 @@ def setup_events(bot: Bot) -> None:
             update_status.start()
         if not news_feed_task.is_running():
             news_feed_task.start()
+        if not pending_sticky_task.is_running():
+            pending_sticky_task.start()
         if _ws_task is None or _ws_task.done():
             _ws_task = asyncio.create_task(run_earthquake_ws(bot))
 

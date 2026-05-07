@@ -18,10 +18,10 @@ from services.settings_store import (
     get_trusted_user_ids,
     get_vc_notify_channel_id,
     get_welcome_settings,
+    mark_sticky_pending_delete,
     remove_bypass_roles,
     remove_news_feed,
     remove_reaction_role,
-    remove_sticky_message,
     remove_trusted_users,
     set_earthquake_channel,
     set_earthquake_min_scale,
@@ -178,7 +178,7 @@ def sticky():
             flash("スティッキーメッセージを設定した。", "success")
         elif action == "remove":
             ch_id = request.form.get("channel_id", "")
-            remove_sticky_message(gid, validate_channel_id(ch_id))
+            mark_sticky_pending_delete(gid, validate_channel_id(ch_id))
             flash("スティッキーメッセージを解除した。", "success")
         return redirect(url_for("settings.sticky"))
 

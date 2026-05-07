@@ -240,7 +240,13 @@ def get_sticky_messages(guild_id: int) -> Dict[str, Any]:
 
 def set_sticky_message(guild_id: int, channel_id: int, content: str) -> None:
     stickies = get_guild_settings(guild_id).get("sticky_messages", {})
-    stickies[str(channel_id)] = {"content": content, "message_id": None}
+    key = str(channel_id)
+    existing = stickies.get(key, {})
+    stickies[key] = {
+        "content": content,
+        "message_id": existing.get("message_id"),
+        "pending": "post",
+    }
     update_guild_settings(guild_id, {"sticky_messages": stickies})
 
 
@@ -249,6 +255,16 @@ def update_sticky_message_id(guild_id: int, channel_id: int, message_id: int | N
     key = str(channel_id)
     if key in stickies:
         stickies[key]["message_id"] = message_id
+        stickies[key].pop("pending", None)
+        update_guild_settings(guild_id, {"sticky_messages": stickies})
+
+
+def mark_sticky_pending_delete(guild_id: int, channel_id: int) -> None:
+    """削除待ちフラグを立てる。Botの定期タスクがDiscordメッセージを削除した後エントリを消す。"""
+    stickies = get_guild_settings(guild_id).get("sticky_messages", {})
+    key = str(channel_id)
+    if key in stickies:
+        stickies[key]["pending"] = "delete"
         update_guild_settings(guild_id, {"sticky_messages": stickies})
 
 

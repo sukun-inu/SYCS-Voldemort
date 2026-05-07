@@ -5,6 +5,7 @@ from typing import Dict
 import discord
 
 from services.settings_store import (
+    get_all_guild_ids,
     get_sticky_messages,
     remove_sticky_message,
     update_sticky_message_id,
@@ -13,7 +14,6 @@ from services.settings_store import (
 logger = logging.getLogger(__name__)
 
 _locks: Dict[int, asyncio.Lock] = {}
-# ロック保持中にメッセージが届いたことを記録し、解放後に再投稿するためのフラグ
 _pending: Dict[int, bool] = {}
 
 
@@ -28,7 +28,9 @@ async def _post_once(channel: discord.TextChannel, guild_id: int, content: str, 
         try:
             old_msg = await channel.fetch_message(old_message_id)
             await old_msg.delete()
-        except (discord.NotFound, discord.HTTPException):
+        except discord.NotFound:
+            update_sticky_message_id(guild_id, channel.id, None)
+        except discord.HTTPException:
             pass
 
     try:
@@ -77,6 +79,9 @@ async def handle_sticky(message: discord.Message) -> None:
     if not entry:
         return
 
+    if entry.get("pending") == "delete":
+        return
+
     lock = _get_lock(channel_id)
     if lock.locked():
         _pending[channel_id] = True
@@ -90,3 +95,38 @@ async def handle_sticky(message: discord.Message) -> None:
         _pending[channel_id] = False
         async with lock:
             await _post_latest(message.channel, guild_id)
+
+
+async def process_pending_stickies(bot: discord.Client) -> None:
+    """WebUIからのpending操作（post/delete）を処理する。定期タスクから呼ぶ。"""
+    for guild_id in get_all_guild_ids():
+        stickies = get_sticky_messages(guild_id)
+        for ch_id_str, entry in list(stickies.items()):
+            pending = entry.get("pending")
+            if not pending:
+                continue
+
+            channel_id = int(ch_id_str)
+            guild = bot.get_guild(guild_id)
+            if guild is None:
+                continue
+            channel = guild.get_channel(channel_id)
+            if not isinstance(channel, discord.TextChannel):
+                continue
+
+            lock = _get_lock(channel_id)
+            if pending == "post":
+                async with lock:
+                    _pending[channel_id] = False
+                    await _post_latest(channel, guild_id)
+            elif pending == "delete":
+                async with lock:
+                    _pending[channel_id] = False
+                    message_id = entry.get("message_id")
+                    if message_id:
+                        try:
+                            old_msg = await channel.fetch_message(message_id)
+                            await old_msg.delete()
+                        except (discord.NotFound, discord.HTTPException):
+                            pass
+                    remove_sticky_message(guild_id, channel_id)
