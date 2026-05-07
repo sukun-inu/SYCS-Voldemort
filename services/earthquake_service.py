@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import math
+import os
 import re
 from datetime import datetime
 
@@ -26,26 +27,36 @@ _TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 _TILE_UA  = "VoldermortBot/1.0 (earthquake alert; contact: github)"
 _TILE_SZ  = 256
 
-# ── 震度マップ ─────────────────────────────────────────────
+# ── 震度マッピング ─────────────────────────────────────────
+
+# 凡例・ログ用（全角）
 _SCALE_MAP = {
     10: "１", 20: "２", 30: "３", 40: "４", 45: "４強",
     50: "５弱", 55: "５強", 60: "６弱", 65: "６強", 70: "７",
 }
 
-_SCALE_COLORS = {
-    10: discord.Color.from_rgb(0,   200, 100),
-    20: discord.Color.from_rgb(0,   200, 100),
-    30: discord.Color.from_rgb(255, 220,   0),
-    40: discord.Color.from_rgb(255, 140,   0),
-    45: discord.Color.from_rgb(255, 100,   0),
-    50: discord.Color.from_rgb(220,   0,   0),
-    55: discord.Color.from_rgb(190,   0,   0),
-    60: discord.Color.from_rgb(160,   0, 110),
-    65: discord.Color.from_rgb(130,   0,  85),
-    70: discord.Color.from_rgb( 90,   0,  55),
+# embed テキスト用（アラビア数字 + 日本語）
+_SCALE_DISPLAY = {
+    10: "1", 20: "2", 30: "3", 40: "4", 45: "4強",
+    50: "5弱", 55: "5強", 60: "6弱", 65: "6強", 70: "7",
 }
 
-# 震度圏の塗り(RGBA半透明) ・ 枠線(RGBA)
+# バッジ画像用（ASCII のみ・CJK フォント不要）
+_SCALE_BADGE_LABEL = {
+    10: "1", 20: "2", 30: "3", 40: "4", 45: "4+",
+    50: "5-", 55: "5+", 60: "6-", 65: "6+", 70: "7",
+}
+
+# 震度別 RGB（バッジ・embed 色共通）
+_SCALE_RGB = {
+    10: (0, 200, 100), 20: (0, 200, 100), 30: (255, 220, 0),
+    40: (255, 140, 0), 45: (255, 100, 0), 50: (220, 0, 0),
+    55: (190, 0, 0),   60: (160, 0, 110), 65: (130, 0, 85), 70: (90, 0, 55),
+}
+
+_SCALE_COLORS = {k: discord.Color.from_rgb(*v) for k, v in _SCALE_RGB.items()}
+
+# 震度圏の塗り(RGBA半透明)・枠線(RGBA)
 _ZONE_FILL = {
     10: (  0, 200, 100,  55), 20: (120, 210,  50,  65),
     30: (255, 230,   0,  75), 40: (255, 160,   0,  85),
@@ -55,7 +66,6 @@ _ZONE_FILL = {
 }
 _ZONE_BORDER = {k: (r, g, b, 210) for k, (r, g, b, _) in _ZONE_FILL.items()}
 
-# 震度に応じたズーム（拡大率）
 _SCALE_ZOOM = {
     10: 8, 20: 8, 30: 7, 40: 7, 45: 7,
     50: 6, 55: 6, 60: 5, 65: 5, 70: 5,
@@ -66,8 +76,8 @@ _TSUNAMI_TEXT = {
     "Unknown":      "津波の有無を調査中です。",
     "Checking":     "津波の有無を調査中です。",
     "NonEffective": "この地震による津波の心配はありません。",
-    "Watch":        "⚠️ **津波注意報が発令されています。**",
-    "Warning":      "🚨 **津波警報が発令されています。**",
+    "Watch":        "⚠️ 津波注意報が発令されています。",
+    "Warning":      "🚨 津波警報が発令されています！",
 }
 
 _ISSUE_LABELS = {
@@ -80,11 +90,50 @@ _ISSUE_LABELS = {
 }
 
 
+# ── フォントローダー ───────────────────────────────────────
+
+_FONT_SEARCH_PATHS = [
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf",
+    "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "C:/Windows/Fonts/meiryo.ttc",
+    "C:/Windows/Fonts/msgothic.ttc",
+    "C:/Windows/Fonts/YuGothR.ttc",
+]
+_FONT_PATH: str | None = None
+_FONT_CACHE: dict[int, "ImageFont.ImageFont"] = {}
+
+
+def _get_font(size: int) -> "ImageFont.ImageFont":
+    global _FONT_PATH
+    if size in _FONT_CACHE:
+        return _FONT_CACHE[size]
+
+    if _FONT_PATH is None:
+        for p in _FONT_SEARCH_PATHS:
+            if os.path.exists(p):
+                _FONT_PATH = p
+                break
+
+    font = None
+    if _FONT_PATH:
+        try:
+            font = ImageFont.truetype(_FONT_PATH, size)
+        except Exception:
+            pass
+
+    if font is None:
+        try:
+            font = ImageFont.load_default(size=size)
+        except TypeError:
+            font = ImageFont.load_default()
+
+    _FONT_CACHE[size] = font
+    return font
+
+
 # ── データ解析ヘルパー ─────────────────────────────────────
-
-def _scale_label(scale: int) -> str:
-    return _SCALE_MAP.get(scale, f"不明({scale})")
-
 
 def _max_scale(event: dict) -> int:
     points = event.get("points", [])
@@ -127,7 +176,6 @@ def _parse_depth(raw) -> str:
 
 
 def _parse_magnitude(raw) -> tuple[str, float]:
-    """(表示文字列, float値) を返す。不明時は ("不明", -1)。"""
     try:
         v = float(raw)
         return (f"M{v}", v) if v >= 0 else ("不明", -1.0)
@@ -140,9 +188,41 @@ def _format_time(time_str: str) -> tuple[str, datetime | None]:
         return "不明", None
     try:
         dt = datetime.strptime(time_str, "%Y/%m/%d %H:%M:%S").replace(tzinfo=_JST)
-        return f"{dt.month}月{dt.day}日 {dt.hour}時{dt.minute:02d}分ごろ", dt
+        return f"{dt.day}日 {dt.hour}時{dt.minute:02d}分ごろ", dt
     except ValueError:
         return f"{time_str}ごろ", None
+
+
+# ── バッジ画像生成 ─────────────────────────────────────────
+
+def _generate_badge(scale: int) -> io.BytesIO | None:
+    """最大震度バッジ（120×120）を生成して BytesIO で返す。"""
+    if not _PIL:
+        return None
+
+    rgb   = _SCALE_RGB.get(scale, (100, 100, 100))
+    label = _SCALE_BADGE_LABEL.get(scale, str(scale))
+
+    w, h = 120, 120
+    img  = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    # ダーク背景（丸角）
+    draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=14, fill=(28, 28, 30, 255))
+    # 震度カラーのヘッダ帯（上40px）
+    draw.rounded_rectangle([0, 0, w - 1, 42], radius=14, fill=(*rgb, 255))
+    draw.rectangle([0, 28, w - 1, 42], fill=(*rgb, 255))  # 帯の下角を四角に
+
+    font_sm = _get_font(13)
+    font_lg = _get_font(48 if len(label) == 1 else 32)
+
+    draw.text((w // 2, 21), "最大震度", fill=(255, 255, 255, 255), font=font_sm, anchor="mm")
+    draw.text((w // 2, 83), label,     fill=(255, 255, 255, 255), font=font_lg, anchor="mm")
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
 
 
 # ── 地図生成ヘルパー ───────────────────────────────────────
@@ -164,7 +244,7 @@ def _estimate_radii(magnitude: float, max_scale: int) -> dict[int, float]:
     """震度ごとの推定地表半径 (km) を返す。max_scale 以下のみ。"""
     if magnitude <= 0:
         return {}
-    base = min(1200.0, 10 ** (0.6 * magnitude - 0.3))  # 震度1の概算到達距離
+    base = min(1200.0, 10 ** (0.6 * magnitude - 0.3))
     ratios = {
         10: 1.000, 20: 0.600, 30: 0.360,
         40: 0.210, 45: 0.160, 50: 0.100,
@@ -215,10 +295,7 @@ def _draw_star(draw: "ImageDraw.ImageDraw", cx: int, cy: int, r: int) -> None:
 def _draw_legend(img: "Image.Image", radii: dict[int, float], max_scale: int) -> None:
     """右下に震度凡例を描画。"""
     draw = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.load_default(size=11)
-    except TypeError:
-        font = ImageFont.load_default()
+    font = _get_font(11)
 
     scales = sorted([s for s in radii if s <= max_scale], reverse=True)
     if not scales:
@@ -231,7 +308,6 @@ def _draw_legend(img: "Image.Image", radii: dict[int, float], max_scale: int) ->
 
     draw.rectangle([x0, y0, x0 + box_w, y0 + box_h],
                    fill=(255, 255, 255, 210), outline=(150, 150, 150, 255))
-
     for i, scale in enumerate(scales):
         y = y0 + 3 + i * row_h
         fill = _ZONE_FILL.get(scale, (200, 200, 200, 120))[:3] + (255,)
@@ -245,10 +321,7 @@ def _draw_legend(img: "Image.Image", radii: dict[int, float], max_scale: int) ->
 def _draw_attribution(img: "Image.Image") -> None:
     """左下に OSM 帰属表示。"""
     draw = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.load_default(size=9)
-    except TypeError:
-        font = ImageFont.load_default()
+    font = _get_font(9)
     text = "© OpenStreetMap contributors"
     draw.rectangle([0, img.height - 14, len(text) * 6, img.height],
                    fill=(255, 255, 255, 180))
@@ -281,14 +354,12 @@ async def _generate_intensity_map(
     tx0, ty0 = int(cx) - pad, int(cy) - pad
     tx1, ty1 = int(cx) + pad, int(cy) + pad
 
-    # タイルを並列取得
     coords = [(tx, ty) for ty in range(ty0, ty1 + 1) for tx in range(tx0, tx1 + 1)]
     tile_imgs = await asyncio.gather(
         *(_fetch_tile(session, zoom, tx, ty) for tx, ty in coords),
         return_exceptions=True,
     )
 
-    # ベースマップ合成
     map_w = (tx1 - tx0 + 1) * _TILE_SZ
     map_h = (ty1 - ty0 + 1) * _TILE_SZ
     base  = Image.new("RGBA", (map_w, map_h), (200, 210, 220, 255))
@@ -297,11 +368,9 @@ async def _generate_intensity_map(
             continue
         base.paste(tile, ((tx - tx0) * _TILE_SZ, (ty - ty0) * _TILE_SZ))
 
-    # 震源ピクセル座標
     epi_x = int((cx - tx0) * _TILE_SZ)
     epi_y = int((cy - ty0) * _TILE_SZ)
 
-    # 震度圏オーバーレイ（震度の低い=広い順に塗る）
     overlay = Image.new("RGBA", (map_w, map_h), (0, 0, 0, 0))
     draw    = ImageDraw.Draw(overlay)
     for scale in sorted(radii):
@@ -315,12 +384,10 @@ async def _generate_intensity_map(
             width=2,
         )
 
-    # 震源★マーカー
     _draw_star(draw, epi_x, epi_y, 12)
 
     composite = Image.alpha_composite(base, overlay)
 
-    # 震源中心で 600×360 にクロップ
     cx0 = max(0, min(epi_x - img_w // 2, map_w - img_w))
     cy0 = max(0, min(epi_y - img_h // 2, map_h - img_h))
     cropped = composite.crop((cx0, cy0, cx0 + img_w, cy0 + img_h))
@@ -336,48 +403,59 @@ async def _generate_intensity_map(
 
 # ── Embed 生成 ────────────────────────────────────────────
 
-def _build_embed(event: dict, max_scale: int) -> discord.Embed:
+def _build_embed(event: dict, max_scale: int, has_badge: bool = False) -> discord.Embed:
     eq    = event.get("earthquake", {})
     hypo  = eq.get("hypocenter", {})
     issue = event.get("issue", {})
 
     time_label, _  = _format_time(eq.get("time", ""))
     _, issue_dt    = _format_time(issue.get("time", ""))
-    scale_jp       = _scale_label(max_scale)
+    scale_disp     = _SCALE_DISPLAY.get(max_scale, f"不明({max_scale})")
     tsunami_text   = _TSUNAMI_TEXT.get(eq.get("domesticTsunami", "None"), "津波情報は不明です。")
     footer_label   = _ISSUE_LABELS.get(issue.get("type", ""), "気象庁")
     color          = _SCALE_COLORS.get(max_scale, discord.Color.red())
 
-    name           = hypo.get("name") or "不明"
-    mag_str, _     = _parse_magnitude(hypo.get("magnitude"))
-    depth_str      = _parse_depth(hypo.get("depth"))
-
-    event_id   = event.get("_id") or str(event.get("id", ""))
-    detail_url = f"https://www.p2pquake.net/earthquake/{event_id}" if event_id else None
+    name      = hypo.get("name") or "不明"
+    mag_str,_ = _parse_magnitude(hypo.get("magnitude"))
+    depth_str = _parse_depth(hypo.get("depth"))
 
     embed = discord.Embed(
-        title="🔔 地震情報",
+        title="地震情報",
         description="\n".join([
-            f"**{time_label}、**",
-            f"最大震度**{scale_jp}**の地震がありました。",
+            f"{time_label}、",
+            f"最大震度 {scale_disp} の地震がありました。",
             tsunami_text,
         ]),
         color=color,
         timestamp=issue_dt,
-        url=detail_url,
     )
-    embed.add_field(name="震源地", value=name,      inline=True)
-    embed.add_field(name="規模",   value=mag_str,   inline=True)
-    embed.add_field(name="深さ",   value=depth_str, inline=True)
+    embed.add_field(name="震源",  value=name,      inline=True)
+    embed.add_field(name="規模",  value=mag_str,   inline=True)
+    embed.add_field(name="深さ",  value=depth_str, inline=True)
     embed.set_footer(text=footer_label)
+
+    if has_badge:
+        embed.set_thumbnail(url="attachment://intensity_badge.png")
+
     return embed
+
+
+# ── 詳細リンクボタン ──────────────────────────────────────
+
+class _EqView(discord.ui.View):
+    def __init__(self, url: str):
+        super().__init__(timeout=None)
+        self.add_item(discord.ui.Button(
+            label="詳細",
+            url=url,
+            style=discord.ButtonStyle.link,
+        ))
 
 
 # ── 通知送信 ──────────────────────────────────────────────
 
 async def _notify_all_guilds(bot: Bot, event: dict, session: aiohttp.ClientSession) -> None:
     max_scale = _max_scale(event)
-    embed     = _build_embed(event, max_scale)
 
     eq   = event.get("earthquake", {})
     hypo = eq.get("hypocenter", {})
@@ -385,13 +463,25 @@ async def _notify_all_guilds(bot: Bot, event: dict, session: aiohttp.ClientSessi
     lon  = _parse_coord(hypo.get("longitude"))
     _, mag = _parse_magnitude(hypo.get("magnitude"))
 
-    # 震度圏マップを生成（PIL 利用可能かつ座標あり）
+    event_id   = event.get("_id") or str(event.get("id", ""))
+    detail_url = f"https://www.p2pquake.net/earthquake/{event_id}" if event_id else None
+
+    # バッジ画像生成
+    badge_buf: io.BytesIO | None = None
+    try:
+        badge_buf = _generate_badge(max_scale)
+    except Exception as e:
+        logger.exception("[earthquake] badge generation error: %s", e)
+
+    # 震度圏マップ生成
     map_buf: io.BytesIO | None = None
     if lat is not None and lon is not None and mag > 0:
         try:
             map_buf = await _generate_intensity_map(session, lat, lon, mag, max_scale)
         except Exception as e:
             logger.exception("[earthquake] map generation error: %s", e)
+
+    embed = _build_embed(event, max_scale, has_badge=bool(badge_buf))
 
     # マップなし時フォールバック: OSM 静的マップ
     if map_buf is None and lat is not None and lon is not None:
@@ -401,9 +491,10 @@ async def _notify_all_guilds(bot: Bot, event: dict, session: aiohttp.ClientSessi
             f"?center={lat},{lon}&zoom={zoom}&size=600x360"
             f"&markers={lat},{lon},ltblu-pushpin"
         ))
-
-    if map_buf:
+    elif map_buf:
         embed.set_image(url="attachment://earthquake_map.png")
+
+    view = _EqView(detail_url) if detail_url else None
 
     # 対象チャンネルを収集
     targets: list[tuple[int, discord.TextChannel]] = []
@@ -425,14 +516,16 @@ async def _notify_all_guilds(bot: Bot, event: dict, session: aiohttp.ClientSessi
     if not targets:
         return
 
-    map_data = map_buf.getvalue() if map_buf else None
+    badge_data = badge_buf.getvalue() if badge_buf else None
+    map_data   = map_buf.getvalue()   if map_buf   else None
 
     async def _send(channel: discord.TextChannel) -> None:
+        files: list[discord.File] = []
+        if badge_data:
+            files.append(discord.File(io.BytesIO(badge_data), filename="intensity_badge.png"))
         if map_data:
-            f = discord.File(io.BytesIO(map_data), filename="earthquake_map.png")
-            await channel.send(embed=embed, file=f)
-        else:
-            await channel.send(embed=embed)
+            files.append(discord.File(io.BytesIO(map_data), filename="earthquake_map.png"))
+        await channel.send(embed=embed, files=files or discord.utils.MISSING, view=view or discord.utils.MISSING)
 
     results = await asyncio.gather(
         *(_send(ch) for _, ch in targets),

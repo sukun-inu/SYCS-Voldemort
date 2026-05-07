@@ -267,16 +267,19 @@ def setup_events(bot: Bot) -> None:
             )
 
             if is_join:
-                title       = "🎙️ VCに参加しました"
-                description = f"**{after_ch.name}** に参加しました\n{time_str}"
+                title       = "VCに参加しました"
+                description = f"🔊 **{after_ch.name}** に参加しました\n\n{time_str}"
                 color       = discord.Color.green()
             elif is_leave:
-                title       = "🚪 VCから退出しました"
-                description = f"**{before_ch.name}** から退出しました\n{time_str}"
+                title       = "VCから切断しました"
+                desc_parts  = [f"🔊 **{before_ch.name}** から退出しました", "", time_str]
+                if duration_str:
+                    desc_parts.append(f"通話時間: {duration_str}")
+                description = "\n".join(desc_parts)
                 color       = discord.Color.red()
             else:
-                title       = "🔀 VCを移動しました"
-                description = f"**{before_ch.name}** → **{after_ch.name}**\n{time_str}"
+                title       = "VCを移動しました"
+                description = f"🔊 **{before_ch.name}** → **{after_ch.name}**\n\n{time_str}"
                 color       = discord.Color.blurple()
 
             embed = discord.Embed(
@@ -286,8 +289,7 @@ def setup_events(bot: Bot) -> None:
                 timestamp=discord.utils.utcnow(),
             )
             embed.set_author(name=member.display_name, icon_url=member.display_avatar.url)
-            if duration_str:
-                embed.add_field(name="通話時間", value=duration_str, inline=False)
+            embed.set_thumbnail(url=member.display_avatar.url)
 
             # ロールメンション: 同ギルドで直近 10 分以内に送信済みならスキップ
             content = None
