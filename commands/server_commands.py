@@ -6,6 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Bot
 
+from services.sticky_service import post_sticky
 from services.settings_store import (
     add_news_feed,
     add_reaction_role,
@@ -127,7 +128,8 @@ def register_server_commands(bot: Bot) -> None:
             await interaction.response.send_message("テキストチャンネルで使用してください。", ephemeral=True)
             return
         set_sticky_message(interaction.guild.id, interaction.channel.id, content)
-        await interaction.response.send_message(f"スティッキーメッセージを設定した。\n📌 {content}", ephemeral=True)
+        await interaction.response.send_message("スティッキーメッセージを設定した。", ephemeral=True)
+        await post_sticky(interaction.channel, interaction.guild.id)
 
     @bot.tree.command(name="unsticky", description="このチャンネルのスティッキーメッセージを解除（管理者専用）")
     async def unsticky_cmd(interaction: discord.Interaction):
@@ -136,6 +138,14 @@ def register_server_commands(bot: Bot) -> None:
         if not isinstance(interaction.channel, discord.TextChannel):
             await interaction.response.send_message("テキストチャンネルで使用してください。", ephemeral=True)
             return
+        stickies = get_sticky_messages(interaction.guild.id)
+        entry = stickies.get(str(interaction.channel.id))
+        if entry and entry.get("message_id"):
+            try:
+                old_msg = await interaction.channel.fetch_message(entry["message_id"])
+                await old_msg.delete()
+            except (discord.NotFound, discord.HTTPException):
+                pass
         remove_sticky_message(interaction.guild.id, interaction.channel.id)
         await interaction.response.send_message("スティッキーメッセージを解除した。", ephemeral=True)
 
