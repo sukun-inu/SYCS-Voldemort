@@ -1,6 +1,9 @@
 /* SYCS Voldemort admin UI */
 
 :root {
+  --font-main: "Zen Kaku Gothic New", "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif;
+  --bs-body-font-family: var(--font-main);
+  --bs-font-sans-serif: var(--font-main);
   --app-bg: #f5f5f7;
   --surface: #ffffff;
   --surface-raised: #fbfbfd;
@@ -76,7 +79,7 @@ body {
   background-color: var(--app-bg);
   background-image: linear-gradient(180deg, var(--surface) 0, var(--app-bg) 320px);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, "Yu Gothic UI", Meiryo, sans-serif;
+  font-family: var(--font-main);
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -111,6 +114,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 button, a, input, select, textarea {
+  font-family: var(--font-main);
   transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
 }
 
@@ -128,7 +132,7 @@ code {
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
   color: var(--text);
-  font-family: "SF Mono", "JetBrains Mono", Consolas, monospace;
+  font-family: var(--font-main);
   font-size: 0.875em;
   padding: 0.1rem 0.38rem;
 }
@@ -138,7 +142,7 @@ code {
 .min-w-0 { min-width: 0 !important; }
 .fw-500 { font-weight: 500 !important; }
 .fw-600 { font-weight: 600 !important; }
-.font-monospace { font-family: "SF Mono", "JetBrains Mono", Consolas, monospace; }
+.font-monospace { font-family: var(--font-main) !important; }
 
 /* Topbar */
 .topbar {
@@ -183,15 +187,33 @@ code {
 .brand-link:hover { color: var(--text); }
 
 .brand-mark {
-  display: grid;
-  place-items: center;
+  position: relative;
+  display: block;
+  overflow: hidden;
   width: 28px;
   height: 28px;
-  border-radius: var(--radius-md);
-  background: var(--text);
-  color: var(--surface);
-  font-size: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  border-radius: 7px;
+  background: var(--surface-muted);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.38);
   flex: 0 0 auto;
+}
+
+.brand-mark::after,
+.login-logo::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0) 42%);
+  content: "";
+  pointer-events: none;
+}
+
+.brand-mark-image,
+.login-logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand-name {
@@ -858,7 +880,7 @@ code {
   border-radius: var(--radius-md);
   background-color: var(--surface);
   color: var(--text);
-  font-family: inherit;
+  font-family: var(--font-main);
   font-size: 14px;
 }
 
@@ -911,7 +933,7 @@ textarea.form-control { min-height: 120px; resize: vertical; }
   gap: 7px;
   min-height: 38px;
   border-radius: var(--radius-pill);
-  font-family: inherit;
+  font-family: var(--font-main);
   font-size: 14px;
   font-weight: 600;
   line-height: 1;
@@ -1272,15 +1294,16 @@ textarea.form-control { min-height: 120px; resize: vertical; }
 }
 
 .login-logo {
+  position: relative;
+  overflow: hidden;
   display: grid;
   place-items: center;
   width: 64px;
   height: 64px;
-  border-radius: var(--radius-lg);
-  background: var(--text);
-  color: var(--surface);
-  font-size: 30px;
-  box-shadow: var(--shadow-card);
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 15px;
+  background: var(--surface-muted);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), 0 16px 42px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.38);
 }
 
 .login-title {
@@ -1445,6 +1468,12 @@ hr {
   .account-name,
   .guild-switcher-name {
     display: none;
+  }
+
+  .brand-mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
   }
 
   .main-content { padding: 24px 14px 44px; }

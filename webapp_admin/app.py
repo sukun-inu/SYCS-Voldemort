@@ -90,9 +90,10 @@ def create_app() -> Flask:
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' https://cdn.jsdelivr.net; "
-            "style-src 'self' https://cdn.jsdelivr.net; "
+            "style-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
             "img-src 'self' https://cdn.discordapp.com data:; "
-            "font-src 'self' https://cdn.jsdelivr.net"
+            "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; "
+            "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com"
         )
         return response
 
