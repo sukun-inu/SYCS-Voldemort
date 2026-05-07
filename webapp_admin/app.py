@@ -17,6 +17,7 @@ def create_app() -> Flask:
         SESSION_COOKIE_SECURE=os.environ.get("FLASK_SECURE_COOKIES", "false").lower() == "true",
         PERMANENT_SESSION_LIFETIME=3600,
         WTF_CSRF_TIME_LIMIT=3600,
+        ADMIN_ASSET_VERSION=os.environ.get("ADMIN_ASSET_VERSION", "20260507-apple-ui"),
     )
 
     csrf.init_app(app)
