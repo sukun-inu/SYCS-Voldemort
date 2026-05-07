@@ -11,14 +11,14 @@
 </div>
 
 <div class="settings-grid">
-  <section class="section-card span-5">
+  <section class="section-card span-5" id="sticky-form-card">
     <div class="section-card-header">
-      <h2 class="section-card-title"><i class="bi bi-plus-circle"></i>追加</h2>
+      <h2 class="section-card-title" id="sticky-form-title"><i class="bi bi-plus-circle"></i>追加</h2>
     </div>
     <div class="section-card-body">
-      <form method="post">
+      <form method="post" id="sticky-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="action" value="add">
+        <input type="hidden" name="action" value="set">
         <div class="mb-3">
           <label class="form-label" for="sticky_channel_id">チャンネル</label>
           <select id="sticky_channel_id" name="channel_id" class="form-select" required>
@@ -30,12 +30,17 @@
         </div>
         <div class="mb-4">
           <label class="form-label" for="sticky_content">内容</label>
-          <textarea id="sticky_content" name="content" class="form-control" rows="5" maxlength="1000"
+          <textarea id="sticky_content" name="content" class="form-control" rows="6" maxlength="1000"
                     placeholder="スティッキーとして表示するテキスト" required></textarea>
-          <div class="form-text">最大 1000 文字</div>
+          <div class="form-text">最大 1000 文字 · Enter で改行できます</div>
         </div>
-        <div class="form-actions">
-          <button class="btn btn-accent"><i class="bi bi-check-lg me-2"></i>設定</button>
+        <div class="form-actions d-flex gap-2">
+          <button class="btn btn-accent" id="sticky-submit">
+            <i class="bi bi-check-lg me-2"></i>設定
+          </button>
+          <button type="button" class="btn btn-outline-secondary d-none" id="sticky-cancel" onclick="cancelStickyEdit()">
+            <i class="bi bi-x-lg me-2"></i>キャンセル
+          </button>
         </div>
       </form>
     </div>
@@ -60,8 +65,19 @@
           {% for ch_id, entry in stickies.items() %}
           <tr>
             <td class="text-nowrap"># {{ ch_map.get(ch_id, ch_id) }}</td>
-            <td class="table-cell-truncate">{{ entry.get('content', '') }}</td>
+            <td>
+              <span class="sticky-preview">{{ entry.get('content', '') }}</span>
+              {% if entry.get('pending') %}
+              <br><span class="badge-soft warning small">{{ entry.get('pending') }}待ち</span>
+              {% endif %}
+            </td>
             <td class="table-actions">
+              <button class="btn btn-sm btn-outline-primary me-1" title="編集"
+                      data-ch="{{ ch_id }}"
+                      data-content='{{ entry.get("content", "") | tojson }}'
+                      onclick="editSticky(this)">
+                <i class="bi bi-pencil"></i>
+              </button>
               <form method="post" class="d-inline confirm-form" data-msg="このスティッキーを解除しますか？">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="remove">
@@ -86,5 +102,38 @@
     {% endif %}
   </section>
 </div>
+
+<style>
+.sticky-preview {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 4.5em;
+  overflow: hidden;
+  font-size: .875rem;
+}
+</style>
+
+<script>
+function editSticky(btn) {
+  const chId   = btn.dataset.ch;
+  const content = JSON.parse(btn.dataset.content);
+
+  document.getElementById('sticky_channel_id').value = chId;
+  document.getElementById('sticky_content').value    = content;
+  document.getElementById('sticky-form-title').innerHTML = '<i class="bi bi-pencil"></i>編集';
+  document.getElementById('sticky-submit').innerHTML  = '<i class="bi bi-check-lg me-2"></i>更新';
+  document.getElementById('sticky-cancel').classList.remove('d-none');
+  document.getElementById('sticky-form-card').scrollIntoView({ behavior: 'smooth' });
+}
+
+function cancelStickyEdit() {
+  document.getElementById('sticky_channel_id').value = '';
+  document.getElementById('sticky_content').value    = '';
+  document.getElementById('sticky-form-title').innerHTML = '<i class="bi bi-plus-circle"></i>追加';
+  document.getElementById('sticky-submit').innerHTML  = '<i class="bi bi-check-lg me-2"></i>設定';
+  document.getElementById('sticky-cancel').classList.add('d-none');
+}
+</script>
 
 {% endblock %}

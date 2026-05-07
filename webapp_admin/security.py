@@ -28,7 +28,8 @@ def guild_required(f):
 def sanitize(s: str, max_len: int = MAX_STR_LEN) -> str:
     if not isinstance(s, str):
         return ""
-    return s.replace("\x00", "")[:max_len]
+    s = s.replace("\x00", "").replace("\r\n", "\n").replace("\r", "\n")
+    return s[:max_len]
 
 
 def validate_channel_id(value) -> int:

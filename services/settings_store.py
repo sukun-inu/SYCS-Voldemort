@@ -356,6 +356,16 @@ def remove_news_feed(guild_id: int, feed_id: str) -> bool:
     return True
 
 
+def update_news_feed(guild_id: int, feed_id: str, channel_id: int, query: str, interval_minutes: int) -> bool:
+    """フィードの設定（チャンネル・クエリ・間隔）を更新する。seen_hashes と last_run は保持する。"""
+    feeds = get_guild_settings(guild_id).get("news_feeds", {})
+    if feed_id not in feeds:
+        return False
+    feeds[feed_id].update({"channel_id": channel_id, "query": query, "interval": interval_minutes})
+    update_guild_settings(guild_id, {"news_feeds": feeds})
+    return True
+
+
 def update_news_feed_state(guild_id: int, feed_id: str, last_run: float, seen_hashes: list) -> None:
     feeds = get_guild_settings(guild_id).get("news_feeds", {})
     if feed_id not in feeds:

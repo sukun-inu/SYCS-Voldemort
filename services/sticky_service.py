@@ -28,9 +28,7 @@ async def _post_once(channel: discord.TextChannel, guild_id: int, content: str, 
         try:
             old_msg = await channel.fetch_message(old_message_id)
             await old_msg.delete()
-        except discord.NotFound:
-            update_sticky_message_id(guild_id, channel.id, None)
-        except discord.HTTPException:
+        except (discord.NotFound, discord.HTTPException):
             pass
 
     try:
@@ -76,10 +74,7 @@ async def handle_sticky(message: discord.Message) -> None:
     guild_id = message.guild.id
 
     entry = get_sticky_messages(guild_id).get(str(channel_id))
-    if not entry:
-        return
-
-    if entry.get("pending") == "delete":
+    if not entry or entry.get("pending") == "delete":
         return
 
     lock = _get_lock(channel_id)
@@ -89,7 +84,7 @@ async def handle_sticky(message: discord.Message) -> None:
 
     async with lock:
         _pending[channel_id] = False
-        await _post_once(message.channel, guild_id, entry.get("content", ""), entry.get("message_id"))
+        await _post_latest(message.channel, guild_id)
 
     if _pending.get(channel_id):
         _pending[channel_id] = False
@@ -118,7 +113,10 @@ async def process_pending_stickies(bot: discord.Client) -> None:
             if pending == "post":
                 async with lock:
                     _pending[channel_id] = False
-                    await _post_latest(channel, guild_id)
+                    # ロック待ち中に handle_sticky が処理済みの場合は二重投稿を避ける
+                    fresh = get_sticky_messages(guild_id).get(ch_id_str, {})
+                    if fresh.get("pending") == "post":
+                        await _post_latest(channel, guild_id)
             elif pending == "delete":
                 async with lock:
                     _pending[channel_id] = False

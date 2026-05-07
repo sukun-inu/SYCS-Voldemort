@@ -6,6 +6,7 @@ from services.logging_service import get_log_settings, set_log_channel, set_log_
 from services.settings_store import (
     add_bypass_roles,
     add_news_feed,
+    update_news_feed,
     add_reaction_role,
     add_trusted_users,
     get_bypass_role_ids,
@@ -185,7 +186,7 @@ def sticky():
     channels = _channels()
     if request.method == "POST":
         action = request.form.get("action", "")
-        if action == "add":
+        if action in ("add", "set"):
             ch_id = request.form.get("channel_id", "")
             content = sanitize(request.form.get("content", ""), 1000).strip()
             if not content:
@@ -281,6 +282,17 @@ def news_feeds():
             fid = uuid.uuid4().hex[:8]
             add_news_feed(gid, fid, validate_channel_id(ch_id), query, validate_int(interval_str, 5, 1440))
             flash(f"ニュースフィードを追加した。（ID: {fid}）", "success")
+        elif action == "edit":
+            fid = sanitize(request.form.get("feed_id", ""), 8)
+            ch_id = request.form.get("channel_id", "")
+            query = sanitize(request.form.get("query", ""), 200).strip()
+            interval_str = request.form.get("interval", "60")
+            if not query:
+                flash("検索クエリを入力してください。", "warning")
+                return redirect(url_for("settings.news_feeds"))
+            ok = update_news_feed(gid, fid, validate_channel_id(ch_id), query, validate_int(interval_str, 5, 1440))
+            flash("フィードを更新した。" if ok else "該当するフィードが見つからなかった。",
+                  "success" if ok else "warning")
         elif action == "remove":
             fid = sanitize(request.form.get("feed_id", ""), 8)
             ok = remove_news_feed(gid, fid)
