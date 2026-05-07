@@ -36,10 +36,10 @@ def create_app() -> Flask:
 
         try:
             asset_path = (static_root / filename).resolve()
-            if asset_path.is_relative_to(static_root):
-                stat = asset_path.stat()
-                version = f"{version_seed}-{stat.st_mtime_ns:x}-{stat.st_size:x}"
-        except OSError:
+            asset_path.relative_to(static_root)
+            stat = asset_path.stat()
+            version = f"{version_seed}-{stat.st_mtime_ns:x}-{stat.st_size:x}"
+        except (OSError, ValueError):
             pass
 
         return url_for("static", filename=filename, v=version)
