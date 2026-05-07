@@ -17,7 +17,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="guild_id" value="{{ guild.id }}">
       
-      <button type="submit" class="w-100 h-100 btn btn-outline-none guild-card-btn p-0" style="border: none; background: transparent;">
+      <button type="submit" class="w-100 h-100 p-0" style="border: none; background: transparent;">
         <div class="card h-100 guild-card shadow-sm overflow-hidden">
           <div class="card-body d-flex flex-column align-items-center py-5 px-3">
             <!-- Guild Icon -->
@@ -28,7 +28,7 @@
                    style="box-shadow: 0 4px 16px rgba(0,122,255,.2); object-fit: cover;">
               {% else %}
               <div class="guild-icon-placeholder" style="width: 80px; height: 80px; font-size: 32px;">
-                {{ guild.name[0].upper() }}
+                {{ guild.name[0] }}
               </div>
               {% endif %}
             </div>
@@ -40,7 +40,7 @@
 
             <!-- Selection Button -->
             <div class="d-flex gap-2 mt-auto w-100">
-              <span class="badge badge-primary mx-auto">
+              <span class="badge bg-primary mx-auto">
                 <i class="bi bi-check-lg me-1"></i>選択
               </span>
             </div>

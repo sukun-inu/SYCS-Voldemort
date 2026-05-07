@@ -29,13 +29,13 @@
           </small>
           <div class="d-flex gap-3 flex-wrap">
             <div>
-              <span class="badge badge-secondary">
+              <span class="badge bg-secondary">
                 <i class="bi bi-hash me-1"></i>
                 {% if log_settings.channel_id %}#{{ log_settings.channel_id }}{% else %}未設定{% endif %}
               </span>
             </div>
             <div>
-              <span class="badge badge-secondary">
+              <span class="badge bg-secondary">
                 {{ log_settings.level }}
               </span>
             </div>
@@ -97,7 +97,7 @@
           <small class="text-muted d-block mb-1">
             <strong>現在の設定</strong>
           </small>
-          <span class="badge badge-secondary">
+          <span class="badge bg-secondary">
             <i class="bi bi-hash me-1"></i>
             {% if chatgpt_ch %}#{{ chatgpt_ch }}{% else %}全チャンネル（未設定）{% endif %}
           </span>
