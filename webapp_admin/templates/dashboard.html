@@ -63,17 +63,24 @@
     </div>
   </section>
 
+  {# チャンネルIDを名前に変換するマクロ #}
+  {%- macro ch_name(ch_id) -%}
+    {%- if ch_id -%}
+      # {{ ch_map.get(ch_id|string, ch_id) }}
+    {%- else -%}未設定{%- endif -%}
+  {%- endmacro -%}
+
   {% set cards = [
     ("bi-journal-text", "accent", "ログ設定", "settings.logging_settings",
-     [("ログチャンネル", ("#" ~ stats.log_channel) if stats.log_channel else "未設定"),
+     [("ログチャンネル", ch_name(stats.log_channel)),
       ("ログレベル", stats.log_level)]),
     ("bi-person-plus-fill", "success", "ウェルカム/グッバイ", "settings.welcome_settings",
-     [("ウェルカムチャンネル", ("#" ~ stats.welcome_ch) if stats.welcome_ch else "未設定"),
-      ("グッバイチャンネル", ("#" ~ stats.goodbye_ch) if stats.goodbye_ch else "未設定")]),
+     [("ウェルカムチャンネル", ch_name(stats.welcome_ch)),
+      ("グッバイチャンネル", ch_name(stats.goodbye_ch))]),
     ("bi-mic-fill", "info", "VC 通知", "settings.vc_notify",
-     [("通知チャンネル", ("#" ~ stats.vc_notify_ch) if stats.vc_notify_ch else "未設定")]),
+     [("通知チャンネル", ch_name(stats.vc_notify_ch))]),
     ("bi-robot", "warning", "ChatGPT 応答", "settings.logging_settings",
-     [("応答チャンネル", ("#" ~ stats.chatgpt_ch) if stats.chatgpt_ch else "未設定（全チャンネル）")]),
+     [("応答チャンネル", ch_name(stats.chatgpt_ch) if stats.chatgpt_ch else "未設定（全チャンネル）")]),
     ("bi-pin-angle-fill", "accent", "スティッキー", "settings.sticky",
      [("設定数", stats.sticky_count ~ " チャンネル")]),
     ("bi-emoji-smile-fill", "success", "リアクションロール", "settings.reaction_roles",
@@ -81,7 +88,7 @@
     ("bi-newspaper", "info", "ニュースフィード", "settings.news_feeds",
      [("フィード数", stats.news_feed_count ~ " / 10")]),
     ("bi-exclamation-triangle-fill", "danger", "地震アラート", "settings.earthquake",
-     [("チャンネル", ("#" ~ stats.eq_channel) if stats.eq_channel else "未設定"),
+     [("チャンネル", ch_name(stats.eq_channel)),
       ("最小震度", stats.eq_min_scale)]),
     ("bi-shield-fill-check", "warning", "セキュリティ", "settings.security_settings",
      [("信頼済みユーザー", stats.trusted_count ~ " 名"),

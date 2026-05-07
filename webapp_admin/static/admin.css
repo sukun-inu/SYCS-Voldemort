@@ -1173,6 +1173,15 @@ textarea.form-control { min-height: 120px; resize: vertical; }
 
 .btn-close { opacity: 0.56; }
 
+.alert-dismissible { padding-right: 14px; }
+.alert-dismissible .btn-close {
+  position: static;
+  padding: 0;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 1px;
+}
+
 .dropdown-menu {
   border: 1px solid var(--separator);
   border-radius: var(--radius-lg);

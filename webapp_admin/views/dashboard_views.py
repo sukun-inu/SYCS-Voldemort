@@ -13,6 +13,7 @@ from services.settings_store import (
     get_welcome_settings,
 )
 from services.logging_service import get_log_settings
+from webapp_admin.auth import get_guild_channels
 from webapp_admin.metrics import collect_host_metrics, list_incidents
 from webapp_admin.security import login_required, guild_required
 
@@ -85,7 +86,9 @@ def overview():
         "trusted_count": len(get_trusted_user_ids(gid)),
         "bypass_count": len(get_bypass_role_ids(gid)),
     }
-    return render_template("dashboard.html", stats=stats)
+    channels = get_guild_channels(gid)
+    ch_map = {str(c["id"]): c["name"] for c in channels}
+    return render_template("dashboard.html", stats=stats, ch_map=ch_map)
 
 
 @dashboard_bp.route("/api/metrics")
