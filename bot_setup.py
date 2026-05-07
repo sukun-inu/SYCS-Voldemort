@@ -166,7 +166,7 @@ def setup_events(bot: Bot) -> None:
         if before.content == after.content:
             return
 
-        ch_mention = before.channel.mention if hasattr(before.channel, "mention") else str(before.channel)
+        ch_mention = before.channel.mention
 
         try:
             await log_action(

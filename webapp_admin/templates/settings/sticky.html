@@ -35,10 +35,10 @@
           <div class="form-text">最大 1000 文字 · Enter で改行できます</div>
         </div>
         <div class="form-actions d-flex gap-2">
-          <button class="btn btn-accent" id="sticky-submit">
+          <button type="submit" class="btn btn-accent" id="sticky-submit">
             <i class="bi bi-check-lg me-2"></i>設定
           </button>
-          <button type="button" class="btn btn-outline-secondary d-none" id="sticky-cancel" onclick="cancelStickyEdit()">
+          <button type="button" class="btn btn-outline-secondary d-none" id="sticky-cancel">
             <i class="bi bi-x-lg me-2"></i>キャンセル
           </button>
         </div>
@@ -72,17 +72,15 @@
               {% endif %}
             </td>
             <td class="table-actions">
-              <button class="btn btn-sm btn-outline-primary me-1" title="編集"
-                      data-ch="{{ ch_id }}"
-                      data-content='{{ entry.get("content", "") | tojson }}'
-                      onclick="editSticky(this)">
+              <button type="button" class="btn btn-sm btn-outline-primary me-1" title="編集"
+                      onclick="editSticky('{{ ch_id }}')">
                 <i class="bi bi-pencil"></i>
               </button>
               <form method="post" class="d-inline confirm-form" data-msg="このスティッキーを解除しますか？">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="remove">
                 <input type="hidden" name="channel_id" value="{{ ch_id }}">
-                <button class="btn btn-sm btn-outline-danger" title="削除">
+                <button type="submit" class="btn btn-sm btn-outline-danger" title="削除">
                   <i class="bi bi-trash"></i>
                 </button>
               </form>
@@ -114,26 +112,43 @@
 }
 </style>
 
-<script>
-function editSticky(btn) {
-  const chId   = btn.dataset.ch;
-  const content = JSON.parse(btn.dataset.content);
+{% endblock %}
 
-  document.getElementById('sticky_channel_id').value = chId;
-  document.getElementById('sticky_content').value    = content;
+{% block extra_scripts %}
+<script>
+/* stickies データをサーバー側から安全に埋め込む */
+const _STICKIES = {{ stickies | tojson }};
+
+function editSticky(chId) {
+  const entry  = _STICKIES[chId] || {};
+  const select = document.getElementById('sticky_channel_id');
+  const area   = document.getElementById('sticky_content');
+
+  select.value = chId;
+  area.value   = entry.content || '';
+
+  /* バリデーションエラークラスをリセット */
+  select.classList.remove('is-invalid');
+  area.classList.remove('is-invalid');
+
   document.getElementById('sticky-form-title').innerHTML = '<i class="bi bi-pencil"></i>編集';
-  document.getElementById('sticky-submit').innerHTML  = '<i class="bi bi-check-lg me-2"></i>更新';
+  document.getElementById('sticky-submit').innerHTML     = '<i class="bi bi-check-lg me-2"></i>更新';
   document.getElementById('sticky-cancel').classList.remove('d-none');
   document.getElementById('sticky-form-card').scrollIntoView({ behavior: 'smooth' });
 }
 
-function cancelStickyEdit() {
-  document.getElementById('sticky_channel_id').value = '';
-  document.getElementById('sticky_content').value    = '';
-  document.getElementById('sticky-form-title').innerHTML = '<i class="bi bi-plus-circle"></i>追加';
-  document.getElementById('sticky-submit').innerHTML  = '<i class="bi bi-check-lg me-2"></i>設定';
-  document.getElementById('sticky-cancel').classList.add('d-none');
-}
-</script>
+document.getElementById('sticky-cancel').addEventListener('click', () => {
+  const select = document.getElementById('sticky_channel_id');
+  const area   = document.getElementById('sticky_content');
 
+  select.value = '';
+  area.value   = '';
+  select.classList.remove('is-invalid');
+  area.classList.remove('is-invalid');
+
+  document.getElementById('sticky-form-title').innerHTML = '<i class="bi bi-plus-circle"></i>追加';
+  document.getElementById('sticky-submit').innerHTML     = '<i class="bi bi-check-lg me-2"></i>設定';
+  document.getElementById('sticky-cancel').classList.add('d-none');
+});
+</script>
 {% endblock %}

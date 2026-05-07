@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from typing import Dict
 
 import discord
 
@@ -13,8 +12,8 @@ from services.settings_store import (
 
 logger = logging.getLogger(__name__)
 
-_locks: Dict[int, asyncio.Lock] = {}
-_pending: Dict[int, bool] = {}
+_locks: dict[int, asyncio.Lock] = {}
+_pending: dict[int, bool] = {}
 
 
 def _get_lock(channel_id: int) -> asyncio.Lock:

@@ -2,6 +2,7 @@ import uuid
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
+from config import SCALE_LABELS
 from services.logging_service import get_log_settings, set_log_channel, set_log_level
 from services.settings_store import (
     add_bypass_roles,
@@ -49,10 +50,6 @@ settings_bp = Blueprint("settings", __name__)
 
 _LOG_LEVELS = {"NONE", "ERROR", "INFO", "DEBUG"}
 _VALID_SCALES = {10, 20, 30, 40, 45, 50, 55, 60, 65, 70}
-_SCALE_LABELS = {
-    10: "1", 20: "2", 30: "3", 40: "4", 45: "4強",
-    50: "5弱", 55: "5強", 60: "6弱", 65: "6強", 70: "7",
-}
 
 
 def _gid() -> int:
@@ -146,7 +143,7 @@ def welcome_settings():
 def vc_notify():
     gid = _gid()
     if request.method == "POST":
-        action = request.form.get("action", "set_channel")
+        action = request.form.get("action", "")
         if action == "set_channel":
             ch_id = request.form.get("vc_notify_channel_id", "")
             if ch_id == "0" or not ch_id:
@@ -331,14 +328,14 @@ def earthquake():
                 flash("無効な震度値です。", "warning")
                 return redirect(url_for("settings.earthquake"))
             set_earthquake_min_scale(gid, scale)
-            flash(f"最小震度を {_SCALE_LABELS.get(scale, scale)} に設定した。", "success")
+            flash(f"最小震度を {SCALE_LABELS.get(scale, scale)} に設定した。", "success")
         return redirect(url_for("settings.earthquake"))
 
     return render_template(
         "settings/earthquake.html",
         channels=_channels(),
         eq_s=get_earthquake_settings(gid),
-        scale_labels=_SCALE_LABELS,
+        scale_labels=SCALE_LABELS,
         valid_scales=sorted(_VALID_SCALES),
     )
 

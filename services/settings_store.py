@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 try:
     import orjson as _json
@@ -17,7 +17,7 @@ _SETTINGS_FILE = _SETTINGS_DIR / "settings.json"
 
 # メモリ内キャッシュ。mtime が変わったら自動無効化するため、
 # Bot と WebUI が別プロセスでもファイル更新を検知できる。
-_cache: Dict[str, Any] | None = None
+_cache: dict[str, Any] | None = None
 _cache_mtime: float = 0.0
 
 
@@ -28,7 +28,7 @@ def _file_mtime() -> float:
         return 0.0
 
 
-def _load_all() -> Dict[str, Any]:
+def _load_all() -> dict[str, Any]:
     global _cache, _cache_mtime
     mtime = _file_mtime()
     if _cache is not None and mtime <= _cache_mtime:
@@ -60,7 +60,7 @@ def _load_all() -> Dict[str, Any]:
     return _cache
 
 
-def _save_all(data: Dict[str, Any]) -> None:
+def _save_all(data: dict[str, Any]) -> None:
     global _cache, _cache_mtime
     _SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -76,16 +76,16 @@ def _save_all(data: Dict[str, Any]) -> None:
     _cache_mtime = _file_mtime()
 
 
-def get_guild_settings(guild_id: int) -> Dict[str, Any]:
+def get_guild_settings(guild_id: int) -> dict[str, Any]:
     """指定ギルドの設定を取得（存在しない場合は空 dict）。"""
-    guilds: Dict[str, Any] = _load_all().get("guilds", {})  # type: ignore[assignment]
+    guilds: dict[str, Any] = _load_all().get("guilds", {})  # type: ignore[assignment]
     return dict(guilds.get(str(guild_id), {}))
 
 
-def update_guild_settings(guild_id: int, updates: Dict[str, Any]) -> Dict[str, Any]:
+def update_guild_settings(guild_id: int, updates: dict[str, Any]) -> dict[str, Any]:
     """指定ギルドの設定を更新し、保存してから最新状態を返す。"""
     data = _load_all()
-    guilds: Dict[str, Any] = data.setdefault("guilds", {})  # type: ignore[assignment]
+    guilds: dict[str, Any] = data.setdefault("guilds", {})  # type: ignore[assignment]
     current = guilds.get(str(guild_id), {})
     if not isinstance(current, dict):
         current = {}
@@ -95,7 +95,7 @@ def update_guild_settings(guild_id: int, updates: Dict[str, Any]) -> Dict[str, A
     return dict(current)
 
 
-def _update_nested(guild_id: int, top_key: str, patch: Dict[str, Any]) -> None:
+def _update_nested(guild_id: int, top_key: str, patch: dict[str, Any]) -> None:
     s = get_guild_settings(guild_id).get(top_key, {})
     s.update(patch)
     update_guild_settings(guild_id, {top_key: s})
@@ -122,7 +122,7 @@ def get_response_channel_id(guild_id: int) -> int:
         return 0
 
 
-def set_response_channel_id(guild_id: int, channel_id: int | None) -> Dict[str, Any]:
+def set_response_channel_id(guild_id: int, channel_id: int | None) -> dict[str, Any]:
     """ChatGPT応答チャンネルIDを設定/解除。"""
     return update_guild_settings(guild_id, {"response_channel_id": channel_id})
 
@@ -131,7 +131,7 @@ def get_trusted_user_ids(guild_id: int) -> list[int]:
     return _parse_id_list(get_guild_settings(guild_id).get("trusted_user_ids"))
 
 
-def set_trusted_user_ids(guild_id: int, ids: list[int]) -> Dict[str, Any]:
+def set_trusted_user_ids(guild_id: int, ids: list[int]) -> dict[str, Any]:
     """信頼済みユーザーIDのリストを設定。"""
     return update_guild_settings(guild_id, {"trusted_user_ids": list({int(i) for i in ids})})
 
@@ -160,7 +160,7 @@ def get_bypass_role_ids(guild_id: int) -> list[int]:
     return _parse_id_list(get_guild_settings(guild_id).get("bypass_role_ids"))
 
 
-def set_bypass_role_ids(guild_id: int, role_ids: list[int]) -> Dict[str, Any]:
+def set_bypass_role_ids(guild_id: int, role_ids: list[int]) -> dict[str, Any]:
     """セキュリティチェックをバイパスするロールIDを設定。"""
     return update_guild_settings(guild_id, {"bypass_role_ids": list({int(i) for i in role_ids})})
 
@@ -189,7 +189,7 @@ def remove_bypass_roles(guild_id: int, role_ids: list[int]) -> list[int]:
 # ウェルカム / グッバイ
 # ──────────────────────────────────────────────
 
-def get_welcome_settings(guild_id: int) -> Dict[str, Any]:
+def get_welcome_settings(guild_id: int) -> dict[str, Any]:
     return dict(get_guild_settings(guild_id).get("welcome", {}))
 
 
@@ -201,7 +201,7 @@ def set_welcome_message(guild_id: int, message: str | None) -> None:
     _update_nested(guild_id, "welcome", {"message": message})
 
 
-def get_goodbye_settings(guild_id: int) -> Dict[str, Any]:
+def get_goodbye_settings(guild_id: int) -> dict[str, Any]:
     return dict(get_guild_settings(guild_id).get("goodbye", {}))
 
 
@@ -246,7 +246,7 @@ def set_vc_notify_role_id(guild_id: int, role_id: int | None) -> None:
 # スティッキーメッセージ
 # ──────────────────────────────────────────────
 
-def get_sticky_messages(guild_id: int) -> Dict[str, Any]:
+def get_sticky_messages(guild_id: int) -> dict[str, Any]:
     """channel_id(str) → {"content": str, "message_id": int|None}"""
     return dict(get_guild_settings(guild_id).get("sticky_messages", {}))
 
@@ -291,7 +291,7 @@ def remove_sticky_message(guild_id: int, channel_id: int) -> None:
 # リアクションロール
 # ──────────────────────────────────────────────
 
-def get_reaction_roles(guild_id: int) -> Dict[str, Any]:
+def get_reaction_roles(guild_id: int) -> dict[str, Any]:
     """message_id(str) → {emoji(str) → role_id(int)}"""
     return dict(get_guild_settings(guild_id).get("reaction_roles", {}))
 
@@ -320,7 +320,7 @@ def remove_reaction_role(guild_id: int, message_id: int, emoji: str) -> bool:
 # ──────────────────────────────────────────────
 
 def get_all_guild_ids() -> list[int]:
-    guilds: Dict[str, Any] = _load_all().get("guilds", {})
+    guilds: dict[str, Any] = _load_all().get("guilds", {})
     result: list[int] = []
     for k in guilds:
         try:
@@ -330,7 +330,7 @@ def get_all_guild_ids() -> list[int]:
     return result
 
 
-def get_news_feeds(guild_id: int) -> Dict[str, Any]:
+def get_news_feeds(guild_id: int) -> dict[str, Any]:
     """feed_id(str) → {"channel_id": int, "query": str, "interval": int, "last_run": float, "seen_hashes": list}"""
     return dict(get_guild_settings(guild_id).get("news_feeds", {}))
 
@@ -379,7 +379,7 @@ def update_news_feed_state(guild_id: int, feed_id: str, last_run: float, seen_ha
 # 地震アラート
 # ──────────────────────────────────────────────
 
-def get_earthquake_settings(guild_id: int) -> Dict[str, Any]:
+def get_earthquake_settings(guild_id: int) -> dict[str, Any]:
     return dict(get_guild_settings(guild_id).get("earthquake", {}))
 
 

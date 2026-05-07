@@ -11,7 +11,7 @@ import aiohttp
 import discord
 from discord.ext.commands import Bot
 
-from config import JST as _JST
+from config import BOT_ICON_URL, JST as _JST
 from services.settings_store import (
     get_all_guild_ids,
     get_news_feeds,
@@ -130,7 +130,6 @@ async def run_news_feeds(bot: Bot) -> None:
                 articles    = await _fetch_articles(session, query)
                 new_articles = [a for a in articles if _url_hash(a["link"]) not in seen]
 
-                # 最大5件投稿（古い順）
                 for article in reversed(new_articles[:5]):
                     h = _url_hash(article["link"])
                     try:
@@ -144,7 +143,7 @@ async def run_news_feeds(bot: Bot) -> None:
                         if article["source"]:
                             embed.set_author(name=article["source"])
                         if article["pubDate"]:
-                            embed.set_footer(text=_format_pub_date(article["pubDate"]))
+                            embed.set_footer(text=_format_pub_date(article["pubDate"]), icon_url=BOT_ICON_URL)
                         await channel.send(embed=embed)
                         seen.append(h)
                     except Exception as e:

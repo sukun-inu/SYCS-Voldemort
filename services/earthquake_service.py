@@ -17,7 +17,7 @@ try:
 except ImportError:
     _PIL = False
 
-from config import JST as _JST
+from config import BOT_ICON_URL, JST as _JST, SCALE_LABELS as _SCALE_DISPLAY
 from services.settings_store import get_all_guild_ids, get_earthquake_settings
 
 logger = logging.getLogger(__name__)
@@ -33,12 +33,6 @@ _TILE_SZ  = 256
 _SCALE_MAP = {
     10: "１", 20: "２", 30: "３", 40: "４", 45: "４強",
     50: "５弱", 55: "５強", 60: "６弱", 65: "６強", 70: "７",
-}
-
-# embed テキスト用（アラビア数字 + 日本語）
-_SCALE_DISPLAY = {
-    10: "1", 20: "2", 30: "3", 40: "4", 45: "4強",
-    50: "5弱", 55: "5強", 60: "6弱", 65: "6強", 70: "7",
 }
 
 # バッジ画像用（ASCII のみ・CJK フォント不要）
@@ -432,7 +426,7 @@ def _build_embed(event: dict, max_scale: int, has_badge: bool = False) -> discor
     embed.add_field(name="震源",  value=name,      inline=True)
     embed.add_field(name="規模",  value=mag_str,   inline=True)
     embed.add_field(name="深さ",  value=depth_str, inline=True)
-    embed.set_footer(text=footer_label)
+    embed.set_footer(text=footer_label, icon_url=BOT_ICON_URL)
 
     if has_badge:
         embed.set_thumbnail(url="attachment://intensity_badge.png")

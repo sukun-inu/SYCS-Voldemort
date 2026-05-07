@@ -5,6 +5,16 @@ from typing import Dict, Mapping, Optional
 
 JST = timezone(timedelta(hours=9))
 
+BOT_ICON_URL = (
+    "https://cdn.discordapp.com/avatars/1350672236612288633"
+    "/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"
+)
+
+SCALE_LABELS: Dict[int, str] = {
+    10: "1", 20: "2", 30: "3", 40: "4", 45: "4強",
+    50: "5弱", 55: "5強", 60: "6弱", 65: "6強", 70: "7",
+}
+
 
 def _read_env(key: str) -> Optional[str]:
     """環境変数を空文字チェック込みで取得"""

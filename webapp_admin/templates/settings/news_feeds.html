@@ -13,14 +13,18 @@
 <div class="settings-grid">
   <section class="section-card span-5" id="feed-form-card">
     <div class="section-card-header">
-      <h2 class="section-card-title" id="feed-form-title"><i class="bi bi-plus-circle"></i>フィードを追加</h2>
-      <span class="badge-soft {% if feeds|length >= 10 %}warning{% else %}accent{% endif %}">{{ feeds|length }} / 10</span>
+      <h2 class="section-card-title" id="feed-form-title">
+        <i class="bi bi-plus-circle"></i>フィードを追加
+      </h2>
+      <span class="badge-soft {% if feeds|length >= 10 %}warning{% else %}accent{% endif %}">
+        {{ feeds|length }} / 10
+      </span>
     </div>
     <div class="section-card-body">
       <form method="post" id="feed-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="add" id="feed-action">
-        <input type="hidden" name="feed_id" value="" id="feed-id-field">
+        <input type="hidden" name="feed_id"  value=""  id="feed-id-field">
         <div class="mb-3">
           <label class="form-label" for="news_channel_id">投稿チャンネル</label>
           <select id="news_channel_id" name="channel_id" class="form-select" required>
@@ -31,20 +35,21 @@
           </select>
         </div>
         <div class="mb-3">
-          <label class="form-label" for="query">検索クエリ</label>
-          <input id="query" type="text" name="query" class="form-control" maxlength="200"
+          <label class="form-label" for="feed_query">検索クエリ</label>
+          <input id="feed_query" type="text" name="query" class="form-control" maxlength="200"
                  placeholder="AI 技術、セキュリティ" required>
         </div>
         <div class="mb-4">
-          <label class="form-label" for="interval">チェック間隔（分）</label>
-          <input id="interval" type="number" name="interval" class="form-control" value="60" min="5" max="1440">
+          <label class="form-label" for="feed_interval">チェック間隔（分）</label>
+          <input id="feed_interval" type="number" name="interval" class="form-control"
+                 value="60" min="5" max="1440">
           <div class="form-text">5〜1440 分</div>
         </div>
         <div class="form-actions d-flex gap-2">
-          <button class="btn btn-accent" id="feed-submit">
+          <button type="submit" class="btn btn-accent" id="feed-submit">
             <i class="bi bi-plus-lg me-2"></i>追加
           </button>
-          <button type="button" class="btn btn-outline-secondary d-none" id="feed-cancel" onclick="cancelFeedEdit()">
+          <button type="button" class="btn btn-outline-secondary d-none" id="feed-cancel">
             <i class="bi bi-x-lg me-2"></i>キャンセル
           </button>
         </div>
@@ -77,19 +82,17 @@
             <td># {{ ch_map.get(feed.get('channel_id', '')|string, feed.get('channel_id', '')) }}</td>
             <td>{{ feed.get('interval', 60) }}分</td>
             <td class="table-actions">
-              <button class="btn btn-sm btn-outline-primary me-1" title="編集"
-                      data-fid="{{ fid }}"
-                      data-ch="{{ feed.get('channel_id', '') }}"
-                      data-query="{{ feed.get('query', '') | e }}"
-                      data-interval="{{ feed.get('interval', 60) }}"
-                      onclick="editFeed(this)">
+              <button type="button" class="btn btn-sm btn-outline-primary me-1" title="編集"
+                      onclick="editFeed('{{ fid }}')">
                 <i class="bi bi-pencil"></i>
               </button>
               <form method="post" class="d-inline confirm-form" data-msg="このフィードを削除しますか？">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="remove">
                 <input type="hidden" name="feed_id" value="{{ fid }}">
-                <button class="btn btn-sm btn-outline-danger" title="削除"><i class="bi bi-trash"></i></button>
+                <button type="submit" class="btn btn-sm btn-outline-danger" title="削除">
+                  <i class="bi bi-trash"></i>
+                </button>
               </form>
             </td>
           </tr>
@@ -108,29 +111,47 @@
   </section>
 </div>
 
+{% endblock %}
+
+{% block extra_scripts %}
 <script>
-function editFeed(btn) {
-  document.getElementById('feed-action').value    = 'edit';
-  document.getElementById('feed-id-field').value  = btn.dataset.fid;
-  document.getElementById('news_channel_id').value = btn.dataset.ch;
-  document.getElementById('query').value          = btn.dataset.query;
-  document.getElementById('interval').value       = btn.dataset.interval;
+/* feeds データをサーバー側から安全に埋め込む */
+const _FEEDS = {{ feeds | tojson }};
+
+function editFeed(fid) {
+  const feed = _FEEDS[fid] || {};
+
+  document.getElementById('feed-action').value     = 'edit';
+  document.getElementById('feed-id-field').value   = fid;
+  document.getElementById('news_channel_id').value = String(feed.channel_id || '');
+  document.getElementById('feed_query').value      = feed.query      || '';
+  document.getElementById('feed_interval').value   = feed.interval   || 60;
+
+  /* バリデーションエラークラスをリセット */
+  ['news_channel_id', 'feed_query', 'feed_interval'].forEach((id) => {
+    document.getElementById(id).classList.remove('is-invalid');
+  });
+
   document.getElementById('feed-form-title').innerHTML = '<i class="bi bi-pencil"></i>フィードを編集';
-  document.getElementById('feed-submit').innerHTML = '<i class="bi bi-check-lg me-2"></i>更新';
+  document.getElementById('feed-submit').innerHTML     = '<i class="bi bi-check-lg me-2"></i>更新';
   document.getElementById('feed-cancel').classList.remove('d-none');
   document.getElementById('feed-form-card').scrollIntoView({ behavior: 'smooth' });
 }
 
-function cancelFeedEdit() {
-  document.getElementById('feed-action').value    = 'add';
-  document.getElementById('feed-id-field').value  = '';
+document.getElementById('feed-cancel').addEventListener('click', () => {
+  document.getElementById('feed-action').value     = 'add';
+  document.getElementById('feed-id-field').value   = '';
   document.getElementById('news_channel_id').value = '';
-  document.getElementById('query').value          = '';
-  document.getElementById('interval').value       = '60';
-  document.getElementById('feed-form-title').innerHTML = '<i class="bi bi-plus-circle"></i>フィードを追加';
-  document.getElementById('feed-submit').innerHTML = '<i class="bi bi-plus-lg me-2"></i>追加';
-  document.getElementById('feed-cancel').classList.add('d-none');
-}
-</script>
+  document.getElementById('feed_query').value      = '';
+  document.getElementById('feed_interval').value   = '60';
 
+  ['news_channel_id', 'feed_query', 'feed_interval'].forEach((id) => {
+    document.getElementById(id).classList.remove('is-invalid');
+  });
+
+  document.getElementById('feed-form-title').innerHTML = '<i class="bi bi-plus-circle"></i>フィードを追加';
+  document.getElementById('feed-submit').innerHTML     = '<i class="bi bi-plus-lg me-2"></i>追加';
+  document.getElementById('feed-cancel').classList.add('d-none');
+});
+</script>
 {% endblock %}
