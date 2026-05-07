@@ -15,28 +15,40 @@ _default_dir = Path(__file__).resolve().parent.parent / "data"
 _SETTINGS_DIR = Path(os.getenv("SETTINGS_DIR", str(_default_dir)))
 _SETTINGS_FILE = _SETTINGS_DIR / "settings.json"
 
-# メモリ内ライトスルーキャッシュ。
-# asyncio はシングルスレッドのため Lock 不要。
+# メモリ内キャッシュ。mtime が変わったら自動無効化するため、
+# Bot と WebUI が別プロセスでもファイル更新を検知できる。
 _cache: Dict[str, Any] | None = None
+_cache_mtime: float = 0.0
+
+
+def _file_mtime() -> float:
+    try:
+        return _SETTINGS_FILE.stat().st_mtime
+    except OSError:
+        return 0.0
 
 
 def _load_all() -> Dict[str, Any]:
-    global _cache
-    if _cache is not None:
+    global _cache, _cache_mtime
+    mtime = _file_mtime()
+    if _cache is not None and mtime <= _cache_mtime:
         return _cache
 
     if not _SETTINGS_FILE.exists():
         _cache = {"guilds": {}}
+        _cache_mtime = mtime
         return _cache
 
     try:
         data = _json.loads(_SETTINGS_FILE.read_bytes())
     except Exception:
         _cache = {"guilds": {}}
+        _cache_mtime = mtime
         return _cache
 
     if not isinstance(data, dict):
         _cache = {"guilds": {}}
+        _cache_mtime = mtime
         return _cache
 
     data.setdefault("guilds", {})
@@ -44,15 +56,15 @@ def _load_all() -> Dict[str, Any]:
         data["guilds"] = {}
 
     _cache = data
+    _cache_mtime = mtime
     return _cache
 
 
 def _save_all(data: Dict[str, Any]) -> None:
-    global _cache
+    global _cache, _cache_mtime
     _SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # アトミック書き込み: 一時ファイルに書いてからリネーム。
-    # クラッシュ時に settings.json が壊れるのを防ぐ。
+    # アトミック書き込み: クラッシュ時に settings.json が壊れるのを防ぐ。
     tmp = _SETTINGS_FILE.with_suffix(".json.tmp")
     if _ORJSON:
         tmp.write_bytes(_json.dumps(data, option=_json.OPT_INDENT_2))  # type: ignore[attr-defined]
@@ -61,6 +73,7 @@ def _save_all(data: Dict[str, Any]) -> None:
     tmp.replace(_SETTINGS_FILE)
 
     _cache = data
+    _cache_mtime = _file_mtime()
 
 
 def get_guild_settings(guild_id: int) -> Dict[str, Any]:
