@@ -23,6 +23,8 @@
   --warning-soft: rgba(169, 107, 24, 0.14);
   --info: #3b73a9;
   --info-soft: rgba(59, 115, 169, 0.12);
+  --table-zebra: rgba(36, 38, 35, 0.025);
+  --table-hover: rgba(39, 111, 99, 0.08);
   --topbar-height: 56px;
   --sidebar-width: 264px;
   --content-max: 1160px;
@@ -49,6 +51,8 @@
     --accent: #58b99f;
     --accent-hover: #75cbb5;
     --accent-soft: rgba(88, 185, 159, 0.16);
+    --table-zebra: rgba(245, 247, 242, 0.035);
+    --table-hover: rgba(88, 185, 159, 0.14);
     --shadow-popover: 0 18px 60px rgba(0, 0, 0, 0.55);
   }
 }
@@ -1065,22 +1069,54 @@ textarea.form-control {
 
 /* Tables and lists */
 .table-responsive {
+  width: 100%;
+  overflow: auto;
+  background: var(--surface);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
+  scrollbar-gutter: stable;
 }
 
 .table {
+  --bs-table-bg: var(--surface);
+  --bs-table-color: var(--text);
+  --bs-table-border-color: var(--separator);
+  --bs-table-striped-bg: var(--table-zebra);
+  --bs-table-striped-color: var(--text);
+  --bs-table-hover-bg: var(--table-hover);
+  --bs-table-hover-color: var(--text);
+  --bs-table-active-bg: var(--table-hover);
+  --bs-table-active-color: var(--text);
+  --bs-table-accent-bg: transparent;
   color: var(--text);
+  background-color: var(--surface);
+  min-width: 640px;
   margin: 0;
   vertical-align: middle;
 }
 
+.table > :not(caption) > * > * {
+  padding: 11px 14px;
+  color: var(--text);
+  background-color: var(--surface);
+  border-bottom-color: var(--separator);
+  box-shadow: none;
+}
+
 .table thead th {
-  border-bottom: 1px solid var(--separator);
-  background: var(--section-header);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: 1px solid var(--separator-strong);
+  background-color: var(--surface-muted);
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 650;
   white-space: nowrap;
+  box-shadow: none;
+}
+
+.table tbody tr:nth-child(even) > * {
+  background-color: var(--table-zebra);
 }
 
 .table td {
@@ -1089,19 +1125,44 @@ textarea.form-control {
   font-size: 13px;
 }
 
-.table-hover tbody tr:hover {
-  background-color: var(--surface-raised);
+.table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.table-hover > tbody > tr:hover > * {
+  background-color: var(--table-hover);
+  color: var(--text);
+}
+
+.table th:first-child,
+.table td:first-child {
+  padding-left: 16px;
+}
+
+.table th:last-child,
+.table td:last-child {
+  padding-right: 16px;
 }
 
 .table-actions {
   width: 1%;
+  min-width: 54px;
   white-space: nowrap;
   text-align: right;
 }
 
+.table-actions .btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
 .table-cell-truncate {
   overflow: hidden;
-  max-width: 280px;
+  min-width: 220px;
+  max-width: 360px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
