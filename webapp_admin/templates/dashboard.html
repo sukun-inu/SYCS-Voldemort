@@ -2,18 +2,15 @@
 {% block title %}ダッシュボード{% endblock %}
 {% block content %}
 
-<!-- Page Header -->
 <div class="page-header">
-  <div class="d-flex align-items-center justify-content-between">
-    <div>
-      <h2 class="h3 fw-bold mb-1"><i class="bi bi-grid-3x3-gap-fill me-2"></i>ダッシュボード</h2>
-      <p class="text-muted small mb-0">{{ session.guild_name }} の現在の設定概要</p>
-    </div>
+  <div>
+    <p class="page-kicker">Overview</p>
+    <h1 class="page-title"><i class="bi bi-grid-1x2-fill"></i>ダッシュボード</h1>
+    <p class="page-description">{{ session.guild_name }} の設定状況をまとめて確認できます。</p>
   </div>
 </div>
 
-<!-- Stats Grid -->
-<div class="row g-3">
+<div class="overview-grid">
   {% set cards = [
     ("bi-journal-text", "accent", "ログ設定", "settings.logging_settings",
      [("ログチャンネル", ("#" ~ stats.log_channel) if stats.log_channel else "未設定"),
@@ -40,52 +37,48 @@
   ] %}
 
   {% for icon, color, title, endpoint, items in cards %}
-  <div class="col-md-6 col-xl-4">
-    <div class="card stat-card h-100 shadow-sm">
-      <div class="card-body">
-        <!-- Card Header with Icon and Title -->
-        <div class="d-flex align-items-start gap-3 mb-4">
-          <div class="stat-icon stat-icon-{{ color }}" style="min-width: 44px;">
-            <i class="bi {{ icon }}"></i>
-          </div>
-          <div class="flex-grow-1">
-            <h6 class="card-title fw-bold mb-0">{{ title }}</h6>
-          </div>
-          <a href="{{ url_for(endpoint) }}" class="btn btn-sm btn-outline-secondary py-1 px-2 ms-2" title="設定を編集">
-            <i class="bi bi-pencil-square"></i>
-          </a>
-        </div>
-
-        <!-- Card Content -->
-        <div>
-          {% for label, value in items %}
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="text-muted small fw-500">{{ label }}</span>
-            <span class="fw-600 text-end">
-              {% if value == "未設定" or value == "未設定（全チャンネル）" %}
-              <span class="badge bg-light text-muted">{{ value }}</span>
-              {% else %}
-              {{ value }}
-              {% endif %}
-            </span>
-          </div>
-          {% endfor %}
-        </div>
+  <article class="metric-card span-4">
+    <div class="metric-card-header">
+      <div class="metric-icon {{ color if color != 'accent' else '' }}">
+        <i class="bi {{ icon }}"></i>
       </div>
+      <div class="min-w-0">
+        <h2 class="metric-title">{{ title }}</h2>
+      </div>
+      <a href="{{ url_for(endpoint) }}" class="metric-edit" title="編集">
+        <i class="bi bi-pencil-square"></i>
+      </a>
     </div>
-  </div>
+
+    <div class="metric-list">
+      {% for label, value in items %}
+      <div class="metric-row">
+        <span class="metric-label">{{ label }}</span>
+        <span class="metric-value">
+          {% if value == "未設定" or value == "未設定（全チャンネル）" %}
+          <span class="metric-value-empty">{{ value }}</span>
+          {% else %}
+          {{ value }}
+          {% endif %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  </article>
   {% endfor %}
 </div>
 
-<!-- Quick Actions Section (optional) -->
-<div class="mt-5 pt-4 border-top" style="border-color: var(--separator);">
-  <h5 class="fw-bold mb-3">クイックアクション</h5>
-  <div class="d-flex flex-wrap gap-2">
-    <a href="{{ url_for('settings.logging_settings') }}" class="btn btn-sm btn-outline-secondary">
+<div class="action-strip">
+  <div>
+    <h2 class="action-strip-title">よく使う操作</h2>
+    <p class="page-description mb-0">設定編集とサーバー切り替えへすぐ移動できます。</p>
+  </div>
+  <div class="action-strip-actions">
+    <a href="{{ url_for('settings.logging_settings') }}" class="btn btn-outline-secondary">
       <i class="bi bi-gear me-2"></i>設定を編集
     </a>
-    <a href="{{ url_for('dashboard.guild_select') }}" class="btn btn-sm btn-outline-secondary">
-      <i class="bi bi-arrow-repeat me-2"></i>ギルドを切り替え
+    <a href="{{ url_for('dashboard.guild_select') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-repeat me-2"></i>サーバーを切り替え
     </a>
   </div>
 </div>

@@ -1,81 +1,97 @@
 {% extends "base.html" %}
 {% block title %}ニュースフィード{% endblock %}
 {% block content %}
+
 <div class="page-header">
-  <h2 class="h4 fw-bold mb-1"><i class="bi bi-newspaper me-2"></i>Google News フィード</h2>
-  <p class="text-muted small mb-0">キーワードで Google News を定期検索し、新着記事を投稿します。最大 10 件。</p>
+  <div>
+    <p class="page-kicker">News</p>
+    <h1 class="page-title"><i class="bi bi-newspaper"></i>Google News フィード</h1>
+    <p class="page-description">キーワード検索の新着記事を指定チャンネルへ投稿します。</p>
+  </div>
 </div>
 
-<div class="row g-4">
-  <div class="col-lg-5">
-    <div class="card">
-      <div class="card-header fw-bold"><i class="bi bi-plus-circle me-2"></i>フィードを追加</div>
-      <div class="card-body">
-        <form method="post">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <input type="hidden" name="action" value="add">
-          <div class="mb-3">
-            <label class="form-label">投稿チャンネル</label>
-            <select name="channel_id" class="form-select" required>
-              <option value="">チャンネルを選択…</option>
-              {% for ch in channels %}
-              <option value="{{ ch.id }}"># {{ ch.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">検索クエリ</label>
-            <input type="text" name="query" class="form-control" maxlength="200"
-                   placeholder="AI 技術、セキュリティ…" required>
-            <div class="form-text">Google News で検索するキーワードを入力してください。</div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">チェック間隔（分）</label>
-            <input type="number" name="interval" class="form-control" value="60" min="5" max="1440">
-            <div class="form-text">5〜1440 分（最小 5 分）</div>
-          </div>
-          <button class="btn btn-accent">追加</button>
-        </form>
-      </div>
+<div class="settings-grid">
+  <section class="section-card span-5">
+    <div class="section-card-header">
+      <h2 class="section-card-title"><i class="bi bi-plus-circle"></i>フィードを追加</h2>
+      <span class="badge-soft {% if feeds|length >= 10 %}warning{% else %}accent{% endif %}">{{ feeds|length }} / 10</span>
     </div>
-  </div>
-
-  <div class="col-lg-7">
-    <div class="card">
-      <div class="card-header fw-bold">
-        <i class="bi bi-list-ul me-2"></i>登録済みフィード
-        <span class="badge bg-secondary ms-2">{{ feeds|length }} / 10</span>
-      </div>
-      <div class="card-body p-0">
-        {% if feeds %}
-        <table class="table table-hover mb-0">
-          <thead>
-            <tr><th>ID</th><th>クエリ</th><th>チャンネル</th><th>間隔</th><th></th></tr>
-          </thead>
-          <tbody>
-            {% for fid, feed in feeds.items() %}
-            <tr>
-              <td class="font-monospace small text-muted">{{ fid }}</td>
-              <td class="text-truncate" style="max-width:120px">{{ feed.get('query', '') }}</td>
-              <td># {{ ch_map.get(feed.get('channel_id', '')|string, feed.get('channel_id', '')) }}</td>
-              <td>{{ feed.get('interval', 60) }}分</td>
-              <td>
-                <form method="post" class="d-inline confirm-form" data-msg="このフィードを削除しますか？">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <input type="hidden" name="action" value="remove">
-                  <input type="hidden" name="feed_id" value="{{ fid }}">
-                  <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
-                </form>
-              </td>
-            </tr>
+    <div class="section-card-body">
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add">
+        <div class="mb-3">
+          <label class="form-label" for="news_channel_id">投稿チャンネル</label>
+          <select id="news_channel_id" name="channel_id" class="form-select" required>
+            <option value="">チャンネルを選択</option>
+            {% for ch in channels %}
+            <option value="{{ ch.id }}"># {{ ch.name }}</option>
             {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
-        <div class="p-4 text-center text-muted">ニュースフィードは登録されていません。</div>
-        {% endif %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="query">検索クエリ</label>
+          <input id="query" type="text" name="query" class="form-control" maxlength="200"
+                 placeholder="AI 技術、セキュリティ" required>
+        </div>
+        <div class="mb-4">
+          <label class="form-label" for="interval">チェック間隔（分）</label>
+          <input id="interval" type="number" name="interval" class="form-control" value="60" min="5" max="1440">
+          <div class="form-text">5〜1440 分</div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-accent"><i class="bi bi-plus-lg me-2"></i>追加</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="section-card span-7">
+    <div class="section-card-header">
+      <h2 class="section-card-title"><i class="bi bi-list-ul"></i>登録済みフィード</h2>
+      <span class="badge-soft accent">{{ feeds|length }} 件</span>
+    </div>
+    {% if feeds %}
+    <div class="table-responsive">
+      <table class="table table-hover">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>クエリ</th>
+            <th>チャンネル</th>
+            <th>間隔</th>
+            <th class="table-actions"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for fid, feed in feeds.items() %}
+          <tr>
+            <td class="font-monospace small text-muted">{{ fid }}</td>
+            <td class="table-cell-truncate">{{ feed.get('query', '') }}</td>
+            <td># {{ ch_map.get(feed.get('channel_id', '')|string, feed.get('channel_id', '')) }}</td>
+            <td>{{ feed.get('interval', 60) }}分</td>
+            <td class="table-actions">
+              <form method="post" class="d-inline confirm-form" data-msg="このフィードを削除しますか？">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="remove">
+                <input type="hidden" name="feed_id" value="{{ fid }}">
+                <button class="btn btn-sm btn-outline-danger" title="削除"><i class="bi bi-trash"></i></button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div>
+        <i class="bi bi-newspaper"></i>
+        <p class="mb-0">ニュースフィードは登録されていません。</p>
       </div>
     </div>
-  </div>
+    {% endif %}
+  </section>
 </div>
+
 {% endblock %}

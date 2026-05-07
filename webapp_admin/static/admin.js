@@ -1,173 +1,148 @@
 'use strict';
 
-// ─── Dark Mode detection ────────────────────────
-const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-console.log('Dark mode:', prefersDark ? 'enabled' : 'disabled');
-
-// ─── Delete confirmation ────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  // Confirm dialogs
+  const hasBootstrap = typeof bootstrap !== 'undefined';
+
   document.querySelectorAll('.confirm-form').forEach((form) => {
-    form.addEventListener('submit', (e) => {
-      const msg = form.dataset.msg || '本当に実行しますか？';
-      if (!window.confirm(msg)) {
-        e.preventDefault();
+    form.addEventListener('submit', (event) => {
+      const message = form.dataset.msg || '本当に実行しますか？';
+      if (!window.confirm(message)) {
+        event.preventDefault();
       }
     });
   });
 
-  // ─── Fade flash messages ────────────────────
-  const alerts = document.querySelectorAll('.alert:not(.alert-dismissible [data-bs-dismiss="alert"])');
-  alerts.forEach((alert) => {
-    setTimeout(() => {
-      const bsAlert = new bootstrap.Alert(alert);
-      bsAlert.close();
-    }, 5000);
+  document.querySelectorAll('[data-auto-dismiss="true"]').forEach((alert) => {
+    if (!hasBootstrap) return;
+    window.setTimeout(() => {
+      bootstrap.Alert.getOrCreateInstance(alert).close();
+    }, 5200);
   });
 
-  // ─── Smooth navigation highlight ─────────────
-  const currentPage = window.location.pathname;
-  document.querySelectorAll('.sidebar-link').forEach((link) => {
-    if (link.getAttribute('href') === currentPage) {
-      link.classList.add('active');
-    }
-  });
-
-  // ─── Mobile sidebar toggle (if needed) ──────
   const sidebarToggle = document.getElementById('sidebar-toggle');
   const sidebar = document.getElementById('sidebar');
-  if (sidebarToggle && sidebar) {
+  const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+
+  const closeSidebar = () => {
+    if (!sidebar || !sidebarToggle || !sidebarBackdrop) return;
+    sidebar.classList.remove('is-open');
+    sidebarToggle.setAttribute('aria-expanded', 'false');
+    sidebarBackdrop.hidden = true;
+  };
+
+  const openSidebar = () => {
+    if (!sidebar || !sidebarToggle || !sidebarBackdrop) return;
+    sidebar.classList.add('is-open');
+    sidebarToggle.setAttribute('aria-expanded', 'true');
+    sidebarBackdrop.hidden = false;
+  };
+
+  if (sidebarToggle && sidebar && sidebarBackdrop) {
     sidebarToggle.addEventListener('click', () => {
-      sidebar.classList.toggle('show');
+      if (sidebar.classList.contains('is-open')) {
+        closeSidebar();
+      } else {
+        openSidebar();
+      }
     });
-    // Close sidebar when link clicked
+
+    sidebarBackdrop.addEventListener('click', closeSidebar);
     sidebar.querySelectorAll('.sidebar-link').forEach((link) => {
-      link.addEventListener('click', () => {
-        sidebar.classList.remove('show');
-      });
+      link.addEventListener('click', closeSidebar);
     });
   }
 
-  // ─── Form validation feedback ───────────────
-  const forms = document.querySelectorAll('form');
-  forms.forEach((form) => {
-    form.addEventListener('submit', (e) => {
-      const inputs = form.querySelectorAll('[required]');
+  document.querySelectorAll('form').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+      const requiredFields = form.querySelectorAll('[required]');
       let isValid = true;
 
-      inputs.forEach((input) => {
-        if (!input.value.trim()) {
-          input.classList.add('is-invalid');
+      requiredFields.forEach((field) => {
+        if (!field.value.trim()) {
+          field.classList.add('is-invalid');
           isValid = false;
         } else {
-          input.classList.remove('is-invalid');
+          field.classList.remove('is-invalid');
         }
       });
 
-      if (!isValid) e.preventDefault();
-    });
-  });
-
-  // ─── Clear validation on input ──────────────
-  document.querySelectorAll('input, select, textarea').forEach((input) => {
-    input.addEventListener('input', () => {
-      input.classList.remove('is-invalid');
-    });
-  });
-
-  // ─── Tooltip initialization ─────────────────
-  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((el) => {
-    new bootstrap.Tooltip(el);
-  });
-
-  // ─── Popovers initialization ────────────────
-  document.querySelectorAll('[data-bs-toggle="popover"]').forEach((el) => {
-    new bootstrap.Popover(el);
-  });
-
-  // ─── Toggle password visibility ─────────────
-  document.querySelectorAll('[data-toggle-password]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const input = document.querySelector(btn.dataset.togglePassword);
-      if (input) {
-        const isPassword = input.type === 'password';
-        input.type = isPassword ? 'text' : 'password';
-        btn.innerHTML = isPassword ? 
-          '<i class="bi bi-eye-slash"></i>' : 
-          '<i class="bi bi-eye"></i>';
+      if (!isValid) {
+        event.preventDefault();
       }
     });
   });
 
-  // ─── Copy to clipboard ──────────────────────
-  document.querySelectorAll('[data-copy-to-clipboard]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const text = btn.dataset.copyToClipboard;
+  document.querySelectorAll('input, select, textarea').forEach((field) => {
+    field.addEventListener('input', () => {
+      field.classList.remove('is-invalid');
+    });
+    field.addEventListener('change', () => {
+      field.classList.remove('is-invalid');
+    });
+  });
+
+  if (hasBootstrap) {
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
+      bootstrap.Tooltip.getOrCreateInstance(element);
+    });
+
+    document.querySelectorAll('[data-bs-toggle="popover"]').forEach((element) => {
+      bootstrap.Popover.getOrCreateInstance(element);
+    });
+  }
+
+  document.querySelectorAll('[data-toggle-password]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const input = document.querySelector(button.dataset.togglePassword);
+      if (!input) return;
+
+      const isPassword = input.type === 'password';
+      input.type = isPassword ? 'text' : 'password';
+      button.innerHTML = isPassword
+        ? '<i class="bi bi-eye-slash"></i>'
+        : '<i class="bi bi-eye"></i>';
+    });
+  });
+
+  document.querySelectorAll('[data-copy-to-clipboard]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const text = button.dataset.copyToClipboard;
+      const originalHtml = button.innerHTML;
+
       try {
         await navigator.clipboard.writeText(text);
-        const originalHtml = btn.innerHTML;
-        btn.innerHTML = '<i class="bi bi-check"></i> コピー完了';
-        btn.classList.add('disabled');
-        setTimeout(() => {
-          btn.innerHTML = originalHtml;
-          btn.classList.remove('disabled');
-        }, 2000);
-      } catch (err) {
-        console.error('Copy failed:', err);
+        button.innerHTML = '<i class="bi bi-check"></i> コピー完了';
+        button.disabled = true;
+        window.setTimeout(() => {
+          button.innerHTML = originalHtml;
+          button.disabled = false;
+        }, 1800);
+      } catch (error) {
+        button.innerHTML = '<i class="bi bi-exclamation-circle"></i> 失敗';
+        window.setTimeout(() => {
+          button.innerHTML = originalHtml;
+        }, 1800);
       }
     });
   });
 
-  // ─── Loading state for buttons ──────────────
-  document.querySelectorAll('button[data-loading-text]').forEach((btn) => {
-    btn.addEventListener('click', function() {
-      if (!this.disabled) {
-        const originalHtml = this.innerHTML;
-        const loadingText = this.dataset.loadingText;
-        this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + loadingText;
-        this.disabled = true;
-        setTimeout(() => {
-          this.innerHTML = originalHtml;
-          this.disabled = false;
-        }, 3000);
-      }
+  document.querySelectorAll('[data-loading-text]').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (button.disabled) return;
+      const loadingText = button.dataset.loadingText || '処理中';
+      button.dataset.originalHtml = button.innerHTML;
+      button.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>${loadingText}`;
+      button.disabled = true;
     });
   });
 
-  // ─── Auto-clear form messages ───────────────
-  document.querySelectorAll('.form-feedback').forEach((feedback) => {
-    setTimeout(() => {
-      feedback.style.transition = 'opacity 0.3s ease';
-      feedback.style.opacity = '0';
-      setTimeout(() => {
-        feedback.remove();
-      }, 300);
-    }, 4000);
-  });
-});
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    closeSidebar();
 
-// ─── Keyboard shortcuts ──────────────────────────
-document.addEventListener('keydown', (e) => {
-  // Escape to close modals and popovers
-  if (e.key === 'Escape') {
+    if (!hasBootstrap) return;
     document.querySelectorAll('.modal.show').forEach((modal) => {
-      const bsModal = bootstrap.Modal.getInstance(modal);
-      if (bsModal) bsModal.hide();
+      bootstrap.Modal.getInstance(modal)?.hide();
     });
-  }
-  // Ctrl/Cmd + K for quick search (if implemented)
-  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-    e.preventDefault();
-    // Implement quick search if needed
-  }
-});
-
-// ─── Accessibility: Focus management ────────────
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Tab') {
-    document.body.classList.add('focus-visible');
-  }
-});
-document.addEventListener('mousedown', () => {
-  document.body.classList.remove('focus-visible');
+  });
 });

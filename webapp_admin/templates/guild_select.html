@@ -1,78 +1,49 @@
 {% extends "base.html" %}
 {% block title %}サーバー選択{% endblock %}
 {% block content %}
-
-<!-- Page Header -->
 <div class="page-header">
-  <h2 class="h3 fw-bold mb-1"><i class="bi bi-diagram-3-fill me-2"></i>管理するサーバーを選択</h2>
-  <p class="text-muted small mb-0">あなたが管理者権限を持ち、Bot が参加しているサーバーが表示されます。</p>
+  <div>
+    <p class="page-kicker">Server</p>
+    <h1 class="page-title"><i class="bi bi-diagram-3-fill"></i>管理するサーバーを選択</h1>
+    <p class="page-description">管理者権限があり、Bot が参加しているサーバーを表示しています。</p>
+  </div>
 </div>
 
-<!-- Guild Grid -->
 {% if guilds %}
-<div class="row g-4">
+<div class="guild-grid">
   {% for guild in guilds %}
-  <div class="col-sm-6 col-md-4 col-lg-3">
-    <form method="post" action="{{ url_for('dashboard.select_guild') }}" class="h-100">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="guild_id" value="{{ guild.id }}">
-      
-      <button type="submit" class="w-100 h-100 p-0" style="border: none; background: transparent;">
-        <div class="card h-100 guild-card shadow-sm overflow-hidden">
-          <div class="card-body d-flex flex-column align-items-center py-5 px-3">
-            <!-- Guild Icon -->
-            <div class="mb-4">
-              {% if guild.icon %}
-              <img src="https://cdn.discordapp.com/icons/{{ guild.id }}/{{ guild.icon }}.webp?size=128"
-                   class="rounded-circle" width="80" height="80" alt="{{ guild.name }}" 
-                   style="box-shadow: 0 4px 16px rgba(0,122,255,.2); object-fit: cover;">
-              {% else %}
-              <div class="guild-icon-placeholder" style="width: 80px; height: 80px; font-size: 32px;">
-                {{ guild.name[0] }}
-              </div>
-              {% endif %}
-            </div>
-
-            <!-- Guild Name -->
-            <h6 class="fw-bold text-center mb-3 text-truncate" style="max-width: 100%; font-size: 0.95rem;">
-              {{ guild.name }}
-            </h6>
-
-            <!-- Selection Button -->
-            <div class="d-flex gap-2 mt-auto w-100">
-              <span class="badge bg-primary mx-auto">
-                <i class="bi bi-check-lg me-1"></i>選択
-              </span>
-            </div>
+  <form method="post" action="{{ url_for('dashboard.select_guild') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="guild_id" value="{{ guild.id }}">
+    <button type="submit" class="guild-card-button">
+      <div class="guild-card">
+        {% if guild.icon %}
+        <img src="https://cdn.discordapp.com/icons/{{ guild.id }}/{{ guild.icon }}.webp?size=128"
+             class="guild-card-icon" width="56" height="56" alt="">
+        {% else %}
+        <div class="guild-icon-placeholder">{{ guild.name[0] }}</div>
+        {% endif %}
+        <div class="min-w-0">
+          <h2 class="guild-card-title">{{ guild.name }}</h2>
+          <div class="guild-card-meta">
+            <i class="bi bi-check-circle-fill"></i>
+            <span>管理可能</span>
           </div>
         </div>
-      </button>
-    </form>
-  </div>
+      </div>
+    </button>
+  </form>
   {% endfor %}
 </div>
 
 {% else %}
-<!-- No Guilds Available -->
-<div class="alert alert-warning alert-dismissible fade show" role="alert">
-  <div class="d-flex gap-2">
-    <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
-    <div class="flex-grow-1">
-      <strong>管理可能なサーバーが見つかりません。</strong>
-      <p class="mb-0 mt-1 small">Bot が参加しているサーバーで管理者権限を確認してください。</p>
+<div class="section-card">
+  <div class="empty-state">
+    <div>
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      <h2 class="h5">管理可能なサーバーが見つかりません</h2>
+      <p class="mb-0">Bot が参加しているサーバーで管理者権限を確認してください。</p>
     </div>
-  </div>
-  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-</div>
-
-<!-- Help Info -->
-<div class="card bg-light border-0 mt-4">
-  <div class="card-body">
-    <h6 class="fw-bold mb-2"><i class="bi bi-info-circle me-2"></i>ヘルプ</h6>
-    <ul class="small text-muted mb-0">
-      <li>このページに表示されるには、Bot が参加しているサーバーで管理者である必要があります。</li>
-      <li>新しくサーバーを追加した場合は、ページを再読み込みしてください。</li>
-    </ul>
   </div>
 </div>
 {% endif %}

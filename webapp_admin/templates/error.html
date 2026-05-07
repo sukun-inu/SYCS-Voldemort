@@ -2,51 +2,30 @@
 {% block title %}エラー {{ code }}{% endblock %}
 {% block content %}
 
-<div class="container-fluid">
-  <div class="row min-vh-100 align-items-center">
-    <div class="col-12 col-md-8 col-lg-6 mx-auto">
-      <!-- Error Icon -->
-      <div class="text-center mb-4">
-        <div style="font-size: 4rem; color: var(--danger); margin-bottom: 1rem;">
-          <i class="bi bi-exclamation-triangle-fill"></i>
-        </div>
-        
-        <!-- Error Code -->
-        <h1 class="display-3 fw-bold mb-3" style="color: var(--accent); letter-spacing: -1px;">
-          {{ code }}
-        </h1>
-        
-        <!-- Error Message -->
-        <h2 class="h3 fw-normal mb-2">{{ message }}</h2>
-        <p class="text-muted mb-4">申し訳ございません。リクエストを処理できませんでした。</p>
-      </div>
-
-      <!-- Error Details (if available) -->
-      {% if description %}
-      <div class="card bg-light border-0 mb-4">
-        <div class="card-body">
-          <p class="text-muted small mb-0">{{ description }}</p>
-        </div>
-      </div>
-      {% endif %}
-
-      <!-- Action Buttons -->
-      <div class="d-flex flex-column flex-sm-row gap-2 justify-content-center">
-        <a href="javascript:history.back()" class="btn btn-outline-secondary px-4">
-          <i class="bi bi-arrow-left me-2"></i>前のページに戻る
-        </a>
-        <a href="{{ url_for('dashboard.index') }}" class="btn btn-accent px-4">
-          <i class="bi bi-house-fill me-2"></i>ダッシュボードへ戻る
-        </a>
-      </div>
-
-      <!-- Additional Help -->
-      <div class="mt-5 pt-4 border-top text-center" style="border-color: var(--separator);">
-        <p class="small text-muted mb-2">問題が解決しない場合は、</p>
-        <p class="small text-muted">管理者に報告してください。</p>
-      </div>
+<div class="error-view">
+  <section class="error-panel">
+    <div class="error-icon">
+      <i class="bi bi-exclamation-triangle-fill"></i>
     </div>
-  </div>
+    <h1 class="error-code">{{ code }}</h1>
+    <h2 class="error-message">{{ message }}</h2>
+    <p class="page-description">リクエストを処理できませんでした。</p>
+
+    {% if description %}
+    <div class="info-panel mt-4 text-start">
+      <p class="mb-0">{{ description }}</p>
+    </div>
+    {% endif %}
+
+    <div class="error-actions">
+      <a href="javascript:history.back()" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-2"></i>前のページに戻る
+      </a>
+      <a href="{{ url_for('dashboard.index') }}" class="btn btn-accent">
+        <i class="bi bi-house-fill me-2"></i>ダッシュボードへ戻る
+      </a>
+    </div>
+  </section>
 </div>
 
 {% endblock %}

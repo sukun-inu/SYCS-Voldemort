@@ -1,75 +1,90 @@
 {% extends "base.html" %}
 {% block title %}スティッキーメッセージ{% endblock %}
 {% block content %}
+
 <div class="page-header">
-  <h2 class="h4 fw-bold mb-1"><i class="bi bi-pin-angle-fill me-2"></i>スティッキーメッセージ</h2>
-  <p class="text-muted small mb-0">メッセージが投稿されるたびに自動で最下部に固定されるメッセージを設定します。</p>
+  <div>
+    <p class="page-kicker">Sticky</p>
+    <h1 class="page-title"><i class="bi bi-pin-angle-fill"></i>スティッキーメッセージ</h1>
+    <p class="page-description">チャンネル下部に固定表示するメッセージを管理します。</p>
+  </div>
 </div>
 
-<div class="row g-4">
-  <!-- 追加フォーム -->
-  <div class="col-lg-5">
-    <div class="card">
-      <div class="card-header fw-bold"><i class="bi bi-plus-circle me-2"></i>追加</div>
-      <div class="card-body">
-        <form method="post">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <input type="hidden" name="action" value="add">
-          <div class="mb-3">
-            <label class="form-label">チャンネル</label>
-            <select name="channel_id" class="form-select" required>
-              <option value="">チャンネルを選択…</option>
-              {% for ch in channels %}
-              <option value="{{ ch.id }}"># {{ ch.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">内容</label>
-            <textarea name="content" class="form-control" rows="4" maxlength="1000"
-                      placeholder="スティッキーとして表示するテキスト" required></textarea>
-            <div class="form-text">最大 1000 文字</div>
-          </div>
-          <button class="btn btn-accent">設定</button>
-        </form>
-      </div>
+<div class="settings-grid">
+  <section class="section-card span-5">
+    <div class="section-card-header">
+      <h2 class="section-card-title"><i class="bi bi-plus-circle"></i>追加</h2>
     </div>
-  </div>
-
-  <!-- 一覧 -->
-  <div class="col-lg-7">
-    <div class="card">
-      <div class="card-header fw-bold"><i class="bi bi-list-ul me-2"></i>設定済みスティッキー</div>
-      <div class="card-body p-0">
-        {% if stickies %}
-        <table class="table table-hover mb-0">
-          <thead>
-            <tr><th>チャンネル</th><th>内容</th><th></th></tr>
-          </thead>
-          <tbody>
-            {% for ch_id, entry in stickies.items() %}
-            <tr>
-              <td class="text-nowrap"># {{ ch_map.get(ch_id, ch_id) }}</td>
-              <td class="text-truncate" style="max-width:200px">{{ entry.get('content', '') }}</td>
-              <td>
-                <form method="post" class="d-inline confirm-form" data-msg="このスティッキーを解除しますか？">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <input type="hidden" name="action" value="remove">
-                  <input type="hidden" name="channel_id" value="{{ ch_id }}">
-                  <button class="btn btn-sm btn-outline-danger">
-                    <i class="bi bi-trash"></i>
-                  </button>
-                </form>
-              </td>
-            </tr>
+    <div class="section-card-body">
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add">
+        <div class="mb-3">
+          <label class="form-label" for="sticky_channel_id">チャンネル</label>
+          <select id="sticky_channel_id" name="channel_id" class="form-select" required>
+            <option value="">チャンネルを選択</option>
+            {% for ch in channels %}
+            <option value="{{ ch.id }}"># {{ ch.name }}</option>
             {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
-        <div class="p-4 text-center text-muted">スティッキーメッセージは設定されていません。</div>
-        {% endif %}
+          </select>
+        </div>
+        <div class="mb-4">
+          <label class="form-label" for="sticky_content">内容</label>
+          <textarea id="sticky_content" name="content" class="form-control" rows="5" maxlength="1000"
+                    placeholder="スティッキーとして表示するテキスト" required></textarea>
+          <div class="form-text">最大 1000 文字</div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-accent"><i class="bi bi-check-lg me-2"></i>設定</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="section-card span-7">
+    <div class="section-card-header">
+      <h2 class="section-card-title"><i class="bi bi-list-ul"></i>設定済みスティッキー</h2>
+      <span class="badge-soft accent">{{ stickies|length }} 件</span>
+    </div>
+    {% if stickies %}
+    <div class="table-responsive">
+      <table class="table table-hover">
+        <thead>
+          <tr>
+            <th>チャンネル</th>
+            <th>内容</th>
+            <th class="table-actions"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ch_id, entry in stickies.items() %}
+          <tr>
+            <td class="text-nowrap"># {{ ch_map.get(ch_id, ch_id) }}</td>
+            <td class="table-cell-truncate">{{ entry.get('content', '') }}</td>
+            <td class="table-actions">
+              <form method="post" class="d-inline confirm-form" data-msg="このスティッキーを解除しますか？">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="remove">
+                <input type="hidden" name="channel_id" value="{{ ch_id }}">
+                <button class="btn btn-sm btn-outline-danger" title="削除">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div>
+        <i class="bi bi-pin-angle"></i>
+        <p class="mb-0">スティッキーメッセージは設定されていません。</p>
       </div>
     </div>
-  </div>
+    {% endif %}
+  </section>
 </div>
+
 {% endblock %}
