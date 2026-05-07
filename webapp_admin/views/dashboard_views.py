@@ -1,4 +1,4 @@
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
 
 from services.settings_store import (
     get_bypass_role_ids,
@@ -13,6 +13,7 @@ from services.settings_store import (
     get_welcome_settings,
 )
 from services.logging_service import get_log_settings
+from webapp_admin.metrics import collect_host_metrics
 from webapp_admin.security import login_required, guild_required
 
 dashboard_bp = Blueprint("dashboard", __name__)
@@ -85,3 +86,9 @@ def overview():
         "bypass_count": len(get_bypass_role_ids(gid)),
     }
     return render_template("dashboard.html", stats=stats)
+
+
+@dashboard_bp.route("/api/metrics")
+@guild_required
+def system_metrics():
+    return jsonify(collect_host_metrics())

@@ -136,6 +136,55 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  const metricsRoot = document.querySelector('[data-metrics-url]');
+  if (metricsRoot) {
+    const updated = metricsRoot.querySelector('[data-metrics-updated]');
+    const updateMetrics = async () => {
+      try {
+        const response = await fetch(metricsRoot.dataset.metricsUrl, {
+          headers: { Accept: 'application/json' },
+          credentials: 'same-origin',
+          cache: 'no-store',
+        });
+
+        if (!response.ok) {
+          throw new Error(`metrics ${response.status}`);
+        }
+
+        const payload = await response.json();
+        Object.entries(payload.metrics || {}).forEach(([key, metric]) => {
+          const card = metricsRoot.querySelector(`[data-metric-card="${key}"]`);
+          if (!card) return;
+
+          const value = Number(metric.percent || 0);
+          const ring = card.querySelector('[data-ring]');
+          const display = card.querySelector('[data-metric-display]');
+          const detail = card.querySelector('[data-metric-detail]');
+
+          ring?.style.setProperty('--value', Math.max(0, Math.min(value, 100)).toFixed(2));
+          if (display) display.textContent = metric.display || `${value.toFixed(1)}%`;
+          if (detail) detail.textContent = metric.detail || '';
+          card.setAttribute('aria-label', `${metric.label || key}: ${metric.display || value}`);
+        });
+
+        if (updated) {
+          updated.textContent = `更新 ${payload.updated_at || '--:--:--'}`;
+          updated.classList.remove('warning');
+          updated.classList.add('accent');
+        }
+      } catch (error) {
+        if (updated) {
+          updated.textContent = '取得失敗';
+          updated.classList.remove('accent');
+          updated.classList.add('warning');
+        }
+      }
+    };
+
+    updateMetrics();
+    window.setInterval(updateMetrics, 5000);
+  }
+
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
     closeSidebar();

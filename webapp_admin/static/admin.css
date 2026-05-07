@@ -539,6 +539,12 @@ code {
   color: var(--accent);
 }
 
+.section-card-subtitle {
+  margin: 5px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 .settings-grid,
 .overview-grid {
   display: grid;
@@ -791,6 +797,91 @@ code {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* Host metrics */
+.host-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+}
+
+.health-card {
+  display: grid;
+  align-content: space-between;
+  gap: 18px;
+  min-height: 238px;
+  padding: 18px;
+  border-right: 1px solid var(--separator);
+}
+
+.health-card:last-child {
+  border-right: 0;
+}
+
+.health-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.health-card-title {
+  margin: 0;
+  font-size: 15px;
+}
+
+.health-card-detail {
+  margin: 5px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.ring-chart {
+  --ring-color: var(--accent);
+  --value: 0;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(128px, 100%);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  border-radius: 50%;
+  background:
+    conic-gradient(var(--ring-color) calc(var(--value) * 1%), var(--surface-muted) 0);
+}
+
+.ring-chart::after {
+  position: absolute;
+  inset: 13px;
+  border: 1px solid var(--separator);
+  border-radius: 50%;
+  background: var(--surface);
+  content: "";
+}
+
+.ring-chart span {
+  position: relative;
+  z-index: 1;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.ring-chart.tone-success {
+  --ring-color: var(--success);
+}
+
+.ring-chart.tone-warning {
+  --ring-color: var(--warning);
+}
+
+.ring-chart.tone-danger {
+  --ring-color: var(--danger);
+}
+
+.ring-chart.tone-info {
+  --ring-color: var(--info);
 }
 
 /* Forms */
@@ -1290,6 +1381,18 @@ hr {
   .span-7 {
     grid-column: span 6;
   }
+
+  .host-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .health-card:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .health-card:nth-child(n + 3) {
+    border-top: 1px solid var(--separator);
+  }
 }
 
 @media (max-width: 900px) {
@@ -1370,5 +1473,18 @@ hr {
   .metric-value {
     max-width: 100%;
     text-align: left;
+  }
+
+  .host-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .health-card {
+    border-right: 0;
+    border-top: 1px solid var(--separator);
+  }
+
+  .health-card:first-child {
+    border-top: 0;
   }
 }

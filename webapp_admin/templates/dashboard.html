@@ -11,6 +11,40 @@
 </div>
 
 <div class="overview-grid">
+  <section class="section-card span-12 host-metrics" data-metrics-url="{{ url_for('dashboard.system_metrics') }}">
+    <div class="section-card-header">
+      <div>
+        <h2 class="section-card-title"><i class="bi bi-activity"></i>ホストメトリクス</h2>
+        <p class="section-card-subtitle">CPU・メモリ・TPS・SLA目安をリアルタイムで監視します。</p>
+      </div>
+      <span class="badge-soft accent" data-metrics-updated>読み込み中</span>
+    </div>
+    <div class="host-metrics-grid">
+      {% set health_cards = [
+        ("cpu", "CPU", "bi-cpu", "accent"),
+        ("memory", "Memory", "bi-memory", "success"),
+        ("tps", "TPS", "bi-speedometer2", "info"),
+        ("sla", "SLA", "bi-shield-check", "warning"),
+      ] %}
+      {% for key, label, icon, tone in health_cards %}
+      <article class="health-card" data-metric-card="{{ key }}">
+        <div class="health-card-top">
+          <div class="metric-icon {{ tone if tone != 'accent' else '' }}">
+            <i class="bi {{ icon }}"></i>
+          </div>
+          <div>
+            <h3 class="health-card-title">{{ label }}</h3>
+            <p class="health-card-detail" data-metric-detail>取得中</p>
+          </div>
+        </div>
+        <div class="ring-chart tone-{{ tone }}" data-ring>
+          <span data-metric-display>--%</span>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+
   {% set cards = [
     ("bi-journal-text", "accent", "ログ設定", "settings.logging_settings",
      [("ログチャンネル", ("#" ~ stats.log_channel) if stats.log_channel else "未設定"),

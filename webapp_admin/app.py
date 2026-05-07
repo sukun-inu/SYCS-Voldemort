@@ -1,9 +1,10 @@
 import os
 import secrets
 
-from flask import Flask
+from flask import Flask, request
 
 from webapp_admin.extensions import csrf, limiter
+from webapp_admin.metrics import record_request
 
 
 def create_app() -> Flask:
@@ -17,7 +18,7 @@ def create_app() -> Flask:
         SESSION_COOKIE_SECURE=os.environ.get("FLASK_SECURE_COOKIES", "false").lower() == "true",
         PERMANENT_SESSION_LIFETIME=3600,
         WTF_CSRF_TIME_LIMIT=3600,
-        ADMIN_ASSET_VERSION=os.environ.get("ADMIN_ASSET_VERSION", "20260507-apple-ui"),
+        ADMIN_ASSET_VERSION=os.environ.get("ADMIN_ASSET_VERSION", "20260507-metrics"),
     )
 
     csrf.init_app(app)
@@ -33,6 +34,9 @@ def create_app() -> Flask:
 
     @app.after_request
     def set_security_headers(response):
+        if request.endpoint != "static":
+            record_request()
+
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
