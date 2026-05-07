@@ -1,7 +1,8 @@
 import os
 import secrets
+from pathlib import Path
 
-from flask import Flask, got_request_exception, request
+from flask import Flask, got_request_exception, request, url_for
 
 from webapp_admin.extensions import csrf, limiter
 from webapp_admin.metrics import (
@@ -23,8 +24,29 @@ def create_app() -> Flask:
         SESSION_COOKIE_SECURE=os.environ.get("FLASK_SECURE_COOKIES", "false").lower() == "true",
         PERMANENT_SESSION_LIFETIME=3600,
         WTF_CSRF_TIME_LIMIT=3600,
-        ADMIN_ASSET_VERSION=os.environ.get("ADMIN_ASSET_VERSION", "20260507-monitoring"),
+        SEND_FILE_MAX_AGE_DEFAULT=0,
+        ADMIN_ASSET_VERSION=os.environ.get("ADMIN_ASSET_VERSION", "admin"),
     )
+
+    static_root = Path(app.static_folder or "").resolve()
+
+    def admin_asset_url(filename: str) -> str:
+        version_seed = app.config.get("ADMIN_ASSET_VERSION", "admin")
+        version = version_seed
+
+        try:
+            asset_path = (static_root / filename).resolve()
+            if asset_path.is_relative_to(static_root):
+                stat = asset_path.stat()
+                version = f"{version_seed}-{stat.st_mtime_ns:x}-{stat.st_size:x}"
+        except OSError:
+            pass
+
+        return url_for("static", filename=filename, v=version)
+
+    @app.context_processor
+    def inject_asset_helpers():
+        return {"admin_asset_url": admin_asset_url}
 
     csrf.init_app(app)
     limiter.init_app(app)
@@ -53,7 +75,11 @@ def create_app() -> Flask:
 
     @app.after_request
     def set_security_headers(response):
-        if request.endpoint != "static":
+        if request.endpoint == "static":
+            response.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        else:
             record_request()
             record_error_response(response.status_code, request_snapshot())
 

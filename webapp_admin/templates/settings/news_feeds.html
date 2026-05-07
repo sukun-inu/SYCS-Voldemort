@@ -83,7 +83,7 @@
             <td>{{ feed.get('interval', 60) }}分</td>
             <td class="table-actions">
               <button type="button" class="btn btn-sm btn-outline-primary me-1" title="編集"
-                      onclick="editFeed('{{ fid }}')">
+                      aria-label="編集" data-edit-feed="{{ fid }}">
                 <i class="bi bi-pencil"></i>
               </button>
               <form method="post" class="d-inline confirm-form" data-msg="このフィードを削除しますか？">
@@ -111,47 +111,6 @@
   </section>
 </div>
 
-{% endblock %}
+<div id="feed-data" data-feeds-json="{{ feeds | tojson | forceescape }}" hidden></div>
 
-{% block extra_scripts %}
-<script>
-/* feeds データをサーバー側から安全に埋め込む */
-const _FEEDS = {{ feeds | tojson }};
-
-function editFeed(fid) {
-  const feed = _FEEDS[fid] || {};
-
-  document.getElementById('feed-action').value     = 'edit';
-  document.getElementById('feed-id-field').value   = fid;
-  document.getElementById('news_channel_id').value = String(feed.channel_id || '');
-  document.getElementById('feed_query').value      = feed.query      || '';
-  document.getElementById('feed_interval').value   = feed.interval   || 60;
-
-  /* バリデーションエラークラスをリセット */
-  ['news_channel_id', 'feed_query', 'feed_interval'].forEach((id) => {
-    document.getElementById(id).classList.remove('is-invalid');
-  });
-
-  document.getElementById('feed-form-title').innerHTML = '<i class="bi bi-pencil"></i>フィードを編集';
-  document.getElementById('feed-submit').innerHTML     = '<i class="bi bi-check-lg me-2"></i>更新';
-  document.getElementById('feed-cancel').classList.remove('d-none');
-  document.getElementById('feed-form-card').scrollIntoView({ behavior: 'smooth' });
-}
-
-document.getElementById('feed-cancel').addEventListener('click', () => {
-  document.getElementById('feed-action').value     = 'add';
-  document.getElementById('feed-id-field').value   = '';
-  document.getElementById('news_channel_id').value = '';
-  document.getElementById('feed_query').value      = '';
-  document.getElementById('feed_interval').value   = '60';
-
-  ['news_channel_id', 'feed_query', 'feed_interval'].forEach((id) => {
-    document.getElementById(id).classList.remove('is-invalid');
-  });
-
-  document.getElementById('feed-form-title').innerHTML = '<i class="bi bi-plus-circle"></i>フィードを追加';
-  document.getElementById('feed-submit').innerHTML     = '<i class="bi bi-plus-lg me-2"></i>追加';
-  document.getElementById('feed-cancel').classList.add('d-none');
-});
-</script>
 {% endblock %}

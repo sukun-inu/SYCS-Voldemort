@@ -104,6 +104,117 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  const parseJsonDataset = (elementId, datasetKey, fallback = {}) => {
+    const element = document.getElementById(elementId);
+    if (!element || !element.dataset[datasetKey]) return fallback;
+
+    try {
+      return JSON.parse(element.dataset[datasetKey]);
+    } catch (error) {
+      return fallback;
+    }
+  };
+
+  const setButtonLabel = (element, iconClass, label) => {
+    if (!element) return;
+    element.innerHTML = `<i class="bi ${iconClass} me-2"></i>${label}`;
+  };
+
+  const clearInvalidState = (...fields) => {
+    fields.forEach((field) => field?.classList.remove('is-invalid'));
+  };
+
+  const initStickyEditor = () => {
+    const formCard = document.getElementById('sticky-form-card');
+    const select = document.getElementById('sticky_channel_id');
+    const area = document.getElementById('sticky_content');
+    const title = document.getElementById('sticky-form-title');
+    const submit = document.getElementById('sticky-submit');
+    const cancel = document.getElementById('sticky-cancel');
+
+    if (!formCard || !select || !area || !title || !submit || !cancel) return;
+
+    const stickies = parseJsonDataset('sticky-data', 'stickiesJson');
+
+    document.querySelectorAll('[data-edit-sticky]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const channelId = button.dataset.editSticky;
+        const entry = stickies[channelId] || {};
+
+        select.value = channelId || '';
+        area.value = entry.content || '';
+        clearInvalidState(select, area);
+
+        title.innerHTML = '<i class="bi bi-pencil"></i>編集';
+        setButtonLabel(submit, 'bi-check-lg', '更新');
+        cancel.classList.remove('d-none');
+        formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    cancel.addEventListener('click', () => {
+      select.value = '';
+      area.value = '';
+      clearInvalidState(select, area);
+
+      title.innerHTML = '<i class="bi bi-plus-circle"></i>追加';
+      setButtonLabel(submit, 'bi-check-lg', '設定');
+      cancel.classList.add('d-none');
+    });
+  };
+
+  const initFeedEditor = () => {
+    const formCard = document.getElementById('feed-form-card');
+    const action = document.getElementById('feed-action');
+    const feedIdField = document.getElementById('feed-id-field');
+    const channel = document.getElementById('news_channel_id');
+    const query = document.getElementById('feed_query');
+    const interval = document.getElementById('feed_interval');
+    const title = document.getElementById('feed-form-title');
+    const submit = document.getElementById('feed-submit');
+    const cancel = document.getElementById('feed-cancel');
+
+    if (!formCard || !action || !feedIdField || !channel || !query || !interval || !title || !submit || !cancel) return;
+
+    const feeds = parseJsonDataset('feed-data', 'feedsJson');
+    const editableFields = [channel, query, interval];
+
+    document.querySelectorAll('[data-edit-feed]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const feedId = button.dataset.editFeed;
+        const feed = feeds[feedId] || {};
+
+        action.value = 'edit';
+        feedIdField.value = feedId || '';
+        channel.value = String(feed.channel_id || '');
+        query.value = feed.query || '';
+        interval.value = feed.interval || 60;
+        clearInvalidState(...editableFields);
+
+        title.innerHTML = '<i class="bi bi-pencil"></i>フィードを編集';
+        setButtonLabel(submit, 'bi-check-lg', '更新');
+        cancel.classList.remove('d-none');
+        formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    cancel.addEventListener('click', () => {
+      action.value = 'add';
+      feedIdField.value = '';
+      channel.value = '';
+      query.value = '';
+      interval.value = '60';
+      clearInvalidState(...editableFields);
+
+      title.innerHTML = '<i class="bi bi-plus-circle"></i>フィードを追加';
+      setButtonLabel(submit, 'bi-plus-lg', '追加');
+      cancel.classList.add('d-none');
+    });
+  };
+
+  initStickyEditor();
+  initFeedEditor();
+
   document.querySelectorAll('[data-copy-to-clipboard]').forEach((button) => {
     button.addEventListener('click', async () => {
       const text = button.dataset.copyToClipboard;
@@ -129,6 +240,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-loading-text]').forEach((button) => {
     button.addEventListener('click', () => {
       if (button.disabled) return;
+      const form = button.closest('form');
+      if (form && !form.checkValidity()) return;
       const loadingText = button.dataset.loadingText || '処理中';
       button.dataset.originalHtml = button.innerHTML;
       button.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>${loadingText}`;

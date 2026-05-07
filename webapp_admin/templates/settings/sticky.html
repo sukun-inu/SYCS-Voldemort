@@ -73,7 +73,7 @@
             </td>
             <td class="table-actions">
               <button type="button" class="btn btn-sm btn-outline-primary me-1" title="編集"
-                      onclick="editSticky('{{ ch_id }}')">
+                      aria-label="編集" data-edit-sticky="{{ ch_id }}">
                 <i class="bi bi-pencil"></i>
               </button>
               <form method="post" class="d-inline confirm-form" data-msg="このスティッキーを解除しますか？">
@@ -101,54 +101,6 @@
   </section>
 </div>
 
-<style>
-.sticky-preview {
-  display: block;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 4.5em;
-  overflow: hidden;
-  font-size: .875rem;
-}
-</style>
+<div id="sticky-data" data-stickies-json="{{ stickies | tojson | forceescape }}" hidden></div>
 
-{% endblock %}
-
-{% block extra_scripts %}
-<script>
-/* stickies データをサーバー側から安全に埋め込む */
-const _STICKIES = {{ stickies | tojson }};
-
-function editSticky(chId) {
-  const entry  = _STICKIES[chId] || {};
-  const select = document.getElementById('sticky_channel_id');
-  const area   = document.getElementById('sticky_content');
-
-  select.value = chId;
-  area.value   = entry.content || '';
-
-  /* バリデーションエラークラスをリセット */
-  select.classList.remove('is-invalid');
-  area.classList.remove('is-invalid');
-
-  document.getElementById('sticky-form-title').innerHTML = '<i class="bi bi-pencil"></i>編集';
-  document.getElementById('sticky-submit').innerHTML     = '<i class="bi bi-check-lg me-2"></i>更新';
-  document.getElementById('sticky-cancel').classList.remove('d-none');
-  document.getElementById('sticky-form-card').scrollIntoView({ behavior: 'smooth' });
-}
-
-document.getElementById('sticky-cancel').addEventListener('click', () => {
-  const select = document.getElementById('sticky_channel_id');
-  const area   = document.getElementById('sticky_content');
-
-  select.value = '';
-  area.value   = '';
-  select.classList.remove('is-invalid');
-  area.classList.remove('is-invalid');
-
-  document.getElementById('sticky-form-title').innerHTML = '<i class="bi bi-plus-circle"></i>追加';
-  document.getElementById('sticky-submit').innerHTML     = '<i class="bi bi-check-lg me-2"></i>設定';
-  document.getElementById('sticky-cancel').classList.add('d-none');
-});
-</script>
 {% endblock %}
