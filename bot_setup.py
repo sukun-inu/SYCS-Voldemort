@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+from datetime import datetime
 
 import discord
 import psutil
@@ -18,6 +19,8 @@ from services.sticky_service import handle_sticky, process_pending_stickies
 from services.welcome_service import send_goodbye, send_welcome
 
 logger = logging.getLogger(__name__)
+
+_WDAYS = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
 
 
 def create_bot() -> Bot:
@@ -256,17 +259,24 @@ def setup_events(bot: Bot) -> None:
             if not isinstance(notify_ch, discord.TextChannel):
                 return
 
+            now_jst  = datetime.fromtimestamp(now_ts, tz=_JST)
+            time_str = (
+                f"{now_jst.year}年{now_jst.month}月{now_jst.day}日 "
+                f"{_WDAYS[now_jst.weekday()]} "
+                f"{now_jst.hour}:{now_jst.minute:02d}"
+            )
+
             if is_join:
                 title       = "🎙️ VCに参加しました"
-                description = f"**{after_ch.name}** に参加しました"
+                description = f"**{after_ch.name}** に参加しました\n{time_str}"
                 color       = discord.Color.green()
             elif is_leave:
                 title       = "🚪 VCから退出しました"
-                description = f"**{before_ch.name}** から退出しました"
+                description = f"**{before_ch.name}** から退出しました\n{time_str}"
                 color       = discord.Color.red()
             else:
                 title       = "🔀 VCを移動しました"
-                description = f"**{before_ch.name}** → **{after_ch.name}**"
+                description = f"**{before_ch.name}** → **{after_ch.name}**\n{time_str}"
                 color       = discord.Color.blurple()
 
             embed = discord.Embed(
