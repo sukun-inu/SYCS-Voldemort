@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}セキュリティ設定{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2 class="h4 fw-bold mb-1"><i class="bi bi-shield-fill-check me-2"></i>セキュリティ設定</h2>
+  <p class="text-muted small mb-0">スパム・レイド検出のセキュリティチェック対象外ユーザーとロールを管理します。</p>
+</div>
+
+<div class="row g-4">
+  <!-- 信頼済みユーザー -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header fw-bold">
+        <i class="bi bi-person-check-fill me-2"></i>信頼済みユーザー
+        <span class="badge bg-secondary ms-2">{{ trusted_ids|length }} 名</span>
+      </div>
+      <div class="card-body">
+        <form method="post" class="mb-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="add_trusted">
+          <div class="input-group">
+            <input type="text" name="user_id" class="form-control" pattern="\d+"
+                   placeholder="ユーザーID（数値）" required>
+            <button class="btn btn-accent">追加</button>
+          </div>
+          <div class="form-text">右クリック → 「ユーザーIDをコピー」で取得できます。</div>
+        </form>
+
+        {% if trusted_ids %}
+        <ul class="list-group list-group-flush">
+          {% for uid in trusted_ids %}
+          <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+            <span class="font-monospace small"><i class="bi bi-person me-2"></i>{{ uid }}</span>
+            <form method="post" class="confirm-form" data-msg="このユーザーを信頼済みから削除しますか？">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="action" value="remove_trusted">
+              <input type="hidden" name="user_id" value="{{ uid }}">
+              <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted small mb-0">信頼済みユーザーは登録されていません。</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- バイパスロール -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header fw-bold">
+        <i class="bi bi-shield-slash-fill me-2"></i>セキュリティバイパスロール
+        <span class="badge bg-secondary ms-2">{{ bypass_ids|length }} 個</span>
+      </div>
+      <div class="card-body">
+        <form method="post" class="mb-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="add_bypass">
+          <div class="input-group">
+            <select name="role_id" class="form-select" required>
+              <option value="">ロールを選択…</option>
+              {% for role in roles %}
+              {% if role.id|string not in bypass_ids|map('string')|list %}
+              <option value="{{ role.id }}">{{ role.name }}</option>
+              {% endif %}
+              {% endfor %}
+            </select>
+            <button class="btn btn-accent">追加</button>
+          </div>
+        </form>
+
+        {% if bypass_ids %}
+        <ul class="list-group list-group-flush">
+          {% for rid in bypass_ids %}
+          <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+            <span><i class="bi bi-tag me-2"></i>{{ role_map.get(rid|string, rid) }}</span>
+            <form method="post" class="confirm-form" data-msg="このロールをバイパスから削除しますか？">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="action" value="remove_bypass">
+              <input type="hidden" name="role_id" value="{{ rid }}">
+              <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted small mb-0">バイパスロールは登録されていません。</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

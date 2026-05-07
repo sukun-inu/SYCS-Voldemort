@@ -172,3 +172,188 @@ def remove_bypass_roles(guild_id: int, role_ids: list[int]) -> list[int]:
             continue
     set_bypass_role_ids(guild_id, list(current))
     return sorted(current)
+
+
+# ──────────────────────────────────────────────
+# ウェルカム / グッバイ
+# ──────────────────────────────────────────────
+
+def get_welcome_settings(guild_id: int) -> Dict[str, Any]:
+    return dict(get_guild_settings(guild_id).get("welcome", {}))
+
+
+def set_welcome_channel(guild_id: int, channel_id: int | None) -> None:
+    s = get_guild_settings(guild_id).get("welcome", {})
+    s["channel_id"] = channel_id
+    update_guild_settings(guild_id, {"welcome": s})
+
+
+def set_welcome_message(guild_id: int, message: str | None) -> None:
+    s = get_guild_settings(guild_id).get("welcome", {})
+    s["message"] = message
+    update_guild_settings(guild_id, {"welcome": s})
+
+
+def get_goodbye_settings(guild_id: int) -> Dict[str, Any]:
+    return dict(get_guild_settings(guild_id).get("goodbye", {}))
+
+
+def set_goodbye_channel(guild_id: int, channel_id: int | None) -> None:
+    s = get_guild_settings(guild_id).get("goodbye", {})
+    s["channel_id"] = channel_id
+    update_guild_settings(guild_id, {"goodbye": s})
+
+
+def set_goodbye_message(guild_id: int, message: str | None) -> None:
+    s = get_guild_settings(guild_id).get("goodbye", {})
+    s["message"] = message
+    update_guild_settings(guild_id, {"goodbye": s})
+
+
+# ──────────────────────────────────────────────
+# VC 通知チャンネル
+# ──────────────────────────────────────────────
+
+def get_vc_notify_channel_id(guild_id: int) -> int:
+    value = get_guild_settings(guild_id).get("vc_notify_channel_id")
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def set_vc_notify_channel_id(guild_id: int, channel_id: int | None) -> None:
+    update_guild_settings(guild_id, {"vc_notify_channel_id": channel_id})
+
+
+# ──────────────────────────────────────────────
+# スティッキーメッセージ
+# ──────────────────────────────────────────────
+
+def get_sticky_messages(guild_id: int) -> Dict[str, Any]:
+    """channel_id(str) → {"content": str, "message_id": int|None}"""
+    return dict(get_guild_settings(guild_id).get("sticky_messages", {}))
+
+
+def set_sticky_message(guild_id: int, channel_id: int, content: str) -> None:
+    stickies = get_guild_settings(guild_id).get("sticky_messages", {})
+    stickies[str(channel_id)] = {"content": content, "message_id": None}
+    update_guild_settings(guild_id, {"sticky_messages": stickies})
+
+
+def update_sticky_message_id(guild_id: int, channel_id: int, message_id: int | None) -> None:
+    stickies = get_guild_settings(guild_id).get("sticky_messages", {})
+    key = str(channel_id)
+    if key in stickies:
+        stickies[key]["message_id"] = message_id
+        update_guild_settings(guild_id, {"sticky_messages": stickies})
+
+
+def remove_sticky_message(guild_id: int, channel_id: int) -> None:
+    stickies = get_guild_settings(guild_id).get("sticky_messages", {})
+    stickies.pop(str(channel_id), None)
+    update_guild_settings(guild_id, {"sticky_messages": stickies})
+
+
+# ──────────────────────────────────────────────
+# リアクションロール
+# ──────────────────────────────────────────────
+
+def get_reaction_roles(guild_id: int) -> Dict[str, Any]:
+    """message_id(str) → {emoji(str) → role_id(int)}"""
+    return dict(get_guild_settings(guild_id).get("reaction_roles", {}))
+
+
+def add_reaction_role(guild_id: int, message_id: int, emoji: str, role_id: int) -> None:
+    rr = get_guild_settings(guild_id).get("reaction_roles", {})
+    key = str(message_id)
+    rr.setdefault(key, {})[emoji] = role_id
+    update_guild_settings(guild_id, {"reaction_roles": rr})
+
+
+def remove_reaction_role(guild_id: int, message_id: int, emoji: str) -> bool:
+    rr = get_guild_settings(guild_id).get("reaction_roles", {})
+    key = str(message_id)
+    if key not in rr or emoji not in rr[key]:
+        return False
+    del rr[key][emoji]
+    if not rr[key]:
+        del rr[key]
+    update_guild_settings(guild_id, {"reaction_roles": rr})
+    return True
+
+
+# ──────────────────────────────────────────────
+# ニュースフィード
+# ──────────────────────────────────────────────
+
+def get_all_guild_ids() -> list[int]:
+    guilds: Dict[str, Any] = _load_all().get("guilds", {})
+    result: list[int] = []
+    for k in guilds:
+        try:
+            result.append(int(k))
+        except (TypeError, ValueError):
+            continue
+    return result
+
+
+def get_news_feeds(guild_id: int) -> Dict[str, Any]:
+    """feed_id(str) → {"channel_id": int, "query": str, "interval": int, "last_run": float, "seen_hashes": list}"""
+    return dict(get_guild_settings(guild_id).get("news_feeds", {}))
+
+
+def add_news_feed(guild_id: int, feed_id: str, channel_id: int, query: str, interval_minutes: int) -> None:
+    feeds = get_guild_settings(guild_id).get("news_feeds", {})
+    feeds[feed_id] = {
+        "channel_id": channel_id,
+        "query": query,
+        "interval": interval_minutes,
+        "last_run": 0.0,
+        "seen_hashes": [],
+    }
+    update_guild_settings(guild_id, {"news_feeds": feeds})
+
+
+def remove_news_feed(guild_id: int, feed_id: str) -> bool:
+    feeds = get_guild_settings(guild_id).get("news_feeds", {})
+    if feed_id not in feeds:
+        return False
+    del feeds[feed_id]
+    update_guild_settings(guild_id, {"news_feeds": feeds})
+    return True
+
+
+def update_news_feed_state(guild_id: int, feed_id: str, last_run: float, seen_hashes: list) -> None:
+    feeds = get_guild_settings(guild_id).get("news_feeds", {})
+    if feed_id not in feeds:
+        return
+    feeds[feed_id]["last_run"] = last_run
+    feeds[feed_id]["seen_hashes"] = seen_hashes[-100:]
+    update_guild_settings(guild_id, {"news_feeds": feeds})
+
+
+# ──────────────────────────────────────────────
+# 地震アラート
+# ──────────────────────────────────────────────
+
+def get_earthquake_settings(guild_id: int) -> Dict[str, Any]:
+    return dict(get_guild_settings(guild_id).get("earthquake", {}))
+
+
+def set_earthquake_channel(guild_id: int, channel_id: int | None) -> None:
+    s = get_guild_settings(guild_id).get("earthquake", {})
+    s["channel_id"] = channel_id
+    update_guild_settings(guild_id, {"earthquake": s})
+
+
+def set_earthquake_min_scale(guild_id: int, scale: int) -> None:
+    s = get_guild_settings(guild_id).get("earthquake", {})
+    s["min_scale"] = scale
+    update_guild_settings(guild_id, {"earthquake": s})
+
+
+def set_earthquake_last_event_id(guild_id: int, event_id: str) -> None:
+    s = get_guild_settings(guild_id).get("earthquake", {})
+    s["last_event_id"] = event_id
+    update_guild_settings(guild_id, {"earthquake": s})

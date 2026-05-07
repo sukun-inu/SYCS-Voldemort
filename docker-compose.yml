@@ -61,6 +61,30 @@ services:
     volumes:
       - /home/kawasaki/SYCS-Voldemort:/app/data
 
+  sycs-voldemort-admin:
+    build:
+      context: .
+    container_name: sycs-voldemort-admin
+    restart: unless-stopped
+    command: python admin_main.py
+    depends_on:
+      postgres-secret-init:
+        condition: service_completed_successfully
+    ports:
+      - "${ADMIN_HOST_PORT:-5001}:5001"
+    environment:
+      - TZ=Asia/Tokyo
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
+      - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
+      - DISCORD_REDIRECT_URI=${DISCORD_REDIRECT_URI:-http://localhost:5001/admin/callback}
+      - ADMIN_FLASK_SECRET_KEY=${ADMIN_FLASK_SECRET_KEY}
+      - FLASK_SECURE_COOKIES=${FLASK_SECURE_COOKIES:-false}
+      - SETTINGS_DIR=/app/data
+      - ADMIN_PORT=5001
+    volumes:
+      - /home/kawasaki/SYCS-Voldemort:/app/data
+
   sycs-voldemort-web:
     build:
       context: .

@@ -6,8 +6,14 @@ import psutil
 from commands.chat_commands import handle_chatgpt_message
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
+from services.earthquake_service import run_earthquake_check
 from services.logging_service import log_action
+from services.news_service import run_news_feeds
+from services.reaction_role_service import handle_reaction_add, handle_reaction_remove
 from services.security_service import handle_security_for_message, handle_security_for_voice_join
+from services.settings_store import get_vc_notify_channel_id
+from services.sticky_service import handle_sticky
+from services.welcome_service import send_goodbye, send_welcome
 
 _JST = timezone(timedelta(hours=9))
 logger = logging.getLogger(__name__)
@@ -19,6 +25,7 @@ def create_bot() -> Bot:
     intents.members = True
     intents.voice_states = True
     intents.moderation = True
+    intents.reactions = True
     return commands.Bot(command_prefix="!", intents=intents)
 
 
@@ -41,12 +48,36 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.exception("ステータス更新エラー: %s", e)
 
+    # --------------------------
+    # ニュースフィード（5分ごと）
+    # --------------------------
+    @tasks.loop(minutes=5)
+    async def news_feed_task():
+        try:
+            await run_news_feeds(bot)
+        except Exception as e:
+            logger.exception("[BOT_SETUP] news_feed_task error: %s", e)
+
+    # --------------------------
+    # 地震アラート（1分ごと）
+    # --------------------------
+    @tasks.loop(minutes=1)
+    async def earthquake_task():
+        try:
+            await run_earthquake_check(bot)
+        except Exception as e:
+            logger.exception("[BOT_SETUP] earthquake_task error: %s", e)
+
     @bot.event
     async def on_ready():
         logger.info("[BOT] Logged in as %s", bot.user)
         await bot.tree.sync()
         if not update_status.is_running():
             update_status.start()
+        if not news_feed_task.is_running():
+            news_feed_task.start()
+        if not earthquake_task.is_running():
+            earthquake_task.start()
 
     # --------------------------
     # メッセージ（司令塔）
@@ -75,7 +106,13 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.exception("[BOT_SETUP] chat_commands error: %s", e)
 
-        # ③ コマンド
+        # ③ スティッキーメッセージ
+        try:
+            await handle_sticky(message)
+        except Exception as e:
+            logger.exception("[BOT_SETUP] sticky error: %s", e)
+
+        # ④ コマンド
         await bot.process_commands(message)
 
     # --------------------------
@@ -139,7 +176,7 @@ def setup_events(bot: Bot) -> None:
             logger.exception("[BOT_SETUP] on_message_edit log_action error: %s", e)
 
     # --------------------------
-    # VC 参加・退出・移動 + セキュリティ
+    # VC 参加・退出・移動 + セキュリティ + VC通知チャンネル
     # --------------------------
     @bot.event
     async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
@@ -151,7 +188,7 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.exception("[BOT_SETUP] VC security error: %s", e)
 
-        # VC 参加 / 退出 / 移動 をログ
+        # VC 参加 / 退出 / 移動 をログチャンネルへ
         try:
             if before.channel is None and after.channel is not None:
                 await log_action(
@@ -184,6 +221,31 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.exception("[BOT_SETUP] VC log_action error: %s", e)
 
+        # VC 通知チャンネルへ（ユーザー向け通知）
+        try:
+            vc_notify_id = get_vc_notify_channel_id(member.guild.id)
+            if vc_notify_id:
+                notify_ch = member.guild.get_channel(vc_notify_id)
+                if isinstance(notify_ch, discord.TextChannel):
+                    if before.channel is None and after.channel is not None:
+                        await notify_ch.send(
+                            f"🎙️ {member.mention} が **{after.channel.name}** に参加しました。"
+                        )
+                    elif before.channel is not None and after.channel is None:
+                        await notify_ch.send(
+                            f"🚪 {member.mention} が **{before.channel.name}** から退出しました。"
+                        )
+                    elif (
+                        before.channel is not None
+                        and after.channel is not None
+                        and before.channel.id != after.channel.id
+                    ):
+                        await notify_ch.send(
+                            f"🔀 {member.mention} が **{before.channel.name}** → **{after.channel.name}** に移動しました。"
+                        )
+        except Exception as e:
+            logger.exception("[BOT_SETUP] VC notify error: %s", e)
+
     # --------------------------
     # メンバー参加・退出
     # --------------------------
@@ -208,6 +270,11 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.exception("[BOT_SETUP] on_member_join log_action error: %s", e)
 
+        try:
+            await send_welcome(member)
+        except Exception as e:
+            logger.exception("[BOT_SETUP] on_member_join welcome error: %s", e)
+
     @bot.event
     async def on_member_remove(member: discord.Member):
         roles = [r.mention for r in member.roles if not r.is_default()]
@@ -226,6 +293,11 @@ def setup_events(bot: Bot) -> None:
             )
         except Exception as e:
             logger.exception("[BOT_SETUP] on_member_remove log_action error: %s", e)
+
+        try:
+            await send_goodbye(member)
+        except Exception as e:
+            logger.exception("[BOT_SETUP] on_member_remove goodbye error: %s", e)
 
     # --------------------------
     # メンバー情報変更（ニックネーム・ロール・タイムアウト）
@@ -340,3 +412,20 @@ def setup_events(bot: Bot) -> None:
             )
         except Exception as e:
             logger.exception("[BOT_SETUP] on_member_unban log_action error: %s", e)
+
+    # --------------------------
+    # リアクションロール
+    # --------------------------
+    @bot.event
+    async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+        try:
+            await handle_reaction_add(bot, payload)
+        except Exception as e:
+            logger.exception("[BOT_SETUP] on_raw_reaction_add error: %s", e)
+
+    @bot.event
+    async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
+        try:
+            await handle_reaction_remove(bot, payload)
+        except Exception as e:
+            logger.exception("[BOT_SETUP] on_raw_reaction_remove error: %s", e)

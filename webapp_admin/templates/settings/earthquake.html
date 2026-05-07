@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}地震アラート{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2 class="h4 fw-bold mb-1"><i class="bi bi-exclamation-triangle-fill me-2"></i>地震アラート設定</h2>
+  <p class="text-muted small mb-0">P2PQuake API を使用して日本の地震情報をリアルタイム通知します。</p>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header fw-bold"><i class="bi bi-broadcast me-2"></i>通知チャンネル</div>
+      <div class="card-body">
+        <div class="mb-2 small text-muted">
+          現在: <strong>{% if eq_s.get('channel_id') %}#{{ eq_s.get('channel_id') }}{% else %}未設定{% endif %}</strong>
+        </div>
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="set_channel">
+          <div class="mb-3">
+            <label class="form-label">地震情報を送信するチャンネル</label>
+            <select name="channel_id" class="form-select">
+              <option value="0">── 未設定（無効）──</option>
+              {% for ch in channels %}
+              <option value="{{ ch.id }}" {% if ch.id|string == eq_s.get('channel_id', '')|string %}selected{% endif %}>
+                # {{ ch.name }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <button class="btn btn-accent">保存</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header fw-bold"><i class="bi bi-sliders me-2"></i>最小震度</div>
+      <div class="card-body">
+        <div class="mb-2 small text-muted">
+          現在: <strong>{{ scale_labels.get(eq_s.get('min_scale', 30), eq_s.get('min_scale', 30)) }}</strong>
+        </div>
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="set_scale">
+          <div class="mb-3">
+            <label class="form-label">通知する最小震度</label>
+            <select name="min_scale" class="form-select">
+              {% for scale in valid_scales %}
+              <option value="{{ scale }}" {% if scale == eq_s.get('min_scale', 30) %}selected{% endif %}>
+                震度 {{ scale_labels.get(scale, scale) }}（内部値: {{ scale }}）
+              </option>
+              {% endfor %}
+            </select>
+            <div class="form-text">設定した震度以上の地震が発生した際に通知します。</div>
+          </div>
+          <button class="btn btn-accent">保存</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mt-4">
+  <div class="card-body small text-muted">
+    <i class="bi bi-info-circle me-1"></i>
+    Bot 起動後、初回チェック時は最新の地震IDを記録するだけで通知しません。
+    以降 1 分ごとに新しい地震情報をチェックします。
+    情報提供: <strong>P2PQuake</strong> (api.p2pquake.net)
+  </div>
+</div>
+{% endblock %}

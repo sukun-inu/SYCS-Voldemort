@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ログイン — SYCS Voldemort</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+</head>
+<body class="d-flex align-items-center justify-content-center" style="min-height:100vh">
+<div class="login-card text-center p-5">
+  <div class="mb-4">
+    <i class="bi bi-robot" style="font-size:3rem;color:var(--accent)"></i>
+    <h1 class="h3 mt-2 fw-bold">SYCS Voldemort</h1>
+    <p class="text-muted small">Bot 管理ダッシュボード</p>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=True) %}
+  {% if messages %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ cat }} mb-3">{{ msg }}</div>
+  {% endfor %}
+  {% endif %}
+  {% endwith %}
+
+  <a href="{{ url_for('auth.oauth_start') }}" class="btn btn-discord btn-lg w-100">
+    <svg class="me-2" width="20" height="20" viewBox="0 0 71 55" fill="currentColor">
+      <path d="M60.1 4.9A58.5 58.5 0 0 0 45.5.9a40.3 40.3 0 0 0-1.8 3.7 54.2 54.2 0 0 0-16.3 0A38.7 38.7 0 0 0 25.6.9 58.4 58.4 0 0 0 11 4.9C1.6 18.9-1 32.5.3 45.9A58.8 58.8 0 0 0 17.9 54a43.6 43.6 0 0 0 3.8-6.1 38.3 38.3 0 0 1-6-2.9l1.4-1.1a41.9 41.9 0 0 0 35.8 0l1.5 1.1a38.2 38.2 0 0 1-6 2.9 43.5 43.5 0 0 0 3.8 6.1A58.7 58.7 0 0 0 70.7 45.9C72.2 30.3 68 16.8 60.1 4.9ZM23.7 37.8c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.3 6.4 7.2c0 4-2.8 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.3 6.4 7.2c0 4-2.8 7.2-6.4 7.2Z"/>
+    </svg>
+    Discord でログイン
+  </a>
+  <p class="mt-3 text-muted" style="font-size:.75rem">
+    Bot が参加しているサーバーで管理者権限が必要です。
+  </p>
+</div>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+</body>
+</html>

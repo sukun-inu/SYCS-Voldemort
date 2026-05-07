@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}ダッシュボード{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2 class="h4 fw-bold mb-1"><i class="bi bi-grid-3x3-gap-fill me-2"></i>ダッシュボード</h2>
+  <p class="text-muted small mb-0">{{ session.guild_name }} の現在の設定概要</p>
+</div>
+
+<div class="row g-3">
+  {% set cards = [
+    ("bi-journal-text", "accent", "ログ設定", "settings.logging_settings",
+     [("ログチャンネル", ("#" ~ stats.log_channel) if stats.log_channel else "未設定"),
+      ("ログレベル", stats.log_level)]),
+    ("bi-person-plus-fill", "success", "ウェルカム/グッバイ", "settings.welcome_settings",
+     [("ウェルカムチャンネル", ("#" ~ stats.welcome_ch) if stats.welcome_ch else "未設定"),
+      ("グッバイチャンネル", ("#" ~ stats.goodbye_ch) if stats.goodbye_ch else "未設定")]),
+    ("bi-mic-fill", "info", "VC 通知", "settings.vc_notify",
+     [("通知チャンネル", ("#" ~ stats.vc_notify_ch) if stats.vc_notify_ch else "未設定")]),
+    ("bi-robot", "warning", "ChatGPT 応答", "settings.logging_settings",
+     [("応答チャンネル", ("#" ~ stats.chatgpt_ch) if stats.chatgpt_ch else "未設定（全チャンネル）")]),
+    ("bi-pin-angle-fill", "accent", "スティッキー", "settings.sticky",
+     [("設定数", stats.sticky_count ~ " チャンネル")]),
+    ("bi-emoji-smile-fill", "success", "リアクションロール", "settings.reaction_roles",
+     [("設定数", stats.rr_count ~ " エントリ")]),
+    ("bi-newspaper", "info", "ニュースフィード", "settings.news_feeds",
+     [("フィード数", stats.news_feed_count ~ " / 10")]),
+    ("bi-exclamation-triangle-fill", "danger", "地震アラート", "settings.earthquake",
+     [("チャンネル", ("#" ~ stats.eq_channel) if stats.eq_channel else "未設定"),
+      ("最小震度", stats.eq_min_scale)]),
+    ("bi-shield-fill-check", "warning", "セキュリティ", "settings.security_settings",
+     [("信頼済みユーザー", stats.trusted_count ~ " 名"),
+      ("バイパスロール", stats.bypass_count ~ " 個")]),
+  ] %}
+
+  {% for icon, color, title, endpoint, items in cards %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card stat-card h-100">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-3 mb-3">
+          <div class="stat-icon stat-icon-{{ color }}">
+            <i class="bi {{ icon }}"></i>
+          </div>
+          <h6 class="fw-bold mb-0">{{ title }}</h6>
+          <a href="{{ url_for(endpoint) }}" class="btn btn-sm btn-outline-secondary ms-auto py-0">
+            <i class="bi bi-pencil"></i>
+          </a>
+        </div>
+        {% for label, value in items %}
+        <div class="d-flex justify-content-between small mb-1">
+          <span class="text-muted">{{ label }}</span>
+          <span class="fw-medium">{{ value }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

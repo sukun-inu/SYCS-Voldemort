@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}ウェルカム/グッバイ{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2 class="h4 fw-bold mb-1"><i class="bi bi-person-plus-fill me-2"></i>ウェルカム / グッバイ設定</h2>
+  <p class="text-muted small mb-0">メンバー参加・退出時のメッセージを設定します。</p>
+</div>
+
+<div class="alert alert-secondary small mb-4">
+  <strong>テンプレート変数:</strong>
+  <code>{user}</code> メンション &nbsp;
+  <code>{username}</code> ユーザー名 &nbsp;
+  <code>{server}</code> サーバー名 &nbsp;
+  <code>{count}</code> メンバー数
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header fw-bold"><i class="bi bi-door-open me-2"></i>ウェルカムメッセージ</div>
+      <div class="card-body">
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="set_welcome">
+          <div class="mb-3">
+            <label class="form-label">送信チャンネル</label>
+            <select name="welcome_channel_id" class="form-select">
+              <option value="0">── 未設定（無効）──</option>
+              {% for ch in channels %}
+              <option value="{{ ch.id }}"
+                {% if ch.id|string == welcome_s.get('channel_id', '')|string %}selected{% endif %}>
+                # {{ ch.name }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">メッセージテンプレート</label>
+            <textarea name="welcome_message" class="form-control" rows="3"
+              placeholder="（空白でデフォルトメッセージを使用）"
+            >{{ welcome_s.get('message', '') }}</textarea>
+          </div>
+          <button class="btn btn-accent">保存</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header fw-bold"><i class="bi bi-door-closed me-2"></i>グッバイメッセージ</div>
+      <div class="card-body">
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="set_goodbye">
+          <div class="mb-3">
+            <label class="form-label">送信チャンネル</label>
+            <select name="goodbye_channel_id" class="form-select">
+              <option value="0">── 未設定（無効）──</option>
+              {% for ch in channels %}
+              <option value="{{ ch.id }}"
+                {% if ch.id|string == goodbye_s.get('channel_id', '')|string %}selected{% endif %}>
+                # {{ ch.name }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">メッセージテンプレート</label>
+            <textarea name="goodbye_message" class="form-control" rows="3"
+              placeholder="（空白でデフォルトメッセージを使用）"
+            >{{ goodbye_s.get('message', '') }}</textarea>
+          </div>
+          <button class="btn btn-accent">保存</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}ログ設定{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2 class="h4 fw-bold mb-1"><i class="bi bi-journal-text me-2"></i>ログ設定</h2>
+  <p class="text-muted small mb-0">Bot の動作ログと ChatGPT 応答チャンネルを設定します。</p>
+</div>
+
+<div class="row g-4">
+  <!-- ログチャンネル -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header fw-bold"><i class="bi bi-broadcast me-2"></i>ログチャンネル / レベル</div>
+      <div class="card-body">
+        <div class="mb-2 small text-muted">
+          現在: チャンネル
+          <strong>{% if log_settings.channel_id %}#{{ log_settings.channel_id }}{% else %}未設定{% endif %}</strong>
+          / レベル <strong>{{ log_settings.level }}</strong>
+        </div>
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="set_log">
+          <div class="mb-3">
+            <label class="form-label">ログチャンネル</label>
+            <select name="log_channel_id" class="form-select">
+              <option value="0">── 未設定（解除）──</option>
+              {% for ch in channels %}
+              <option value="{{ ch.id }}" {% if ch.id|string == log_settings.channel_id|string %}selected{% endif %}>
+                # {{ ch.name }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">ログレベル</label>
+            <select name="log_level" class="form-select">
+              {% for lvl in log_levels %}
+              <option value="{{ lvl }}" {% if lvl == log_settings.level %}selected{% endif %}>{{ lvl }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">NONE=無効 / ERROR=エラーのみ / INFO=通常 / DEBUG=詳細</div>
+          </div>
+          <button class="btn btn-accent">保存</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ChatGPT -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header fw-bold"><i class="bi bi-robot me-2"></i>ChatGPT 応答チャンネル</div>
+      <div class="card-body">
+        <div class="mb-2 small text-muted">
+          現在:
+          <strong>{% if chatgpt_ch %}#{{ chatgpt_ch }}{% else %}全チャンネル（未設定）{% endif %}</strong>
+        </div>
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="set_chatgpt">
+          <div class="mb-3">
+            <label class="form-label">ChatGPT が応答するチャンネル</label>
+            <select name="chatgpt_channel_id" class="form-select">
+              <option value="0">── 全チャンネル（解除）──</option>
+              {% for ch in channels %}
+              <option value="{{ ch.id }}" {% if ch.id|string == chatgpt_ch|string %}selected{% endif %}>
+                # {{ ch.name }}
+              </option>
+              {% endfor %}
+            </select>
+            <div class="form-text">未設定の場合、すべてのチャンネルで応答します。</div>
+          </div>
+          <button class="btn btn-accent">保存</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

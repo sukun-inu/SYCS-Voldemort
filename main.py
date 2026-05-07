@@ -3,6 +3,7 @@ import logging
 from bot_setup import create_bot, setup_events
 from commands.logging_commands import register_logging_commands
 from commands.metal_commands import register_metal_commands
+from commands.server_commands import register_server_commands
 from config import DISCORD_BOT_TOKEN
 
 logging.basicConfig(
@@ -22,6 +23,7 @@ async def main():
     # コマンド登録（スラッシュ / prefix）
     register_metal_commands(bot)
     register_logging_commands(bot)
+    register_server_commands(bot)
 
     # ボット起動
     async with bot:

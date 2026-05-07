@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}VC 通知{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2 class="h4 fw-bold mb-1"><i class="bi bi-mic-fill me-2"></i>VC 通知チャンネル</h2>
+  <p class="text-muted small mb-0">メンバーの VC 参加・退出・移動を通知するチャンネルを設定します。</p>
+</div>
+
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-body">
+        <div class="mb-2 small text-muted">
+          現在: <strong>{% if current_ch %}#{{ current_ch }}{% else %}未設定{% endif %}</strong>
+        </div>
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="mb-3">
+            <label class="form-label">通知チャンネル</label>
+            <select name="vc_notify_channel_id" class="form-select">
+              <option value="0">── 未設定（無効）──</option>
+              {% for ch in channels %}
+              <option value="{{ ch.id }}" {% if ch.id|string == current_ch|string %}selected{% endif %}>
+                # {{ ch.name }}
+              </option>
+              {% endfor %}
+            </select>
+            <div class="form-text">
+              ここで設定したチャンネルにユーザー向けの VC 通知（🎙️参加 / 🚪退出 / 🔀移動）が送信されます。<br>
+              ログチャンネルとは別のチャンネルを推奨します。
+            </div>
+          </div>
+          <button class="btn btn-accent">保存</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

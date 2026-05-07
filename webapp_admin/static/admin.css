@@ -1,0 +1,230 @@
+:root {
+  --bg:      #1e2124;
+  --surface: #282b30;
+  --surface2: #36393e;
+  --border:  #3c3f44;
+  --accent:  #5865f2;
+  --accent-h:#4752c4;
+  --text:    #dcddde;
+  --muted:   #8e9297;
+  --success: #3ba55c;
+  --danger:  #ed4245;
+  --warning: #faa61a;
+  --info:    #4fbbef;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+}
+
+/* ── Navbar ─────────────────────────────────────── */
+#topnav {
+  background: var(--surface) !important;
+  border-bottom: 1px solid var(--border);
+  height: 56px;
+  z-index: 1030;
+}
+.navbar-brand { color: var(--text) !important; }
+.navbar-brand:hover { color: #fff !important; }
+
+/* ── Sidebar ─────────────────────────────────────── */
+#sidebar {
+  width: 220px;
+  min-width: 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 13.5px;
+  transition: background .15s, color .15s;
+  text-decoration: none;
+}
+.sidebar-link:hover { background: var(--surface2); color: var(--text); }
+.sidebar-link.active { background: var(--accent); color: #fff; }
+.sidebar-link i { font-size: 15px; flex-shrink: 0; }
+
+.sidebar-section {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  color: var(--muted);
+  padding: 14px 12px 4px;
+  text-transform: uppercase;
+  list-style: none;
+}
+
+/* ── Cards ───────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.card-header {
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  font-size: 13.5px;
+}
+
+/* ── Stat cards (dashboard) ──────────────────────── */
+.stat-card { transition: border-color .2s; }
+.stat-card:hover { border-color: var(--accent); }
+
+.stat-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  flex-shrink: 0;
+}
+.stat-icon-accent  { background: rgba(88,101,242,.2); color: var(--accent); }
+.stat-icon-success { background: rgba(59,165,92,.2);  color: var(--success); }
+.stat-icon-warning { background: rgba(250,166,26,.2); color: var(--warning); }
+.stat-icon-danger  { background: rgba(237,66,69,.2);  color: var(--danger); }
+.stat-icon-info    { background: rgba(79,187,239,.2); color: var(--info); }
+
+/* ── Forms ───────────────────────────────────────── */
+.form-control, .form-select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+}
+.form-control:focus, .form-select:focus {
+  background: var(--surface2);
+  border-color: var(--accent);
+  color: var(--text);
+  box-shadow: 0 0 0 3px rgba(88,101,242,.25);
+}
+.form-control::placeholder { color: var(--muted); }
+.form-text { color: var(--muted); font-size: .8rem; margin-top: 4px; }
+.form-label { color: var(--text); font-weight: 500; margin-bottom: 5px; }
+
+/* ── Buttons ─────────────────────────────────────── */
+.btn-accent {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+}
+.btn-accent:hover { background: var(--accent-h); color: #fff; }
+
+.btn-discord {
+  background: #5865f2;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.btn-discord:hover { background: #4752c4; color: #fff; }
+
+/* ── Tables ──────────────────────────────────────── */
+.table {
+  color: var(--text);
+  border-color: var(--border);
+  margin-bottom: 0;
+}
+.table thead th {
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 8px 12px;
+}
+.table td { padding: 9px 12px; border-color: var(--border); vertical-align: middle; }
+.table-hover tbody tr:hover { background: var(--surface2); }
+
+/* ── Alerts ──────────────────────────────────────── */
+.alert { border-radius: 6px; font-size: 13.5px; border: none; }
+.alert-success  { background: rgba(59,165,92,.15);  color: #5ad881; }
+.alert-danger   { background: rgba(237,66,69,.15);  color: #f28b8c; }
+.alert-warning  { background: rgba(250,166,26,.15); color: #fbbf47; }
+.alert-info     { background: rgba(79,187,239,.15); color: #7dcfee; }
+.alert-secondary{ background: var(--surface2); color: var(--muted); }
+
+/* ── List groups ─────────────────────────────────── */
+.list-group-item {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+/* ── Badges ──────────────────────────────────────── */
+.badge { font-size: .75rem; }
+
+/* ── Page header ─────────────────────────────────── */
+.page-header { margin-bottom: 24px; }
+.page-header h2 { color: var(--text); }
+
+/* ── Login card ──────────────────────────────────── */
+.login-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 380px;
+}
+
+/* ── Guild select ────────────────────────────────── */
+.guild-card {
+  border: 1px solid var(--border);
+  transition: border-color .2s, transform .15s;
+  cursor: default;
+}
+.guild-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+.guild-icon-placeholder {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 26px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+/* ── Scrollbar ───────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ── Font monospace ──────────────────────────────── */
+.font-monospace { font-family: "JetBrains Mono", "Fira Code", Consolas, monospace; }
+
+/* ── Input group ─────────────────────────────────── */
+.input-group .form-control, .input-group .form-select { z-index: 1; }
+
+/* ── Bootstrap overrides ─────────────────────────── */
+.btn-outline-danger  { border-color: var(--danger);  color: var(--danger); }
+.btn-outline-danger:hover  { background: var(--danger);  color: #fff; }
+.btn-outline-secondary { border-color: var(--border); color: var(--muted); }
+.btn-outline-secondary:hover { background: var(--surface2); color: var(--text); }
+.btn-outline-light { border-color: rgba(255,255,255,.3); color: var(--text); }
+.btn-outline-light:hover { background: var(--surface2); color: var(--text); }
+.btn-close { filter: invert(1) grayscale(1); }
+.text-muted { color: var(--muted) !important; }
+.text-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
