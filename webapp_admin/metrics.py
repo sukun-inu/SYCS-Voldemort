@@ -23,7 +23,7 @@ def collect_host_metrics() -> dict:
     cpu_percent = psutil.cpu_percent(interval=0.1)
     memory = psutil.virtual_memory()
     tps = _request_tps(now)
-    tps_target = _env_float("ADMIN_TPS_TARGET", 50.0)
+    tps_target = max(_env_float("ADMIN_TPS_TARGET", 50.0), 0.01)
     boot_time = psutil.boot_time()
     sla_percent = _month_to_date_sla_percent(now, boot_time)
 
@@ -46,8 +46,8 @@ def collect_host_metrics() -> dict:
             },
             "tps": {
                 "label": "TPS",
-                "percent": _clamp_percent((tps / tps_target) * 100 if tps_target else 0),
-                "display": f"{_clamp_percent((tps / tps_target) * 100 if tps_target else 0):.1f}%",
+                "percent": _clamp_percent((tps / tps_target) * 100),
+                "display": f"{_clamp_percent((tps / tps_target) * 100):.1f}%",
                 "detail": f"{tps:.2f} req/s / 目標 {tps_target:g}",
                 "tone": "info",
             },
