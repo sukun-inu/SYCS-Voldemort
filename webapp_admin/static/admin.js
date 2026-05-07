@@ -185,6 +185,108 @@ document.addEventListener('DOMContentLoaded', () => {
     window.setInterval(updateMetrics, 5000);
   }
 
+  const incidentsRoot = document.querySelector('[data-incidents-url]');
+  if (incidentsRoot) {
+    const list = incidentsRoot.querySelector('[data-incident-list]');
+    const count = incidentsRoot.querySelector('[data-incidents-count]');
+
+    const iconForIncident = (kind) => {
+      if (kind === 'downtime') return 'bi-power';
+      if (kind === 'exception') return 'bi-bug';
+      if (kind === 'http_error') return 'bi-exclamation-octagon';
+      if (kind === 'resource_alert') return 'bi-activity';
+      return 'bi-info-circle';
+    };
+
+    const renderEmptyIncidents = () => {
+      if (!list) return;
+      list.innerHTML = '';
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      const inner = document.createElement('div');
+      const icon = document.createElement('i');
+      icon.className = 'bi bi-check-circle';
+      const text = document.createElement('p');
+      text.className = 'mb-0';
+      text.textContent = '記録済みの異常はありません。';
+      inner.append(icon, text);
+      empty.append(inner);
+      list.append(empty);
+    };
+
+    const renderIncidents = (incidents) => {
+      if (!list) return;
+      list.innerHTML = '';
+
+      if (!incidents.length) {
+        renderEmptyIncidents();
+        return;
+      }
+
+      incidents.slice(0, 8).forEach((incident) => {
+        const row = document.createElement('article');
+        row.className = `incident-row severity-${incident.severity || 'info'}`;
+
+        const iconWrap = document.createElement('div');
+        iconWrap.className = 'incident-icon';
+        const icon = document.createElement('i');
+        icon.className = `bi ${iconForIncident(incident.kind)}`;
+        iconWrap.append(icon);
+
+        const body = document.createElement('div');
+        body.className = 'min-w-0';
+        const title = document.createElement('h3');
+        title.className = 'incident-title';
+        title.textContent = incident.title || 'Incident';
+        const message = document.createElement('p');
+        message.className = 'incident-message';
+        message.textContent = incident.message || '';
+        body.append(title, message);
+
+        const meta = document.createElement('div');
+        meta.className = 'incident-meta';
+        meta.textContent = incident.duration
+          ? `${incident.created_at || ''} / ${incident.duration}`
+          : incident.created_at || '';
+
+        row.append(iconWrap, body, meta);
+        list.append(row);
+      });
+    };
+
+    const updateIncidents = async () => {
+      try {
+        const response = await fetch(incidentsRoot.dataset.incidentsUrl, {
+          headers: { Accept: 'application/json' },
+          credentials: 'same-origin',
+          cache: 'no-store',
+        });
+
+        if (!response.ok) {
+          throw new Error(`incidents ${response.status}`);
+        }
+
+        const payload = await response.json();
+        const incidents = Array.isArray(payload.incidents) ? payload.incidents : [];
+        renderIncidents(incidents);
+        if (count) {
+          count.textContent = `${incidents.length} 件`;
+          count.classList.remove('warning');
+          count.classList.add('accent');
+        }
+      } catch (error) {
+        if (count) {
+          count.textContent = '取得失敗';
+          count.classList.remove('accent');
+          count.classList.add('warning');
+        }
+      }
+    };
+
+    updateIncidents();
+    window.setInterval(updateIncidents, 10000);
+  }
+
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
     closeSidebar();

@@ -13,7 +13,7 @@ from services.settings_store import (
     get_welcome_settings,
 )
 from services.logging_service import get_log_settings
-from webapp_admin.metrics import collect_host_metrics
+from webapp_admin.metrics import collect_host_metrics, list_incidents
 from webapp_admin.security import login_required, guild_required
 
 dashboard_bp = Blueprint("dashboard", __name__)
@@ -92,3 +92,9 @@ def overview():
 @guild_required
 def system_metrics():
     return jsonify(collect_host_metrics())
+
+
+@dashboard_bp.route("/api/incidents")
+@guild_required
+def monitor_incidents():
+    return jsonify({"incidents": list_incidents(limit=30)})

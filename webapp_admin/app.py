@@ -1,10 +1,15 @@
 import os
 import secrets
 
-from flask import Flask, request
+from flask import Flask, got_request_exception, request
 
 from webapp_admin.extensions import csrf, limiter
-from webapp_admin.metrics import record_request
+from webapp_admin.metrics import (
+    record_error_response,
+    record_exception,
+    record_request,
+    start_background_monitor,
+)
 
 
 def create_app() -> Flask:
@@ -18,7 +23,7 @@ def create_app() -> Flask:
         SESSION_COOKIE_SECURE=os.environ.get("FLASK_SECURE_COOKIES", "false").lower() == "true",
         PERMANENT_SESSION_LIFETIME=3600,
         WTF_CSRF_TIME_LIMIT=3600,
-        ADMIN_ASSET_VERSION=os.environ.get("ADMIN_ASSET_VERSION", "20260507-metrics"),
+        ADMIN_ASSET_VERSION=os.environ.get("ADMIN_ASSET_VERSION", "20260507-monitoring"),
     )
 
     csrf.init_app(app)
@@ -32,10 +37,25 @@ def create_app() -> Flask:
     app.register_blueprint(dashboard_bp, url_prefix="/admin")
     app.register_blueprint(settings_bp, url_prefix="/admin/settings")
 
+    def request_snapshot():
+        return {
+            "method": request.method,
+            "path": request.path,
+            "endpoint": request.endpoint,
+            "remote_addr": request.headers.get("CF-Connecting-IP") or request.remote_addr,
+        }
+
+    def log_unhandled_exception(sender, exception, **extra):
+        record_exception(exception, request_snapshot())
+
+    got_request_exception.connect(log_unhandled_exception, app)
+    start_background_monitor(app.logger)
+
     @app.after_request
     def set_security_headers(response):
         if request.endpoint != "static":
             record_request()
+            record_error_response(response.status_code, request_snapshot())
 
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"

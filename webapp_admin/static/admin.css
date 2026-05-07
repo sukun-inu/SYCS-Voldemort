@@ -884,6 +884,65 @@ code {
   --ring-color: var(--info);
 }
 
+.incident-list {
+  display: grid;
+}
+
+.incident-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--separator);
+}
+
+.incident-row:first-child {
+  border-top: 0;
+}
+
+.incident-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+}
+
+.incident-row.severity-critical .incident-icon {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.incident-row.severity-warning .incident-icon {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.incident-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.incident-message {
+  overflow: hidden;
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.incident-meta {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
 /* Forms */
 .form-label {
   color: var(--text);
@@ -1465,9 +1524,22 @@ hr {
   }
 
   .metric-row,
-  .object-row {
+  .object-row,
+  .incident-row {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .incident-row {
+    display: flex;
+  }
+
+  .incident-message {
+    white-space: normal;
+  }
+
+  .incident-meta {
+    text-align: left;
   }
 
   .metric-value {

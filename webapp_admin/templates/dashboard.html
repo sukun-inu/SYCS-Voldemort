@@ -45,6 +45,24 @@
     </div>
   </section>
 
+  <section class="section-card span-12 monitor-history" data-incidents-url="{{ url_for('dashboard.monitor_incidents') }}">
+    <div class="section-card-header">
+      <div>
+        <h2 class="section-card-title"><i class="bi bi-clock-history"></i>監視履歴</h2>
+        <p class="section-card-subtitle">ダウンタイム、5xx、未処理例外、リソース異常を記録します。</p>
+      </div>
+      <span class="badge-soft accent" data-incidents-count>読み込み中</span>
+    </div>
+    <div class="incident-list" data-incident-list>
+      <div class="empty-state">
+        <div>
+          <i class="bi bi-hourglass-split"></i>
+          <p class="mb-0">履歴を読み込んでいます。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   {% set cards = [
     ("bi-journal-text", "accent", "ログ設定", "settings.logging_settings",
      [("ログチャンネル", ("#" ~ stats.log_channel) if stats.log_channel else "未設定"),
