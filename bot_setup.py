@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 
 import discord
 import psutil
@@ -12,7 +13,7 @@ from services.news_service import run_news_feeds
 from services.reaction_role_service import handle_reaction_add, handle_reaction_remove
 from services.security_service import handle_security_for_message, handle_security_for_voice_join
 from config import JST as _JST
-from services.settings_store import get_vc_notify_channel_id
+from services.settings_store import get_vc_notify_channel_id, get_vc_notify_role_id
 from services.sticky_service import handle_sticky, process_pending_stickies
 from services.welcome_service import send_goodbye, send_welcome
 
@@ -31,6 +32,8 @@ def create_bot() -> Bot:
 
 def setup_events(bot: Bot) -> None:
     _ws_task: asyncio.Task | None = None
+    _vc_join_times: dict[tuple[int, int], float] = {}   # (guild_id, user_id) → Unix timestamp
+    _vc_last_notify: dict[tuple[int, int], float] = {}  # (guild_id, user_id) → Unix timestamp
 
     # --------------------------
     # ステータス更新
@@ -192,27 +195,44 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.exception("[BOT_SETUP] VC security error: %s", e)
 
+        # 通話時間追跡
+        key = (member.guild.id, member.id)
+        now_ts = time.time()
+        is_join = before.channel is None and after.channel is not None
+        is_leave = before.channel is not None and after.channel is None
+        is_move = (
+            before.channel is not None
+            and after.channel is not None
+            and before.channel.id != after.channel.id
+        )
+        if is_join:
+            _vc_join_times[key] = now_ts
+        duration_str = ""
+        if is_leave:
+            join_ts = _vc_join_times.pop(key, None)
+            if join_ts is not None:
+                elapsed = int(now_ts - join_ts)
+                h, r = divmod(elapsed, 3600)
+                m, s = divmod(r, 60)
+                duration_str = f"{h:02d}:{m:02d}:{s:02d}"
+
         # VC 参加 / 退出 / 移動 をログチャンネルへ
         try:
-            if before.channel is None and after.channel is not None:
+            if is_join:
                 await log_action(
                     bot, member.guild.id, "INFO",
                     f"{member.mention} が VC に参加しました。",
                     user=member,
                     fields={"チャンネル": after.channel.mention},
                 )
-            elif before.channel is not None and after.channel is None:
+            elif is_leave:
                 await log_action(
                     bot, member.guild.id, "INFO",
                     f"{member.mention} が VC から退出しました。",
                     user=member,
                     fields={"チャンネル": before.channel.mention},
                 )
-            elif (
-                before.channel is not None
-                and after.channel is not None
-                and before.channel.id != after.channel.id
-            ):
+            elif is_move:
                 await log_action(
                     bot, member.guild.id, "INFO",
                     f"{member.mention} が VC を移動しました。",
@@ -225,28 +245,48 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.exception("[BOT_SETUP] VC log_action error: %s", e)
 
-        # VC 通知チャンネルへ（ユーザー向け通知）
+        # VC 通知チャンネルへ（リッチエンベッド）
         try:
+            if not (is_join or is_leave or is_move):
+                return
             vc_notify_id = get_vc_notify_channel_id(member.guild.id)
-            if vc_notify_id:
-                notify_ch = member.guild.get_channel(vc_notify_id)
-                if isinstance(notify_ch, discord.TextChannel):
-                    if before.channel is None and after.channel is not None:
-                        await notify_ch.send(
-                            f"🎙️ {member.mention} が **{after.channel.name}** に参加しました。"
-                        )
-                    elif before.channel is not None and after.channel is None:
-                        await notify_ch.send(
-                            f"🚪 {member.mention} が **{before.channel.name}** から退出しました。"
-                        )
-                    elif (
-                        before.channel is not None
-                        and after.channel is not None
-                        and before.channel.id != after.channel.id
-                    ):
-                        await notify_ch.send(
-                            f"🔀 {member.mention} が **{before.channel.name}** → **{after.channel.name}** に移動しました。"
-                        )
+            if not vc_notify_id:
+                return
+            notify_ch = member.guild.get_channel(vc_notify_id)
+            if not isinstance(notify_ch, discord.TextChannel):
+                return
+
+            # スパム防止: 同一ユーザーの直前通知から 10 秒以内はスキップ
+            if now_ts - _vc_last_notify.get(key, 0.0) < 10:
+                return
+            _vc_last_notify[key] = now_ts
+
+            if is_join:
+                title = "🎙️ VCに参加しました"
+                description = f"**{after.channel.name}** に参加しました"
+                color = discord.Color.green()
+            elif is_leave:
+                title = "🚪 VCから退出しました"
+                description = f"**{before.channel.name}** から退出しました"
+                color = discord.Color.red()
+            else:
+                title = "🔀 VCを移動しました"
+                description = f"**{before.channel.name}** → **{after.channel.name}**"
+                color = discord.Color.blurple()
+
+            embed = discord.Embed(
+                title=title,
+                description=description,
+                color=color,
+                timestamp=discord.utils.utcnow(),
+            )
+            embed.set_author(name=member.display_name, icon_url=member.display_avatar.url)
+            if duration_str:
+                embed.add_field(name="通話時間", value=duration_str, inline=False)
+
+            role_id = get_vc_notify_role_id(member.guild.id)
+            content = f"<@&{role_id}>" if role_id else None
+            await notify_ch.send(content=content, embed=embed)
         except Exception as e:
             logger.exception("[BOT_SETUP] VC notify error: %s", e)
 

@@ -6,7 +6,7 @@
   <div>
     <p class="page-kicker">VC</p>
     <h1 class="page-title"><i class="bi bi-mic-fill"></i>VC 通知</h1>
-    <p class="page-description">メンバーの VC 参加・退出・移動を通知するチャンネルを管理します。</p>
+    <p class="page-description">メンバーの VC 参加・退出・移動を通知するチャンネルとロールを管理します。</p>
   </div>
 </div>
 
@@ -26,6 +26,7 @@
 
       <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="set_channel">
         <div class="mb-4">
           <label class="form-label" for="vc_notify_channel_id">通知チャンネル</label>
           <select id="vc_notify_channel_id" name="vc_notify_channel_id" class="form-select">
@@ -37,6 +38,41 @@
             {% endfor %}
           </select>
           <div class="form-text">ログチャンネルとは別のチャンネルを推奨します。</div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-accent"><i class="bi bi-check-lg me-2"></i>保存</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="section-card span-6">
+    <div class="section-card-header">
+      <h2 class="section-card-title"><i class="bi bi-at"></i>通知ロール</h2>
+    </div>
+    <div class="section-card-body">
+      <div class="status-strip">
+        <span class="status-label">現在</span>
+        <span class="status-chip">
+          <i class="bi bi-shield-fill"></i>
+          {% if current_role %}{{ current_role }}{% else %}未設定{% endif %}
+        </span>
+      </div>
+
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="set_role">
+        <div class="mb-4">
+          <label class="form-label" for="vc_notify_role_id">メンションするロール</label>
+          <select id="vc_notify_role_id" name="vc_notify_role_id" class="form-select">
+            <option value="0">未設定（メンションなし）</option>
+            {% for role in roles %}
+            <option value="{{ role.id }}" {% if role.id|string == current_role|string %}selected{% endif %}>
+              {{ role.name }}
+            </option>
+            {% endfor %}
+          </select>
+          <div class="form-text">VC 通知時にこのロールへメンションします。未設定の場合はメンションなし。</div>
         </div>
         <div class="form-actions">
           <button class="btn btn-accent"><i class="bi bi-check-lg me-2"></i>保存</button>

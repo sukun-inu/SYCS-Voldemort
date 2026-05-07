@@ -229,6 +229,19 @@ def set_vc_notify_channel_id(guild_id: int, channel_id: int | None) -> None:
     update_guild_settings(guild_id, {"vc_notify_channel_id": channel_id})
 
 
+def get_vc_notify_role_id(guild_id: int) -> int:
+    """VC通知時にメンションするロールIDを取得（未設定なら0）。"""
+    value = get_guild_settings(guild_id).get("vc_notify_role_id")
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def set_vc_notify_role_id(guild_id: int, role_id: int | None) -> None:
+    update_guild_settings(guild_id, {"vc_notify_role_id": role_id})
+
+
 # ──────────────────────────────────────────────
 # スティッキーメッセージ
 # ──────────────────────────────────────────────

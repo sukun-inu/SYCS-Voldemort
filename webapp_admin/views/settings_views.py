@@ -17,6 +17,7 @@ from services.settings_store import (
     get_sticky_messages,
     get_trusted_user_ids,
     get_vc_notify_channel_id,
+    get_vc_notify_role_id,
     get_welcome_settings,
     mark_sticky_pending_delete,
     remove_bypass_roles,
@@ -30,6 +31,7 @@ from services.settings_store import (
     set_response_channel_id,
     set_sticky_message,
     set_vc_notify_channel_id,
+    set_vc_notify_role_id,
     set_welcome_channel,
     set_welcome_message,
 )
@@ -143,19 +145,34 @@ def welcome_settings():
 def vc_notify():
     gid = _gid()
     if request.method == "POST":
-        ch_id = request.form.get("vc_notify_channel_id", "")
-        if ch_id == "0" or not ch_id:
-            set_vc_notify_channel_id(gid, None)
-            flash("VC 通知チャンネルを解除した。", "success")
-        else:
-            set_vc_notify_channel_id(gid, validate_channel_id(ch_id))
-            flash("VC 通知チャンネルを設定した。", "success")
+        action = request.form.get("action", "set_channel")
+        if action == "set_channel":
+            ch_id = request.form.get("vc_notify_channel_id", "")
+            if ch_id == "0" or not ch_id:
+                set_vc_notify_channel_id(gid, None)
+                flash("VC 通知チャンネルを解除した。", "success")
+            else:
+                set_vc_notify_channel_id(gid, validate_channel_id(ch_id))
+                flash("VC 通知チャンネルを設定した。", "success")
+        elif action == "set_role":
+            rid_str = request.form.get("vc_notify_role_id", "")
+            if rid_str == "0" or not rid_str:
+                set_vc_notify_role_id(gid, None)
+                flash("VC 通知ロールを解除した。", "success")
+            else:
+                try:
+                    set_vc_notify_role_id(gid, int(rid_str))
+                    flash("VC 通知ロールを設定した。", "success")
+                except ValueError:
+                    flash("無効なロールIDです。", "warning")
         return redirect(url_for("settings.vc_notify"))
 
     return render_template(
         "settings/vc_notify.html",
         channels=_channels(),
+        roles=_roles(),
         current_ch=get_vc_notify_channel_id(gid),
+        current_role=get_vc_notify_role_id(gid),
     )
 
 
