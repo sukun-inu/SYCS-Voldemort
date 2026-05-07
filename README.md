@@ -1,12 +1,7 @@
 # Discord Voldemort Bot 仕様書
 
-このリポジトリは、**金属価格コマンド・ChatGPT 会話 Bot・サーバーアクティビティログ・高度なセキュリティ対策**を  
-**1 つに統合した Discord ボット実装**です。
-
-単なる娯楽 Bot ではなく、  
-> *「情報取得」「会話」「監査」「防衛」*  
-
-を同時に担う **運用向け Bot** として設計されています。
+**金属価格・LLM 会話・サーバー管理・セキュリティ・各種自動化** を 1 つに統合した  
+運用向け Discord Bot + Web 管理 UI の実装です。
 
 ---
 
@@ -14,55 +9,208 @@
 
 ### 1.1 金属価格コマンド
 - `/gold` `/silver` `/platinum` `/all`
-- JPY ベースのリアルタイム金属価格を取得
-- グラム指定に対応
+- JPY ベースのリアルタイム金属価格を取得（MetalPriceAPI）
+- グラム数指定に対応
 - Embed 形式で視認性の高い表示
 
 ---
 
-### 1.2 LLM 会話 Bot
+### 1.2 LLM 会話 Bot（Groq）
 - 日本語限定・ヴォルデモート人格
-- ユーザーごとに会話履歴を保持し、文脈の続いた会話が可能
-- Groq API を使用（OpenAI 互換エンドポイント）
+- ユーザーごとに会話履歴を保持し、文脈を継続
+- 指定チャンネル以外では応答しない（未設定時は全チャンネル）
 
-使用モデル:
-- `llama-3.3-70b-versatile`（会話・予測シグナル）
-- `llama-3.1-8b-instant`（セキュリティ補助判定）
+| 項目 | 内容 |
+|---|---|
+| API | Groq（`AsyncGroq`） |
+| 会話モデル | `llama-3.3-70b-versatile` |
+| モデレーションモデル | `llama-3.1-8b-instant` |
+| Temperature | `0.45` |
+| Timeout | `30.0` 秒 |
 
 ---
 
 ### 1.3 サーバーアクティビティログ
-以下のイベントを **指定ログチャンネルへ Embed 形式** で出力します（JST 時刻付き）。
+指定ログチャンネルへ Embed 形式（JST 時刻付き）で出力します。
 
-- メッセージ送信 / 削除 / 編集
-- ボイスチャンネル参加 / 退出 / 移動 / 状態変化
-- メンバー参加 / 退出
-- ロール変更 / ニックネーム変更
-- チャンネル作成 / 削除
-- Bot コマンド実行 / エラー
+| イベント | 詳細 |
+|---|---|
+| メッセージ削除 | 送信日時・内容・ユーザーID・添付ファイル |
+| メッセージ編集 | 編集前後の内容・チャンネル |
+| VC 参加/退出/移動 | チャンネル名 |
+| メンバー参加 | アカウント作成日・参加日時・メンバー数 |
+| メンバー退出 | 保有ロール・メンバー数 |
+| ニックネーム変更 | 旧→新 |
+| ロール変更 | 追加・削除されたロール |
+| タイムアウト付与/解除 | 解除日時 |
+| BAN / BAN 解除 | ユーザーID・ユーザー名 |
+
+ログレベル: `NONE / ERROR / INFO / DEBUG`
 
 ---
 
-### 1.4 設定の JSON 永続化
-ギルドごとに以下の設定を `settings.json` に保存します。
+### 1.4 ウェルカム / グッバイメッセージ
+メンバーの参加・退出時に指定チャンネルへメッセージを送信します。
 
-- ログチャンネル ID
-- ログレベル（`NONE / ERROR / INFO / DEBUG`）
+**テンプレート変数:**
+
+| 変数 | 展開内容 |
+|---|---|
+| `{user}` | メンション（`@ユーザー名`） |
+| `{username}` | ユーザー名（文字列） |
+| `{server}` | サーバー名 |
+| `{count}` | 現在のメンバー数 |
+
+---
+
+### 1.5 VC 通知チャンネル
+VC 参加・退出・移動をユーザー向けに通知する専用チャンネルを設定できます。  
+ログチャンネル（管理者向け）とは独立して動作します。
+
+| イベント | 表示例 |
+|---|---|
+| 参加 | 🎙️ @ユーザー が **チャンネル名** に参加しました。 |
+| 退出 | 🚪 @ユーザー が **チャンネル名** から退出しました。 |
+| 移動 | 🔀 @ユーザー が **旧** → **新** に移動しました。 |
+
+---
+
+### 1.6 スティッキーメッセージ
+チャンネルに新しいメッセージが投稿されるたびに、設定したメッセージを自動で最下部に再投稿します。
+
+- チャンネルごとに独立して設定可能
+- 旧スティッキーを自動削除してから新規投稿
+- asyncio.Lock によるレース条件防止
+
+---
+
+### 1.7 リアクションロール
+指定メッセージへのリアクションに連動してロールを自動付与・解除します。
+
+- メッセージキャッシュ不要の `on_raw_reaction_add/remove` 対応
+- 1 メッセージに複数の絵文字→ロール設定が可能
+- カスタム絵文字（絵文字ID）・Unicode 絵文字の両方に対応
+
+---
+
+### 1.8 Google News フィード
+キーワードで Google News を定期検索し、新着記事を Discord チャンネルへ Embed 投稿します。
+
+- MD5 ハッシュによる URL 重複排除（最新 100 件）
+- チェック間隔は 5〜1440 分でフィードごとに個別設定
+- 1 サーバーあたり最大 10 フィード
+- Bot 起動 5 分ごとにバックグラウンドで実行
+
+---
+
+### 1.9 地震アラート（P2PQuake）
+P2PQuake API を使用して日本の地震情報をリアルタイムで通知します。
+
+- 1 分ごとに新着確認
+- 最小震度を設定して通知量を調整可能
+- 震度に応じた Embed カラー（緑→黄→橙→赤）
+- 初回起動時はサイレント（最新 ID を記録するだけで投稿しない）
+
+**震度対応表:**
+
+| 内部値 | 震度表記 |
+|---|---|
+| 10 | 1 |
+| 20 | 2 |
+| 30 | 3 |
+| 40 | 4 |
+| 45 | 4強 |
+| 50 | 5弱 |
+| 55 | 5強 |
+| 60 | 6弱 |
+| 65 | 6強 |
+| 70 | 7 |
+
+---
+
+### 1.10 セキュリティ対策
+
+チェック除外条件（以下に該当するユーザーはスキップ）:
+- 信頼済みユーザー
+- バイパスロール保持者
+
+| チェック | 内容 |
+|---|---|
+| レート監視 | 1 秒以内に 3 件以上でスパム判定 |
+| Unicode 異常検出 | 長文・同一文字連続・制御文字多用 |
+| LLM モデレーション | Groq で危険コンテンツを JSON 判定 |
+| VirusTotal 連携 | URL・添付ファイルをスキャン（キャッシュ付き） |
+| VC レイド検知 | 20 秒以内に同一 VC へ類似名 5 人以上で検知 |
+
+**危険判定時の挙動:**
+1. メッセージ削除
+2. `@everyone` 以外のロール剥奪
+3. ログ出力（赤 Embed）
+4. チャンネルへ注意喚起メッセージ送信
+
+---
+
+### 1.11 設定の JSON 永続化
+ギルドごとに以下の設定を `settings.json` に保存します（Bot 再起動後も保持）。
+
+- ログチャンネル ID / ログレベル
 - ChatGPT 応答チャンネル
 - 信頼済みユーザー ID リスト
 - セキュリティバイパスロール ID リスト
+- ウェルカム / グッバイ チャンネル・メッセージ
+- VC 通知チャンネル
+- スティッキーメッセージ（チャンネルごと）
+- リアクションロール（メッセージ × 絵文字 × ロール）
+- ニュースフィード（フィード ID × 設定）
+- 地震アラート設定
 
-すべて **Slash コマンド経由で安全に操作可能**です。
+**実装:** アトミック書き込み（`.tmp` ファイル → rename）によりクラッシュ時の破損を防止。  
+インメモリライトスルーキャッシュで毎回ディスク読み込みを回避。
 
 ---
 
-### 1.5 セキュリティ対策（中核機能）
-- メッセージレート監視
-- Unicode 異常検出
-- GPT による危険コンテンツ判定
-- VirusTotal 連携（URL / ファイル）
-- VC レイド検知
-- 危険時の自動ロール剥奪 + 注意喚起
+### 1.12 Web 管理 UI（Flask）
+Discord OAuth 認証によって管理者のみがアクセスできる Web 管理ダッシュボードです。
+
+**認証フロー:**
+1. Discord でログイン（OAuth2 `identify guilds` スコープ）
+2. `administrator` 権限を持ち、Bot が参加しているサーバーのみ管理可能
+3. サーバーを選択してダッシュボードへ
+
+**管理できる機能:**
+- ログ設定（チャンネル・レベル）
+- ChatGPT 応答チャンネル
+- ウェルカム / グッバイ設定
+- VC 通知チャンネル
+- スティッキーメッセージ（追加・削除）
+- リアクションロール（追加・削除）
+- ニュースフィード（追加・削除）
+- 地震アラート（チャンネル・最小震度）
+- セキュリティ設定（信頼済みユーザー・バイパスロール）
+- サーバー情報・ユーザー情報表示
+
+**セキュリティ対策:**
+
+| 対策 | 実装内容 |
+|---|---|
+| CSRF | Flask-WTF `CSRFProtect`（全フォームにトークン） |
+| XSS | Jinja2 自動エスケープ + 厳格 CSP ヘッダー |
+| クリックジャッキング | `X-Frame-Options: DENY` |
+| セッション固定 | OAuth コールバック後に `session.clear()` |
+| OAuth CSRF | `state` パラメータ + `compare_digest` 検証 |
+| レートリミット | Flask-Limiter（ログイン系 10 回 / 分） |
+| 入力検証 | チャンネルID・震度・ログレベルのホワイトリスト検証 |
+| エラーハンドラ | 400/403/429/500 に統一エラーページ |
+
+---
+
+### 1.13 貴金属 Web トラッカー（FastAPI）
+金・銀・プラチナの価格を JST 0:00 に日次保存し、チャート表示・Web Push 通知を提供します。
+
+- 純度別価格計算 API（`/api/prices/calculate`）
+- SARIMAX + Groq シグナルによる価格予測
+- PWA 対応・Web Push 通知（JST 11:00）
+- VAPID 鍵の自動生成
 
 ---
 
@@ -70,20 +218,58 @@
 
 ```text
 /
-├── main.py
+├── main.py                         # Discord Bot エントリーポイント
+├── admin_main.py                   # Flask 管理 UI エントリーポイント
+├── web_main.py                     # FastAPI Web トラッカーエントリーポイント
 ├── config.py
-├── bot_setup.py
+├── bot_setup.py                    # イベントハンドラ・バックグラウンドタスク
 ├── commands/
 │   ├── metal_commands.py
 │   ├── chat_commands.py
-│   └── logging_commands.py
+│   ├── logging_commands.py
+│   └── server_commands.py          # 新機能スラッシュコマンド
 ├── services/
 │   ├── metal_service.py
 │   ├── chatgpt_service.py
 │   ├── discord_utils.py
 │   ├── logging_service.py
-│   ├── settings_store.py
-│   └── security_service.py
+│   ├── settings_store.py           # JSON 永続化（全設定）
+│   ├── security_service.py
+│   ├── welcome_service.py          # ウェルカム / グッバイ
+│   ├── sticky_service.py           # スティッキーメッセージ
+│   ├── reaction_role_service.py    # リアクションロール
+│   ├── news_service.py             # Google News フィード
+│   └── earthquake_service.py      # 地震アラート（P2PQuake）
+├── webapp_admin/                   # Flask 管理 UI
+│   ├── app.py
+│   ├── auth.py
+│   ├── extensions.py
+│   ├── security.py
+│   ├── views/
+│   │   ├── auth_views.py
+│   │   ├── dashboard_views.py
+│   │   └── settings_views.py
+│   ├── templates/
+│   │   ├── base.html
+│   │   ├── login.html
+│   │   ├── guild_select.html
+│   │   ├── dashboard.html
+│   │   ├── error.html
+│   │   └── settings/
+│   │       ├── logging.html
+│   │       ├── welcome.html
+│   │       ├── vc_notify.html
+│   │       ├── sticky.html
+│   │       ├── reaction_roles.html
+│   │       ├── news_feeds.html
+│   │       ├── earthquake.html
+│   │       └── security.html
+│   └── static/
+│       ├── admin.css
+│       └── admin.js
+├── webapp/                         # FastAPI Web トラッカー
+│   └── ...
+├── migrations/
 ├── requirements.txt
 ├── Dockerfile
 └── docker-compose.yml
@@ -93,14 +279,54 @@
 
 ## 3. 環境変数
 
-```bash
-DISCORD_BOT_TOKEN=your_bot_token
-METALPRICE_API_KEY=your_metalprice_api_key
-GROQ_API_KEY=your_groq_api_key
-VIRUSTOTAL_API_KEY=your_virustotal_api_key
-```
+### 3.1 Discord Bot
 
-※ VirusTotal / Groq を使用しない場合は未設定でも可。Groq 未設定時は LLM 機能が無効化されます。
+| 変数 | 必須 | 説明 |
+|---|---|---|
+| `DISCORD_BOT_TOKEN` | ✅ | Bot トークン |
+| `GROQ_API_KEY` | ☑ | LLM 会話・モデレーション用。未設定で無効化 |
+| `VIRUSTOTAL_API_KEY` | ☑ | URL/ファイルスキャン用。未設定で無効化 |
+| `METALPRICE_API_KEY` | ☑ | 金属価格取得用 |
+| `SETTINGS_DIR` | ☑ | 設定 JSON 保存先（デフォルト: `./data`） |
+
+### 3.2 Flask 管理 UI
+
+| 変数 | 必須 | 説明 |
+|---|---|---|
+| `DISCORD_CLIENT_ID` | ✅ | Discord OAuth2 クライアント ID |
+| `DISCORD_CLIENT_SECRET` | ✅ | Discord OAuth2 クライアントシークレット |
+| `DISCORD_REDIRECT_URI` | ✅ | OAuth2 リダイレクト URI（例: `https://yourdomain/admin/callback`） |
+| `ADMIN_FLASK_SECRET_KEY` | ✅ | Flask セッション署名キー（ランダム長文字列） |
+| `FLASK_SECURE_COOKIES` | ☑ | `true` に設定すると Secure Cookie（HTTPS 環境で推奨） |
+| `ADMIN_HOST_PORT` | ☑ | ホスト側ポート（デフォルト: `5001`） |
+
+### 3.3 FastAPI Web トラッカー
+
+| 変数 | 必須 | 説明 |
+|---|---|---|
+| `POSTGRES_HOST` | ☑ | デフォルト: `localhost` |
+| `POSTGRES_PORT` | ☑ | デフォルト: `5432` |
+| `POSTGRES_DB` | ☑ | デフォルト: `metal_prices` |
+| `POSTGRES_USER` | ☑ | デフォルト: `metal_user` |
+| `POSTGRES_PASSWORD_FILE` | ☑ | パスワードファイルパス |
+| `API_RATE_LIMIT_PER_MINUTE` | ☑ | デフォルト: `120` |
+| `API_CALCULATE_RATE_LIMIT_PER_MINUTE` | ☑ | デフォルト: `60` |
+| `API_RESPONSE_CACHE_SECONDS` | ☑ | デフォルト: `20` |
+| `FORECAST_REFRESH_MINUTE_JST` | ☑ | 毎時の予測再計算タイミング（デフォルト: `5`） |
+| `FORECAST_SARIMAX_ENABLED` | ☑ | デフォルト: `true` |
+| `FORECAST_SARIMAX_MIN_HISTORY` | ☑ | SARIMAX 最小履歴件数（デフォルト: `24`） |
+| `PUSH_NOTIFY_HOUR_JST` | ☑ | Push 通知時刻・時（デフォルト: `11`） |
+| `PUSH_NOTIFY_MINUTE_JST` | ☑ | Push 通知時刻・分（デフォルト: `0`） |
+| `VAPID_AUTO_GENERATE` | ☑ | デフォルト: `true` |
+| `VAPID_KEYS_DIR` | ☑ | デフォルト: `/shared/vapid` |
+| `VAPID_PUBLIC_KEY` | ☑ | 手動指定する場合 |
+| `VAPID_PRIVATE_KEY` | ☑ | 手動指定する場合 |
+| `VAPID_SUBJECT` | ☑ | デフォルト: `mailto:admin@example.com` |
+| `TRUST_CF_HEADERS` | ☑ | デフォルト: `true`（Cloudflare 経由の場合） |
+| `REQUIRE_CF_CONNECTING_IP` | ☑ | デフォルト: `false` |
+| `ALLOWED_HOSTS` | ☑ | カンマ区切り（デフォルト: `*`） |
+| `APP_ROOT_PATH` | ☑ | サブパス配信時のみ（例: `/metal`） |
+| `APP_PUBLIC_PATH` | ☑ | Push 通知クリック先ベース（デフォルト: `/`） |
 
 ---
 
@@ -108,250 +334,213 @@ VIRUSTOTAL_API_KEY=your_virustotal_api_key
 
 ```bash
 pip install -r requirements.txt
+
+# Discord Bot
 python main.py
-```
 
-起動後、Slash コマンドは自動同期されます。
+# Flask 管理 UI（別ターミナル）
+python admin_main.py
 
----
-
-## 5. Slash コマンド一覧
-
-`/help` を実行すると、登録済みコマンドが Embed で表示されます。
-
-### 管理・設定系
-- `/set_log_channel`
-- `/set_log_level`
-- `/set_response_channel`
-- `/clear_response_channel`
-
-### セキュリティ管理
-- `/add_trusted_members`
-- `/remove_trusted_members`
-- `/list_trusted_members`
-- `/add_bypass_roles`
-- `/remove_bypass_roles`
-- `/list_bypass_roles`
-
-### 金属価格
-- `/gold g:<number>`
-- `/silver g:<number>`
-- `/platinum g:<number>`
-- `/all g:<number>`
-
----
-
-## 6. LLM 会話仕様
-
-- 指定された応答チャンネルでのみ反応
-- ユーザー ID ごとに会話履歴を保持
-- システムプロンプトに以下を含む:
-  - ヴォルデモート人格
-  - 日本語限定
-  - 威圧的・尊大な口調
-  - 現在日時（JST）
-
-Groq SDK（`groq` パッケージ）:
-- Client: `AsyncGroq`
-- Model: `llama-3.3-70b-versatile`
-- Temperature: `0.45`
-- Timeout: `30.0` 秒
-
----
-
-## 7. ログ機能の詳細
-
-- すべて `logging_service.log_action` 経由
-- Embed Author にユーザー名とアイコン表示
-- 通常ログはアイコン色から Embed 色を自動抽出
-- セキュリティ関連ログは **常に赤色で強調**
-- フッターに JST 時刻を表示
-
----
-
-## 8. セキュリティ仕様
-
-### 8.1 チェック除外条件
-以下に該当するユーザーは **全セキュリティチェックをスキップ**。
-
-- 信頼済みユーザー
-- バイパスロール保持者
-
----
-
-### 8.2 メッセージセキュリティ
-
-非除外ユーザーに対し、以下を順に評価します。
-
-1. **レート監視**
-   - 1 秒以内に 3 件以上でスパム判定
-
-2. **Unicode 異常検出**
-   - 極端な長文
-   - 同一文字の連続
-   - ゼロ幅 / Bidi / 制御文字の大量使用
-
-3. **LLM モデレーション**
-   - Groq SDK `AsyncGroq` を使用
-   - モデル: `llama-3.1-8b-instant`
-   - 危険判定・理由・カテゴリを JSON で取得
-
-4. **VirusTotal**
-   - URL / 添付ファイルをスキャン
-   - キャッシュによる API 節約
-
----
-
-### 8.3 危険判定時の挙動
-
-- メッセージ削除
-- `@everyone` 以外のロール剥奪
-- ログ出力
-- チャンネルで注意喚起メッセージ送信
-
----
-
-### 8.4 VC レイド検知
-
-- 20 秒以内
-- 同一 VC
-- 名前の先頭が類似したユーザーが 5 人以上
-
-→ レイドと判定しロール剥奪 + 警告
-
----
-
-## 9. 運用のすすめ
-
-1. 初期設定
-   - `/set_log_channel`
-   - `/set_log_level`
-   - `/set_response_channel`
-
-2. 信頼設定
-   - `/add_trusted_members`
-   - `/add_bypass_roles`
-
-3. 定期確認
-   - `/list_trusted_members`
-   - `/list_bypass_roles`
-
----
-
-## 10. 貴金属Webトラッカー（追加機能）
-
-Discord Bot とは別に、金・銀・プラチナの価格を **JST 0:00 に日次保存** し、  
-Web画面でチャート表示できる機能を追加しています。
-さらに、Bot ロジック準拠で金属の純度別価格計算も可能です。
-PWA 対応により、Web Push 通知で日次の価格変動を受け取れます。
-
-### 10.1 追加技術スタック
-- FastAPI
-- PostgreSQL（`asyncpg` + SQLAlchemy）
-- APScheduler（JST 0:00 実行）
-- Chart.js（価格推移 + 前日差）
-- 純度計算 API（`/api/prices/calculate`）
-- Web Push（JST 11:00 に前日差最大の金属を通知）
-
-### 10.2 保存データ
-`metal_price_daily` テーブルに以下を保存します。
-
-- 金属キー（`gold/silver/platinum`）
-- 取得日（JST 日付）
-- 1gあたり価格（円）
-- 前日差分（円）
-
-### 10.3 Web 起動
-
-```bash
+# FastAPI Web トラッカー（別ターミナル）
 python web_main.py
 ```
 
-アクセス先:
-- `http://localhost:${WEB_HOST_PORT:-8001}/`
-- API: `http://localhost:${WEB_HOST_PORT:-8001}/api/prices/history?days=365`
+---
 
-### 10.4 必須環境変数（Web）
-- `METALPRICE_API_KEY`
-
-`POSTGRES_DSN` は任意です。未指定時は以下を組み合わせて自動構成します。
-
-- `POSTGRES_HOST`（デフォルト: `localhost`）
-- `POSTGRES_PORT`（デフォルト: `5432`）
-- `POSTGRES_DB`（デフォルト: `metal_prices`）
-- `POSTGRES_USER`（デフォルト: `postgres`）
-- `POSTGRES_PASSWORD` または `POSTGRES_PASSWORD_FILE`
-
-任意:
-- `API_RATE_LIMIT_PER_MINUTE`（デフォルト: 120）
-- `API_CALCULATE_RATE_LIMIT_PER_MINUTE`（デフォルト: 60）
-- `API_RESPONSE_CACHE_SECONDS`（デフォルト: 20）
-- `PURITY_OPTIONS_CACHE_SECONDS`（デフォルト: 3600）
-- `PUSH_PUBLIC_KEY_CACHE_SECONDS`（デフォルト: 3600）
-- `FORECAST_REFRESH_MINUTE_JST`（デフォルト: 5。毎時この分に予測のみ再計算）
-- `FORECAST_SARIMAX_ENABLED`（デフォルト: true。統計モデルを有効化）
-- `FORECAST_SARIMAX_MIN_HISTORY`（デフォルト: 24。SARIMAXを使う最小履歴件数）
-- `FORECAST_LLM_MODEL`（デフォルト: `llama-3.3-70b-versatile`。Groq モデルを変更する場合に指定）
-- `FORECAST_LLM_TIMEOUT_SECONDS`（デフォルト: 20。Groq API タイムアウト秒数）
-- `PUSH_NOTIFY_HOUR_JST`（デフォルト: 11）
-- `PUSH_NOTIFY_MINUTE_JST`（デフォルト: 0）
-- `APP_ROOT_PATH`（サブパス配信時のみ。例: `/metal`）
-- `APP_PUBLIC_PATH`（Push通知クリック先のベース。デフォルト: `/`）
-- `VAPID_AUTO_GENERATE`（デフォルト: true）
-- `VAPID_KEYS_DIR`（デフォルト: `/shared/vapid`）
-- `VAPID_PUBLIC_KEY`（手動指定する場合）
-- `VAPID_PRIVATE_KEY`（手動指定する場合）
-- `VAPID_SUBJECT`（デフォルト: `mailto:admin@example.com`。`admin@example.com` を指定した場合は `mailto:` を自動補完。不正形式はデフォルトへフォールバック）
-- `TRUST_CF_HEADERS`（デフォルト: true）
-- `REQUIRE_CF_CONNECTING_IP`（デフォルト: false）
-- `ALLOWED_HOSTS`（カンマ区切り）
-- `WEB_HOST_PORT`（デフォルト: 8001）
-- `STARTUP_TEST_MODE`（デフォルト: false）
-- `STARTUP_TEST_REQUIRE_DOCKER`（デフォルト: true）
-- `STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT`（デフォルト: false）
-- `STARTUP_TEST_FORCE_SNAPSHOT_REFRESH`（デフォルト: true）
-- `STARTUP_TEST_RUN_PUSH_ON_BOOT`（デフォルト: false）
-
-起動テスト機能の注意:
-- `STARTUP_TEST_MODE=true` かつ各実行フラグが有効なときのみ、コンテナ起動時にテスト処理を実行します。
-- `STARTUP_TEST_REQUIRE_DOCKER=true` の場合、コンテナ外プロセスではテスト処理を強制的に無効化します。
-- テスト起動処理はサーバー起動フック内のみで実行し、HTTP API は提供しません。
-  そのためブラウザの JS コンソールや外部リクエストからは実行できません。
-
-### 10.5 Docker Compose 起動
-`docker-compose.yml` には以下サービスを定義済みです。
-
-- `postgres-secret-init`（初回のみランダムパスワード生成）
-- `postgres`
-- `sycs-voldemort`（Discord Bot）
-- `sycs-voldemort-web`（Webトラッカー）
+## 5. Docker Compose 起動
 
 ```bash
 docker compose up -d --build
 ```
 
-起動時テストを有効化する例（必要なときだけ設定）:
+**定義済みサービス:**
 
-```bash
-STARTUP_TEST_MODE=true \
-STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT=true \
-STARTUP_TEST_RUN_PUSH_ON_BOOT=true \
-docker compose up -d --build sycs-voldemort-web
+| サービス | 役割 | ポート |
+|---|---|---|
+| `postgres-secret-init` | 初回のみパスワード自動生成 | — |
+| `postgres` | PostgreSQL 16 | — |
+| `sycs-voldemort` | Discord Bot | — |
+| `sycs-voldemort-admin` | Flask 管理 UI | `5001` |
+| `sycs-voldemort-web` | FastAPI Web トラッカー | `8001` |
+
+**PostgreSQL パスワード自動生成:**
+- 初回起動時に `postgres-secret-init` がランダムパスワードを生成
+- Docker Volume `shared_secrets` 内の `/shared/postgres_password` に保存
+- 以降の再起動でも同じパスワードを再利用
+
+---
+
+## 6. Discord OAuth2 設定手順（管理 UI 用）
+
+1. [Discord Developer Portal](https://discord.com/developers/applications) → 対象アプリを選択
+2. **OAuth2** → **Redirects** に `DISCORD_REDIRECT_URI` を追加  
+   例: `http://localhost:5001/admin/callback`
+3. `Client ID` と `Client Secret` を `.env` に設定
+
+---
+
+## 7. Slash コマンド一覧
+
+起動後に `bot.tree.sync()` で自動同期。`/help` で Embed 一覧表示。
+
+### 7.1 ログ・設定系（管理者専用）
+
+| コマンド | 説明 |
+|---|---|
+| `/set_log_channel` | ログ送信チャンネルを設定 |
+| `/set_log_level` | ログレベル設定（NONE/ERROR/INFO/DEBUG） |
+| `/set_response_channel` | ChatGPT 応答チャンネルを設定 |
+| `/clear_response_channel` | ChatGPT 応答チャンネルを解除 |
+| `/settings` | 現在の全設定を Embed で表示 |
+| `/help` | コマンド一覧を表示 |
+
+### 7.2 セキュリティ管理（管理者専用）
+
+| コマンド | 説明 |
+|---|---|
+| `/add_trusted_members` | 信頼済みユーザーに追加（最大 5 名同時） |
+| `/remove_trusted_members` | 信頼済みユーザーから削除 |
+| `/list_trusted_members` | 信頼済みユーザー一覧表示 |
+| `/add_bypass_roles` | バイパスロール追加（最大 3 個同時） |
+| `/remove_bypass_roles` | バイパスロール削除 |
+| `/list_bypass_roles` | バイパスロール一覧表示 |
+
+### 7.3 ウェルカム / グッバイ（管理者専用）
+
+| コマンド | 説明 |
+|---|---|
+| `/set_welcome_channel` | ウェルカムメッセージ送信チャンネルを設定 |
+| `/set_welcome_message` | ウェルカムメッセージテンプレートを設定 |
+| `/set_goodbye_channel` | グッバイメッセージ送信チャンネルを設定 |
+| `/set_goodbye_message` | グッバイメッセージテンプレートを設定 |
+| `/welcome_settings` | 現在のウェルカム / グッバイ設定を表示 |
+
+### 7.4 VC 通知（管理者専用）
+
+| コマンド | 説明 |
+|---|---|
+| `/set_vc_notify_channel` | VC 通知チャンネルを設定 |
+| `/clear_vc_notify_channel` | VC 通知チャンネルを解除 |
+
+### 7.5 スティッキーメッセージ（管理者専用）
+
+| コマンド | 説明 |
+|---|---|
+| `/sticky` | このチャンネルにスティッキーを設定 |
+| `/unsticky` | このチャンネルのスティッキーを解除 |
+| `/list_stickies` | スティッキー一覧を表示 |
+
+### 7.6 リアクションロール（管理者専用）
+
+| コマンド | 説明 |
+|---|---|
+| `/add_reaction_role` | リアクションロールを追加 |
+| `/remove_reaction_role` | リアクションロールを削除 |
+| `/list_reaction_roles` | リアクションロール一覧を表示 |
+
+### 7.7 ニュースフィード（管理者専用）
+
+| コマンド | 説明 |
+|---|---|
+| `/add_news_feed` | Google News フィードを追加 |
+| `/remove_news_feed` | ニュースフィードを削除 |
+| `/list_news_feeds` | フィード一覧を表示 |
+
+### 7.8 地震アラート（管理者専用）
+
+| コマンド | 説明 |
+|---|---|
+| `/set_earthquake_channel` | 地震アラートチャンネルを設定 |
+| `/set_earthquake_min_scale` | 最小震度を設定 |
+| `/earthquake_settings` | 地震アラート設定を表示 |
+
+### 7.9 情報表示（全員）
+
+| コマンド | 説明 |
+|---|---|
+| `/gold g:<数値>` | 金の現在価格 |
+| `/silver g:<数値>` | 銀の現在価格 |
+| `/platinum g:<数値>` | プラチナの現在価格 |
+| `/all g:<数値>` | 全金属の価格一覧 |
+| `/serverinfo` | サーバー情報を表示 |
+| `/userinfo [member]` | ユーザー情報を表示 |
+
+---
+
+## 8. バックグラウンドタスク
+
+| タスク | 間隔 | 説明 |
+|---|---|---|
+| `update_status` | 5 秒 | Ping・CPU・MEM をステータスに表示 |
+| `news_feed_task` | 5 分 | 全サーバーのニュースフィードをチェック |
+| `earthquake_task` | 1 分 | P2PQuake から地震情報を取得・通知 |
+
+---
+
+## 9. 初期運用手順
+
+### 9.1 管理 UI でまとめて設定する場合
+
+1. `http://サーバーアドレス:5001/admin/` にアクセス
+2. **Discord でログイン** → サーバーを選択
+3. サイドバーから各機能を設定
+
+### 9.2 スラッシュコマンドで設定する場合
+
+```
+/set_log_channel       → ログチャンネルを指定
+/set_log_level         → INFO に設定
+/set_response_channel  → ChatGPT 応答チャンネルを指定
+/add_bypass_roles      → Mod ロールをバイパスに追加
+/set_welcome_channel   → ウェルカムチャンネルを指定
+/set_earthquake_channel → 地震アラートチャンネルを指定
+/set_earthquake_min_scale → 最小震度を設定（例: 30 = 震度3）
+/add_news_feed         → キーワードとチャンネルを設定
 ```
 
-### 10.6 PostgreSQL パスワード自動生成
-- 初回起動時、`postgres-secret-init` がランダムな PostgreSQL パスワードを生成します。
-- パスワードは Docker Volume `shared_secrets` 内の `/shared/postgres_password` に保存されます。
-- `postgres` / `sycs-voldemort-web` は毎回このファイルを読み込むため、再起動後も同じパスワードで動作します。
+---
 
-### 10.7 PWA と Push 通知
-- `manifest.webmanifest` と `service worker` を実装済みです。
-- ブラウザで「Push通知を有効化」を押すと購読登録されます。
-- 価格スナップショット取得（MetalPriceAPI）は JST 0:00 の日次実行です。
-- 価格予測は毎時 `FORECAST_REFRESH_MINUTE_JST` 分に再計算し、最新結果を API に反映します。
-- 予測は USD/JPY・ニュース・AI判定を合算した外生シグナルを含む SARIMAX で算出します（履歴不足時は自動フォールバック）。
-- ニュースシグナルは Google News RSS を取得します。User-Agent を設定しブロック回避済み。XML は bytes のままパースし encoding 宣言を正しく処理します。
-- フロントは予測APIを約5分間隔で自動再フェッチし、生成時刻が更新されると表示を自動反映します。
-- サーバーは JST 毎日 11:00 に「前日差が最大の金属」を通知します。
-- 通知は `notification_dispatch` テーブルで同日重複送信を防止します。
-- `VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY` が未設定でも、初回起動時に `/shared/vapid` へ自動生成して再利用します。
+## 10. settings.json 構造
+
+```json
+{
+  "guilds": {
+    "<guild_id>": {
+      "log_channel_id": 123456789,
+      "log_level": "INFO",
+      "response_channel_id": 123456789,
+      "trusted_user_ids": [111, 222],
+      "bypass_role_ids": [333],
+      "welcome": {
+        "channel_id": 123456789,
+        "message": "{user} がサーバーに参加しました！"
+      },
+      "goodbye": {
+        "channel_id": 123456789,
+        "message": null
+      },
+      "vc_notify_channel_id": 123456789,
+      "sticky_messages": {
+        "<channel_id>": { "content": "テキスト", "message_id": 123456789 }
+      },
+      "reaction_roles": {
+        "<message_id>": { "👍": 444555 }
+      },
+      "news_feeds": {
+        "ab12cd34": {
+          "channel_id": 123456789,
+          "query": "AI技術",
+          "interval": 60,
+          "last_run": 1700000000.0,
+          "seen_hashes": ["md5hash..."]
+        }
+      },
+      "earthquake": {
+        "channel_id": 123456789,
+        "min_scale": 30,
+        "last_event_id": "abc123"
+      }
+    }
+  }
+}
+```
