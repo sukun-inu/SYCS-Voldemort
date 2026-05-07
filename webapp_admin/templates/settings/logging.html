@@ -20,7 +20,7 @@
         <span class="status-label">現在</span>
         <span class="status-chip">
           <i class="bi bi-hash"></i>
-          {% if log_settings.channel_id %}{{ log_settings.channel_id }}{% else %}未設定{% endif %}
+          {% if log_settings.channel_id %}{{ ch_map.get(log_settings.channel_id|string, log_settings.channel_id) }}{% else %}未設定{% endif %}
         </span>
         <span class="status-chip">{{ log_settings.level }}</span>
       </div>
@@ -69,7 +69,7 @@
         <span class="status-label">現在</span>
         <span class="status-chip">
           <i class="bi bi-hash"></i>
-          {% if chatgpt_ch %}{{ chatgpt_ch }}{% else %}全チャンネル{% endif %}
+          {% if chatgpt_ch %}{{ ch_map.get(chatgpt_ch|string, chatgpt_ch) }}{% else %}全チャンネル{% endif %}
         </span>
       </div>
 

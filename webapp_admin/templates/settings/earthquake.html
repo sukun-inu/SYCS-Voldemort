@@ -20,7 +20,7 @@
         <span class="status-label">現在</span>
         <span class="status-chip">
           <i class="bi bi-hash"></i>
-          {% if eq_s.get('channel_id') %}{{ eq_s.get('channel_id') }}{% else %}未設定{% endif %}
+          {% if eq_s.get('channel_id') %}{{ ch_map.get(eq_s.get('channel_id')|string, eq_s.get('channel_id')) }}{% else %}未設定{% endif %}
         </span>
       </div>
 

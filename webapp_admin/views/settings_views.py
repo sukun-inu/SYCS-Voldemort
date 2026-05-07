@@ -91,9 +91,12 @@ def logging_settings():
             flash("ChatGPT 応答チャンネルを更新した。", "success")
         return redirect(url_for("settings.logging_settings"))
 
+    channels = _channels()
+    ch_map = {c["id"]: c["name"] for c in channels}
     return render_template(
         "settings/logging.html",
-        channels=_channels(),
+        channels=channels,
+        ch_map=ch_map,
         log_settings=get_log_settings(gid),
         chatgpt_ch=get_response_channel_id(gid),
         log_levels=sorted(_LOG_LEVELS),
@@ -128,9 +131,12 @@ def welcome_settings():
             flash("グッバイ設定を更新した。", "success")
         return redirect(url_for("settings.welcome_settings"))
 
+    channels = _channels()
+    ch_map = {c["id"]: c["name"] for c in channels}
     return render_template(
         "settings/welcome.html",
-        channels=_channels(),
+        channels=channels,
+        ch_map=ch_map,
         welcome_s=get_welcome_settings(gid),
         goodbye_s=get_goodbye_settings(gid),
     )
@@ -165,9 +171,12 @@ def vc_notify():
                     flash("無効なロールIDです。", "warning")
         return redirect(url_for("settings.vc_notify"))
 
+    channels = _channels()
+    ch_map = {c["id"]: c["name"] for c in channels}
     return render_template(
         "settings/vc_notify.html",
-        channels=_channels(),
+        channels=channels,
+        ch_map=ch_map,
         roles=_roles(),
         current_ch=get_vc_notify_channel_id(gid),
         current_role=get_vc_notify_role_id(gid),
@@ -331,9 +340,12 @@ def earthquake():
             flash(f"最小震度を {SCALE_LABELS.get(scale, scale)} に設定した。", "success")
         return redirect(url_for("settings.earthquake"))
 
+    channels = _channels()
+    ch_map = {c["id"]: c["name"] for c in channels}
     return render_template(
         "settings/earthquake.html",
-        channels=_channels(),
+        channels=channels,
+        ch_map=ch_map,
         eq_s=get_earthquake_settings(gid),
         scale_labels=SCALE_LABELS,
         valid_scales=sorted(_VALID_SCALES),

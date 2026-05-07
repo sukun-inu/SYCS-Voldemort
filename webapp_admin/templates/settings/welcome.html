@@ -30,7 +30,7 @@
         <span class="status-label">現在</span>
         <span class="status-chip">
           <i class="bi bi-hash"></i>
-          {% if welcome_s.get('channel_id') %}{{ welcome_s.get('channel_id') }}{% else %}未設定{% endif %}
+          {% if welcome_s.get('channel_id') %}{{ ch_map.get(welcome_s.get('channel_id')|string, welcome_s.get('channel_id')) }}{% else %}未設定{% endif %}
         </span>
       </div>
 
@@ -70,7 +70,7 @@
         <span class="status-label">現在</span>
         <span class="status-chip">
           <i class="bi bi-hash"></i>
-          {% if goodbye_s.get('channel_id') %}{{ goodbye_s.get('channel_id') }}{% else %}未設定{% endif %}
+          {% if goodbye_s.get('channel_id') %}{{ ch_map.get(goodbye_s.get('channel_id')|string, goodbye_s.get('channel_id')) }}{% else %}未設定{% endif %}
         </span>
       </div>
 

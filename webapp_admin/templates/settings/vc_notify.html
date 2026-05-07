@@ -20,7 +20,7 @@
         <span class="status-label">現在</span>
         <span class="status-chip">
           <i class="bi bi-hash"></i>
-          {% if current_ch %}{{ current_ch }}{% else %}未設定{% endif %}
+          {% if current_ch %}{{ ch_map.get(current_ch|string, current_ch) }}{% else %}未設定{% endif %}
         </span>
       </div>
 
