@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import timezone, timedelta
 
@@ -6,7 +7,7 @@ import psutil
 from commands.chat_commands import handle_chatgpt_message
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
-from services.earthquake_service import run_earthquake_check
+from services.earthquake_service import run_earthquake_ws
 from services.logging_service import log_action
 from services.news_service import run_news_feeds
 from services.reaction_role_service import handle_reaction_add, handle_reaction_remove
@@ -30,6 +31,7 @@ def create_bot() -> Bot:
 
 
 def setup_events(bot: Bot) -> None:
+    _ws_task: list[asyncio.Task] = []
 
     # --------------------------
     # ステータス更新
@@ -58,16 +60,6 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.exception("[BOT_SETUP] news_feed_task error: %s", e)
 
-    # --------------------------
-    # 地震アラート（1分ごと）
-    # --------------------------
-    @tasks.loop(minutes=1)
-    async def earthquake_task():
-        try:
-            await run_earthquake_check(bot)
-        except Exception as e:
-            logger.exception("[BOT_SETUP] earthquake_task error: %s", e)
-
     @bot.event
     async def on_ready():
         logger.info("[BOT] Logged in as %s", bot.user)
@@ -76,8 +68,10 @@ def setup_events(bot: Bot) -> None:
             update_status.start()
         if not news_feed_task.is_running():
             news_feed_task.start()
-        if not earthquake_task.is_running():
-            earthquake_task.start()
+        if not _ws_task or _ws_task[0].done():
+            if _ws_task:
+                _ws_task.clear()
+            _ws_task.append(asyncio.create_task(run_earthquake_ws(bot)))
 
     # --------------------------
     # メッセージ（司令塔）
