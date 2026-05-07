@@ -51,9 +51,44 @@
     --accent: #58b99f;
     --accent-hover: #75cbb5;
     --accent-soft: rgba(88, 185, 159, 0.16);
-    --table-zebra: rgba(245, 247, 242, 0.035);
+    --table-zebra: #20231f;
     --table-hover: rgba(88, 185, 159, 0.14);
     --shadow-popover: 0 18px 60px rgba(0, 0, 0, 0.55);
+  }
+
+  .table-responsive {
+    background-color: var(--surface);
+    color-scheme: dark;
+  }
+
+  .table {
+    --bs-table-bg: var(--surface);
+    --bs-table-color: var(--text);
+    --bs-table-border-color: var(--separator);
+    --bs-table-hover-bg: var(--table-hover);
+    --bs-table-hover-color: var(--text);
+    --bs-table-accent-bg: transparent;
+    background-color: var(--surface);
+    color: var(--text);
+  }
+
+  .table > :not(caption) > * > * {
+    background-color: var(--surface);
+    color: var(--text);
+  }
+
+  .table thead > * > * {
+    background-color: var(--surface-muted);
+    color: var(--text-secondary);
+  }
+
+  .table tbody tr:nth-child(even) > * {
+    background-color: var(--table-zebra);
+  }
+
+  .table-hover > tbody > tr:hover > * {
+    background-color: var(--table-hover);
+    color: var(--text);
   }
 }
 
