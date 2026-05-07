@@ -1,8 +1,8 @@
 import discord
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from typing import Mapping, Sequence
 
-_JST = timezone(timedelta(hours=9))
+from config import JST as _JST
 
 
 def _resolve_color(color: str | int | discord.Color) -> discord.Color:
@@ -17,16 +17,19 @@ def _resolve_color(color: str | int | discord.Color) -> discord.Color:
         return discord.Color.blurple()
 
 
-def create_embed(title: str, description: str, data: Mapping[str, str], color: str | int | discord.Color) -> discord.Embed:
-    """Discord Embedを作成"""
+def create_embed(
+    title: str,
+    description: str,
+    data: Mapping[str, str],
+    color: str | int | discord.Color,
+    footer_text: str = "",
+) -> discord.Embed:
     embed = discord.Embed(title=title, description=description, color=_resolve_color(color))
-
     for name, value in data.items():
         embed.add_field(name=name, value=value, inline=True)
-
-    embed.set_footer(
-        text=f"タイムスタンプ: {datetime.now(_JST).strftime('%Y-%m-%d %H:%M:%S')} | Powered by MetalpriceAPI Free"
-    )
+    ts = datetime.now(_JST).strftime("%Y-%m-%d %H:%M:%S")
+    suffix = f" | {footer_text}" if footer_text else ""
+    embed.set_footer(text=f"タイムスタンプ: {ts}{suffix}")
     return embed
 
 

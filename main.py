@@ -13,19 +13,12 @@ logging.basicConfig(
 
 
 async def main():
-    """メイン処理"""
-    # ボット作成
     bot = create_bot()
-
-    # イベント設定（on_message 含む）
     setup_events(bot)
-
-    # コマンド登録（スラッシュ / prefix）
     register_metal_commands(bot)
     register_logging_commands(bot)
     register_server_commands(bot)
 
-    # ボット起動
     async with bot:
         if not DISCORD_BOT_TOKEN:
             raise RuntimeError("DISCORD_BOT_TOKEN が設定されていません。環境変数または .env を確認してください。")
@@ -33,5 +26,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    # Discord Bot 起動
     asyncio.run(main())

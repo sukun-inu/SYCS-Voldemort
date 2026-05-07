@@ -32,12 +32,13 @@ async def _handle_single_metal(interaction: discord.Interaction, grams: float, s
 
     try:
         price_map = await calculate_metal_value(grams, spec.code, spec.purity)
-        text = _format_prices(price_map if isinstance(price_map, dict) else {spec.display_name: int(price_map)})
+        text = _format_prices(price_map)
         embed = create_embed(
             f"{grams}グラムの{spec.display_name}価格",
             spec.description,
             {"現在の価格": text},
             spec.color,
+            footer_text="Powered by MetalpriceAPI Free",
         )
         await interaction.response.send_message(embed=embed)
     except (ValueError, MetalPriceError) as e:
@@ -95,13 +96,14 @@ def register_metal_commands(bot: discord.Client) -> None:
             for spec, prices in zip(specs, results):
                 if isinstance(prices, Exception):
                     raise prices
-                data[f"{spec.display_name} ({spec.key.title()})"] = _format_prices(prices if isinstance(prices, dict) else {spec.display_name: prices})
+                data[f"{spec.display_name} ({spec.key.title()})"] = _format_prices(prices)
 
             embed = create_embed(
                 f"{g}グラムの金属価格",
                 "金、銀、プラチナの力を見せてやろう。",
                 data,
                 discord.Color.gold(),
+                footer_text="Powered by MetalpriceAPI Free",
             )
             await interaction.response.send_message(embed=embed)
 

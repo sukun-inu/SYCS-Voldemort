@@ -46,14 +46,8 @@ async def fetch_metal_price_per_gram(metal_code: str) -> float:
     return rate / 31.1035  # トロイオンス->グラム換算
 
 
-async def calculate_metal_value(grams: float, metal_code: str, purity: Mapping[str, float] | None = None) -> Dict[str, int] | int:
-    """指定グラム数の金属価値を計算"""
+async def calculate_metal_value(grams: float, metal_code: str, purity: Mapping[str, float]) -> Dict[str, int]:
     if grams <= 0:
         raise MetalPriceError("グラム数は正の値で指定せよ。")
-
     price_per_gram = await fetch_metal_price_per_gram(metal_code)
-
-    if purity:
-        return {grade: int(price_per_gram * grams * ratio) for grade, ratio in purity.items()}
-
-    return int(price_per_gram * grams)
+    return {grade: int(price_per_gram * grams * ratio) for grade, ratio in purity.items()}

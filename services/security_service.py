@@ -20,12 +20,6 @@ URL_REGEX = re.compile(r"https?://[^\s]+", re.IGNORECASE)
 UNICODE_TRICK_REGEX = re.compile(r"[\u202A-\u202E\u2066-\u2069]")
 
 logger = logging.getLogger(__name__)
-if not logger.handlers:
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
-    logger.addHandler(handler)
-logger.setLevel(logging.INFO)
-logger.propagate = True
 
 
 # ==================================================
@@ -331,8 +325,8 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     if danger:
         try:
             await message.delete()
-        except Exception:
-            pass
+        except discord.HTTPException as e:
+            logger.warning("[security] message delete failed: %s", e)
         await strip_roles(member)
 
     embed = build_final_embed(vt_results, gpt_result, reason_flags, logs)
@@ -340,13 +334,13 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
         try:
             if progress_msg:
                 await progress_msg.edit(embed=embed)
-        except Exception:
-            pass
+        except discord.HTTPException as e:
+            logger.warning("[security] progress_msg edit failed: %s", e)
     if danger:
         try:
             await message.channel.send(embed=embed)
-        except Exception:
-            pass
+        except discord.HTTPException as e:
+            logger.warning("[security] danger embed send failed: %s", e)
 
     try:
         await log_action(

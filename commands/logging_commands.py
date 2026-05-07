@@ -4,6 +4,7 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Bot
 
+from commands.guards import ensure_admin as _ensure_admin_in_guild
 from services.logging_service import get_log_settings, set_log_channel, set_log_level
 from services.settings_store import (
     add_bypass_roles,
@@ -15,18 +16,6 @@ from services.settings_store import (
     remove_trusted_users,
     set_response_channel_id,
 )
-
-
-async def _ensure_admin_in_guild(interaction: discord.Interaction) -> bool:
-    if interaction.guild is None:
-        await interaction.response.send_message("ギルド内でのみ使用可能だ。", ephemeral=True)
-        return False
-
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("このコマンドは管理者のみが実行できる。", ephemeral=True)
-        return False
-
-    return True
 
 
 async def _update_entity_list(

@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from io import BytesIO
 from typing import Dict, Mapping, Optional
 
@@ -11,20 +11,17 @@ try:
 except ImportError:  # ライブラリ未導入時は色抽出をスキップ
     ColorThief = None  # type: ignore[assignment]
 
+from config import JST as _JST
 from services.settings_store import get_guild_settings, update_guild_settings
 
 logger = logging.getLogger(__name__)
 
-# ログレベルの優先度
 _LEVEL_PRIORITY = {
     "NONE": 0,
     "ERROR": 1,
     "INFO": 2,
     "DEBUG": 3,
 }
-
-# JST（日本時間）
-_JST = timezone(timedelta(hours=9))
 
 # ユーザーごとの代表色キャッシュ {user_id: 0xRRGGBB}（最大1024件でLRU）
 _USER_COLOR_CACHE: Dict[int, int] = {}
@@ -36,7 +33,6 @@ def _get_default_settings() -> Dict[str, Optional[int | str]]:
 
 
 def get_log_settings(guild_id: int) -> Dict[str, Optional[int | str]]:
-    """ギルドの現在のログ設定を取得（JSON から読み出し）"""
     raw = get_guild_settings(guild_id)
     level = str(raw.get("log_level", "INFO")).upper()
     channel_id = raw.get("log_channel_id")
@@ -47,12 +43,10 @@ def get_log_settings(guild_id: int) -> Dict[str, Optional[int | str]]:
 
 
 def set_log_channel(guild_id: int, channel_id: int | None) -> None:
-    """ログを投稿するチャンネルを設定/解除し、JSON に保存"""
     update_guild_settings(guild_id, {"log_channel_id": channel_id})
 
 
 def set_log_level(guild_id: int, level: str) -> None:
-    """ログレベルを設定し、JSON に保存"""
     upper = level.upper()
     if upper not in _LEVEL_PRIORITY:
         raise ValueError(f"不正なログレベル: {level}. 使用可能: NONE, ERROR, INFO, DEBUG")
@@ -166,10 +160,6 @@ async def log_action(
 
     jst_now = datetime.now(_JST)
 
-    # Embedカラー決定ロジック:
-    # 1. embed_color が指定されていればそれを使用
-    # 2. なければユーザーのアバター色（取得成功時）
-    # 3. それもなければログレベルに応じたデフォルト色
     user_color = None
     if embed_color is None:
         user_color = await _user_avatar_color(user)
@@ -181,7 +171,6 @@ async def log_action(
         color=base_color,
     )
 
-    # ユーザー情報があればAuthorとして表示（アイコン付き）
     if user is not None:
         try:
             avatar_url = str(user.display_avatar.url)  # type: ignore[attr-defined]
@@ -189,7 +178,6 @@ async def log_action(
         except Exception:
             embed.set_author(name=str(user))
 
-    # 追加フィールド
     if fields:
         for name, value in fields.items():
             embed.add_field(name=name, value=value, inline=False)

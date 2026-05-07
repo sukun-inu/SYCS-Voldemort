@@ -82,6 +82,24 @@ def update_guild_settings(guild_id: int, updates: Dict[str, Any]) -> Dict[str, A
     return dict(current)
 
 
+def _update_nested(guild_id: int, top_key: str, patch: Dict[str, Any]) -> None:
+    s = get_guild_settings(guild_id).get(top_key, {})
+    s.update(patch)
+    update_guild_settings(guild_id, {top_key: s})
+
+
+def _parse_id_list(raw: Any) -> list[int]:
+    if not isinstance(raw, list):
+        return []
+    result: list[int] = []
+    for v in raw:
+        try:
+            result.append(int(v))
+        except (TypeError, ValueError):
+            continue
+    return result
+
+
 def get_response_channel_id(guild_id: int) -> int:
     """ChatGPT応答チャンネルIDを取得（未設定なら0を返す）。"""
     value = get_guild_settings(guild_id).get("response_channel_id")
@@ -97,17 +115,7 @@ def set_response_channel_id(guild_id: int, channel_id: int | None) -> Dict[str, 
 
 
 def get_trusted_user_ids(guild_id: int) -> list[int]:
-    """信頼済みユーザーIDのリストを取得。"""
-    ids = get_guild_settings(guild_id).get("trusted_user_ids") or []
-    if not isinstance(ids, list):
-        return []
-    result: list[int] = []
-    for v in ids:
-        try:
-            result.append(int(v))
-        except (TypeError, ValueError):
-            continue
-    return result
+    return _parse_id_list(get_guild_settings(guild_id).get("trusted_user_ids"))
 
 
 def set_trusted_user_ids(guild_id: int, ids: list[int]) -> Dict[str, Any]:
@@ -136,17 +144,7 @@ def remove_trusted_users(guild_id: int, user_ids: list[int]) -> list[int]:
 
 
 def get_bypass_role_ids(guild_id: int) -> list[int]:
-    """セキュリティチェックをバイパスするロールIDのリストを取得。"""
-    ids = get_guild_settings(guild_id).get("bypass_role_ids") or []
-    if not isinstance(ids, list):
-        return []
-    result: list[int] = []
-    for v in ids:
-        try:
-            result.append(int(v))
-        except (TypeError, ValueError):
-            continue
-    return result
+    return _parse_id_list(get_guild_settings(guild_id).get("bypass_role_ids"))
 
 
 def set_bypass_role_ids(guild_id: int, role_ids: list[int]) -> Dict[str, Any]:
@@ -183,15 +181,11 @@ def get_welcome_settings(guild_id: int) -> Dict[str, Any]:
 
 
 def set_welcome_channel(guild_id: int, channel_id: int | None) -> None:
-    s = get_guild_settings(guild_id).get("welcome", {})
-    s["channel_id"] = channel_id
-    update_guild_settings(guild_id, {"welcome": s})
+    _update_nested(guild_id, "welcome", {"channel_id": channel_id})
 
 
 def set_welcome_message(guild_id: int, message: str | None) -> None:
-    s = get_guild_settings(guild_id).get("welcome", {})
-    s["message"] = message
-    update_guild_settings(guild_id, {"welcome": s})
+    _update_nested(guild_id, "welcome", {"message": message})
 
 
 def get_goodbye_settings(guild_id: int) -> Dict[str, Any]:
@@ -199,15 +193,11 @@ def get_goodbye_settings(guild_id: int) -> Dict[str, Any]:
 
 
 def set_goodbye_channel(guild_id: int, channel_id: int | None) -> None:
-    s = get_guild_settings(guild_id).get("goodbye", {})
-    s["channel_id"] = channel_id
-    update_guild_settings(guild_id, {"goodbye": s})
+    _update_nested(guild_id, "goodbye", {"channel_id": channel_id})
 
 
 def set_goodbye_message(guild_id: int, message: str | None) -> None:
-    s = get_guild_settings(guild_id).get("goodbye", {})
-    s["message"] = message
-    update_guild_settings(guild_id, {"goodbye": s})
+    _update_nested(guild_id, "goodbye", {"message": message})
 
 
 # ──────────────────────────────────────────────
@@ -342,18 +332,12 @@ def get_earthquake_settings(guild_id: int) -> Dict[str, Any]:
 
 
 def set_earthquake_channel(guild_id: int, channel_id: int | None) -> None:
-    s = get_guild_settings(guild_id).get("earthquake", {})
-    s["channel_id"] = channel_id
-    update_guild_settings(guild_id, {"earthquake": s})
+    _update_nested(guild_id, "earthquake", {"channel_id": channel_id})
 
 
 def set_earthquake_min_scale(guild_id: int, scale: int) -> None:
-    s = get_guild_settings(guild_id).get("earthquake", {})
-    s["min_scale"] = scale
-    update_guild_settings(guild_id, {"earthquake": s})
+    _update_nested(guild_id, "earthquake", {"min_scale": scale})
 
 
 def set_earthquake_last_event_id(guild_id: int, event_id: str) -> None:
-    s = get_guild_settings(guild_id).get("earthquake", {})
-    s["last_event_id"] = event_id
-    update_guild_settings(guild_id, {"earthquake": s})
+    _update_nested(guild_id, "earthquake", {"last_event_id": event_id})

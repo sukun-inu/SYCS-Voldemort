@@ -28,7 +28,7 @@ def _cleanup_stale_instances() -> None:
         _user_last_used.pop(key, None)
 
 
-async def handle_chatgpt_message(bot, message: discord.Message):
+async def handle_chatgpt_message(bot: discord.Client, message: discord.Message):
     if message.author == bot.user:
         return
 

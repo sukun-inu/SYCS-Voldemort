@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from datetime import timezone, timedelta
 
 import discord
 import psutil
@@ -12,11 +11,11 @@ from services.logging_service import log_action
 from services.news_service import run_news_feeds
 from services.reaction_role_service import handle_reaction_add, handle_reaction_remove
 from services.security_service import handle_security_for_message, handle_security_for_voice_join
+from config import JST as _JST
 from services.settings_store import get_vc_notify_channel_id
 from services.sticky_service import handle_sticky
 from services.welcome_service import send_goodbye, send_welcome
 
-_JST = timezone(timedelta(hours=9))
 logger = logging.getLogger(__name__)
 
 
@@ -31,7 +30,7 @@ def create_bot() -> Bot:
 
 
 def setup_events(bot: Bot) -> None:
-    _ws_task: list[asyncio.Task] = []
+    _ws_task: asyncio.Task | None = None
 
     # --------------------------
     # ステータス更新
@@ -62,16 +61,15 @@ def setup_events(bot: Bot) -> None:
 
     @bot.event
     async def on_ready():
+        nonlocal _ws_task
         logger.info("[BOT] Logged in as %s", bot.user)
         await bot.tree.sync()
         if not update_status.is_running():
             update_status.start()
         if not news_feed_task.is_running():
             news_feed_task.start()
-        if not _ws_task or _ws_task[0].done():
-            if _ws_task:
-                _ws_task.clear()
-            _ws_task.append(asyncio.create_task(run_earthquake_ws(bot)))
+        if _ws_task is None or _ws_task.done():
+            _ws_task = asyncio.create_task(run_earthquake_ws(bot))
 
     # --------------------------
     # メッセージ（司令塔）

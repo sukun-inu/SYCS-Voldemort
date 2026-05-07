@@ -1,12 +1,10 @@
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from typing import Dict, List
-
-_JST = timezone(timedelta(hours=9))
 
 from groq import AsyncGroq
 
-from config import CHATGPT_SYSTEM_MESSAGE, GROQ_API_KEY
+from config import CHATGPT_SYSTEM_MESSAGE, GROQ_API_KEY, JST as _JST
 
 logger = logging.getLogger(__name__)
 

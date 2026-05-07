@@ -1,6 +1,9 @@
 import os
 from dataclasses import dataclass
+from datetime import timezone, timedelta
 from typing import Dict, Mapping, Optional
+
+JST = timezone(timedelta(hours=9))
 
 
 def _read_env(key: str) -> Optional[str]:

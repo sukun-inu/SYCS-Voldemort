@@ -73,33 +73,35 @@ async def _notify_all_guilds(bot: Bot, event: dict) -> None:
     embed.add_field(name="発生時刻", value=origin_time, inline=False)
     embed.set_footer(text="情報提供: P2PQuake")
 
+    targets: list[tuple[int, discord.TextChannel]] = []
     for guild_id in get_all_guild_ids():
         s = get_earthquake_settings(guild_id)
         channel_id = s.get("channel_id")
         if not channel_id:
             continue
-        min_scale = int(s.get("min_scale", 30))
-        if max_scale < min_scale:
+        if max_scale < int(s.get("min_scale", 30)):
             continue
-
         guild = bot.get_guild(guild_id)
         if guild is None:
             continue
         channel = guild.get_channel(int(channel_id))
         if not isinstance(channel, discord.TextChannel):
             continue
+        targets.append((guild_id, channel))
 
-        try:
-            await channel.send(embed=embed)
-        except Exception as e:
-            logger.exception("[earthquake] send error guild=%s: %s", guild_id, e)
+    results = await asyncio.gather(
+        *(ch.send(embed=embed) for _, ch in targets),
+        return_exceptions=True,
+    )
+    for (guild_id, _), result in zip(targets, results):
+        if isinstance(result, Exception):
+            logger.exception("[earthquake] send error guild=%s: %s", guild_id, result)
 
 
 async def run_earthquake_ws(bot: Bot) -> None:
-    """P2PQuake WebSocket に常時接続し、地震情報をリアルタイムで受信・通知する。切断時は自動再接続。"""
-    while True:
-        try:
-            async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
                 async with session.ws_connect(_WS_URL, heartbeat=30) as ws:
                     logger.info("[earthquake] WebSocket接続確立")
                     async for msg in ws:
@@ -113,8 +115,8 @@ async def run_earthquake_ws(bot: Bot) -> None:
                         elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
                             logger.warning("[earthquake] WebSocket切断: type=%s", msg.type)
                             break
-        except Exception as e:
-            logger.exception("[earthquake] WebSocket接続エラー: %s", e)
+            except Exception as e:
+                logger.exception("[earthquake] WebSocket接続エラー: %s", e)
 
-        logger.info("[earthquake] 10秒後に再接続します")
-        await asyncio.sleep(10)
+            logger.info("[earthquake] 10秒後に再接続します")
+            await asyncio.sleep(10)

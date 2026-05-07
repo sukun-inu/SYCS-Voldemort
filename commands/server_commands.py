@@ -1,12 +1,13 @@
 import uuid
-from datetime import timezone, timedelta
 from typing import Optional
 
 import discord
 from discord import app_commands
 from discord.ext.commands import Bot
 
-from services.sticky_service import post_sticky
+from commands.guards import ensure_admin as _ensure_admin
+from config import JST as _JST
+from services.sticky_service import delete_sticky, post_sticky
 from services.settings_store import (
     add_news_feed,
     add_reaction_role,
@@ -19,7 +20,6 @@ from services.settings_store import (
     get_welcome_settings,
     remove_news_feed,
     remove_reaction_role,
-    remove_sticky_message,
     set_earthquake_channel,
     set_earthquake_min_scale,
     set_goodbye_channel,
@@ -29,18 +29,6 @@ from services.settings_store import (
     set_welcome_channel,
     set_welcome_message,
 )
-
-_JST = timezone(timedelta(hours=9))
-
-
-async def _ensure_admin(interaction: discord.Interaction) -> bool:
-    if interaction.guild is None:
-        await interaction.response.send_message("ギルド内でのみ使用可能だ。", ephemeral=True)
-        return False
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("このコマンドは管理者のみが実行できる。", ephemeral=True)
-        return False
-    return True
 
 
 def register_server_commands(bot: Bot) -> None:
@@ -138,16 +126,8 @@ def register_server_commands(bot: Bot) -> None:
         if not isinstance(interaction.channel, discord.TextChannel):
             await interaction.response.send_message("テキストチャンネルで使用してください。", ephemeral=True)
             return
-        stickies = get_sticky_messages(interaction.guild.id)
-        entry = stickies.get(str(interaction.channel.id))
-        if entry and entry.get("message_id"):
-            try:
-                old_msg = await interaction.channel.fetch_message(entry["message_id"])
-                await old_msg.delete()
-            except (discord.NotFound, discord.HTTPException):
-                pass
-        remove_sticky_message(interaction.guild.id, interaction.channel.id)
         await interaction.response.send_message("スティッキーメッセージを解除した。", ephemeral=True)
+        await delete_sticky(interaction.channel, interaction.guild.id)
 
     @bot.tree.command(name="list_stickies", description="スティッキーメッセージ一覧を表示（管理者専用）")
     async def list_stickies_cmd(interaction: discord.Interaction):

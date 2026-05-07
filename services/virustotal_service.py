@@ -33,8 +33,8 @@ def _vt_cache_get(key: str) -> Optional[Dict[str, Any]]:
 
 
 def _vt_cache_set(key: str, data: Dict[str, Any]) -> None:
-    _vt_cache[key] = {"time": time.time(), "data": data}
     now = time.time()
+    _vt_cache[key] = {"time": now, "data": data}
     expired = [k for k, v in list(_vt_cache.items()) if now - v["time"] > VT_CACHE_TTL]
     for k in expired:
         _vt_cache.pop(k, None)
