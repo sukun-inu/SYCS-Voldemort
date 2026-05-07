@@ -115,7 +115,7 @@ def register_server_commands(bot: Bot) -> None:
         if not isinstance(interaction.channel, discord.TextChannel):
             await interaction.response.send_message("テキストチャンネルで使用してください。", ephemeral=True)
             return
-        set_sticky_message(interaction.guild.id, interaction.channel.id, content)
+        set_sticky_message(interaction.guild.id, interaction.channel.id, content.replace("\\n", "\n"))
         await interaction.response.send_message("スティッキーメッセージを設定した。", ephemeral=True)
         await post_sticky(interaction.channel, interaction.guild.id)
 
