@@ -1,11 +1,18 @@
 {% extends "base.html" %}
 {% block title %}ダッシュボード{% endblock %}
 {% block content %}
+
+<!-- Page Header -->
 <div class="page-header">
-  <h2 class="h4 fw-bold mb-1"><i class="bi bi-grid-3x3-gap-fill me-2"></i>ダッシュボード</h2>
-  <p class="text-muted small mb-0">{{ session.guild_name }} の現在の設定概要</p>
+  <div class="d-flex align-items-center justify-content-between">
+    <div>
+      <h2 class="h3 fw-bold mb-1"><i class="bi bi-grid-3x3-gap-fill me-2"></i>ダッシュボード</h2>
+      <p class="text-muted small mb-0">{{ session.guild_name }} の現在の設定概要</p>
+    </div>
+  </div>
 </div>
 
+<!-- Stats Grid -->
 <div class="row g-3">
   {% set cards = [
     ("bi-journal-text", "accent", "ログ設定", "settings.logging_settings",
@@ -34,26 +41,53 @@
 
   {% for icon, color, title, endpoint, items in cards %}
   <div class="col-md-6 col-xl-4">
-    <div class="card stat-card h-100">
+    <div class="card stat-card h-100 shadow-sm">
       <div class="card-body">
-        <div class="d-flex align-items-center gap-3 mb-3">
-          <div class="stat-icon stat-icon-{{ color }}">
+        <!-- Card Header with Icon and Title -->
+        <div class="d-flex align-items-start gap-3 mb-4">
+          <div class="stat-icon stat-icon-{{ color }}" style="min-width: 44px;">
             <i class="bi {{ icon }}"></i>
           </div>
-          <h6 class="fw-bold mb-0">{{ title }}</h6>
-          <a href="{{ url_for(endpoint) }}" class="btn btn-sm btn-outline-secondary ms-auto py-0">
-            <i class="bi bi-pencil"></i>
+          <div class="flex-grow-1">
+            <h6 class="card-title fw-bold mb-0">{{ title }}</h6>
+          </div>
+          <a href="{{ url_for(endpoint) }}" class="btn btn-sm btn-outline-secondary py-1 px-2 ms-2" title="設定を編集">
+            <i class="bi bi-pencil-square"></i>
           </a>
         </div>
-        {% for label, value in items %}
-        <div class="d-flex justify-content-between small mb-1">
-          <span class="text-muted">{{ label }}</span>
-          <span class="fw-medium">{{ value }}</span>
+
+        <!-- Card Content -->
+        <div class="space-y-2">
+          {% for label, value in items %}
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted small fw-500">{{ label }}</span>
+            <span class="fw-600 text-end">
+              {% if value == "未設定" or value == "未設定（全チャンネル）" %}
+              <span class="badge bg-light text-muted">{{ value }}</span>
+              {% else %}
+              {{ value }}
+              {% endif %}
+            </span>
+          </div>
+          {% endfor %}
         </div>
-        {% endfor %}
       </div>
     </div>
   </div>
   {% endfor %}
 </div>
+
+<!-- Quick Actions Section (optional) -->
+<div class="mt-5 pt-4 border-top" style="border-color: var(--separator);">
+  <h5 class="fw-bold mb-3">クイックアクション</h5>
+  <div class="d-flex flex-wrap gap-2">
+    <a href="{{ url_for('settings.logging_settings') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-gear me-2"></i>設定を編集
+    </a>
+    <a href="{{ url_for('dashboard.guild_select') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-repeat me-2"></i>ギルドを切り替え
+    </a>
+  </div>
+</div>
+
 {% endblock %}

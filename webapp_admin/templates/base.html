@@ -12,92 +12,177 @@
 </head>
 <body>
 
+<!-- ─── Top Navigation ─────────────────────────────── -->
 <nav class="navbar navbar-expand-lg navbar-dark fixed-top px-3" id="topnav">
-  <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="{{ url_for('dashboard.index') }}">
+  <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="{{ url_for('dashboard.index') }}" title="ダッシュボード">
     <i class="bi bi-robot fs-5"></i>
-    <span>SYCS Voldemort</span>
+    <span class="d-none d-md-inline">SYCS Voldemort</span>
   </a>
 
-  <div class="ms-auto d-flex align-items-center gap-3">
+  <!-- Sidebar toggle button (mobile) -->
+  <button class="btn btn-sm btn-outline-light d-lg-none ms-auto" id="sidebar-toggle" type="button" aria-label="サイドバーを切り替える">
+    <i class="bi bi-list"></i>
+  </button>
+
+  <div class="ms-auto d-flex align-items-center gap-2 gap-md-3">
     {% if session.guild_id %}
+    <!-- Guild selector -->
     <div class="d-flex align-items-center gap-2 text-light small">
       {% if session.guild_icon %}
       <img src="https://cdn.discordapp.com/icons/{{ session.guild_id }}/{{ session.guild_icon }}.webp?size=32"
-           class="rounded-circle" width="22" height="22" alt="">
+           class="rounded-circle" width="22" height="22" alt="{{ session.guild_name }}" title="{{ session.guild_name }}">
       {% endif %}
-      <span class="text-truncate" style="max-width:160px">{{ session.guild_name }}</span>
-      <a href="{{ url_for('dashboard.guild_select') }}" class="btn btn-sm btn-outline-light py-0">
+      <span class="text-truncate d-none d-md-inline" style="max-width:160px">{{ session.guild_name }}</span>
+      <a href="{{ url_for('dashboard.guild_select') }}" class="btn btn-sm btn-outline-light py-0" title="別のギルドを選択">
         <i class="bi bi-arrow-repeat"></i>
       </a>
     </div>
     {% endif %}
 
     {% if session.user %}
-    <div class="d-flex align-items-center gap-2">
-      {% if session.user.avatar %}
-      <img src="https://cdn.discordapp.com/avatars/{{ session.user.id }}/{{ session.user.avatar }}.webp?size=32"
-           class="rounded-circle" width="28" height="28" alt="">
-      {% endif %}
-      <span class="text-light small d-none d-md-inline">
-        {{ session.user.global_name or session.user.username }}
-      </span>
-      <a href="{{ url_for('auth.logout') }}" class="btn btn-sm btn-outline-danger py-0">
-        <i class="bi bi-box-arrow-right"></i>
-      </a>
+    <!-- User menu -->
+    <div class="dropdown d-flex align-items-center gap-2">
+      <button class="btn btn-sm btn-outline-light py-0 px-2" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="ユーザーメニュー">
+        {% if session.user.avatar %}
+        <img src="https://cdn.discordapp.com/avatars/{{ session.user.id }}/{{ session.user.avatar }}.webp?size=32"
+             class="rounded-circle me-2" width="24" height="24" alt="">
+        {% endif %}
+        <span class="text-light small d-none d-lg-inline">{{ session.user.global_name or session.user.username }}</span>
+        <i class="bi bi-chevron-down text-light small ms-1"></i>
+      </button>
+      <div class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+        <h6 class="dropdown-header text-muted">{{ session.user.global_name or session.user.username }}</h6>
+        <hr class="dropdown-divider">
+        <a class="dropdown-item" href="{{ url_for('auth.logout') }}">
+          <i class="bi bi-box-arrow-right me-2"></i>ログアウト
+        </a>
+      </div>
     </div>
     {% endif %}
   </div>
 </nav>
 
+<!-- ─── Main Layout ────────────────────────────────── -->
 <div class="d-flex" style="padding-top:56px; min-height:100vh">
 
+  <!-- ─── Sidebar ────────────────────────────── -->
   {% if session.guild_id %}
   <nav id="sidebar" class="d-flex flex-column py-3 px-2">
     <ul class="nav flex-column gap-1">
+      <!-- Dashboard -->
       <li>
-        <a class="nav-link sidebar-link {% if request.endpoint == 'dashboard.overview' %}active{% endif %}"
-           href="{{ url_for('dashboard.overview') }}">
+        <a class="nav-link sidebar-link {% if request.endpoint == 'dashboard.index' or request.endpoint == 'dashboard.overview' %}active{% endif %}"
+           href="{{ url_for('dashboard.overview') }}" title="ダッシュボード">
           <i class="bi bi-grid-3x3-gap-fill"></i><span>ダッシュボード</span>
         </a>
       </li>
 
+      <!-- Logging & Notifications Section -->
       <li class="sidebar-section">ログ・通知</li>
       <li>
         <a class="nav-link sidebar-link {% if request.endpoint == 'settings.logging_settings' %}active{% endif %}"
-           href="{{ url_for('settings.logging_settings') }}">
+           href="{{ url_for('settings.logging_settings') }}" title="ログ設定">
           <i class="bi bi-journal-text"></i><span>ログ設定</span>
         </a>
       </li>
       <li>
         <a class="nav-link sidebar-link {% if request.endpoint == 'settings.welcome_settings' %}active{% endif %}"
-           href="{{ url_for('settings.welcome_settings') }}">
+           href="{{ url_for('settings.welcome_settings') }}" title="ウェルカム・グッバイメッセージ">
           <i class="bi bi-person-plus-fill"></i><span>ウェルカム/グッバイ</span>
         </a>
       </li>
       <li>
         <a class="nav-link sidebar-link {% if request.endpoint == 'settings.vc_notify' %}active{% endif %}"
-           href="{{ url_for('settings.vc_notify') }}">
+           href="{{ url_for('settings.vc_notify') }}" title="ボイスチャンネル通知">
           <i class="bi bi-mic-fill"></i><span>VC 通知</span>
         </a>
       </li>
       <li>
         <a class="nav-link sidebar-link {% if request.endpoint == 'settings.earthquake' %}active{% endif %}"
-           href="{{ url_for('settings.earthquake') }}">
+           href="{{ url_for('settings.earthquake') }}" title="地震アラート設定">
           <i class="bi bi-exclamation-triangle-fill"></i><span>地震アラート</span>
         </a>
       </li>
       <li>
         <a class="nav-link sidebar-link {% if request.endpoint == 'settings.news_feeds' %}active{% endif %}"
-           href="{{ url_for('settings.news_feeds') }}">
+           href="{{ url_for('settings.news_feeds') }}" title="ニュースフィード設定">
           <i class="bi bi-newspaper"></i><span>ニュースフィード</span>
         </a>
       </li>
 
+      <!-- Channel Features Section -->
       <li class="sidebar-section">チャンネル機能</li>
       <li>
         <a class="nav-link sidebar-link {% if request.endpoint == 'settings.sticky' %}active{% endif %}"
-           href="{{ url_for('settings.sticky') }}">
+           href="{{ url_for('settings.sticky') }}" title="スティッキーメッセージ">
           <i class="bi bi-pin-angle-fill"></i><span>スティッキー</span>
+        </a>
+      </li>
+      <li>
+        <a class="nav-link sidebar-link {% if request.endpoint == 'settings.reaction_roles' %}active{% endif %}"
+           href="{{ url_for('settings.reaction_roles') }}" title="リアクションロール">
+          <i class="bi bi-emoji-smile-fill"></i><span>リアクションロール</span>
+        </a>
+      </li>
+
+      <!-- Security Section -->
+      <li class="sidebar-section">セキュリティ</li>
+      <li>
+        <a class="nav-link sidebar-link {% if request.endpoint == 'settings.security_settings' %}active{% endif %}"
+           href="{{ url_for('settings.security_settings') }}" title="セキュリティ設定">
+          <i class="bi bi-shield-fill-check"></i><span>セキュリティ設定</span>
+        </a>
+      </li>
+    </ul>
+
+    <!-- Sidebar footer -->
+    <div class="mt-auto pt-3 border-top" style="border-color: var(--separator);">
+      <small class="text-muted d-block text-center" style="font-size: 0.75rem;">
+        v1.0 • Apple Design
+      </small>
+    </div>
+  </nav>
+  {% endif %}
+
+  <!-- ─── Main Content ───────────────────────────── -->
+  <main class="flex-grow-1 p-4" style="min-width:0">
+    {% with messages = get_flashed_messages(with_categories=True) %}
+    {% if messages %}
+    <div class="mb-4">
+      {% for cat, msg in messages %}
+      <div class="alert alert-{{ cat }} alert-dismissible fade show mb-3" role="alert" data-bs-dismiss="alert">
+        <div class="d-flex align-items-start gap-2">
+          {% if cat == 'success' %}
+          <i class="bi bi-check-circle-fill text-success flex-shrink-0 mt-1"></i>
+          {% elif cat == 'danger' %}
+          <i class="bi bi-exclamation-circle-fill text-danger flex-shrink-0 mt-1"></i>
+          {% elif cat == 'warning' %}
+          <i class="bi bi-exclamation-triangle-fill text-warning flex-shrink-0 mt-1"></i>
+          {% elif cat == 'info' %}
+          <i class="bi bi-info-circle-fill text-info flex-shrink-0 mt-1"></i>
+          {% endif %}
+          <div class="flex-grow-1">
+            {{ msg }}
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <!-- Page Content Block -->
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<!-- ─── Scripts ────────────────────────────────────── -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='admin.js') }}"></script>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>
         </a>
       </li>
       <li>

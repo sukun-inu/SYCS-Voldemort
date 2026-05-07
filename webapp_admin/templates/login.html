@@ -5,34 +5,71 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ログイン — SYCS Voldemort</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
 </head>
-<body class="d-flex align-items-center justify-content-center" style="min-height:100vh">
-<div class="login-card text-center p-5">
-  <div class="mb-4">
-    <i class="bi bi-robot" style="font-size:3rem;color:var(--accent)"></i>
-    <h1 class="h3 mt-2 fw-bold">SYCS Voldemort</h1>
-    <p class="text-muted small">Bot 管理ダッシュボード</p>
+<body class="d-flex align-items-center justify-content-center" style="min-height:100vh; background: var(--bg)">
+
+<!-- Background decoration -->
+<div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: radial-gradient(circle at 20% 50%, rgba(0,122,255,0.05) 0%, transparent 50%); pointer-events: none;"></div>
+
+<!-- Login Container -->
+<div class="login-wrapper">
+  <div class="login-card">
+    <!-- Logo & Title -->
+    <div class="mb-5 text-center">
+      <div class="mb-3">
+        <i class="bi bi-robot" style="font-size: 3rem; color: var(--accent);"></i>
+      </div>
+      <h1 class="h2 fw-bold mb-1" style="letter-spacing: -0.5px;">SYCS Voldemort</h1>
+      <p class="text-muted mb-0" style="font-size: 0.875rem;">Bot 管理ダッシュボード</p>
+    </div>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=True) %}
+    {% if messages %}
+    <div class="mb-4">
+      {% for cat, msg in messages %}
+      <div class="alert alert-{{ cat }} alert-dismissible fade show" role="alert">
+        <div class="d-flex align-items-start gap-2">
+          {% if cat == 'danger' %}
+          <i class="bi bi-exclamation-circle-fill flex-shrink-0 mt-1"></i>
+          {% elif cat == 'warning' %}
+          <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
+          {% else %}
+          <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
+          {% endif %}
+          <div class="flex-grow-1">{{ msg }}</div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <!-- Login Button -->
+    <a href="{{ url_for('auth.oauth_start') }}" class="btn btn-discord btn-lg w-100 fw-600 py-3 mb-3" style="font-size: 0.95rem; letter-spacing: -0.2px;">
+      <svg class="me-2" width="18" height="18" viewBox="0 0 71 55" fill="currentColor">
+        <path d="M60.1 4.9A58.5 58.5 0 0 0 45.5.9a40.3 40.3 0 0 0-1.8 3.7 54.2 54.2 0 0 0-16.3 0A38.7 38.7 0 0 0 25.6.9 58.4 58.4 0 0 0 11 4.9C1.6 18.9-1 32.5.3 45.9A58.8 58.8 0 0 0 17.9 54a43.6 43.6 0 0 0 3.8-6.1 38.3 38.3 0 0 1-6-2.9l1.4-1.1a41.9 41.9 0 0 0 35.8 0l1.5 1.1a38.2 38.2 0 0 1-6 2.9 43.5 43.5 0 0 0 3.8 6.1A58.7 58.7 0 0 0 70.7 45.9C72.2 30.3 68 16.8 60.1 4.9ZM23.7 37.8c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.3 6.4 7.2c0 4-2.8 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.3 6.4 7.2c0 4-2.8 7.2-6.4 7.2Z"/>
+      </svg>
+      Discord でログイン
+    </a>
+
+    <!-- Info Message -->
+    <p class="text-muted text-center" style="font-size: 0.75rem; line-height: 1.5; margin-bottom: 0;">
+      <i class="bi bi-info-circle me-1"></i>
+      Bot が参加しているサーバーで管理者権限が必要です。
+    </p>
+
+    <!-- Footer -->
+    <hr class="my-4" style="opacity: 0.5; border-color: var(--separator);">
+    <div class="text-center" style="font-size: 0.75rem; color: var(--muted);">
+      <p class="mb-0">Apple Design for Modern Management</p>
+    </div>
   </div>
-
-  {% with messages = get_flashed_messages(with_categories=True) %}
-  {% if messages %}
-  {% for cat, msg in messages %}
-  <div class="alert alert-{{ cat }} mb-3">{{ msg }}</div>
-  {% endfor %}
-  {% endif %}
-  {% endwith %}
-
-  <a href="{{ url_for('auth.oauth_start') }}" class="btn btn-discord btn-lg w-100">
-    <svg class="me-2" width="20" height="20" viewBox="0 0 71 55" fill="currentColor">
-      <path d="M60.1 4.9A58.5 58.5 0 0 0 45.5.9a40.3 40.3 0 0 0-1.8 3.7 54.2 54.2 0 0 0-16.3 0A38.7 38.7 0 0 0 25.6.9 58.4 58.4 0 0 0 11 4.9C1.6 18.9-1 32.5.3 45.9A58.8 58.8 0 0 0 17.9 54a43.6 43.6 0 0 0 3.8-6.1 38.3 38.3 0 0 1-6-2.9l1.4-1.1a41.9 41.9 0 0 0 35.8 0l1.5 1.1a38.2 38.2 0 0 1-6 2.9 43.5 43.5 0 0 0 3.8 6.1A58.7 58.7 0 0 0 70.7 45.9C72.2 30.3 68 16.8 60.1 4.9ZM23.7 37.8c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.3 6.4 7.2c0 4-2.8 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.3 6.4 7.2c0 4-2.8 7.2-6.4 7.2Z"/>
-    </svg>
-    Discord でログイン
-  </a>
-  <p class="mt-3 text-muted" style="font-size:.75rem">
-    Bot が参加しているサーバーで管理者権限が必要です。
-  </p>
 </div>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
