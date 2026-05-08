@@ -65,10 +65,25 @@ def create_app() -> Flask:
     from webapp_admin.views.djaudio_views import djaudio_bp, dlaudio_bp
     from webapp_admin.views.settings_views import settings_bp
 
-    from flask import redirect
+    from webapp_admin.auth import DISCORD_CLIENT_ID, get_bot_guild_count
+
+    def _invite_url() -> str | None:
+        if not DISCORD_CLIENT_ID:
+            return None
+        return (
+            "https://discord.com/api/oauth2/authorize"
+            f"?client_id={DISCORD_CLIENT_ID}"
+            "&permissions=8&scope=bot+applications.commands"
+        )
+
     @app.route("/")
-    def root_redirect():
-        return redirect("/admin")
+    def landing():
+        from flask import render_template
+        return render_template(
+            "landing.html",
+            invite_url=_invite_url(),
+            guild_count=get_bot_guild_count(),
+        )
 
     app.register_blueprint(auth_bp, url_prefix="/admin")
     app.register_blueprint(dashboard_bp, url_prefix="/admin")
