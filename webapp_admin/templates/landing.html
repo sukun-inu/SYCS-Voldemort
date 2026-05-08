@@ -98,10 +98,9 @@
   </div>
 </div>
 
-<div class="landing-body">
-
-  <!-- Features -->
-  <section class="landing-section">
+<!-- Features -->
+<section class="landing-section">
+  <div class="landing-inner">
     <p class="landing-section-kicker">Features</p>
     <h2>主な機能</h2>
     <div class="row g-3">
@@ -148,10 +147,12 @@
         </div>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- Setup -->
-  <section class="landing-section">
+<!-- Setup -->
+<section class="landing-section">
+  <div class="landing-inner">
     <p class="landing-section-kicker">Get started</p>
     <h2>はじめ方</h2>
     <ol class="doc-steps landing-steps">
@@ -172,10 +173,12 @@
       </a>
     </div>
     {% endif %}
-  </section>
+  </div>
+</section>
 
-  <!-- Links -->
-  <section class="landing-section landing-section-last">
+<!-- Links -->
+<section class="landing-section landing-section-last">
+  <div class="landing-inner">
     <div class="doc-links landing-footer-links">
       <a href="https://metals.kawasaki-n3t.f5.si/" class="btn btn-outline-primary" target="_blank" rel="noopener noreferrer">
         <i class="bi bi-graph-up"></i>貴金属価格トラッカー
@@ -192,9 +195,8 @@
       <span class="doc-legal-sep">·</span>
       <a href="{{ url_for('privacy') }}">プライバシーポリシー</a>
     </div>
-  </section>
-
-</div>
+  </div>
+</section>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
