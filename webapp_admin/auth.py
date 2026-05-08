@@ -1,9 +1,12 @@
+import logging
 import os
 import time
 from typing import Optional
 from urllib.parse import urlencode
 
 import requests as req
+
+logger = logging.getLogger(__name__)
 
 DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID", "")
 DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET", "")
@@ -108,15 +111,15 @@ def get_bot_guild_count() -> int:
             )
             resp.raise_for_status()
             count = len(resp.json())
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("get_bot_guild_count: Discord API 失敗、フォールバックを使用: %s", e)
 
     if count == 0:
         try:
             from services.settings_store import get_all_guild_ids
             count = len(get_all_guild_ids())
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("get_bot_guild_count: settings_store フォールバックも失敗: %s", e)
 
     _guild_count_cache = (count, now)
     return count

@@ -19,6 +19,7 @@ def _build_invite_url() -> str | None:
 
 
 @auth_bp.route("/login")
+@limiter.limit("30 per minute")
 def login():
     if "user" in session:
         return redirect(url_for("dashboard.index"))
@@ -26,16 +27,19 @@ def login():
 
 
 @auth_bp.route("/guide")
+@limiter.limit("60 per minute")
 def guide():
     return render_template("guide.html", invite_url=_build_invite_url())
 
 
 @auth_bp.route("/privacy")
+@limiter.limit("60 per minute")
 def privacy():
     return render_template("privacy.html", invite_url=_build_invite_url())
 
 
 @auth_bp.route("/terms")
+@limiter.limit("60 per minute")
 def terms():
     return render_template("terms.html", invite_url=_build_invite_url())
 
