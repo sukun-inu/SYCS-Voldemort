@@ -268,19 +268,29 @@ def register_logging_commands(bot: Bot) -> None:
 
     @bot.tree.command(name="bot_help", description="利用可能なスラッシュコマンド一覧を表示します")
     async def help_cmd(interaction: discord.Interaction):
-        commands = {}
+        all_commands: dict[str, str] = {}
         for cmd in bot.tree.walk_commands():
-            commands[cmd.name] = cmd.description or "(説明なし)"
+            all_commands[cmd.name] = cmd.description or "(説明なし)"
 
-        items = sorted(commands.items(), key=lambda x: x[0])
+        items = sorted(all_commands.items(), key=lambda x: x[0])
+        lines = [f"`/{name}` — {desc}" for name, desc in items]
 
-        embed = discord.Embed(
-            title="余が授けたコマンドの一覧",
-            description="余の力を借りられるコマンドだ。使いこなすがよい。",
-            color=discord.Color.blurple(),
+        chunk_size = 20
+        embeds: list[discord.Embed] = []
+        for i in range(0, len(lines), chunk_size):
+            chunk = lines[i : i + chunk_size]
+            is_first = i == 0
+            embed = discord.Embed(
+                title="余が授けたコマンドの一覧" if is_first else None,
+                description=(
+                    "余の力を借りられるコマンドだ。使いこなすがよい。\n\n" + "\n".join(chunk)
+                    if is_first
+                    else "\n".join(chunk)
+                ),
+                color=discord.Color.blurple(),
+            )
+            embeds.append(embed)
+
+        await interaction.response.send_message(
+            embeds=embeds, ephemeral=True, view=admin_site_view()
         )
-
-        for name, desc in items:
-            embed.add_field(name=f"/{name}", value=desc or "(説明なし)", inline=False)
-
-        await interaction.response.send_message(embed=embed, ephemeral=True, view=admin_site_view())
