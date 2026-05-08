@@ -2,7 +2,7 @@ import secrets
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
-from webapp_admin.auth import DISCORD_CLIENT_ID, exchange_code, get_admin_guilds, get_oauth_url, get_user_info
+from webapp_admin.auth import DISCORD_CLIENT_ID, exchange_code, get_admin_guilds, get_bot_guild_count, get_oauth_url, get_user_info
 from webapp_admin.extensions import limiter
 
 auth_bp = Blueprint("auth", __name__)
@@ -15,6 +15,15 @@ def _build_invite_url() -> str | None:
         "https://discord.com/api/oauth2/authorize"
         f"?client_id={DISCORD_CLIENT_ID}"
         "&permissions=8&scope=bot+applications.commands"
+    )
+
+
+@auth_bp.route("", strict_slashes=False)
+def landing():
+    return render_template(
+        "landing.html",
+        invite_url=_build_invite_url(),
+        guild_count=get_bot_guild_count(),
     )
 
 

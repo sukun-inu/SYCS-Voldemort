@@ -65,6 +65,11 @@ def create_app() -> Flask:
     from webapp_admin.views.djaudio_views import djaudio_bp, dlaudio_bp
     from webapp_admin.views.settings_views import settings_bp
 
+    from flask import redirect
+    @app.route("/")
+    def root_redirect():
+        return redirect("/admin/")
+
     app.register_blueprint(auth_bp, url_prefix="/admin")
     app.register_blueprint(dashboard_bp, url_prefix="/admin")
     app.register_blueprint(settings_bp, url_prefix="/admin/settings")

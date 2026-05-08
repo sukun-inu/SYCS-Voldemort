@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="description" content="貴金属価格・AI 会話・音楽ダウンロード・地震アラートなど多機能な Discord Bot。Web 管理画面で全機能を設定できます。">
+  <title>SYCS Voldemort — Discord Bot</title>
+  <link rel="icon" type="image/webp" href="{{ admin_asset_url('admin-icon.webp') }}">
+  <link rel="apple-touch-icon" href="{{ admin_asset_url('admin-icon.webp') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="{{ admin_asset_url('admin.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('guide.css') }}">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="topbar-leading">
+      <a class="brand-link" href="{{ url_for('auth.landing') }}">
+        <span class="brand-mark">
+          <img class="brand-mark-image" src="{{ admin_asset_url('admin-icon.webp') }}" width="28" height="28" alt="">
+        </span>
+        <span class="brand-name">SYCS Voldemort</span>
+      </a>
+    </div>
+    <div class="topbar-actions">
+      <a href="{{ url_for('auth.guide') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-book"></i>使い方ガイド
+      </a>
+      {% if invite_url %}
+      <a href="{{ invite_url }}" class="btn btn-sm btn-accent" target="_blank" rel="noopener noreferrer">
+        <i class="bi bi-plus-circle-fill"></i>招待
+      </a>
+      {% endif %}
+      <a href="{{ url_for('auth.login') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-gear-fill"></i>管理画面
+      </a>
+    </div>
+  </div>
+</header>
+
+<!-- Hero -->
+<div class="landing-hero">
+  <div class="landing-hero-logo">
+    <img src="{{ admin_asset_url('admin-icon.webp') }}" width="80" height="80" alt="SYCS Voldemort">
+  </div>
+  <h1>SYCS Voldemort</h1>
+  <p class="landing-hero-sub">ヴォルデモート卿がそなたのサーバーを支配する。<br>多機能 Discord Bot + Web 管理画面。</p>
+  {% if guild_count and guild_count > 0 %}
+  <div class="landing-stat">
+    <i class="bi bi-server"></i>{{ guild_count }} サーバーに導入済み
+  </div>
+  {% endif %}
+  <div class="landing-cta">
+    {% if invite_url %}
+    <a href="{{ invite_url }}" class="btn btn-accent btn-lg" target="_blank" rel="noopener noreferrer">
+      <i class="bi bi-plus-circle-fill"></i>Bot をサーバーに招待
+    </a>
+    {% endif %}
+    <a href="{{ url_for('auth.guide') }}" class="btn btn-outline-secondary btn-lg">
+      <i class="bi bi-book"></i>使い方ガイド
+    </a>
+    <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary btn-lg">
+      <i class="bi bi-gear-fill"></i>管理画面にログイン
+    </a>
+  </div>
+</div>
+
+<div class="landing-body">
+
+  <!-- Features -->
+  <section class="landing-section">
+    <p class="landing-section-kicker">Features</p>
+    <h2>主な機能</h2>
+    <div class="row g-3">
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="feature-card">
+          <div class="feature-card-icon"><i class="bi bi-graph-up"></i></div>
+          <h3>貴金属価格</h3>
+          <p>金・銀・プラチナのリアルタイム価格を照会。グラム数を指定すると合計額も計算します。</p>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="feature-card">
+          <div class="feature-card-icon"><i class="bi bi-chat-dots-fill"></i></div>
+          <h3>AI 会話</h3>
+          <p>ヴォルデモート卿の人格で問いに答えてやろう。会話の文脈を記憶した連続対話が可能。</p>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="feature-card">
+          <div class="feature-card-icon"><i class="bi bi-music-note-beamed"></i></div>
+          <h3>DJAudio-DL</h3>
+          <p>YouTube・SoundCloud 等の URL を貼るだけで MP3 ダウンロードリンクを自動返信。</p>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="feature-card">
+          <div class="feature-card-icon"><i class="bi bi-activity"></i></div>
+          <h3>地震アラート</h3>
+          <p>P2PQuake 連携で日本全国の地震情報をリアルタイム通知。EEW・津波予報にも対応。</p>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="feature-card">
+          <div class="feature-card-icon"><i class="bi bi-bell-fill"></i></div>
+          <h3>自動通知・管理</h3>
+          <p>VC 通知・ウェルカム／グッバイ・スティッキー・リアクションロール・Google News フィード。</p>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-lg-4">
+        <div class="feature-card">
+          <div class="feature-card-icon"><i class="bi bi-display"></i></div>
+          <h3>Web 管理画面</h3>
+          <p>Discord OAuth でログインするだけ。全機能の設定をブラウザから簡単に管理できます。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Setup -->
+  <section class="landing-section">
+    <p class="landing-section-kicker">Get started</p>
+    <h2>はじめ方</h2>
+    <ol class="doc-steps landing-steps">
+      <li>
+        <span>下の招待ボタンから <strong>Bot をサーバーに追加</strong>します。管理者権限が必要です。</span>
+      </li>
+      <li>
+        <span><strong>管理画面</strong>に Discord アカウントでログインし、使いたい機能のチャンネルを設定します。</span>
+      </li>
+      <li>
+        <span>設定完了。Discord 上でコマンドを叩くか、URL を貼るだけで <strong>Bot が応答</strong>します。</span>
+      </li>
+    </ol>
+    {% if invite_url %}
+    <div class="mt-4">
+      <a href="{{ invite_url }}" class="btn btn-accent" target="_blank" rel="noopener noreferrer">
+        <i class="bi bi-plus-circle-fill"></i>今すぐ Bot を招待する
+      </a>
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- Links -->
+  <section class="landing-section landing-section-last">
+    <div class="doc-links landing-footer-links">
+      <a href="https://metals.kawasaki-n3t.f5.si/" class="btn btn-outline-primary" target="_blank" rel="noopener noreferrer">
+        <i class="bi bi-graph-up"></i>貴金属価格トラッカー
+      </a>
+      <a href="{{ url_for('auth.guide') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-book"></i>使い方ガイド
+      </a>
+      <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-gear-fill"></i>管理画面
+      </a>
+    </div>
+    <div class="doc-legal">
+      <a href="{{ url_for('auth.terms') }}">利用規約</a>
+      <span class="doc-legal-sep">·</span>
+      <a href="{{ url_for('auth.privacy') }}">プライバシーポリシー</a>
+    </div>
+  </section>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

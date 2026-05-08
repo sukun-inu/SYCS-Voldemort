@@ -1,4 +1,5 @@
 import os
+import time
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -84,6 +85,41 @@ def _get_bot_guild_ids() -> set[int]:
         return {int(g["id"]) for g in resp.json()}
     except Exception:
         return set()
+
+
+_guild_count_cache: tuple[int, float] | None = None
+_GUILD_COUNT_TTL = 300  # 5分キャッシュ
+
+
+def get_bot_guild_count() -> int:
+    """Bot が参加しているサーバー数を返す（5分キャッシュ）。"""
+    global _guild_count_cache
+    now = time.time()
+    if _guild_count_cache and now - _guild_count_cache[1] < _GUILD_COUNT_TTL:
+        return _guild_count_cache[0]
+
+    count = 0
+    if DISCORD_BOT_TOKEN:
+        try:
+            resp = req.get(
+                f"{_API}/users/@me/guilds?limit=200",
+                headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+                timeout=_TIMEOUT,
+            )
+            resp.raise_for_status()
+            count = len(resp.json())
+        except Exception:
+            pass
+
+    if count == 0:
+        try:
+            from services.settings_store import get_all_guild_ids
+            count = len(get_all_guild_ids())
+        except Exception:
+            pass
+
+    _guild_count_cache = (count, now)
+    return count
 
 
 def get_admin_guilds(access_token: str) -> list[dict]:
