@@ -605,6 +605,7 @@ class DJAudioRuntimeSettings:
     cache_ttl: int
     cooldown: int
     max_urls: int
+    output_channel_id: int | None = None
 
 
 def _read_int(value: Any) -> int | None:
@@ -748,6 +749,30 @@ def get_djaudio_max_urls(guild_id: int) -> int:
         return DJAUDIO_MAX_URLS
 
 
+def get_djaudio_output_channel(guild_id: int) -> int | None:
+    """結果送信チャンネルIDを取得（未設定なら None）。"""
+    guild_settings = get_guild_settings(guild_id)
+    nested = guild_settings.get("djaudio", {})
+    if not isinstance(nested, dict):
+        nested = {}
+    value = nested.get("output_channel_id")
+    parsed = _read_int(value)
+    return parsed if parsed and parsed > 0 else None
+
+
+def set_djaudio_output_channel(guild_id: int, channel_id: int | None) -> None:
+    """結果送信チャンネルIDを設定/解除。"""
+    def _mutator(data: dict[str, Any]) -> None:
+        current = _get_or_create_guild(data, guild_id)
+        nested = current.get("djaudio", {})
+        if not isinstance(nested, dict):
+            nested = {}
+        nested["output_channel_id"] = channel_id
+        current["djaudio"] = nested
+
+    _mutate_settings(_mutator)
+
+
 def get_djaudio_runtime_settings(guild_id: int) -> DJAudioRuntimeSettings:
     """DJAudio 実行時に使う設定をまとめて返す。"""
     return DJAudioRuntimeSettings(
@@ -755,4 +780,5 @@ def get_djaudio_runtime_settings(guild_id: int) -> DJAudioRuntimeSettings:
         cache_ttl=get_djaudio_cache_ttl(guild_id),
         cooldown=get_djaudio_cooldown(guild_id),
         max_urls=get_djaudio_max_urls(guild_id),
+        output_channel_id=get_djaudio_output_channel(guild_id),
     )

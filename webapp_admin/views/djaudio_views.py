@@ -15,6 +15,7 @@ from config import DJAUDIO_CACHE_DIR
 from services.djaudio_cache import get_meta
 from services.settings_store import (
     get_djaudio_runtime_settings,
+    set_djaudio_output_channel,
     set_djaudio_settings,
     set_djaudio_watch_channel,
 )
@@ -146,6 +147,17 @@ def djaudio_settings():
                 flash("監視チャンネルを保存しました。", "success")
             return redirect(url_for("djaudio.djaudio_settings"))
 
+        elif action == "set_output_channel":
+            raw_ch = request.form.get("output_channel_id", "")
+            if raw_ch == "0" or not raw_ch:
+                set_djaudio_output_channel(gid, None)
+                flash("出力チャンネルを解除しました（監視チャンネルに返信します）。", "success")
+            else:
+                ch_id = validate_channel_id(raw_ch)
+                set_djaudio_output_channel(gid, ch_id)
+                flash("出力チャンネルを保存しました。", "success")
+            return redirect(url_for("djaudio.djaudio_settings"))
+
         elif action == "set_limits":
             cache_ttl = validate_int(request.form.get("cache_ttl", "600"), min_val=60, max_val=86400)
             cooldown  = validate_int(request.form.get("cooldown",  "30"),  min_val=0,  max_val=3600)
@@ -159,6 +171,7 @@ def djaudio_settings():
         "settings/djaudio.html",
         channels=channels,
         current_channel_id=runtime.watch_channel_id,
+        current_output_channel_id=runtime.output_channel_id,
         cache_ttl=runtime.cache_ttl,
         cooldown=runtime.cooldown,
         max_urls=runtime.max_urls,

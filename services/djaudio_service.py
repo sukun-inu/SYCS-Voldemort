@@ -309,7 +309,15 @@ async def _process_url(
 
         embed = _build_result_embed(results, message.guild.id, settings.cache_ttl)
         embed.set_footer(text=f"リクエスト: {message.author.display_name}")
-        reply_msg = await message.reply(embed=embed, mention_author=False)
+
+        output_ch = None
+        if settings.output_channel_id:
+            output_ch = bot.get_channel(settings.output_channel_id)
+        if output_ch and output_ch.id != message.channel.id:
+            embed.add_field(name="元メッセージ", value=f"[ジャンプ]({message.jump_url})", inline=True)
+            reply_msg = await output_ch.send(embed=embed)
+        else:
+            reply_msg = await message.reply(embed=embed, mention_author=False)
         for _, token in results:
             update_discord_message(token, reply_msg.channel.id, reply_msg.id)
         logger.info("完了 guild=%s [%s]: %s ファイル", message.guild.id, message.author, len(results))
