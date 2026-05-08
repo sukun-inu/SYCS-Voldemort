@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}DJAudio-DL{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <p class="page-kicker">メディア</p>
+    <h1 class="page-title"><i class="bi bi-music-note-beamed"></i>DJAudio-DL</h1>
+    <p class="page-description">URL を投稿すると自動で MP3 に変換して配信リンクを返信します。</p>
+  </div>
+</div>
+
+<div class="settings-grid">
+  <section class="section-card span-6">
+    <div class="section-card-header">
+      <h2 class="section-card-title"><i class="bi bi-broadcast"></i>監視チャンネル</h2>
+    </div>
+    <div class="section-card-body">
+      <div class="status-strip">
+        <span class="status-label">現在</span>
+        <span class="status-chip">
+          <i class="bi bi-hash"></i>
+          {% set ch_name = namespace(value="未設定") %}
+          {% for ch in channels %}
+            {% if ch.id|string == current_channel_id|string %}
+              {% set ch_name.value = ch.name %}
+            {% endif %}
+          {% endfor %}
+          {{ ch_name.value }}
+        </span>
+      </div>
+
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="set_channel">
+        <div class="mb-4">
+          <label class="form-label" for="djaudio_channel_id">MP3 変換結果を送信するチャンネル</label>
+          <select id="djaudio_channel_id" name="channel_id" class="form-select">
+            <option value="0">未設定（無効）</option>
+            {% for ch in channels %}
+            <option value="{{ ch.id }}"
+              {% if ch.id|string == current_channel_id|string %}selected{% endif %}>
+              # {{ ch.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-accent"><i class="bi bi-check-lg me-2"></i>保存</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="section-card span-6">
+    <div class="section-card-header">
+      <h2 class="section-card-title"><i class="bi bi-sliders"></i>制限設定</h2>
+    </div>
+    <div class="section-card-body">
+      <div class="status-strip">
+        <span class="status-label">現在</span>
+        <span class="status-chip">TTL {{ cache_ttl // 60 }}分 / CD {{ cooldown }}秒 / 最大{{ max_urls }}URL</span>
+      </div>
+
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="set_limits">
+        <div class="mb-3">
+          <label class="form-label" for="djaudio_cache_ttl">キャッシュ有効期間（秒）</label>
+          <input type="number" id="djaudio_cache_ttl" name="cache_ttl"
+                 class="form-control" min="60" max="86400"
+                 value="{{ cache_ttl }}">
+          <div class="form-text">60〜86400 秒（デフォルト 600 = 10分）</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="djaudio_cooldown">ユーザークールダウン（秒）</label>
+          <input type="number" id="djaudio_cooldown" name="cooldown"
+                 class="form-control" min="0" max="3600"
+                 value="{{ cooldown }}">
+          <div class="form-text">0 で無制限。デフォルト 30 秒。</div>
+        </div>
+        <div class="mb-4">
+          <label class="form-label" for="djaudio_max_urls">1メッセージあたりの最大 URL 数</label>
+          <input type="number" id="djaudio_max_urls" name="max_urls"
+                 class="form-control" min="1" max="10"
+                 value="{{ max_urls }}">
+          <div class="form-text">1〜10（デフォルト 3）</div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-accent"><i class="bi bi-check-lg me-2"></i>保存</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <div class="info-panel span-12">
+    <p class="info-panel-title"><i class="bi bi-info-circle"></i>対応サービス</p>
+    <p class="mb-0">
+      YouTube / YouTube Music &bull; SoundCloud &bull; Bandcamp &bull; ニコニコ動画 &bull; TikTok &bull; 直リンク<br>
+      ⚠️ Spotify・Apple Music・Amazon Music はダウンロード不可。<br>
+      変換後の MP3 リンクはキャッシュ有効期間後に自動削除されます。
+    </p>
+  </div>
+</div>
+
+{% endblock %}

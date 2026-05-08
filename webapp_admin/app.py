@@ -53,11 +53,14 @@ def create_app() -> Flask:
 
     from webapp_admin.views.auth_views import auth_bp
     from webapp_admin.views.dashboard_views import dashboard_bp
+    from webapp_admin.views.djaudio_views import djaudio_bp, dlaudio_bp
     from webapp_admin.views.settings_views import settings_bp
 
     app.register_blueprint(auth_bp, url_prefix="/admin")
     app.register_blueprint(dashboard_bp, url_prefix="/admin")
     app.register_blueprint(settings_bp, url_prefix="/admin/settings")
+    app.register_blueprint(djaudio_bp, url_prefix="/admin/settings")
+    app.register_blueprint(dlaudio_bp, url_prefix="/dlaudio")
 
     def request_snapshot():
         return {

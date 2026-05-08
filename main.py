@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from bot_setup import create_bot, setup_events
+from commands.djaudio_commands import register_djaudio_commands
 from commands.logging_commands import register_logging_commands
 from commands.metal_commands import register_metal_commands
 from commands.server_commands import register_server_commands
@@ -18,6 +19,7 @@ async def main():
     register_metal_commands(bot)
     register_logging_commands(bot)
     register_server_commands(bot)
+    register_djaudio_commands(bot)
 
     async with bot:
         if not DISCORD_BOT_TOKEN:

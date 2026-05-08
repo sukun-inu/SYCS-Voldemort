@@ -414,3 +414,68 @@ def set_earthquake_notify_types(guild_id: int, types: dict[str, bool]) -> None:
     """通知タイプ設定を保存。有効なキーのみ受け付ける。"""
     patch = {k: bool(v) for k, v in types.items() if k in _NOTIFY_TYPE_KEYS}
     _update_nested(guild_id, "earthquake", {"notify_types": patch})
+
+
+# ──────────────────────────────────────────────
+# DJAudio-DL 監視チャンネル
+# ──────────────────────────────────────────────
+
+def get_djaudio_watch_channel(guild_id: int) -> int:
+    """URL監視チャンネルIDを取得（未設定なら0）。"""
+    value = get_guild_settings(guild_id).get("djaudio_watch_channel_id")
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def set_djaudio_watch_channel(guild_id: int, channel_id: int | None) -> None:
+    """URL監視チャンネルIDを設定/解除。"""
+    update_guild_settings(guild_id, {"djaudio_watch_channel_id": channel_id})
+
+
+def get_djaudio_settings(guild_id: int) -> dict[str, Any]:
+    """DJAudio の詳細設定を取得。"""
+    return dict(get_guild_settings(guild_id).get("djaudio", {}))
+
+
+def set_djaudio_settings(guild_id: int, patch: dict[str, Any]) -> None:
+    """DJAudio の詳細設定を更新。"""
+    _update_nested(guild_id, "djaudio", patch)
+
+
+_DJAUDIO_DEFAULTS: dict[str, int] = {
+    "cache_ttl":  600,
+    "cooldown":   30,
+    "max_urls":   3,
+}
+
+
+def get_djaudio_cache_ttl(guild_id: int) -> int:
+    """キャッシュ有効期間（秒）を取得。未設定なら環境変数 or デフォルト 600。"""
+    stored = get_djaudio_settings(guild_id).get("cache_ttl")
+    try:
+        return max(60, int(stored))
+    except (TypeError, ValueError):
+        from config import DJAUDIO_CACHE_TTL
+        return DJAUDIO_CACHE_TTL
+
+
+def get_djaudio_cooldown(guild_id: int) -> int:
+    """ユーザークールダウン（秒）を取得。未設定なら環境変数 or デフォルト 30。"""
+    stored = get_djaudio_settings(guild_id).get("cooldown")
+    try:
+        return max(0, int(stored))
+    except (TypeError, ValueError):
+        from config import DJAUDIO_COOLDOWN
+        return DJAUDIO_COOLDOWN
+
+
+def get_djaudio_max_urls(guild_id: int) -> int:
+    """1メッセージあたりのURL上限を取得。未設定なら環境変数 or デフォルト 3。"""
+    stored = get_djaudio_settings(guild_id).get("max_urls")
+    try:
+        return max(1, min(10, int(stored)))
+    except (TypeError, ValueError):
+        from config import DJAUDIO_MAX_URLS
+        return DJAUDIO_MAX_URLS

@@ -8,6 +8,8 @@ import psutil
 from commands.chat_commands import handle_chatgpt_message
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
+from services.djaudio_cache import cache_cleanup_loop as djaudio_cache_cleanup
+from services.djaudio_service import handle_djaudio_message
 from services.earthquake_service import run_earthquake_ws
 from services.logging_service import log_action
 from services.news_service import run_news_feeds
@@ -88,6 +90,7 @@ def setup_events(bot: Bot) -> None:
             pending_sticky_task.start()
         if _ws_task is None or _ws_task.done():
             _ws_task = asyncio.create_task(run_earthquake_ws(bot))
+        asyncio.create_task(djaudio_cache_cleanup(bot=bot, interval=60))
 
     # --------------------------
     # メッセージ（司令塔）
@@ -122,7 +125,13 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.exception("[BOT_SETUP] sticky error: %s", e)
 
-        # ④ コマンド
+        # ④ DJAudio URL 監視
+        try:
+            await handle_djaudio_message(bot, message)
+        except Exception as e:
+            logger.exception("[BOT_SETUP] djaudio error: %s", e)
+
+        # ⑤ コマンド
         await bot.process_commands(message)
 
     # --------------------------

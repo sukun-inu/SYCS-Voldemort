@@ -1,6 +1,6 @@
 # Discord Voldemort Bot 仕様書
 
-**金属価格・LLM 会話・サーバー管理・セキュリティ・各種自動化** を 1 つに統合した  
+**金属価格・LLM 会話・サーバー管理・セキュリティ・音楽ダウンロード・各種自動化** を 1 つに統合した  
 運用向け Discord Bot + Web 管理 UI の実装です。
 
 ---
@@ -150,7 +150,43 @@ P2PQuake WebSocket API に常時接続し、日本の地震情報をリアルタ
 
 ---
 
-### 1.10 セキュリティ対策
+### 1.10 DJAudio-DL（音楽ダウンロード配信）
+指定チャンネルに投稿された URL を自動検知し、yt-dlp で MP3 に変換して時限配信リンクを返信します。
+
+**対応サービス:**
+
+| サービス | 備考 |
+|---|---|
+| YouTube / YouTube Music | 音楽メタデータの自動補完に対応 |
+| SoundCloud | |
+| Bandcamp | |
+| ニコニコ動画 | |
+| TikTok | |
+| 直リンク（汎用） | |
+| Spotify / Apple Music / Amazon Music | ❌ 著作権保護のためダウンロード不可 |
+
+**主な機能:**
+- 監視チャンネルへの URL 投稿を自動検知し `⏳` → `✅` / `❌` でリアクション通知
+- yt-dlp + ffmpeg による高品質 MP3 変換（最高音質・サムネイル埋め込み）
+- Deezer API による ID3 タグ自動補完（タイトル・アーティスト・アルバム・カバー画像）
+  - ISRC 完全一致検索 → 媒体別クエリ最適化検索にフォールバック
+- guild ごとに独立した配信 URL（`/dlaudio/files/<guild_id>/<token>`）でアクセス制御
+- TTL 経過後にキャッシュファイルと Discord 返信メッセージを自動削除
+- ユーザーごとのクールダウンで連続投稿を制限
+- 同時ダウンロード数・タイムアウトはグローバル設定で制御
+
+**設定項目（Web 管理 UI / スラッシュコマンドで変更可能）:**
+
+| 設定 | 説明 | デフォルト |
+|---|---|---|
+| 監視チャンネル | URL を監視するテキストチャンネル | 未設定（無効） |
+| キャッシュ有効期間 | MP3 配信リンクの有効時間（60〜86400 秒） | 600 秒（10 分） |
+| ユーザークールダウン | 同一ユーザーの連続リクエスト待機時間（0=無制限） | 30 秒 |
+| 最大 URL 数 / メッセージ | 1 メッセージあたりの処理 URL 上限（1〜10） | 3 |
+
+---
+
+### 1.11 セキュリティ対策
 
 チェック除外条件（以下に該当するユーザーはスキップ）:
 - 信頼済みユーザー
@@ -172,7 +208,7 @@ P2PQuake WebSocket API に常時接続し、日本の地震情報をリアルタ
 
 ---
 
-### 1.11 設定の JSON 永続化
+### 1.12 設定の JSON 永続化
 ギルドごとに以下の設定を `settings.json` に保存します（Bot 再起動後も保持）。
 
 - ログチャンネル ID / ログレベル
@@ -185,13 +221,14 @@ P2PQuake WebSocket API に常時接続し、日本の地震情報をリアルタ
 - リアクションロール（メッセージ × 絵文字 × ロール）
 - ニュースフィード（フィード ID × 設定）
 - 地震アラート設定
+- DJAudio-DL 設定（監視チャンネル・TTL・クールダウン・最大 URL 数）
 
 **実装:** アトミック書き込み（`.tmp` ファイル → rename）によりクラッシュ時の破損を防止。  
 インメモリライトスルーキャッシュで毎回ディスク読み込みを回避。
 
 ---
 
-### 1.12 Web 管理 UI（Flask）
+### 1.13 Web 管理 UI（Flask）
 Discord OAuth 認証によって管理者のみがアクセスできる Web 管理ダッシュボードです。
 
 **認証フロー:**
@@ -208,6 +245,7 @@ Discord OAuth 認証によって管理者のみがアクセスできる Web 管�
 - リアクションロール（追加・削除）
 - ニュースフィード（追加・編集・削除）
 - 地震アラート（チャンネル・最小震度・通知タイプ切り替え）
+- DJAudio-DL（監視チャンネル・TTL・クールダウン・最大 URL 数）
 - セキュリティ設定（信頼済みユーザー・バイパスロール）
 - サーバー情報・ユーザー情報表示
 - ダッシュボードでチャンネル ID をチャンネル名に変換して表示（設定画面全体に適用）
@@ -227,7 +265,7 @@ Discord OAuth 認証によって管理者のみがアクセスできる Web 管�
 
 ---
 
-### 1.13 貴金属 Web トラッカー（FastAPI）
+### 1.14 貴金属 Web トラッカー（FastAPI）
 金・銀・プラチナの価格を JST 0:00 に日次保存し、チャート表示・Web Push 通知を提供します。
 
 - 純度別価格計算 API（`/api/prices/calculate`）
@@ -251,6 +289,7 @@ Discord OAuth 認証によって管理者のみがアクセスできる Web 管�
 │   ├── chat_commands.py
 │   ├── logging_commands.py
 │   ├── server_commands.py          # 新機能スラッシュコマンド
+│   ├── djaudio_commands.py         # DJAudio-DL スラッシュコマンド
 │   └── guards.py                   # コマンド権限チェック
 ├── services/
 │   ├── metal_service.py
@@ -264,6 +303,10 @@ Discord OAuth 認証によって管理者のみがアクセスできる Web 管�
 │   ├── reaction_role_service.py    # リアクションロール
 │   ├── news_service.py             # Google News フィード
 │   ├── earthquake_service.py       # 地震アラート（P2PQuake）・バッジ画像生成
+│   ├── djaudio_service.py          # DJAudio-DL コアロジック（URL検知・ダウンロード）
+│   ├── djaudio_cache.py            # DJAudio-DL MP3 キャッシュ管理
+│   ├── djaudio_site_detection.py   # DJAudio-DL サービス判定ユーティリティ
+│   ├── djaudio_isrc_meta.py        # DJAudio-DL Deezer ID3 タグ補完
 │   ├── virustotal_service.py       # URL・ファイルセキュリティスキャン
 │   ├── raid_detection.py           # VC レイド検知
 │   ├── spam_detection.py           # スパム判定
@@ -276,7 +319,8 @@ Discord OAuth 認証によって管理者のみがアクセスできる Web 管�
 │   ├── views/
 │   │   ├── auth_views.py
 │   │   ├── dashboard_views.py
-│   │   └── settings_views.py
+│   │   ├── settings_views.py
+│   │   └── djaudio_views.py        # DJAudio-DL 設定 + MP3 配信 Blueprint
 │   ├── templates/
 │   │   ├── base.html
 │   │   ├── login.html
@@ -291,6 +335,7 @@ Discord OAuth 認証によって管理者のみがアクセスできる Web 管�
 │   │       ├── reaction_roles.html
 │   │       ├── news_feeds.html
 │   │       ├── earthquake.html
+│   │       ├── djaudio.html        # DJAudio-DL 設定ページ
 │   │       └── security.html
 │   └── static/
 │       ├── admin.css
@@ -328,7 +373,20 @@ Discord OAuth 認証によって管理者のみがアクセスできる Web 管�
 | `FLASK_SECURE_COOKIES` | ☑ | `true` に設定すると Secure Cookie（HTTPS 環境で推奨） |
 | `ADMIN_HOST_PORT` | ☑ | ホスト側ポート（デフォルト: `5001`） |
 
-### 3.3 FastAPI Web トラッカー
+### 3.3 DJAudio-DL
+
+| 変数 | 必須 | 説明 |
+|---|---|---|
+| `DJAUDIO_BASE_URL` | ✅ | MP3 配信 URL のベース（例: `https://yourdomain:5001`）。管理サーバーの公開 URL を指定 |
+| `DJAUDIO_CACHE_DIR` | ☑ | MP3 キャッシュ保存先（デフォルト: `./data/djaudio_cache`） |
+| `DJAUDIO_CACHE_TTL_SECONDS` | ☑ | グローバルデフォルト TTL（デフォルト: `600`）。Web 管理 UI でサーバーごとに上書き可能 |
+| `DJAUDIO_COOLDOWN_SECONDS` | ☑ | グローバルデフォルトクールダウン（デフォルト: `30`）。Web 管理 UI でサーバーごとに上書き可能 |
+| `DJAUDIO_MAX_URLS_PER_MSG` | ☑ | グローバルデフォルト最大 URL 数（デフォルト: `3`）。Web 管理 UI でサーバーごとに上書き可能 |
+| `DJAUDIO_DL_CONCURRENCY` | ☑ | 同時ダウンロード処理数（デフォルト: `3`） |
+| `DJAUDIO_DL_TIMEOUT_SECONDS` | ☑ | ダウンロードタイムアウト（デフォルト: `120`） |
+| `DJAUDIO_FFMPEG_PATH` | ☑ | ffmpeg 実行ファイルのパス（デフォルト: `ffmpeg`） |
+
+### 3.4 FastAPI Web トラッカー
 
 | 変数 | 必須 | 説明 |
 |---|---|---|
@@ -483,7 +541,14 @@ docker compose up -d --build
 | `/earthquake_settings` | 地震アラート設定・通知タイプ一覧を表示 |
 | `/earthquake_notify_type` | 通知タイプをボタン UI でオン/オフ切り替え |
 
-### 7.9 情報表示（全員）
+### 7.9 DJAudio-DL（管理者専用）
+
+| コマンド | 説明 |
+|---|---|
+| `/djaudio_setchannel [channel]` | URL 監視チャンネルを設定（省略で解除） |
+| `/djaudio_status` | DJAudio 現在の設定を表示 |
+
+### 7.10 情報表示（全員）
 
 | コマンド | 説明 |
 |---|---|
@@ -503,6 +568,7 @@ docker compose up -d --build
 | `update_status` | 5 秒 | Ping・CPU・MEM をステータスに表示 |
 | `news_feed_task` | 5 分 | 全サーバーのニュースフィードをチェック |
 | `run_earthquake_ws` | 常時 | P2PQuake WS に接続し地震情報をリアルタイム受信（切断時 10 秒で再接続） |
+| `djaudio_cache_cleanup` | 60 秒 | 有効期限切れ MP3 キャッシュを削除し、Discord 返信メッセージも合わせて削除 |
 
 ---
 
@@ -526,7 +592,11 @@ docker compose up -d --build
 /set_earthquake_min_scale → 最小震度を設定（例: 30 = 震度3）
 /earthquake_notify_type   → 通知タイプをボタン UI で切り替え
 /add_news_feed         → キーワードとチャンネルを設定
+/djaudio_setchannel    → MP3 自動変換を有効にするチャンネルを指定
 ```
+
+> **DJAudio-DL 動作要件:** `yt-dlp` / `ffmpeg` が実行環境にインストールされている必要があります。  
+> キャッシュ TTL・クールダウン・最大 URL 数は管理 UI → **DJAudio-DL** から変更できます。
 
 ---
 
@@ -576,6 +646,12 @@ docker compose up -d --build
           "quake_info": true,
           "bot_news": true
         }
+      },
+      "djaudio_watch_channel_id": 123456789,
+      "djaudio": {
+        "cache_ttl": 600,
+        "cooldown": 30,
+        "max_urls": 3
       }
     }
   }
