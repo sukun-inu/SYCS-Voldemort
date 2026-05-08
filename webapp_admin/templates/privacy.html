@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>プライバシーポリシー - SYCS Voldemort</title>
+  <link rel="icon" type="image/webp" href="{{ admin_asset_url('admin-icon.webp') }}">
+  <link rel="apple-touch-icon" href="{{ admin_asset_url('admin-icon.webp') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="{{ admin_asset_url('admin.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('guide.css') }}">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="topbar-leading">
+      <a class="brand-link" href="{{ url_for('auth.login') }}">
+        <span class="brand-mark">
+          <img class="brand-mark-image" src="{{ admin_asset_url('admin-icon.webp') }}" width="28" height="28" alt="">
+        </span>
+        <span class="brand-name">SYCS Voldemort</span>
+      </a>
+    </div>
+    <div class="topbar-actions">
+      <a href="{{ url_for('auth.guide') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-book"></i>使い方ガイド
+      </a>
+      <a href="{{ url_for('auth.login') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-gear-fill"></i>管理画面
+      </a>
+    </div>
+  </div>
+</header>
+
+<div class="guide-wrap">
+
+  <!-- Hero -->
+  <div class="guide-hero">
+    <div class="guide-hero-logo">
+      <img src="{{ admin_asset_url('admin-icon.webp') }}" width="72" height="72" alt="SYCS Voldemort">
+    </div>
+    <p class="page-kicker">Privacy Policy</p>
+    <h1>プライバシーポリシー</h1>
+    <p>最終更新日：2026年5月9日</p>
+  </div>
+
+  <!-- 収集する情報 -->
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-database-fill"></i>収集する情報
+      </h2>
+    </div>
+    <div class="section-card-body">
+      <div class="guide-cmd-list">
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">Discord サーバー設定</div>
+          <p class="guide-cmd-desc">Bot の機能設定（通知チャンネル ID、ウェルカムメッセージ、リアクションロール設定など）をサーバーごとにサーバー内に保存します。これらの設定はサーバー管理者が入力・編集した情報です。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">Discord ユーザー情報（認証時のみ）</div>
+          <p class="guide-cmd-desc">Web 管理画面へのログイン時に、Discord OAuth2 を通じてユーザー ID・ユーザー名・アバターを一時的に取得します。これらはセッション管理にのみ使用し、永続的には保存しません。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">メッセージ内容（一時処理のみ）</div>
+          <p class="guide-cmd-desc">AI 会話機能や DJAudio-DL 機能の処理に必要なメッセージ内容を一時的に参照します。これらはデータベースに保存されることなく、処理完了後に破棄されます。AI 会話の文脈は直前のやりとりのみをメモリ上で保持します。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">アクセスログ</div>
+          <p class="guide-cmd-desc">Web 管理画面へのアクセスログ（IP アドレス、タイムスタンプ、操作内容）をサーバーのログファイルに記録する場合があります。これはセキュリティ監査および不正アクセスの調査を目的としています。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 情報の利用目的 -->
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-list-check"></i>情報の利用目的
+      </h2>
+    </div>
+    <div class="section-card-body">
+      <div class="guide-cmd-list">
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">Bot 機能の提供</div>
+          <p class="guide-cmd-desc">地震アラート・AI 会話・DJAudio-DL・ウェルカム通知などの Bot 機能を提供するために設定情報を使用します。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">Web 管理画面の認証</div>
+          <p class="guide-cmd-desc">Discord OAuth2 を通じた本人確認および管理者権限の検証のためにユーザー情報を使用します。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">セキュリティの確保</div>
+          <p class="guide-cmd-desc">不正アクセスの検知・防止およびシステムの安定稼働のためにアクセスログを利用します。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第三者サービス -->
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-boxes"></i>利用する第三者サービス
+      </h2>
+    </div>
+    <div class="section-card-body">
+      <p class="section-card-subtitle mb-3">本 Bot は以下の外部サービスを利用しています。各サービスのプライバシーポリシーが適用されます。</p>
+      <div class="guide-cmd-list">
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">Discord</div>
+          <p class="guide-cmd-desc">Bot の動作基盤および OAuth2 認証に使用します。Discord のプライバシーポリシーが適用されます。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">OpenAI / Groq</div>
+          <p class="guide-cmd-desc">AI 会話機能（ヴォルデモート）の応答生成に使用します。送信されたメッセージは各社の API を経由します。各社のプライバシーポリシーが適用されます。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">VirusTotal</div>
+          <p class="guide-cmd-desc">DJAudio-DL 機能において投稿された URL のセキュリティチェックに使用します。URL が VirusTotal の API に送信されます。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">P2PQuake</div>
+          <p class="guide-cmd-desc">地震アラート機能において地震情報のリアルタイム受信に使用します。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">MetalpriceAPI</div>
+          <p class="guide-cmd-desc">貴金属価格の取得に使用します。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- データの保管と削除 -->
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-shield-fill-check"></i>データの保管・削除
+      </h2>
+    </div>
+    <div class="section-card-body">
+      <div class="guide-cmd-list">
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">設定データの保管場所</div>
+          <p class="guide-cmd-desc">サーバー設定情報はホスティングサーバー上のボリュームに保存されます。外部の第三者と共有されることはありません。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">設定データの削除</div>
+          <p class="guide-cmd-desc">Bot をサーバーから退出させると、そのサーバーに紐づく設定データは順次削除されます。また、Web 管理画面から各設定を個別に削除することもできます。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">セッション情報</div>
+          <p class="guide-cmd-desc">Web 管理画面のログインセッションはブラウザを閉じるか、ログアウト操作により終了します。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ポリシーの変更 -->
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-arrow-clockwise"></i>ポリシーの変更
+      </h2>
+    </div>
+    <div class="section-card-body">
+      <div class="info-panel">
+        <p class="info-panel-title"><i class="bi bi-info-circle-fill"></i>更新について</p>
+        本プライバシーポリシーは予告なく変更される場合があります。重要な変更がある場合はこのページにて告知します。定期的にご確認ください。
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer links -->
+  <div class="guide-links">
+    <a href="{{ url_for('auth.terms') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-file-text"></i>利用規約
+    </a>
+    <a href="{{ url_for('auth.guide') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-book"></i>使い方ガイド
+    </a>
+    <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-gear-fill"></i>Web 管理画面
+    </a>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

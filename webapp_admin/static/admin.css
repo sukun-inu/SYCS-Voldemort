@@ -1341,6 +1341,25 @@ textarea.form-control { min-height: 120px; resize: vertical; }
   text-align: center;
 }
 
+.login-legal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 12px auto 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.login-legal a {
+  color: var(--text-tertiary);
+  text-decoration: none;
+}
+
+.login-legal a:hover { color: var(--text-secondary); text-decoration: underline; }
+
+.login-legal-sep { opacity: 0.4; }
+
 /* Error */
 .error-view {
   display: grid;

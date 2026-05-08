@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>利用規約 - SYCS Voldemort</title>
+  <link rel="icon" type="image/webp" href="{{ admin_asset_url('admin-icon.webp') }}">
+  <link rel="apple-touch-icon" href="{{ admin_asset_url('admin-icon.webp') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="{{ admin_asset_url('admin.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('guide.css') }}">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="topbar-leading">
+      <a class="brand-link" href="{{ url_for('auth.login') }}">
+        <span class="brand-mark">
+          <img class="brand-mark-image" src="{{ admin_asset_url('admin-icon.webp') }}" width="28" height="28" alt="">
+        </span>
+        <span class="brand-name">SYCS Voldemort</span>
+      </a>
+    </div>
+    <div class="topbar-actions">
+      <a href="{{ url_for('auth.guide') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-book"></i>使い方ガイド
+      </a>
+      <a href="{{ url_for('auth.login') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-gear-fill"></i>管理画面
+      </a>
+    </div>
+  </div>
+</header>
+
+<div class="guide-wrap">
+
+  <!-- Hero -->
+  <div class="guide-hero">
+    <div class="guide-hero-logo">
+      <img src="{{ admin_asset_url('admin-icon.webp') }}" width="72" height="72" alt="SYCS Voldemort">
+    </div>
+    <p class="page-kicker">Terms of Service</p>
+    <h1>利用規約</h1>
+    <p>最終更新日：2026年5月9日</p>
+  </div>
+
+  <!-- 同意 -->
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-check-circle-fill"></i>規約への同意
+      </h2>
+    </div>
+    <div class="section-card-body">
+      <div class="info-panel">
+        <p class="info-panel-title"><i class="bi bi-info-circle-fill"></i>ご利用の前に</p>
+        SYCS Voldemort（以下「本 Bot」）をご利用いただくことで、本利用規約に同意したものとみなします。同意いただけない場合は、本 Bot のご利用をお控えください。
+      </div>
+    </div>
+  </div>
+
+  <!-- サービスの概要 -->
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-robot"></i>サービスの概要
+      </h2>
+    </div>
+    <div class="section-card-body">
+      <p class="section-card-subtitle mb-3">本 Bot は Discord 上で以下の機能を提供します。</p>
+      <div class="guide-cmd-list">
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">情報提供機能</div>
+          <p class="guide-cmd-desc">貴金属価格の表示、サーバー情報・ユーザー情報の確認、Google News フィードの自動投稿。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">メディア処理機能</div>
+          <p class="guide-cmd-desc">YouTube・SoundCloud などの対応サービスから音声を抽出し、期限付きダウンロードリンクを提供する DJAudio-DL 機能。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">AI 会話機能</div>
+          <p class="guide-cmd-desc">OpenAI / Groq API を用いたヴォルデモート卿キャラクターによる AI 会話。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">通知・自動化機能</div>
+          <p class="guide-cmd-desc">地震アラート、VC 通知、ウェルカム／グッバイメッセージ、スティッキーメッセージ、リアクションロール。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">Web 管理画面</div>
+          <p class="guide-cmd-desc">Discord OAuth2 で認証した管理者が各機能の設定を管理できるブラウザベースのダッシュボード。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 利用条件 -->
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-person-check-fill"></i>利用条件
+      </h2>
+    </div>
+    <div class="section-card-body">
+      <div class="guide-cmd-list">
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">Discord 利用規約の遵守</div>
+          <p class="guide-cmd-desc">本 Bot の利用にあたっては、Discord の利用規約およびコミュニティガイドラインに従ってください。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">著作権・知的財産権の尊重</div>
+          <p class="guide-cmd-desc">DJAudio-DL 機能は個人的・非営利的な用途にのみ使用してください。著作権法に違反する形での利用は禁止します。本機能を通じて取得したコンテンツの配布・再配布は行わないでください。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">管理者責任</div>
+          <p class="guide-cmd-desc">Web 管理画面にアクセスできるのは、Bot が参加している Discord サーバーの管理者権限を持つユーザーのみです。管理者は自サーバーの設定内容および Bot の利用状況に責任を持ちます。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 禁止事項 -->
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-slash-circle-fill"></i>禁止事項
+      </h2>
+    </div>
+    <div class="section-card-body">
+      <div class="guide-cmd-list">
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">不正アクセス・改ざん</div>
+          <p class="guide-cmd-desc">本 Bot のシステムへの不正アクセス、リバースエンジニアリング、設定データの不正操作を禁じます。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">スパム・過負荷行為</div>
+          <p class="guide-cmd-desc">過度なコマンド連打・大量リクエストなど、サービスに過負荷をかける行為を禁じます。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">違法コンテンツの処理</div>
+          <p class="guide-cmd-desc">違法または有害なコンテンツの処理・配布を目的とした本 Bot の利用を禁じます。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">商業的再販・代行</div>
+          <p class="guide-cmd-desc">本 Bot の機能を商業目的で第三者に再販または代行サービスとして提供することを禁じます。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 免責事項 -->
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-exclamation-triangle-fill"></i>免責事項
+      </h2>
+    </div>
+    <div class="section-card-body">
+      <div class="guide-cmd-list">
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">サービスの可用性</div>
+          <p class="guide-cmd-desc">本 Bot はベストエフォートで提供されます。メンテナンス・障害・外部 API の停止等により、予告なくサービスが中断または終了する場合があります。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">情報の正確性</div>
+          <p class="guide-cmd-desc">貴金属価格・地震情報・ニュースフィードなどの情報は外部 API から取得しており、その正確性・完全性を保証するものではありません。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">損害の免責</div>
+          <p class="guide-cmd-desc">本 Bot の利用または利用不能により生じた直接的・間接的・偶発的な損害について、運営者は責任を負いません。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">AI 生成コンテンツ</div>
+          <p class="guide-cmd-desc">AI 会話機能が生成する応答は自動生成されたものであり、その内容の正確性・適切性を保証するものではありません。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 規約の変更 -->
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-arrow-clockwise"></i>規約の変更・終了
+      </h2>
+    </div>
+    <div class="section-card-body">
+      <div class="info-panel">
+        <p class="info-panel-title"><i class="bi bi-info-circle-fill"></i>変更について</p>
+        本利用規約は予告なく変更される場合があります。変更後に本 Bot を継続して利用した場合、変更後の規約に同意したものとみなします。また、運営者は予告なく本サービスを変更・停止・終了する権利を有します。
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer links -->
+  <div class="guide-links">
+    <a href="{{ url_for('auth.privacy') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-shield-check"></i>プライバシーポリシー
+    </a>
+    <a href="{{ url_for('auth.guide') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-book"></i>使い方ガイド
+    </a>
+    <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-gear-fill"></i>Web 管理画面
+    </a>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

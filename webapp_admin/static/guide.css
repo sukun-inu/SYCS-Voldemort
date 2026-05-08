@@ -131,6 +131,26 @@
 
 .guide-links .btn { flex: 1; min-width: 180px; }
 
+/* Legal footnote (guide + privacy + terms pages) */
+.guide-legal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.guide-legal a {
+  color: var(--text-tertiary);
+  text-decoration: none;
+}
+
+.guide-legal a:hover { color: var(--text-secondary); text-decoration: underline; }
+
+.guide-legal-sep { opacity: 0.4; }
+
 /* Responsive */
 @media (max-width: 640px) {
   .guide-wrap { padding: calc(var(--topbar-height) + 24px) 14px 60px; }
