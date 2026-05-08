@@ -58,6 +58,8 @@ services:
       - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
       # Bot 設定ファイルの保存先（ボリュームマウント先に合わせる）
       - SETTINGS_DIR=/app/data
+      # DJAudio-DL: Discord に貼る MP3 ダウンロード URL のベース（外部からアクセス可能な admin の URL）
+      - DJAUDIO_BASE_URL=${DJAUDIO_BASE_URL:-http://localhost:5001}
     volumes:
       - /home/kawasaki/SYCS-Voldemort:/app/data
 
