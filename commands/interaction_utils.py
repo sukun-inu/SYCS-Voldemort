@@ -4,7 +4,29 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Bot
 
+from config import ADMIN_SITE_URL, METALS_SITE_URL
+
 logger = logging.getLogger(__name__)
+
+
+def metals_site_view() -> discord.ui.View:
+    view = discord.ui.View()
+    view.add_item(discord.ui.Button(
+        style=discord.ButtonStyle.link,
+        label="📊 貴金属トラッカーを開く",
+        url=METALS_SITE_URL,
+    ))
+    return view
+
+
+def admin_site_view() -> discord.ui.View:
+    view = discord.ui.View()
+    view.add_item(discord.ui.Button(
+        style=discord.ButtonStyle.link,
+        label="⚙️ Web管理画面を開く",
+        url=ADMIN_SITE_URL,
+    ))
+    return view
 
 
 async def send_interaction(
@@ -33,7 +55,7 @@ async def send_ephemeral(interaction: discord.Interaction, message: str) -> None
 def bind_permission_error_handler(
     command: app_commands.Command,
     *,
-    missing_permissions_message: str = "❌ このコマンドを実行する権限がありません。",
+    missing_permissions_message: str = "❌ 余のコマンドを使う権限が貴様にはない。",
 ) -> None:
     @command.error
     async def _on_error(
@@ -45,10 +67,11 @@ def bind_permission_error_handler(
             return
 
         if isinstance(error, app_commands.CheckFailure):
-            await send_ephemeral(interaction, "❌ 実行条件を満たしていません。")
+            await send_ephemeral(interaction, "❌ 条件を満たしておらぬ。出直してこい。")
             return
 
-        await send_ephemeral(interaction, f"❌ エラー: {error}")
+        logger.exception("コマンドエラー: %s", error)
+        await send_ephemeral(interaction, "❌ 何かが邪魔をしたようだ。しばし待って試せ。")
 
 
 def install_global_app_command_error_handler(bot: Bot) -> None:
@@ -61,17 +84,17 @@ def install_global_app_command_error_handler(bot: Bot) -> None:
             return
 
         if isinstance(error, app_commands.MissingPermissions):
-            await send_ephemeral(interaction, "❌ このコマンドを実行する権限がありません。")
+            await send_ephemeral(interaction, "❌ 余のコマンドを使う権限が貴様にはない。")
             return
 
         if isinstance(error, app_commands.CheckFailure):
-            await send_ephemeral(interaction, "❌ 実行条件を満たしていません。")
+            await send_ephemeral(interaction, "❌ 条件を満たしておらぬ。出直してこい。")
             return
 
         if isinstance(error, app_commands.CommandInvokeError):
             logger.exception("スラッシュコマンド実行エラー: %s", error.original)
-            await send_ephemeral(interaction, "❌ コマンド実行中にエラーが発生しました。")
+            await send_ephemeral(interaction, "❌ 余の力をもってしても処理できなかった。しばし待って試せ。")
             return
 
         logger.exception("スラッシュコマンドエラー: %s", error)
-        await send_ephemeral(interaction, f"❌ エラー: {error}")
+        await send_ephemeral(interaction, "❌ 予期せぬ障害が生じた。しばし待て。")

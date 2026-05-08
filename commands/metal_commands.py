@@ -4,6 +4,7 @@ import discord
 from discord import app_commands
 
 from config import METAL_COMMANDS, MetalSpec
+from commands.interaction_utils import metals_site_view
 from services.discord_utils import create_embed
 from services.logging_service import log_action
 from services.metal_service import MetalPriceError, calculate_metal_value
@@ -40,7 +41,7 @@ async def _handle_single_metal(interaction: discord.Interaction, grams: float, s
             spec.color,
             footer_text="Powered by MetalpriceAPI Free",
         )
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, view=metals_site_view())
     except (ValueError, MetalPriceError) as e:
         if interaction.guild is not None:
             await log_action(
@@ -51,7 +52,7 @@ async def _handle_single_metal(interaction: discord.Interaction, grams: float, s
                 user=interaction.user,
                 fields={"エラー内容": str(e)},
             )
-        await _respond_error(interaction, f"エラーだ。俺様の力をもってしても: {e}")
+        await _respond_error(interaction, "エラーだ。俺様の力をもってしても処理できなかった。しばらく待ってから試せ。")
 
 
 def register_metal_commands(bot: discord.Client) -> None:
@@ -105,7 +106,7 @@ def register_metal_commands(bot: discord.Client) -> None:
                 discord.Color.gold(),
                 footer_text="Powered by MetalpriceAPI Free",
             )
-            await interaction.response.send_message(embed=embed)
+            await interaction.response.send_message(embed=embed, view=metals_site_view())
 
             if interaction.guild is not None:
                 await log_action(
@@ -126,4 +127,4 @@ def register_metal_commands(bot: discord.Client) -> None:
                     user=interaction.user,
                     fields={"エラー内容": str(e)},
                 )
-            await _respond_error(interaction, f"エラーだ。俺様の力をもってしても: {e}")
+            await _respond_error(interaction, "エラーだ。俺様の力をもってしても処理できなかった。しばらく待ってから試せ。")

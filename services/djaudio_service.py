@@ -203,9 +203,9 @@ async def _download_and_register(
 def _build_result_embed(results: list[tuple[str, str]], guild_id: int, cache_ttl: int) -> discord.Embed:
     ttl_min = cache_ttl // 60
     embed = discord.Embed(
-        title="🎵 MP3 準備完了",
+        title="🎵 MP3 の準備が整った",
         color=discord.Color.blurple(),
-        description=f"⏱️ リンクは **{ttl_min}分後** に失効します",
+        description=f"⏱️ リンクは **{ttl_min}分後** に失効するぞ",
     )
     for title, token in results:
         link = f"{DJAUDIO_BASE_URL}/dlaudio/files/{guild_id}/{token}"
@@ -261,12 +261,12 @@ async def handle_djaudio_message(bot: Bot, message: discord.Message) -> None:
         try:
             validate_public_http_url(url)
         except URLSafetyError:
-            unsupported_reasons.append("この URL はセキュリティ上の理由で処理できません。")
+            unsupported_reasons.append("この URL はセキュリティ上の理由で処理できぬ。")
             continue
         supported_urls.append(url)
 
     if not supported_urls:
-        notice = unsupported_reasons[0] if unsupported_reasons else "この URL は現在サポート対象外です。"
+        notice = unsupported_reasons[0] if unsupported_reasons else "この URL は現在サポート対象外だ。"
         await message.reply(f"❌ {notice}", mention_author=False)
         return
 
@@ -275,7 +275,7 @@ async def handle_djaudio_message(bot: Bot, message: discord.Message) -> None:
     last = _user_cooldown.get(cooldown_key, 0)
     if settings.cooldown > 0 and now - last < settings.cooldown:
         remaining = int(settings.cooldown - (now - last))
-        await message.reply(f"⏱️ {remaining}秒後に再試行してください。", mention_author=False)
+        await message.reply(f"⏱️ {remaining}秒後に再試行するがよい。", mention_author=False)
         return
     _user_cooldown[cooldown_key] = now
 
@@ -319,7 +319,7 @@ async def _process_url(
         try:
             await _remove_reaction_safe(message, "⏳", bot)
             await _add_reaction_safe(message, "❌")
-            await message.reply("⚠️ タイムアウトしました。時間をおいて再試行してください。", mention_author=False)
+            await message.reply("⚠️ タイムアウトしたぞ。時間をおいてから再試行せよ。", mention_author=False)
         except discord.HTTPException:
             pass
     except Exception as e:
@@ -328,7 +328,7 @@ async def _process_url(
             await _remove_reaction_safe(message, "⏳", bot)
             await _add_reaction_safe(message, "❌")
             await message.reply(
-                "⚠️ ダウンロードに失敗しました。URL を確認して再試行してください。",
+                "⚠️ ダウンロードに失敗した。URL を確認して再試行せよ。",
                 mention_author=False,
             )
         except discord.HTTPException:

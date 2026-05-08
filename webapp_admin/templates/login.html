@@ -54,6 +54,17 @@
       Discord でログイン
     </a>
 
+    <div class="login-actions mt-3 d-flex gap-2">
+      <a href="{{ url_for('auth.guide') }}" class="btn btn-outline-secondary flex-fill">
+        <i class="bi bi-book me-1"></i>使い方ガイド
+      </a>
+      {% if invite_url %}
+      <a href="{{ invite_url }}" class="btn btn-outline-success flex-fill" target="_blank" rel="noopener noreferrer">
+        <i class="bi bi-plus-circle me-1"></i>Bot を招待
+      </a>
+      {% endif %}
+    </div>
+
     <p class="login-note">
       <i class="bi bi-info-circle me-1"></i>
       Bot が参加しているサーバーで管理者権限が必要です。

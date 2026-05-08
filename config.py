@@ -147,6 +147,9 @@ def _resolve_ffmpeg_path() -> str:
     return "ffmpeg"
 
 DJAUDIO_BASE_URL       = (_read_env("DJAUDIO_BASE_URL") or "http://localhost:5001").rstrip("/")
+
+METALS_SITE_URL = (_read_env("METALS_SITE_URL") or "https://metals.kawasaki-n3t.f5.si/").rstrip("/") + "/"
+ADMIN_SITE_URL  = (_read_env("ADMIN_SITE_URL")  or "https://vol.kawasaki-n3t.f5.si/admin/login")
 DJAUDIO_CACHE_TTL      = int(os.environ.get("DJAUDIO_CACHE_TTL_SECONDS", "600"))
 DJAUDIO_CACHE_DIR      = Path(os.environ.get("DJAUDIO_CACHE_DIR", str(_default_djaudio_cache)))
 DJAUDIO_COOLDOWN       = int(os.environ.get("DJAUDIO_COOLDOWN_SECONDS", "30"))

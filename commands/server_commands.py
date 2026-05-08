@@ -6,6 +6,7 @@ from discord import app_commands
 from discord.ext.commands import Bot
 
 from commands.guards import ensure_admin as _ensure_admin
+from commands.interaction_utils import admin_site_view
 from config import JST as _JST
 from services.sticky_service import delete_sticky, post_sticky
 from services.settings_store import (
@@ -99,7 +100,7 @@ class _NotifyTypeView(discord.ui.View):
 
     async def _check_author(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.author_id:
-            await interaction.response.send_message("操作権限がありません。", ephemeral=True)
+            await interaction.response.send_message("貴様にその操作の権限はない。", ephemeral=True)
             return False
         return True
 
@@ -119,7 +120,7 @@ class _NotifyTypeView(discord.ui.View):
         self.clear_items()
         self.stop()
         await interaction.response.edit_message(
-            content="✅ 設定を保存した。",
+            content="✅ 余の意志を刻んだ。",
             embed=_build_notify_type_embed(self.types),
             view=self,
         )
@@ -137,7 +138,7 @@ def register_server_commands(bot: Bot) -> None:
         if not await _ensure_admin(interaction):
             return
         set_welcome_channel(interaction.guild.id, channel.id)
-        await interaction.response.send_message(f"ウェルカムチャンネルを {channel.mention} に設定した。", ephemeral=True)
+        await interaction.response.send_message(f"{channel.mention} をウェルカムチャンネルと定めた。", ephemeral=True)
 
     @bot.tree.command(name="welcome_message_set", description="【管理者】ウェルカムメッセージを設定します")
     @app_commands.describe(message="テンプレート: {user} {username} {server} {count} が使用可能")
@@ -145,7 +146,7 @@ def register_server_commands(bot: Bot) -> None:
         if not await _ensure_admin(interaction):
             return
         set_welcome_message(interaction.guild.id, message)
-        await interaction.response.send_message(f"ウェルカムメッセージを設定した。\n> {message}", ephemeral=True)
+        await interaction.response.send_message(f"ウェルカムメッセージを定めた。\n> {message}", ephemeral=True)
 
     @bot.tree.command(name="goodbye_channel_set", description="【管理者】グッバイ送信チャンネルを設定します")
     @app_commands.describe(channel="グッバイメッセージを送るチャンネル")
@@ -153,7 +154,7 @@ def register_server_commands(bot: Bot) -> None:
         if not await _ensure_admin(interaction):
             return
         set_goodbye_channel(interaction.guild.id, channel.id)
-        await interaction.response.send_message(f"グッバイチャンネルを {channel.mention} に設定した。", ephemeral=True)
+        await interaction.response.send_message(f"{channel.mention} をグッバイチャンネルと定めた。", ephemeral=True)
 
     @bot.tree.command(name="goodbye_message_set", description="【管理者】グッバイメッセージを設定します")
     @app_commands.describe(message="テンプレート: {user} {username} {server} {count} が使用可能")
@@ -161,7 +162,7 @@ def register_server_commands(bot: Bot) -> None:
         if not await _ensure_admin(interaction):
             return
         set_goodbye_message(interaction.guild.id, message)
-        await interaction.response.send_message(f"グッバイメッセージを設定した。\n> {message}", ephemeral=True)
+        await interaction.response.send_message(f"グッバイメッセージを定めた。\n> {message}", ephemeral=True)
 
     @bot.tree.command(name="welcome_goodbye_status", description="【管理者】ウェルカム/グッバイ設定を表示します")
     async def welcome_settings_cmd(interaction: discord.Interaction):
@@ -176,7 +177,7 @@ def register_server_commands(bot: Bot) -> None:
         embed.add_field(name="ウェルカムメッセージ", value=ws.get("message") or "(デフォルト)", inline=False)
         embed.add_field(name="グッバイチャンネル", value=g_ch, inline=True)
         embed.add_field(name="グッバイメッセージ", value=gs.get("message") or "(デフォルト)", inline=False)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True, view=admin_site_view())
 
     # ──────────────────────────────────────────────
     # VC 通知
@@ -188,14 +189,14 @@ def register_server_commands(bot: Bot) -> None:
         if not await _ensure_admin(interaction):
             return
         set_vc_notify_channel_id(interaction.guild.id, channel.id)
-        await interaction.response.send_message(f"VC通知チャンネルを {channel.mention} に設定した。", ephemeral=True)
+        await interaction.response.send_message(f"{channel.mention} をVC通知チャンネルと定めた。", ephemeral=True)
 
     @bot.tree.command(name="vc_notify_channel_clear", description="【管理者】VC通知チャンネル設定を解除します")
     async def clear_vc_notify_ch(interaction: discord.Interaction):
         if not await _ensure_admin(interaction):
             return
         set_vc_notify_channel_id(interaction.guild.id, None)
-        await interaction.response.send_message("VC通知チャンネル設定を解除した。", ephemeral=True)
+        await interaction.response.send_message("VC通知チャンネルを解除した。", ephemeral=True)
 
     # ──────────────────────────────────────────────
     # スティッキーメッセージ
@@ -207,10 +208,10 @@ def register_server_commands(bot: Bot) -> None:
         if not await _ensure_admin(interaction):
             return
         if not isinstance(interaction.channel, discord.TextChannel):
-            await interaction.response.send_message("テキストチャンネルで使用してください。", ephemeral=True)
+            await interaction.response.send_message("テキストチャンネルでのみ使えるぞ。", ephemeral=True)
             return
         set_sticky_message(interaction.guild.id, interaction.channel.id, content.replace("\\n", "\n"))
-        await interaction.response.send_message("スティッキーメッセージを設定した。", ephemeral=True)
+        await interaction.response.send_message("スティッキーメッセージを刻んだ。", ephemeral=True)
         await post_sticky(interaction.channel, interaction.guild.id)
 
     @bot.tree.command(name="sticky_clear", description="【管理者】このチャンネルのスティッキーを解除します")
@@ -218,9 +219,9 @@ def register_server_commands(bot: Bot) -> None:
         if not await _ensure_admin(interaction):
             return
         if not isinstance(interaction.channel, discord.TextChannel):
-            await interaction.response.send_message("テキストチャンネルで使用してください。", ephemeral=True)
+            await interaction.response.send_message("テキストチャンネルでのみ使えるぞ。", ephemeral=True)
             return
-        await interaction.response.send_message("スティッキーメッセージを解除した。", ephemeral=True)
+        await interaction.response.send_message("スティッキーメッセージを取り除いた。", ephemeral=True)
         await delete_sticky(interaction.channel, interaction.guild.id)
 
     @bot.tree.command(name="sticky_list", description="【管理者】スティッキー設定一覧を表示します")
@@ -229,7 +230,7 @@ def register_server_commands(bot: Bot) -> None:
             return
         stickies = get_sticky_messages(interaction.guild.id)
         if not stickies:
-            await interaction.response.send_message("スティッキーメッセージは設定されていない。", ephemeral=True)
+            await interaction.response.send_message("スティッキーメッセージは設定されておらぬ。", ephemeral=True)
             return
         lines = [f"<#{ch_id}>: {v.get('content', '')[:50]}" for ch_id, v in stickies.items()]
         await interaction.response.send_message("**スティッキー一覧**\n" + "\n".join(lines), ephemeral=True)
@@ -255,7 +256,7 @@ def register_server_commands(bot: Bot) -> None:
         try:
             mid = int(message_id)
         except ValueError:
-            await interaction.response.send_message("メッセージIDは数値で指定してください。", ephemeral=True)
+            await interaction.response.send_message("メッセージIDは数値で指定するがよい。", ephemeral=True)
             return
         add_reaction_role(interaction.guild.id, mid, emoji.strip(), role.id)
         await interaction.response.send_message(
@@ -278,13 +279,13 @@ def register_server_commands(bot: Bot) -> None:
         try:
             mid = int(message_id)
         except ValueError:
-            await interaction.response.send_message("メッセージIDは数値で指定してください。", ephemeral=True)
+            await interaction.response.send_message("メッセージIDは数値で指定するがよい。", ephemeral=True)
             return
         removed = remove_reaction_role(interaction.guild.id, mid, emoji.strip())
         if removed:
-            await interaction.response.send_message(f"リアクションロール ({emoji}) を削除した。", ephemeral=True)
+            await interaction.response.send_message(f"リアクションロール ({emoji}) を取り除いた。", ephemeral=True)
         else:
-            await interaction.response.send_message("該当するリアクションロールが見つからなかった。", ephemeral=True)
+            await interaction.response.send_message("そのようなリアクションロールは見つからなかった。", ephemeral=True)
 
     @bot.tree.command(name="reaction_role_list", description="【管理者】リアクションロール一覧を表示します")
     async def list_rr_cmd(interaction: discord.Interaction):
@@ -292,7 +293,7 @@ def register_server_commands(bot: Bot) -> None:
             return
         rr = get_reaction_roles(interaction.guild.id)
         if not rr:
-            await interaction.response.send_message("リアクションロールは設定されていない。", ephemeral=True)
+            await interaction.response.send_message("リアクションロールは設定されておらぬ。", ephemeral=True)
             return
         lines = []
         for msg_id, mapping in rr.items():
@@ -319,16 +320,16 @@ def register_server_commands(bot: Bot) -> None:
         if not await _ensure_admin(interaction):
             return
         if interval < 5:
-            await interaction.response.send_message("間隔は5分以上で指定してください。", ephemeral=True)
+            await interaction.response.send_message("間隔は5分以上で指定せよ。", ephemeral=True)
             return
         feeds = get_news_feeds(interaction.guild.id)
         if len(feeds) >= 10:
-            await interaction.response.send_message("フィードは最大10件まで登録できる。", ephemeral=True)
+            await interaction.response.send_message("フィードは最大10件までだ。余の力にも限りがある。", ephemeral=True)
             return
         feed_id = uuid.uuid4().hex[:8]
         add_news_feed(interaction.guild.id, feed_id, channel.id, query, interval)
         await interaction.response.send_message(
-            f"ニュースフィードを追加した。\nID: `{feed_id}` | クエリ: `{query}` | チャンネル: {channel.mention} | 間隔: {interval}分",
+            f"ニュースフィードを加えた。\nID: `{feed_id}` | クエリ: `{query}` | チャンネル: {channel.mention} | 間隔: {interval}分",
             ephemeral=True,
         )
 
@@ -339,9 +340,9 @@ def register_server_commands(bot: Bot) -> None:
             return
         removed = remove_news_feed(interaction.guild.id, feed_id.strip())
         if removed:
-            await interaction.response.send_message(f"フィード `{feed_id}` を削除した。", ephemeral=True)
+            await interaction.response.send_message(f"フィード `{feed_id}` を抹消した。", ephemeral=True)
         else:
-            await interaction.response.send_message("該当するフィードが見つからなかった。", ephemeral=True)
+            await interaction.response.send_message("そのようなフィードは見つからなかった。", ephemeral=True)
 
     @bot.tree.command(name="news_feed_list", description="【管理者】ニュースフィード一覧を表示します")
     async def list_news_cmd(interaction: discord.Interaction):
@@ -349,7 +350,7 @@ def register_server_commands(bot: Bot) -> None:
             return
         feeds = get_news_feeds(interaction.guild.id)
         if not feeds:
-            await interaction.response.send_message("ニュースフィードは登録されていない。", ephemeral=True)
+            await interaction.response.send_message("ニュースフィードは登録されておらぬ。", ephemeral=True)
             return
         lines = [
             f"`{fid}` | {f.get('query')} | <#{f.get('channel_id')}> | {f.get('interval')}分"
@@ -367,7 +368,7 @@ def register_server_commands(bot: Bot) -> None:
         if not await _ensure_admin(interaction):
             return
         set_earthquake_channel(interaction.guild.id, channel.id)
-        await interaction.response.send_message(f"地震アラートチャンネルを {channel.mention} に設定した。", ephemeral=True)
+        await interaction.response.send_message(f"{channel.mention} を地震アラートチャンネルと定めた。", ephemeral=True)
 
     @bot.tree.command(name="quake_min_scale_set", description="【管理者】地震通知の最小震度を設定します")
     @app_commands.describe(scale="最小震度（10=1, 20=2, 30=3, 40=4, 45=4強, 50=5弱, 55=5強, 60=6弱, 65=6強, 70=7）")
@@ -377,12 +378,12 @@ def register_server_commands(bot: Bot) -> None:
         valid = {10, 20, 30, 40, 45, 50, 55, 60, 65, 70}
         if scale not in valid:
             await interaction.response.send_message(
-                f"有効な震度値: {', '.join(str(v) for v in sorted(valid))}",
+                f"有効な震度値はこれだ: {', '.join(str(v) for v in sorted(valid))}",
                 ephemeral=True,
             )
             return
         set_earthquake_min_scale(interaction.guild.id, scale)
-        await interaction.response.send_message(f"地震アラートの最小震度を {scale} に設定した。", ephemeral=True)
+        await interaction.response.send_message(f"地震アラートの最小震度を {scale} と定めた。", ephemeral=True)
 
     @bot.tree.command(name="quake_status", description="【管理者】地震アラート設定を表示します")
     async def eq_settings_cmd(interaction: discord.Interaction):
@@ -399,7 +400,7 @@ def register_server_commands(bot: Bot) -> None:
         embed.add_field(name="​", value="​", inline=False)
         for key, label in _NOTIFY_TYPE_LABELS.items():
             embed.add_field(name=label, value="✅ 有効" if types.get(key, True) else "❌ 無効", inline=True)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True, view=admin_site_view())
 
     @bot.tree.command(name="quake_notify_type", description="【管理者】地震通知タイプのオン/オフを設定します")
     async def eq_notify_type_cmd(interaction: discord.Interaction):
@@ -418,7 +419,7 @@ def register_server_commands(bot: Bot) -> None:
     @bot.tree.command(name="server_info", description="サーバー情報を表示します")
     async def serverinfo_cmd(interaction: discord.Interaction):
         if interaction.guild is None:
-            await interaction.response.send_message("ギルド内でのみ使用可能だ。", ephemeral=True)
+            await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return
         g = interaction.guild
         created = g.created_at.astimezone(_JST).strftime("%Y/%m/%d %H:%M")
@@ -440,7 +441,7 @@ def register_server_commands(bot: Bot) -> None:
         embed.add_field(name="作成日", value=created, inline=True)
         embed.add_field(name="ブーストレベル", value=str(g.premium_tier), inline=True)
         embed.add_field(name="ブースト数", value=str(g.premium_subscription_count or 0), inline=True)
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, view=admin_site_view())
 
     @bot.tree.command(name="user_info", description="ユーザー情報を表示します")
     @app_commands.describe(member="情報を表示するメンバー（省略時は自分）")
@@ -449,11 +450,11 @@ def register_server_commands(bot: Bot) -> None:
         member: Optional[discord.Member] = None,
     ):
         if interaction.guild is None:
-            await interaction.response.send_message("ギルド内でのみ使用可能だ。", ephemeral=True)
+            await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return
         target = member or interaction.user
         if not isinstance(target, discord.Member):
-            await interaction.response.send_message("メンバー情報を取得できなかった。", ephemeral=True)
+            await interaction.response.send_message("そのメンバーの情報を取得できなかった。", ephemeral=True)
             return
 
         joined = target.joined_at.astimezone(_JST).strftime("%Y/%m/%d %H:%M") if target.joined_at else "不明"

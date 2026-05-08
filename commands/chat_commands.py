@@ -72,7 +72,7 @@ async def handle_chatgpt_message(bot: discord.Client, message: discord.Message):
                 user=message.author,
                 fields={"エラー": str(e)},
             )
-            await message.channel.send(f"ヴォルデモートでも手こずるとはな… {e}")
+            await message.channel.send("ヴォルデモートでも手こずるとはな… 少し待ってから試せ。")
             return
 
         preview = response[:1800] + ("..." if len(response) > 1800 else "")

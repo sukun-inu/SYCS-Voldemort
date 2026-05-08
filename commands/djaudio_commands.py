@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext.commands import Bot
 
 from commands.guards import ensure_admin as _ensure_admin
-from commands.interaction_utils import bind_permission_error_handler
+from commands.interaction_utils import admin_site_view, bind_permission_error_handler
 from config import DJAUDIO_BASE_URL
 from services.settings_store import get_djaudio_runtime_settings, set_djaudio_watch_channel
 
@@ -28,7 +28,7 @@ def register_djaudio_commands(bot: Bot) -> None:
             set_djaudio_watch_channel(interaction.guild_id, None)
             embed = discord.Embed(
                 title="✅ DJAudio 監視チャンネル解除",
-                description="URL の自動 MP3 変換を無効にしました。",
+                description="URL の自動 MP3 変換を無効にした。",
                 color=discord.Color.red(),
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -37,17 +37,17 @@ def register_djaudio_commands(bot: Bot) -> None:
         set_djaudio_watch_channel(interaction.guild_id, channel.id)
         embed = discord.Embed(title="✅ DJAudio チャンネル設定完了", color=discord.Color.green())
         embed.description = (
-            f"{channel.mention} を監視チャンネルに設定しました。\n"
-            "このチャンネルに URL を投稿すると自動で MP3 リンクを返信します。\n\n"
+            f"{channel.mention} を監視チャンネルと定めた。\n"
+            "このチャンネルに URL を投稿すれば、自動で MP3 リンクを返してやろう。\n\n"
             f"🔗 配信 URL ベース: `{DJAUDIO_BASE_URL}`\n"
             f"⏱️ キャッシュ有効期間: `{runtime.cache_ttl // 60}分`\n"
             f"⏳ クールダウン: `{runtime.cooldown}秒` / 最大URL: `{runtime.max_urls}`"
         )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True, view=admin_site_view())
 
     bind_permission_error_handler(
         djaudio_channel_set,
-        missing_permissions_message="❌ チャンネル管理権限が必要です。",
+        missing_permissions_message="❌ チャンネル管理の権限がなければ使えぬ。",
     )
 
     @bot.tree.command(
@@ -73,9 +73,9 @@ def register_djaudio_commands(bot: Bot) -> None:
         embed.add_field(name="キャッシュ有効期間", value=f"{runtime.cache_ttl // 60}分", inline=True)
         embed.add_field(name="クールダウン", value=f"{runtime.cooldown}秒", inline=True)
         embed.add_field(name="最大URL / メッセージ", value=str(runtime.max_urls), inline=True)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True, view=admin_site_view())
 
     bind_permission_error_handler(
         djaudio_status,
-        missing_permissions_message="❌ チャンネル管理権限が必要です。",
+        missing_permissions_message="❌ チャンネル管理の権限がなければ使えぬ。",
     )

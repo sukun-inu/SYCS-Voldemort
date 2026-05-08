@@ -2,17 +2,32 @@ import secrets
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
-from webapp_admin.auth import exchange_code, get_admin_guilds, get_oauth_url, get_user_info
+from webapp_admin.auth import DISCORD_CLIENT_ID, exchange_code, get_admin_guilds, get_oauth_url, get_user_info
 from webapp_admin.extensions import limiter
 
 auth_bp = Blueprint("auth", __name__)
+
+
+def _build_invite_url() -> str | None:
+    if not DISCORD_CLIENT_ID:
+        return None
+    return (
+        "https://discord.com/api/oauth2/authorize"
+        f"?client_id={DISCORD_CLIENT_ID}"
+        "&permissions=8&scope=bot+applications.commands"
+    )
 
 
 @auth_bp.route("/login")
 def login():
     if "user" in session:
         return redirect(url_for("dashboard.index"))
-    return render_template("login.html")
+    return render_template("login.html", invite_url=_build_invite_url())
+
+
+@auth_bp.route("/guide")
+def guide():
+    return render_template("guide.html", invite_url=_build_invite_url())
 
 
 @auth_bp.route("/auth")

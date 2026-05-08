@@ -145,7 +145,7 @@ services:
       - TRUST_CF_HEADERS=${TRUST_CF_HEADERS:-false}
       - REQUIRE_CF_CONNECTING_IP=${REQUIRE_CF_CONNECTING_IP:-false}
       - TRUSTED_PROXY_CIDRS=${TRUSTED_PROXY_CIDRS:-127.0.0.1/32,::1/128}
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,::1}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-metals.kawasaki-n3t.f5.si,localhost,127.0.0.1,::1}
       # 起動時テスト機能（HTTP公開なし・環境変数指定時のみ）
       - STARTUP_TEST_MODE=${STARTUP_TEST_MODE:-false}
       - STARTUP_TEST_REQUIRE_DOCKER=${STARTUP_TEST_REQUIRE_DOCKER:-true}
