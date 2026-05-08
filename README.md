@@ -53,12 +53,13 @@ Discord Bot（運用支援）+ Flask 管理 UI + FastAPI Web トラッカーを�
 - 最小震度フィルタ設定あり
 
 ### 1.10 DJAudio-DL
-- 監視チャンネルに投稿された URL から MP3 を生成して返信
+- 監視チャンネルに投稿された URL から MP3 を生成して配信リンクを送信
 - 期限付き配信リンク（TTL）で提供し、期限後に自動削除
 - 対応例: YouTube / SoundCloud / Bandcamp / ニコニコ動画 / TikTok / 汎用URL
 - 非対応例: Spotify / Apple Music / Amazon Music
 - 設定可能:
-  - 監視チャンネル
+  - 監視チャンネル（URL を投稿するチャンネル）
+  - 出力チャンネル（MP3 リンクを送信するチャンネル。未設定時は監視チャンネルに返信）
   - TTL
   - クールダウン
   - 1メッセージあたりのURL上限
@@ -95,7 +96,7 @@ Discord Bot（運用支援）+ Flask 管理 UI + FastAPI Web トラッカーを�
 | Google News | `/news_feed_add` `/news_feed_remove` `/news_feed_list` | `/admin/settings/news-feeds` |
 | 地震アラート | `/quake_channel_set` `/quake_min_scale_set` `/quake_notify_type` `/quake_status` | `/admin/settings/earthquake` |
 | セキュリティ除外設定 | `/trusted_member_*` `/bypass_role_*` | `/admin/settings/security` |
-| DJAudio-DL | `/djaudio_channel_set` `/djaudio_status` | `/admin/settings/djaudio` |
+| DJAudio-DL | `/djaudio_channel_set` `/djaudio_output_set` `/djaudio_status` | `/admin/settings/djaudio` |
 
 ---
 
@@ -284,6 +285,7 @@ docker compose up -d --build
 | コマンド | 説明 |
 |---|---|
 | `/djaudio_channel_set` | DJAudio 監視チャンネル設定（未指定で解除） |
+| `/djaudio_output_set` | MP3 リンクの送信先チャンネル設定（未指定で解除→監視チャンネルに返信） |
 | `/djaudio_status` | DJAudio 設定表示 |
 
 ---
@@ -308,7 +310,7 @@ docker compose up -d --build
 | `/admin/settings/news-feeds` | ニュースフィード追加・更新・削除 |
 | `/admin/settings/earthquake` | 地震通知チャンネル、最小震度、通知タイプ設定 |
 | `/admin/settings/security` | 信頼済みユーザー / バイパスロール管理 |
-| `/admin/settings/djaudio` | DJAudio監視チャンネル、TTL、クールダウン、URL上限設定 |
+| `/admin/settings/djaudio` | DJAudio 監視チャンネル・出力チャンネル・TTL・クールダウン・URL上限設定 |
 
 ---
 
