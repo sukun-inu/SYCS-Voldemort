@@ -298,7 +298,7 @@ async def _fetch_tile(session: aiohttp.ClientSession, z: int, x: int, y: int):
         async with session.get(
             url,
             headers={"User-Agent": _TILE_UA},
-            timeout=aiohttp.ClientTimeout(total=5),
+            timeout=aiohttp.ClientTimeout(total=3),
         ) as resp:
             if resp.status == 200:
                 data = await resp.read()
@@ -599,7 +599,7 @@ def _jma_quake_url(eq_time: str) -> str:
 
 # ── 通知送信（確定地震情報 551） ──────────────────────────
 
-async def _notify_all_guilds(bot: Bot, event: dict, session: aiohttp.ClientSession) -> None:
+async def _notify_all_guilds(bot: Bot, event: dict) -> None:
     max_scale = _max_scale(event)
     points    = event.get("points", [])
 
@@ -619,7 +619,9 @@ async def _notify_all_guilds(bot: Bot, event: dict, session: aiohttp.ClientSessi
     map_buf: io.BytesIO | None = None
     if lat is not None and lon is not None and points:
         try:
-            map_buf = await _generate_intensity_map(session, lat, lon, points)
+            # タイル取得は専用セッションで実施（WS セッションを汚染しない）
+            async with aiohttp.ClientSession() as tile_session:
+                map_buf = await _generate_intensity_map(tile_session, lat, lon, points)
         except Exception as e:
             logger.exception("[earthquake] map generation error: %s", e)
 
@@ -759,14 +761,29 @@ async def _notify_eew_guilds(bot: Bot, event: dict, notify_type: str) -> None:
 
 # ── WebSocket ループ ──────────────────────────────────────
 
+def _spawn(coro) -> asyncio.Task:
+    """通知タスクをバックグラウンドで起動し、未捕捉例外をログに記録する。"""
+    task = asyncio.create_task(coro)
+    task.add_done_callback(
+        lambda t: logger.exception("[earthquake] task error: %s", t.exception())
+        if not t.cancelled() and t.exception() else None
+    )
+    return task
+
+
 async def run_earthquake_ws(bot: Bot) -> None:
-    """P2PQuake WS 1本で地震情報 (551)・津波情報 (552)・EEW警報 (554)・EEW予報 (556) を受信する。"""
+    """P2PQuake WS 1本で地震情報 (551)・津波情報 (552)・EEW警報 (554)・EEW予報 (556) を受信する。
+
+    通知処理はすべて asyncio.create_task() でバックグラウンド起動するため、
+    WS 受信ループはタイル取得や Discord API 送信をブロックせず常に即応する。
+    """
     _eew_seen: set[str] = set()
 
-    async with aiohttp.ClientSession() as session:
-        while True:
-            try:
-                async with session.ws_connect(_WS_URL, heartbeat=30) as ws:
+    while True:
+        try:
+            # WS 専用セッション（タイル HTTP と共有しない）
+            async with aiohttp.ClientSession() as ws_session:
+                async with ws_session.ws_connect(_WS_URL, heartbeat=20) as ws:
                     logger.info("[earthquake] P2PQuake WS 接続確立")
                     async for msg in ws:
                         if msg.type == aiohttp.WSMsgType.TEXT:
@@ -778,10 +795,11 @@ async def run_earthquake_ws(bot: Bot) -> None:
                             code = data.get("code")
 
                             if code == 551:
-                                await _notify_all_guilds(bot, data, session)
+                                # タイル生成を含むためバックグラウンド実行
+                                _spawn(_notify_all_guilds(bot, data))
 
                             elif code == 552:
-                                await _notify_tsunami_guilds(bot, data)
+                                _spawn(_notify_tsunami_guilds(bot, data))
 
                             elif code in (554, 556) and not data.get("cancelled"):
                                 notify_type = "eew_forecast" if code == 556 else "eew_warning"
@@ -794,12 +812,13 @@ async def run_earthquake_ws(bot: Bot) -> None:
                                     _eew_seen.add(key)
                                     if len(_eew_seen) > 200:
                                         _eew_seen.clear()
-                                    await _notify_eew_guilds(bot, data, notify_type)
+                                    # EEW は最優先でバックグラウンド起動
+                                    _spawn(_notify_eew_guilds(bot, data, notify_type))
 
                         elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
                             logger.warning("[earthquake] WS 切断: %s", msg.type)
                             break
-            except Exception as e:
-                logger.exception("[earthquake] WS エラー: %s", e)
-            logger.info("[earthquake] 10秒後に再接続")
-            await asyncio.sleep(10)
+        except Exception as e:
+            logger.exception("[earthquake] WS エラー: %s", e)
+        logger.info("[earthquake] 10秒後に再接続")
+        await asyncio.sleep(10)
