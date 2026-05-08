@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext.commands import Bot
 
 from commands.guards import ensure_admin as _ensure_admin
+from commands.interaction_utils import bind_permission_error_handler
 from config import DJAUDIO_BASE_URL
 from services.settings_store import get_djaudio_runtime_settings, set_djaudio_watch_channel
 
@@ -10,12 +11,12 @@ from services.settings_store import get_djaudio_runtime_settings, set_djaudio_wa
 def register_djaudio_commands(bot: Bot) -> None:
 
     @bot.tree.command(
-        name="djaudio_setchannel",
-        description="URL を監視して MP3 リンクを送信するチャンネルを設定します",
+        name="djaudio_channel_set",
+        description="【管理者】DJAudio の監視チャンネルを設定します",
     )
-    @app_commands.describe(channel="監視するチャンネル（省略で解除）")
+    @app_commands.describe(channel="監視するチャンネル（未指定で解除）")
     @app_commands.checks.has_permissions(manage_channels=True)
-    async def djaudio_setchannel(
+    async def djaudio_channel_set(
         interaction: discord.Interaction,
         channel: discord.TextChannel | None = None,
     ):
@@ -44,18 +45,14 @@ def register_djaudio_commands(bot: Bot) -> None:
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @djaudio_setchannel.error
-    async def djaudio_setchannel_error(
-        interaction: discord.Interaction, error: app_commands.AppCommandError
-    ):
-        if isinstance(error, app_commands.MissingPermissions):
-            await interaction.response.send_message("❌ チャンネル管理権限が必要です。", ephemeral=True)
-        else:
-            await interaction.response.send_message(f"❌ エラー: {error}", ephemeral=True)
+    bind_permission_error_handler(
+        djaudio_channel_set,
+        missing_permissions_message="❌ チャンネル管理権限が必要です。",
+    )
 
     @bot.tree.command(
         name="djaudio_status",
-        description="DJAudio の現在の設定を表示します",
+        description="【管理者】DJAudio の現在設定を表示します",
     )
     @app_commands.checks.has_permissions(manage_channels=True)
     async def djaudio_status(interaction: discord.Interaction):
@@ -78,11 +75,7 @@ def register_djaudio_commands(bot: Bot) -> None:
         embed.add_field(name="最大URL / メッセージ", value=str(runtime.max_urls), inline=True)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @djaudio_status.error
-    async def djaudio_status_error(
-        interaction: discord.Interaction, error: app_commands.AppCommandError
-    ):
-        if isinstance(error, app_commands.MissingPermissions):
-            await interaction.response.send_message("❌ チャンネル管理権限が必要です。", ephemeral=True)
-        else:
-            await interaction.response.send_message(f"❌ エラー: {error}", ephemeral=True)
+    bind_permission_error_handler(
+        djaudio_status,
+        missing_permissions_message="❌ チャンネル管理権限が必要です。",
+    )

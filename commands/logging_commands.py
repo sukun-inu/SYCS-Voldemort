@@ -36,7 +36,7 @@ async def _update_entity_list(
 
 def register_logging_commands(bot: Bot) -> None:
 
-    @bot.tree.command(name="set_log_channel", description="ボットの動作ログを送信するチャンネルを設定（管理者専用）")
+    @bot.tree.command(name="log_channel_set", description="【管理者】ログ送信チャンネルを設定します")
     @app_commands.describe(channel="ログを投稿するテキストチャンネル")
     async def set_log_channel_cmd(interaction: discord.Interaction, channel: discord.TextChannel):
         if not await _ensure_admin_in_guild(interaction):
@@ -49,7 +49,7 @@ def register_logging_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
-    @bot.tree.command(name="set_log_level", description="ボットの動作ログレベルを設定（管理者専用）")
+    @bot.tree.command(name="log_level_set", description="【管理者】ログレベルを設定します")
     @app_commands.describe(level="NONE / ERROR / INFO / DEBUG のいずれか")
     async def set_log_level_cmd(interaction: discord.Interaction, level: str):
         if not await _ensure_admin_in_guild(interaction):
@@ -69,7 +69,7 @@ def register_logging_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
-    @bot.tree.command(name="set_response_channel", description="ChatGPT応答チャンネルを設定（管理者専用）")
+    @bot.tree.command(name="chat_channel_set", description="【管理者】AI応答チャンネルを設定します")
     @app_commands.describe(channel="ChatGPTが応答するテキストチャンネル")
     async def set_response_channel_cmd(interaction: discord.Interaction, channel: discord.TextChannel):
         if not await _ensure_admin_in_guild(interaction):
@@ -82,7 +82,7 @@ def register_logging_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
-    @bot.tree.command(name="clear_response_channel", description="ChatGPT応答チャンネル設定を解除（管理者専用）")
+    @bot.tree.command(name="chat_channel_clear", description="【管理者】AI応答チャンネル設定を解除します")
     async def clear_response_channel_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
@@ -90,7 +90,7 @@ def register_logging_commands(bot: Bot) -> None:
         set_response_channel_id(interaction.guild.id, None)
         await interaction.response.send_message("ChatGPT応答チャンネル設定を解除しました。", ephemeral=True)
 
-    @bot.tree.command(name="add_trusted_members", description="信頼済みユーザーとして追加（セキュリティチェック対象外・管理者専用）")
+    @bot.tree.command(name="trusted_member_add", description="【管理者】信頼済みユーザーを追加します")
     @app_commands.describe(
         member1="信頼済みに追加するメンバー1",
         member2="信頼済みに追加するメンバー2 (任意)",
@@ -112,7 +112,7 @@ def register_logging_commands(bot: Bot) -> None:
         members = [m for m in [member1, member2, member3, member4, member5] if m is not None]
         await _update_entity_list(interaction, members, add_trusted_users, "信頼済みユーザーに追加", "信頼済みユーザー数")
 
-    @bot.tree.command(name="remove_trusted_members", description="信頼済みユーザーから削除（管理者専用）")
+    @bot.tree.command(name="trusted_member_remove", description="【管理者】信頼済みユーザーを削除します")
     @app_commands.describe(
         member1="削除するメンバー1",
         member2="削除するメンバー2 (任意)",
@@ -134,7 +134,7 @@ def register_logging_commands(bot: Bot) -> None:
         members = [m for m in [member1, member2, member3, member4, member5] if m is not None]
         await _update_entity_list(interaction, members, remove_trusted_users, "信頼済みユーザーから削除", "信頼済みユーザー数")
 
-    @bot.tree.command(name="list_trusted_members", description="信頼済みユーザー一覧を表示（管理者専用）")
+    @bot.tree.command(name="trusted_member_list", description="【管理者】信頼済みユーザー一覧を表示します")
     async def list_trusted_members_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
@@ -154,7 +154,7 @@ def register_logging_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
-    @bot.tree.command(name="add_bypass_roles", description="セキュリティチェックをバイパスするロールを追加（管理者専用）")
+    @bot.tree.command(name="bypass_role_add", description="【管理者】バイパスロールを追加します")
     @app_commands.describe(
         role1="追加するロール1",
         role2="追加するロール2 (任意)",
@@ -172,7 +172,7 @@ def register_logging_commands(bot: Bot) -> None:
         roles = [r for r in [role1, role2, role3] if r is not None]
         await _update_entity_list(interaction, roles, add_bypass_roles, "バイパスロールに追加", "バイパスロール数")
 
-    @bot.tree.command(name="remove_bypass_roles", description="バイパスロールから削除（管理者専用）")
+    @bot.tree.command(name="bypass_role_remove", description="【管理者】バイパスロールを削除します")
     @app_commands.describe(
         role1="削除するロール1",
         role2="削除するロール2 (任意)",
@@ -190,7 +190,7 @@ def register_logging_commands(bot: Bot) -> None:
         roles = [r for r in [role1, role2, role3] if r is not None]
         await _update_entity_list(interaction, roles, remove_bypass_roles, "バイパスロールから削除", "バイパスロール数")
 
-    @bot.tree.command(name="list_bypass_roles", description="バイパスロール一覧を表示（管理者専用）")
+    @bot.tree.command(name="bypass_role_list", description="【管理者】バイパスロール一覧を表示します")
     async def list_bypass_roles_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
@@ -210,7 +210,7 @@ def register_logging_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
-    @bot.tree.command(name="settings", description="現在のBot設定を一覧表示（管理者専用）")
+    @bot.tree.command(name="bot_settings", description="【管理者】Bot設定を一覧表示します")
     async def settings_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
@@ -263,7 +263,7 @@ def register_logging_commands(bot: Bot) -> None:
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @bot.tree.command(name="help", description="このボットで利用可能なスラッシュコマンド一覧を表示")
+    @bot.tree.command(name="bot_help", description="利用可能なスラッシュコマンド一覧を表示します")
     async def help_cmd(interaction: discord.Interaction):
         commands = {}
         for cmd in bot.tree.walk_commands():
@@ -273,7 +273,7 @@ def register_logging_commands(bot: Bot) -> None:
 
         embed = discord.Embed(
             title="利用可能なスラッシュコマンド一覧",
-            description="/help 以外にも以下のコマンドが利用可能だ。",
+            description="/bot_help 以外にも以下のコマンドが利用可能だ。",
             color=discord.Color.blurple(),
         )
 

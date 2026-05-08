@@ -8,7 +8,7 @@
 ## 1. 機能概要
 
 ### 1.1 金属価格コマンド
-- `/gold` `/silver` `/platinum` `/all`
+- `/metal_gold` `/metal_silver` `/metal_platinum` `/metal_all`
 - JPY ベースのリアルタイム金属価格を取得（MetalPriceAPI）
 - グラム数指定に対応
 - Embed 形式で視認性の高い表示
@@ -471,97 +471,98 @@ docker compose up -d --build
 
 ## 7. Slash コマンド一覧
 
-起動後に `bot.tree.sync()` で自動同期。`/help` で Embed 一覧表示。
+起動後に `bot.tree.sync()` で自動同期。`/bot_help` で Embed 一覧表示。  
+命名ルールは原則 `機能_操作`（例: `log_channel_set`, `news_feed_add`）で統一。
 
 ### 7.1 ログ・設定系（管理者専用）
 
 | コマンド | 説明 |
 |---|---|
-| `/set_log_channel` | ログ送信チャンネルを設定 |
-| `/set_log_level` | ログレベル設定（NONE/ERROR/INFO/DEBUG） |
-| `/set_response_channel` | ChatGPT 応答チャンネルを設定 |
-| `/clear_response_channel` | ChatGPT 応答チャンネルを解除 |
-| `/settings` | 現在の全設定を Embed で表示 |
-| `/help` | コマンド一覧を表示 |
+| `/log_channel_set` | ログ送信チャンネルを設定 |
+| `/log_level_set` | ログレベル設定（NONE/ERROR/INFO/DEBUG） |
+| `/chat_channel_set` | ChatGPT 応答チャンネルを設定 |
+| `/chat_channel_clear` | ChatGPT 応答チャンネルを解除 |
+| `/bot_settings` | 現在の全設定を Embed で表示 |
+| `/bot_help` | コマンド一覧を表示 |
 
 ### 7.2 セキュリティ管理（管理者専用）
 
 | コマンド | 説明 |
 |---|---|
-| `/add_trusted_members` | 信頼済みユーザーに追加（最大 5 名同時） |
-| `/remove_trusted_members` | 信頼済みユーザーから削除 |
-| `/list_trusted_members` | 信頼済みユーザー一覧表示 |
-| `/add_bypass_roles` | バイパスロール追加（最大 3 個同時） |
-| `/remove_bypass_roles` | バイパスロール削除 |
-| `/list_bypass_roles` | バイパスロール一覧表示 |
+| `/trusted_member_add` | 信頼済みユーザーに追加（最大 5 名同時） |
+| `/trusted_member_remove` | 信頼済みユーザーから削除 |
+| `/trusted_member_list` | 信頼済みユーザー一覧表示 |
+| `/bypass_role_add` | バイパスロール追加（最大 3 個同時） |
+| `/bypass_role_remove` | バイパスロール削除 |
+| `/bypass_role_list` | バイパスロール一覧表示 |
 
 ### 7.3 ウェルカム / グッバイ（管理者専用）
 
 | コマンド | 説明 |
 |---|---|
-| `/set_welcome_channel` | ウェルカムメッセージ送信チャンネルを設定 |
-| `/set_welcome_message` | ウェルカムメッセージテンプレートを設定 |
-| `/set_goodbye_channel` | グッバイメッセージ送信チャンネルを設定 |
-| `/set_goodbye_message` | グッバイメッセージテンプレートを設定 |
-| `/welcome_settings` | 現在のウェルカム / グッバイ設定を表示 |
+| `/welcome_channel_set` | ウェルカムメッセージ送信チャンネルを設定 |
+| `/welcome_message_set` | ウェルカムメッセージテンプレートを設定 |
+| `/goodbye_channel_set` | グッバイメッセージ送信チャンネルを設定 |
+| `/goodbye_message_set` | グッバイメッセージテンプレートを設定 |
+| `/welcome_goodbye_status` | 現在のウェルカム / グッバイ設定を表示 |
 
 ### 7.4 VC 通知（管理者専用）
 
 | コマンド | 説明 |
 |---|---|
-| `/set_vc_notify_channel` | VC 通知チャンネルを設定 |
-| `/clear_vc_notify_channel` | VC 通知チャンネルを解除 |
+| `/vc_notify_channel_set` | VC 通知チャンネルを設定 |
+| `/vc_notify_channel_clear` | VC 通知チャンネルを解除 |
 
 ### 7.5 スティッキーメッセージ（管理者専用）
 
 | コマンド | 説明 |
 |---|---|
-| `/sticky` | このチャンネルにスティッキーを設定 |
-| `/unsticky` | このチャンネルのスティッキーを解除 |
-| `/list_stickies` | スティッキー一覧を表示 |
+| `/sticky_set` | このチャンネルにスティッキーを設定 |
+| `/sticky_clear` | このチャンネルのスティッキーを解除 |
+| `/sticky_list` | スティッキー一覧を表示 |
 
 ### 7.6 リアクションロール（管理者専用）
 
 | コマンド | 説明 |
 |---|---|
-| `/add_reaction_role` | リアクションロールを追加 |
-| `/remove_reaction_role` | リアクションロールを削除 |
-| `/list_reaction_roles` | リアクションロール一覧を表示 |
+| `/reaction_role_add` | リアクションロールを追加 |
+| `/reaction_role_remove` | リアクションロールを削除 |
+| `/reaction_role_list` | リアクションロール一覧を表示 |
 
 ### 7.7 ニュースフィード（管理者専用）
 
 | コマンド | 説明 |
 |---|---|
-| `/add_news_feed` | Google News フィードを追加 |
-| `/remove_news_feed` | ニュースフィードを削除 |
-| `/list_news_feeds` | フィード一覧を表示 |
+| `/news_feed_add` | Google News フィードを追加 |
+| `/news_feed_remove` | ニュースフィードを削除 |
+| `/news_feed_list` | フィード一覧を表示 |
 
 ### 7.8 地震アラート（管理者専用）
 
 | コマンド | 説明 |
 |---|---|
-| `/set_earthquake_channel` | 地震アラートチャンネルを設定 |
-| `/set_earthquake_min_scale` | 最小震度を設定 |
-| `/earthquake_settings` | 地震アラート設定・通知タイプ一覧を表示 |
-| `/earthquake_notify_type` | 通知タイプをボタン UI でオン/オフ切り替え |
+| `/quake_channel_set` | 地震アラートチャンネルを設定 |
+| `/quake_min_scale_set` | 最小震度を設定 |
+| `/quake_status` | 地震アラート設定・通知タイプ一覧を表示 |
+| `/quake_notify_type` | 通知タイプをボタン UI でオン/オフ切り替え |
 
 ### 7.9 DJAudio-DL（管理者専用）
 
 | コマンド | 説明 |
 |---|---|
-| `/djaudio_setchannel [channel]` | URL 監視チャンネルを設定（省略で解除） |
+| `/djaudio_channel_set [channel]` | URL 監視チャンネルを設定（省略で解除） |
 | `/djaudio_status` | DJAudio 現在の設定を表示 |
 
 ### 7.10 情報表示（全員）
 
 | コマンド | 説明 |
 |---|---|
-| `/gold g:<数値>` | 金の現在価格 |
-| `/silver g:<数値>` | 銀の現在価格 |
-| `/platinum g:<数値>` | プラチナの現在価格 |
-| `/all g:<数値>` | 全金属の価格一覧 |
-| `/serverinfo` | サーバー情報を表示 |
-| `/userinfo [member]` | ユーザー情報を表示 |
+| `/metal_gold g:<数値>` | 金の現在価格 |
+| `/metal_silver g:<数値>` | 銀の現在価格 |
+| `/metal_platinum g:<数値>` | プラチナの現在価格 |
+| `/metal_all g:<数値>` | 全金属の価格一覧 |
+| `/server_info` | サーバー情報を表示 |
+| `/user_info [member]` | ユーザー情報を表示 |
 
 ---
 
@@ -587,16 +588,16 @@ docker compose up -d --build
 ### 9.2 スラッシュコマンドで設定する場合
 
 ```
-/set_log_channel       → ログチャンネルを指定
-/set_log_level         → INFO に設定
-/set_response_channel  → ChatGPT 応答チャンネルを指定
-/add_bypass_roles      → Mod ロールをバイパスに追加
-/set_welcome_channel   → ウェルカムチャンネルを指定
-/set_earthquake_channel   → 地震アラートチャンネルを指定
-/set_earthquake_min_scale → 最小震度を設定（例: 30 = 震度3）
-/earthquake_notify_type   → 通知タイプをボタン UI で切り替え
-/add_news_feed         → キーワードとチャンネルを設定
-/djaudio_setchannel    → MP3 自動変換を有効にするチャンネルを指定
+/log_channel_set       → ログチャンネルを指定
+/log_level_set         → INFO に設定
+/chat_channel_set      → ChatGPT 応答チャンネルを指定
+/bypass_role_add       → Mod ロールをバイパスに追加
+/welcome_channel_set   → ウェルカムチャンネルを指定
+/quake_channel_set     → 地震アラートチャンネルを指定
+/quake_min_scale_set   → 最小震度を設定（例: 30 = 震度3）
+/quake_notify_type     → 通知タイプをボタン UI で切り替え
+/news_feed_add         → キーワードとチャンネルを設定
+/djaudio_channel_set   → MP3 自動変換を有効にするチャンネルを指定
 ```
 
 > **DJAudio-DL 動作要件:** `yt-dlp` / `ffmpeg` が実行環境にインストールされている必要があります。  

@@ -1,10 +1,9 @@
 import asyncio
 import logging
+
 from bot_setup import create_bot, setup_events
-from commands.djaudio_commands import register_djaudio_commands
-from commands.logging_commands import register_logging_commands
-from commands.metal_commands import register_metal_commands
-from commands.server_commands import register_server_commands
+from commands import register_all_commands
+from commands.interaction_utils import install_global_app_command_error_handler
 from config import DISCORD_BOT_TOKEN
 
 logging.basicConfig(
@@ -16,10 +15,13 @@ logging.basicConfig(
 async def main():
     bot = create_bot()
     setup_events(bot)
-    register_metal_commands(bot)
-    register_logging_commands(bot)
-    register_server_commands(bot)
-    register_djaudio_commands(bot)
+    loaded_modules = register_all_commands(bot)
+    install_global_app_command_error_handler(bot)
+
+    logging.getLogger(__name__).info(
+        "Slash command modules loaded: %s",
+        ", ".join(loaded_modules),
+    )
 
     async with bot:
         if not DISCORD_BOT_TOKEN:
