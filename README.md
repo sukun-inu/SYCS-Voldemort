@@ -111,14 +111,27 @@ VC 参加・退出・移動をユーザー向けに通知する専用チャン�
 ---
 
 ### 1.9 地震アラート（P2PQuake）
-P2PQuake API を使用して日本の地震情報をリアルタイムで通知します。
+P2PQuake WebSocket API に常時接続し、日本の地震情報をリアルタイムで通知します。
 
-- 1 分ごとに新着確認
-- 最小震度を設定して通知量を調整可能
-- 震度に応じた Embed カラー（緑→黄→橙→赤）
-- 初回起動時はサイレント（最新 ID を記録するだけで投稿しない）
-- Pillow で震度バッジ画像を動的生成（震度値・配色を画像として Embed に添付）
-- 津波警報・注意報を検出して別メッセージで通知（Watch / Warning）
+**受信するイベント:**
+
+| P2PQuake コード | 種別 | 通知タイプキー |
+|---|---|---|
+| 551 | 地震情報（確定） | `quake_info` |
+| 552 | 津波予報 | `tsunami` |
+| 554 | 緊急地震速報（警報） | `eew_warning` |
+| 556 | 緊急地震速報（予報） | `eew_forecast` |
+
+**主な機能:**
+- WebSocket による常時接続（切断時は 10 秒後に自動再接続）
+- 通知タイプごとにサーバー単位でオン/オフ切り替え可能
+- 最小震度フィルタで通知量を調整可能
+- Kiwi Monitor カラースキーム 第2版 に基づく震度別カラー
+- Pillow で震度バッジ（Apple スタイル・120×120px）を動的生成し Embed に添付
+- CartoDB Dark Matter タイルによるダーク地図を生成し震度分布を可視化
+- 津波情報は大津波警報 / 津波警報 / 津波注意報 / 解除を色分けして通知
+- EEW は同一イベントの重複送信を抑制（第 1 報・最終報のみ通知）
+- 各通知に気象庁情報ページへのリンクボタンを付与
 
 **震度対応表:**
 
@@ -194,7 +207,7 @@ Discord OAuth 認証によって管理者のみがアクセスできる Web 管�
 - スティッキーメッセージ（追加・削除）
 - リアクションロール（追加・削除）
 - ニュースフィード（追加・編集・削除）
-- 地震アラート（チャンネル・最小震度）
+- 地震アラート（チャンネル・最小震度・通知タイプ切り替え）
 - セキュリティ設定（信頼済みユーザー・バイパスロール）
 - サーバー情報・ユーザー情報表示
 - ダッシュボードでチャンネル ID をチャンネル名に変換して表示（設定画面全体に適用）
@@ -467,7 +480,8 @@ docker compose up -d --build
 |---|---|
 | `/set_earthquake_channel` | 地震アラートチャンネルを設定 |
 | `/set_earthquake_min_scale` | 最小震度を設定 |
-| `/earthquake_settings` | 地震アラート設定を表示 |
+| `/earthquake_settings` | 地震アラート設定・通知タイプ一覧を表示 |
+| `/earthquake_notify_type` | 通知タイプをボタン UI でオン/オフ切り替え |
 
 ### 7.9 情報表示（全員）
 
@@ -488,7 +502,7 @@ docker compose up -d --build
 |---|---|---|
 | `update_status` | 5 秒 | Ping・CPU・MEM をステータスに表示 |
 | `news_feed_task` | 5 分 | 全サーバーのニュースフィードをチェック |
-| `earthquake_task` | 1 分 | P2PQuake から地震情報を取得・通知 |
+| `run_earthquake_ws` | 常時 | P2PQuake WS に接続し地震情報をリアルタイム受信（切断時 10 秒で再接続） |
 
 ---
 
@@ -508,8 +522,9 @@ docker compose up -d --build
 /set_response_channel  → ChatGPT 応答チャンネルを指定
 /add_bypass_roles      → Mod ロールをバイパスに追加
 /set_welcome_channel   → ウェルカムチャンネルを指定
-/set_earthquake_channel → 地震アラートチャンネルを指定
+/set_earthquake_channel   → 地震アラートチャンネルを指定
 /set_earthquake_min_scale → 最小震度を設定（例: 30 = 震度3）
+/earthquake_notify_type   → 通知タイプをボタン UI で切り替え
 /add_news_feed         → キーワードとチャンネルを設定
 ```
 
@@ -553,7 +568,14 @@ docker compose up -d --build
       "earthquake": {
         "channel_id": 123456789,
         "min_scale": 30,
-        "last_event_id": "abc123"
+        "last_event_id": "abc123",
+        "notify_types": {
+          "eew_forecast": true,
+          "eew_warning": true,
+          "tsunami": true,
+          "quake_info": true,
+          "bot_news": true
+        }
       }
     }
   }

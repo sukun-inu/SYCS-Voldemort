@@ -11,6 +11,7 @@ from services.sticky_service import delete_sticky, post_sticky
 from services.settings_store import (
     add_news_feed,
     add_reaction_role,
+    get_earthquake_notify_types,
     get_earthquake_settings,
     get_goodbye_settings,
     get_news_feeds,
@@ -22,6 +23,7 @@ from services.settings_store import (
     remove_reaction_role,
     set_earthquake_channel,
     set_earthquake_min_scale,
+    set_earthquake_notify_types,
     set_goodbye_channel,
     set_goodbye_message,
     set_sticky_message,
@@ -29,6 +31,98 @@ from services.settings_store import (
     set_welcome_channel,
     set_welcome_message,
 )
+
+_NOTIFY_TYPE_LABELS: dict[str, str] = {
+    "eew_forecast": "緊急地震速報（予報）",
+    "eew_warning":  "緊急地震速報（警報）",
+    "tsunami":      "津波情報",
+    "quake_info":   "地震情報",
+    "bot_news":     "ボットに関するお知らせ",
+}
+
+
+def _build_notify_type_embed(types: dict[str, bool]) -> discord.Embed:
+    embed = discord.Embed(
+        title="地震通知タイプ設定",
+        description="ボタンをクリックしてオン/オフを切り替え、「保存」で確定します。",
+        color=discord.Color.orange(),
+    )
+    for key, label in _NOTIFY_TYPE_LABELS.items():
+        enabled = types.get(key, True)
+        embed.add_field(name=label, value="✅ 有効" if enabled else "❌ 無効", inline=True)
+    return embed
+
+
+class _ToggleButton(discord.ui.Button):
+    def __init__(self, key: str, label: str, enabled: bool, row: int):
+        super().__init__(
+            label=f"{'✅' if enabled else '❌'} {label}",
+            style=discord.ButtonStyle.success if enabled else discord.ButtonStyle.secondary,
+            custom_id=f"eq_toggle_{key}",
+            row=row,
+        )
+        self.key = key
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await self.view.handle_toggle(interaction, self.key)  # type: ignore[attr-defined]
+
+
+class _SaveButton(discord.ui.Button):
+    def __init__(self, row: int):
+        super().__init__(
+            label="保存して閉じる",
+            style=discord.ButtonStyle.primary,
+            custom_id="eq_notify_save_btn",
+            row=row,
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await self.view.handle_save(interaction)  # type: ignore[attr-defined]
+
+
+class _NotifyTypeView(discord.ui.View):
+    def __init__(self, guild_id: int, author_id: int, types: dict[str, bool]):
+        super().__init__(timeout=180)
+        self.guild_id  = guild_id
+        self.author_id = author_id
+        self.types     = dict(types)
+        self._rebuild()
+
+    def _rebuild(self) -> None:
+        self.clear_items()
+        keys = list(_NOTIFY_TYPE_LABELS.keys())
+        for i, key in enumerate(keys):
+            label   = _NOTIFY_TYPE_LABELS[key]
+            enabled = self.types.get(key, True)
+            self.add_item(_ToggleButton(key, label, enabled, row=i // 2))
+        self.add_item(_SaveButton(row=len(keys) // 2 + 1))
+
+    async def _check_author(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message("操作権限がありません。", ephemeral=True)
+            return False
+        return True
+
+    async def handle_toggle(self, interaction: discord.Interaction, key: str) -> None:
+        if not await self._check_author(interaction):
+            return
+        self.types[key] = not self.types.get(key, True)
+        self._rebuild()
+        await interaction.response.edit_message(
+            embed=_build_notify_type_embed(self.types), view=self
+        )
+
+    async def handle_save(self, interaction: discord.Interaction) -> None:
+        if not await self._check_author(interaction):
+            return
+        set_earthquake_notify_types(self.guild_id, self.types)
+        self.clear_items()
+        self.stop()
+        await interaction.response.edit_message(
+            content="✅ 設定を保存した。",
+            embed=_build_notify_type_embed(self.types),
+            view=self,
+        )
 
 
 def register_server_commands(bot: Bot) -> None:
@@ -295,13 +389,27 @@ def register_server_commands(bot: Bot) -> None:
         if not await _ensure_admin(interaction):
             return
         s = get_earthquake_settings(interaction.guild.id)
+        types = get_earthquake_notify_types(interaction.guild.id)
         ch_id = s.get("channel_id")
         ch_text = f"<#{ch_id}>" if ch_id else "未設定"
         min_scale = s.get("min_scale", 30)
         embed = discord.Embed(title="地震アラート設定", color=discord.Color.orange())
         embed.add_field(name="チャンネル", value=ch_text, inline=True)
         embed.add_field(name="最小震度", value=str(min_scale), inline=True)
+        embed.add_field(name="​", value="​", inline=False)
+        for key, label in _NOTIFY_TYPE_LABELS.items():
+            embed.add_field(name=label, value="✅ 有効" if types.get(key, True) else "❌ 無効", inline=True)
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @bot.tree.command(name="earthquake_notify_type", description="地震通知タイプのオン/オフを設定（管理者専用）")
+    async def eq_notify_type_cmd(interaction: discord.Interaction):
+        if not await _ensure_admin(interaction):
+            return
+        types = get_earthquake_notify_types(interaction.guild.id)
+        view  = _NotifyTypeView(interaction.guild.id, interaction.user.id, types)
+        await interaction.response.send_message(
+            embed=_build_notify_type_embed(types), view=view, ephemeral=True
+        )
 
     # ──────────────────────────────────────────────
     # サーバー情報 / ユーザー情報

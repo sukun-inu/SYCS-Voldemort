@@ -75,9 +75,38 @@
     </div>
   </section>
 
+  <section class="section-card span-12">
+    <div class="section-card-header">
+      <h2 class="section-card-title"><i class="bi bi-bell"></i>通知タイプ</h2>
+    </div>
+    <div class="section-card-body">
+      <p class="text-muted mb-3">受信する通知の種類を選択します。無効にした種類は送信されません。</p>
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="set_notify_types">
+        <div class="row g-3 mb-4">
+          {% for key, label in notify_type_labels.items() %}
+          <div class="col-12 col-md-6">
+            <div class="form-check form-switch d-flex align-items-center gap-2 py-2">
+              <input class="form-check-input flex-shrink-0" type="checkbox" role="switch"
+                     id="notify_{{ key }}" name="notify_{{ key }}"
+                     {% if notify_types.get(key, True) %}checked{% endif %}
+                     style="width:3em;height:1.5em;">
+              <label class="form-check-label fw-semibold" for="notify_{{ key }}">{{ label }}</label>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-accent"><i class="bi bi-check-lg me-2"></i>保存</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
   <div class="info-panel span-12">
     <p class="info-panel-title"><i class="bi bi-info-circle"></i>チェック動作</p>
-    <p class="mb-0">Bot 起動後の初回チェックは最新IDを記録し、以降 1 分ごとに新しい地震情報を確認します。情報提供: <strong>P2PQuake</strong></p>
+    <p class="mb-0">P2PQuake WebSocket 経由でリアルタイムに地震情報・津波情報・緊急地震速報を受信します。情報提供: <strong>P2PQuake</strong> / <strong>気象庁</strong></p>
   </div>
 </div>
 

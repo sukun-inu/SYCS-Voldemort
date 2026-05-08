@@ -393,3 +393,24 @@ def set_earthquake_min_scale(guild_id: int, scale: int) -> None:
 
 def set_earthquake_last_event_id(guild_id: int, event_id: str) -> None:
     _update_nested(guild_id, "earthquake", {"last_event_id": event_id})
+
+
+# ──────────────────────────────────────────────
+# 地震通知タイプ
+# ──────────────────────────────────────────────
+
+_NOTIFY_TYPE_KEYS: frozenset[str] = frozenset(
+    {"eew_forecast", "eew_warning", "tsunami", "quake_info", "bot_news"}
+)
+
+
+def get_earthquake_notify_types(guild_id: int) -> dict[str, bool]:
+    """通知タイプ設定を取得。未設定キーはデフォルト True（有効）。"""
+    stored = get_earthquake_settings(guild_id).get("notify_types", {})
+    return {k: bool(stored.get(k, True)) for k in _NOTIFY_TYPE_KEYS}
+
+
+def set_earthquake_notify_types(guild_id: int, types: dict[str, bool]) -> None:
+    """通知タイプ設定を保存。有効なキーのみ受け付ける。"""
+    patch = {k: bool(v) for k, v in types.items() if k in _NOTIFY_TYPE_KEYS}
+    _update_nested(guild_id, "earthquake", {"notify_types": patch})

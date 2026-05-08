@@ -11,6 +11,7 @@ from services.settings_store import (
     add_reaction_role,
     add_trusted_users,
     get_bypass_role_ids,
+    get_earthquake_notify_types,
     get_earthquake_settings,
     get_goodbye_settings,
     get_news_feeds,
@@ -28,6 +29,7 @@ from services.settings_store import (
     remove_trusted_users,
     set_earthquake_channel,
     set_earthquake_min_scale,
+    set_earthquake_notify_types,
     set_goodbye_channel,
     set_goodbye_message,
     set_response_channel_id,
@@ -50,6 +52,13 @@ settings_bp = Blueprint("settings", __name__)
 
 _LOG_LEVELS = {"NONE", "ERROR", "INFO", "DEBUG"}
 _VALID_SCALES = {10, 20, 30, 40, 45, 50, 55, 60, 65, 70}
+_NOTIFY_TYPE_LABELS: dict[str, str] = {
+    "eew_forecast": "緊急地震速報（予報）",
+    "eew_warning":  "緊急地震速報（警報）",
+    "tsunami":      "津波情報",
+    "quake_info":   "地震情報",
+    "bot_news":     "ボットに関するお知らせ",
+}
 
 
 def _gid() -> int:
@@ -338,6 +347,11 @@ def earthquake():
                 return redirect(url_for("settings.earthquake"))
             set_earthquake_min_scale(gid, scale)
             flash(f"最小震度を {SCALE_LABELS.get(scale, scale)} に設定した。", "success")
+        elif action == "set_notify_types":
+            valid_keys = set(_NOTIFY_TYPE_LABELS.keys())
+            types = {k: (f"notify_{k}" in request.form) for k in valid_keys}
+            set_earthquake_notify_types(gid, types)
+            flash("通知タイプを更新した。", "success")
         return redirect(url_for("settings.earthquake"))
 
     channels = _channels()
@@ -349,6 +363,8 @@ def earthquake():
         eq_s=get_earthquake_settings(gid),
         scale_labels=SCALE_LABELS,
         valid_scales=sorted(_VALID_SCALES),
+        notify_types=get_earthquake_notify_types(gid),
+        notify_type_labels=_NOTIFY_TYPE_LABELS,
     )
 
 

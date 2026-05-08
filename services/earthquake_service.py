@@ -18,16 +18,46 @@ except ImportError:
     _PIL = False
 
 from config import BOT_ICON_URL, JST as _JST, SCALE_LABELS as _SCALE_DISPLAY
-from services.settings_store import get_all_guild_ids, get_earthquake_settings
+from services.settings_store import (
+    get_all_guild_ids,
+    get_earthquake_notify_types,
+    get_earthquake_settings,
+)
 
 logger = logging.getLogger(__name__)
 
-_WS_URL   = "wss://api.p2pquake.net/v2/ws"
-_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+_WS_URL  = "wss://api.p2pquake.net/v2/ws"
+_TILE_URL = "https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png"
 _TILE_UA  = "VoldermortBot/1.0 (earthquake alert; contact: github)"
 _TILE_SZ  = 256
 
-# ── 震度マッピング ─────────────────────────────────────────
+# 都道府県中心座標（エリア座標APIが存在しないため都道府県単位でフォールバック）
+_PREF_CENTERS: dict[str, tuple[float, float]] = {
+    "北海道": (43.064, 141.347), "青森県": (40.824, 140.740), "岩手県": (39.703, 141.153),
+    "宮城県": (38.268, 140.872), "秋田県": (39.718, 140.102), "山形県": (38.240, 140.363),
+    "福島県": (37.750, 140.468), "茨城県": (36.341, 140.447), "栃木県": (36.565, 139.883),
+    "群馬県": (36.391, 139.060), "埼玉県": (35.857, 139.649), "千葉県": (35.605, 140.123),
+    "東京都": (35.689, 139.692), "神奈川県": (35.447, 139.642), "新潟県": (37.902, 139.023),
+    "富山県": (36.695, 137.211), "石川県": (36.594, 136.626), "福井県": (36.065, 136.222),
+    "山梨県": (35.664, 138.568), "長野県": (36.651, 138.181), "岐阜県": (35.391, 136.722),
+    "静岡県": (34.977, 138.383), "愛知県": (35.180, 136.906), "三重県": (34.730, 136.509),
+    "滋賀県": (35.004, 135.869), "京都府": (35.021, 135.756), "大阪府": (34.686, 135.520),
+    "兵庫県": (34.691, 135.183), "奈良県": (34.685, 135.833), "和歌山県": (34.226, 135.167),
+    "鳥取県": (35.503, 134.238), "島根県": (35.472, 133.051), "岡山県": (34.661, 133.934),
+    "広島県": (34.396, 132.460), "山口県": (34.186, 131.471), "徳島県": (34.066, 134.559),
+    "香川県": (34.340, 134.043), "愛媛県": (33.842, 132.766), "高知県": (33.560, 133.531),
+    "福岡県": (33.606, 130.418), "佐賀県": (33.249, 130.299), "長崎県": (32.745, 129.874),
+    "熊本県": (32.789, 130.742), "大分県": (33.238, 131.613), "宮崎県": (31.911, 131.424),
+    "鹿児島県": (31.560, 130.558), "沖縄県": (26.212, 127.681),
+}
+
+# マップ上の震度圏塗り色 — Kiwi Monitor V2 準拠
+_MAP_FILL_RGB = {
+    10: (  0,  55, 220), 20: (  0, 130, 230), 30: (  0, 180, 180),
+    40: (220, 200,  10), 45: (230, 150,   0),
+    50: (230, 100,   0), 55: (230,  45,   0),
+    60: (200,   0,   0), 65: (150,   0, 150), 70: ( 95,   0, 115),
+}
 
 # 凡例・ログ用（全角）
 _SCALE_MAP = {
@@ -41,29 +71,21 @@ _SCALE_BADGE_LABEL = {
     50: "5-", 55: "5+", 60: "6-", 65: "6+", 70: "7",
 }
 
-# 震度別 RGB（バッジ・embed 色共通）
+# EEW予報 (556) の forecastMaxInt 文字列 → 内部スケール値
+_FORECAST_INT_TO_SCALE: dict[str, int] = {
+    "1": 10, "2": 20, "3": 30, "4": 40, "4+": 45,
+    "5-": 50, "5+": 55, "6-": 60, "6+": 65, "7": 70,
+}
+
+# 震度別 RGB — Kiwi Monitor カラースキーム 第2版
 _SCALE_RGB = {
-    10: (0, 200, 100), 20: (0, 200, 100), 30: (255, 220, 0),
-    40: (255, 140, 0), 45: (255, 100, 0), 50: (220, 0, 0),
-    55: (190, 0, 0),   60: (160, 0, 110), 65: (130, 0, 85), 70: (90, 0, 55),
+    10: (  0,  64, 255), 20: (  0, 148, 255), 30: (  0, 200, 200),
+    40: (250, 230,  20), 45: (255, 175,   0),
+    50: (255, 120,   0), 55: (255,  60,   0),
+    60: (220,   0,   0), 65: (170,   0, 170), 70: (110,   0, 130),
 }
 
 _SCALE_COLORS = {k: discord.Color.from_rgb(*v) for k, v in _SCALE_RGB.items()}
-
-# 震度圏の塗り(RGBA半透明)・枠線(RGBA)
-_ZONE_FILL = {
-    10: (  0, 200, 100,  55), 20: (120, 210,  50,  65),
-    30: (255, 230,   0,  75), 40: (255, 160,   0,  85),
-    45: (255, 110,   0,  95), 50: (220,   0,   0, 105),
-    55: (190,   0,   0, 115), 60: (160,   0, 110, 125),
-    65: (130,   0,  85, 135), 70: ( 90,   0,  55, 145),
-}
-_ZONE_BORDER = {k: (r, g, b, 210) for k, (r, g, b, _) in _ZONE_FILL.items()}
-
-_SCALE_ZOOM = {
-    10: 8, 20: 8, 30: 7, 40: 7, 45: 7,
-    50: 6, 55: 6, 60: 5, 65: 5, 70: 5,
-}
 
 _TSUNAMI_TEXT = {
     "None":         "この地震による津波の心配はありません。",
@@ -72,6 +94,17 @@ _TSUNAMI_TEXT = {
     "NonEffective": "この地震による津波の心配はありません。",
     "Watch":        "⚠️ 津波注意報が発令されています。",
     "Warning":      "🚨 津波警報が発令されています！",
+}
+
+_TSUNAMI_GRADE_LABELS: dict[str, str] = {
+    "MajorWarning": "🔴 大津波警報",
+    "Warning":      "🟠 津波警報",
+    "Watch":        "🟡 津波注意報",
+    "Unknown":      "❓ 不明",
+}
+
+_TSUNAMI_GRADE_ORDER: dict[str, int] = {
+    "MajorWarning": 3, "Warning": 2, "Watch": 1, "Unknown": 0,
 }
 
 _ISSUE_LABELS = {
@@ -133,20 +166,26 @@ def _max_scale(event: dict) -> int:
     points = event.get("points", [])
     if points:
         return max((p.get("scale", -1) for p in points), default=-1)
-    return event.get("earthquake", {}).get("maxScale", -1)
+    eq_scale = event.get("earthquake", {}).get("maxScale", -1)
+    if eq_scale >= 0:
+        return eq_scale
+    # EEW予報 (556): intensity.forecastMaxInt.to を使用
+    to_str = event.get("intensity", {}).get("forecastMaxInt", {}).get("to", "")
+    return _FORECAST_INT_TO_SCALE.get(to_str, -1)
 
 
 def _parse_coord(raw) -> float | None:
-    """'N35.8' / 'E137.7' / float → float。0 または解析不能なら None。"""
+    """'N35.8' / 'E137.7' / float → float。0・±200 (P2PQuake 無効値) は None。"""
     if raw is None:
         return None
     if isinstance(raw, (int, float)):
-        return float(raw) or None
+        v = float(raw)
+        return v if v != 0 and abs(v) <= 180 else None
     s = str(raw).strip()
     sign = -1 if s[:1] in ("S", "W") else 1
     try:
         v = sign * float(re.sub(r"^[NSEWnsew]", "", s))
-        return v or None
+        return v if v != 0 and abs(v) <= 180 else None
     except ValueError:
         return None
 
@@ -190,28 +229,25 @@ def _format_time(time_str: str) -> tuple[str, datetime | None]:
 # ── バッジ画像生成 ─────────────────────────────────────────
 
 def _generate_badge(scale: int) -> io.BytesIO | None:
-    """最大震度バッジ（120×120）を生成して BytesIO で返す。"""
+    """Apple Emergency Alert スタイルの震度バッジ（120×120）を生成して BytesIO で返す。"""
     if not _PIL:
         return None
 
-    rgb   = _SCALE_RGB.get(scale, (100, 100, 100))
-    label = _SCALE_BADGE_LABEL.get(scale, str(scale))
+    r, g, b = _SCALE_RGB.get(scale, (100, 100, 100))
+    label   = _SCALE_BADGE_LABEL.get(scale, str(scale))
 
     w, h = 120, 120
     img  = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # ダーク背景（丸角）
-    draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=14, fill=(28, 28, 30, 255))
-    # 震度カラーのヘッダ帯（上40px）
-    draw.rounded_rectangle([0, 0, w - 1, 42], radius=14, fill=(*rgb, 255))
-    draw.rectangle([0, 28, w - 1, 42], fill=(*rgb, 255))  # 帯の下角を四角に
+    draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=24, fill=(r, g, b, 255))
+    dark = (max(0, r - 45), max(0, g - 45), max(0, b - 45))
+    draw.rounded_rectangle([0, h // 2, w - 1, h - 1], radius=24, fill=(*dark, 255))
+    draw.rectangle([0, h // 2, w - 1, h // 2 + 24], fill=(*dark, 255))
+    draw.rounded_rectangle([3, 3, w - 4, h // 2 - 4], radius=20, fill=(255, 255, 255, 30))
 
-    font_sm = _get_font(13)
-    font_lg = _get_font(48 if len(label) == 1 else 32)
-
-    draw.text((w // 2, 21), "最大震度", fill=(255, 255, 255, 255), font=font_sm, anchor="mm")
-    draw.text((w // 2, 83), label,     fill=(255, 255, 255, 255), font=font_lg, anchor="mm")
+    font_lg = _get_font(68 if len(label) == 1 else 44)
+    draw.text((w // 2, h // 2 + 6), label, fill=(255, 255, 255, 255), font=font_lg, anchor="mm")
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -234,28 +270,24 @@ def _km_to_px(km: float, lat: float, zoom: int) -> float:
     return km * _TILE_SZ / tile_km
 
 
-def _estimate_radii(magnitude: float, max_scale: int) -> dict[int, float]:
-    """震度ごとの推定地表半径 (km) を返す。max_scale 以下のみ。"""
-    if magnitude <= 0:
-        return {}
-    base = min(1200.0, 10 ** (0.6 * magnitude - 0.3))
-    ratios = {
-        10: 1.000, 20: 0.600, 30: 0.360,
-        40: 0.210, 45: 0.160, 50: 0.100,
-        55: 0.065, 60: 0.038, 65: 0.022, 70: 0.013,
-    }
-    return {
-        scale: base * r
-        for scale, r in ratios.items()
-        if scale <= max_scale and base * r >= 1.0
-    }
+def _resolve_point_coord(addr: str, pref: str) -> tuple[float, float] | None:
+    """pref / addr → (lat, lon)。都道府県中心座標を使用。"""
+    return _PREF_CENTERS.get(pref) or _PREF_CENTERS.get(addr)
 
 
-def _pick_zoom(max_r_km: float, lat: float, img_size: int) -> int:
-    """影響圏が画像の40%程度に収まる最大ズームレベルを返す。"""
-    target = img_size * 0.40
-    for zoom in range(12, 3, -1):
-        if _km_to_px(max_r_km, lat, zoom) <= target:
+def _auto_zoom(
+    lats: list[float], lons: list[float],
+    img_w: int, img_h: int,
+) -> int:
+    """点群が画像の 65% 以内に収まる最大ズームを返す。"""
+    clat = (max(lats) + min(lats)) / 2
+    span_km = max(
+        (max(lats) - min(lats)) * 111,
+        (max(lons) - min(lons)) * 111 * math.cos(math.radians(clat)),
+    ) * 1.5
+    target = min(img_w, img_h) * 0.65
+    for zoom in range(9, 3, -1):
+        if _km_to_px(max(span_km / 2, 1.0), clat, zoom) <= target / 2:
             return zoom
     return 4
 
@@ -276,77 +308,79 @@ async def _fetch_tile(session: aiohttp.ClientSession, z: int, x: int, y: int):
     return None
 
 
-def _draw_star(draw: "ImageDraw.ImageDraw", cx: int, cy: int, r: int) -> None:
-    """赤い5点星（震源マーカー）を描画。"""
-    pts = []
-    for i in range(10):
-        a = math.pi / 2 + i * math.pi / 5
-        ri = r if i % 2 == 0 else r // 2
-        pts.append((cx + ri * math.cos(a), cy - ri * math.sin(a)))
-    draw.polygon(pts, fill=(255, 30, 30, 255), outline=(140, 0, 0, 255))
+def _draw_x_marker(draw: "ImageDraw.ImageDraw", cx: int, cy: int, r: int) -> None:
+    """赤い × 印（震源マーカー）を描画。"""
+    d = int(r * 0.78)
+    w = max(3, r // 3)
+    draw.line([cx - d, cy - d, cx + d, cy + d], fill=(110, 0, 0, 255), width=w + 3)
+    draw.line([cx - d, cy + d, cx + d, cy - d], fill=(110, 0, 0, 255), width=w + 3)
+    draw.line([cx - d, cy - d, cx + d, cy + d], fill=(255, 45, 45, 255), width=w)
+    draw.line([cx - d, cy + d, cx + d, cy - d], fill=(255, 45, 45, 255), width=w)
 
 
-def _draw_legend(img: "Image.Image", radii: dict[int, float], max_scale: int) -> None:
-    """右下に震度凡例を描画。"""
-    draw = ImageDraw.Draw(img)
-    font = _get_font(11)
-
-    scales = sorted([s for s in radii if s <= max_scale], reverse=True)
-    if not scales:
-        return
-
-    row_h, box_w = 17, 88
-    box_h = len(scales) * row_h + 6
-    x0 = img.width  - box_w - 6
-    y0 = img.height - box_h - 6
-
-    draw.rectangle([x0, y0, x0 + box_w, y0 + box_h],
-                   fill=(255, 255, 255, 210), outline=(150, 150, 150, 255))
-    for i, scale in enumerate(scales):
-        y = y0 + 3 + i * row_h
-        fill = _ZONE_FILL.get(scale, (200, 200, 200, 120))[:3] + (255,)
-        draw.rectangle([x0 + 3, y + 1, x0 + 15, y + 13],
-                       fill=fill, outline=(80, 80, 80, 255))
-        draw.text((x0 + 19, y + 1),
-                  f"震度{_SCALE_MAP.get(scale, '?')}",
-                  fill=(20, 20, 20), font=font)
+def _draw_point_badge(
+    draw: "ImageDraw.ImageDraw",
+    px: int, py: int,
+    label: str,
+    rgb: tuple[int, int, int],
+) -> None:
+    """各観測点に震度バッジ（暗背景の四角ボックス）を描画。"""
+    font = _get_font(13)
+    pad  = 5
+    try:
+        tw = int(draw.textlength(label, font=font))
+    except AttributeError:
+        tw = len(label) * 8
+    bw, bh = tw + pad * 2, 22
+    x0, y0 = px - bw // 2, py - bh // 2
+    draw.rectangle([x0 - 1, y0 - 1, x0 + bw + 1, y0 + bh + 1], fill=(5, 15, 35, 220))
+    draw.rectangle([x0, y0, x0 + bw, y0 + bh], fill=(*rgb, 235))
+    draw.text((px, py + 1), label, fill=(255, 255, 255, 255), font=font, anchor="mm")
 
 
 def _draw_attribution(img: "Image.Image") -> None:
-    """左下に OSM 帰属表示。"""
+    """左下に地図帰属表示。"""
     draw = ImageDraw.Draw(img)
     font = _get_font(9)
     text = "© OpenStreetMap contributors"
     draw.rectangle([0, img.height - 14, len(text) * 6, img.height],
-                   fill=(255, 255, 255, 180))
-    draw.text((2, img.height - 13), text, fill=(60, 60, 60), font=font)
+                   fill=(0, 0, 0, 160))
+    draw.text((2, img.height - 13), text, fill=(180, 180, 180), font=font)
 
 
 async def _generate_intensity_map(
     session: aiohttp.ClientSession,
     lat: float,
     lon: float,
-    magnitude: float,
-    max_scale: int,
+    points: list[dict],
 ) -> io.BytesIO | None:
-    """震源地図＋震度圏画像を生成し BytesIO で返す。失敗時は None。"""
+    """P2PQuake 点震度データを使ったダーク地図を生成し BytesIO で返す。"""
     if not _PIL:
         return None
 
-    radii = _estimate_radii(magnitude, max_scale)
-    if not radii:
+    plot: list[tuple[float, float, int]] = []
+    for p in points:
+        scale = p.get("scale", -1)
+        if scale < 10:
+            continue
+        coord = _resolve_point_coord(p.get("addr", ""), p.get("pref", ""))
+        if coord:
+            plot.append((*coord, scale))
+
+    if not plot:
         return None
 
     img_w, img_h = 600, 360
-    max_r = max(radii.values())
-    zoom  = _pick_zoom(max_r, lat, min(img_w, img_h))
+    all_lats = [p[0] for p in plot] + [lat]
+    all_lons = [p[1] for p in plot] + [lon]
+    zoom = _auto_zoom(all_lats, all_lons, img_w, img_h)
 
-    cx, cy = _latlon_to_tile_float(lat, lon, zoom)
-    r_px   = _km_to_px(max_r, lat, zoom)
-    pad    = min(4, max(1, math.ceil(r_px / _TILE_SZ) + 1))
-
-    tx0, ty0 = int(cx) - pad, int(cy) - pad
-    tx1, ty1 = int(cx) + pad, int(cy) + pad
+    clat = (max(all_lats) + min(all_lats)) / 2
+    clon = (max(all_lons) + min(all_lons)) / 2
+    cx_f, cy_f = _latlon_to_tile_float(clat, clon, zoom)
+    pad = 2
+    tx0, ty0 = int(cx_f) - pad, int(cy_f) - pad
+    tx1, ty1 = int(cx_f) + pad, int(cy_f) + pad
 
     coords = [(tx, ty) for ty in range(ty0, ty1 + 1) for tx in range(tx0, tx1 + 1)]
     tile_imgs = await asyncio.gather(
@@ -356,29 +390,32 @@ async def _generate_intensity_map(
 
     map_w = (tx1 - tx0 + 1) * _TILE_SZ
     map_h = (ty1 - ty0 + 1) * _TILE_SZ
-    base  = Image.new("RGBA", (map_w, map_h), (200, 210, 220, 255))
+    base = Image.new("RGBA", (map_w, map_h), (20, 22, 30, 255))
     for (tx, ty), tile in zip(coords, tile_imgs):
-        if not isinstance(tile, Image.Image):
-            continue
-        base.paste(tile, ((tx - tx0) * _TILE_SZ, (ty - ty0) * _TILE_SZ))
-
-    epi_x = int((cx - tx0) * _TILE_SZ)
-    epi_y = int((cy - ty0) * _TILE_SZ)
+        if isinstance(tile, Image.Image):
+            base.paste(tile, ((tx - tx0) * _TILE_SZ, (ty - ty0) * _TILE_SZ))
 
     overlay = Image.new("RGBA", (map_w, map_h), (0, 0, 0, 0))
     draw    = ImageDraw.Draw(overlay)
-    for scale in sorted(radii):
-        rp = int(_km_to_px(radii[scale], lat, zoom))
-        if rp < 2:
-            continue
-        draw.ellipse(
-            [epi_x - rp, epi_y - rp, epi_x + rp, epi_y + rp],
-            fill=_ZONE_FILL.get(scale, (200, 200, 200, 60)),
-            outline=_ZONE_BORDER.get(scale, (180, 180, 180, 200)),
-            width=2,
-        )
+    circle_r_km = 55.0
+    badge_positions: list[tuple[int, int, str, tuple[int, int, int]]] = []
 
-    _draw_star(draw, epi_x, epi_y, 12)
+    for pt_lat, pt_lon, scale in sorted(plot, key=lambda x: x[2]):
+        pxf, pyf = _latlon_to_tile_float(pt_lat, pt_lon, zoom)
+        px = int((pxf - tx0) * _TILE_SZ)
+        py = int((pyf - ty0) * _TILE_SZ)
+        rp  = max(20, int(_km_to_px(circle_r_km, pt_lat, zoom)))
+        rgb = _MAP_FILL_RGB.get(scale, (30, 80, 150))
+        draw.ellipse(
+            [px - rp, py - rp, px + rp, py + rp],
+            fill=(*rgb, 185), outline=(*rgb, 255), width=2,
+        )
+        badge_positions.append((px, py, _SCALE_BADGE_LABEL.get(scale, str(scale)), rgb))
+
+    epi_xf, epi_yf = _latlon_to_tile_float(lat, lon, zoom)
+    epi_x = int((epi_xf - tx0) * _TILE_SZ)
+    epi_y = int((epi_yf - ty0) * _TILE_SZ)
+    _draw_x_marker(draw, epi_x, epi_y, 14)
 
     composite = Image.alpha_composite(base, overlay)
 
@@ -386,7 +423,10 @@ async def _generate_intensity_map(
     cy0 = max(0, min(epi_y - img_h // 2, map_h - img_h))
     cropped = composite.crop((cx0, cy0, cx0 + img_w, cy0 + img_h))
 
-    _draw_legend(cropped, radii, max_scale)
+    bdraw = ImageDraw.Draw(cropped)
+    for px, py, label, rgb in badge_positions:
+        _draw_point_badge(bdraw, px - cx0, py - cy0, label, rgb)
+
     _draw_attribution(cropped)
 
     buf = io.BytesIO()
@@ -423,14 +463,114 @@ def _build_embed(event: dict, max_scale: int, has_badge: bool = False) -> discor
         color=color,
         timestamp=issue_dt,
     )
-    embed.add_field(name="震源",  value=name,      inline=True)
-    embed.add_field(name="規模",  value=mag_str,   inline=True)
-    embed.add_field(name="深さ",  value=depth_str, inline=True)
+    if name != "不明":
+        embed.add_field(name="震源", value=name,      inline=True)
+    if mag_str != "不明":
+        embed.add_field(name="規模", value=mag_str,   inline=True)
+    if depth_str != "不明":
+        embed.add_field(name="深さ", value=depth_str, inline=True)
     embed.set_footer(text=footer_label, icon_url=BOT_ICON_URL)
 
     if has_badge:
         embed.set_thumbnail(url="attachment://intensity_badge.png")
 
+    return embed
+
+
+def _build_eew_embed(event: dict) -> discord.Embed:
+    """P2PQuake code 554 (警報) / 556 (予報) EEW データから Discord Embed を生成。"""
+    code        = event.get("code", 554)
+    is_forecast = code == 556
+    title_base  = "緊急地震速報（予報）" if is_forecast else "緊急地震速報（警報）"
+
+    eq   = event.get("earthquake", {})
+    hypo = eq.get("hypocenter", {})
+
+    name       = hypo.get("name") or "不明"
+    # 556 は originTime、554 は time を使用
+    time_raw   = eq.get("originTime") or eq.get("time", "")
+    time_label, ts = _format_time(time_raw)
+    mag_str, _ = _parse_magnitude(hypo.get("magnitude"))
+    max_scale  = _max_scale(event)
+    scale_disp = _SCALE_DISPLAY.get(max_scale, "不明") if max_scale > 0 else "不明"
+    color      = _SCALE_COLORS.get(max_scale, discord.Color.orange())
+
+    serial   = str(event.get("serialNo", "1"))
+    is_final = event.get("isFinal", False)
+    status   = "（最終報）" if is_final else f"（第{serial}報）"
+
+    embed = discord.Embed(
+        title=f"{title_base} {status}",
+        description="\n".join([
+            f"{time_label}、",
+            f"**{name}** 付近を震源とする地震が発生しました。",
+            f"予想最大震度 **{scale_disp}**",
+        ]),
+        color=color,
+        timestamp=ts,
+    )
+    if name != "不明":
+        embed.add_field(name="予想震源", value=name,    inline=True)
+    if mag_str != "不明":
+        embed.add_field(name="予想規模", value=mag_str, inline=True)
+    footer = "気象庁 緊急地震速報（予報）" if is_forecast else "気象庁 緊急地震速報（警報）"
+    embed.set_footer(text=footer, icon_url=BOT_ICON_URL)
+    return embed
+
+
+def _build_tsunami_embed(event: dict) -> discord.Embed:
+    """P2PQuake code 552 津波予報データから Discord Embed を生成。"""
+    areas     = event.get("areas", [])
+    issue     = event.get("issue", {})
+    cancelled = event.get("cancelled", False)
+    _, issue_dt = _format_time(issue.get("time", ""))
+
+    if cancelled:
+        embed = discord.Embed(
+            title="津波予報（解除）",
+            description="すべての津波予報が解除されました。",
+            color=discord.Color.green(),
+            timestamp=issue_dt,
+        )
+        embed.set_footer(text="気象庁 津波情報", icon_url=BOT_ICON_URL)
+        return embed
+
+    max_grade = max(
+        areas,
+        key=lambda a: _TSUNAMI_GRADE_ORDER.get(a.get("grade", "Unknown"), 0),
+        default={},
+    ).get("grade", "Unknown") if areas else "Unknown"
+
+    color       = discord.Color.red() if max_grade == "MajorWarning" else (
+                  discord.Color.orange() if max_grade == "Warning" else
+                  discord.Color.yellow() if max_grade == "Watch" else
+                  discord.Color.greyple())
+    grade_label = _TSUNAMI_GRADE_LABELS.get(max_grade, "津波情報")
+
+    embed = discord.Embed(
+        title="津波情報",
+        description=f"{grade_label}が発令されています。",
+        color=color,
+        timestamp=issue_dt,
+    )
+
+    by_grade: dict[str, list[str]] = {}
+    for area in areas:
+        grade = area.get("grade", "Unknown")
+        name  = area.get("name", "不明")
+        by_grade.setdefault(grade, []).append(name)
+
+    for grade in ("MajorWarning", "Warning", "Watch", "Unknown"):
+        if grade not in by_grade:
+            continue
+        label   = _TSUNAMI_GRADE_LABELS.get(grade, grade)
+        names   = by_grade[grade]
+        regions = "、".join(names[:10])
+        if len(names) > 10:
+            regions += f" 他{len(names) - 10}地域"
+        embed.add_field(name=label, value=regions, inline=False)
+
+    embed.set_footer(text="気象庁 津波情報", icon_url=BOT_ICON_URL)
     return embed
 
 
@@ -446,51 +586,49 @@ class _EqView(discord.ui.View):
         ))
 
 
-# ── 通知送信 ──────────────────────────────────────────────
+# ── JMA URL ヘルパー ──────────────────────────────────────
+
+def _jma_quake_url(eq_time: str) -> str:
+    """earthquake.time (P2PQuake) → 気象庁地震情報 URL。"""
+    try:
+        dt = datetime.strptime(eq_time, "%Y/%m/%d %H:%M:%S")
+        return f"https://www.jma.go.jp/jp/quake/{dt.strftime('%Y%m%d%H%M%S')}.html"
+    except ValueError:
+        return "https://www.jma.go.jp/jp/quake/"
+
+
+# ── 通知送信（確定地震情報 551） ──────────────────────────
 
 async def _notify_all_guilds(bot: Bot, event: dict, session: aiohttp.ClientSession) -> None:
     max_scale = _max_scale(event)
+    points    = event.get("points", [])
 
     eq   = event.get("earthquake", {})
     hypo = eq.get("hypocenter", {})
     lat  = _parse_coord(hypo.get("latitude"))
     lon  = _parse_coord(hypo.get("longitude"))
-    _, mag = _parse_magnitude(hypo.get("magnitude"))
 
-    event_id   = event.get("_id") or str(event.get("id", ""))
-    detail_url = f"https://www.p2pquake.net/earthquake/{event_id}" if event_id else None
+    detail_url = _jma_quake_url(eq.get("time", ""))
 
-    # バッジ画像生成
     badge_buf: io.BytesIO | None = None
     try:
         badge_buf = _generate_badge(max_scale)
     except Exception as e:
         logger.exception("[earthquake] badge generation error: %s", e)
 
-    # 震度圏マップ生成
     map_buf: io.BytesIO | None = None
-    if lat is not None and lon is not None and mag > 0:
+    if lat is not None and lon is not None and points:
         try:
-            map_buf = await _generate_intensity_map(session, lat, lon, mag, max_scale)
+            map_buf = await _generate_intensity_map(session, lat, lon, points)
         except Exception as e:
             logger.exception("[earthquake] map generation error: %s", e)
 
     embed = _build_embed(event, max_scale, has_badge=bool(badge_buf))
-
-    # マップなし時フォールバック: OSM 静的マップ
-    if map_buf is None and lat is not None and lon is not None:
-        zoom = _SCALE_ZOOM.get(max_scale, 6)
-        embed.set_image(url=(
-            f"https://staticmap.openstreetmap.de/staticmap.php"
-            f"?center={lat},{lon}&zoom={zoom}&size=600x360"
-            f"&markers={lat},{lon},ltblu-pushpin"
-        ))
-    elif map_buf:
+    if map_buf:
         embed.set_image(url="attachment://earthquake_map.png")
 
-    view = _EqView(detail_url) if detail_url else None
+    view = _EqView(detail_url)
 
-    # 対象チャンネルを収集
     targets: list[tuple[int, discord.TextChannel]] = []
     for guild_id in get_all_guild_ids():
         s = get_earthquake_settings(guild_id)
@@ -498,6 +636,8 @@ async def _notify_all_guilds(bot: Bot, event: dict, session: aiohttp.ClientSessi
         if not ch_id:
             continue
         if max_scale < int(s.get("min_scale", 30)):
+            continue
+        if not get_earthquake_notify_types(guild_id).get("quake_info", True):
             continue
         guild = bot.get_guild(guild_id)
         if guild is None:
@@ -519,7 +659,7 @@ async def _notify_all_guilds(bot: Bot, event: dict, session: aiohttp.ClientSessi
             files.append(discord.File(io.BytesIO(badge_data), filename="intensity_badge.png"))
         if map_data:
             files.append(discord.File(io.BytesIO(map_data), filename="earthquake_map.png"))
-        await channel.send(embed=embed, files=files or discord.utils.MISSING, view=view or discord.utils.MISSING)
+        await channel.send(embed=embed, files=files or discord.utils.MISSING, view=view)
 
     results = await asyncio.gather(
         *(_send(ch) for _, ch in targets),
@@ -530,27 +670,136 @@ async def _notify_all_guilds(bot: Bot, event: dict, session: aiohttp.ClientSessi
             logger.exception("[earthquake] send error guild=%s: %s", guild_id, result)
 
 
+# ── 津波情報通知（552） ───────────────────────────────────
+
+async def _notify_tsunami_guilds(bot: Bot, event: dict) -> None:
+    """津波情報 (code 552) を全対象ギルドへ送信。"""
+    embed = _build_tsunami_embed(event)
+
+    targets: list[discord.TextChannel] = []
+    for guild_id in get_all_guild_ids():
+        s = get_earthquake_settings(guild_id)
+        ch_id = s.get("channel_id")
+        if not ch_id:
+            continue
+        if not get_earthquake_notify_types(guild_id).get("tsunami", True):
+            continue
+        guild = bot.get_guild(guild_id)
+        if guild is None:
+            continue
+        channel = guild.get_channel(int(ch_id))
+        if isinstance(channel, discord.TextChannel):
+            targets.append(channel)
+
+    if not targets:
+        return
+
+    results = await asyncio.gather(
+        *(ch.send(embed=embed) for ch in targets),
+        return_exceptions=True,
+    )
+    for ch, result in zip(targets, results):
+        if isinstance(result, Exception):
+            logger.exception("[tsunami] send error ch=%s: %s", ch.id, result)
+
+
+# ── EEW 通知（554 警報 / 556 予報） ──────────────────────
+
+async def _notify_eew_guilds(bot: Bot, event: dict, notify_type: str) -> None:
+    """EEW を全対象ギルドへ送信。notify_type: 'eew_warning' or 'eew_forecast'"""
+    max_scale  = _max_scale(event)
+    eq_time    = event.get("earthquake", {}).get("originTime") or \
+                 event.get("earthquake", {}).get("time", "")
+    detail_url = _jma_quake_url(eq_time)
+
+    badge_buf: io.BytesIO | None = None
+    try:
+        badge_buf = _generate_badge(max_scale)
+    except Exception:
+        pass
+
+    embed = _build_eew_embed(event)
+    if badge_buf:
+        embed.set_thumbnail(url="attachment://intensity_badge.png")
+
+    view = _EqView(detail_url)
+
+    targets: list[discord.TextChannel] = []
+    for guild_id in get_all_guild_ids():
+        s = get_earthquake_settings(guild_id)
+        ch_id = s.get("channel_id")
+        if not ch_id:
+            continue
+        if max_scale >= 0 and max_scale < int(s.get("min_scale", 30)):
+            continue
+        if not get_earthquake_notify_types(guild_id).get(notify_type, True):
+            continue
+        guild = bot.get_guild(guild_id)
+        if guild is None:
+            continue
+        channel = guild.get_channel(int(ch_id))
+        if isinstance(channel, discord.TextChannel):
+            targets.append(channel)
+
+    if not targets:
+        return
+
+    badge_data = badge_buf.getvalue() if badge_buf else None
+
+    async def _send(channel: discord.TextChannel) -> None:
+        files = ([discord.File(io.BytesIO(badge_data), filename="intensity_badge.png")]
+                 if badge_data else discord.utils.MISSING)
+        await channel.send(embed=embed, files=files, view=view)
+
+    results = await asyncio.gather(*(_send(ch) for ch in targets), return_exceptions=True)
+    for ch, result in zip(targets, results):
+        if isinstance(result, Exception):
+            logger.exception("[eew] send error ch=%s: %s", ch.id, result)
+
+
 # ── WebSocket ループ ──────────────────────────────────────
 
 async def run_earthquake_ws(bot: Bot) -> None:
+    """P2PQuake WS 1本で地震情報 (551)・津波情報 (552)・EEW警報 (554)・EEW予報 (556) を受信する。"""
+    _eew_seen: set[str] = set()
+
     async with aiohttp.ClientSession() as session:
         while True:
             try:
                 async with session.ws_connect(_WS_URL, heartbeat=30) as ws:
-                    logger.info("[earthquake] WebSocket接続確立")
+                    logger.info("[earthquake] P2PQuake WS 接続確立")
                     async for msg in ws:
                         if msg.type == aiohttp.WSMsgType.TEXT:
                             try:
                                 data = json.loads(msg.data)
                             except json.JSONDecodeError:
                                 continue
-                            if data.get("code") == 551:
+
+                            code = data.get("code")
+
+                            if code == 551:
                                 await _notify_all_guilds(bot, data, session)
+
+                            elif code == 552:
+                                await _notify_tsunami_guilds(bot, data)
+
+                            elif code in (554, 556) and not data.get("cancelled"):
+                                notify_type = "eew_forecast" if code == 556 else "eew_warning"
+                                eq      = data.get("earthquake", {})
+                                eq_time = eq.get("originTime") or eq.get("time", "")
+                                serial   = str(data.get("serialNo", "1"))
+                                is_final = data.get("isFinal", False)
+                                key = f"{code}:{eq_time}:{'F' if is_final else serial}"
+                                if key not in _eew_seen and (serial == "1" or is_final):
+                                    _eew_seen.add(key)
+                                    if len(_eew_seen) > 200:
+                                        _eew_seen.clear()
+                                    await _notify_eew_guilds(bot, data, notify_type)
+
                         elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
-                            logger.warning("[earthquake] WebSocket切断: type=%s", msg.type)
+                            logger.warning("[earthquake] WS 切断: %s", msg.type)
                             break
             except Exception as e:
-                logger.exception("[earthquake] WebSocket接続エラー: %s", e)
-
-            logger.info("[earthquake] 10秒後に再接続します")
+                logger.exception("[earthquake] WS エラー: %s", e)
+            logger.info("[earthquake] 10秒後に再接続")
             await asyncio.sleep(10)
