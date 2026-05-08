@@ -74,18 +74,16 @@
   margin-top: 28px;
 }
 
+.landing-section { }
+
 .landing-inner {
   max-width: 960px;
   margin: 0 auto;
-  padding: 0 24px;
-}
-
-.landing-section {
-  padding: 48px 0;
+  padding: 48px 24px;
   border-top: 1px solid var(--separator);
 }
 
-.landing-section-last {
+.landing-section-last .landing-inner {
   padding-bottom: 80px;
 }
 
@@ -140,14 +138,12 @@
   margin: 0;
 }
 
-.landing-steps { max-width: 540px; }
-
 .landing-footer-links { margin-top: 0; }
 
 @media (max-width: 640px) {
   .landing-hero { padding: calc(var(--topbar-height) + 48px) 16px 48px; }
-  .landing-inner { padding: 0 16px; }
-  .landing-section-last { padding-bottom: 60px; }
+  .landing-inner { padding: 32px 16px; }
+  .landing-section-last .landing-inner { padding-bottom: 60px; }
   .landing-cta .btn { flex: 1 0 100%; }
 }
 
