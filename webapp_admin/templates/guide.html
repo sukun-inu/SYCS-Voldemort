@@ -40,219 +40,111 @@
   </div>
 </header>
 
-<div class="guide-wrap">
+<div class="doc-wrap">
 
-  <!-- Hero -->
-  <div class="guide-hero">
-    <div class="guide-hero-logo">
-      <img src="{{ admin_asset_url('admin-icon.webp') }}" width="72" height="72" alt="SYCS Voldemort">
+  <div class="doc-hero">
+    <div class="doc-hero-logo">
+      <img src="{{ admin_asset_url('admin-icon.webp') }}" width="64" height="64" alt="SYCS Voldemort">
     </div>
     <p class="page-kicker">使い方ガイド</p>
     <h1>SYCS Voldemort</h1>
-    <p>貴金属価格・AI 会話・音楽ダウンロード・地震アラートなど多機能な Discord Bot</p>
+    <p class="doc-lead">貴金属価格・AI 会話・音楽ダウンロード・地震アラートなど多機能な Discord Bot</p>
   </div>
 
   <!-- 一般コマンド -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-terminal-fill"></i>誰でも使えるコマンド
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <div class="guide-cmd-list">
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">/metal_gold [g]&nbsp;&nbsp;/metal_silver [g]&nbsp;&nbsp;/metal_platinum [g]</div>
-          <p class="guide-cmd-desc">金・銀・プラチナのリアルタイム価格を表示します。<code>g</code> にグラム数を指定すると合計額も計算します。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">/metal_all [g]</div>
-          <p class="guide-cmd-desc">金・銀・プラチナをまとめて一覧表示します。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">/server_info</div>
-          <p class="guide-cmd-desc">サーバーの基本情報（メンバー数・チャンネル数・ブーストレベルなど）を表示します。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">/user_info [member]</div>
-          <p class="guide-cmd-desc">指定したメンバーのアカウント情報を表示します。省略すると自分の情報を表示します。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">/bot_help</div>
-          <p class="guide-cmd-desc">利用可能なすべてのスラッシュコマンドの一覧を表示します。</p>
-        </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-terminal-fill"></i>誰でも使えるコマンド</h2>
+    <div class="doc-cmd">
+      <div class="doc-cmd-entry">
+        <div class="doc-cmd-name">/metal_gold [g] &nbsp; /metal_silver [g] &nbsp; /metal_platinum [g]</div>
+        <p class="doc-cmd-desc">金・銀・プラチナのリアルタイム価格を表示します。<code>g</code> にグラム数を指定すると合計額も計算します。</p>
+      </div>
+      <div class="doc-cmd-entry">
+        <div class="doc-cmd-name">/metal_all [g]</div>
+        <p class="doc-cmd-desc">金・銀・プラチナをまとめて一覧表示します。</p>
+      </div>
+      <div class="doc-cmd-entry">
+        <div class="doc-cmd-name">/server_info</div>
+        <p class="doc-cmd-desc">サーバーの基本情報（メンバー数・チャンネル数・ブーストレベルなど）を表示します。</p>
+      </div>
+      <div class="doc-cmd-entry">
+        <div class="doc-cmd-name">/user_info [member]</div>
+        <p class="doc-cmd-desc">指定したメンバーのアカウント情報を表示します。省略すると自分の情報を表示します。</p>
+      </div>
+      <div class="doc-cmd-entry">
+        <div class="doc-cmd-name">/bot_help</div>
+        <p class="doc-cmd-desc">利用可能なすべてのスラッシュコマンドの一覧を表示します。</p>
       </div>
     </div>
   </div>
 
   <!-- DJAudio-DL -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-music-note-beamed"></i>DJAudio-DL
-        <span class="badge-soft accent ms-1">自動</span>
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <p class="section-card-subtitle mb-3">監視チャンネルに URL を貼るだけで MP3 リンクが返信されます。管理者がチャンネルを設定すると有効になります。</p>
-      <div class="guide-cmd-list mb-4">
-        <div class="guide-step-row">
-          <span class="guide-step-badge">1</span>
-          <span class="guide-step-text">管理者が設定した <strong>監視チャンネル</strong> に URL を貼り付けます。</span>
-        </div>
-        <div class="guide-step-row">
-          <span class="guide-step-badge">2</span>
-          <span class="guide-step-text">Bot が <strong>⏳ リアクション</strong> を付けて処理開始を知らせます。</span>
-        </div>
-        <div class="guide-step-row">
-          <span class="guide-step-badge">3</span>
-          <span class="guide-step-text">変換完了後 <strong>✅ リアクション</strong> と共に <strong>期限付きダウンロードリンク</strong> を返信します。</span>
-        </div>
-      </div>
-      <p class="guide-service-label">対応サービス</p>
-      <div class="d-flex flex-wrap gap-2">
-        <span class="badge-soft success">YouTube / YouTube Music</span>
-        <span class="badge-soft success">SoundCloud</span>
-        <span class="badge-soft success">Bandcamp</span>
-        <span class="badge-soft success">ニコニコ動画</span>
-        <span class="badge-soft success">TikTok</span>
-        <span class="badge-soft success">汎用直リンク</span>
-        <span class="badge-soft danger">Spotify 非対応</span>
-        <span class="badge-soft danger">Apple Music 非対応</span>
-        <span class="badge-soft danger">Amazon Music 非対応</span>
-      </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-music-note-beamed"></i>DJAudio-DL <span class="badge-soft accent ms-2">自動</span></h2>
+    <p>管理者が設定した<strong>監視チャンネル</strong>に URL を貼るだけで MP3 ダウンロードリンクが返信されます。</p>
+    <ol class="doc-steps">
+      <li>管理者が設定した<strong>監視チャンネル</strong>に URL を貼り付けます。</li>
+      <li>Bot が <strong>⏳ リアクション</strong>を付けて処理開始を知らせます。</li>
+      <li>変換完了後、<strong>✅ リアクション</strong>と共に<strong>期限付きダウンロードリンク</strong>を返信します。</li>
+    </ol>
+    <h3>対応サービス</h3>
+    <div class="doc-chips">
+      <span class="badge-soft success">YouTube / YouTube Music</span>
+      <span class="badge-soft success">SoundCloud</span>
+      <span class="badge-soft success">Bandcamp</span>
+      <span class="badge-soft success">ニコニコ動画</span>
+      <span class="badge-soft success">TikTok</span>
+      <span class="badge-soft success">汎用直リンク</span>
+      <span class="badge-soft danger">Spotify 非対応</span>
+      <span class="badge-soft danger">Apple Music 非対応</span>
+      <span class="badge-soft danger">Amazon Music 非対応</span>
     </div>
   </div>
 
   <!-- AI 会話 -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-chat-dots-fill"></i>AI 会話（ヴォルデモート）
-        <span class="badge-soft accent ms-1">自動</span>
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <p class="section-card-subtitle mb-3">管理者が指定した <strong>応答チャンネル</strong> にメッセージを送るだけで Bot が返信します。</p>
-      <div class="guide-cmd-list">
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">会話の文脈を記憶</div>
-          <p class="guide-cmd-desc">直前のやりとりを踏まえた連続した対話が可能です。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">ヴォルデモート卿の人格</div>
-          <p class="guide-cmd-desc">日本語専用・ヴォルデモート卿のキャラクターで応答します。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">未設定時は全チャンネル対応</div>
-          <p class="guide-cmd-desc">応答チャンネルが未設定の場合、すべてのチャンネルで反応します。</p>
-        </div>
-      </div>
-    </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-chat-dots-fill"></i>AI 会話（ヴォルデモート）<span class="badge-soft accent ms-2">自動</span></h2>
+    <p>管理者が指定した<strong>応答チャンネル</strong>にメッセージを送るだけで Bot が返信します。応答チャンネルが未設定の場合、すべてのチャンネルで反応します。</p>
+    <ul>
+      <li>直前のやりとりを踏まえた連続した対話が可能です。</li>
+      <li>日本語専用・ヴォルデモート卿のキャラクターで応答します。</li>
+    </ul>
   </div>
 
   <!-- 地震アラート -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-activity"></i>地震アラート
-        <span class="badge-soft accent ms-1">自動</span>
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <p class="section-card-subtitle mb-3">管理者が設定した通知チャンネルに地震情報をリアルタイムで通知します。</p>
-      <div class="guide-cmd-list">
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">P2PQuake 連携</div>
-          <p class="guide-cmd-desc">WebSocket で日本全国の地震情報をリアルタイム受信します。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">ビジュアル通知</div>
-          <p class="guide-cmd-desc">震度バッジ画像・震度分布地図を Embed に添付して送信します。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">EEW・津波対応</div>
-          <p class="guide-cmd-desc">緊急地震速報（予報・警報）および津波予報にも対応しています。</p>
-        </div>
-      </div>
-    </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-activity"></i>地震アラート<span class="badge-soft accent ms-2">自動</span></h2>
+    <p>管理者が設定した通知チャンネルに地震情報をリアルタイムで通知します。</p>
+    <ul>
+      <li><strong>P2PQuake 連携</strong> — WebSocket で日本全国の地震情報をリアルタイム受信します。</li>
+      <li><strong>ビジュアル通知</strong> — 震度バッジ画像・震度分布地図を Embed に添付して送信します。</li>
+      <li><strong>EEW・津波対応</strong> — 緊急地震速報（予報・警報）および津波予報にも対応しています。</li>
+    </ul>
   </div>
 
   <!-- その他の自動機能 -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-stars"></i>その他の自動機能
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <div class="guide-cmd-list">
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">ウェルカム / グッバイ <span class="badge-soft accent ms-1">自動</span></div>
-          <p class="guide-cmd-desc">メンバーの参加・退出時に設定したメッセージを自動で送信します。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">VC 通知 <span class="badge-soft accent ms-1">自動</span></div>
-          <p class="guide-cmd-desc">ボイスチャンネルへの参加・退出・移動を通知チャンネルにお知らせします。退出時は通話時間も表示します。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">スティッキーメッセージ <span class="badge-soft accent ms-1">自動</span></div>
-          <p class="guide-cmd-desc">設定したチャンネルで、新しいメッセージが投稿されるたびに固定メッセージを最下部に再掲します。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">リアクションロール <span class="badge-soft accent ms-1">自動</span></div>
-          <p class="guide-cmd-desc">指定したメッセージへのリアクションに連動してロールを自動付与・解除します。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">Google News フィード <span class="badge-soft accent ms-1">自動</span></div>
-          <p class="guide-cmd-desc">設定したキーワードで Google News を定期検索し、新着記事を自動投稿します。</p>
-        </div>
-      </div>
-    </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-stars"></i>その他の自動機能</h2>
+    <ul>
+      <li><strong>ウェルカム / グッバイ</strong> — メンバーの参加・退出時に設定したメッセージを自動送信します。</li>
+      <li><strong>VC 通知</strong> — ボイスチャンネルへの参加・退出・移動を通知します。退出時は通話時間も表示します。</li>
+      <li><strong>スティッキーメッセージ</strong> — 新しいメッセージが投稿されるたびに固定メッセージを最下部に再掲します。</li>
+      <li><strong>リアクションロール</strong> — 指定メッセージへのリアクションに連動してロールを自動付与・解除します。</li>
+      <li><strong>Google News フィード</strong> — 設定したキーワードで Google News を定期検索し、新着記事を自動投稿します。</li>
+    </ul>
   </div>
 
   <!-- 管理者向け -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-shield-fill-check"></i>管理者向け設定
-        <span class="badge-soft danger ms-1">要管理者権限</span>
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <div class="info-panel mb-3">
-        <p class="info-panel-title"><i class="bi bi-info-circle-fill"></i>設定方法</p>
-        上記の自動機能はすべてサーバーの管理者が設定する必要があります。<br>
-        スラッシュコマンド（Discord 上）または <strong>Web 管理画面</strong> から設定できます。
-      </div>
-      <p class="guide-service-label">Web 管理画面でできること</p>
-      <div class="guide-cmd-list">
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">チャンネル・通知設定</div>
-          <p class="guide-cmd-desc">各機能の送信先チャンネルや通知条件をまとめて管理できます。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">DJAudio 詳細設定</div>
-          <p class="guide-cmd-desc">キャッシュ保持時間・クールダウン・最大 URL 数を調整できます。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">ニュースフィード管理</div>
-          <p class="guide-cmd-desc">キーワード・投稿先チャンネル・検索間隔の追加・編集・削除が可能です。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">リアクションロール管理</div>
-          <p class="guide-cmd-desc">絵文字とロールの紐づけを GUI で管理できます。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">セキュリティ設定</div>
-          <p class="guide-cmd-desc">信頼済みユーザーやバイパスロールを設定してセキュリティ検査の挙動を調整できます。</p>
-        </div>
-      </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-shield-fill-check"></i>管理者向け設定<span class="badge-soft danger ms-2">要管理者権限</span></h2>
+    <p>上記の自動機能はすべてサーバーの管理者が設定する必要があります。スラッシュコマンド（Discord 上）または <strong>Web 管理画面</strong>から設定できます。</p>
+    <div class="info-panel mt-3">
+      <p class="info-panel-title"><i class="bi bi-display"></i>Web 管理画面でできること</p>
+      各機能の送信先チャンネルや通知条件の設定、DJAudio のキャッシュ・クールダウン調整、ニュースフィードのキーワード管理、リアクションロールの絵文字とロールの紐づけ管理、セキュリティ設定（信頼済みユーザー・バイパスロール）。
     </div>
   </div>
 
-  <!-- Footer links -->
-  <div class="guide-links">
+  <div class="doc-links">
     <a href="https://metals.kawasaki-n3t.f5.si/" class="btn btn-outline-primary" target="_blank" rel="noopener noreferrer">
       <i class="bi bi-graph-up"></i>貴金属価格トラッカー
     </a>
@@ -266,9 +158,9 @@
     {% endif %}
   </div>
 
-  <div class="guide-legal">
+  <div class="doc-legal">
     <a href="{{ url_for('auth.terms') }}">利用規約</a>
-    <span class="guide-legal-sep">·</span>
+    <span class="doc-legal-sep">·</span>
     <a href="{{ url_for('auth.privacy') }}">プライバシーポリシー</a>
   </div>
 

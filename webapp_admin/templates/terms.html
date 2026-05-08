@@ -38,167 +38,98 @@
   </div>
 </header>
 
-<div class="guide-wrap">
+<div class="doc-wrap">
 
-  <!-- Hero -->
-  <div class="guide-hero">
-    <div class="guide-hero-logo">
-      <img src="{{ admin_asset_url('admin-icon.webp') }}" width="72" height="72" alt="SYCS Voldemort">
-    </div>
+  <div class="doc-hero">
     <p class="page-kicker">Terms of Service</p>
     <h1>利用規約</h1>
-    <p>最終更新日：2026年5月9日</p>
+    <p class="doc-updated">最終更新日：2026年5月9日</p>
   </div>
 
-  <!-- 同意 -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-check-circle-fill"></i>規約への同意
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <div class="info-panel">
-        <p class="info-panel-title"><i class="bi bi-info-circle-fill"></i>ご利用の前に</p>
-        SYCS Voldemort（以下「本 Bot」）をご利用いただくことで、本利用規約に同意したものとみなします。同意いただけない場合は、本 Bot のご利用をお控えください。
-      </div>
-    </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-check-circle-fill"></i>規約への同意</h2>
+    <p>
+      SYCS Voldemort（以下「本 Bot」）をご利用いただくことで、本利用規約に同意したものとみなします。
+      同意いただけない場合は、本 Bot のご利用をお控えください。
+    </p>
   </div>
 
-  <!-- サービスの概要 -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-robot"></i>サービスの概要
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <p class="section-card-subtitle mb-3">本 Bot は Discord 上で以下の機能を提供します。</p>
-      <div class="guide-cmd-list">
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">情報提供機能</div>
-          <p class="guide-cmd-desc">貴金属価格の表示、サーバー情報・ユーザー情報の確認、Google News フィードの自動投稿。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">メディア処理機能</div>
-          <p class="guide-cmd-desc">YouTube・SoundCloud などの対応サービスから音声を抽出し、期限付きダウンロードリンクを提供する DJAudio-DL 機能。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">AI 会話機能</div>
-          <p class="guide-cmd-desc">OpenAI / Groq API を用いたヴォルデモート卿キャラクターによる AI 会話。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">通知・自動化機能</div>
-          <p class="guide-cmd-desc">地震アラート、VC 通知、ウェルカム／グッバイメッセージ、スティッキーメッセージ、リアクションロール。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">Web 管理画面</div>
-          <p class="guide-cmd-desc">Discord OAuth2 で認証した管理者が各機能の設定を管理できるブラウザベースのダッシュボード。</p>
-        </div>
-      </div>
-    </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-robot"></i>サービスの概要</h2>
+    <p>本 Bot は Discord 上で以下の機能を提供します。</p>
+    <ul>
+      <li><strong>情報提供</strong> — 貴金属価格の表示、サーバー情報・ユーザー情報の確認、Google News フィードの自動投稿</li>
+      <li><strong>DJAudio-DL</strong> — YouTube・SoundCloud などの対応サービスから音声を抽出し、期限付きダウンロードリンクを提供</li>
+      <li><strong>AI 会話</strong> — OpenAI / Groq API を用いたヴォルデモート卿キャラクターによる会話</li>
+      <li><strong>通知・自動化</strong> — 地震アラート、VC 通知、ウェルカム／グッバイ、スティッキーメッセージ、リアクションロール</li>
+      <li><strong>Web 管理画面</strong> — Discord OAuth2 で認証した管理者が各機能の設定を管理できるダッシュボード</li>
+    </ul>
   </div>
 
-  <!-- 利用条件 -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-person-check-fill"></i>利用条件
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <div class="guide-cmd-list">
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">Discord 利用規約の遵守</div>
-          <p class="guide-cmd-desc">本 Bot の利用にあたっては、Discord の利用規約およびコミュニティガイドラインに従ってください。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">著作権・知的財産権の尊重</div>
-          <p class="guide-cmd-desc">DJAudio-DL 機能は個人的・非営利的な用途にのみ使用してください。著作権法に違反する形での利用は禁止します。本機能を通じて取得したコンテンツの配布・再配布は行わないでください。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">管理者責任</div>
-          <p class="guide-cmd-desc">Web 管理画面にアクセスできるのは、Bot が参加している Discord サーバーの管理者権限を持つユーザーのみです。管理者は自サーバーの設定内容および Bot の利用状況に責任を持ちます。</p>
-        </div>
-      </div>
-    </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-person-check-fill"></i>利用条件</h2>
+
+    <h3>Discord 利用規約の遵守</h3>
+    <p>
+      本 Bot の利用にあたっては、Discord の利用規約およびコミュニティガイドラインに従ってください。
+    </p>
+
+    <h3>著作権・知的財産権の尊重</h3>
+    <p>
+      DJAudio-DL 機能は個人的・非営利的な用途にのみ使用してください。著作権法に違反する形での利用は禁止します。
+      本機能を通じて取得したコンテンツの第三者への配布・再配布は行わないでください。
+    </p>
+
+    <h3>管理者の責任</h3>
+    <p>
+      Web 管理画面にアクセスできるのは、Bot が参加している Discord サーバーの管理者権限を持つユーザーのみです。
+      管理者は自サーバーの設定内容および Bot の利用状況に責任を持ちます。
+    </p>
   </div>
 
-  <!-- 禁止事項 -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-slash-circle-fill"></i>禁止事項
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <div class="guide-cmd-list">
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">不正アクセス・改ざん</div>
-          <p class="guide-cmd-desc">本 Bot のシステムへの不正アクセス、リバースエンジニアリング、設定データの不正操作を禁じます。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">スパム・過負荷行為</div>
-          <p class="guide-cmd-desc">過度なコマンド連打・大量リクエストなど、サービスに過負荷をかける行為を禁じます。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">違法コンテンツの処理</div>
-          <p class="guide-cmd-desc">違法または有害なコンテンツの処理・配布を目的とした本 Bot の利用を禁じます。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">商業的再販・代行</div>
-          <p class="guide-cmd-desc">本 Bot の機能を商業目的で第三者に再販または代行サービスとして提供することを禁じます。</p>
-        </div>
-      </div>
-    </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-slash-circle-fill"></i>禁止事項</h2>
+    <ul>
+      <li><strong>不正アクセス・改ざん</strong> — 本 Bot のシステムへの不正アクセス、リバースエンジニアリング、設定データの不正操作</li>
+      <li><strong>スパム・過負荷行為</strong> — 過度なコマンド連打・大量リクエストなどサービスに過負荷をかける行為</li>
+      <li><strong>違法コンテンツの処理</strong> — 違法または有害なコンテンツの処理・配布を目的とした利用</li>
+      <li><strong>商業的再販・代行</strong> — 本 Bot の機能を商業目的で第三者に再販または代行サービスとして提供すること</li>
+    </ul>
   </div>
 
-  <!-- 免責事項 -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-exclamation-triangle-fill"></i>免責事項
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <div class="guide-cmd-list">
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">サービスの可用性</div>
-          <p class="guide-cmd-desc">本 Bot はベストエフォートで提供されます。メンテナンス・障害・外部 API の停止等により、予告なくサービスが中断または終了する場合があります。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">情報の正確性</div>
-          <p class="guide-cmd-desc">貴金属価格・地震情報・ニュースフィードなどの情報は外部 API から取得しており、その正確性・完全性を保証するものではありません。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">損害の免責</div>
-          <p class="guide-cmd-desc">本 Bot の利用または利用不能により生じた直接的・間接的・偶発的な損害について、運営者は責任を負いません。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">AI 生成コンテンツ</div>
-          <p class="guide-cmd-desc">AI 会話機能が生成する応答は自動生成されたものであり、その内容の正確性・適切性を保証するものではありません。</p>
-        </div>
-      </div>
-    </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-exclamation-triangle-fill"></i>免責事項</h2>
+
+    <h3>サービスの可用性</h3>
+    <p>
+      本 Bot はベストエフォートで提供されます。メンテナンス・障害・外部 API の停止等により、予告なくサービスが中断または終了する場合があります。
+    </p>
+
+    <h3>情報の正確性</h3>
+    <p>
+      貴金属価格・地震情報・ニュースフィードなどの情報は外部 API から取得しており、その正確性・完全性を保証するものではありません。
+    </p>
+
+    <h3>AI 生成コンテンツ</h3>
+    <p>
+      AI 会話機能が生成する応答は自動生成されたものであり、その内容の正確性・適切性を保証するものではありません。
+    </p>
+
+    <h3>損害の免責</h3>
+    <p>
+      本 Bot の利用または利用不能により生じた直接的・間接的・偶発的な損害について、運営者は一切の責任を負いません。
+    </p>
   </div>
 
-  <!-- 規約の変更 -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-arrow-clockwise"></i>規約の変更・終了
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <div class="info-panel">
-        <p class="info-panel-title"><i class="bi bi-info-circle-fill"></i>変更について</p>
-        本利用規約は予告なく変更される場合があります。変更後に本 Bot を継続して利用した場合、変更後の規約に同意したものとみなします。また、運営者は予告なく本サービスを変更・停止・終了する権利を有します。
-      </div>
-    </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-arrow-clockwise"></i>規約の変更・終了</h2>
+    <p>
+      本利用規約は予告なく変更される場合があります。変更後に本 Bot を継続して利用した場合、変更後の規約に同意したものとみなします。
+      また、運営者は予告なく本サービスを変更・停止・終了する権利を有します。
+    </p>
   </div>
 
-  <!-- Footer links -->
-  <div class="guide-links">
+  <div class="doc-links">
     <a href="{{ url_for('auth.privacy') }}" class="btn btn-outline-secondary">
       <i class="bi bi-shield-check"></i>プライバシーポリシー
     </a>
@@ -208,6 +139,12 @@
     <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary">
       <i class="bi bi-gear-fill"></i>Web 管理画面
     </a>
+  </div>
+
+  <div class="doc-legal">
+    <a href="{{ url_for('auth.privacy') }}">プライバシーポリシー</a>
+    <span class="doc-legal-sep">·</span>
+    <a href="{{ url_for('auth.guide') }}">使い方ガイド</a>
   </div>
 
 </div>

@@ -38,148 +38,103 @@
   </div>
 </header>
 
-<div class="guide-wrap">
+<div class="doc-wrap">
 
-  <!-- Hero -->
-  <div class="guide-hero">
-    <div class="guide-hero-logo">
-      <img src="{{ admin_asset_url('admin-icon.webp') }}" width="72" height="72" alt="SYCS Voldemort">
-    </div>
+  <div class="doc-hero">
     <p class="page-kicker">Privacy Policy</p>
     <h1>プライバシーポリシー</h1>
-    <p>最終更新日：2026年5月9日</p>
+    <p class="doc-updated">最終更新日：2026年5月9日</p>
   </div>
 
-  <!-- 収集する情報 -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-database-fill"></i>収集する情報
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <div class="guide-cmd-list">
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">Discord サーバー設定</div>
-          <p class="guide-cmd-desc">Bot の機能設定（通知チャンネル ID、ウェルカムメッセージ、リアクションロール設定など）をサーバーごとにサーバー内に保存します。これらの設定はサーバー管理者が入力・編集した情報です。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">Discord ユーザー情報（認証時のみ）</div>
-          <p class="guide-cmd-desc">Web 管理画面へのログイン時に、Discord OAuth2 を通じてユーザー ID・ユーザー名・アバターを一時的に取得します。これらはセッション管理にのみ使用し、永続的には保存しません。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">メッセージ内容（一時処理のみ）</div>
-          <p class="guide-cmd-desc">AI 会話機能や DJAudio-DL 機能の処理に必要なメッセージ内容を一時的に参照します。これらはデータベースに保存されることなく、処理完了後に破棄されます。AI 会話の文脈は直前のやりとりのみをメモリ上で保持します。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">アクセスログ</div>
-          <p class="guide-cmd-desc">Web 管理画面へのアクセスログ（IP アドレス、タイムスタンプ、操作内容）をサーバーのログファイルに記録する場合があります。これはセキュリティ監査および不正アクセスの調査を目的としています。</p>
-        </div>
-      </div>
-    </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-info-circle-fill"></i>はじめに</h2>
+    <p>
+      SYCS Voldemort（以下「本 Bot」）は、Discord 上で動作する多機能 Bot およびその Web 管理画面を提供するサービスです。
+      本プライバシーポリシーは、本サービスがどのような情報をどのような目的で取り扱うかを説明するものです。
+      本サービスをご利用いただくことで、本ポリシーの内容に同意したものとみなします。
+    </p>
   </div>
 
-  <!-- 情報の利用目的 -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-list-check"></i>情報の利用目的
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <div class="guide-cmd-list">
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">Bot 機能の提供</div>
-          <p class="guide-cmd-desc">地震アラート・AI 会話・DJAudio-DL・ウェルカム通知などの Bot 機能を提供するために設定情報を使用します。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">Web 管理画面の認証</div>
-          <p class="guide-cmd-desc">Discord OAuth2 を通じた本人確認および管理者権限の検証のためにユーザー情報を使用します。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">セキュリティの確保</div>
-          <p class="guide-cmd-desc">不正アクセスの検知・防止およびシステムの安定稼働のためにアクセスログを利用します。</p>
-        </div>
-      </div>
-    </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-database-fill"></i>収集する情報</h2>
+
+    <h3>サーバー設定情報</h3>
+    <p>
+      Bot の機能を有効化するために、管理者が Web 管理画面またはスラッシュコマンドで入力した設定情報（通知チャンネル ID・ウェルカムメッセージ・リアクションロール設定・ニュースフィードキーワードなど）をサーバーごとに保存します。
+    </p>
+
+    <h3>Discord ユーザー情報（認証時のみ）</h3>
+    <p>
+      Web 管理画面へのログイン時に、Discord OAuth2 を通じてユーザー ID・ユーザー名・アバターハッシュを一時的に取得します。
+      これらはセッション管理にのみ使用し、データベース等への永続保存は行いません。ログアウトまたはセッション終了と同時に破棄されます。
+    </p>
+
+    <h3>メッセージ内容（一時処理のみ）</h3>
+    <p>
+      AI 会話・DJAudio-DL・セキュリティチェック機能の処理に必要なメッセージ内容を一時的に参照します。
+      これらは処理完了後に破棄され、データベースには保存されません。AI 会話の文脈はメモリ上で直前のやりとりのみ保持し、Bot の再起動でリセットされます。
+    </p>
+
+    <h3>アクセスログ</h3>
+    <p>
+      Web 管理画面へのアクセスログ（IP アドレス・タイムスタンプ・操作内容）をサーバーのログファイルに記録する場合があります。
+      これはセキュリティ監査および不正アクセスの調査を目的としています。
+    </p>
   </div>
 
-  <!-- 第三者サービス -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-boxes"></i>利用する第三者サービス
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <p class="section-card-subtitle mb-3">本 Bot は以下の外部サービスを利用しています。各サービスのプライバシーポリシーが適用されます。</p>
-      <div class="guide-cmd-list">
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">Discord</div>
-          <p class="guide-cmd-desc">Bot の動作基盤および OAuth2 認証に使用します。Discord のプライバシーポリシーが適用されます。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">OpenAI / Groq</div>
-          <p class="guide-cmd-desc">AI 会話機能（ヴォルデモート）の応答生成に使用します。送信されたメッセージは各社の API を経由します。各社のプライバシーポリシーが適用されます。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">VirusTotal</div>
-          <p class="guide-cmd-desc">DJAudio-DL 機能において投稿された URL のセキュリティチェックに使用します。URL が VirusTotal の API に送信されます。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">P2PQuake</div>
-          <p class="guide-cmd-desc">地震アラート機能において地震情報のリアルタイム受信に使用します。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">MetalpriceAPI</div>
-          <p class="guide-cmd-desc">貴金属価格の取得に使用します。</p>
-        </div>
-      </div>
-    </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-list-check"></i>情報の利用目的</h2>
+    <p>収集した情報は以下の目的にのみ使用します。</p>
+    <ul>
+      <li>地震アラート・AI 会話・DJAudio-DL・ウェルカム通知などの Bot 機能の提供</li>
+      <li>Discord OAuth2 を通じた本人確認および管理者権限の検証</li>
+      <li>不正アクセスの検知・防止およびシステムの安定稼働の確保</li>
+    </ul>
+    <p>収集した情報を上記以外の目的に使用することはありません。</p>
   </div>
 
-  <!-- データの保管と削除 -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-shield-fill-check"></i>データの保管・削除
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <div class="guide-cmd-list">
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">設定データの保管場所</div>
-          <p class="guide-cmd-desc">サーバー設定情報はホスティングサーバー上のボリュームに保存されます。外部の第三者と共有されることはありません。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">設定データの削除</div>
-          <p class="guide-cmd-desc">Bot をサーバーから退出させると、そのサーバーに紐づく設定データは順次削除されます。また、Web 管理画面から各設定を個別に削除することもできます。</p>
-        </div>
-        <div class="guide-cmd-row">
-          <div class="guide-cmd-name">セッション情報</div>
-          <p class="guide-cmd-desc">Web 管理画面のログインセッションはブラウザを閉じるか、ログアウト操作により終了します。</p>
-        </div>
-      </div>
-    </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-boxes"></i>利用する第三者サービス</h2>
+    <p>
+      本 Bot は以下の外部サービスの API を使用しています。各サービスへの情報送信は機能提供に必要な範囲に限られます。各サービスのプライバシーポリシーも合わせてご確認ください。
+    </p>
+    <ul>
+      <li><strong>Discord</strong> — Bot の動作基盤および OAuth2 認証</li>
+      <li><strong>OpenAI / Groq</strong> — AI 会話機能の応答生成。送信されたメッセージが各社の API を経由します</li>
+      <li><strong>VirusTotal</strong> — DJAudio-DL 機能における投稿 URL のセキュリティチェック</li>
+      <li><strong>P2PQuake</strong> — 地震アラート機能のリアルタイム地震情報受信</li>
+      <li><strong>MetalpriceAPI</strong> — 貴金属価格データの取得</li>
+      <li><strong>Google News RSS</strong> — ニュースフィード機能の記事取得</li>
+    </ul>
   </div>
 
-  <!-- ポリシーの変更 -->
-  <div class="section-card mb-3">
-    <div class="section-card-header">
-      <h2 class="section-card-title">
-        <i class="bi bi-arrow-clockwise"></i>ポリシーの変更
-      </h2>
-    </div>
-    <div class="section-card-body">
-      <div class="info-panel">
-        <p class="info-panel-title"><i class="bi bi-info-circle-fill"></i>更新について</p>
-        本プライバシーポリシーは予告なく変更される場合があります。重要な変更がある場合はこのページにて告知します。定期的にご確認ください。
-      </div>
-    </div>
+  <div class="doc-section">
+    <h2><i class="bi bi-shield-fill-check"></i>データの保管・削除</h2>
+
+    <h3>保管場所とアクセス</h3>
+    <p>
+      サーバー設定情報はホスティングサーバー上のボリュームに保存されます。外部の第三者と共有・販売されることはありません。
+    </p>
+
+    <h3>削除方法</h3>
+    <p>
+      Bot をサーバーから退出させると、そのサーバーに紐づく設定データは順次削除されます。Web 管理画面から各設定を個別に削除することも可能です。
+    </p>
+
+    <h3>セッション情報</h3>
+    <p>
+      Web 管理画面のログインセッションは、ログアウト操作またはセッション終了により破棄されます。
+    </p>
   </div>
 
-  <!-- Footer links -->
-  <div class="guide-links">
+  <div class="doc-section">
+    <h2><i class="bi bi-arrow-clockwise"></i>ポリシーの変更</h2>
+    <p>
+      本プライバシーポリシーは予告なく変更される場合があります。重要な変更がある場合はこのページに反映されます。最終更新日を定期的にご確認ください。
+    </p>
+  </div>
+
+  <div class="doc-links">
     <a href="{{ url_for('auth.terms') }}" class="btn btn-outline-secondary">
       <i class="bi bi-file-text"></i>利用規約
     </a>
@@ -189,6 +144,12 @@
     <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary">
       <i class="bi bi-gear-fill"></i>Web 管理画面
     </a>
+  </div>
+
+  <div class="doc-legal">
+    <a href="{{ url_for('auth.terms') }}">利用規約</a>
+    <span class="doc-legal-sep">·</span>
+    <a href="{{ url_for('auth.guide') }}">使い方ガイド</a>
   </div>
 
 </div>
