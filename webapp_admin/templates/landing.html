@@ -89,9 +89,6 @@
       <i class="bi bi-plus-circle-fill"></i>Bot をサーバーに招待
     </a>
     {% endif %}
-    <a href="{{ url_for('guide') }}" class="btn btn-outline-secondary btn-lg">
-      <i class="bi bi-book"></i>使い方ガイド
-    </a>
     <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary btn-lg">
       <i class="bi bi-gear-fill"></i>管理画面にログイン
     </a>
@@ -157,7 +154,7 @@
     <h2>はじめ方</h2>
     <ol class="doc-steps landing-steps">
       <li>
-        <span>下の招待ボタンから <strong>Bot をサーバーに追加</strong>します。管理者権限が必要です。</span>
+        <span>上部の<strong>招待ボタン</strong>から Bot をサーバーに追加します。管理者権限が必要です。</span>
       </li>
       <li>
         <span><strong>管理画面</strong>に Discord アカウントでログインし、使いたい機能のチャンネルを設定します。</span>
@@ -166,31 +163,15 @@
         <span>設定完了。Discord 上でコマンドを叩くか、URL を貼るだけで <strong>Bot が応答</strong>します。</span>
       </li>
     </ol>
-    {% if invite_url %}
-    <div class="mt-4">
-      <a href="{{ invite_url }}" class="btn btn-accent" target="_blank" rel="noopener noreferrer">
-        <i class="bi bi-plus-circle-fill"></i>今すぐ Bot を招待する
-      </a>
-    </div>
-    {% endif %}
   </div>
 </section>
 
-<!-- Links -->
+<!-- Footer -->
 <section class="landing-section landing-section-last">
   <div class="landing-inner">
-    <div class="doc-links landing-footer-links">
-      <a href="https://metals.kawasaki-n3t.f5.si/" class="btn btn-outline-primary" target="_blank" rel="noopener noreferrer">
-        <i class="bi bi-graph-up"></i>貴金属価格トラッカー
-      </a>
-      <a href="{{ url_for('guide') }}" class="btn btn-outline-secondary">
-        <i class="bi bi-book"></i>使い方ガイド
-      </a>
-      <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary">
-        <i class="bi bi-gear-fill"></i>管理画面
-      </a>
-    </div>
     <div class="doc-legal">
+      <a href="https://metals.kawasaki-n3t.f5.si/" target="_blank" rel="noopener noreferrer">貴金属価格トラッカー</a>
+      <span class="doc-legal-sep">·</span>
       <a href="{{ url_for('terms') }}">利用規約</a>
       <span class="doc-legal-sep">·</span>
       <a href="{{ url_for('privacy') }}">プライバシーポリシー</a>

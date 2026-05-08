@@ -20,7 +20,7 @@
 <header class="topbar">
   <div class="topbar-inner">
     <div class="topbar-leading">
-      <a class="brand-link" href="{{ url_for('auth.login') }}">
+      <a class="brand-link" href="{{ url_for('landing') }}">
         <span class="brand-mark">
           <img class="brand-mark-image" src="{{ admin_asset_url('admin-icon.webp') }}" width="28" height="28" alt="">
         </span>
@@ -148,14 +148,6 @@
     <a href="https://metals.kawasaki-n3t.f5.si/" class="btn btn-outline-primary" target="_blank" rel="noopener noreferrer">
       <i class="bi bi-graph-up"></i>貴金属価格トラッカー
     </a>
-    <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary">
-      <i class="bi bi-gear-fill"></i>Web 管理画面
-    </a>
-    {% if invite_url %}
-    <a href="{{ invite_url }}" class="btn btn-accent" target="_blank" rel="noopener noreferrer">
-      <i class="bi bi-plus-circle-fill"></i>Bot をサーバーに招待
-    </a>
-    {% endif %}
   </div>
 
   <div class="doc-legal">
