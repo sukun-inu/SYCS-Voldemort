@@ -6,8 +6,8 @@ from services.settings_store import get_goodbye_settings, get_welcome_settings
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_WELCOME = "{user} がサーバーに参加しました！ ようこそ **{server}** へ！ （現在 {count} 名）"
-_DEFAULT_GOODBYE = "{username} がサーバーから退出しました。"
+_DEFAULT_WELCOME = "新たなる者よ、{user} がこの地に降り立った。**{server}** へようこそ… 余の治める場所へ。（現在 {count} 名）"
+_DEFAULT_GOODBYE = "{username} が去っていった。余の名を知りながら逃げるとは… 嘆かわしい。"
 
 
 def _render(template: str, member: discord.Member) -> str:

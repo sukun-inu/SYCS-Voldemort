@@ -101,11 +101,11 @@ def create_app() -> Flask:
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' https://cdn.jsdelivr.net; "
-            "style-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+            "script-src 'self' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
             "img-src 'self' https://cdn.discordapp.com data:; "
             "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; "
-            "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com"
+            "connect-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com https://static.cloudflareinsights.com"
         )
         return response
 

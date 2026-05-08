@@ -11,31 +11,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="{{ admin_asset_url('admin.css') }}">
-  <style>
-    body { background: var(--bg-base, #0d1117); color: var(--text-primary, #e6edf3); font-family: 'Zen Kaku Gothic New', sans-serif; }
-    .guide-wrap { max-width: 860px; margin: 0 auto; padding: 2rem 1rem 4rem; }
-    .guide-hero { text-align: center; padding: 3rem 1rem 2rem; }
-    .guide-hero-icon { font-size: 3rem; }
-    .guide-hero h1 { font-size: 1.8rem; font-weight: 900; margin-top: .5rem; }
-    .guide-hero p { color: var(--text-secondary, #8b949e); font-size: .95rem; }
-    .guide-section { background: var(--bg-surface, #161b22); border: 1px solid var(--border, #30363d); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
-    .guide-section-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: .5rem; }
-    .cmd-block { background: var(--bg-base, #0d1117); border-radius: 8px; padding: 1rem; margin-bottom: .75rem; border: 1px solid var(--border, #30363d); }
-    .cmd-name { font-family: monospace; font-size: .95rem; color: #79c0ff; font-weight: 700; }
-    .cmd-desc { font-size: .875rem; color: var(--text-secondary, #8b949e); margin-top: .25rem; }
-    .badge-auto { background: #1f6feb22; color: #79c0ff; border: 1px solid #1f6feb66; border-radius: 4px; font-size: .75rem; padding: .1rem .4rem; vertical-align: middle; }
-    .badge-admin { background: #da363322; color: #f85149; border: 1px solid #da363366; border-radius: 4px; font-size: .75rem; padding: .1rem .4rem; vertical-align: middle; }
-    .site-link-row { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.5rem; }
-    .site-link-row .btn { flex: 1; min-width: 180px; }
-    .guide-back { color: var(--text-secondary, #8b949e); font-size: .875rem; text-decoration: none; }
-    .guide-back:hover { color: var(--text-primary, #e6edf3); }
-    .step-badge { display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: #1f6feb; color: #fff; font-size: .8rem; font-weight: 700; flex-shrink: 0; }
-    .step-row { display: flex; gap: .75rem; align-items: flex-start; margin-bottom: .75rem; }
-    .step-text { font-size: .9rem; color: var(--text-secondary, #8b949e); padding-top: .15rem; }
-    .supported-list { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
-    .supported-chip { background: #238636; border-radius: 20px; padding: .25rem .75rem; font-size: .8rem; font-weight: 500; }
-    .unsupported-chip { background: #da363322; border: 1px solid #da363366; color: #f85149; border-radius: 20px; padding: .25rem .75rem; font-size: .8rem; }
-  </style>
+  <link rel="stylesheet" href="{{ admin_asset_url('guide.css') }}">
 </head>
 <body>
 <div class="guide-wrap">
@@ -87,7 +63,7 @@
       <i class="bi bi-music-note-beamed text-success"></i>
       DJAudio-DL（音楽 MP3 ダウンロード）
     </div>
-    <p class="text-secondary" style="font-size:.9rem;">管理者が監視チャンネルを設定した後、そのチャンネルに URL を貼るだけで MP3 リンクが返信されます。<span class="badge-auto">自動</span></p>
+    <p class="guide-note">管理者が監視チャンネルを設定した後、そのチャンネルに URL を貼るだけで MP3 リンクが返信されます。<span class="badge-auto">自動</span></p>
 
     <div class="step-row">
       <span class="step-badge">1</span>
@@ -102,8 +78,8 @@
       <div class="step-text">変換完了後 <strong>✅ リアクション</strong> と共に <strong>期限付きダウンロードリンク</strong> を返信します。</div>
     </div>
 
-    <div style="margin-top:1rem;">
-      <div style="font-size:.875rem; font-weight:600; margin-bottom:.4rem;">対応サービス</div>
+    <div class="mt-3">
+      <div class="guide-service-label">対応サービス</div>
       <div class="supported-list">
         <span class="supported-chip">YouTube / YouTube Music</span>
         <span class="supported-chip">SoundCloud</span>
@@ -124,8 +100,8 @@
       <i class="bi bi-chat-dots-fill text-warning"></i>
       AI 会話（ヴォルデモート）
     </div>
-    <p style="font-size:.9rem; color:var(--text-secondary,#8b949e);">管理者が指定した <strong>応答チャンネル</strong> にメッセージを送るだけで Bot が返信します。<span class="badge-auto">自動</span></p>
-    <ul style="font-size:.875rem; color:var(--text-secondary,#8b949e); padding-left:1.25rem; margin:0;">
+    <p class="guide-note">管理者が指定した <strong>応答チャンネル</strong> にメッセージを送るだけで Bot が返信します。<span class="badge-auto">自動</span></p>
+    <ul class="guide-meta-list">
       <li>会話の文脈を記憶し、連続した対話が可能です。</li>
       <li>日本語専用・ヴォルデモート卿の人格で応答します。</li>
       <li>未設定の場合は全チャンネルで応答します。</li>
@@ -138,8 +114,8 @@
       <i class="bi bi-activity text-danger"></i>
       地震アラート
     </div>
-    <p style="font-size:.9rem; color:var(--text-secondary,#8b949e);">管理者が設定した通知チャンネルに地震情報をリアルタイムで通知します。<span class="badge-auto">自動</span></p>
-    <ul style="font-size:.875rem; color:var(--text-secondary,#8b949e); padding-left:1.25rem; margin:0;">
+    <p class="guide-note">管理者が設定した通知チャンネルに地震情報をリアルタイムで通知します。<span class="badge-auto">自動</span></p>
+    <ul class="guide-meta-list">
       <li>P2PQuake WebSocket で日本全国の地震情報を受信</li>
       <li>震度バッジ画像・震度分布地図を Embed に添付</li>
       <li>緊急地震速報（EEW）・津波予報にも対応</li>
@@ -177,16 +153,16 @@
   <!-- 管理者向け -->
   <div class="guide-section">
     <div class="guide-section-title">
-      <i class="bi bi-shield-lock-fill" style="color:#f85149"></i>
+      <i class="bi bi-shield-lock-fill guide-icon-danger"></i>
       管理者向け設定 <span class="badge-admin">要管理者権限</span>
     </div>
-    <p style="font-size:.9rem; color:var(--text-secondary,#8b949e);">
+    <p class="guide-note">
       上記の自動機能はすべてサーバーの管理者が設定する必要があります。<br>
       スラッシュコマンド（Discord 上）または Web 管理画面から設定できます。
     </p>
-    <div style="font-size:.875rem; color:var(--text-secondary,#8b949e);">
-      <strong style="color:var(--text-primary,#e6edf3);">Web 管理画面でできること:</strong>
-      <ul style="padding-left:1.25rem; margin:.5rem 0 0;">
+    <div class="guide-admin-body">
+      <strong class="guide-text-primary">Web 管理画面でできること:</strong>
+      <ul class="guide-admin-list">
         <li>各機能のチャンネル設定・通知設定</li>
         <li>DJAudio のキャッシュ時間・クールダウン設定</li>
         <li>ニュースフィードの追加・編集・削除</li>

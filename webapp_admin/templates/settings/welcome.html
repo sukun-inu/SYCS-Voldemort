@@ -12,12 +12,22 @@
 
 <div class="info-panel mb-4">
   <p class="info-panel-title"><i class="bi bi-braces"></i>テンプレート変数</p>
-  <div class="d-flex flex-wrap gap-2">
-    <code>{user}</code>
-    <code>{username}</code>
-    <code>{server}</code>
-    <code>{count}</code>
-  </div>
+  <p class="info-panel-body mb-2 small">メッセージ内に下記の変数を埋め込むと、送信時に自動で置換されます。</p>
+  <table class="table table-sm mb-0 small">
+    <thead>
+      <tr>
+        <th class="col-2">変数</th>
+        <th>置換内容</th>
+        <th>例</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>{user}</code></td><td>メンションリンク（クリックでプロフィールが開く）</td><td>@ユーザー名</td></tr>
+      <tr><td><code>{username}</code></td><td>Discordユーザー名（テキスト形式）</td><td>voldemort#0001</td></tr>
+      <tr><td><code>{server}</code></td><td>サーバー名</td><td>余の領地</td></tr>
+      <tr><td><code>{count}</code></td><td>現在のメンバー数（人）</td><td>42</td></tr>
+    </tbody>
+  </table>
 </div>
 
 <div class="settings-grid">
