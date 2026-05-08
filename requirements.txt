@@ -22,3 +22,6 @@ flask-limiter>=3.5.0
 yt-dlp
 mutagen
 imageio-ffmpeg
+rcssmin
+rjsmin
+flask-minify

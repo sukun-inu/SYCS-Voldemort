@@ -17,9 +17,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # アプリ本体をコピー
 COPY . .
 
+# 静的アセットをminify
+RUN python scripts/minify_assets.py
+
 # 環境変数
 ENV PYTHONUNBUFFERED=1
 ENV TZ=Asia/Tokyo
-
+ENV MINIFY_RESPONSES=true
 
 CMD ["python", "main.py"]

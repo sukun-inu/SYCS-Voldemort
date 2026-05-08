@@ -184,4 +184,9 @@ def create_app() -> Flask:
         from flask import render_template
         return render_template("error.html", code=500, message="サーバーエラーが発生しました。"), 500
 
+    if os.environ.get("MINIFY_RESPONSES", "false").lower() == "true":
+        from flask_minify import Minify
+        Minify(app=app, html=True, js=False, cssless=False)
+        logger.info("Flask-Minify: HTML minification enabled")
+
     return app
