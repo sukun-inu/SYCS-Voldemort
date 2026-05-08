@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import time
 from datetime import datetime
 
@@ -23,6 +24,17 @@ from services.welcome_service import send_goodbye, send_welcome
 logger = logging.getLogger(__name__)
 
 _WDAYS = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
+_TRUE_SET = {"1", "true", "yes", "on"}
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in _TRUE_SET
+
+
+_BOT_BACKGROUND_WORKER = _env_bool("BOT_BACKGROUND_WORKER", True)
 
 
 def create_bot() -> Bot:
@@ -84,13 +96,17 @@ def setup_events(bot: Bot) -> None:
         await bot.tree.sync()
         if not update_status.is_running():
             update_status.start()
-        if not news_feed_task.is_running():
-            news_feed_task.start()
-        if not pending_sticky_task.is_running():
-            pending_sticky_task.start()
-        if _ws_task is None or _ws_task.done():
-            _ws_task = asyncio.create_task(run_earthquake_ws(bot))
-        asyncio.create_task(djaudio_cache_cleanup(bot=bot, interval=60))
+        if _BOT_BACKGROUND_WORKER:
+            if not news_feed_task.is_running():
+                news_feed_task.start()
+            if not pending_sticky_task.is_running():
+                pending_sticky_task.start()
+            if _ws_task is None or _ws_task.done():
+                _ws_task = asyncio.create_task(run_earthquake_ws(bot))
+            asyncio.create_task(djaudio_cache_cleanup(bot=bot, interval=60))
+            logger.info("[BOT] background worker enabled: periodic jobs are active")
+        else:
+            logger.info("[BOT] BOT_BACKGROUND_WORKER=false: periodic background jobs are disabled")
 
     # --------------------------
     # メッセージ（司令塔）

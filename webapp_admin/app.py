@@ -1,3 +1,4 @@
+import logging
 import os
 import secrets
 from pathlib import Path
@@ -12,11 +13,19 @@ from webapp_admin.metrics import (
     start_background_monitor,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def create_app() -> Flask:
     app = Flask(__name__, template_folder="templates", static_folder="static")
 
-    secret = os.environ.get("ADMIN_FLASK_SECRET_KEY") or secrets.token_hex(32)
+    secret = os.environ.get("ADMIN_FLASK_SECRET_KEY")
+    if not secret:
+        secret = secrets.token_hex(32)
+        logger.warning(
+            "ADMIN_FLASK_SECRET_KEY が未設定のため一時キーを生成しました。"
+            "マルチインスタンス運用では固定値を設定してください。"
+        )
     app.config.update(
         SECRET_KEY=secret,
         SESSION_COOKIE_HTTPONLY=True,

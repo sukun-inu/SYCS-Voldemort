@@ -160,6 +160,9 @@ docker compose up -d --build
 | `GROQ_API_KEY` | 任意 | AI 会話/モデレーション |
 | `VIRUSTOTAL_API_KEY` | 任意 | URL/ファイルスキャン |
 | `SETTINGS_DIR` | 任意 | `settings.json` 保存先 |
+| `SETTINGS_LOCK_TIMEOUT_SECONDS` | 任意 | `settings.json` 更新ロック待機秒数（既定 `10`） |
+| `SETTINGS_LOCK_STALE_SECONDS` | 任意 | 古いロックファイルを破棄する閾値秒数（既定 `30`） |
+| `BOT_BACKGROUND_WORKER` | 任意 | `true/false`。定期ジョブ実行ノードかどうか（既定 `true`） |
 | `DJAUDIO_BASE_URL` | DJAudio時推奨 | MP3 配信 URL ベース |
 | `DJAUDIO_FFMPEG_PATH` | 任意 | ffmpeg 実行ファイルを明示指定 |
 | `DJAUDIO_AUTO_INSTALL_FFMPEG` | 任意 | `true/false`（既定 `true`） |
@@ -174,15 +177,31 @@ docker compose up -d --build
 | `DISCORD_REDIRECT_URI` | Yes | OAuth リダイレクトURL |
 | `ADMIN_FLASK_SECRET_KEY` | Yes | セッション署名キー |
 | `ADMIN_PORT` | 任意 | デフォルト `5001` |
+| `ADMIN_LIMITER_STORAGE_URI` | 任意 | Flask-Limiter ストレージ（既定 `memory://`、分散時はRedis推奨） |
 
 ### 5.3 Web トラッカー（`web_main.py`）
 
 | 変数 | 必須 | 説明 |
 |---|---|---|
 | `WEB_PORT` | 任意 | デフォルト `8000` |
+| `WEB_SCHEDULER_ENABLED` | 任意 | `true/false`。日次更新/Push通知ジョブを実行するか（既定 `true`） |
 | `POSTGRES_*` | 通常必要 | DB 接続設定 |
 
 詳細な環境変数は `config.py` と `docker-compose.yml` を参照してください。
+
+### 5.4 マルチインスタンス運用の推奨
+
+- Discord Bot を複数インスタンスで動かす場合:
+  - 定期ジョブ担当 1台だけ `BOT_BACKGROUND_WORKER=true`
+  - それ以外は `BOT_BACKGROUND_WORKER=false`
+- Web トラッカーを複数インスタンスで動かす場合:
+  - スケジューラ担当 1台だけ `WEB_SCHEDULER_ENABLED=true`
+  - それ以外は `WEB_SCHEDULER_ENABLED=false`
+- 管理UIを複数インスタンスで動かす場合:
+  - 全インスタンスで同じ `ADMIN_FLASK_SECRET_KEY` を設定
+  - `ADMIN_LIMITER_STORAGE_URI` に Redis を設定
+- DJAudio-DL を複数ノードで使う場合:
+  - `DJAUDIO_CACHE_DIR` を共有ストレージにする（または配信ノードを固定）
 
 ---
 

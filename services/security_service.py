@@ -184,7 +184,7 @@ def _check_content_flags(
     reason_flags: List[str] = []
     logs: List[str] = []
 
-    if is_spam(member.id):
+    if is_spam(member.guild.id, member.id):
         reason_flags.append("SPAM")
         logs.append("スパム検出")
 

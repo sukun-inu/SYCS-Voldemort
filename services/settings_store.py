@@ -1,7 +1,10 @@
 import os
+import time
+import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 try:
     import orjson as _json
@@ -15,11 +18,16 @@ except ImportError:
 _default_dir = Path(__file__).resolve().parent.parent / "data"
 _SETTINGS_DIR = Path(os.getenv("SETTINGS_DIR", str(_default_dir)))
 _SETTINGS_FILE = _SETTINGS_DIR / "settings.json"
+_SETTINGS_LOCK_FILE = _SETTINGS_DIR / "settings.json.lock"
+_SETTINGS_LOCK_TIMEOUT_SEC = max(0.2, float(os.getenv("SETTINGS_LOCK_TIMEOUT_SECONDS", "10")))
+_SETTINGS_LOCK_STALE_SEC = max(_SETTINGS_LOCK_TIMEOUT_SEC, float(os.getenv("SETTINGS_LOCK_STALE_SECONDS", "30")))
+_SETTINGS_LOCK_POLL_SEC = 0.05
 
 # メモリ内キャッシュ。ファイル署名（mtime_ns + size）が変わったら自動無効化するため、
 # Bot と WebUI が別プロセスでもファイル更新を検知できる。
 _cache: dict[str, Any] | None = None
 _cache_sig: tuple[int, int] | None = None
+_T = TypeVar("_T")
 
 
 def _file_signature() -> tuple[int, int] | None:
@@ -30,35 +38,77 @@ def _file_signature() -> tuple[int, int] | None:
         return None
 
 
+def _normalize_root(data: Any) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        return {"guilds": {}}
+
+    data.setdefault("guilds", {})
+    if not isinstance(data["guilds"], dict):
+        data["guilds"] = {}
+    return data
+
+
+def _load_all_from_disk() -> dict[str, Any]:
+    sig = _file_signature()
+    if sig is None:
+        return {"guilds": {}}
+
+    try:
+        data = _json.loads(_SETTINGS_FILE.read_bytes())
+    except Exception:
+        return {"guilds": {}}
+    return _normalize_root(data)
+
+
+@contextmanager
+def _settings_file_lock(timeout_sec: float = _SETTINGS_LOCK_TIMEOUT_SEC):
+    _SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
+    owner_id = uuid.uuid4().hex
+    deadline = time.monotonic() + timeout_sec
+
+    while True:
+        try:
+            fd = os.open(
+                str(_SETTINGS_LOCK_FILE),
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+            )
+            with os.fdopen(fd, "w", encoding="utf-8") as lock_fp:
+                lock_fp.write(owner_id)
+            break
+        except FileExistsError:
+            try:
+                lock_age = time.time() - _SETTINGS_LOCK_FILE.stat().st_mtime
+                if lock_age > _SETTINGS_LOCK_STALE_SEC:
+                    _SETTINGS_LOCK_FILE.unlink(missing_ok=True)
+                    continue
+            except OSError:
+                pass
+            if time.monotonic() >= deadline:
+                raise TimeoutError("settings.json のロック取得がタイムアウトしました。")
+            time.sleep(_SETTINGS_LOCK_POLL_SEC)
+
+    try:
+        yield
+    finally:
+        try:
+            current_owner = _SETTINGS_LOCK_FILE.read_text(encoding="utf-8")
+        except OSError:
+            current_owner = ""
+        if current_owner == owner_id:
+            try:
+                _SETTINGS_LOCK_FILE.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
 def _load_all() -> dict[str, Any]:
     global _cache, _cache_sig
     sig = _file_signature()
     if _cache is not None and sig == _cache_sig:
         return _cache
 
-    if sig is None:
-        _cache = {"guilds": {}}
-        _cache_sig = sig
-        return _cache
-
-    try:
-        data = _json.loads(_SETTINGS_FILE.read_bytes())
-    except Exception:
-        _cache = {"guilds": {}}
-        _cache_sig = sig
-        return _cache
-
-    if not isinstance(data, dict):
-        _cache = {"guilds": {}}
-        _cache_sig = sig
-        return _cache
-
-    data.setdefault("guilds", {})
-    if not isinstance(data["guilds"], dict):
-        data["guilds"] = {}
-
-    _cache = data
-    _cache_sig = sig
+    _cache = _load_all_from_disk()
+    _cache_sig = _file_signature()
     return _cache
 
 
@@ -78,6 +128,14 @@ def _save_all(data: dict[str, Any]) -> None:
     _cache_sig = _file_signature()
 
 
+def _mutate_settings(mutator: Callable[[dict[str, Any]], _T]) -> _T:
+    with _settings_file_lock():
+        data = _load_all_from_disk()
+        result = mutator(data)
+        _save_all(data)
+        return result
+
+
 def get_guild_settings(guild_id: int) -> dict[str, Any]:
     """指定ギルドの設定を取得（存在しない場合は空 dict）。"""
     guilds: dict[str, Any] = _load_all().get("guilds", {})  # type: ignore[assignment]
@@ -86,23 +144,37 @@ def get_guild_settings(guild_id: int) -> dict[str, Any]:
 
 def update_guild_settings(guild_id: int, updates: dict[str, Any]) -> dict[str, Any]:
     """指定ギルドの設定を更新し、保存してから最新状態を返す。"""
-    data = _load_all()
+    def _mutator(data: dict[str, Any]) -> dict[str, Any]:
+        guilds: dict[str, Any] = data.setdefault("guilds", {})  # type: ignore[assignment]
+        current = guilds.get(str(guild_id), {})
+        if not isinstance(current, dict):
+            current = {}
+        current.update(updates)
+        guilds[str(guild_id)] = current
+        return dict(current)
+
+    return _mutate_settings(_mutator)
+
+
+def _get_or_create_guild(data: dict[str, Any], guild_id: int) -> dict[str, Any]:
     guilds: dict[str, Any] = data.setdefault("guilds", {})  # type: ignore[assignment]
     current = guilds.get(str(guild_id), {})
     if not isinstance(current, dict):
         current = {}
-    current.update(updates)
     guilds[str(guild_id)] = current
-    _save_all(data)
-    return dict(current)
+    return current
 
 
 def _update_nested(guild_id: int, top_key: str, patch: dict[str, Any]) -> None:
-    s = get_guild_settings(guild_id).get(top_key, {})
-    if not isinstance(s, dict):
-        s = {}
-    s.update(patch)
-    update_guild_settings(guild_id, {top_key: s})
+    def _mutator(data: dict[str, Any]) -> None:
+        current = _get_or_create_guild(data, guild_id)
+        nested = current.get(top_key, {})
+        if not isinstance(nested, dict):
+            nested = {}
+        nested.update(patch)
+        current[top_key] = nested
+
+    _mutate_settings(_mutator)
 
 
 def _parse_id_list(raw: Any) -> list[int]:
@@ -142,22 +214,34 @@ def set_trusted_user_ids(guild_id: int, ids: list[int]) -> dict[str, Any]:
 
 def add_trusted_users(guild_id: int, user_ids: list[int]) -> list[int]:
     """信頼済みユーザーに追加して、最新のリストを返す。"""
-    current = set(get_trusted_user_ids(guild_id))
-    current.update(int(i) for i in user_ids)
-    set_trusted_user_ids(guild_id, list(current))
-    return sorted(current)
+    def _mutator(data: dict[str, Any]) -> list[int]:
+        current = _get_or_create_guild(data, guild_id)
+        trusted = set(_parse_id_list(current.get("trusted_user_ids")))
+        for i in user_ids:
+            try:
+                trusted.add(int(i))
+            except (TypeError, ValueError):
+                continue
+        current["trusted_user_ids"] = sorted(trusted)
+        return sorted(trusted)
+
+    return _mutate_settings(_mutator)
 
 
 def remove_trusted_users(guild_id: int, user_ids: list[int]) -> list[int]:
     """信頼済みユーザーから削除して、最新のリストを返す。"""
-    current = set(get_trusted_user_ids(guild_id))
-    for i in user_ids:
-        try:
-            current.discard(int(i))
-        except (TypeError, ValueError):
-            continue
-    set_trusted_user_ids(guild_id, list(current))
-    return sorted(current)
+    def _mutator(data: dict[str, Any]) -> list[int]:
+        current = _get_or_create_guild(data, guild_id)
+        trusted = set(_parse_id_list(current.get("trusted_user_ids")))
+        for i in user_ids:
+            try:
+                trusted.discard(int(i))
+            except (TypeError, ValueError):
+                continue
+        current["trusted_user_ids"] = sorted(trusted)
+        return sorted(trusted)
+
+    return _mutate_settings(_mutator)
 
 
 def get_bypass_role_ids(guild_id: int) -> list[int]:
@@ -171,22 +255,34 @@ def set_bypass_role_ids(guild_id: int, role_ids: list[int]) -> dict[str, Any]:
 
 def add_bypass_roles(guild_id: int, role_ids: list[int]) -> list[int]:
     """バイパス対象ロールに追加し、最新のリストを返す。"""
-    current = set(get_bypass_role_ids(guild_id))
-    current.update(int(i) for i in role_ids)
-    set_bypass_role_ids(guild_id, list(current))
-    return sorted(current)
+    def _mutator(data: dict[str, Any]) -> list[int]:
+        current = _get_or_create_guild(data, guild_id)
+        bypass = set(_parse_id_list(current.get("bypass_role_ids")))
+        for i in role_ids:
+            try:
+                bypass.add(int(i))
+            except (TypeError, ValueError):
+                continue
+        current["bypass_role_ids"] = sorted(bypass)
+        return sorted(bypass)
+
+    return _mutate_settings(_mutator)
 
 
 def remove_bypass_roles(guild_id: int, role_ids: list[int]) -> list[int]:
     """バイパス対象ロールから削除し、最新のリストを返す。"""
-    current = set(get_bypass_role_ids(guild_id))
-    for i in role_ids:
-        try:
-            current.discard(int(i))
-        except (TypeError, ValueError):
-            continue
-    set_bypass_role_ids(guild_id, list(current))
-    return sorted(current)
+    def _mutator(data: dict[str, Any]) -> list[int]:
+        current = _get_or_create_guild(data, guild_id)
+        bypass = set(_parse_id_list(current.get("bypass_role_ids")))
+        for i in role_ids:
+            try:
+                bypass.discard(int(i))
+            except (TypeError, ValueError):
+                continue
+        current["bypass_role_ids"] = sorted(bypass)
+        return sorted(bypass)
+
+    return _mutate_settings(_mutator)
 
 
 # ──────────────────────────────────────────────
@@ -256,39 +352,71 @@ def get_sticky_messages(guild_id: int) -> dict[str, Any]:
 
 
 def set_sticky_message(guild_id: int, channel_id: int, content: str) -> None:
-    stickies = get_guild_settings(guild_id).get("sticky_messages", {})
     key = str(channel_id)
-    existing = stickies.get(key, {})
-    stickies[key] = {
-        "content": content,
-        "message_id": existing.get("message_id"),
-        "pending": "post",
-    }
-    update_guild_settings(guild_id, {"sticky_messages": stickies})
+
+    def _mutator(data: dict[str, Any]) -> None:
+        current = _get_or_create_guild(data, guild_id)
+        stickies = current.get("sticky_messages", {})
+        if not isinstance(stickies, dict):
+            stickies = {}
+        existing = stickies.get(key, {})
+        if not isinstance(existing, dict):
+            existing = {}
+        stickies[key] = {
+            "content": content,
+            "message_id": existing.get("message_id"),
+            "pending": "post",
+        }
+        current["sticky_messages"] = stickies
+
+    _mutate_settings(_mutator)
 
 
 def update_sticky_message_id(guild_id: int, channel_id: int, message_id: int | None) -> None:
-    stickies = get_guild_settings(guild_id).get("sticky_messages", {})
     key = str(channel_id)
-    if key in stickies:
+
+    def _mutator(data: dict[str, Any]) -> None:
+        current = _get_or_create_guild(data, guild_id)
+        stickies = current.get("sticky_messages", {})
+        if not isinstance(stickies, dict):
+            return
+        if key not in stickies or not isinstance(stickies[key], dict):
+            return
         stickies[key]["message_id"] = message_id
         stickies[key].pop("pending", None)
-        update_guild_settings(guild_id, {"sticky_messages": stickies})
+        current["sticky_messages"] = stickies
+
+    _mutate_settings(_mutator)
 
 
 def mark_sticky_pending_delete(guild_id: int, channel_id: int) -> None:
     """削除待ちフラグを立てる。Botの定期タスクがDiscordメッセージを削除した後エントリを消す。"""
-    stickies = get_guild_settings(guild_id).get("sticky_messages", {})
     key = str(channel_id)
-    if key in stickies:
-        stickies[key]["pending"] = "delete"
-        update_guild_settings(guild_id, {"sticky_messages": stickies})
+
+    def _mutator(data: dict[str, Any]) -> None:
+        current = _get_or_create_guild(data, guild_id)
+        stickies = current.get("sticky_messages", {})
+        if not isinstance(stickies, dict):
+            return
+        if key in stickies and isinstance(stickies[key], dict):
+            stickies[key]["pending"] = "delete"
+            current["sticky_messages"] = stickies
+
+    _mutate_settings(_mutator)
 
 
 def remove_sticky_message(guild_id: int, channel_id: int) -> None:
-    stickies = get_guild_settings(guild_id).get("sticky_messages", {})
-    stickies.pop(str(channel_id), None)
-    update_guild_settings(guild_id, {"sticky_messages": stickies})
+    key = str(channel_id)
+
+    def _mutator(data: dict[str, Any]) -> None:
+        current = _get_or_create_guild(data, guild_id)
+        stickies = current.get("sticky_messages", {})
+        if not isinstance(stickies, dict):
+            return
+        stickies.pop(key, None)
+        current["sticky_messages"] = stickies
+
+    _mutate_settings(_mutator)
 
 
 # ──────────────────────────────────────────────
@@ -301,22 +429,43 @@ def get_reaction_roles(guild_id: int) -> dict[str, Any]:
 
 
 def add_reaction_role(guild_id: int, message_id: int, emoji: str, role_id: int) -> None:
-    rr = get_guild_settings(guild_id).get("reaction_roles", {})
     key = str(message_id)
-    rr.setdefault(key, {})[emoji] = role_id
-    update_guild_settings(guild_id, {"reaction_roles": rr})
+
+    def _mutator(data: dict[str, Any]) -> None:
+        current = _get_or_create_guild(data, guild_id)
+        rr = current.get("reaction_roles", {})
+        if not isinstance(rr, dict):
+            rr = {}
+        mapping = rr.get(key, {})
+        if not isinstance(mapping, dict):
+            mapping = {}
+        mapping[emoji] = role_id
+        rr[key] = mapping
+        current["reaction_roles"] = rr
+
+    _mutate_settings(_mutator)
 
 
 def remove_reaction_role(guild_id: int, message_id: int, emoji: str) -> bool:
-    rr = get_guild_settings(guild_id).get("reaction_roles", {})
     key = str(message_id)
-    if key not in rr or emoji not in rr[key]:
-        return False
-    del rr[key][emoji]
-    if not rr[key]:
-        del rr[key]
-    update_guild_settings(guild_id, {"reaction_roles": rr})
-    return True
+
+    def _mutator(data: dict[str, Any]) -> bool:
+        current = _get_or_create_guild(data, guild_id)
+        rr = current.get("reaction_roles", {})
+        if not isinstance(rr, dict):
+            return False
+        mapping = rr.get(key)
+        if not isinstance(mapping, dict) or emoji not in mapping:
+            return False
+        del mapping[emoji]
+        if not mapping:
+            del rr[key]
+        else:
+            rr[key] = mapping
+        current["reaction_roles"] = rr
+        return True
+
+    return _mutate_settings(_mutator)
 
 
 # ──────────────────────────────────────────────
@@ -340,43 +489,69 @@ def get_news_feeds(guild_id: int) -> dict[str, Any]:
 
 
 def add_news_feed(guild_id: int, feed_id: str, channel_id: int, query: str, interval_minutes: int) -> None:
-    feeds = get_guild_settings(guild_id).get("news_feeds", {})
-    feeds[feed_id] = {
-        "channel_id": channel_id,
-        "query": query,
-        "interval": interval_minutes,
-        "last_run": 0.0,
-        "seen_hashes": [],
-    }
-    update_guild_settings(guild_id, {"news_feeds": feeds})
+    def _mutator(data: dict[str, Any]) -> None:
+        current = _get_or_create_guild(data, guild_id)
+        feeds = current.get("news_feeds", {})
+        if not isinstance(feeds, dict):
+            feeds = {}
+        feeds[feed_id] = {
+            "channel_id": channel_id,
+            "query": query,
+            "interval": interval_minutes,
+            "last_run": 0.0,
+            "seen_hashes": [],
+        }
+        current["news_feeds"] = feeds
+
+    _mutate_settings(_mutator)
 
 
 def remove_news_feed(guild_id: int, feed_id: str) -> bool:
-    feeds = get_guild_settings(guild_id).get("news_feeds", {})
-    if feed_id not in feeds:
-        return False
-    del feeds[feed_id]
-    update_guild_settings(guild_id, {"news_feeds": feeds})
-    return True
+    def _mutator(data: dict[str, Any]) -> bool:
+        current = _get_or_create_guild(data, guild_id)
+        feeds = current.get("news_feeds", {})
+        if not isinstance(feeds, dict) or feed_id not in feeds:
+            return False
+        del feeds[feed_id]
+        current["news_feeds"] = feeds
+        return True
+
+    return _mutate_settings(_mutator)
 
 
 def update_news_feed(guild_id: int, feed_id: str, channel_id: int, query: str, interval_minutes: int) -> bool:
     """フィードの設定（チャンネル・クエリ・間隔）を更新する。seen_hashes と last_run は保持する。"""
-    feeds = get_guild_settings(guild_id).get("news_feeds", {})
-    if feed_id not in feeds:
-        return False
-    feeds[feed_id].update({"channel_id": channel_id, "query": query, "interval": interval_minutes})
-    update_guild_settings(guild_id, {"news_feeds": feeds})
-    return True
+    def _mutator(data: dict[str, Any]) -> bool:
+        current = _get_or_create_guild(data, guild_id)
+        feeds = current.get("news_feeds", {})
+        if not isinstance(feeds, dict) or feed_id not in feeds:
+            return False
+        row = feeds.get(feed_id, {})
+        if not isinstance(row, dict):
+            row = {}
+        row.update({"channel_id": channel_id, "query": query, "interval": interval_minutes})
+        feeds[feed_id] = row
+        current["news_feeds"] = feeds
+        return True
+
+    return _mutate_settings(_mutator)
 
 
 def update_news_feed_state(guild_id: int, feed_id: str, last_run: float, seen_hashes: list) -> None:
-    feeds = get_guild_settings(guild_id).get("news_feeds", {})
-    if feed_id not in feeds:
-        return
-    feeds[feed_id]["last_run"] = last_run
-    feeds[feed_id]["seen_hashes"] = seen_hashes[-100:]
-    update_guild_settings(guild_id, {"news_feeds": feeds})
+    def _mutator(data: dict[str, Any]) -> None:
+        current = _get_or_create_guild(data, guild_id)
+        feeds = current.get("news_feeds", {})
+        if not isinstance(feeds, dict) or feed_id not in feeds:
+            return
+        row = feeds.get(feed_id, {})
+        if not isinstance(row, dict):
+            row = {}
+        row["last_run"] = last_run
+        row["seen_hashes"] = seen_hashes[-100:]
+        feeds[feed_id] = row
+        current["news_feeds"] = feeds
+
+    _mutate_settings(_mutator)
 
 
 # ──────────────────────────────────────────────
@@ -467,16 +642,17 @@ def get_djaudio_watch_channel(guild_id: int) -> int:
 
 def set_djaudio_watch_channel(guild_id: int, channel_id: int | None) -> None:
     """URL監視チャンネルIDを設定/解除。"""
-    nested = get_djaudio_settings(guild_id)
-    nested["watch_channel_id"] = channel_id
-    update_guild_settings(
-        guild_id,
-        {
-            "djaudio_watch_channel_id": channel_id,
-            "djaudio_watch_channel": channel_id,  # legacy 互換
-            "djaudio": nested,
-        },
-    )
+    def _mutator(data: dict[str, Any]) -> None:
+        current = _get_or_create_guild(data, guild_id)
+        nested = current.get("djaudio", {})
+        if not isinstance(nested, dict):
+            nested = {}
+        nested["watch_channel_id"] = channel_id
+        current["djaudio_watch_channel_id"] = channel_id
+        current["djaudio_watch_channel"] = channel_id  # legacy 互換
+        current["djaudio"] = nested
+
+    _mutate_settings(_mutator)
 
 
 def get_djaudio_settings(guild_id: int) -> dict[str, Any]:
@@ -521,17 +697,18 @@ def set_djaudio_settings(guild_id: int, patch: dict[str, Any]) -> None:
     if not normalized:
         return
 
-    existing = get_djaudio_settings(guild_id)
-    existing.update(normalized)
-    update_guild_settings(
-        guild_id,
-        {
-            "djaudio": existing,
-            "djaudio_cache_ttl": existing.get("cache_ttl"),  # legacy 互換
-            "djaudio_cooldown": existing.get("cooldown"),
-            "djaudio_max_urls": existing.get("max_urls"),
-        },
-    )
+    def _mutator(data: dict[str, Any]) -> None:
+        current = _get_or_create_guild(data, guild_id)
+        nested = current.get("djaudio", {})
+        if not isinstance(nested, dict):
+            nested = {}
+        nested.update(normalized)
+        current["djaudio"] = nested
+        current["djaudio_cache_ttl"] = nested.get("cache_ttl")  # legacy 互換
+        current["djaudio_cooldown"] = nested.get("cooldown")
+        current["djaudio_max_urls"] = nested.get("max_urls")
+
+    _mutate_settings(_mutator)
 
 
 _DJAUDIO_DEFAULTS: dict[str, int] = {

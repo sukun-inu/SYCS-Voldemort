@@ -1,7 +1,7 @@
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -13,7 +13,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -65,6 +65,7 @@ STARTUP_TEST_REQUIRE_DOCKER = read_env_bool("STARTUP_TEST_REQUIRE_DOCKER", True)
 STARTUP_TEST_RUN_PUSH_ON_BOOT = read_env_bool("STARTUP_TEST_RUN_PUSH_ON_BOOT", False)
 STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT = read_env_bool("STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT", False)
 STARTUP_TEST_FORCE_SNAPSHOT_REFRESH = read_env_bool("STARTUP_TEST_FORCE_SNAPSHOT_REFRESH", True)
+WEB_SCHEDULER_ENABLED = read_env_bool("WEB_SCHEDULER_ENABLED", True)
 
 history_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=64)
 latest_prices_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=8)
@@ -180,12 +181,20 @@ def _pick_top_delta(snapshot: dict[str, dict[str, str | None]]) -> tuple[str, De
     return top_metal_key, top_delta, top_date
 
 
-async def _already_dispatched(session: AsyncSession, *, snapshot_date: str) -> bool:
-    stmt = select(NotificationDispatch.id).where(
-        NotificationDispatch.notification_type == NOTIFY_TOP_DELTA_TYPE,
-        NotificationDispatch.snapshot_date == datetime.fromisoformat(snapshot_date).date(),
+async def _claim_dispatch_slot(session: AsyncSession, *, snapshot_date: date) -> int | None:
+    """通知送信スロットを先に確保して、多重インスタンスの重複送信を防ぐ。"""
+    dispatch = NotificationDispatch(
+        notification_type=NOTIFY_TOP_DELTA_TYPE,
+        snapshot_date=snapshot_date,
+        detail="pending",
     )
-    return (await session.scalar(stmt)) is not None
+    session.add(dispatch)
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        return None
+    return dispatch.id
 
 
 async def _send_push_to_subscriptions(
@@ -226,11 +235,14 @@ async def dispatch_top_delta_notification(*, enforce_schedule_time: bool = False
             return
 
         metal_key, delta_value, snapshot_date = top
-        if await _already_dispatched(session, snapshot_date=snapshot_date):
-            return
-
         subscriptions = list((await session.scalars(select(PushSubscription))).all())
         if not subscriptions:
+            return
+
+        snapshot_date_value = datetime.fromisoformat(snapshot_date).date()
+        dispatch_id = await _claim_dispatch_slot(session, snapshot_date=snapshot_date_value)
+        if dispatch_id is None:
+            logger.info("日次Push通知は別インスタンスで処理中/送信済みのためスキップ。snapshot=%s", snapshot_date)
             return
 
         spec = METAL_COMMANDS[metal_key]
@@ -241,21 +253,23 @@ async def dispatch_top_delta_notification(*, enforce_schedule_time: bool = False
             url=APP_PUBLIC_ROOT,
         )
 
-        success_count, stale_endpoints = await _send_push_to_subscriptions(subscriptions, payload, session)
-
-        session.add(
-            NotificationDispatch(
-                notification_type=NOTIFY_TOP_DELTA_TYPE,
-                snapshot_date=datetime.fromisoformat(snapshot_date).date(),
-                detail=f"{metal_key}:{delta_value}",
-            )
-        )
         try:
+            success_count, stale_endpoints = await _send_push_to_subscriptions(subscriptions, payload, session)
+            await session.execute(
+                update(NotificationDispatch)
+                .where(NotificationDispatch.id == dispatch_id)
+                .values(detail=f"{metal_key}:{delta_value}:ok={success_count}:stale={len(stale_endpoints)}")
+            )
             await session.commit()
-        except IntegrityError:
+        except Exception:
             await session.rollback()
-            logger.info("日次Push通知は別インスタンスで送信済みのためスキップ。snapshot=%s", snapshot_date)
-            return
+            try:
+                await session.execute(delete(NotificationDispatch).where(NotificationDispatch.id == dispatch_id))
+                await session.commit()
+            except Exception:
+                await session.rollback()
+            raise
+
         logger.info(
             "日次Push通知を送信した。snapshot=%s success=%s stale_removed=%s",
             snapshot_date,
@@ -390,45 +404,52 @@ async def collect_daily_data(*, force_snapshot_refresh: bool = False, force_fore
 async def lifespan(_: FastAPI):
     await init_db()
     refresh_vapid_config()
-    await collect_daily_data()
-    await dispatch_top_delta_notification(enforce_schedule_time=True)
-    await _run_startup_test_jobs()
+    scheduler: AsyncIOScheduler | None = None
 
-    scheduler = AsyncIOScheduler(timezone=JST)
-    scheduler.add_job(
-        collect_daily_data,
-        CronTrigger(hour=0, minute=0, timezone=JST),
-        id="jst_daily_metal_snapshot_and_forecast",
-        replace_existing=True,
-        coalesce=True,
-        max_instances=1,
-        misfire_grace_time=3600,
-    )
-    scheduler.add_job(
-        collect_weekly_forecast_cache,
-        CronTrigger(minute=FORECAST_REFRESH_MINUTE_JST, timezone=JST),
-        kwargs={"force_refresh": True},
-        id="jst_hourly_forecast_refresh",
-        replace_existing=True,
-        coalesce=True,
-        max_instances=1,
-        misfire_grace_time=1800,
-    )
-    scheduler.add_job(
-        dispatch_top_delta_notification,
-        CronTrigger(hour=PUSH_NOTIFY_HOUR_JST, minute=PUSH_NOTIFY_MINUTE_JST, timezone=JST),
-        id="jst_daily_top_delta_push_notify",
-        replace_existing=True,
-        coalesce=True,
-        max_instances=1,
-        misfire_grace_time=7200,
-    )
-    scheduler.start()
+    if WEB_SCHEDULER_ENABLED:
+        await collect_daily_data()
+        await dispatch_top_delta_notification(enforce_schedule_time=True)
+        await _run_startup_test_jobs()
+
+        scheduler = AsyncIOScheduler(timezone=JST)
+        scheduler.add_job(
+            collect_daily_data,
+            CronTrigger(hour=0, minute=0, timezone=JST),
+            id="jst_daily_metal_snapshot_and_forecast",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        scheduler.add_job(
+            collect_weekly_forecast_cache,
+            CronTrigger(minute=FORECAST_REFRESH_MINUTE_JST, timezone=JST),
+            kwargs={"force_refresh": True},
+            id="jst_hourly_forecast_refresh",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+            misfire_grace_time=1800,
+        )
+        scheduler.add_job(
+            dispatch_top_delta_notification,
+            CronTrigger(hour=PUSH_NOTIFY_HOUR_JST, minute=PUSH_NOTIFY_MINUTE_JST, timezone=JST),
+            id="jst_daily_top_delta_push_notify",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+            misfire_grace_time=7200,
+        )
+        scheduler.start()
+        logger.info("WEB_SCHEDULER_ENABLED=true: background scheduler started")
+    else:
+        logger.info("WEB_SCHEDULER_ENABLED=false: startup jobs and scheduler are disabled")
 
     try:
         yield
     finally:
-        scheduler.shutdown(wait=False)
+        if scheduler is not None:
+            scheduler.shutdown(wait=False)
         await close_db()
 
 
