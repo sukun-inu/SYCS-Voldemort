@@ -1,10 +1,13 @@
 import os
+import logging
+import shutil
 from dataclasses import dataclass
 from datetime import timezone, timedelta
 from pathlib import Path
 from typing import Dict, Mapping, Optional
 
 JST = timezone(timedelta(hours=9))
+logger = logging.getLogger(__name__)
 
 BOT_ICON_URL = (
     "https://cdn.discordapp.com/avatars/1350672236612288633"
@@ -24,6 +27,13 @@ def _read_env(key: str) -> Optional[str]:
         return None
     value = value.strip()
     return value or None
+
+
+def _read_env_bool(key: str, default: bool) -> bool:
+    raw = _read_env(key)
+    if raw is None:
+        return default
+    return raw.lower() in {"1", "true", "yes", "on"}
 
 
 # 環境変数から定数を取得
@@ -105,6 +115,37 @@ METAL_COMMANDS: Dict[str, MetalSpec] = {
 # ──────────────────────────────────────────────
 _default_djaudio_cache = Path(__file__).resolve().parent / "data" / "djaudio_cache"
 
+
+def _resolve_ffmpeg_path() -> str:
+    """ffmpeg の実行パスを解決する。
+    優先順:
+    1) DJAUDIO_FFMPEG_PATH が設定済み
+    2) システムの ffmpeg (PATH)
+    3) imageio-ffmpeg による自動取得（既定で有効）
+    """
+    explicit = _read_env("DJAUDIO_FFMPEG_PATH")
+    if explicit:
+        return explicit
+
+    system_ffmpeg = shutil.which("ffmpeg")
+    if system_ffmpeg:
+        return system_ffmpeg
+
+    if not _read_env_bool("DJAUDIO_AUTO_INSTALL_FFMPEG", default=True):
+        return "ffmpeg"
+
+    try:
+        import imageio_ffmpeg
+
+        auto_ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        if auto_ffmpeg:
+            logger.info("imageio-ffmpeg の自動取得を利用: %s", auto_ffmpeg)
+            return auto_ffmpeg
+    except Exception as e:
+        logger.warning("ffmpeg 自動取得に失敗しました。PATH の ffmpeg を使用します: %s", e)
+
+    return "ffmpeg"
+
 DJAUDIO_BASE_URL       = (_read_env("DJAUDIO_BASE_URL") or "http://localhost:5001").rstrip("/")
 DJAUDIO_CACHE_TTL      = int(os.environ.get("DJAUDIO_CACHE_TTL_SECONDS", "600"))
 DJAUDIO_CACHE_DIR      = Path(os.environ.get("DJAUDIO_CACHE_DIR", str(_default_djaudio_cache)))
@@ -112,7 +153,7 @@ DJAUDIO_COOLDOWN       = int(os.environ.get("DJAUDIO_COOLDOWN_SECONDS", "30"))
 DJAUDIO_MAX_URLS       = int(os.environ.get("DJAUDIO_MAX_URLS_PER_MSG", "3"))
 DJAUDIO_DL_CONCURRENCY = int(os.environ.get("DJAUDIO_DL_CONCURRENCY", "3"))
 DJAUDIO_DL_TIMEOUT     = int(os.environ.get("DJAUDIO_DL_TIMEOUT_SECONDS", "120"))
-DJAUDIO_FFMPEG_PATH    = _read_env("DJAUDIO_FFMPEG_PATH") or "ffmpeg"
+DJAUDIO_FFMPEG_PATH    = _resolve_ffmpeg_path()
 
 # ChatGPTシステムメッセージ
 CHATGPT_SYSTEM_MESSAGE = (
