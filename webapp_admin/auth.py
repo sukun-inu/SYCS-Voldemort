@@ -78,6 +78,9 @@ def get_user_guilds(access_token: str) -> list[dict]:
 
 
 def _get_bot_guild_ids() -> set[int]:
+    if not DISCORD_BOT_TOKEN:
+        logger.warning("DISCORD_BOT_TOKEN が未設定のため Bot ギルド一覧を取得できません。")
+        return set()
     try:
         resp = req.get(
             f"{_API}/users/@me/guilds",
@@ -85,8 +88,12 @@ def _get_bot_guild_ids() -> set[int]:
             timeout=_TIMEOUT,
         )
         resp.raise_for_status()
-        return {int(g["id"]) for g in resp.json()}
-    except Exception:
+        ids = {int(g["id"]) for g in resp.json()}
+        if not ids:
+            logger.warning("Bot がどのサーバーにも参加していません。")
+        return ids
+    except Exception as e:
+        logger.warning("Bot ギルド一覧取得失敗: %s", e)
         return set()
 
 

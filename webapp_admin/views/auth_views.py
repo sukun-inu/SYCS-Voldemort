@@ -26,11 +26,6 @@ def login():
     return render_template("login.html", invite_url=_build_invite_url())
 
 
-@auth_bp.route("/guide")
-@limiter.limit("60 per minute")
-def guide():
-    return render_template("guide.html", invite_url=_build_invite_url())
-
 
 
 @auth_bp.route("/auth")

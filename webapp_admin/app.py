@@ -86,6 +86,12 @@ def create_app() -> Flask:
             guild_count=get_bot_guild_count(),
         )
 
+    @app.route("/guide")
+    @limiter.limit("60 per minute")
+    def guide():
+        from flask import render_template
+        return render_template("guide.html", invite_url=_invite_url())
+
     @app.route("/privacy")
     @limiter.limit("60 per minute")
     def privacy():

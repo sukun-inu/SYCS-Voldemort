@@ -97,7 +97,7 @@
       </div>
 
       <div class="sidebar-group">
-        <span class="sidebar-label">ログと通知</span>
+        <span class="sidebar-label">基本設定</span>
         <a class="sidebar-link {% if request.endpoint == 'settings.logging_settings' %}active{% endif %}"
            href="{{ url_for('settings.logging_settings') }}" title="ログ設定" {% if request.endpoint == 'settings.logging_settings' %}aria-current="page"{% endif %}>
           <i class="bi bi-journal-text"></i><span>ログ設定</span>
@@ -110,6 +110,10 @@
            href="{{ url_for('settings.vc_notify') }}" title="VC 通知" {% if request.endpoint == 'settings.vc_notify' %}aria-current="page"{% endif %}>
           <i class="bi bi-mic-fill"></i><span>VC 通知</span>
         </a>
+      </div>
+
+      <div class="sidebar-group">
+        <span class="sidebar-label">自動通知</span>
         <a class="sidebar-link {% if request.endpoint == 'settings.earthquake' %}active{% endif %}"
            href="{{ url_for('settings.earthquake') }}" title="地震アラート" {% if request.endpoint == 'settings.earthquake' %}aria-current="page"{% endif %}>
           <i class="bi bi-exclamation-triangle-fill"></i><span>地震アラート</span>

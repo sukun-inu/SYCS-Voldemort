@@ -82,7 +82,18 @@
 
 .landing-section {
   padding: 48px 0;
+  position: relative;
+}
+
+.landing-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100vw;
   border-top: 1px solid var(--separator);
+  pointer-events: none;
 }
 
 .landing-section-kicker {
