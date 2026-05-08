@@ -420,6 +420,10 @@ Discord OAuth 認証によって管理者のみがアクセスできる Web 管�
 
 ```bash
 pip install -r requirements.txt
+# yt-dlp は requirements.txt に含まれるため自動インストールされます。
+# ffmpeg は別途システムにインストールしてください（DJAudio-DL 利用時）。
+#   Ubuntu/Debian: sudo apt-get install -y ffmpeg
+#   macOS:         brew install ffmpeg
 
 # Discord Bot
 python main.py
