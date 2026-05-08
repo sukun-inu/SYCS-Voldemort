@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from urllib.parse import urlparse
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -13,11 +14,12 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import METAL_COMMANDS
+from services.url_safety import URLSafetyError, validate_public_http_url
 from .cache import TTLCache
 from .db import SessionLocal, close_db, init_db
 from .forecast_service import load_stored_weekly_forecast, refresh_weekly_forecast_cache
@@ -29,7 +31,13 @@ from .push_service import (
     refresh_vapid_config,
     send_push,
 )
-from .security import RateLimitMiddleware, SecurityHeadersMiddleware, load_allowed_hosts, read_env_bool
+from .security import (
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+    load_allowed_hosts,
+    load_trusted_proxy_cidrs,
+    read_env_bool,
+)
 from .snapshot_service import JST, load_history, load_latest_rows, store_today_snapshot
 
 logger = logging.getLogger(__name__)
@@ -48,6 +56,12 @@ PUSH_NOTIFY_HOUR_JST = max(0, min(23, int(os.getenv("PUSH_NOTIFY_HOUR_JST", "11"
 PUSH_NOTIFY_MINUTE_JST = max(0, min(59, int(os.getenv("PUSH_NOTIFY_MINUTE_JST", "0"))))
 NOTIFY_TOP_DELTA_TYPE = "daily_top_delta"
 APP_PUBLIC_PATH = (os.getenv("APP_PUBLIC_PATH") or os.getenv("APP_ROOT_PATH") or "/").strip() or "/"
+PUSH_MAX_SUBSCRIPTIONS = max(100, int(os.getenv("PUSH_MAX_SUBSCRIPTIONS", "50000")))
+_PUSH_ALLOWED_ENDPOINT_SUFFIXES = tuple(
+    part.strip().lower()
+    for part in os.getenv("PUSH_ALLOWED_ENDPOINT_SUFFIXES", "").split(",")
+    if part.strip()
+)
 
 
 def _normalize_public_path(path: str) -> str:
@@ -106,6 +120,25 @@ def _cache_headers(ttl_seconds: int) -> dict[str, str]:
     return {
         "Cache-Control": f"public, max-age={ttl_seconds}, s-maxage={ttl_seconds}, stale-while-revalidate={ttl_seconds}",
     }
+
+
+def _validate_push_endpoint(endpoint: str) -> str:
+    endpoint = endpoint.strip()
+    try:
+        validate_public_http_url(endpoint, allow_http=False)
+    except URLSafetyError as e:
+        raise HTTPException(status_code=400, detail=f"無効なPush endpointです: {e}") from e
+
+    parsed = urlparse(endpoint)
+    host = (parsed.hostname or "").lower()
+    if not host:
+        raise HTTPException(status_code=400, detail="無効なPush endpointです: hostが不正です")
+
+    if _PUSH_ALLOWED_ENDPOINT_SUFFIXES:
+        if not any(host == suffix or host.endswith(f".{suffix}") for suffix in _PUSH_ALLOWED_ENDPOINT_SUFFIXES):
+            raise HTTPException(status_code=400, detail="Push endpoint のホストが許可リスト外です")
+
+    return endpoint
 
 
 async def _clear_response_caches() -> None:
@@ -467,8 +500,9 @@ app.add_middleware(
     requests_per_window=int(os.getenv("API_RATE_LIMIT_PER_MINUTE", "120")),
     calculate_requests_per_window=int(os.getenv("API_CALCULATE_RATE_LIMIT_PER_MINUTE", "60")),
     window_seconds=60,
-    trust_cf_headers=read_env_bool("TRUST_CF_HEADERS", True),
+    trust_cf_headers=read_env_bool("TRUST_CF_HEADERS", False),
     require_cf_connecting_ip=read_env_bool("REQUIRE_CF_CONNECTING_IP", False),
+    trusted_proxy_cidrs=load_trusted_proxy_cidrs(),
 )
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=500)
@@ -597,7 +631,7 @@ async def push_subscribe(
     if not is_push_enabled():
         raise HTTPException(status_code=503, detail="Push通知が無効です。VAPID設定を確認してください。")
 
-    endpoint = payload.endpoint.strip()
+    endpoint = _validate_push_endpoint(payload.endpoint)
     existing = (
         await session.scalars(select(PushSubscription).where(PushSubscription.endpoint == endpoint))
     ).first()
@@ -606,6 +640,9 @@ async def push_subscribe(
         existing.auth_key = payload.keys.auth
         existing.user_agent = request.headers.get("user-agent")
     else:
+        current_count = await session.scalar(select(func.count(PushSubscription.id)))
+        if int(current_count or 0) >= PUSH_MAX_SUBSCRIPTIONS:
+            raise HTTPException(status_code=429, detail="Push購読数が上限に達しています。")
         session.add(
             PushSubscription(
                 endpoint=endpoint,

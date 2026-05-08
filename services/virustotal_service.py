@@ -5,14 +5,18 @@ import os
 import tempfile
 import time
 from typing import Any, Dict, Optional
+from urllib.parse import urljoin
 
 import aiohttp
 import vt
 
 from config import VIRUSTOTAL_API_KEY
+from services.url_safety import URLSafetyError, validate_public_http_url
 
 MALICIOUS_THRESHOLD = 10
 VT_CACHE_TTL = 60 * 60 * 6
+VT_MAX_REDIRECTS = max(0, int(os.getenv("VT_MAX_REDIRECTS", "5")))
+VT_MAX_DOWNLOAD_BYTES = max(1, int(os.getenv("VT_MAX_DOWNLOAD_BYTES", str(20 * 1024 * 1024))))
 
 _vt_cache: Dict[str, Dict[str, Any]] = {}
 logger = logging.getLogger(__name__)
@@ -41,15 +45,36 @@ def _vt_cache_set(key: str, data: Dict[str, Any]) -> None:
 
 
 async def fetch_content_type(session: aiohttp.ClientSession, url: str) -> str:
+    async def _probe(method: str, target_url: str) -> tuple[int, str]:
+        current = target_url
+        for _ in range(VT_MAX_REDIRECTS + 1):
+            validate_public_http_url(current)
+            async with session.request(method, current, allow_redirects=False) as r:
+                if 300 <= r.status < 400:
+                    location = r.headers.get("Location")
+                    if not location:
+                        return r.status, ""
+                    current = urljoin(current, location)
+                    continue
+                return r.status, r.headers.get("Content-Type", "")
+        return 310, ""
+
     try:
-        async with session.head(url, allow_redirects=True) as r:
-            if r.status < 400:
-                return r.headers.get("Content-Type", "")
+        status, content_type = await _probe("HEAD", url)
+        if status < 400 and content_type:
+            return content_type
+    except URLSafetyError as e:
+        logger.warning("[VT] unsafe URL blocked in content-type probe: %s (%s)", url, e)
+        return ""
     except Exception:
         pass
+
     try:
-        async with session.get(url, allow_redirects=True) as r:
-            return r.headers.get("Content-Type", "")
+        _, content_type = await _probe("GET", url)
+        return content_type
+    except URLSafetyError as e:
+        logger.warning("[VT] unsafe URL blocked in content-type fallback: %s (%s)", url, e)
+        return ""
     except Exception:
         return ""
 
@@ -169,6 +194,12 @@ async def vt_check_file(content: bytes) -> Dict[str, Any]:
 
 
 async def vt_scan_target(session: aiohttp.ClientSession, url: str) -> Dict[str, Any]:
+    try:
+        validate_public_http_url(url)
+    except URLSafetyError as e:
+        logger.warning("[VT] unsafe URL blocked: %s (%s)", url, e)
+        return {"status": "skip", "type": "url", "reason": f"unsafe_url:{e}", "malicious": 0, "suspicious": 0}
+
     content_type = await fetch_content_type(session, url)
     logger.info("[VT] Content-Type %s -> %s", url, content_type)
 
@@ -177,8 +208,69 @@ async def vt_scan_target(session: aiohttp.ClientSession, url: str) -> Dict[str, 
 
     if is_file_content_type(content_type):
         try:
-            async with session.get(url) as r:
-                data = await r.read()
+            current = url
+            data: bytes | None = None
+            for _ in range(VT_MAX_REDIRECTS + 1):
+                validate_public_http_url(current)
+                async with session.get(current, allow_redirects=False) as r:
+                    if 300 <= r.status < 400:
+                        location = r.headers.get("Location")
+                        if not location:
+                            return {
+                                "status": "error",
+                                "type": "file",
+                                "reason": "redirect_without_location",
+                                "malicious": -1,
+                                "suspicious": -1,
+                            }
+                        current = urljoin(current, location)
+                        continue
+
+                    if r.status >= 400:
+                        return {
+                            "status": "error",
+                            "type": "file",
+                            "reason": f"http_status_{r.status}",
+                            "malicious": -1,
+                            "suspicious": -1,
+                        }
+
+                    content_length = r.headers.get("Content-Length")
+                    if content_length:
+                        try:
+                            if int(content_length) > VT_MAX_DOWNLOAD_BYTES:
+                                return {
+                                    "status": "skip",
+                                    "type": "file",
+                                    "reason": f"file_too_large>{VT_MAX_DOWNLOAD_BYTES}",
+                                    "malicious": 0,
+                                    "suspicious": 0,
+                                }
+                        except ValueError:
+                            pass
+
+                    chunks: bytearray = bytearray()
+                    async for chunk in r.content.iter_chunked(64 * 1024):
+                        chunks.extend(chunk)
+                        if len(chunks) > VT_MAX_DOWNLOAD_BYTES:
+                            return {
+                                "status": "skip",
+                                "type": "file",
+                                "reason": f"file_too_large>{VT_MAX_DOWNLOAD_BYTES}",
+                                "malicious": 0,
+                                "suspicious": 0,
+                            }
+                    data = bytes(chunks)
+                    break
+
+            if data is None:
+                return {
+                    "status": "error",
+                    "type": "file",
+                    "reason": "too_many_redirects",
+                    "malicious": -1,
+                    "suspicious": -1,
+                }
         except Exception as e:
             logger.error("[VT] file download failed: %s", e)
             return {"status": "error", "type": "file", "reason": str(e), "malicious": -1, "suspicious": -1}

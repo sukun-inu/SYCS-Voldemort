@@ -1,4 +1,5 @@
 import asyncio
+import ipaddress
 import os
 import time
 from collections import defaultdict, deque
@@ -46,6 +47,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         window_seconds: int = 60,
         trust_cf_headers: bool = True,
         require_cf_connecting_ip: bool = False,
+        trusted_proxy_cidrs: list[str] | None = None,
     ):
         super().__init__(app)
         self.requests_per_window = requests_per_window
@@ -53,9 +55,55 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.window_seconds = window_seconds
         self.trust_cf_headers = trust_cf_headers
         self.require_cf_connecting_ip = require_cf_connecting_ip
+        self.trusted_proxy_networks = self._parse_proxy_cidrs(trusted_proxy_cidrs or [])
         self._hits: dict[str, Deque[float]] = defaultdict(deque)
         self._lock = asyncio.Lock()
         self._last_cleanup = time.monotonic()
+
+    @staticmethod
+    def _parse_proxy_cidrs(
+        cidrs: list[str],
+    ) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+        nets: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+        for cidr in cidrs:
+            try:
+                nets.append(ipaddress.ip_network(cidr, strict=False))
+            except ValueError:
+                continue
+        return nets
+
+    @staticmethod
+    def _parse_ip_token(token: str | None) -> str | None:
+        if not token:
+            return None
+        raw = token.strip()
+        if not raw:
+            return None
+
+        if raw.startswith("[") and "]" in raw:
+            raw = raw[1 : raw.index("]")]
+        elif raw.count(":") == 1 and "." in raw:
+            # IPv4 with port (e.g. 203.0.113.10:443)
+            host, _, port = raw.rpartition(":")
+            if host and port.isdigit():
+                raw = host
+
+        try:
+            return str(ipaddress.ip_address(raw))
+        except ValueError:
+            return None
+
+    def _is_trusted_proxy(self, remote_ip: str | None) -> bool:
+        if not remote_ip:
+            return False
+        parsed = self._parse_ip_token(remote_ip)
+        if not parsed:
+            return False
+        try:
+            ip_obj = ipaddress.ip_address(parsed)
+        except ValueError:
+            return False
+        return any(ip_obj in net for net in self.trusted_proxy_networks)
 
     def _cleanup(self, now: float) -> None:
         # 攻撃時にIPキーが増え続けないよう、期限切れエントリを間引く。
@@ -72,19 +120,27 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             del self._hits[client_ip]
 
     def _extract_client_ip(self, request: Request) -> tuple[str, bool]:
-        cf_ip = request.headers.get("cf-connecting-ip")
-        if self.trust_cf_headers and cf_ip:
-            return cf_ip.strip(), True
+        remote_ip = self._parse_ip_token(request.client.host if request.client else None) or "unknown"
+        from_trusted_proxy = self._is_trusted_proxy(remote_ip)
 
-        x_real_ip = request.headers.get("x-real-ip")
-        if x_real_ip:
-            return x_real_ip.strip(), False
+        if from_trusted_proxy and self.trust_cf_headers:
+            cf_ip = self._parse_ip_token(request.headers.get("cf-connecting-ip"))
+            if cf_ip:
+                return cf_ip, True
 
-        forwarded_for = request.headers.get("x-forwarded-for")
-        if forwarded_for:
-            return forwarded_for.split(",")[0].strip(), False
+        if from_trusted_proxy:
+            x_real_ip = self._parse_ip_token(request.headers.get("x-real-ip"))
+            if x_real_ip:
+                return x_real_ip, False
 
-        return (request.client.host if request.client else "unknown"), False
+            forwarded_for = request.headers.get("x-forwarded-for")
+            if forwarded_for:
+                first_hop = forwarded_for.split(",")[0]
+                forwarded_ip = self._parse_ip_token(first_hop)
+                if forwarded_ip:
+                    return forwarded_ip, False
+
+        return remote_ip, False
 
     async def dispatch(self, request: Request, call_next):
         if request.url.path.startswith("/api/"):
@@ -129,6 +185,13 @@ def read_env_bool(name: str, default: bool = False) -> bool:
 def load_allowed_hosts() -> list[str]:
     raw = os.getenv("ALLOWED_HOSTS", "").strip()
     if not raw:
-        return ["*"]
+        return ["localhost", "127.0.0.1", "::1"]
     hosts = [host.strip() for host in raw.split(",") if host.strip()]
-    return hosts or ["*"]
+    return hosts or ["localhost", "127.0.0.1", "::1"]
+
+
+def load_trusted_proxy_cidrs() -> list[str]:
+    raw = os.getenv("TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128").strip()
+    if not raw:
+        return []
+    return [item.strip() for item in raw.split(",") if item.strip()]

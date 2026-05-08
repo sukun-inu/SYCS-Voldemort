@@ -159,6 +159,7 @@ docker compose up -d --build
 | `METALPRICE_API_KEY` | 推奨 | 金属価格 API |
 | `GROQ_API_KEY` | 任意 | AI 会話/モデレーション |
 | `VIRUSTOTAL_API_KEY` | 任意 | URL/ファイルスキャン |
+| `VT_MAX_DOWNLOAD_BYTES` | 任意 | VTスキャン時の最大ダウンロードサイズ（既定 `20971520` = 20MB） |
 | `SETTINGS_DIR` | 任意 | `settings.json` 保存先 |
 | `SETTINGS_LOCK_TIMEOUT_SECONDS` | 任意 | `settings.json` 更新ロック待機秒数（既定 `10`） |
 | `SETTINGS_LOCK_STALE_SECONDS` | 任意 | 古いロックファイルを破棄する閾値秒数（既定 `30`） |
@@ -185,6 +186,12 @@ docker compose up -d --build
 |---|---|---|
 | `WEB_PORT` | 任意 | デフォルト `8000` |
 | `WEB_SCHEDULER_ENABLED` | 任意 | `true/false`。日次更新/Push通知ジョブを実行するか（既定 `true`） |
+| `TRUST_CF_HEADERS` | 任意 | `true/false`。CFヘッダを信頼するか（既定 `false`） |
+| `REQUIRE_CF_CONNECTING_IP` | 任意 | `true/false`。CFヘッダ必須化（既定 `false`） |
+| `TRUSTED_PROXY_CIDRS` | 任意 | Forwardedヘッダを信頼するプロキシCIDR（既定 `127.0.0.1/32,::1/128`） |
+| `ALLOWED_HOSTS` | 推奨 | 受け付けるHost（例: `example.com,www.example.com`） |
+| `PUSH_MAX_SUBSCRIPTIONS` | 任意 | Push購読上限（既定 `50000`） |
+| `PUSH_ALLOWED_ENDPOINT_SUFFIXES` | 任意 | Push endpoint 許可ドメインサフィックス（カンマ区切り） |
 | `POSTGRES_*` | 通常必要 | DB 接続設定 |
 
 詳細な環境変数は `config.py` と `docker-compose.yml` を参照してください。
@@ -197,6 +204,10 @@ docker compose up -d --build
 - Web トラッカーを複数インスタンスで動かす場合:
   - スケジューラ担当 1台だけ `WEB_SCHEDULER_ENABLED=true`
   - それ以外は `WEB_SCHEDULER_ENABLED=false`
+- Reverse Proxy 配下で運用する場合:
+  - `TRUSTED_PROXY_CIDRS` にプロキシCIDRを設定
+  - Cloudflare 直下構成のみ `TRUST_CF_HEADERS=true` を有効化
+  - 公開ドメインを `ALLOWED_HOSTS` に明示設定
 - 管理UIを複数インスタンスで動かす場合:
   - 全インスタンスで同じ `ADMIN_FLASK_SECRET_KEY` を設定
   - `ADMIN_LIMITER_STORAGE_URI` に Redis を設定
