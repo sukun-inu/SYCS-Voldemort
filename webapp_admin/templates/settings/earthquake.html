@@ -24,7 +24,7 @@
         </span>
       </div>
 
-      <form method="post">
+      <form method="post" data-autosave="true">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="set_channel">
         <div class="mb-4">
@@ -55,7 +55,7 @@
         <span class="status-chip">{{ scale_labels.get(eq_s.get('min_scale', 30), eq_s.get('min_scale', 30)) }}</span>
       </div>
 
-      <form method="post">
+      <form method="post" data-autosave="true">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="set_scale">
         <div class="mb-4">
@@ -81,7 +81,7 @@
     </div>
     <div class="section-card-body">
       <p class="text-muted mb-3">受信する通知の種類を選択します。無効にした種類は送信されません。</p>
-      <form method="post">
+      <form method="post" data-autosave="true">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="set_notify_types">
         <div class="row g-3 mb-4">

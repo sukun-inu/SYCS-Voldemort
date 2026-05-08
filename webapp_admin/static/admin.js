@@ -409,4 +409,59 @@ document.addEventListener('DOMContentLoaded', () => {
       bootstrap.Modal.getInstance(modal)?.hide();
     });
   });
+
+  // ── 自動保存 ──────────────────────────────────────────────
+  const _autosaveTimers = new WeakMap();
+
+  const doAutoSave = async (form) => {
+    const statusEl = form.querySelector('.autosave-status');
+    const textEl   = statusEl?.querySelector('.autosave-text');
+    const iconEl   = statusEl?.querySelector('.autosave-icon');
+
+    if (iconEl) { iconEl.className = 'bi bi-cloud-upload autosave-icon saving'; }
+    if (textEl)   textEl.textContent = '保存中…';
+
+    try {
+      const resp = await fetch(window.location.href, {
+        method: 'POST',
+        body: new FormData(form),
+        credentials: 'same-origin',
+      });
+      if (!resp.ok) throw new Error(String(resp.status));
+      if (iconEl) { iconEl.className = 'bi bi-cloud-check-fill autosave-icon ok'; }
+      if (textEl)   textEl.textContent = '保存済み';
+      window.setTimeout(() => {
+        if (iconEl) { iconEl.className = 'bi bi-cloud-check-fill autosave-icon'; }
+        if (textEl)   textEl.textContent = '変更は自動保存されます';
+      }, 2000);
+    } catch (_) {
+      if (iconEl) { iconEl.className = 'bi bi-cloud-slash-fill autosave-icon error'; }
+      if (textEl)   textEl.textContent = '保存失敗';
+      window.setTimeout(() => {
+        if (iconEl) { iconEl.className = 'bi bi-cloud-check-fill autosave-icon'; }
+        if (textEl)   textEl.textContent = '変更は自動保存されます';
+      }, 3000);
+    }
+  };
+
+  const scheduleAutoSave = (form) => {
+    if (_autosaveTimers.has(form)) clearTimeout(_autosaveTimers.get(form));
+    _autosaveTimers.set(form, window.setTimeout(() => {
+      _autosaveTimers.delete(form);
+      doAutoSave(form);
+    }, 250));
+  };
+
+  document.querySelectorAll('form[data-autosave]').forEach((form) => {
+    const actionsEl = form.querySelector('.form-actions');
+    if (actionsEl) {
+      actionsEl.innerHTML = `
+        <span class="autosave-status" aria-live="polite">
+          <i class="bi bi-cloud-check-fill autosave-icon"></i>
+          <span class="autosave-text">変更は自動保存されます</span>
+        </span>`;
+    }
+    form.querySelectorAll('select, input[type="checkbox"], input[type="radio"], input[type="number"], input[type="range"]')
+      .forEach((field) => field.addEventListener('change', () => scheduleAutoSave(form)));
+  });
 });

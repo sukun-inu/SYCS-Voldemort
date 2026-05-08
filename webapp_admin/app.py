@@ -86,6 +86,18 @@ def create_app() -> Flask:
             guild_count=get_bot_guild_count(),
         )
 
+    @app.route("/privacy")
+    @limiter.limit("60 per minute")
+    def privacy():
+        from flask import render_template
+        return render_template("privacy.html", invite_url=_invite_url())
+
+    @app.route("/terms")
+    @limiter.limit("60 per minute")
+    def terms():
+        from flask import render_template
+        return render_template("terms.html", invite_url=_invite_url())
+
     app.register_blueprint(auth_bp, url_prefix="/admin")
     app.register_blueprint(dashboard_bp, url_prefix="/admin")
     app.register_blueprint(settings_bp, url_prefix="/admin/settings")

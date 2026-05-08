@@ -32,17 +32,6 @@ def guide():
     return render_template("guide.html", invite_url=_build_invite_url())
 
 
-@auth_bp.route("/privacy")
-@limiter.limit("60 per minute")
-def privacy():
-    return render_template("privacy.html", invite_url=_build_invite_url())
-
-
-@auth_bp.route("/terms")
-@limiter.limit("60 per minute")
-def terms():
-    return render_template("terms.html", invite_url=_build_invite_url())
-
 
 @auth_bp.route("/auth")
 @limiter.limit("10 per minute")

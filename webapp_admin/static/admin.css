@@ -1538,3 +1538,78 @@ hr {
   }
   .health-card:first-child { border-top: 0; }
 }
+
+/* ── ランディングページ モバイルナビ ──────────────────────── */
+
+.landing-menu-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 22px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.landing-menu-toggle:hover { background: var(--surface-muted); }
+
+.landing-mobile-nav {
+  background: var(--surface-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--separator);
+  position: sticky;
+  top: var(--topbar-height);
+  z-index: 90;
+}
+.landing-mobile-nav-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 10px 16px 14px;
+}
+.landing-mobile-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.landing-mobile-nav-item:hover { background: var(--surface-muted); color: var(--text); }
+.landing-mobile-nav-item.accent {
+  background: var(--accent);
+  color: #fff;
+}
+.landing-mobile-nav-item.accent:hover { background: var(--accent-hover); color: #fff; }
+
+@media (max-width: 600px) {
+  .landing-nav-desktop { display: none !important; }
+  .landing-menu-toggle { display: inline-flex; }
+}
+
+/* ── 自動保存ステータス ───────────────────────────────────── */
+
+.autosave-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  min-height: 36px;
+}
+.autosave-icon { font-size: 15px; transition: color 0.2s; }
+.autosave-icon.ok    { color: var(--success); }
+.autosave-icon.saving { color: var(--accent); animation: spin 0.8s linear infinite; }
+.autosave-icon.error  { color: var(--danger); }
+@keyframes spin { to { transform: rotate(360deg); } }

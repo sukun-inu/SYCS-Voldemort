@@ -87,6 +87,14 @@ _SCALE_RGB = {
 
 _SCALE_COLORS = {k: discord.Color.from_rgb(*v) for k, v in _SCALE_RGB.items()}
 
+# タイトル絵文字（震度別）
+_SCALE_TITLE_EMOJI = {
+    10: "🔵", 20: "🔵", 30: "🔵",
+    40: "🟡", 45: "🟡",
+    50: "🟠", 55: "🟠",
+    60: "🔴", 65: "🔴", 70: "🔴",
+}
+
 _TSUNAMI_TEXT = {
     "None":         "この地震による津波の心配はありません。",
     "Unknown":      "津波の有無を調査中です。",
@@ -120,10 +128,12 @@ _ISSUE_LABELS = {
 # ── フォントローダー ───────────────────────────────────────
 
 _FONT_SEARCH_PATHS = [
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    # Debian/Ubuntu: fonts-noto-cjk パッケージ
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
     "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    # Windows
     "C:/Windows/Fonts/meiryo.ttc",
     "C:/Windows/Fonts/msgothic.ttc",
     "C:/Windows/Fonts/YuGothR.ttc",
@@ -198,12 +208,16 @@ def _parse_depth(raw) -> str:
             return "ごく浅い"
         try:
             v = int(float(raw))
-            return f"{v} km" if v >= 0 else "不明"
+            if v < 0:
+                return "不明"
+            return "ごく浅い" if v == 0 else f"{v} km"
         except ValueError:
             return raw or "不明"
     try:
         v = int(raw)
-        return f"{v} km" if v >= 0 else "不明"
+        if v < 0:
+            return "不明"
+        return "ごく浅い" if v == 0 else f"{v} km"
     except (TypeError, ValueError):
         return "不明"
 
@@ -229,25 +243,42 @@ def _format_time(time_str: str) -> tuple[str, datetime | None]:
 # ── バッジ画像生成 ─────────────────────────────────────────
 
 def _generate_badge(scale: int) -> io.BytesIO | None:
-    """Apple Emergency Alert スタイルの震度バッジ（120×120）を生成して BytesIO で返す。"""
+    """震度バッジ（160×160）を生成して BytesIO で返す。
+    上部ダークヘッダーに「最大震度」、下部に大きな震度数字。"""
     if not _PIL:
         return None
 
     r, g, b = _SCALE_RGB.get(scale, (100, 100, 100))
     label   = _SCALE_BADGE_LABEL.get(scale, str(scale))
 
-    w, h = 120, 120
+    w, h       = 160, 160
+    header_h   = 38          # ヘッダー帯の高さ
+    radius     = 16
+    header_bg  = (10, 18, 30, 255)
+
     img  = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=24, fill=(r, g, b, 255))
-    dark = (max(0, r - 45), max(0, g - 45), max(0, b - 45))
-    draw.rounded_rectangle([0, h // 2, w - 1, h - 1], radius=24, fill=(*dark, 255))
-    draw.rectangle([0, h // 2, w - 1, h // 2 + 24], fill=(*dark, 255))
-    draw.rounded_rectangle([3, 3, w - 4, h // 2 - 4], radius=20, fill=(255, 255, 255, 30))
+    # 全体背景（角丸、震度カラー）
+    draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=radius, fill=(r, g, b, 255))
 
-    font_lg = _get_font(68 if len(label) == 1 else 44)
-    draw.text((w // 2, h // 2 + 6), label, fill=(255, 255, 255, 255), font=font_lg, anchor="mm")
+    # ヘッダー帯（上部、角丸はみ出しを矩形で塗りつぶし）
+    draw.rounded_rectangle([0, 0, w - 1, header_h + radius], radius=radius, fill=header_bg)
+    draw.rectangle([0, header_h, w - 1, header_h + radius], fill=header_bg)
+
+    # ヘッダーと本体の区切り線
+    draw.rectangle([0, header_h, w - 1, header_h + 1], fill=(255, 255, 255, 30))
+
+    # 「最大震度」テキスト
+    font_hd = _get_font(20)
+    draw.text((w // 2, header_h // 2 + 1), "最大震度",
+              fill=(255, 255, 255, 240), font=font_hd, anchor="mm")
+
+    # 震度数字（下部中央）
+    body_cy = header_h + (h - header_h) // 2
+    font_lg = _get_font(88 if len(label) == 1 else 60)
+    draw.text((w // 2, body_cy + 4), label,
+              fill=(255, 255, 255, 255), font=font_lg, anchor="mm")
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -453,8 +484,9 @@ def _build_embed(event: dict, max_scale: int, has_badge: bool = False) -> discor
     mag_str,_ = _parse_magnitude(hypo.get("magnitude"))
     depth_str = _parse_depth(hypo.get("depth"))
 
+    emoji = _SCALE_TITLE_EMOJI.get(max_scale, "⚪")
     embed = discord.Embed(
-        title="地震情報",
+        title=f"{emoji} 地震情報",
         description="\n".join([
             f"{time_label}、",
             f"最大震度 {scale_disp} の地震がありました。",
@@ -481,7 +513,7 @@ def _build_eew_embed(event: dict) -> discord.Embed:
     """P2PQuake code 554 (警報) / 556 (予報) EEW データから Discord Embed を生成。"""
     code        = event.get("code", 554)
     is_forecast = code == 556
-    title_base  = "緊急地震速報（予報）" if is_forecast else "緊急地震速報（警報）"
+    title_base  = "⚠️ 緊急地震速報（予報）" if is_forecast else "🚨 緊急地震速報（警報）"
 
     eq   = event.get("earthquake", {})
     hypo = eq.get("hypocenter", {})
@@ -588,13 +620,19 @@ class _EqView(discord.ui.View):
 
 # ── JMA URL ヘルパー ──────────────────────────────────────
 
-def _jma_quake_url(eq_time: str) -> str:
-    """earthquake.time (P2PQuake) → 気象庁地震情報 URL。"""
+_JMA_QUAKE_BASE = "https://www.jma.go.jp/jp/quake/"
+
+
+def _jma_quake_url(eq_time: str, max_scale: int = -1) -> str:
+    """気象庁地震情報 URL。
+    震度3未満は JMA が個別ページを発行しないため一覧ページを返す。"""
+    if max_scale >= 0 and max_scale < 30:
+        return _JMA_QUAKE_BASE
     try:
         dt = datetime.strptime(eq_time, "%Y/%m/%d %H:%M:%S")
-        return f"https://www.jma.go.jp/jp/quake/{dt.strftime('%Y%m%d%H%M%S')}.html"
+        return f"{_JMA_QUAKE_BASE}{dt.strftime('%Y%m%d%H%M%S')}.html"
     except ValueError:
-        return "https://www.jma.go.jp/jp/quake/"
+        return _JMA_QUAKE_BASE
 
 
 # ── 通知送信（確定地震情報 551） ──────────────────────────
@@ -608,7 +646,9 @@ async def _notify_all_guilds(bot: Bot, event: dict) -> None:
     lat  = _parse_coord(hypo.get("latitude"))
     lon  = _parse_coord(hypo.get("longitude"))
 
-    detail_url = _jma_quake_url(eq.get("time", ""))
+    detail_url = _jma_quake_url(eq.get("time", ""), max_scale)
+
+    is_minor = max_scale <= 20  # 震度1-2 はコンパクト表示
 
     badge_buf: io.BytesIO | None = None
     try:
@@ -617,7 +657,7 @@ async def _notify_all_guilds(bot: Bot, event: dict) -> None:
         logger.exception("[earthquake] badge generation error: %s", e)
 
     map_buf: io.BytesIO | None = None
-    if lat is not None and lon is not None and points:
+    if not is_minor and lat is not None and lon is not None and points:
         try:
             # タイル取得は専用セッションで実施（WS セッションを汚染しない）
             async with aiohttp.ClientSession() as tile_session:
@@ -712,7 +752,7 @@ async def _notify_eew_guilds(bot: Bot, event: dict, notify_type: str) -> None:
     max_scale  = _max_scale(event)
     eq_time    = event.get("earthquake", {}).get("originTime") or \
                  event.get("earthquake", {}).get("time", "")
-    detail_url = _jma_quake_url(eq_time)
+    detail_url = _jma_quake_url(eq_time, max_scale)
 
     badge_buf: io.BytesIO | None = None
     try:

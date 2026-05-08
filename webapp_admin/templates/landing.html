@@ -28,7 +28,7 @@
         <span class="brand-name">SYCS Voldemort</span>
       </a>
     </div>
-    <div class="topbar-actions">
+    <nav class="topbar-actions landing-nav-desktop" aria-label="メインナビゲーション">
       <a href="{{ url_for('auth.guide') }}" class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-book"></i>使い方ガイド
       </a>
@@ -40,9 +40,36 @@
       <a href="{{ url_for('auth.login') }}" class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-gear-fill"></i>管理画面
       </a>
-    </div>
+    </nav>
+    <button class="landing-menu-toggle"
+            type="button"
+            aria-label="メニューを開く"
+            data-bs-toggle="collapse"
+            data-bs-target="#landing-nav-mobile"
+            aria-expanded="false"
+            aria-controls="landing-nav-mobile">
+      <i class="bi bi-list"></i>
+    </button>
   </div>
 </header>
+
+<div class="collapse" id="landing-nav-mobile">
+  <nav class="landing-mobile-nav" aria-label="モバイルナビゲーション">
+    <div class="landing-mobile-nav-inner">
+      <a href="{{ url_for('auth.guide') }}" class="landing-mobile-nav-item">
+        <i class="bi bi-book"></i>使い方ガイド
+      </a>
+      {% if invite_url %}
+      <a href="{{ invite_url }}" class="landing-mobile-nav-item accent" target="_blank" rel="noopener noreferrer">
+        <i class="bi bi-plus-circle-fill"></i>Bot をサーバーに招待
+      </a>
+      {% endif %}
+      <a href="{{ url_for('auth.login') }}" class="landing-mobile-nav-item">
+        <i class="bi bi-gear-fill"></i>管理画面にログイン
+      </a>
+    </div>
+  </nav>
+</div>
 
 <!-- Hero -->
 <div class="landing-hero">
@@ -161,9 +188,9 @@
       </a>
     </div>
     <div class="doc-legal">
-      <a href="{{ url_for('auth.terms') }}">利用規約</a>
+      <a href="{{ url_for('terms') }}">利用規約</a>
       <span class="doc-legal-sep">·</span>
-      <a href="{{ url_for('auth.privacy') }}">プライバシーポリシー</a>
+      <a href="{{ url_for('privacy') }}">プライバシーポリシー</a>
     </div>
   </section>
 
