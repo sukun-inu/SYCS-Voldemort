@@ -123,31 +123,20 @@ def setup_events(bot: Bot) -> None:
             message.author,
         )
 
-        # ① セキュリティ（最優先）
-        try:
-            await handle_security_for_message(bot, message)
-        except Exception as e:
-            logger.exception("[BOT_SETUP] security_service error: %s", e)
+        async def _safe(coro, name: str) -> None:
+            try:
+                await coro
+            except Exception as e:
+                logger.exception("[BOT_SETUP] %s error: %s", name, e)
 
-        # ② ChatGPT
-        try:
-            await handle_chatgpt_message(bot, message)
-        except Exception as e:
-            logger.exception("[BOT_SETUP] chat_commands error: %s", e)
+        # 各ハンドラーは互いに独立しているため並列実行（VT スキャンが DJAudio をブロックしない）
+        await asyncio.gather(
+            _safe(handle_security_for_message(bot, message), "security_service"),
+            _safe(handle_chatgpt_message(bot, message), "chat_commands"),
+            _safe(handle_sticky(message), "sticky"),
+            _safe(handle_djaudio_message(bot, message), "djaudio"),
+        )
 
-        # ③ スティッキーメッセージ
-        try:
-            await handle_sticky(message)
-        except Exception as e:
-            logger.exception("[BOT_SETUP] sticky error: %s", e)
-
-        # ④ DJAudio URL 監視
-        try:
-            await handle_djaudio_message(bot, message)
-        except Exception as e:
-            logger.exception("[BOT_SETUP] djaudio error: %s", e)
-
-        # ⑤ コマンド
         await bot.process_commands(message)
 
     # --------------------------

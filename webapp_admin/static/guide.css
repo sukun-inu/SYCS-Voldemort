@@ -1,89 +1,139 @@
-body {
-  background: var(--bg-base, #0d1117);
-  color: var(--text-primary, #e6edf3);
-  font-family: 'Zen Kaku Gothic New', sans-serif;
+/* Guide page — layout additions on top of admin.css design system */
+
+.guide-wrap {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: calc(var(--topbar-height) + 40px) 24px 80px;
 }
-.guide-wrap { max-width: 860px; margin: 0 auto; padding: 2rem 1rem 4rem; }
-.guide-hero { text-align: center; padding: 3rem 1rem 2rem; }
-.guide-hero-icon { font-size: 3rem; }
-.guide-hero h1 { font-size: 1.8rem; font-weight: 900; margin-top: .5rem; }
-.guide-hero p { color: var(--text-secondary, #8b949e); font-size: .95rem; }
-.guide-section {
-  background: var(--bg-surface, #161b22);
-  border: 1px solid var(--border, #30363d);
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
+
+/* Hero */
+.guide-hero {
+  text-align: center;
+  padding-bottom: 36px;
 }
-.guide-section-title {
-  font-size: 1.05rem;
+
+.guide-hero-logo {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 20px;
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 17px;
+  background: var(--surface-muted);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), 0 16px 42px rgba(0, 0, 0, 0.12),
+              inset 0 1px 0 rgba(255, 255, 255, 0.38);
+}
+
+.guide-hero-logo::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0) 42%);
+  content: "";
+  pointer-events: none;
+}
+
+.guide-hero-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.guide-hero h1 {
+  font-size: clamp(28px, 5vw, 42px);
   font-weight: 700;
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
-  gap: .5rem;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+  margin: 0 0 10px;
 }
-.cmd-block {
-  background: var(--bg-base, #0d1117);
-  border-radius: 8px;
-  padding: 1rem;
-  margin-bottom: .75rem;
-  border: 1px solid var(--border, #30363d);
+
+.guide-hero p {
+  color: var(--text-secondary);
+  font-size: 16px;
+  margin: 0;
 }
-.cmd-name { font-family: monospace; font-size: .95rem; color: #79c0ff; font-weight: 700; }
-.cmd-desc { font-size: .875rem; color: var(--text-secondary, #8b949e); margin-top: .25rem; }
-.badge-auto {
-  background: #1f6feb22;
-  color: #79c0ff;
-  border: 1px solid #1f6feb66;
-  border-radius: 4px;
-  font-size: .75rem;
-  padding: .1rem .4rem;
-  vertical-align: middle;
-}
-.badge-admin {
-  background: #da363322;
-  color: #f85149;
-  border: 1px solid #da363366;
-  border-radius: 4px;
-  font-size: .75rem;
-  padding: .1rem .4rem;
-  vertical-align: middle;
-}
-.site-link-row { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.5rem; }
-.site-link-row .btn { flex: 1; min-width: 180px; }
-.guide-back { color: var(--text-secondary, #8b949e); font-size: .875rem; text-decoration: none; }
-.guide-back:hover { color: var(--text-primary, #e6edf3); }
-.step-badge {
+
+/* Step list (DJAudio など) */
+.guide-step-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.6rem;
-  height: 1.6rem;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
   border-radius: 50%;
-  background: #1f6feb;
-  color: #fff;
-  font-size: .8rem;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
   font-weight: 700;
   flex-shrink: 0;
 }
-.step-row { display: flex; gap: .75rem; align-items: flex-start; margin-bottom: .75rem; }
-.step-text { font-size: .9rem; color: var(--text-secondary, #8b949e); padding-top: .15rem; }
-.supported-list { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
-.supported-chip { background: #238636; border-radius: 20px; padding: .25rem .75rem; font-size: .8rem; font-weight: 500; }
-.unsupported-chip {
-  background: #da363322;
-  border: 1px solid #da363366;
-  color: #f85149;
-  border-radius: 20px;
-  padding: .25rem .75rem;
-  font-size: .8rem;
+
+.guide-step-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--separator);
 }
-.guide-note { font-size: .9rem; color: var(--text-secondary, #8b949e); }
-.guide-meta { font-size: .875rem; color: var(--text-secondary, #8b949e); }
-.guide-meta-list { font-size: .875rem; color: var(--text-secondary, #8b949e); padding-left: 1.25rem; margin: 0; }
-.guide-service-label { font-size: .875rem; font-weight: 600; margin-bottom: .4rem; }
-.guide-admin-body { font-size: .875rem; color: var(--text-secondary, #8b949e); }
-.guide-admin-list { padding-left: 1.25rem; margin: .5rem 0 0; }
-.guide-icon-danger { color: #f85149; }
-.guide-text-primary { color: var(--text-primary, #e6edf3); }
+
+.guide-step-row:last-child { border-bottom: 0; }
+
+.guide-step-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+  padding-top: 3px;
+}
+
+/* Command / feature list */
+.guide-cmd-list { display: grid; }
+
+.guide-cmd-row {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--separator);
+}
+
+.guide-cmd-row:last-child { border-bottom: 0; }
+
+.guide-cmd-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: var(--font-main);
+}
+
+.guide-cmd-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 4px 0 0;
+}
+
+/* Service chips label */
+.guide-service-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 10px;
+}
+
+/* Footer links */
+.guide-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 32px;
+}
+
+.guide-links .btn { flex: 1; min-width: 180px; }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .guide-wrap { padding: calc(var(--topbar-height) + 24px) 14px 60px; }
+  .guide-hero { padding-bottom: 24px; }
+  .guide-links .btn { flex: 1 0 100%; }
+}

@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>使い方ガイド - SYCS Voldemort</title>
   <link rel="icon" type="image/webp" href="{{ admin_asset_url('admin-icon.webp') }}">
+  <link rel="apple-touch-icon" href="{{ admin_asset_url('admin-icon.webp') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap">
@@ -14,180 +16,258 @@
   <link rel="stylesheet" href="{{ admin_asset_url('guide.css') }}">
 </head>
 <body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="topbar-leading">
+      <a class="brand-link" href="{{ url_for('auth.login') }}">
+        <span class="brand-mark">
+          <img class="brand-mark-image" src="{{ admin_asset_url('admin-icon.webp') }}" width="28" height="28" alt="">
+        </span>
+        <span class="brand-name">SYCS Voldemort</span>
+      </a>
+    </div>
+    <div class="topbar-actions">
+      {% if invite_url %}
+      <a href="{{ invite_url }}" class="btn btn-sm btn-accent" target="_blank" rel="noopener noreferrer">
+        <i class="bi bi-plus-circle-fill"></i>Bot を招待
+      </a>
+      {% endif %}
+      <a href="{{ url_for('auth.login') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-gear-fill"></i>管理画面
+      </a>
+    </div>
+  </div>
+</header>
+
 <div class="guide-wrap">
 
-  <div class="mb-3">
-    <a href="{{ url_for('auth.login') }}" class="guide-back">
-      <i class="bi bi-arrow-left me-1"></i>ログイン画面に戻る
-    </a>
-  </div>
-
+  <!-- Hero -->
   <div class="guide-hero">
-    <div class="guide-hero-icon">🤖</div>
-    <h1>SYCS Voldemort Bot 使い方ガイド</h1>
-    <p>貴金属価格・AI会話・音楽ダウンロード・地震アラートなど多機能な Discord Bot の使い方をまとめています。</p>
+    <div class="guide-hero-logo">
+      <img src="{{ admin_asset_url('admin-icon.webp') }}" width="72" height="72" alt="SYCS Voldemort">
+    </div>
+    <p class="page-kicker">使い方ガイド</p>
+    <h1>SYCS Voldemort</h1>
+    <p>貴金属価格・AI 会話・音楽ダウンロード・地震アラートなど多機能な Discord Bot</p>
   </div>
 
-  <!-- 一般ユーザー向けコマンド -->
-  <div class="guide-section">
-    <div class="guide-section-title">
-      <i class="bi bi-terminal-fill text-info"></i>
-      誰でも使えるコマンド
+  <!-- 一般コマンド -->
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-terminal-fill"></i>誰でも使えるコマンド
+      </h2>
     </div>
-
-    <div class="cmd-block">
-      <div class="cmd-name">/metal_gold [g]&nbsp; /metal_silver [g]&nbsp; /metal_platinum [g]</div>
-      <div class="cmd-desc">金・銀・プラチナのリアルタイム価格を表示します。<code>g</code> にグラム数を指定すると合計額も計算します。</div>
-    </div>
-    <div class="cmd-block">
-      <div class="cmd-name">/metal_all [g]</div>
-      <div class="cmd-desc">金・銀・プラチナをまとめて一覧表示します。</div>
-    </div>
-    <div class="cmd-block">
-      <div class="cmd-name">/server_info</div>
-      <div class="cmd-desc">サーバーの基本情報（メンバー数・チャンネル数・ブーストレベルなど）を表示します。</div>
-    </div>
-    <div class="cmd-block">
-      <div class="cmd-name">/user_info [member]</div>
-      <div class="cmd-desc">指定したメンバーのアカウント情報を表示します。省略すると自分の情報を表示します。</div>
-    </div>
-    <div class="cmd-block">
-      <div class="cmd-name">/bot_help</div>
-      <div class="cmd-desc">利用可能なすべてのスラッシュコマンドの一覧を表示します。</div>
+    <div class="section-card-body">
+      <div class="guide-cmd-list">
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">/metal_gold [g]&nbsp;&nbsp;/metal_silver [g]&nbsp;&nbsp;/metal_platinum [g]</div>
+          <p class="guide-cmd-desc">金・銀・プラチナのリアルタイム価格を表示します。<code>g</code> にグラム数を指定すると合計額も計算します。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">/metal_all [g]</div>
+          <p class="guide-cmd-desc">金・銀・プラチナをまとめて一覧表示します。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">/server_info</div>
+          <p class="guide-cmd-desc">サーバーの基本情報（メンバー数・チャンネル数・ブーストレベルなど）を表示します。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">/user_info [member]</div>
+          <p class="guide-cmd-desc">指定したメンバーのアカウント情報を表示します。省略すると自分の情報を表示します。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">/bot_help</div>
+          <p class="guide-cmd-desc">利用可能なすべてのスラッシュコマンドの一覧を表示します。</p>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- DJAudio-DL -->
-  <div class="guide-section">
-    <div class="guide-section-title">
-      <i class="bi bi-music-note-beamed text-success"></i>
-      DJAudio-DL（音楽 MP3 ダウンロード）
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-music-note-beamed"></i>DJAudio-DL
+        <span class="badge-soft accent ms-1">自動</span>
+      </h2>
     </div>
-    <p class="guide-note">管理者が監視チャンネルを設定した後、そのチャンネルに URL を貼るだけで MP3 リンクが返信されます。<span class="badge-auto">自動</span></p>
-
-    <div class="step-row">
-      <span class="step-badge">1</span>
-      <div class="step-text">管理者が設定した <strong>監視チャンネル</strong> に URL を貼り付けます。</div>
-    </div>
-    <div class="step-row">
-      <span class="step-badge">2</span>
-      <div class="step-text">Bot が <strong>⏳ リアクション</strong> を付けて処理開始を知らせます。</div>
-    </div>
-    <div class="step-row">
-      <span class="step-badge">3</span>
-      <div class="step-text">変換完了後 <strong>✅ リアクション</strong> と共に <strong>期限付きダウンロードリンク</strong> を返信します。</div>
-    </div>
-
-    <div class="mt-3">
-      <div class="guide-service-label">対応サービス</div>
-      <div class="supported-list">
-        <span class="supported-chip">YouTube / YouTube Music</span>
-        <span class="supported-chip">SoundCloud</span>
-        <span class="supported-chip">Bandcamp</span>
-        <span class="supported-chip">ニコニコ動画</span>
-        <span class="supported-chip">TikTok</span>
-        <span class="supported-chip">汎用直リンク</span>
-        <span class="unsupported-chip">✕ Spotify</span>
-        <span class="unsupported-chip">✕ Apple Music</span>
-        <span class="unsupported-chip">✕ Amazon Music</span>
+    <div class="section-card-body">
+      <p class="section-card-subtitle mb-3">監視チャンネルに URL を貼るだけで MP3 リンクが返信されます。管理者がチャンネルを設定すると有効になります。</p>
+      <div class="guide-cmd-list mb-4">
+        <div class="guide-step-row">
+          <span class="guide-step-badge">1</span>
+          <span class="guide-step-text">管理者が設定した <strong>監視チャンネル</strong> に URL を貼り付けます。</span>
+        </div>
+        <div class="guide-step-row">
+          <span class="guide-step-badge">2</span>
+          <span class="guide-step-text">Bot が <strong>⏳ リアクション</strong> を付けて処理開始を知らせます。</span>
+        </div>
+        <div class="guide-step-row">
+          <span class="guide-step-badge">3</span>
+          <span class="guide-step-text">変換完了後 <strong>✅ リアクション</strong> と共に <strong>期限付きダウンロードリンク</strong> を返信します。</span>
+        </div>
+      </div>
+      <p class="guide-service-label">対応サービス</p>
+      <div class="d-flex flex-wrap gap-2">
+        <span class="badge-soft success">YouTube / YouTube Music</span>
+        <span class="badge-soft success">SoundCloud</span>
+        <span class="badge-soft success">Bandcamp</span>
+        <span class="badge-soft success">ニコニコ動画</span>
+        <span class="badge-soft success">TikTok</span>
+        <span class="badge-soft success">汎用直リンク</span>
+        <span class="badge-soft danger">Spotify 非対応</span>
+        <span class="badge-soft danger">Apple Music 非対応</span>
+        <span class="badge-soft danger">Amazon Music 非対応</span>
       </div>
     </div>
   </div>
 
   <!-- AI 会話 -->
-  <div class="guide-section">
-    <div class="guide-section-title">
-      <i class="bi bi-chat-dots-fill text-warning"></i>
-      AI 会話（ヴォルデモート）
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-chat-dots-fill"></i>AI 会話（ヴォルデモート）
+        <span class="badge-soft accent ms-1">自動</span>
+      </h2>
     </div>
-    <p class="guide-note">管理者が指定した <strong>応答チャンネル</strong> にメッセージを送るだけで Bot が返信します。<span class="badge-auto">自動</span></p>
-    <ul class="guide-meta-list">
-      <li>会話の文脈を記憶し、連続した対話が可能です。</li>
-      <li>日本語専用・ヴォルデモート卿の人格で応答します。</li>
-      <li>未設定の場合は全チャンネルで応答します。</li>
-    </ul>
+    <div class="section-card-body">
+      <p class="section-card-subtitle mb-3">管理者が指定した <strong>応答チャンネル</strong> にメッセージを送るだけで Bot が返信します。</p>
+      <div class="guide-cmd-list">
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">会話の文脈を記憶</div>
+          <p class="guide-cmd-desc">直前のやりとりを踏まえた連続した対話が可能です。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">ヴォルデモート卿の人格</div>
+          <p class="guide-cmd-desc">日本語専用・ヴォルデモート卿のキャラクターで応答します。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">未設定時は全チャンネル対応</div>
+          <p class="guide-cmd-desc">応答チャンネルが未設定の場合、すべてのチャンネルで反応します。</p>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- 地震アラート -->
-  <div class="guide-section">
-    <div class="guide-section-title">
-      <i class="bi bi-activity text-danger"></i>
-      地震アラート
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-activity"></i>地震アラート
+        <span class="badge-soft accent ms-1">自動</span>
+      </h2>
     </div>
-    <p class="guide-note">管理者が設定した通知チャンネルに地震情報をリアルタイムで通知します。<span class="badge-auto">自動</span></p>
-    <ul class="guide-meta-list">
-      <li>P2PQuake WebSocket で日本全国の地震情報を受信</li>
-      <li>震度バッジ画像・震度分布地図を Embed に添付</li>
-      <li>緊急地震速報（EEW）・津波予報にも対応</li>
-    </ul>
+    <div class="section-card-body">
+      <p class="section-card-subtitle mb-3">管理者が設定した通知チャンネルに地震情報をリアルタイムで通知します。</p>
+      <div class="guide-cmd-list">
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">P2PQuake 連携</div>
+          <p class="guide-cmd-desc">WebSocket で日本全国の地震情報をリアルタイム受信します。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">ビジュアル通知</div>
+          <p class="guide-cmd-desc">震度バッジ画像・震度分布地図を Embed に添付して送信します。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">EEW・津波対応</div>
+          <p class="guide-cmd-desc">緊急地震速報（予報・警報）および津波予報にも対応しています。</p>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- その他の自動機能 -->
-  <div class="guide-section">
-    <div class="guide-section-title">
-      <i class="bi bi-stars text-info"></i>
-      その他の自動機能
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-stars"></i>その他の自動機能
+      </h2>
     </div>
-    <div class="cmd-block">
-      <div class="cmd-name">ウェルカム / グッバイ <span class="badge-auto">自動</span></div>
-      <div class="cmd-desc">メンバーの参加・退出時に設定したメッセージを自動で送信します。</div>
-    </div>
-    <div class="cmd-block">
-      <div class="cmd-name">VC 通知 <span class="badge-auto">自動</span></div>
-      <div class="cmd-desc">ボイスチャンネルへの参加・退出・移動を通知チャンネルにお知らせします。退出時は通話時間も表示します。</div>
-    </div>
-    <div class="cmd-block">
-      <div class="cmd-name">スティッキーメッセージ <span class="badge-auto">自動</span></div>
-      <div class="cmd-desc">設定したチャンネルで、新しいメッセージが投稿されるたびに固定メッセージを最下部に再掲します。</div>
-    </div>
-    <div class="cmd-block">
-      <div class="cmd-name">リアクションロール <span class="badge-auto">自動</span></div>
-      <div class="cmd-desc">指定したメッセージへのリアクションに連動してロールを自動付与・解除します。</div>
-    </div>
-    <div class="cmd-block">
-      <div class="cmd-name">Google News フィード <span class="badge-auto">自動</span></div>
-      <div class="cmd-desc">設定したキーワードで Google News を定期検索し、新着記事を自動投稿します。</div>
+    <div class="section-card-body">
+      <div class="guide-cmd-list">
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">ウェルカム / グッバイ <span class="badge-soft accent ms-1">自動</span></div>
+          <p class="guide-cmd-desc">メンバーの参加・退出時に設定したメッセージを自動で送信します。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">VC 通知 <span class="badge-soft accent ms-1">自動</span></div>
+          <p class="guide-cmd-desc">ボイスチャンネルへの参加・退出・移動を通知チャンネルにお知らせします。退出時は通話時間も表示します。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">スティッキーメッセージ <span class="badge-soft accent ms-1">自動</span></div>
+          <p class="guide-cmd-desc">設定したチャンネルで、新しいメッセージが投稿されるたびに固定メッセージを最下部に再掲します。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">リアクションロール <span class="badge-soft accent ms-1">自動</span></div>
+          <p class="guide-cmd-desc">指定したメッセージへのリアクションに連動してロールを自動付与・解除します。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">Google News フィード <span class="badge-soft accent ms-1">自動</span></div>
+          <p class="guide-cmd-desc">設定したキーワードで Google News を定期検索し、新着記事を自動投稿します。</p>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- 管理者向け -->
-  <div class="guide-section">
-    <div class="guide-section-title">
-      <i class="bi bi-shield-lock-fill guide-icon-danger"></i>
-      管理者向け設定 <span class="badge-admin">要管理者権限</span>
+  <div class="section-card mb-3">
+    <div class="section-card-header">
+      <h2 class="section-card-title">
+        <i class="bi bi-shield-fill-check"></i>管理者向け設定
+        <span class="badge-soft danger ms-1">要管理者権限</span>
+      </h2>
     </div>
-    <p class="guide-note">
-      上記の自動機能はすべてサーバーの管理者が設定する必要があります。<br>
-      スラッシュコマンド（Discord 上）または Web 管理画面から設定できます。
-    </p>
-    <div class="guide-admin-body">
-      <strong class="guide-text-primary">Web 管理画面でできること:</strong>
-      <ul class="guide-admin-list">
-        <li>各機能のチャンネル設定・通知設定</li>
-        <li>DJAudio のキャッシュ時間・クールダウン設定</li>
-        <li>ニュースフィードの追加・編集・削除</li>
-        <li>リアクションロールの管理</li>
-        <li>セキュリティ設定（信頼済みユーザー・バイパスロール）</li>
-      </ul>
+    <div class="section-card-body">
+      <div class="info-panel mb-3">
+        <p class="info-panel-title"><i class="bi bi-info-circle-fill"></i>設定方法</p>
+        上記の自動機能はすべてサーバーの管理者が設定する必要があります。<br>
+        スラッシュコマンド（Discord 上）または <strong>Web 管理画面</strong> から設定できます。
+      </div>
+      <p class="guide-service-label">Web 管理画面でできること</p>
+      <div class="guide-cmd-list">
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">チャンネル・通知設定</div>
+          <p class="guide-cmd-desc">各機能の送信先チャンネルや通知条件をまとめて管理できます。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">DJAudio 詳細設定</div>
+          <p class="guide-cmd-desc">キャッシュ保持時間・クールダウン・最大 URL 数を調整できます。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">ニュースフィード管理</div>
+          <p class="guide-cmd-desc">キーワード・投稿先チャンネル・検索間隔の追加・編集・削除が可能です。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">リアクションロール管理</div>
+          <p class="guide-cmd-desc">絵文字とロールの紐づけを GUI で管理できます。</p>
+        </div>
+        <div class="guide-cmd-row">
+          <div class="guide-cmd-name">セキュリティ設定</div>
+          <p class="guide-cmd-desc">信頼済みユーザーやバイパスロールを設定してセキュリティ検査の挙動を調整できます。</p>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- リンク -->
-  <div class="site-link-row">
-    <a href="https://metals.kawasaki-n3t.f5.si/" class="btn btn-outline-warning" target="_blank" rel="noopener noreferrer">
-      <i class="bi bi-graph-up me-2"></i>貴金属価格トラッカー
+  <!-- Footer links -->
+  <div class="guide-links">
+    <a href="https://metals.kawasaki-n3t.f5.si/" class="btn btn-outline-primary" target="_blank" rel="noopener noreferrer">
+      <i class="bi bi-graph-up"></i>貴金属価格トラッカー
     </a>
     <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary">
-      <i class="bi bi-gear me-2"></i>Web 管理画面（要ログイン）
+      <i class="bi bi-gear-fill"></i>Web 管理画面
     </a>
     {% if invite_url %}
-    <a href="{{ invite_url }}" class="btn btn-outline-success" target="_blank" rel="noopener noreferrer">
-      <i class="bi bi-plus-circle me-2"></i>Bot をサーバーに招待
+    <a href="{{ invite_url }}" class="btn btn-accent" target="_blank" rel="noopener noreferrer">
+      <i class="bi bi-plus-circle-fill"></i>Bot をサーバーに招待
     </a>
     {% endif %}
   </div>
 
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

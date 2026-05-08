@@ -66,7 +66,7 @@ services:
       # DJAudio-DL: Discord に貼る MP3 ダウンロード URL のベース（外部からアクセス可能な admin の URL）
       - DJAUDIO_BASE_URL=${DJAUDIO_BASE_URL:-http://localhost:5001}
     volumes:
-      - ./data:/app/data
+      - app_data:/app/data
 
   sycs-voldemort-admin:
     build:
@@ -100,7 +100,7 @@ services:
       - SETTINGS_LOCK_STALE_SECONDS=${SETTINGS_LOCK_STALE_SECONDS:-30}
       - ADMIN_PORT=5001
     volumes:
-      - ./data:/app/data
+      - app_data:/app/data
 
   sycs-voldemort-web:
     build:
@@ -153,9 +153,10 @@ services:
       - STARTUP_TEST_FORCE_SNAPSHOT_REFRESH=${STARTUP_TEST_FORCE_SNAPSHOT_REFRESH:-true}
       - STARTUP_TEST_RUN_PUSH_ON_BOOT=${STARTUP_TEST_RUN_PUSH_ON_BOOT:-false}
     volumes:
-      - ./data:/app/data
+      - app_data:/app/data
       - shared_secrets:/shared
 
 volumes:
   postgres_data:
   shared_secrets:
+  app_data:
