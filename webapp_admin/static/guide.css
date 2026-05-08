@@ -80,7 +80,6 @@
   max-width: 960px;
   margin: 0 auto;
   padding: 48px 24px;
-  border-top: 1px solid var(--separator);
 }
 
 .landing-section-last .landing-inner {
