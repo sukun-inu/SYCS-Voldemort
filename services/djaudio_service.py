@@ -26,10 +26,8 @@ from services.djaudio_cache import register_file, update_discord_message
 from services.djaudio_isrc_meta import enrich_metadata
 from services.djaudio_site_detection import detect_site, is_unsupported_url
 from services.settings_store import (
-    get_djaudio_cache_ttl,
-    get_djaudio_cooldown,
-    get_djaudio_max_urls,
-    get_djaudio_watch_channel,
+    DJAudioRuntimeSettings,
+    get_djaudio_runtime_settings,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,8 +35,8 @@ logger = logging.getLogger(__name__)
 URL_PATTERN = re.compile(r"https?://[^\s]+")
 
 _dl_semaphore: asyncio.Semaphore | None = None
-_user_cooldown: dict[int, float] = {}
-_processing: set[tuple] = set()
+_user_cooldown: dict[tuple[int, int], float] = {}
+_processing: set[tuple[int, int, str]] = set()
 
 
 def _get_semaphore() -> asyncio.Semaphore:
@@ -49,19 +47,21 @@ def _get_semaphore() -> asyncio.Semaphore:
 
 
 # ──────────────────────────────────────────────
-# yt-dlp ユーティリティ
+# yt-dlp / URL ユーティリティ
 # ──────────────────────────────────────────────
 
-async def _can_download(url: str) -> bool:
-    proc = await asyncio.create_subprocess_exec(
-        "yt-dlp", "--simulate", "--quiet", "--no-warnings",
-        "--ffmpeg-location", DJAUDIO_FFMPEG_PATH,
-        url,
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.DEVNULL,
-    )
-    await proc.communicate()
-    return proc.returncode == 0
+def _extract_urls(content: str, max_urls: int) -> list[str]:
+    urls: list[str] = []
+    seen: set[str] = set()
+    for raw in URL_PATTERN.findall(content):
+        cleaned = raw.strip().strip("<>").rstrip(")]}>.,!?;:")
+        if not cleaned or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        urls.append(cleaned)
+        if len(urls) >= max_urls:
+            break
+    return urls
 
 
 def _normalize_text(value: str | None) -> str:
@@ -161,7 +161,7 @@ async def _download_as_mp3(url: str, output_dir: str) -> list[Path]:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate()
+    _, stderr = await proc.communicate()
 
     if proc.returncode != 0:
         err = stderr.decode("utf-8", errors="replace")
@@ -171,7 +171,12 @@ async def _download_as_mp3(url: str, output_dir: str) -> list[Path]:
     return sorted(Path(output_dir).glob("*.mp3"))
 
 
-async def _download_and_register(url: str, guild_id: int, tmpdir: str) -> list[tuple[str, str]]:
+async def _download_and_register(
+    url: str,
+    guild_id: int,
+    tmpdir: str,
+    cache_ttl: int,
+) -> list[tuple[str, str]]:
     """MP3 をダウンロードしてメタデータを補完・キャッシュ登録し、(title, token) のリストを返す。"""
     mp3_files = await _download_as_mp3(url, tmpdir)
     if not mp3_files:
@@ -183,13 +188,19 @@ async def _download_and_register(url: str, guild_id: int, tmpdir: str) -> list[t
         if info_meta:
             await enrich_metadata(mp3, info_meta)
         title_text = _format_title_from_metadata(info_meta) if info_meta else mp3.stem
-        token = register_file(mp3, source_url=url, title=title_text, guild_id=guild_id, ttl=get_djaudio_cache_ttl(guild_id))
+        token = register_file(
+            mp3,
+            source_url=url,
+            title=title_text,
+            guild_id=guild_id,
+            ttl=cache_ttl,
+        )
         results.append((title_text, token))
     return results
 
 
-def _build_result_embed(results: list[tuple[str, str]], guild_id: int) -> discord.Embed:
-    ttl_min = get_djaudio_cache_ttl(guild_id) // 60
+def _build_result_embed(results: list[tuple[str, str]], guild_id: int, cache_ttl: int) -> discord.Embed:
+    ttl_min = cache_ttl // 60
     embed = discord.Embed(
         title="🎵 MP3 準備完了",
         color=discord.Color.blurple(),
@@ -205,6 +216,22 @@ def _build_result_embed(results: list[tuple[str, str]], guild_id: int) -> discor
     return embed
 
 
+async def _add_reaction_safe(message: discord.Message, emoji: str) -> None:
+    try:
+        await message.add_reaction(emoji)
+    except discord.HTTPException:
+        pass
+
+
+async def _remove_reaction_safe(message: discord.Message, emoji: str, bot: Bot) -> None:
+    if bot.user is None:
+        return
+    try:
+        await message.remove_reaction(emoji, bot.user)
+    except discord.HTTPException:
+        pass
+
+
 # ──────────────────────────────────────────────
 # メッセージハンドラ（bot_setup から呼び出す）
 # ──────────────────────────────────────────────
@@ -214,62 +241,67 @@ async def handle_djaudio_message(bot: Bot, message: discord.Message) -> None:
     if not message.guild:
         return
 
-    watch_ch_id = get_djaudio_watch_channel(message.guild.id)
-    if not watch_ch_id or message.channel.id != watch_ch_id:
+    guild_id = message.guild.id
+    settings = get_djaudio_runtime_settings(guild_id)
+    if not settings.watch_channel_id or message.channel.id != settings.watch_channel_id:
         return
 
-    guild_id = message.guild.id
-    max_urls = get_djaudio_max_urls(guild_id)
-    cooldown = get_djaudio_cooldown(guild_id)
-
-    urls = URL_PATTERN.findall(message.content)[:max_urls]
+    urls = _extract_urls(message.content, settings.max_urls)
     if not urls:
         return
 
+    supported_urls: list[str] = []
+    unsupported_reasons: list[str] = []
+    for url in urls:
+        reason = is_unsupported_url(url)
+        if reason:
+            unsupported_reasons.append(reason)
+            continue
+        supported_urls.append(url)
+
+    if not supported_urls:
+        notice = unsupported_reasons[0] if unsupported_reasons else "この URL は現在サポート対象外です。"
+        await message.reply(f"❌ {notice}", mention_author=False)
+        return
+
     now = time.monotonic()
-    last = _user_cooldown.get(message.author.id, 0)
-    if cooldown > 0 and now - last < cooldown:
-        remaining = int(cooldown - (now - last))
+    cooldown_key = (guild_id, message.author.id)
+    last = _user_cooldown.get(cooldown_key, 0)
+    if settings.cooldown > 0 and now - last < settings.cooldown:
+        remaining = int(settings.cooldown - (now - last))
         await message.reply(f"⏱️ {remaining}秒後に再試行してください。", mention_author=False)
         return
-    _user_cooldown[message.author.id] = now
+    _user_cooldown[cooldown_key] = now
 
-    await asyncio.gather(*[_process_url(bot, message, url) for url in urls])
+    await asyncio.gather(*[_process_url(bot, message, url, settings) for url in supported_urls])
 
 
-async def _process_url(bot: Bot, message: discord.Message, url: str) -> None:
+async def _process_url(
+    bot: Bot,
+    message: discord.Message,
+    url: str,
+    settings: DJAudioRuntimeSettings,
+) -> None:
     key = (message.guild.id, message.id, url)
     if key in _processing:
         return
     _processing.add(key)
 
     try:
-        await message.add_reaction("⏳")
+        await _add_reaction_safe(message, "⏳")
         logger.info("URL検知 guild=%s [%s]: %s", message.guild.id, message.author, url)
-
-        unsupported_reason = is_unsupported_url(url)
-        if unsupported_reason:
-            await message.remove_reaction("⏳", bot.user)
-            await message.add_reaction("❌")
-            await message.reply(f"❌ {unsupported_reason}", mention_author=False)
-            return
-
-        if not await _can_download(url):
-            await message.remove_reaction("⏳", bot.user)
-            await message.add_reaction("❓")
-            return
 
         async with _get_semaphore():
             with tempfile.TemporaryDirectory() as tmpdir:
                 results = await asyncio.wait_for(
-                    _download_and_register(url, message.guild.id, tmpdir),
+                    _download_and_register(url, message.guild.id, tmpdir, settings.cache_ttl),
                     timeout=DJAUDIO_DL_TIMEOUT,
                 )
 
-        await message.remove_reaction("⏳", bot.user)
-        await message.add_reaction("✅")
+        await _remove_reaction_safe(message, "⏳", bot)
+        await _add_reaction_safe(message, "✅")
 
-        embed = _build_result_embed(results, message.guild.id)
+        embed = _build_result_embed(results, message.guild.id, settings.cache_ttl)
         embed.set_footer(text=f"リクエスト: {message.author.display_name}")
         reply_msg = await message.reply(embed=embed, mention_author=False)
         for _, token in results:
@@ -279,16 +311,16 @@ async def _process_url(bot: Bot, message: discord.Message, url: str) -> None:
     except asyncio.TimeoutError:
         logger.error("タイムアウト [%s]", url)
         try:
-            await message.remove_reaction("⏳", bot.user)
-            await message.add_reaction("❌")
+            await _remove_reaction_safe(message, "⏳", bot)
+            await _add_reaction_safe(message, "❌")
             await message.reply("⚠️ タイムアウトしました。時間をおいて再試行してください。", mention_author=False)
         except discord.HTTPException:
             pass
     except Exception as e:
         logger.exception("処理失敗 [%s]: %s", url, e)
         try:
-            await message.remove_reaction("⏳", bot.user)
-            await message.add_reaction("❌")
+            await _remove_reaction_safe(message, "⏳", bot)
+            await _add_reaction_safe(message, "❌")
             await message.reply(
                 f"⚠️ ダウンロードに失敗しました\n```\n{str(e)[:300]}\n```",
                 mention_author=False,

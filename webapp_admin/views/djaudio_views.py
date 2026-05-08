@@ -14,11 +14,7 @@ from flask import Blueprint, abort, flash, jsonify, redirect, render_template, r
 from config import DJAUDIO_CACHE_DIR
 from services.djaudio_cache import get_meta
 from services.settings_store import (
-    get_djaudio_cache_ttl,
-    get_djaudio_cooldown,
-    get_djaudio_max_urls,
-    get_djaudio_settings,
-    get_djaudio_watch_channel,
+    get_djaudio_runtime_settings,
     set_djaudio_settings,
     set_djaudio_watch_channel,
 )
@@ -140,10 +136,14 @@ def djaudio_settings():
         action = request.form.get("action")
 
         if action == "set_channel":
-            raw_ch = request.form.get("channel_id", "0")
-            ch_id  = validate_channel_id(raw_ch)
-            set_djaudio_watch_channel(gid, ch_id if ch_id else None)
-            flash("監視チャンネルを保存しました。", "success")
+            raw_ch = request.form.get("channel_id", "")
+            if raw_ch == "0" or not raw_ch:
+                set_djaudio_watch_channel(gid, None)
+                flash("監視チャンネルを解除しました。", "success")
+            else:
+                ch_id = validate_channel_id(raw_ch)
+                set_djaudio_watch_channel(gid, ch_id)
+                flash("監視チャンネルを保存しました。", "success")
             return redirect(url_for("djaudio.djaudio_settings"))
 
         elif action == "set_limits":
@@ -154,15 +154,12 @@ def djaudio_settings():
             flash("制限設定を保存しました。", "success")
             return redirect(url_for("djaudio.djaudio_settings"))
 
-    current_ch  = get_djaudio_watch_channel(gid)
-    current_ttl = get_djaudio_cache_ttl(gid)
-    current_cd  = get_djaudio_cooldown(gid)
-    current_mu  = get_djaudio_max_urls(gid)
+    runtime = get_djaudio_runtime_settings(gid)
     return render_template(
         "settings/djaudio.html",
         channels=channels,
-        current_channel_id=current_ch,
-        cache_ttl=current_ttl,
-        cooldown=current_cd,
-        max_urls=current_mu,
+        current_channel_id=runtime.watch_channel_id,
+        cache_ttl=runtime.cache_ttl,
+        cooldown=runtime.cooldown,
+        max_urls=runtime.max_urls,
     )

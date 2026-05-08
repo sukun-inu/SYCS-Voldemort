@@ -133,6 +133,14 @@
       </div>
 
       <div class="sidebar-group">
+        <span class="sidebar-label">メディア</span>
+        <a class="sidebar-link {% if request.endpoint == 'djaudio.djaudio_settings' %}active{% endif %}"
+           href="{{ url_for('djaudio.djaudio_settings') }}" title="DJAudio-DL" {% if request.endpoint == 'djaudio.djaudio_settings' %}aria-current="page"{% endif %}>
+          <i class="bi bi-music-note-beamed"></i><span>DJAudio-DL</span>
+        </a>
+      </div>
+
+      <div class="sidebar-group">
         <span class="sidebar-label">セキュリティ</span>
         <a class="sidebar-link {% if request.endpoint == 'settings.security_settings' %}active{% endif %}"
            href="{{ url_for('settings.security_settings') }}" title="セキュリティ設定" {% if request.endpoint == 'settings.security_settings' %}aria-current="page"{% endif %}>

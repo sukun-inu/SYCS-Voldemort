@@ -2,6 +2,7 @@ from flask import Blueprint, flash, jsonify, redirect, render_template, request,
 
 from services.settings_store import (
     get_bypass_role_ids,
+    get_djaudio_runtime_settings,
     get_earthquake_settings,
     get_goodbye_settings,
     get_news_feeds,
@@ -70,6 +71,7 @@ def overview():
     feeds = get_news_feeds(gid)
     eq = get_earthquake_settings(gid)
     rr = get_reaction_roles(gid)
+    djaudio = get_djaudio_runtime_settings(gid)
 
     stats = {
         "log_channel": log_s.get("channel_id"),
@@ -85,6 +87,10 @@ def overview():
         "eq_min_scale": eq.get("min_scale", 30),
         "trusted_count": len(get_trusted_user_ids(gid)),
         "bypass_count": len(get_bypass_role_ids(gid)),
+        "djaudio_watch_channel": djaudio.watch_channel_id or None,
+        "djaudio_cache_ttl": djaudio.cache_ttl,
+        "djaudio_cooldown": djaudio.cooldown,
+        "djaudio_max_urls": djaudio.max_urls,
     }
     channels = get_guild_channels(gid)
     ch_map = {str(c["id"]): c["name"] for c in channels}

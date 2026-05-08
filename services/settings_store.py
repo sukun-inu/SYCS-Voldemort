@@ -1,4 +1,5 @@
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -15,40 +16,41 @@ _default_dir = Path(__file__).resolve().parent.parent / "data"
 _SETTINGS_DIR = Path(os.getenv("SETTINGS_DIR", str(_default_dir)))
 _SETTINGS_FILE = _SETTINGS_DIR / "settings.json"
 
-# メモリ内キャッシュ。mtime が変わったら自動無効化するため、
+# メモリ内キャッシュ。ファイル署名（mtime_ns + size）が変わったら自動無効化するため、
 # Bot と WebUI が別プロセスでもファイル更新を検知できる。
 _cache: dict[str, Any] | None = None
-_cache_mtime: float = 0.0
+_cache_sig: tuple[int, int] | None = None
 
 
-def _file_mtime() -> float:
+def _file_signature() -> tuple[int, int] | None:
     try:
-        return _SETTINGS_FILE.stat().st_mtime
+        stat = _SETTINGS_FILE.stat()
+        return stat.st_mtime_ns, stat.st_size
     except OSError:
-        return 0.0
+        return None
 
 
 def _load_all() -> dict[str, Any]:
-    global _cache, _cache_mtime
-    mtime = _file_mtime()
-    if _cache is not None and mtime <= _cache_mtime:
+    global _cache, _cache_sig
+    sig = _file_signature()
+    if _cache is not None and sig == _cache_sig:
         return _cache
 
-    if not _SETTINGS_FILE.exists():
+    if sig is None:
         _cache = {"guilds": {}}
-        _cache_mtime = mtime
+        _cache_sig = sig
         return _cache
 
     try:
         data = _json.loads(_SETTINGS_FILE.read_bytes())
     except Exception:
         _cache = {"guilds": {}}
-        _cache_mtime = mtime
+        _cache_sig = sig
         return _cache
 
     if not isinstance(data, dict):
         _cache = {"guilds": {}}
-        _cache_mtime = mtime
+        _cache_sig = sig
         return _cache
 
     data.setdefault("guilds", {})
@@ -56,12 +58,12 @@ def _load_all() -> dict[str, Any]:
         data["guilds"] = {}
 
     _cache = data
-    _cache_mtime = mtime
+    _cache_sig = sig
     return _cache
 
 
 def _save_all(data: dict[str, Any]) -> None:
-    global _cache, _cache_mtime
+    global _cache, _cache_sig
     _SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
 
     # アトミック書き込み: クラッシュ時に settings.json が壊れるのを防ぐ。
@@ -73,7 +75,7 @@ def _save_all(data: dict[str, Any]) -> None:
     tmp.replace(_SETTINGS_FILE)
 
     _cache = data
-    _cache_mtime = _file_mtime()
+    _cache_sig = _file_signature()
 
 
 def get_guild_settings(guild_id: int) -> dict[str, Any]:
@@ -97,6 +99,8 @@ def update_guild_settings(guild_id: int, updates: dict[str, Any]) -> dict[str, A
 
 def _update_nested(guild_id: int, top_key: str, patch: dict[str, Any]) -> None:
     s = get_guild_settings(guild_id).get(top_key, {})
+    if not isinstance(s, dict):
+        s = {}
     s.update(patch)
     update_guild_settings(guild_id, {top_key: s})
 
@@ -420,28 +424,114 @@ def set_earthquake_notify_types(guild_id: int, types: dict[str, bool]) -> None:
 # DJAudio-DL 監視チャンネル
 # ──────────────────────────────────────────────
 
-def get_djaudio_watch_channel(guild_id: int) -> int:
-    """URL監視チャンネルIDを取得（未設定なら0）。"""
-    value = get_guild_settings(guild_id).get("djaudio_watch_channel_id")
+@dataclass(frozen=True)
+class DJAudioRuntimeSettings:
+    watch_channel_id: int
+    cache_ttl: int
+    cooldown: int
+    max_urls: int
+
+
+def _read_int(value: Any) -> int | None:
     try:
         return int(value)
     except (TypeError, ValueError):
-        return 0
+        return None
+
+
+def _get_djaudio_top_level(guild_settings: dict[str, Any], key: str) -> Any:
+    if key in guild_settings:
+        return guild_settings.get(key)
+    return guild_settings.get(f"djaudio_{key}")
+
+
+def get_djaudio_watch_channel(guild_id: int) -> int:
+    """URL監視チャンネルIDを取得（未設定なら0）。"""
+    guild_settings = get_guild_settings(guild_id)
+    nested = guild_settings.get("djaudio", {})
+    if not isinstance(nested, dict):
+        nested = {}
+
+    candidates = (
+        guild_settings.get("djaudio_watch_channel_id"),
+        guild_settings.get("djaudio_watch_channel"),
+        nested.get("watch_channel_id"),
+        nested.get("channel_id"),
+    )
+    for value in candidates:
+        parsed = _read_int(value)
+        if parsed and parsed > 0:
+            return parsed
+    return 0
 
 
 def set_djaudio_watch_channel(guild_id: int, channel_id: int | None) -> None:
     """URL監視チャンネルIDを設定/解除。"""
-    update_guild_settings(guild_id, {"djaudio_watch_channel_id": channel_id})
+    nested = get_djaudio_settings(guild_id)
+    nested["watch_channel_id"] = channel_id
+    update_guild_settings(
+        guild_id,
+        {
+            "djaudio_watch_channel_id": channel_id,
+            "djaudio_watch_channel": channel_id,  # legacy 互換
+            "djaudio": nested,
+        },
+    )
 
 
 def get_djaudio_settings(guild_id: int) -> dict[str, Any]:
     """DJAudio の詳細設定を取得。"""
-    return dict(get_guild_settings(guild_id).get("djaudio", {}))
+    guild_settings = get_guild_settings(guild_id)
+    nested = guild_settings.get("djaudio", {})
+    if not isinstance(nested, dict):
+        nested = {}
+
+    result = dict(nested)
+    if "cache_ttl" not in result:
+        legacy = _get_djaudio_top_level(guild_settings, "cache_ttl")
+        if legacy is not None:
+            result["cache_ttl"] = legacy
+    if "cooldown" not in result:
+        legacy = _get_djaudio_top_level(guild_settings, "cooldown")
+        if legacy is not None:
+            result["cooldown"] = legacy
+    if "max_urls" not in result:
+        legacy = _get_djaudio_top_level(guild_settings, "max_urls")
+        if legacy is not None:
+            result["max_urls"] = legacy
+    return result
 
 
 def set_djaudio_settings(guild_id: int, patch: dict[str, Any]) -> None:
     """DJAudio の詳細設定を更新。"""
-    _update_nested(guild_id, "djaudio", patch)
+    normalized: dict[str, int] = {}
+    if "cache_ttl" in patch:
+        value = _read_int(patch.get("cache_ttl"))
+        if value is not None:
+            normalized["cache_ttl"] = max(60, min(86400, value))
+    if "cooldown" in patch:
+        value = _read_int(patch.get("cooldown"))
+        if value is not None:
+            normalized["cooldown"] = max(0, min(3600, value))
+    if "max_urls" in patch:
+        value = _read_int(patch.get("max_urls"))
+        if value is not None:
+            normalized["max_urls"] = max(1, min(10, value))
+
+    if not normalized:
+        return
+
+    existing = get_djaudio_settings(guild_id)
+    existing.update(normalized)
+    update_guild_settings(
+        guild_id,
+        {
+            "djaudio": existing,
+            "djaudio_cache_ttl": existing.get("cache_ttl"),  # legacy 互換
+            "djaudio_cooldown": existing.get("cooldown"),
+            "djaudio_max_urls": existing.get("max_urls"),
+        },
+    )
 
 
 _DJAUDIO_DEFAULTS: dict[str, int] = {
@@ -479,3 +569,13 @@ def get_djaudio_max_urls(guild_id: int) -> int:
     except (TypeError, ValueError):
         from config import DJAUDIO_MAX_URLS
         return DJAUDIO_MAX_URLS
+
+
+def get_djaudio_runtime_settings(guild_id: int) -> DJAudioRuntimeSettings:
+    """DJAudio 実行時に使う設定をまとめて返す。"""
+    return DJAudioRuntimeSettings(
+        watch_channel_id=get_djaudio_watch_channel(guild_id),
+        cache_ttl=get_djaudio_cache_ttl(guild_id),
+        cooldown=get_djaudio_cooldown(guild_id),
+        max_urls=get_djaudio_max_urls(guild_id),
+    )
