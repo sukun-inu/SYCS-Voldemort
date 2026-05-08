@@ -18,7 +18,7 @@ def _build_invite_url() -> str | None:
     )
 
 
-@auth_bp.route("", strict_slashes=False)
+@auth_bp.route("")
 def landing():
     return render_template(
         "landing.html",

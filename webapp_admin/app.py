@@ -68,7 +68,7 @@ def create_app() -> Flask:
     from flask import redirect
     @app.route("/")
     def root_redirect():
-        return redirect("/admin/")
+        return redirect("/admin")
 
     app.register_blueprint(auth_bp, url_prefix="/admin")
     app.register_blueprint(dashboard_bp, url_prefix="/admin")
