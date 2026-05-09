@@ -49,24 +49,28 @@ async def handle_chatgpt_message(bot: discord.Client, message: discord.Message):
     _user_last_used[key] = time.time()
     _cleanup_stale_instances()
 
-    async with message.channel.typing():
-        try:
-            response = await user_chatgpt[key].input_message(message.content)
-        except Exception as e:
-            await log_action(
-                bot,
-                message.guild.id,
-                "ERROR",
-                "ChatGPT呼び出し失敗",
-                user=message.author,
-                fields={"エラー": str(e)},
-            )
-            await message.channel.send("ヴォルデモートでも手こずるとはな… 少し待ってから試せ。")
-            return
+    # trigger_typing() は1回だけ送信する（typing()コンテキストは5秒ごとに再送して429になるため使わない）
+    try:
+        await message.channel.trigger_typing()
+    except discord.HTTPException:
+        pass
 
-        await send_large_message(message.channel, response)
+    try:
+        response = await user_chatgpt[key].input_message(message.content)
+    except Exception as e:
+        await log_action(
+            bot,
+            message.guild.id,
+            "ERROR",
+            "ChatGPT呼び出し失敗",
+            user=message.author,
+            fields={"エラー": str(e)},
+        )
+        await message.channel.send("ヴォルデモートでも手こずるとはな… 少し待ってから試せ。")
+        return
 
-    # typing コンテキスト外でログ出力（API呼び出しの競合を避ける）
+    await send_large_message(message.channel, response)
+
     preview = response[:1800]
     await log_action(
         bot,
