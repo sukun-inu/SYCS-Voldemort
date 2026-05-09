@@ -11,13 +11,15 @@ from fastapi.responses import JSONResponse, Response
 from starlette.responses import RedirectResponse
 
 from config import DJAUDIO_CACHE_DIR, DISCORD_BOT_TOKEN
+from webapp_admin.extensions import limiter
 from webapp_admin.security import _NeedsLogin, check_csrf, sanitize
 from webapp_admin.templating import flash, render
 
-_DEV_USER_ID = "987278623641829436"
+_DEV_USER_ID = os.getenv("DEV_USER_ID", "987278623641829436")
 _DISCORD_API = "https://discord.com/api/v10"
 _P2PQUAKE_API = "https://api.p2pquake.net/v2/history"
 _TIMEOUT = aiohttp.ClientTimeout(total=10)
+_MAX_IMPORT_BYTES = 512 * 1024  # 512 KB
 _SIGNAL_DIR = Path(os.getenv("SETTINGS_DIR", "/app/data")) / "_dev_signals"
 
 _SCALE_LABELS: dict[int, str] = {
@@ -155,18 +157,30 @@ def _tail_file(path: Path, lines: int = 200) -> list[str]:
 
 
 def _env_rows() -> list[dict]:
+    try:
+        import config as cfg
+        _defaults: dict[str, str] = {
+            "DJAUDIO_BASE_URL":        str(cfg.DJAUDIO_BASE_URL),
+            "DJAUDIO_CACHE_DIR":       str(cfg.DJAUDIO_CACHE_DIR),
+            "DJAUDIO_CACHE_TTL_SECONDS": str(cfg.DJAUDIO_CACHE_TTL),
+            "METALS_SITE_URL":         cfg.METALS_SITE_URL,
+            "ADMIN_SITE_URL":          cfg.ADMIN_SITE_URL,
+        }
+    except Exception:
+        _defaults = {}
+
     rows = []
     for key, secret in _ENV_DISPLAY:
         val = os.environ.get(key)
-        if val is None:
+        if val is not None and val.strip():
+            display = f"{val[:4]}{'*' * min(len(val) - 4, 20)}" if secret and len(val) > 4 else ("****" if secret else val)
+            status = "set"
+        elif key in _defaults:
+            display = _defaults[key]
+            status = "default"
+        else:
             display = None
             status = "missing"
-        elif secret:
-            display = f"{val[:4]}{'*' * min(len(val) - 4, 20)}" if len(val) > 4 else "****"
-            status = "set"
-        else:
-            display = val
-            status = "set"
         rows.append({"key": key, "value": display, "status": status, "secret": secret})
     return rows
 
@@ -219,6 +233,7 @@ async def dev_index(request: Request, _=Depends(_check_dev)):
 
 
 @router.post("/send-message")
+@limiter.limit("10/minute")
 async def send_message(
     request: Request, _=Depends(_check_dev), _csrf=Depends(check_csrf)
 ):
@@ -237,6 +252,7 @@ async def send_message(
 
 
 @router.post("/forward-message")
+@limiter.limit("10/minute")
 async def forward_message(
     request: Request, _=Depends(_check_dev), _csrf=Depends(check_csrf)
 ):
@@ -287,6 +303,7 @@ async def settings_guild(
 
 
 @router.post("/cache/delete")
+@limiter.limit("20/minute")
 async def delete_cache_entry(
     request: Request, _=Depends(_check_dev), _csrf=Depends(check_csrf)
 ):
@@ -302,6 +319,7 @@ async def delete_cache_entry(
 
 
 @router.post("/cache/purge")
+@limiter.limit("5/minute")
 async def purge_cache(
     request: Request, _=Depends(_check_dev), _csrf=Depends(check_csrf)
 ):
@@ -312,6 +330,7 @@ async def purge_cache(
 
 
 @router.post("/signal/{task_name}")
+@limiter.limit("10/minute")
 async def trigger_signal(
     request: Request, task_name: str, _=Depends(_check_dev), _csrf=Depends(check_csrf)
 ):
@@ -331,6 +350,7 @@ async def trigger_signal(
 
 
 @router.post("/news-send")
+@limiter.limit("5/minute")
 async def news_send(
     request: Request, _=Depends(_check_dev), _csrf=Depends(check_csrf)
 ):
@@ -384,6 +404,7 @@ async def news_send(
 
 
 @router.post("/earthquake-replay")
+@limiter.limit("5/minute")
 async def earthquake_replay(
     request: Request, _=Depends(_check_dev), _csrf=Depends(check_csrf)
 ):
@@ -394,9 +415,12 @@ async def earthquake_replay(
         return RedirectResponse("/admin/dev#earthquake", status_code=303)
 
     try:
-        json.loads(event_json)
-    except (ValueError, json.JSONDecodeError):
-        flash(request, "無効なJSONです。", "danger")
+        data = json.loads(event_json)
+        eq = data.get("earthquake")
+        if not isinstance(eq, dict) or not isinstance(eq.get("hypocenter"), dict):
+            raise ValueError("earthquake / hypocenter キーが必要です")
+    except (ValueError, json.JSONDecodeError) as e:
+        flash(request, f"無効な地震イベントJSONです: {e}", "danger")
         return RedirectResponse("/admin/dev#earthquake", status_code=303)
 
     _SIGNAL_DIR.mkdir(parents=True, exist_ok=True)
@@ -406,6 +430,7 @@ async def earthquake_replay(
 
 
 @router.get("/api/channels")
+@limiter.limit("30/minute")
 async def api_channels(
     request: Request,
     guild_id: str = Query(...),
@@ -429,6 +454,7 @@ async def api_channels(
 
 
 @router.get("/api/logs")
+@limiter.limit("20/minute")
 async def api_logs(
     request: Request,
     source: str = Query("bot", pattern="^(bot|admin)$"),
@@ -441,6 +467,7 @@ async def api_logs(
 
 
 @router.get("/api/user")
+@limiter.limit("20/minute")
 async def api_user(
     request: Request,
     user_id: str = Query(...),
@@ -458,6 +485,7 @@ async def api_user(
 
 
 @router.get("/settings/{guild_id}/export")
+@limiter.limit("10/minute")
 async def export_guild_settings(
     request: Request, guild_id: str, _=Depends(_check_dev)
 ):
@@ -476,6 +504,7 @@ async def export_guild_settings(
 
 
 @router.post("/settings/{guild_id}/import")
+@limiter.limit("5/minute")
 async def import_guild_settings(
     request: Request,
     guild_id: str,
@@ -485,7 +514,10 @@ async def import_guild_settings(
 ):
     if not re.fullmatch(r"\d+", guild_id):
         raise HTTPException(status_code=400)
-    content = await file.read()
+    content = await file.read(_MAX_IMPORT_BYTES + 1)
+    if len(content) > _MAX_IMPORT_BYTES:
+        flash(request, f"ファイルサイズが上限({_MAX_IMPORT_BYTES // 1024} KB)を超えています。", "danger")
+        return RedirectResponse("/admin/dev#settings", status_code=303)
     try:
         new_settings = json.loads(content.decode("utf-8"))
         if not isinstance(new_settings, dict):
@@ -500,6 +532,7 @@ async def import_guild_settings(
 
 
 @router.post("/test-notify/welcome")
+@limiter.limit("10/minute")
 async def test_notify_welcome(
     request: Request, _=Depends(_check_dev), _csrf=Depends(check_csrf)
 ):
@@ -518,6 +551,7 @@ async def test_notify_welcome(
 
 
 @router.post("/test-notify/vc")
+@limiter.limit("10/minute")
 async def test_notify_vc(
     request: Request, _=Depends(_check_dev), _csrf=Depends(check_csrf)
 ):
