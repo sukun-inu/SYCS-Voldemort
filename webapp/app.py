@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -15,7 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import METAL_COMMANDS
@@ -31,6 +32,7 @@ from .push_service import (
     refresh_vapid_config,
     send_push,
 )
+from .repair_service import repair_metalprice_integrity
 from .security import (
     RateLimitMiddleware,
     SecurityHeadersMiddleware,
@@ -73,6 +75,22 @@ def _normalize_public_path(path: str) -> str:
     return normalized
 
 
+def _is_repairable_db_error(exc: Exception) -> bool:
+    return isinstance(exc, (OperationalError, ProgrammingError))
+
+
+async def _try_db_self_heal(*, context: str, exc: Exception) -> bool:
+    if not _is_repairable_db_error(exc):
+        return False
+    logger.warning("[WEB] %s failed with DB error. trying self-heal: %s", context, exc)
+    try:
+        await init_db()
+        return True
+    except Exception:
+        logger.exception("[WEB] DB self-heal failed at %s", context)
+        return False
+
+
 APP_PUBLIC_ROOT = _normalize_public_path(APP_PUBLIC_PATH)
 STARTUP_TEST_MODE = read_env_bool("STARTUP_TEST_MODE", False)
 STARTUP_TEST_REQUIRE_DOCKER = read_env_bool("STARTUP_TEST_REQUIRE_DOCKER", True)
@@ -80,6 +98,10 @@ STARTUP_TEST_RUN_PUSH_ON_BOOT = read_env_bool("STARTUP_TEST_RUN_PUSH_ON_BOOT", F
 STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT = read_env_bool("STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT", False)
 STARTUP_TEST_FORCE_SNAPSHOT_REFRESH = read_env_bool("STARTUP_TEST_FORCE_SNAPSHOT_REFRESH", True)
 WEB_SCHEDULER_ENABLED = read_env_bool("WEB_SCHEDULER_ENABLED", True)
+METAL_AUTO_REPAIR_ENABLED = read_env_bool("METAL_AUTO_REPAIR_ENABLED", True)
+METAL_AUTO_REPAIR_INTERVAL_MINUTES = max(5, int(os.getenv("METAL_AUTO_REPAIR_INTERVAL_MINUTES", "30")))
+METAL_AUTO_REPAIR_LOOKBACK_DAYS = max(7, int(os.getenv("METAL_AUTO_REPAIR_LOOKBACK_DAYS", "60")))
+METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH = read_env_bool("METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH", False)
 
 history_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=64)
 latest_prices_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=8)
@@ -403,29 +425,70 @@ async def _run_startup_test_jobs() -> None:
 
 
 async def collect_daily_snapshot(*, force_refresh: bool = False) -> None:
-    async with SessionLocal() as session:
-        try:
-            await store_today_snapshot(session, skip_if_exists=not force_refresh)
-            await _clear_response_caches()
-            logger.info("日次価格スナップショットを保存した。force_refresh=%s", force_refresh)
-        except Exception:
-            logger.exception("日次価格スナップショット保存に失敗した。")
+    for attempt in range(2):
+        async with SessionLocal() as session:
+            try:
+                await store_today_snapshot(session, skip_if_exists=not force_refresh)
+                await _clear_response_caches()
+                logger.info("日次価格スナップショットを保存した。force_refresh=%s", force_refresh)
+                return
+            except Exception as e:
+                await session.rollback()
+                if attempt == 0 and await _try_db_self_heal(context="collect_daily_snapshot", exc=e):
+                    continue
+                logger.exception("日次価格スナップショット保存に失敗した。")
+                return
 
 
 async def collect_weekly_forecast_cache(*, force_refresh: bool = False) -> None:
-    async with SessionLocal() as session:
-        try:
-            today_iso = datetime.now(JST).date().isoformat()
-            if not force_refresh:
-                existing_payload = await load_stored_weekly_forecast(session, days=7)
-                if existing_payload and existing_payload.get("as_of_date") == today_iso:
-                    logger.info("7日予測データは最新のため更新をスキップした。as_of_date=%s", today_iso)
-                    return
-            await refresh_weekly_forecast_cache(session, horizon_days=7)
-            await forecast_cache.clear()
-            logger.info("7日予測データを更新し、DBに保存した。force_refresh=%s", force_refresh)
-        except Exception:
-            logger.exception("7日予測データの更新保存に失敗した。")
+    for attempt in range(2):
+        async with SessionLocal() as session:
+            try:
+                today_iso = datetime.now(JST).date().isoformat()
+                if not force_refresh:
+                    existing_payload = await load_stored_weekly_forecast(session, days=7)
+                    if existing_payload and existing_payload.get("as_of_date") == today_iso:
+                        logger.info("7日予測データは最新のため更新をスキップした。as_of_date=%s", today_iso)
+                        return
+                await refresh_weekly_forecast_cache(session, horizon_days=7)
+                await forecast_cache.clear()
+                logger.info("7日予測データを更新し、DBに保存した。force_refresh=%s", force_refresh)
+                return
+            except Exception as e:
+                await session.rollback()
+                if attempt == 0 and await _try_db_self_heal(context="collect_weekly_forecast_cache", exc=e):
+                    continue
+                logger.exception("7日予測データの更新保存に失敗した。")
+                return
+
+
+async def auto_repair_metalprice_data(*, force_forecast_refresh: bool = False) -> None:
+    for attempt in range(2):
+        async with SessionLocal() as session:
+            try:
+                stats = await repair_metalprice_integrity(
+                    session,
+                    lookback_days=METAL_AUTO_REPAIR_LOOKBACK_DAYS,
+                    force_forecast_refresh=force_forecast_refresh,
+                )
+                await _clear_response_caches()
+                logger.info(
+                    "metalprice自動修復を実行した。rows_scanned=%s rows_fixed=%s code_fixed=%s delta_fixed=%s missing_today_before=%s missing_today_after=%s forecast_refreshed=%s",
+                    stats.get("rows_scanned", 0),
+                    stats.get("rows_fixed", 0),
+                    stats.get("metal_code_fixed", 0),
+                    stats.get("delta_fixed", 0),
+                    stats.get("missing_today_before", 0),
+                    stats.get("missing_today_after", 0),
+                    stats.get("forecast_refreshed", 0),
+                )
+                return
+            except Exception as e:
+                await session.rollback()
+                if attempt == 0 and await _try_db_self_heal(context="auto_repair_metalprice_data", exc=e):
+                    continue
+                logger.exception("metalprice自動修復に失敗した。")
+                return
 
 
 async def collect_daily_data(*, force_snapshot_refresh: bool = False, force_forecast_refresh: bool = False) -> None:
@@ -441,6 +504,10 @@ async def lifespan(_: FastAPI):
 
     if WEB_SCHEDULER_ENABLED:
         await collect_daily_data()
+        if METAL_AUTO_REPAIR_ENABLED:
+            await auto_repair_metalprice_data(
+                force_forecast_refresh=METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH
+            )
         await dispatch_top_delta_notification(enforce_schedule_time=True)
         await _run_startup_test_jobs()
 
@@ -473,6 +540,17 @@ async def lifespan(_: FastAPI):
             max_instances=1,
             misfire_grace_time=7200,
         )
+        if METAL_AUTO_REPAIR_ENABLED:
+            scheduler.add_job(
+                auto_repair_metalprice_data,
+                IntervalTrigger(minutes=METAL_AUTO_REPAIR_INTERVAL_MINUTES, timezone=JST),
+                kwargs={"force_forecast_refresh": METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH},
+                id="jst_metalprice_auto_repair",
+                replace_existing=True,
+                coalesce=True,
+                max_instances=1,
+                misfire_grace_time=max(300, METAL_AUTO_REPAIR_INTERVAL_MINUTES * 60),
+            )
         scheduler.start()
         logger.info("WEB_SCHEDULER_ENABLED=true: background scheduler started")
     else:

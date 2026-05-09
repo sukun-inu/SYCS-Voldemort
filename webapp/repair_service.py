@@ -1,0 +1,135 @@
+from __future__ import annotations
+
+import logging
+from datetime import timedelta
+from decimal import Decimal, ROUND_HALF_UP
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from config import METAL_COMMANDS
+
+from .forecast_service import load_stored_weekly_forecast, refresh_weekly_forecast_cache
+from .models import MetalPriceDaily
+from .snapshot_service import PRICE_SCALE, TRACKED_METALS, jst_today, load_latest_rows, store_snapshot
+
+logger = logging.getLogger(__name__)
+
+_TRACKED_KEYS = {m.key for m in TRACKED_METALS}
+
+
+def _quantize_delta(value: Decimal) -> Decimal:
+    return value.quantize(PRICE_SCALE, rounding=ROUND_HALF_UP)
+
+
+def _forecast_has_drift(payload: dict[str, Any] | None, *, latest_snapshot_date_iso: str | None) -> bool:
+    if payload is None:
+        return True
+
+    as_of_date = payload.get("as_of_date")
+    if latest_snapshot_date_iso and as_of_date != latest_snapshot_date_iso:
+        return True
+
+    forecast = payload.get("forecast")
+    if not isinstance(forecast, dict):
+        return True
+
+    for metal_key in _TRACKED_KEYS:
+        item = forecast.get(metal_key)
+        if not isinstance(item, dict):
+            return True
+        daily = item.get("daily")
+        if not isinstance(daily, list) or len(daily) == 0:
+            return True
+        first = daily[0] if daily else {}
+        if not isinstance(first, dict):
+            return True
+        if not isinstance(first.get("date"), str):
+            return True
+
+    return False
+
+
+async def repair_metalprice_integrity(
+    session: AsyncSession,
+    *,
+    lookback_days: int = 60,
+    force_forecast_refresh: bool = False,
+) -> dict[str, int]:
+    safe_lookback_days = max(7, min(3650, int(lookback_days)))
+    today = jst_today()
+    start_date = today - timedelta(days=safe_lookback_days - 1)
+
+    stats: dict[str, int] = {
+        "rows_scanned": 0,
+        "rows_fixed": 0,
+        "metal_code_fixed": 0,
+        "delta_fixed": 0,
+        "missing_today_before": 0,
+        "missing_today_after": 0,
+        "forecast_refreshed": 0,
+    }
+
+    # 今日の不足データはAPI再取得で補完を試みる。
+    today_rows_before = list(
+        (await session.scalars(select(MetalPriceDaily).where(MetalPriceDaily.snapshot_date == today))).all()
+    )
+    today_keys_before = {row.metal_key for row in today_rows_before if row.metal_key in _TRACKED_KEYS}
+    missing_today_before = _TRACKED_KEYS - today_keys_before
+    stats["missing_today_before"] = len(missing_today_before)
+    if missing_today_before:
+        await store_snapshot(session, today, skip_if_exists=False)
+
+    stmt = (
+        select(MetalPriceDaily)
+        .where(MetalPriceDaily.snapshot_date >= start_date)
+        .order_by(MetalPriceDaily.metal_key.asc(), MetalPriceDaily.snapshot_date.asc())
+    )
+    rows = list((await session.scalars(stmt)).all())
+    prev_price_by_metal: dict[str, Decimal] = {}
+
+    for row in rows:
+        stats["rows_scanned"] += 1
+        changed = False
+
+        spec = METAL_COMMANDS.get(row.metal_key)
+        if spec is not None and row.metal_code != spec.code:
+            row.metal_code = spec.code
+            changed = True
+            stats["metal_code_fixed"] += 1
+
+        prev_price = prev_price_by_metal.get(row.metal_key)
+        expected_delta = _quantize_delta(row.price_per_gram - prev_price) if prev_price is not None else None
+        if row.delta_from_previous != expected_delta:
+            row.delta_from_previous = expected_delta
+            changed = True
+            stats["delta_fixed"] += 1
+
+        prev_price_by_metal[row.metal_key] = row.price_per_gram
+        if changed:
+            stats["rows_fixed"] += 1
+
+    today_rows_after = list(
+        (await session.scalars(select(MetalPriceDaily).where(MetalPriceDaily.snapshot_date == today))).all()
+    )
+    today_keys_after = {row.metal_key for row in today_rows_after if row.metal_key in _TRACKED_KEYS}
+    stats["missing_today_after"] = len(_TRACKED_KEYS - today_keys_after)
+
+    latest_rows = await load_latest_rows(session)
+    latest_dates = {row.snapshot_date for row in latest_rows.values() if row.metal_key in _TRACKED_KEYS}
+    latest_snapshot_date_iso = None
+    if len(latest_dates) == 1:
+        latest_snapshot_date_iso = next(iter(latest_dates)).isoformat()
+
+    forecast_payload = await load_stored_weekly_forecast(session, days=7)
+    if force_forecast_refresh or _forecast_has_drift(
+        forecast_payload,
+        latest_snapshot_date_iso=latest_snapshot_date_iso,
+    ):
+        await refresh_weekly_forecast_cache(session, horizon_days=7)
+        stats["forecast_refreshed"] = 1
+
+    await session.commit()
+    return stats
+

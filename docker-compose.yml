@@ -40,6 +40,38 @@ services:
       timeout: 5s
       retries: 5
 
+  postgres-user-state-init:
+    image: postgres:16-alpine
+    container_name: sycs-voldemort-postgres-user-state-init
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-secret-init:
+        condition: service_completed_successfully
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        DB_NAME="${USER_STATE_POSTGRES_DB:-user_state_audit}"
+        case "$$DB_NAME" in
+          ''|*[!A-Za-z0-9_]*)
+            echo "Invalid USER_STATE_POSTGRES_DB: $$DB_NAME" >&2
+            exit 1
+            ;;
+        esac
+        export PGPASSWORD="$(cat /shared/postgres_password)"
+        EXISTS="$(psql -h postgres -U "${POSTGRES_USER:-metal_user}" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$$DB_NAME'")"
+        if [ "$$EXISTS" = "1" ]; then
+          echo "User state database already exists: $$DB_NAME"
+        else
+          psql -h postgres -U "${POSTGRES_USER:-metal_user}" -d postgres -c "CREATE DATABASE \"$$DB_NAME\""
+          echo "Created user state database: $$DB_NAME"
+        fi
+    volumes:
+      - shared_secrets:/shared:ro
+
   sycs-voldemort:
     build:
       context: .
@@ -49,6 +81,8 @@ services:
       postgres:
         condition: service_healthy
       postgres-secret-init:
+        condition: service_completed_successfully
+      postgres-user-state-init:
         condition: service_completed_successfully
     environment:
       - TZ=Asia/Tokyo
@@ -70,11 +104,34 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-metal_prices}
       - POSTGRES_USER=${POSTGRES_USER:-metal_user}
       - POSTGRES_PASSWORD_FILE=/shared/postgres_password
+      - USER_STATE_POSTGRES_DB=${USER_STATE_POSTGRES_DB:-user_state_audit}
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-5}
+      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-10}
+      - DB_POOL_TIMEOUT=${DB_POOL_TIMEOUT:-30}
+      - DB_POOL_RECYCLE=${DB_POOL_RECYCLE:-1800}
+      - USER_STATE_SYNC_ON_READY=${USER_STATE_SYNC_ON_READY:-true}
+      - USER_STATE_SYNC_DELAY_SECONDS=${USER_STATE_SYNC_DELAY_SECONDS:-20}
+      - USER_STATE_SYNC_GUILD_PAUSE_SECONDS=${USER_STATE_SYNC_GUILD_PAUSE_SECONDS:-1.0}
+      - USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD=${USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD:-0}
+      - USER_STATE_AUTO_REPAIR_ENABLED=${USER_STATE_AUTO_REPAIR_ENABLED:-true}
+      - USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS=${USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS:-1800}
+      - USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS=${USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS:-180}
+      - USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD=${USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD:-50000}
+      - USER_STATE_AUTO_REPAIR_WRITE_EVENTS=${USER_STATE_AUTO_REPAIR_WRITE_EVENTS:-false}
+      - USER_STATE_RETENTION_DAYS=${USER_STATE_RETENTION_DAYS:-3650}
+      - USER_STATE_CLEANUP_INTERVAL_SECONDS=${USER_STATE_CLEANUP_INTERVAL_SECONDS:-21600}
       # DJAudio-DL: Discord に貼る MP3 ダウンロード URL のベース（外部からアクセス可能な admin の URL）
       - DJAUDIO_BASE_URL=${DJAUDIO_BASE_URL:-http://localhost:5001}
     volumes:
       - app_data:/app/data
       - shared_secrets:/shared:ro
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 512
+    mem_limit: 1g
 
   sycs-voldemort-admin:
     build:
@@ -86,6 +143,8 @@ services:
       postgres:
         condition: service_healthy
       postgres-secret-init:
+        condition: service_completed_successfully
+      postgres-user-state-init:
         condition: service_completed_successfully
     ports:
       - "${ADMIN_HOST_PORT:-5001}:5001"
@@ -105,6 +164,7 @@ services:
       - FLASK_SECURE_COOKIES=${FLASK_SECURE_COOKIES:-false}
       - ADMIN_ASSET_VERSION=${ADMIN_ASSET_VERSION:-20260507-monitoring}
       - ADMIN_LIMITER_STORAGE_URI=${ADMIN_LIMITER_STORAGE_URI:-memory://}
+      - ADMIN_WORKERS=${ADMIN_WORKERS:-2}
       - ADMIN_TPS_TARGET=${ADMIN_TPS_TARGET:-50}
       - ADMIN_MONITOR_INTERVAL_SECONDS=${ADMIN_MONITOR_INTERVAL_SECONDS:-30}
       - ADMIN_DOWNTIME_GRACE_SECONDS=${ADMIN_DOWNTIME_GRACE_SECONDS:-120}
@@ -119,10 +179,22 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-metal_prices}
       - POSTGRES_USER=${POSTGRES_USER:-metal_user}
       - POSTGRES_PASSWORD_FILE=/shared/postgres_password
+      - USER_STATE_POSTGRES_DB=${USER_STATE_POSTGRES_DB:-user_state_audit}
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-5}
+      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-10}
+      - DB_POOL_TIMEOUT=${DB_POOL_TIMEOUT:-30}
+      - DB_POOL_RECYCLE=${DB_POOL_RECYCLE:-1800}
       - ADMIN_PORT=5001
     volumes:
       - app_data:/app/data
       - shared_secrets:/shared:ro
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 512
+    mem_limit: 768m
 
   sycs-voldemort-web:
     build:
@@ -138,11 +210,16 @@ services:
     environment:
       - TZ=Asia/Tokyo
       - METALPRICE_API_KEY=${METALPRICE_API_KEY}
+      - WEB_WORKERS=${WEB_WORKERS:-2}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_DB=${POSTGRES_DB:-metal_prices}
       - POSTGRES_USER=${POSTGRES_USER:-metal_user}
       - POSTGRES_PASSWORD_FILE=/shared/postgres_password
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-5}
+      - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-10}
+      - DB_POOL_TIMEOUT=${DB_POOL_TIMEOUT:-30}
+      - DB_POOL_RECYCLE=${DB_POOL_RECYCLE:-1800}
       - API_RATE_LIMIT_PER_MINUTE=${API_RATE_LIMIT_PER_MINUTE:-120}
       - API_CALCULATE_RATE_LIMIT_PER_MINUTE=${API_CALCULATE_RATE_LIMIT_PER_MINUTE:-60}
       - API_RESPONSE_CACHE_SECONDS=${API_RESPONSE_CACHE_SECONDS:-20}
@@ -151,6 +228,10 @@ services:
       - FORECAST_REFRESH_MINUTE_JST=${FORECAST_REFRESH_MINUTE_JST:-5}
       - FORECAST_SARIMAX_ENABLED=${FORECAST_SARIMAX_ENABLED:-true}
       - FORECAST_SARIMAX_MIN_HISTORY=${FORECAST_SARIMAX_MIN_HISTORY:-24}
+      - METAL_AUTO_REPAIR_ENABLED=${METAL_AUTO_REPAIR_ENABLED:-true}
+      - METAL_AUTO_REPAIR_INTERVAL_MINUTES=${METAL_AUTO_REPAIR_INTERVAL_MINUTES:-30}
+      - METAL_AUTO_REPAIR_LOOKBACK_DAYS=${METAL_AUTO_REPAIR_LOOKBACK_DAYS:-60}
+      - METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH=${METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH:-false}
       - PUSH_NOTIFY_HOUR_JST=${PUSH_NOTIFY_HOUR_JST:-11}
       - PUSH_NOTIFY_MINUTE_JST=${PUSH_NOTIFY_MINUTE_JST:-0}
       # マルチインスタンス時: スケジューラ担当のみ true
@@ -177,6 +258,13 @@ services:
     volumes:
       - app_data:/app/data
       - shared_secrets:/shared
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 512
+    mem_limit: 1g
 
 volumes:
   postgres_data:

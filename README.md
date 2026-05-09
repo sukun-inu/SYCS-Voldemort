@@ -27,6 +27,8 @@ Discord Bot（運用支援）+ FastAPI 管理 UI + FastAPI Web トラッカー�
 - `user_state_current`: 各ユーザーの最新状態（在籍/BAN/Timeout/ロール/権限）を保持
 - `user_state_event`: 参加/退出、BAN/KICK、VC入退室、ロール変更などを時系列保存
 - 保持期間は既定10年（`USER_STATE_RETENTION_DAYS=3650`）で、古い履歴は定期削除
+- 価格データDB（`POSTGRES_DB`）とは別DB（既定 `USER_STATE_POSTGRES_DB=user_state_audit`）で管理可能
+- DB不整合時はテーブル再生成を試み、定期突合で同期ズレ（在籍/BAN/Timeout/JSON破損）を自動補正
 - 管理UIの `/admin/users/state` で検索・閲覧可能
 
 ### 1.4 ウェルカム / グッバイ
@@ -185,8 +187,18 @@ docker compose up -d --build
 | `SETTINGS_LOCK_TIMEOUT_SECONDS` | 任意 | `settings.json` 更新ロック待機秒数（既定 `10`） |
 | `SETTINGS_LOCK_STALE_SECONDS` | 任意 | 古いロックファイルを破棄する閾値秒数（既定 `30`） |
 | `BOT_BACKGROUND_WORKER` | 任意 | `true/false`。定期ジョブ実行ノードかどうか（既定 `true`） |
-| `POSTGRES_HOST`/`POSTGRES_PORT`/`POSTGRES_DB`/`POSTGRES_USER` | ユーザー状態監査を使う場合推奨 | 状態監査DB接続先 |
-| `POSTGRES_PASSWORD` or `POSTGRES_PASSWORD_FILE` | ユーザー状態監査を使う場合推奨 | 状態監査DBパスワード |
+| `USER_STATE_POSTGRES_DSN` | 任意 | ユーザー状態監査DB接続先をDSNで直指定 |
+| `USER_STATE_POSTGRES_HOST`/`USER_STATE_POSTGRES_PORT`/`USER_STATE_POSTGRES_DB`/`USER_STATE_POSTGRES_USER` | 任意 | ユーザー状態監査DB接続先（既定DB名: `user_state_audit`） |
+| `USER_STATE_POSTGRES_PASSWORD` or `USER_STATE_POSTGRES_PASSWORD_FILE` | 任意 | ユーザー状態監査DBパスワード |
+| `USER_STATE_SYNC_ON_READY` | 任意 | 起動時にDiscord状態をDBへ同期（既定 `true`） |
+| `USER_STATE_SYNC_DELAY_SECONDS` | 任意 | 起動時同期の遅延秒（既定 `20`） |
+| `USER_STATE_SYNC_GUILD_PAUSE_SECONDS` | 任意 | ギルド間同期の待機秒（既定 `1.0`） |
+| `USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD` | 任意 | 同期時の取得メンバー上限（`0`で無制限） |
+| `USER_STATE_AUTO_REPAIR_ENABLED` | 任意 | 定期自動修復ループを有効化（既定 `true`） |
+| `USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS` | 任意 | 定期修復の実行間隔秒（既定 `1800`） |
+| `USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS` | 任意 | 起動後、最初の定期修復までの待機秒（既定 `180`） |
+| `USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD` | 任意 | 1ギルドあたりの整合性修復対象上限（既定 `50000`） |
+| `USER_STATE_AUTO_REPAIR_WRITE_EVENTS` | 任意 | 定期修復時にも同期イベントを書き込む（既定 `false`） |
 | `USER_STATE_RETENTION_DAYS` | 任意 | 状態監査履歴の保持日数（既定 `3650`） |
 | `USER_STATE_CLEANUP_INTERVAL_SECONDS` | 任意 | 古い履歴削除の実行間隔秒（既定 `21600`） |
 | `DJAUDIO_BASE_URL` | DJAudio時推奨 | MP3 配信 URL ベース |
@@ -205,8 +217,9 @@ docker compose up -d --build
 | `ADMIN_FLASK_SECRET_KEY` | Yes | セッション署名キー |
 | `ADMIN_PORT` | 任意 | デフォルト `5001` |
 | `ADMIN_LIMITER_STORAGE_URI` | 任意 | レート制限ストレージ（既定 `memory://`、分散時はRedis推奨） |
-| `POSTGRES_HOST`/`POSTGRES_PORT`/`POSTGRES_DB`/`POSTGRES_USER` | ユーザー状態監査を表示する場合推奨 | 状態監査DB接続先 |
-| `POSTGRES_PASSWORD` or `POSTGRES_PASSWORD_FILE` | ユーザー状態監査を表示する場合推奨 | 状態監査DBパスワード |
+| `USER_STATE_POSTGRES_DSN` | 任意 | ユーザー状態監査DB接続先をDSNで直指定 |
+| `USER_STATE_POSTGRES_HOST`/`USER_STATE_POSTGRES_PORT`/`USER_STATE_POSTGRES_DB`/`USER_STATE_POSTGRES_USER` | 任意 | ユーザー状態監査DB接続先（既定DB名: `user_state_audit`） |
+| `USER_STATE_POSTGRES_PASSWORD` or `USER_STATE_POSTGRES_PASSWORD_FILE` | 任意 | ユーザー状態監査DBパスワード |
 | `DEV_USER_ID` | 任意 | 開発者パネル（`/admin/dev`）にアクセスできる Discord ユーザーID。**未設定時はパネル全体が 404 で無効化される** |
 
 ### 5.3 Web トラッカー（`web_main.py`）
@@ -215,6 +228,10 @@ docker compose up -d --build
 |---|---|---|
 | `WEB_PORT` | 任意 | デフォルト `8000` |
 | `WEB_SCHEDULER_ENABLED` | 任意 | `true/false`。日次更新/Push通知ジョブを実行するか（既定 `true`） |
+| `METAL_AUTO_REPAIR_ENABLED` | 任意 | `true/false`。metalprice DBの定期自動修復を実行するか（既定 `true`） |
+| `METAL_AUTO_REPAIR_INTERVAL_MINUTES` | 任意 | 自動修復の実行間隔（分、既定 `30`） |
+| `METAL_AUTO_REPAIR_LOOKBACK_DAYS` | 任意 | 自動修復で整合性チェックする履歴日数（既定 `60`） |
+| `METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH` | 任意 | 各修復時に予測キャッシュ再生成を強制（既定 `false`） |
 | `TRUST_CF_HEADERS` | 任意 | `true/false`。CFヘッダを信頼するか（既定 `false`） |
 | `REQUIRE_CF_CONNECTING_IP` | 任意 | `true/false`。CFヘッダ必須化（既定 `false`） |
 | `TRUSTED_PROXY_CIDRS` | 任意 | Forwardedヘッダを信頼するプロキシCIDR（既定 `127.0.0.1/32,::1/128`） |
@@ -224,6 +241,8 @@ docker compose up -d --build
 | `POSTGRES_*` | 通常必要 | DB 接続設定 |
 
 詳細な環境変数は `config.py` と `docker-compose.yml` を参照してください。
+
+metalprice 側の定期処理（日次更新/予測更新/自動修復）は `sycs-voldemort-web` コンテナ内の `webapp/app.py` のスケジューラで実行されます。
 
 ### 5.4 マルチインスタンス運用の推奨
 
@@ -350,7 +369,8 @@ docker compose up -d --build
 - `data/logs/bot.log`: Discord Bot のログ（最大 1MB × 3世代）
 - `data/logs/admin.log`: 管理 UI のログ（最大 1MB × 3世代）
 - `data/djaudio_cache`: DJAudio の一時 MP3 キャッシュ
-- `migrations/` + DB: Web トラッカー + ユーザー状態監査の永続データ
+- `migrations/` + DB（`POSTGRES_DB`）: Web トラッカーの永続データ
+- DB（`USER_STATE_POSTGRES_DB`）: ユーザー状態監査データ
 
 > `data/` の保存先は環境変数 `SETTINGS_DIR` で変更できます。Docker 運用時は Bot と管理 UI でボリュームを共有することでログビューアが機能します。
 

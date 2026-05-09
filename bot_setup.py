@@ -19,7 +19,11 @@ from services.logging_service import log_action
 from services.news_service import run_news_feeds
 from services.reaction_role_service import handle_reaction_add, handle_reaction_remove
 from services.security_service import handle_security_for_message, handle_security_for_voice_join
-from services.user_state_service import record_user_state_event
+from services.user_state_service import (
+    record_user_state_event,
+    repair_user_state_integrity,
+    sync_guild_user_states,
+)
 from config import JST as _JST
 from services.settings_store import get_vc_notify_channel_id, get_vc_notify_role_id
 from services.sticky_service import handle_sticky, process_pending_stickies
@@ -39,6 +43,30 @@ def _env_bool(name: str, default: bool) -> bool:
 
 
 _BOT_BACKGROUND_WORKER = _env_bool("BOT_BACKGROUND_WORKER", True)
+_USER_STATE_SYNC_ON_READY = _env_bool("USER_STATE_SYNC_ON_READY", True)
+_USER_STATE_SYNC_DELAY_SECONDS = max(0, int(os.getenv("USER_STATE_SYNC_DELAY_SECONDS", "20")))
+_USER_STATE_SYNC_GUILD_PAUSE_SECONDS = max(
+    0.0,
+    float(os.getenv("USER_STATE_SYNC_GUILD_PAUSE_SECONDS", "1.0")),
+)
+_USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD = max(
+    0,
+    int(os.getenv("USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD", "0")),
+)
+_USER_STATE_AUTO_REPAIR_ENABLED = _env_bool("USER_STATE_AUTO_REPAIR_ENABLED", True)
+_USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS = max(
+    300,
+    int(os.getenv("USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS", "1800")),
+)
+_USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS = max(
+    0,
+    int(os.getenv("USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS", "180")),
+)
+_USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD = max(
+    100,
+    int(os.getenv("USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD", "50000")),
+)
+_USER_STATE_AUTO_REPAIR_WRITE_EVENTS = _env_bool("USER_STATE_AUTO_REPAIR_WRITE_EVENTS", False)
 
 _SIGNAL_DIR = Path(os.getenv("SETTINGS_DIR", str(Path(__file__).parent / "data"))) / "_dev_signals"
 
@@ -62,6 +90,11 @@ def create_bot() -> Bot:
 
 def setup_events(bot: Bot) -> None:
     _ws_task: asyncio.Task | None = None
+    _user_state_sync_task: asyncio.Task | None = None
+    _user_state_repair_task: asyncio.Task | None = None
+    _user_state_sync_started = False
+    _user_state_repair_started = False
+    _user_state_sync_lock = asyncio.Lock()
     _vc_join_times: dict[tuple[int, int], float] = {}  # (guild_id, user_id) → 入室時刻
     _vc_last_mention: dict[int, float] = {}            # guild_id → 最後にロールメンションを送った時刻
 
@@ -104,6 +137,168 @@ def setup_events(bot: Bot) -> None:
             if attempt < retries:
                 await asyncio.sleep(retry_delay)
         return None
+
+    async def _fetch_guild_members_for_sync(guild: discord.Guild) -> tuple[list[discord.Member], bool]:
+        members: list[discord.Member] = []
+        fetched_all = False
+        fetch_limit = _USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD or None
+
+        try:
+            async for member in guild.fetch_members(limit=fetch_limit):
+                members.append(member)
+            fetched_all = fetch_limit is None
+        except discord.Forbidden:
+            logger.warning(
+                "[BOT_SETUP] user_state sync: fetch_members forbidden guild=%s. Fallback to cache.",
+                guild.id,
+            )
+            members = list(guild.members)
+            fetched_all = False
+        except Exception as e:
+            logger.exception(
+                "[BOT_SETUP] user_state sync: fetch_members error guild=%s err=%s",
+                guild.id,
+                e,
+            )
+            members = list(guild.members)
+            fetched_all = False
+
+        return members, fetched_all
+
+    async def _fetch_guild_bans_for_sync(guild: discord.Guild) -> list[discord.abc.User]:
+        users: list[discord.abc.User] = []
+        try:
+            async for entry in guild.bans(limit=None):
+                users.append(entry.user)
+        except discord.Forbidden:
+            logger.warning(
+                "[BOT_SETUP] user_state sync: bans forbidden guild=%s. Skip ban sync.",
+                guild.id,
+            )
+        except Exception as e:
+            logger.exception(
+                "[BOT_SETUP] user_state sync: bans fetch error guild=%s err=%s",
+                guild.id,
+                e,
+            )
+        return users
+
+    async def _sync_user_state_all_guilds(
+        *,
+        source: str,
+        write_events_on_sync: bool,
+        run_integrity_repair: bool,
+    ) -> None:
+        async with _user_state_sync_lock:
+            logger.info(
+                "[BOT_SETUP] user_state sync started source=%s guilds=%s",
+                source,
+                len(bot.guilds),
+            )
+            total_members = 0
+            total_bans = 0
+            total_created = 0
+            total_updated = 0
+            total_left = 0
+            total_events = 0
+            total_repair_rows = 0
+            total_repair_fixed = 0
+
+            for guild in bot.guilds:
+                try:
+                    members, fetched_all = await _fetch_guild_members_for_sync(guild)
+                    banned_users = await _fetch_guild_bans_for_sync(guild)
+
+                    stats = await sync_guild_user_states(
+                        guild_id=guild.id,
+                        members=members,
+                        banned_users=banned_users,
+                        source=source,
+                        reconcile_missing=fetched_all,
+                        write_events_on_sync=write_events_on_sync,
+                    )
+                    total_members += stats.get("members_seen", 0)
+                    total_bans += stats.get("bans_seen", 0)
+                    total_created += stats.get("created", 0)
+                    total_updated += stats.get("updated", 0)
+                    total_left += stats.get("left_reconciled", 0)
+                    total_events += stats.get("events_written", 0)
+
+                    repair_stats: dict[str, int] | None = None
+                    if run_integrity_repair:
+                        repair_stats = await repair_user_state_integrity(
+                            guild_id=guild.id,
+                            max_rows=_USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD,
+                        )
+                        total_repair_rows += repair_stats.get("rows_scanned", 0)
+                        total_repair_fixed += repair_stats.get("rows_fixed", 0)
+
+                    logger.info(
+                        "[BOT_SETUP] user_state sync guild=%s source=%s members=%s bans=%s created=%s updated=%s left=%s events=%s fetched_all=%s repaired_rows=%s repaired_fixed=%s",
+                        guild.id,
+                        source,
+                        stats.get("members_seen", 0),
+                        stats.get("bans_seen", 0),
+                        stats.get("created", 0),
+                        stats.get("updated", 0),
+                        stats.get("left_reconciled", 0),
+                        stats.get("events_written", 0),
+                        fetched_all,
+                        0 if repair_stats is None else repair_stats.get("rows_scanned", 0),
+                        0 if repair_stats is None else repair_stats.get("rows_fixed", 0),
+                    )
+                except Exception as e:
+                    logger.exception(
+                        "[BOT_SETUP] user_state sync failed guild=%s source=%s err=%s",
+                        guild.id,
+                        source,
+                        e,
+                    )
+
+                if _USER_STATE_SYNC_GUILD_PAUSE_SECONDS > 0:
+                    await asyncio.sleep(_USER_STATE_SYNC_GUILD_PAUSE_SECONDS)
+
+            logger.info(
+                "[BOT_SETUP] user_state sync completed source=%s members=%s bans=%s created=%s updated=%s left=%s events=%s repaired_rows=%s repaired_fixed=%s",
+                source,
+                total_members,
+                total_bans,
+                total_created,
+                total_updated,
+                total_left,
+                total_events,
+                total_repair_rows,
+                total_repair_fixed,
+            )
+
+    async def _sync_user_state_on_ready() -> None:
+        try:
+            if _USER_STATE_SYNC_DELAY_SECONDS > 0:
+                await asyncio.sleep(_USER_STATE_SYNC_DELAY_SECONDS)
+            await _sync_user_state_all_guilds(
+                source="on_ready",
+                write_events_on_sync=True,
+                run_integrity_repair=True,
+            )
+        except Exception as e:
+            logger.exception("[BOT_SETUP] user_state sync fatal error: %s", e)
+
+    async def _user_state_auto_repair_loop() -> None:
+        try:
+            if _USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS > 0:
+                await asyncio.sleep(_USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS)
+            while not bot.is_closed():
+                await _sync_user_state_all_guilds(
+                    source="auto_repair",
+                    write_events_on_sync=_USER_STATE_AUTO_REPAIR_WRITE_EVENTS,
+                    run_integrity_repair=True,
+                )
+                await asyncio.sleep(_USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS)
+        except asyncio.CancelledError:
+            logger.info("[BOT_SETUP] user_state auto_repair loop cancelled")
+            raise
+        except Exception as e:
+            logger.exception("[BOT_SETUP] user_state auto_repair fatal error: %s", e)
 
     # --------------------------
     # ステータス更新
@@ -174,6 +369,12 @@ def setup_events(bot: Bot) -> None:
                     if _ws_task and not _ws_task.done():
                         _ws_task.cancel()
                     _ws_task = asyncio.create_task(run_earthquake_ws(bot))
+                elif task_name == "user_state_repair":
+                    await _sync_user_state_all_guilds(
+                        source="manual_signal",
+                        write_events_on_sync=_USER_STATE_AUTO_REPAIR_WRITE_EVENTS,
+                        run_integrity_repair=True,
+                    )
                 elif task_name == "eq_replay":
                     from services.earthquake_service import _notify_all_guilds
                     event = json.loads(sig_content)
@@ -219,7 +420,8 @@ def setup_events(bot: Bot) -> None:
 
     @bot.event
     async def on_ready():
-        nonlocal _ws_task
+        nonlocal _ws_task, _user_state_sync_task, _user_state_sync_started
+        nonlocal _user_state_repair_task, _user_state_repair_started
         logger.info("[BOT] Logged in as %s", bot.user)
         await bot.tree.sync()
         if not update_status.is_running():
@@ -237,6 +439,22 @@ def setup_events(bot: Bot) -> None:
             logger.info("[BOT] background worker enabled: periodic jobs are active")
         else:
             logger.info("[BOT] BOT_BACKGROUND_WORKER=false: periodic background jobs are disabled")
+
+        if _USER_STATE_SYNC_ON_READY and not _user_state_sync_started:
+            _user_state_sync_started = True
+            _user_state_sync_task = asyncio.create_task(_sync_user_state_on_ready())
+            logger.info(
+                "[BOT] USER_STATE_SYNC_ON_READY=true: background sync task started (delay=%ss)",
+                _USER_STATE_SYNC_DELAY_SECONDS,
+            )
+
+        if _USER_STATE_AUTO_REPAIR_ENABLED and not _user_state_repair_started:
+            _user_state_repair_started = True
+            _user_state_repair_task = asyncio.create_task(_user_state_auto_repair_loop())
+            logger.info(
+                "[BOT] USER_STATE_AUTO_REPAIR_ENABLED=true: periodic repair started (interval=%ss)",
+                _USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS,
+            )
 
     # --------------------------
     # メッセージ（司令塔）
