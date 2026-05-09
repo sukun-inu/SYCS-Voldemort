@@ -87,7 +87,7 @@ def get_meta(token: str) -> dict | None:
     except json.JSONDecodeError:
         return None
 
-    if datetime.now(timezone.utc).timestamp() > meta["expires_at"]:
+    if datetime.now(timezone.utc).timestamp() > meta.get("expires_at", 0):
         _delete_entry(token)
         return None
 

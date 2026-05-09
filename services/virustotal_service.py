@@ -151,16 +151,22 @@ async def vt_check_file(content: bytes) -> Dict[str, Any]:
             tmp_path = tmp.name
 
         def sync_scan():
-            with vt.Client(VIRUSTOTAL_API_KEY) as client:
-                with open(tmp_path, "rb") as f:
-                    analysis = client.scan_file(f, wait_for_completion=True)
-                stats = analysis.stats
-                return {
-                    "status": "ok",
-                    "type": "file",
-                    "malicious": stats.get("malicious", 0),
-                    "suspicious": stats.get("suspicious", 0),
-                }
+            try:
+                with vt.Client(VIRUSTOTAL_API_KEY) as client:
+                    with open(tmp_path, "rb") as f:
+                        analysis = client.scan_file(f, wait_for_completion=True)
+                    stats = analysis.stats
+                    return {
+                        "status": "ok",
+                        "type": "file",
+                        "malicious": stats.get("malicious", 0),
+                        "suspicious": stats.get("suspicious", 0),
+                    }
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
         return await asyncio.to_thread(sync_scan)
 

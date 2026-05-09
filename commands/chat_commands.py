@@ -49,9 +49,9 @@ async def handle_chatgpt_message(bot: discord.Client, message: discord.Message):
     _user_last_used[key] = time.time()
     _cleanup_stale_instances()
 
-    # trigger_typing() は1回だけ送信する（typing()コンテキストは5秒ごとに再送して429になるため使わない）
+    # typing()コンテキストは5秒ごとに再送して429になるため、1回だけ直接送る
     try:
-        await message.channel.trigger_typing()
+        await message.channel._state.http.send_typing(message.channel.id)
     except discord.HTTPException:
         pass
 
