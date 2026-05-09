@@ -67,7 +67,7 @@ async def handle_chatgpt_message(bot: discord.Client, message: discord.Message):
         await send_large_message(message.channel, response)
 
     # typing コンテキスト外でログ出力（API呼び出しの競合を避ける）
-    preview = response[:1800] + ("..." if len(response) > 1800 else "")
+    preview = response[:1800]
     await log_action(
         bot,
         message.guild.id,
@@ -76,7 +76,7 @@ async def handle_chatgpt_message(bot: discord.Client, message: discord.Message):
         user=message.author,
         fields={
             "チャンネル": message.channel.mention,
-            "入力": (message.content or "(内容なし)")[:500],
-            "出力プレビュー": preview[:500],
+            "入力": (message.content or "(内容なし)")[:1024],
+            "出力プレビュー": preview[:1024],
         },
     )

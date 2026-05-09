@@ -165,18 +165,34 @@ async def log_action(
         user_color = await _user_avatar_color(user)
     base_color = embed_color or user_color or _level_color(level)
 
+    # Discord API の Embed 制限値
+    # タイトル: 256文字、説明: 4096文字、著者名: 256文字、フッター: 2048文字
+    title = f"[{level}] ボットログ"
+    if len(title) > 256:
+        title = title[:256]
+    
+    description = message
+    if len(description) > 4096:
+        description = description[:4093] + "..."
+    
     embed = discord.Embed(
-        title=f"[{level}] ボットログ",
-        description=message,
+        title=title,
+        description=description,
         color=base_color,
     )
 
     if user is not None:
         try:
             avatar_url = str(user.display_avatar.url)  # type: ignore[attr-defined]
-            embed.set_author(name=str(user), icon_url=avatar_url)
+            author_name = str(user)
+            if len(author_name) > 256:
+                author_name = author_name[:253] + "..."
+            embed.set_author(name=author_name, icon_url=avatar_url)
         except Exception:
-            embed.set_author(name=str(user))
+            author_name = str(user)
+            if len(author_name) > 256:
+                author_name = author_name[:253] + "..."
+            embed.set_author(name=author_name)
 
     if fields:
         for name, value in fields.items():
@@ -186,7 +202,11 @@ async def log_action(
                 truncated_value += "... (省略)"
             embed.add_field(name=name, value=truncated_value, inline=False)
 
-    embed.set_footer(text=f"時刻 (JST): {jst_now.strftime('%Y-%m-%d %H:%M:%S')}")
+    # フッターも 2048 文字制限を適用
+    footer_text = f"時刻 (JST): {jst_now.strftime('%Y-%m-%d %H:%M:%S')}"
+    if len(footer_text) > 2048:
+        footer_text = footer_text[:2045] + "..."
+    embed.set_footer(text=footer_text)
 
     await channel.send(embed=embed)
 

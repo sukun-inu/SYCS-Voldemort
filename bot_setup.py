@@ -157,13 +157,14 @@ def setup_events(bot: Bot) -> None:
         fields = {
             "送信日時": message.created_at.astimezone(_JST).strftime("%Y/%m/%d %H:%M")
             if message.created_at else "(不明)",
-            "内容": message.content or "(内容なし)",
+            "内容": (message.content or "(内容なし)")[:1024],
             "ユーザーID": str(message.author.id) if message.author else "不明",
             "メッセージID": str(message.id),
         }
 
         if message.attachments:
-            fields["添付ファイル"] = "\n".join(a.url for a in message.attachments)
+            attachment_urls = "\n".join(a.url for a in message.attachments)
+            fields["添付ファイル"] = attachment_urls[:1024] + ("... (省略)" if len(attachment_urls) > 1024 else "")
 
         try:
             await log_action(
