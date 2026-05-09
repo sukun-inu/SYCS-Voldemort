@@ -23,6 +23,13 @@ _SCALE_LABELS: dict[int, str] = {
     50: "震度5弱", 55: "震度5強", 60: "震度6弱", 65: "震度6強", 70: "震度7",
 }
 
+_SCALE_BADGE: dict[int, str] = {
+    10: "bg-secondary",       20: "bg-secondary",       30: "bg-info text-dark",
+    40: "bg-warning text-dark", 45: "bg-warning text-dark",
+    50: "bg-orange",          55: "bg-orange",
+    60: "bg-danger",          65: "bg-danger",          70: "bg-danger",
+}
+
 _VALID_TASKS = {
     "news_feeds":            "ニュースフィードを今すぐ実行",
     "sticky":                "スティッキーペンディング処理を実行",
@@ -132,6 +139,7 @@ async def dev_index(request: Request, _=Depends(_check_dev)):
         valid_tasks=_VALID_TASKS,
         eq_history=eq_history,
         scale_labels=_SCALE_LABELS,
+        scale_badge=_SCALE_BADGE,
     )
 
 

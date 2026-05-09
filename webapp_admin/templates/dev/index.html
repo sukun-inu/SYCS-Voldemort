@@ -1,117 +1,160 @@
 {% extends "base.html" %}
 {% block title %}開発者パネル{% endblock %}
+{% block extra_head %}
+<style>
+.bg-orange { background-color: #e55000 !important; color: #fff !important; }
+</style>
+{% endblock %}
 {% block content %}
 
 <div class="page-header">
   <div>
     <p class="page-kicker">Developer</p>
     <h1 class="page-title"><i class="bi bi-bug-fill"></i>開発者デバッグパネル</h1>
-    <p class="page-description">このページはID <code>{{ session.user.id }}</code> 専用です。本番データに直接影響します。</p>
+    <p class="page-description">ID <code>{{ session.user.id }}</code> 専用 — 本番データに直接影響します。</p>
   </div>
   <span class="badge bg-danger fs-6 align-self-start">DEV ONLY</span>
 </div>
 
-{# ── メッセージ ───────────────────────────────────── #}
-<section id="message" class="section-card mb-4">
-  <div class="section-card-header">
-    <div>
-      <h2 class="section-card-title"><i class="bi bi-send-fill"></i>メッセージ送信 / 転送</h2>
-      <p class="section-card-subtitle">Botとしてチャンネルにメッセージを送信、またはメッセージURLを転送します。</p>
-    </div>
-  </div>
+{# ── タブナビ ─────────────────────────────────────── #}
+<ul class="nav nav-tabs mb-0" id="devTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="tab-send-tab" data-bs-toggle="tab"
+            data-bs-target="#tab-send" type="button" role="tab">
+      <i class="bi bi-send me-1"></i>送信
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-eq-tab" data-bs-toggle="tab"
+            data-bs-target="#tab-eq" type="button" role="tab">
+      <i class="bi bi-broadcast-pin me-1"></i>地震速報
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-tasks-tab" data-bs-toggle="tab"
+            data-bs-target="#tab-tasks" type="button" role="tab">
+      <i class="bi bi-play-circle me-1"></i>タスク
+      {% if pending_signals %}
+      <span class="badge bg-warning text-dark ms-1">{{ pending_signals | length }}</span>
+      {% endif %}
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-settings-tab" data-bs-toggle="tab"
+            data-bs-target="#tab-settings" type="button" role="tab">
+      <i class="bi bi-gear me-1"></i>設定
+      <span class="badge bg-secondary ms-1">{{ settings_guild_ids | length }}</span>
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-cache-tab" data-bs-toggle="tab"
+            data-bs-target="#tab-cache" type="button" role="tab">
+      <i class="bi bi-music-note-beamed me-1"></i>キャッシュ
+      {% if cache_entries %}
+      <span class="badge bg-secondary ms-1">{{ cache_entries | length }}</span>
+      {% endif %}
+    </button>
+  </li>
+</ul>
 
-  <div class="row g-4 p-3">
-    <div class="col-lg-6">
-      <h3 class="fs-6 fw-bold mb-3">送信</h3>
-      <form method="post" action="{{ url_for('dev.send_message') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <div class="mb-3">
-          <label class="form-label">チャンネルID</label>
-          <input type="text" name="channel_id" class="form-control font-monospace"
-                 placeholder="1234567890123456789" pattern="\d+" required>
+<div class="tab-content section-card rounded-top-0 mb-4" id="devTabsContent">
+
+  {# ── 送信タブ ─────────────────────────────────── #}
+  <div class="tab-pane fade show active p-4" id="tab-send" role="tabpanel">
+
+    {# メッセージ送信 / 転送 #}
+    <h3 class="fs-6 fw-semibold text-body-secondary text-uppercase mb-3 d-flex align-items-center gap-2">
+      <i class="bi bi-chat-dots"></i>メッセージ
+    </h3>
+    <div class="row g-4 mb-4">
+      <div class="col-lg-6">
+        <div class="p-3 rounded h-100" style="background:var(--surface-muted);border:1px solid var(--separator)">
+          <p class="small fw-bold mb-3">直接送信</p>
+          <form method="post" action="{{ url_for('dev.send_message') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="mb-2">
+              <label class="form-label form-label-sm">チャンネルID</label>
+              <input type="text" name="channel_id" class="form-control form-control-sm font-monospace"
+                     placeholder="1234567890123456789" pattern="\d+" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label form-label-sm">内容</label>
+              <textarea name="content" class="form-control form-control-sm" rows="3" maxlength="2000"
+                        placeholder="Discordのmarkdownが使えます。" required></textarea>
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary">
+              <i class="bi bi-send me-1"></i>送信
+            </button>
+          </form>
         </div>
-        <div class="mb-3">
-          <label class="form-label">メッセージ内容</label>
-          <textarea name="content" class="form-control" rows="4" maxlength="2000"
-                    placeholder="Discordのmarkdownが使えます。" required></textarea>
+      </div>
+      <div class="col-lg-6">
+        <div class="p-3 rounded h-100" style="background:var(--surface-muted);border:1px solid var(--separator)">
+          <p class="small fw-bold mb-3">メッセージ転送</p>
+          <form method="post" action="{{ url_for('dev.forward_message') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="mb-2">
+              <label class="form-label form-label-sm">元メッセージURL</label>
+              <input type="url" name="message_url" class="form-control form-control-sm font-monospace"
+                     placeholder="https://discord.com/channels/…/…/…" required>
+              <div class="form-text">右クリック → メッセージリンクをコピー</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label form-label-sm">転送先チャンネルID</label>
+              <input type="text" name="target_channel_id" class="form-control form-control-sm font-monospace"
+                     placeholder="1234567890123456789" pattern="\d+" required>
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary">
+              <i class="bi bi-forward-fill me-1"></i>転送
+            </button>
+          </form>
         </div>
-        <button type="submit" class="btn btn-primary">
-          <i class="bi bi-send me-2"></i>送信
-        </button>
-      </form>
+      </div>
     </div>
 
-    <div class="col-lg-6">
-      <h3 class="fs-6 fw-bold mb-3">転送</h3>
-      <form method="post" action="{{ url_for('dev.forward_message') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <div class="mb-3">
-          <label class="form-label">元メッセージURL</label>
-          <input type="url" name="message_url" class="form-control font-monospace"
-                 placeholder="https://discord.com/channels/…/…/…" required>
-          <div class="form-text">右クリック → メッセージリンクをコピー</div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">転送先チャンネルID</label>
-          <input type="text" name="target_channel_id" class="form-control font-monospace"
-                 placeholder="1234567890123456789" pattern="\d+" required>
-        </div>
-        <button type="submit" class="btn btn-primary">
-          <i class="bi bi-forward-fill me-2"></i>転送
-        </button>
-      </form>
-    </div>
-  </div>
-</section>
+    <hr class="my-3">
 
-{# ── ニュース手動送信 ─────────────────────────────── #}
-<section id="news" class="section-card mb-4">
-  <div class="section-card-header">
-    <div>
-      <h2 class="section-card-title"><i class="bi bi-newspaper"></i>ニュース手動送信</h2>
-      <p class="section-card-subtitle">Google News RSSから直近記事を取得してチャンネルに送信します。</p>
-    </div>
-  </div>
-  <div class="p-3">
-    <form method="post" action="{{ url_for('dev.news_send') }}" class="row g-3">
+    {# ニュース手動送信 #}
+    <h3 class="fs-6 fw-semibold text-body-secondary text-uppercase mb-3 d-flex align-items-center gap-2">
+      <i class="bi bi-newspaper"></i>ニュース手動送信
+    </h3>
+    <p class="small text-body-secondary mb-3">Google News RSS から直近1件を取得し、Groq要約付きでチャンネルに送信します。</p>
+    <form method="post" action="{{ url_for('dev.news_send') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <div class="col-lg-5">
-        <label class="form-label">検索クエリ</label>
-        <input type="text" name="query" class="form-control"
-               placeholder="例: 地震 OR Python OR AI" maxlength="200" required>
-      </div>
-      <div class="col-lg-4">
-        <label class="form-label">送信先チャンネルID</label>
-        <input type="text" name="channel_id" class="form-control font-monospace"
-               placeholder="1234567890123456789" pattern="\d+" required>
-      </div>
-      <div class="col-lg-3 d-flex align-items-end">
-        <button type="submit" class="btn btn-primary w-100">
-          <i class="bi bi-send me-2"></i>最新記事を送信
-        </button>
+      <div class="row g-3 align-items-end">
+        <div class="col-sm-5">
+          <label class="form-label form-label-sm">検索クエリ</label>
+          <input type="text" name="query" class="form-control form-control-sm"
+                 placeholder="例: 地震 OR Python" maxlength="200" required>
+        </div>
+        <div class="col-sm-4">
+          <label class="form-label form-label-sm">送信先チャンネルID</label>
+          <input type="text" name="channel_id" class="form-control form-control-sm font-monospace"
+                 placeholder="1234567890123456789" pattern="\d+" required>
+        </div>
+        <div class="col-sm-3">
+          <button type="submit" class="btn btn-sm btn-primary w-100">
+            <i class="bi bi-send me-1"></i>最新記事を送信
+          </button>
+        </div>
       </div>
     </form>
   </div>
-</section>
 
-{# ── 地震速報リプレイ ──────────────────────────────── #}
-<section id="earthquake" class="section-card mb-4">
-  <div class="section-card-header">
-    <div>
-      <h2 class="section-card-title"><i class="bi bi-broadcast-pin"></i>地震速報リプレイ</h2>
-      <p class="section-card-subtitle">P2PQuake 履歴から直近の確定地震情報を全ギルドへ再送信します。</p>
-    </div>
-  </div>
-  <div class="p-3">
+  {# ── 地震速報タブ ──────────────────────────────── #}
+  <div class="tab-pane fade p-4" id="tab-eq" role="tabpanel">
+    <p class="small text-body-secondary mb-3">
+      P2PQuake 履歴から直近の確定地震情報を取得し、全ギルドへ再送信します。
+    </p>
     {% if eq_history %}
     <div class="table-responsive">
       <table class="table table-sm table-hover align-middle mb-0">
-        <thead>
+        <thead class="table-active">
           <tr>
             <th>発生時刻</th>
             <th>震源</th>
-            <th>M</th>
-            <th>最大震度</th>
+            <th class="text-center">M</th>
+            <th class="text-center">最大震度</th>
             <th>津波</th>
             <th></th>
           </tr>
@@ -120,20 +163,17 @@
           {% for ev in eq_history %}
           {% set eq = ev.get("earthquake") or {} %}
           {% set hypo = eq.get("hypocenter") or {} %}
-          {% set max_scale = eq.get("maxScale", -1) %}
+          {% set ms = eq.get("maxScale", -1) %}
           <tr>
-            <td class="text-nowrap small">{{ eq.get("time", "—") }}</td>
+            <td class="text-nowrap small font-monospace">{{ eq.get("time", "—") }}</td>
             <td>{{ hypo.get("name", "—") }}</td>
-            <td class="text-nowrap">{% if hypo.get("magnitude") %}M{{ hypo.magnitude }}{% else %}—{% endif %}</td>
-            <td>
-              {% if max_scale in scale_labels %}
-              <span class="badge"
-                    style="background:{% if max_scale >= 60 %}#c00{% elif max_scale >= 50 %}#e64{% elif max_scale >= 40 %}#ca0{% else %}#07a{% endif %}">
-                {{ scale_labels[max_scale] }}
-              </span>
-              {% else %}
-              —
-              {% endif %}
+            <td class="text-center text-nowrap">
+              {% if hypo.get("magnitude") %}M{{ hypo.magnitude }}{% else %}—{% endif %}
+            </td>
+            <td class="text-center">
+              {% if ms in scale_labels %}
+              <span class="badge px-2 {{ scale_badge.get(ms, 'bg-secondary') }}">{{ scale_labels[ms] }}</span>
+              {% else %}—{% endif %}
             </td>
             <td class="small">{{ eq.get("domesticTsunami", "—") }}</td>
             <td>
@@ -152,59 +192,55 @@
       </table>
     </div>
     {% else %}
-    <p class="text-body-secondary mb-0">P2PQuake から地震履歴を取得できませんでした。</p>
+    <div class="text-center py-5 text-body-secondary">
+      <i class="bi bi-wifi-off fs-2 d-block mb-2"></i>
+      P2PQuake から地震履歴を取得できませんでした。
+    </div>
     {% endif %}
   </div>
-</section>
 
-{# ── バックグラウンドタスク ───────────────────────── #}
-<section id="tasks" class="section-card mb-4">
-  <div class="section-card-header">
-    <div>
-      <h2 class="section-card-title"><i class="bi bi-play-circle-fill"></i>バックグラウンドタスク</h2>
-      <p class="section-card-subtitle">シグナルファイルを書き込みます。Botが30秒以内に検知して実行します。</p>
-    </div>
-  </div>
-  <div class="p-3">
+  {# ── タスクタブ ────────────────────────────────── #}
+  <div class="tab-pane fade p-4" id="tab-tasks" role="tabpanel">
+    <p class="small text-body-secondary mb-3">
+      シグナルファイルを書き込みます。Bot が 30 秒以内に検知して実行します。
+    </p>
     <div class="row g-3">
       {% for task_name, task_label in valid_tasks.items() %}
-      <div class="col-sm-6 col-lg-3">
+      {% set pending = task_name in pending_signals %}
+      <div class="col-sm-6 col-xl-3">
         <form method="post" action="/admin/dev/signal/{{ task_name }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button type="submit" class="btn btn-outline-secondary w-100 text-start
-                  {{ 'border-warning text-warning' if task_name in pending_signals else '' }}">
-            <i class="bi bi-{{ 'hourglass-split' if task_name in pending_signals else 'play-fill' }} me-2"></i>
-            <span class="d-block small fw-bold">{{ task_name }}</span>
-            <span class="d-block smaller text-body-secondary">{{ task_label }}</span>
-            {% if task_name in pending_signals %}
-            <span class="badge bg-warning text-dark mt-1">待機中</span>
-            {% endif %}
+          <button type="submit"
+                  class="btn w-100 text-start py-3 px-3 {{ 'btn-outline-warning' if pending else 'btn-outline-secondary' }}"
+                  style="min-height:80px">
+            <div class="d-flex align-items-start gap-2">
+              <i class="bi bi-{{ 'hourglass-split text-warning' if pending else 'play-circle' }} mt-1 flex-shrink-0"></i>
+              <div>
+                <div class="small fw-bold lh-sm">{{ task_name }}</div>
+                <div class="small text-body-secondary lh-sm mt-1">{{ task_label }}</div>
+                {% if pending %}
+                <span class="badge bg-warning text-dark mt-2 fw-normal">待機中</span>
+                {% endif %}
+              </div>
+            </div>
           </button>
         </form>
       </div>
       {% endfor %}
     </div>
   </div>
-</section>
 
-{# ── 設定閲覧 ─────────────────────────────────────── #}
-<section id="settings" class="section-card mb-4">
-  <div class="section-card-header">
-    <div>
-      <h2 class="section-card-title"><i class="bi bi-gear-wide-connected"></i>ギルド設定 (settings.json)</h2>
-      <p class="section-card-subtitle">各ギルドの生JSONを確認できます。</p>
-    </div>
-    <span class="badge-soft accent">{{ settings_guild_ids | length }} ギルド</span>
-  </div>
-  <div class="p-3">
+  {# ── 設定タブ ──────────────────────────────────── #}
+  <div class="tab-pane fade p-4" id="tab-settings" role="tabpanel">
+    <p class="small text-body-secondary mb-3">各ギルドの生 JSON を確認できます。</p>
     {% if guilds %}
     <div class="table-responsive">
       <table class="table table-sm table-hover align-middle mb-0">
-        <thead>
+        <thead class="table-active">
           <tr>
             <th>サーバー名</th>
             <th>Guild ID</th>
-            <th>設定</th>
+            <th class="text-center">設定</th>
             <th></th>
           </tr>
         </thead>
@@ -219,7 +255,7 @@
               {{ guild.name }}
             </td>
             <td><code class="small">{{ guild.id }}</code></td>
-            <td>
+            <td class="text-center">
               {% if guild.id in settings_guild_ids %}
               <span class="badge bg-success">あり</span>
               {% else %}
@@ -229,7 +265,7 @@
             <td>
               {% if guild.id in settings_guild_ids %}
               <a href="/admin/dev/settings/{{ guild.id }}" class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-code-slash me-1"></i>JSON表示
+                <i class="bi bi-code-slash me-1"></i>JSON
               </a>
               {% endif %}
             </td>
@@ -239,56 +275,52 @@
       </table>
     </div>
     {% else %}
-    <p class="text-body-secondary mb-0">Botが参加しているサーバーがありません。</p>
+    <div class="text-center py-5 text-body-secondary">
+      <i class="bi bi-server fs-2 d-block mb-2"></i>
+      Bot が参加しているサーバーがありません。
+    </div>
     {% endif %}
   </div>
-</section>
 
-{# ── DJAudio キャッシュ ───────────────────────────── #}
-<section id="cache" class="section-card mb-4">
-  <div class="section-card-header">
-    <div>
-      <h2 class="section-card-title"><i class="bi bi-music-note-beamed"></i>DJAudio キャッシュ</h2>
-      <p class="section-card-subtitle">ダウンロード済みMP3のキャッシュ一覧です。</p>
+  {# ── キャッシュタブ ────────────────────────────── #}
+  <div class="tab-pane fade p-4" id="tab-cache" role="tabpanel">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <p class="small text-body-secondary mb-0">ダウンロード済み MP3 のキャッシュ一覧です。</p>
+      <form method="post" action="{{ url_for('dev.purge_cache') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-sm btn-outline-danger"
+                onclick="return confirm('期限切れキャッシュを全削除しますか？')">
+          <i class="bi bi-trash3 me-1"></i>期限切れを一括削除
+        </button>
+      </form>
     </div>
-    <form method="post" action="{{ url_for('dev.purge_cache') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="btn btn-sm btn-outline-danger"
-              onclick="return confirm('期限切れキャッシュを全削除しますか？')">
-        <i class="bi bi-trash3 me-1"></i>期限切れを一括削除
-      </button>
-    </form>
-  </div>
-  <div class="p-3">
     {% if cache_entries %}
     <div class="table-responsive">
       <table class="table table-sm table-hover align-middle mb-0">
-        <thead>
+        <thead class="table-active">
           <tr>
             <th>タイトル</th>
             <th>Token</th>
-            <th>サイズ</th>
+            <th class="text-end">サイズ</th>
             <th>有効期限</th>
-            <th>状態</th>
+            <th class="text-center">状態</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           {% for entry in cache_entries %}
           <tr class="{{ 'table-warning' if entry._expired else '' }}">
-            <td class="text-truncate" style="max-width:200px" title="{{ entry.get('title','') }}">
+            <td class="text-truncate" style="max-width:220px" title="{{ entry.get('title','') }}">
               {{ entry.get("title", "(不明)") }}
             </td>
-            <td><code class="small">{{ entry._token[:16] }}…</code></td>
-            <td class="text-nowrap">{{ entry._size_mb }} MB</td>
+            <td><code class="small">{{ entry._token[:14] }}…</code></td>
+            <td class="text-end text-nowrap">{{ entry._size_mb }} MB</td>
             <td class="text-nowrap small">
               {% if entry.get("expires_at") %}
-                {{ entry.expires_at | int | string }}
-              {% else %}
-                —
-              {% endif %}
+              <span data-ts="{{ entry.expires_at | int }}">{{ entry.expires_at | int }}</span>
+              {% else %}—{% endif %}
             </td>
-            <td>
+            <td class="text-center">
               {% if entry._expired %}
               <span class="badge bg-warning text-dark">期限切れ</span>
               {% else %}
@@ -311,9 +343,38 @@
       </table>
     </div>
     {% else %}
-    <p class="text-body-secondary mb-0">キャッシュエントリはありません。</p>
+    <div class="text-center py-5 text-body-secondary">
+      <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+      キャッシュエントリはありません。
+    </div>
     {% endif %}
   </div>
-</section>
+
+</div>{# /tab-content #}
+
+<script>
+/* タブ状態をセッションストレージで保持 */
+const TAB_KEY = "devActiveTab";
+const tabEl = document.getElementById("devTabs");
+if (tabEl) {
+  const saved = sessionStorage.getItem(TAB_KEY);
+  if (saved) {
+    const btn = tabEl.querySelector(`[data-bs-target="${saved}"]`);
+    if (btn) bootstrap.Tab.getOrCreateInstance(btn).show();
+  }
+  tabEl.addEventListener("shown.bs.tab", e => {
+    sessionStorage.setItem(TAB_KEY, e.target.dataset.bsTarget);
+  });
+}
+
+/* expires_at Unix タイムスタンプ → 日本語ロケール表示 */
+document.querySelectorAll("[data-ts]").forEach(el => {
+  const ts = parseInt(el.dataset.ts, 10);
+  if (ts) el.textContent = new Date(ts * 1000).toLocaleString("ja-JP", {
+    year:"numeric", month:"2-digit", day:"2-digit",
+    hour:"2-digit", minute:"2-digit"
+  });
+});
+</script>
 
 {% endblock %}
