@@ -5,6 +5,7 @@ import logging
 import math
 import os
 import re
+import time
 from datetime import datetime
 
 import aiohttp
@@ -612,7 +613,7 @@ class _EqView(discord.ui.View):
     def __init__(self, url: str):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(
-            label="詳細",
+            label="詳細（気象庁）",
             url=url,
             style=discord.ButtonStyle.link,
         ))
@@ -620,19 +621,227 @@ class _EqView(discord.ui.View):
 
 # ── JMA URL ヘルパー ──────────────────────────────────────
 
-_JMA_QUAKE_BASE = "https://www.jma.go.jp/jp/quake/"
+_JMA_QUAKE_LIST_URL = "https://www.jma.go.jp/bosai/quake/data/list.json"
+_JMA_QUAKE_DETAIL_BASE = "https://www.jma.go.jp/bosai/quake/data/"
+_JMA_QUAKE_FALLBACK_URL = "https://www.jma.go.jp/bosai/map.html#contents=earthquake_map"
+_JMA_LIST_TTL_SEC = 30.0
+_JMA_DETAIL_CACHE_TTL_SEC = 3600.0
+
+_jma_list_cache: tuple[list[dict], float] | None = None
+_jma_detail_url_cache: dict[str, tuple[str, float]] = {}
+_jma_list_lock = asyncio.Lock()
 
 
-def _jma_quake_url(eq_time: str, max_scale: int = -1) -> str:
-    """気象庁地震情報 URL。
-    震度3未満は JMA が個別ページを発行しないため一覧ページを返す。"""
-    if max_scale >= 0 and max_scale < 30:
-        return _JMA_QUAKE_BASE
+def _normalize_scale_text(text: str) -> str:
+    return (
+        str(text or "")
+        .translate(str.maketrans("０１２３４５６７", "01234567"))
+        .replace("最大", "")
+        .replace("震度", "")
+        .replace(" ", "")
+        .replace("　", "")
+    )
+
+
+def _scale_from_text(text: str) -> int:
+    norm = _normalize_scale_text(text)
+    m = re.search(r"([1-7])(弱|強)?", norm)
+    if not m:
+        return -1
+    base = int(m.group(1))
+    mod = m.group(2) or ""
+    if base == 4 and mod == "強":
+        return 45
+    if base == 5:
+        if mod == "弱":
+            return 50
+        if mod == "強":
+            return 55
+    if base == 6:
+        if mod == "弱":
+            return 60
+        if mod == "強":
+            return 65
+    if base == 7:
+        return 70
+    return base * 10
+
+
+def _parse_magnitude_value(raw) -> float | None:
+    if raw is None:
+        return None
+    s = str(raw).strip().upper().replace("M", "")
     try:
-        dt = datetime.strptime(eq_time, "%Y/%m/%d %H:%M:%S")
-        return f"{_JMA_QUAKE_BASE}{dt.strftime('%Y%m%d%H%M%S')}.html"
+        v = float(s)
+        return v if v >= 0 else None
     except ValueError:
-        return _JMA_QUAKE_BASE
+        return None
+
+
+def _parse_any_time(raw) -> datetime | None:
+    if not raw:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+
+    try:
+        dt = datetime.strptime(s, "%Y/%m/%d %H:%M:%S")
+        return dt.replace(tzinfo=_JST)
+    except ValueError:
+        pass
+
+    iso = s.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(iso)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=_JST)
+        return dt.astimezone(_JST)
+    except ValueError:
+        return None
+
+
+def _item_area_name(item: dict) -> str:
+    for key in ("anm", "name", "epicenter"):
+        value = item.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _item_detail_url(item: dict) -> str | None:
+    for key in ("json", "detail", "url", "link", "uri"):
+        value = item.get(key)
+        if not isinstance(value, str):
+            continue
+        val = value.strip()
+        if not val:
+            continue
+        if val.startswith(("http://", "https://")):
+            return val
+        return f"{_JMA_QUAKE_DETAIL_BASE}{val.lstrip('/')}"
+    return None
+
+
+def _cache_key_for_event(event: dict, max_scale: int) -> str:
+    eq = event.get("earthquake", {})
+    hypo = eq.get("hypocenter", {})
+    eq_time = eq.get("originTime") or eq.get("time", "")
+    return "|".join([
+        str(event.get("code", "")),
+        str(eq_time),
+        str(max_scale),
+        str(hypo.get("name", "")),
+    ])
+
+
+def _score_jma_item(
+    item: dict,
+    target_dt: datetime | None,
+    target_name: str,
+    target_mag: float | None,
+    target_scale: int,
+) -> float:
+    score = 0.0
+
+    item_dt = _parse_any_time(item.get("at") or item.get("time") or item.get("datetime"))
+    if target_dt and item_dt:
+        delta = abs((item_dt - target_dt).total_seconds())
+        if delta > 900:
+            return -1e9
+        score += max(0.0, 110.0 - delta / 6.0)
+    elif target_dt:
+        score -= 30.0
+
+    item_name = _item_area_name(item)
+    if target_name and item_name:
+        if item_name == target_name:
+            score += 30.0
+        elif target_name in item_name or item_name in target_name:
+            score += 15.0
+
+    if target_mag is not None:
+        item_mag = _parse_magnitude_value(item.get("mag"))
+        if item_mag is not None:
+            diff = abs(item_mag - target_mag)
+            if diff <= 0.1:
+                score += 18.0
+            elif diff <= 0.3:
+                score += 10.0
+            elif diff <= 0.6:
+                score += 4.0
+
+    if target_scale >= 0:
+        item_scale = _scale_from_text(item.get("ttl", ""))
+        if item_scale >= 0:
+            if item_scale == target_scale:
+                score += 18.0
+            elif abs(item_scale - target_scale) <= 10:
+                score += 8.0
+
+    return score
+
+
+async def _get_jma_list() -> list[dict]:
+    global _jma_list_cache
+    now = time.time()
+    if _jma_list_cache and now - _jma_list_cache[1] < _JMA_LIST_TTL_SEC:
+        return _jma_list_cache[0]
+
+    async with _jma_list_lock:
+        now = time.time()
+        if _jma_list_cache and now - _jma_list_cache[1] < _JMA_LIST_TTL_SEC:
+            return _jma_list_cache[0]
+        try:
+            timeout = aiohttp.ClientTimeout(total=3)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(_JMA_QUAKE_LIST_URL) as resp:
+                    if resp.status != 200:
+                        raise RuntimeError(f"HTTP {resp.status}")
+                    data = await resp.json(content_type=None)
+            if isinstance(data, list):
+                _jma_list_cache = (data, now)
+                return data
+        except Exception as e:
+            logger.debug("[earthquake] JMA list fetch failed: %s", e)
+
+        if _jma_list_cache:
+            return _jma_list_cache[0]
+        return []
+
+
+async def _resolve_jma_detail_url(event: dict, max_scale: int) -> str:
+    key = _cache_key_for_event(event, max_scale)
+    now = time.time()
+    cached = _jma_detail_url_cache.get(key)
+    if cached and now - cached[1] < _JMA_DETAIL_CACHE_TTL_SEC:
+        return cached[0]
+
+    eq = event.get("earthquake", {})
+    hypo = eq.get("hypocenter", {})
+    target_dt = _parse_any_time(eq.get("originTime") or eq.get("time", ""))
+    target_name = str(hypo.get("name", "") or "")
+    target_mag = _parse_magnitude_value(hypo.get("magnitude"))
+
+    items = await _get_jma_list()
+    best_url = _JMA_QUAKE_FALLBACK_URL
+    best_score = -1e9
+    for item in items[:400]:
+        if not isinstance(item, dict):
+            continue
+        detail_url = _item_detail_url(item)
+        if not detail_url:
+            continue
+        score = _score_jma_item(item, target_dt, target_name, target_mag, max_scale)
+        if score > best_score:
+            best_score = score
+            best_url = detail_url
+
+    if best_score < 10:
+        best_url = _JMA_QUAKE_FALLBACK_URL
+
+    _jma_detail_url_cache[key] = (best_url, now)
+    return best_url
 
 
 # ── 通知送信（確定地震情報 551） ──────────────────────────
@@ -646,7 +855,7 @@ async def _notify_all_guilds(bot: Bot, event: dict) -> None:
     lat  = _parse_coord(hypo.get("latitude"))
     lon  = _parse_coord(hypo.get("longitude"))
 
-    detail_url = _jma_quake_url(eq.get("time", ""), max_scale)
+    detail_url = await _resolve_jma_detail_url(event, max_scale)
 
     is_minor = max_scale <= 20  # 震度1-2 はコンパクト表示
 
@@ -750,9 +959,7 @@ async def _notify_tsunami_guilds(bot: Bot, event: dict) -> None:
 async def _notify_eew_guilds(bot: Bot, event: dict, notify_type: str) -> None:
     """EEW を全対象ギルドへ送信。notify_type: 'eew_warning' or 'eew_forecast'"""
     max_scale  = _max_scale(event)
-    eq_time    = event.get("earthquake", {}).get("originTime") or \
-                 event.get("earthquake", {}).get("time", "")
-    detail_url = _jma_quake_url(eq_time, max_scale)
+    detail_url = await _resolve_jma_detail_url(event, max_scale)
 
     badge_buf: io.BytesIO | None = None
     try:
