@@ -13,6 +13,10 @@ DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID", "")
 DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET", "")
 DISCORD_REDIRECT_URI = os.environ.get("DISCORD_REDIRECT_URI", "http://localhost:5001/admin/callback")
 DISCORD_BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN", "")
+DISCORD_OAUTH_PROMPT = os.environ.get("DISCORD_OAUTH_PROMPT", "").strip().lower()
+if DISCORD_OAUTH_PROMPT and DISCORD_OAUTH_PROMPT not in {"none", "consent"}:
+    logger.warning("DISCORD_OAUTH_PROMPT=%s は無効なため無視します。", DISCORD_OAUTH_PROMPT)
+    DISCORD_OAUTH_PROMPT = ""
 
 _API = "https://discord.com/api/v10"
 _SCOPES = "identify guilds"
@@ -28,8 +32,9 @@ def get_oauth_url(state: str) -> str:
         "response_type": "code",
         "scope": _SCOPES,
         "state": state,
-        "prompt": "none",
     }
+    if DISCORD_OAUTH_PROMPT in {"none", "consent"}:
+        params["prompt"] = DISCORD_OAUTH_PROMPT
     return f"https://discord.com/api/oauth2/authorize?{urlencode(params)}"
 
 

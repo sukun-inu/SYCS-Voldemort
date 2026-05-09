@@ -1,7 +1,7 @@
 """
 DJAudio-DL キャッシュ管理モジュール。
 - トークンに guild_id を紐づけて保存
-- Flask Blueprint 側で guild_id を照合してアクセス制御
+- FastAPI ルーター側で guild_id を照合してアクセス制御
 - TTL 経過後に自動削除
 """
 

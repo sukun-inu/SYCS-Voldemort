@@ -2,7 +2,7 @@
 DJAudio-DL コアサービス。
 - 設定チャンネルに投稿された URL を自動検知
 - yt-dlp + ffmpeg で MP3 変換・キャッシュ保存
-- Flask Blueprint が配信 URL を生成（/dlaudio/files/<guild_id>/<token>）
+- FastAPI ルーターが配信 URL を生成（/dlaudio/files/<guild_id>/<token>）
 """
 
 import asyncio

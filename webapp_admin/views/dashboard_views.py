@@ -17,7 +17,7 @@ from services.settings_store import (
 )
 from webapp_admin.auth import get_guild_channels
 from webapp_admin.metrics import collect_host_metrics, list_incidents
-from webapp_admin.security import check_guild, check_login
+from webapp_admin.security import check_csrf, check_guild, check_login
 from webapp_admin.templating import flash, render
 
 router = APIRouter()
@@ -36,7 +36,7 @@ async def guild_select(request: Request, _=Depends(check_login)):
 
 
 @router.post("/guilds/select")
-async def select_guild(request: Request, _=Depends(check_login)):
+async def select_guild(request: Request, _=Depends(check_login), _csrf=Depends(check_csrf)):
     form = await request.form()
     guild_id_str = form.get("guild_id", "")
     try:

@@ -37,7 +37,8 @@ async def handle_chatgpt_message(bot: discord.Client, message: discord.Message):
 
     target_channel_id = get_response_channel_id(message.guild.id)
 
-    if target_channel_id == 0 or message.channel.id != target_channel_id:
+    # 未設定(0)は「全チャンネル許可」。設定されている場合のみチャンネル一致を要求する。
+    if target_channel_id > 0 and message.channel.id != target_channel_id:
         return
 
     key = (message.guild.id, message.author.id)

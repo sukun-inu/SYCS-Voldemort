@@ -1,6 +1,6 @@
 # SYCS Voldemort
 
-Discord Bot（運用支援）+ Flask 管理 UI + FastAPI Web トラッカーをまとめたプロジェクトです。
+Discord Bot（運用支援）+ FastAPI 管理 UI + FastAPI Web トラッカーをまとめたプロジェクトです。
 
 ## 1. 機能一覧（具体）
 
@@ -72,7 +72,7 @@ Discord Bot（運用支援）+ Flask 管理 UI + FastAPI Web トラッカーを�
 - VC レイド検知
 - 信頼済みユーザー / バイパスロールによる除外設定
 
-### 1.12 管理 UI（Flask）
+### 1.12 管理 UI（FastAPI）
 - Discord OAuth ログイン
 - サーバー単位設定
 - Web 上で以下を管理:
@@ -105,7 +105,7 @@ Discord Bot（運用支援）+ Flask 管理 UI + FastAPI Web トラッカーを�
 | プロセス | エントリーポイント | 役割 |
 |---|---|---|
 | Discord Bot | `main.py` | Discord イベント処理とスラッシュコマンド |
-| Admin UI | `admin_main.py` | 管理画面（Flask） |
+| Admin UI | `admin_main.py` | 管理画面（FastAPI） |
 | Web App | `web_main.py` | 金属価格トラッカー（FastAPI） |
 
 設定は `services/settings_store.py` が `settings.json` に永続化します。
@@ -177,9 +177,10 @@ docker compose up -d --build
 | `DISCORD_CLIENT_ID` | Yes | OAuth クライアントID |
 | `DISCORD_CLIENT_SECRET` | Yes | OAuth クライアントシークレット |
 | `DISCORD_REDIRECT_URI` | Yes | OAuth リダイレクトURL |
+| `DISCORD_OAUTH_PROMPT` | 任意 | `none` / `consent` を明示したい場合に指定（未指定時はDiscord既定挙動） |
 | `ADMIN_FLASK_SECRET_KEY` | Yes | セッション署名キー |
 | `ADMIN_PORT` | 任意 | デフォルト `5001` |
-| `ADMIN_LIMITER_STORAGE_URI` | 任意 | Flask-Limiter ストレージ（既定 `memory://`、分散時はRedis推奨） |
+| `ADMIN_LIMITER_STORAGE_URI` | 任意 | レート制限ストレージ（既定 `memory://`、分散時はRedis推奨） |
 
 ### 5.3 Web トラッカー（`web_main.py`）
 
@@ -346,7 +347,7 @@ docker compose up -d --build
 ```text
 commands/      # スラッシュコマンド定義
 services/      # Bot/Web 共通サービスロジック
-webapp_admin/  # Flask 管理 UI
+webapp_admin/  # FastAPI 管理 UI
 webapp/        # FastAPI Web トラッカー
 migrations/    # DB マイグレーション
 ```

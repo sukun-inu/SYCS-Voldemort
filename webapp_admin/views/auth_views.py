@@ -25,7 +25,8 @@ def _build_invite_url() -> str | None:
 @limiter.limit("30/minute")
 async def login(request: Request):
     if "user" in request.session:
-        return RedirectResponse("/admin/overview", status_code=303)
+        target = "/admin/overview" if "guild_id" in request.session else "/admin/guilds"
+        return RedirectResponse(target, status_code=303)
     return render(request, "login.html", invite_url=_build_invite_url())
 
 
