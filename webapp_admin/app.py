@@ -92,14 +92,52 @@ def _sanitize_session_payload(session: dict) -> None:
         session.update(safe)
 
 
-def create_app() -> FastAPI:
-    secret = os.environ.get("ADMIN_FLASK_SECRET_KEY")
-    if not secret:
-        secret = secrets.token_hex(32)
+def _get_or_create_secret_key() -> str:
+    env_secret = os.environ.get("ADMIN_FLASK_SECRET_KEY", "").strip()
+    if env_secret:
+        return env_secret
+
+    settings_dir = Path(os.getenv("SETTINGS_DIR", str(Path(__file__).parent.parent / "data")))
+    secret_file = settings_dir / ".admin_session_secret"
+
+    try:
+        content = secret_file.read_text(encoding="utf-8").strip()
+        if len(content) >= 32:
+            return content
+    except OSError:
+        pass
+
+    new_secret = secrets.token_hex(32)
+    try:
+        settings_dir.mkdir(parents=True, exist_ok=True)
+        fd = os.open(str(secret_file), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(new_secret)
+        logger.info("セッションシークレットをファイルに保存しました: %s", secret_file)
+        return new_secret
+    except FileExistsError:
+        try:
+            content = secret_file.read_text(encoding="utf-8").strip()
+            if len(content) >= 32:
+                return content
+        except OSError:
+            pass
+    except OSError as e:
         logger.warning(
-            "ADMIN_FLASK_SECRET_KEY が未設定のため一時キーを生成しました。"
-            "マルチインスタンス運用では固定値を設定してください。"
+            "セッションシークレットの保存に失敗しました (%s)。"
+            "マルチワーカー環境では ADMIN_FLASK_SECRET_KEY を設定してください。",
+            e,
         )
+
+    logger.warning(
+        "ADMIN_FLASK_SECRET_KEY が未設定でファイル保存も失敗しました。"
+        "一時キーを使用します。再起動またはワーカー切り替えでセッションが失われます。"
+    )
+    return new_secret
+
+
+def create_app() -> FastAPI:
+    secret = _get_or_create_secret_key()
 
     app = FastAPI(docs_url=None, redoc_url=None)
     app.state.limiter = limiter

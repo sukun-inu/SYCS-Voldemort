@@ -31,7 +31,12 @@ async def check_csrf(request: Request) -> None:
     form = await request.form()
     token = str(form.get("csrf_token", "") or request.headers.get("X-CSRFToken", ""))
     expected = request.session.get("_csrf_token", "")
-    if not token or not expected or not secrets.compare_digest(token, expected):
+    if not expected:
+        # セッションにトークンがない = 未ログインまたはセッション切れ。
+        # check_login が同じ依存関係として 303 リダイレクトを処理するため、
+        # ここでは 403 を返さない（エラー画面でなくログイン画面に戻す）。
+        return
+    if not token or not secrets.compare_digest(token, expected):
         raise HTTPException(status_code=403)
 
 

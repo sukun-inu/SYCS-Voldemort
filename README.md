@@ -214,7 +214,7 @@ docker compose up -d --build
 | `DISCORD_CLIENT_SECRET` | Yes | OAuth クライアントシークレット |
 | `DISCORD_REDIRECT_URI` | Yes | OAuth リダイレクトURL |
 | `DISCORD_OAUTH_PROMPT` | 任意 | `none` / `consent` を明示したい場合に指定（未指定時はDiscord既定挙動） |
-| `ADMIN_FLASK_SECRET_KEY` | Yes | セッション署名キー |
+| `ADMIN_FLASK_SECRET_KEY` | 推奨 | セッション署名キー。未設定時は初回起動時に自動生成し `SETTINGS_DIR/.admin_session_secret` に保存（再起動後も同一キーを継続使用）。複数コンテナ構成では全ノードで同一値を明示設定してください |
 | `ADMIN_PORT` | 任意 | デフォルト `5001` |
 | `ADMIN_LIMITER_STORAGE_URI` | 任意 | レート制限ストレージ（既定 `memory://`、分散時はRedis推奨） |
 | `USER_STATE_POSTGRES_DSN` | 任意 | ユーザー状態監査DB接続先をDSNで直指定 |
@@ -257,7 +257,8 @@ metalprice 側の定期処理（日次更新/予測更新/自動修復）は `sy
   - Cloudflare 直下構成のみ `TRUST_CF_HEADERS=true` を有効化
   - 公開ドメインを `ALLOWED_HOSTS` に明示設定
 - 管理UIを複数インスタンスで動かす場合:
-  - 全インスタンスで同じ `ADMIN_FLASK_SECRET_KEY` を設定
+  - 同一コンテナ内の複数ワーカーはシークレットキーを自動共有するため追加設定不要
+  - 複数コンテナ（ロードバランサ構成）では全ノードで同じ `ADMIN_FLASK_SECRET_KEY` を明示設定
   - `ADMIN_LIMITER_STORAGE_URI` に Redis を設定
 - DJAudio-DL を複数ノードで使う場合:
   - `DJAUDIO_CACHE_DIR` を共有ストレージにする（または配信ノードを固定）
@@ -366,6 +367,7 @@ metalprice 側の定期処理（日次更新/予測更新/自動修復）は `sy
 ## 8. データ保存先
 
 - `settings.json`: ギルドごとの Bot 設定
+- `data/.admin_session_secret`: 管理UI セッション署名キー（`ADMIN_FLASK_SECRET_KEY` 未設定時に初回起動で自動生成）
 - `data/logs/bot.log`: Discord Bot のログ（最大 1MB × 3世代）
 - `data/logs/admin.log`: 管理 UI のログ（最大 1MB × 3世代）
 - `data/djaudio_cache`: DJAudio の一時 MP3 キャッシュ
@@ -388,6 +390,10 @@ metalprice 側の定期処理（日次更新/予測更新/自動修復）は `sy
 ### 管理 UI にログインできない
 - `DISCORD_CLIENT_ID/SECRET/REDIRECT_URI` が一致しているか
 - Discord Developer Portal の Redirect URL と同じか
+
+### ログイン後にサーバー選択でログイン画面に戻る
+- `ADMIN_FLASK_SECRET_KEY` を設定していない場合は `data/.admin_session_secret` が正常に作成されているか確認
+- `data/` ディレクトリ（`SETTINGS_DIR`）が書き込み可能か確認（Docker では `app_data` ボリュームのマウントを確認）
 
 ### コマンドが見えない
 - Bot 再起動後に `bot.tree.sync()` が完了しているか
