@@ -17,6 +17,7 @@ cryptography
 statsmodels
 Pillow>=10.0.0
 slowapi
+itsdangerous
 python-multipart
 yt-dlp
 mutagen
