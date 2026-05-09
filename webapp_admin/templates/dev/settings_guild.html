@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}設定 {{ guild_id }}{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <p class="page-kicker"><a href="/admin/dev#settings" class="text-decoration-none">開発者パネル</a></p>
+    <h1 class="page-title"><i class="bi bi-code-slash"></i>ギルド設定 JSON</h1>
+    <p class="page-description">Guild ID: <code>{{ guild_id }}</code></p>
+  </div>
+  <span class="badge bg-danger fs-6 align-self-start">DEV ONLY</span>
+</div>
+
+<section class="section-card">
+  <div class="section-card-header">
+    <h2 class="section-card-title"><i class="bi bi-braces"></i>settings.json — guilds.{{ guild_id }}</h2>
+    <a href="/admin/dev#settings" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>戻る
+    </a>
+  </div>
+  <div class="p-3">
+    <pre class="p-3 rounded bg-body-secondary border overflow-auto"
+         style="max-height:70vh;font-size:.8rem;white-space:pre-wrap;word-break:break-all;">{{ settings_json }}</pre>
+  </div>
+</section>
+
+{% endblock %}

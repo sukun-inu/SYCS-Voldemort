@@ -1,0 +1,322 @@
+import json
+import os
+import re
+from datetime import datetime, timezone
+from pathlib import Path
+
+import aiohttp
+from fastapi import APIRouter, Depends, HTTPException, Request
+from starlette.responses import RedirectResponse
+
+from config import DJAUDIO_CACHE_DIR, DISCORD_BOT_TOKEN
+from webapp_admin.security import _NeedsLogin, check_csrf, sanitize
+from webapp_admin.templating import flash, render
+
+_DEV_USER_ID = "987278623641829436"
+_DISCORD_API = "https://discord.com/api/v10"
+_P2PQUAKE_API = "https://api.p2pquake.net/v2/history"
+_TIMEOUT = aiohttp.ClientTimeout(total=10)
+_SIGNAL_DIR = Path(os.getenv("SETTINGS_DIR", "/app/data")) / "_dev_signals"
+
+_SCALE_LABELS: dict[int, str] = {
+    10: "震度1", 20: "震度2", 30: "震度3", 40: "震度4", 45: "震度4強",
+    50: "震度5弱", 55: "震度5強", 60: "震度6弱", 65: "震度6強", 70: "震度7",
+}
+
+_VALID_TASKS = {
+    "news_feeds":            "ニュースフィードを今すぐ実行",
+    "sticky":                "スティッキーペンディング処理を実行",
+    "djaudio_cache":         "DJAudioキャッシュの期限切れを今すぐ掃除",
+    "earthquake_reconnect":  "地震WSを再接続",
+}
+
+router = APIRouter()
+
+
+def _check_dev(request: Request) -> dict:
+    user = request.session.get("user")
+    if not user:
+        raise _NeedsLogin()
+    if str(user.get("id", "")) != _DEV_USER_ID:
+        raise HTTPException(status_code=403, detail="開発者専用ページです。")
+    return user
+
+
+async def _api(method: str, path: str, **kwargs):
+    if not DISCORD_BOT_TOKEN:
+        return None
+    try:
+        async with aiohttp.ClientSession(timeout=_TIMEOUT) as s:
+            async with s.request(
+                method,
+                f"{_DISCORD_API}{path}",
+                headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+                **kwargs,
+            ) as resp:
+                return await resp.json() if resp.status < 400 else None
+    except Exception:
+        return None
+
+
+def _all_settings() -> dict:
+    try:
+        from services.settings_store import _load_all_from_disk
+        return _load_all_from_disk()
+    except Exception:
+        return {"guilds": {}}
+
+
+def _list_cache_entries() -> list[dict]:
+    entries = []
+    try:
+        for meta_path in sorted(
+            DJAUDIO_CACHE_DIR.glob("*.json"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        ):
+            try:
+                with meta_path.open("r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                mp3_path = DJAUDIO_CACHE_DIR / f"{meta_path.stem}.mp3"
+                meta["_token"] = meta_path.stem
+                meta["_size_mb"] = (
+                    round(mp3_path.stat().st_size / 1024 / 1024, 2)
+                    if mp3_path.exists() else 0
+                )
+                meta["_expired"] = (
+                    datetime.now(timezone.utc).timestamp() > meta.get("expires_at", 0)
+                )
+                entries.append(meta)
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return entries
+
+
+def _pending_signals() -> list[str]:
+    try:
+        return [p.stem for p in _SIGNAL_DIR.glob("*.signal")]
+    except Exception:
+        return []
+
+
+async def _fetch_eq_history(limit: int = 5) -> list[dict]:
+    try:
+        async with aiohttp.ClientSession(timeout=_TIMEOUT) as s:
+            async with s.get(
+                _P2PQUAKE_API,
+                params={"codes": "551", "limit": str(limit)},
+            ) as resp:
+                if resp.status != 200:
+                    return []
+                return await resp.json()
+    except Exception:
+        return []
+
+
+@router.get("")
+@router.get("/")
+async def dev_index(request: Request, _=Depends(_check_dev)):
+    guilds = await _api("GET", "/users/@me/guilds?limit=200") or []
+    if isinstance(guilds, list):
+        guilds.sort(key=lambda g: (g.get("name") or "").lower())
+    settings = _all_settings()
+    eq_history = await _fetch_eq_history()
+    return render(
+        request, "dev/index.html",
+        guilds=guilds,
+        settings_guild_ids=set(settings.get("guilds", {}).keys()),
+        cache_entries=_list_cache_entries(),
+        pending_signals=_pending_signals(),
+        valid_tasks=_VALID_TASKS,
+        eq_history=eq_history,
+        scale_labels=_SCALE_LABELS,
+    )
+
+
+@router.post("/send-message")
+async def send_message(
+    request: Request, _=Depends(_check_dev), _csrf=Depends(check_csrf)
+):
+    form = await request.form()
+    channel_id = sanitize(form.get("channel_id", ""), 20).strip()
+    content = sanitize(form.get("content", ""), 2000).strip()
+    if not channel_id or not content:
+        flash(request, "チャンネルIDとメッセージ内容は必須です。", "warning")
+        return RedirectResponse("/admin/dev#message", status_code=303)
+    result = await _api("POST", f"/channels/{channel_id}/messages", json={"content": content})
+    if result:
+        flash(request, f"ch:{channel_id} へ送信しました。", "success")
+    else:
+        flash(request, "送信に失敗しました。チャンネルIDを確認してください。", "danger")
+    return RedirectResponse("/admin/dev#message", status_code=303)
+
+
+@router.post("/forward-message")
+async def forward_message(
+    request: Request, _=Depends(_check_dev), _csrf=Depends(check_csrf)
+):
+    form = await request.form()
+    msg_url = sanitize(form.get("message_url", ""), 200).strip()
+    target_ch = sanitize(form.get("target_channel_id", ""), 20).strip()
+
+    m = re.match(r"https?://discord(?:app)?\.com/channels/\d+/(\d+)/(\d+)", msg_url)
+    if not m:
+        flash(request, "有効なDiscordメッセージURLを入力してください。", "warning")
+        return RedirectResponse("/admin/dev#message", status_code=303)
+
+    src_ch, msg_id = m.group(1), m.group(2)
+    msg = await _api("GET", f"/channels/{src_ch}/messages/{msg_id}")
+    if not msg or not isinstance(msg, dict):
+        flash(request, "元メッセージの取得に失敗しました。", "danger")
+        return RedirectResponse("/admin/dev#message", status_code=303)
+
+    author = msg.get("author") or {}
+    username = author.get("global_name") or author.get("username", "Unknown")
+    body = msg.get("content") or "(内容なし)"
+    forward_text = f"**[転送: {username}]**\n{body}"[:2000]
+
+    result = await _api("POST", f"/channels/{target_ch}/messages", json={"content": forward_text})
+    if result:
+        flash(request, "メッセージを転送しました。", "success")
+    else:
+        flash(request, "転送先への送信に失敗しました。", "danger")
+    return RedirectResponse("/admin/dev#message", status_code=303)
+
+
+@router.get("/settings/{guild_id}")
+async def settings_guild(
+    request: Request, guild_id: str, _=Depends(_check_dev)
+):
+    if not re.fullmatch(r"\d+", guild_id):
+        raise HTTPException(status_code=400)
+    data = _all_settings()
+    guild_data = data.get("guilds", {}).get(guild_id)
+    if guild_data is None:
+        flash(request, "そのギルドの設定が見つかりません。", "warning")
+        return RedirectResponse("/admin/dev#settings", status_code=303)
+    return render(
+        request, "dev/settings_guild.html",
+        guild_id=guild_id,
+        settings_json=json.dumps(guild_data, ensure_ascii=False, indent=2),
+    )
+
+
+@router.post("/cache/delete")
+async def delete_cache_entry(
+    request: Request, _=Depends(_check_dev), _csrf=Depends(check_csrf)
+):
+    form = await request.form()
+    token = sanitize(form.get("token", ""), 64).strip()
+    if not token or not re.fullmatch(r"[A-Za-z0-9_\-]+", token):
+        flash(request, "無効なトークンです。", "warning")
+        return RedirectResponse("/admin/dev#cache", status_code=303)
+    from services.djaudio_cache import _delete_entry
+    _delete_entry(token)
+    flash(request, f"キャッシュ {token[:20]}… を削除しました。", "success")
+    return RedirectResponse("/admin/dev#cache", status_code=303)
+
+
+@router.post("/cache/purge")
+async def purge_cache(
+    request: Request, _=Depends(_check_dev), _csrf=Depends(check_csrf)
+):
+    from services.djaudio_cache import _cleanup_expired
+    await _cleanup_expired()
+    flash(request, "期限切れキャッシュをすべて削除しました。", "success")
+    return RedirectResponse("/admin/dev#cache", status_code=303)
+
+
+@router.post("/signal/{task_name}")
+async def trigger_signal(
+    request: Request, task_name: str, _=Depends(_check_dev), _csrf=Depends(check_csrf)
+):
+    if task_name not in _VALID_TASKS:
+        raise HTTPException(status_code=400)
+    _SIGNAL_DIR.mkdir(parents=True, exist_ok=True)
+    sig_file = _SIGNAL_DIR / f"{task_name}.signal"
+    sig_file.write_text(
+        json.dumps({
+            "task": task_name,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }),
+        encoding="utf-8",
+    )
+    flash(request, f"タスク '{task_name}' をキューに追加しました。数十秒以内に実行されます。", "info")
+    return RedirectResponse("/admin/dev#tasks", status_code=303)
+
+
+@router.post("/news-send")
+async def news_send(
+    request: Request, _=Depends(_check_dev), _csrf=Depends(check_csrf)
+):
+    form = await request.form()
+    query = sanitize(form.get("query", ""), 200).strip()
+    channel_id = sanitize(form.get("channel_id", ""), 20).strip()
+    if not query or not channel_id:
+        flash(request, "クエリとチャンネルIDは必須です。", "warning")
+        return RedirectResponse("/admin/dev#news", status_code=303)
+
+    from services.news_service import _fetch_articles, _format_pub_date, _summarize_article
+
+    async with aiohttp.ClientSession() as session:
+        articles = await _fetch_articles(session, query)
+
+    if not articles:
+        flash(request, "記事が見つかりませんでした。クエリを変えてお試しください。", "warning")
+        return RedirectResponse("/admin/dev#news", status_code=303)
+
+    article = articles[0]
+    embed: dict = {
+        "title": article["title"][:256],
+        "url": article["link"],
+        "color": 0x3498DB,
+    }
+    if article.get("desc"):
+        embed["description"] = article["desc"][:4096]
+    if article.get("source"):
+        embed["author"] = {"name": article["source"][:256]}
+    if article.get("pubDate"):
+        embed["footer"] = {"text": _format_pub_date(article["pubDate"])}
+
+    try:
+        summary = await _summarize_article(article)
+        if summary:
+            embed.setdefault("fields", []).append({
+                "name": "要約 (Groq)",
+                "value": summary[:1024],
+                "inline": False,
+            })
+    except Exception:
+        pass
+
+    result = await _api("POST", f"/channels/{channel_id}/messages", json={"embeds": [embed]})
+    if result:
+        title_short = article["title"][:50]
+        flash(request, f"ニュース「{title_short}…」を ch:{channel_id} へ送信しました。", "success")
+    else:
+        flash(request, "送信に失敗しました。チャンネルIDを確認してください。", "danger")
+    return RedirectResponse("/admin/dev#news", status_code=303)
+
+
+@router.post("/earthquake-replay")
+async def earthquake_replay(
+    request: Request, _=Depends(_check_dev), _csrf=Depends(check_csrf)
+):
+    form = await request.form()
+    event_json = sanitize(form.get("event_json", ""), 100000).strip()
+    if not event_json:
+        flash(request, "イベントJSONが必要です。", "warning")
+        return RedirectResponse("/admin/dev#earthquake", status_code=303)
+
+    try:
+        json.loads(event_json)
+    except (ValueError, json.JSONDecodeError):
+        flash(request, "無効なJSONです。", "danger")
+        return RedirectResponse("/admin/dev#earthquake", status_code=303)
+
+    _SIGNAL_DIR.mkdir(parents=True, exist_ok=True)
+    (_SIGNAL_DIR / "eq_replay.signal").write_text(event_json, encoding="utf-8")
+    flash(request, "地震速報をリプレイキューに追加しました。数十秒以内に通知が送信されます。", "info")
+    return RedirectResponse("/admin/dev#earthquake", status_code=303)

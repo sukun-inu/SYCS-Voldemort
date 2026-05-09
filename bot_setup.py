@@ -1,8 +1,10 @@
 import asyncio
+import json
 import logging
 import os
 import time
 from datetime import datetime
+from pathlib import Path
 
 import discord
 import psutil
@@ -35,6 +37,8 @@ def _env_bool(name: str, default: bool) -> bool:
 
 
 _BOT_BACKGROUND_WORKER = _env_bool("BOT_BACKGROUND_WORKER", True)
+
+_SIGNAL_DIR = Path(os.getenv("SETTINGS_DIR", str(Path(__file__).parent / "data"))) / "_dev_signals"
 
 
 def _is_public_vc(channel: discord.abc.GuildChannel | None) -> bool:
@@ -96,6 +100,42 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.exception("[BOT_SETUP] pending_sticky_task error: %s", e)
 
+    # --------------------------
+    # 開発者シグナルファイル監視（30秒ごと）
+    # --------------------------
+    @tasks.loop(seconds=30)
+    async def dev_signal_task():
+        if not _SIGNAL_DIR.exists():
+            return
+        for sig_file in list(_SIGNAL_DIR.glob("*.signal")):
+            task_name = sig_file.stem
+            try:
+                try:
+                    sig_content = sig_file.read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                sig_file.unlink(missing_ok=True)
+                logger.info("[DEV] シグナル受信: %s", task_name)
+                if task_name == "news_feeds":
+                    await run_news_feeds(bot)
+                elif task_name == "sticky":
+                    await process_pending_stickies(bot)
+                elif task_name == "djaudio_cache":
+                    from services.djaudio_cache import _cleanup_expired
+                    await _cleanup_expired(bot=bot)
+                elif task_name == "earthquake_reconnect":
+                    nonlocal _ws_task
+                    if _ws_task and not _ws_task.done():
+                        _ws_task.cancel()
+                    _ws_task = asyncio.create_task(run_earthquake_ws(bot))
+                elif task_name == "eq_replay":
+                    from services.earthquake_service import _notify_all_guilds
+                    event = json.loads(sig_content)
+                    await _notify_all_guilds(bot, event)
+                logger.info("[DEV] シグナル完了: %s", task_name)
+            except Exception as e:
+                logger.exception("[DEV] シグナル実行エラー %s: %s", task_name, e)
+
     @bot.event
     async def on_ready():
         nonlocal _ws_task
@@ -103,6 +143,8 @@ def setup_events(bot: Bot) -> None:
         await bot.tree.sync()
         if not update_status.is_running():
             update_status.start()
+        if not dev_signal_task.is_running():
+            dev_signal_task.start()
         if _BOT_BACKGROUND_WORKER:
             if not news_feed_task.is_running():
                 news_feed_task.start()

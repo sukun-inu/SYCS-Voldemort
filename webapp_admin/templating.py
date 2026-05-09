@@ -1,3 +1,4 @@
+import json as _json
 import os
 import secrets
 from pathlib import Path
@@ -35,6 +36,14 @@ _ROUTE_MAP: dict[str, str] = {
     "earthquake": "/admin/settings/earthquake",
     "security_settings": "/admin/settings/security",
     "djaudio_settings": "/admin/settings/djaudio",
+    "dev_index": "/admin/dev",
+    "dev_send_message": "/admin/dev/send-message",
+    "dev_forward_message": "/admin/dev/forward-message",
+    "dev_settings_guild": "/admin/dev/settings/{guild_id}",
+    "dev_delete_cache_entry": "/admin/dev/cache/delete",
+    "dev_purge_cache": "/admin/dev/cache/purge",
+    "dev_news_send": "/admin/dev/news-send",
+    "dev_earthquake_replay": "/admin/dev/earthquake-replay",
     "dlaudio_health": "/dlaudio/health",
     "serve_file": "/dlaudio/files/{guild_id}/{token}",
     "file_info": "/dlaudio/info/{guild_id}/{token}",
@@ -44,7 +53,12 @@ _ROUTE_MAP: dict[str, str] = {
 
 def _url_for(name: str, **kwargs: str) -> str:
     short = name.split(".")[-1] if "." in name else name
-    path = _ROUTE_MAP.get(short) or _ROUTE_MAP.get(name, f"/{name}")
+    dotted_as_underscore = name.replace(".", "_") if "." in name else ""
+    path = (
+        _ROUTE_MAP.get(short)
+        or (dotted_as_underscore and _ROUTE_MAP.get(dotted_as_underscore))
+        or _ROUTE_MAP.get(name, f"/{name}")
+    )
     for k, v in kwargs.items():
         path = path.replace(f"{{{k}}}", str(v))
     return path
@@ -64,6 +78,7 @@ def _admin_asset_url(filename: str) -> str:
 
 
 templates.env.globals["admin_asset_url"] = _admin_asset_url
+templates.env.filters["tojson"] = lambda v: _json.dumps(v, ensure_ascii=False)
 
 
 def _get_csrf_token(request: Request) -> str:

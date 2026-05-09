@@ -101,11 +101,13 @@ def create_app() -> FastAPI:
 
     from webapp_admin.views.auth_views import router as auth_router
     from webapp_admin.views.dashboard_views import router as dashboard_router
+    from webapp_admin.views.dev_views import router as dev_router
     from webapp_admin.views.djaudio_views import dlaudio_router, router as djaudio_router
     from webapp_admin.views.settings_views import router as settings_router
 
     app.include_router(auth_router, prefix="/admin")
     app.include_router(dashboard_router, prefix="/admin")
+    app.include_router(dev_router, prefix="/admin/dev")
     app.include_router(settings_router, prefix="/admin/settings")
     app.include_router(djaudio_router, prefix="/admin/settings")
     app.include_router(dlaudio_router, prefix="/dlaudio")
