@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import re
@@ -5,7 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import aiohttp
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import JSONResponse, Response
 from starlette.responses import RedirectResponse
 
 from config import DJAUDIO_CACHE_DIR, DISCORD_BOT_TOKEN
@@ -122,17 +124,88 @@ async def _fetch_eq_history(limit: int = 5) -> list[dict]:
         return []
 
 
+_LOG_DIR = Path(os.getenv("SETTINGS_DIR", "/app/data")) / "logs"
+
+_ENV_DISPLAY: list[tuple[str, bool]] = [
+    ("DISCORD_BOT_TOKEN",         True),
+    ("DISCORD_CLIENT_ID",         False),
+    ("DISCORD_CLIENT_SECRET",     True),
+    ("ADMIN_FLASK_SECRET_KEY",    True),
+    ("OPENAI_API_KEY",            True),
+    ("GROQ_API_KEY",              True),
+    ("VIRUSTOTAL_API_KEY",        True),
+    ("METALPRICE_API_KEY",        True),
+    ("SETTINGS_DIR",              False),
+    ("DJAUDIO_BASE_URL",          False),
+    ("DJAUDIO_CACHE_DIR",         False),
+    ("DJAUDIO_CACHE_TTL_SECONDS", False),
+    ("FLASK_SECURE_COOKIES",      False),
+    ("ADMIN_SITE_URL",            False),
+    ("METALS_SITE_URL",           False),
+]
+
+
+def _tail_file(path: Path, lines: int = 200) -> list[str]:
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as f:
+            all_lines = f.readlines()
+        return [ln.rstrip("\n") for ln in all_lines[-lines:]]
+    except (OSError, FileNotFoundError):
+        return []
+
+
+def _env_rows() -> list[dict]:
+    rows = []
+    for key, secret in _ENV_DISPLAY:
+        val = os.environ.get(key)
+        if val is None:
+            display = None
+            status = "missing"
+        elif secret:
+            display = f"{val[:4]}{'*' * min(len(val) - 4, 20)}" if len(val) > 4 else "****"
+            status = "set"
+        else:
+            display = val
+            status = "set"
+        rows.append({"key": key, "value": display, "status": status, "secret": secret})
+    return rows
+
+
+def _list_all_stickies() -> list[dict]:
+    try:
+        from services.settings_store import _load_all_from_disk
+        data = _load_all_from_disk()
+        result = []
+        for guild_id, guild_data in data.get("guilds", {}).items():
+            for ch_id, sticky in guild_data.get("sticky_messages", {}).items():
+                result.append({
+                    "guild_id": guild_id,
+                    "channel_id": ch_id,
+                    "content": sticky.get("content", ""),
+                    "message_id": sticky.get("message_id"),
+                    "pending_delete": sticky.get("pending_delete", False),
+                })
+        return sorted(result, key=lambda x: x["guild_id"])
+    except Exception:
+        return []
+
+
 @router.get("")
 @router.get("/")
 async def dev_index(request: Request, _=Depends(_check_dev)):
-    guilds = await _api("GET", "/users/@me/guilds?limit=200") or []
+    guilds, bot_user, eq_history = await asyncio.gather(
+        _api("GET", "/users/@me/guilds?limit=200"),
+        _api("GET", "/users/@me"),
+        _fetch_eq_history(),
+    )
+    guilds = guilds or []
     if isinstance(guilds, list):
         guilds.sort(key=lambda g: (g.get("name") or "").lower())
     settings = _all_settings()
-    eq_history = await _fetch_eq_history()
     return render(
         request, "dev/index.html",
         guilds=guilds,
+        bot_user=bot_user or {},
         settings_guild_ids=set(settings.get("guilds", {}).keys()),
         cache_entries=_list_cache_entries(),
         pending_signals=_pending_signals(),
@@ -140,6 +213,8 @@ async def dev_index(request: Request, _=Depends(_check_dev)):
         eq_history=eq_history,
         scale_labels=_SCALE_LABELS,
         scale_badge=_SCALE_BADGE,
+        stickies=_list_all_stickies(),
+        env_rows=_env_rows(),
     )
 
 
@@ -328,3 +403,133 @@ async def earthquake_replay(
     (_SIGNAL_DIR / "eq_replay.signal").write_text(event_json, encoding="utf-8")
     flash(request, "地震速報をリプレイキューに追加しました。数十秒以内に通知が送信されます。", "info")
     return RedirectResponse("/admin/dev#earthquake", status_code=303)
+
+
+@router.get("/api/channels")
+async def api_channels(
+    request: Request,
+    guild_id: str = Query(...),
+    _=Depends(_check_dev),
+):
+    if not re.fullmatch(r"\d+", guild_id):
+        raise HTTPException(status_code=400)
+    data = await _api("GET", f"/guilds/{guild_id}/channels")
+    if not isinstance(data, list):
+        return JSONResponse({"channels": []})
+    text_types = {0, 5, 10, 11, 12, 15}  # GUILD_TEXT, ANNOUNCEMENT, THREAD, FORUM 等
+    channels = sorted(
+        [
+            {"id": c["id"], "name": c.get("name", ""), "type": c.get("type", 0)}
+            for c in data
+            if c.get("type") in text_types
+        ],
+        key=lambda c: c["name"].lower(),
+    )
+    return JSONResponse({"channels": channels})
+
+
+@router.get("/api/logs")
+async def api_logs(
+    request: Request,
+    source: str = Query("bot", pattern="^(bot|admin)$"),
+    lines: int = Query(200, ge=10, le=1000),
+    _=Depends(_check_dev),
+):
+    log_path = _LOG_DIR / f"{source}.log"
+    tail = _tail_file(log_path, lines)
+    return JSONResponse({"source": source, "lines": tail, "path": str(log_path)})
+
+
+@router.get("/api/user")
+async def api_user(
+    request: Request,
+    user_id: str = Query(...),
+    _=Depends(_check_dev),
+):
+    if not re.fullmatch(r"\d+", user_id):
+        raise HTTPException(status_code=400, detail="user_id は数値のみ")
+    data = await _api("GET", f"/users/{user_id}")
+    if not data or not isinstance(data, dict):
+        return JSONResponse({"error": "ユーザーが見つかりませんでした"}, status_code=404)
+    snowflake = int(user_id)
+    created_ms = (snowflake >> 22) + 1420070400000  # Discord epoch
+    data["_created_at"] = datetime.fromtimestamp(created_ms / 1000, tz=timezone.utc).isoformat()
+    return JSONResponse(data)
+
+
+@router.get("/settings/{guild_id}/export")
+async def export_guild_settings(
+    request: Request, guild_id: str, _=Depends(_check_dev)
+):
+    if not re.fullmatch(r"\d+", guild_id):
+        raise HTTPException(status_code=400)
+    data = _all_settings()
+    guild_data = data.get("guilds", {}).get(guild_id)
+    if guild_data is None:
+        raise HTTPException(status_code=404, detail="ギルド設定が見つかりません")
+    content = json.dumps(guild_data, ensure_ascii=False, indent=2).encode("utf-8")
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="guild_{guild_id}.json"'},
+    )
+
+
+@router.post("/settings/{guild_id}/import")
+async def import_guild_settings(
+    request: Request,
+    guild_id: str,
+    _csrf=Depends(check_csrf),
+    _dev=Depends(_check_dev),
+    file: UploadFile = File(...),
+):
+    if not re.fullmatch(r"\d+", guild_id):
+        raise HTTPException(status_code=400)
+    content = await file.read()
+    try:
+        new_settings = json.loads(content.decode("utf-8"))
+        if not isinstance(new_settings, dict):
+            raise ValueError
+    except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
+        flash(request, "無効なJSONファイルです。", "danger")
+        return RedirectResponse("/admin/dev#settings", status_code=303)
+    from services.settings_store import replace_guild_settings
+    replace_guild_settings(int(guild_id), new_settings)
+    flash(request, f"ギルド {guild_id} の設定をインポートしました。", "success")
+    return RedirectResponse("/admin/dev#settings", status_code=303)
+
+
+@router.post("/test-notify/welcome")
+async def test_notify_welcome(
+    request: Request, _=Depends(_check_dev), _csrf=Depends(check_csrf)
+):
+    form = await request.form()
+    guild_id = sanitize(form.get("guild_id", ""), 20).strip()
+    if not guild_id or not re.fullmatch(r"\d+", guild_id):
+        flash(request, "ギルドIDが無効です。", "warning")
+        return RedirectResponse("/admin/dev#notify", status_code=303)
+    _SIGNAL_DIR.mkdir(parents=True, exist_ok=True)
+    (_SIGNAL_DIR / "test_welcome.signal").write_text(
+        json.dumps({"guild_id": guild_id, "created_at": datetime.now(timezone.utc).isoformat()}),
+        encoding="utf-8",
+    )
+    flash(request, f"ウェルカム通知テストをキューに追加しました。（ギルド: {guild_id}）", "info")
+    return RedirectResponse("/admin/dev#notify", status_code=303)
+
+
+@router.post("/test-notify/vc")
+async def test_notify_vc(
+    request: Request, _=Depends(_check_dev), _csrf=Depends(check_csrf)
+):
+    form = await request.form()
+    guild_id = sanitize(form.get("guild_id", ""), 20).strip()
+    if not guild_id or not re.fullmatch(r"\d+", guild_id):
+        flash(request, "ギルドIDが無効です。", "warning")
+        return RedirectResponse("/admin/dev#notify", status_code=303)
+    _SIGNAL_DIR.mkdir(parents=True, exist_ok=True)
+    (_SIGNAL_DIR / "test_vc_notify.signal").write_text(
+        json.dumps({"guild_id": guild_id, "created_at": datetime.now(timezone.utc).isoformat()}),
+        encoding="utf-8",
+    )
+    flash(request, f"VC通知テストをキューに追加しました。（ギルド: {guild_id}）", "info")
+    return RedirectResponse("/admin/dev#notify", status_code=303)

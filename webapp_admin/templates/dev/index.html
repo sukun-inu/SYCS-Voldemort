@@ -2,13 +2,52 @@
 {% block title %}開発者パネル{% endblock %}
 {% block content %}
 
+{# ── ページヘッダー ────────────────────────────────── #}
 <div class="page-header">
   <div>
     <p class="page-kicker">Developer</p>
     <h1 class="page-title"><i class="bi bi-bug-fill"></i>開発者デバッグパネル</h1>
     <p class="page-description">ID <code>{{ session.user.id }}</code> 専用 — 本番データに直接影響します。</p>
   </div>
-  <span class="badge bg-danger fs-6 align-self-start">DEV ONLY</span>
+  <span class="dev-badge">
+    <span class="dev-badge-dot"></span>DEV ONLY
+  </span>
+</div>
+
+{# ── ステータスバー ────────────────────────────────── #}
+<div class="dev-status-bar">
+  {% if bot_user %}
+  <div class="dev-status-item">
+    <span class="dev-status-dot"></span>
+    {% if bot_user.avatar %}
+    <img src="https://cdn.discordapp.com/avatars/{{ bot_user.id }}/{{ bot_user.avatar }}.webp?size=32"
+         width="18" height="18" class="rounded-circle" alt="">
+    {% endif %}
+    <strong>{{ bot_user.get("global_name") or bot_user.get("username", "Bot") }}</strong>
+    <span style="color:var(--text-tertiary)">オンライン</span>
+  </div>
+  <div class="dev-status-item" style="border-left:1px solid var(--separator);padding-left:18px">
+    <i class="bi bi-server" style="font-size:13px"></i>
+    <strong>{{ guilds | length }}</strong> ギルド
+  </div>
+  {% endif %}
+  {% if pending_signals %}
+  <div class="dev-status-item" style="border-left:1px solid var(--separator);padding-left:18px;color:var(--warning)">
+    <i class="bi bi-hourglass-split" style="font-size:13px"></i>
+    <strong style="color:var(--warning)">{{ pending_signals | length }}</strong> 個のシグナル待機中
+  </div>
+  {% else %}
+  <div class="dev-status-item" style="border-left:1px solid var(--separator);padding-left:18px">
+    <i class="bi bi-check-circle" style="font-size:13px;color:var(--success)"></i>
+    <span>待機中シグナルなし</span>
+  </div>
+  {% endif %}
+  <div class="dev-status-item ms-auto">
+    <i class="bi bi-arrow-clockwise" style="font-size:13px"></i>
+    <span style="font-size:12px;color:var(--text-tertiary)">
+      {{ (cache_entries | selectattr("_expired") | list) | length }} 件のキャッシュ期限切れ
+    </span>
+  </div>
 </div>
 
 {# ── タブナビ ─────────────────────────────────────── #}
@@ -30,7 +69,7 @@
             data-bs-target="#tab-tasks" type="button" role="tab">
       <i class="bi bi-play-circle me-1"></i>タスク
       {% if pending_signals %}
-      <span class="badge bg-warning text-dark ms-1">{{ pending_signals | length }}</span>
+      <span class="badge-soft warning ms-1" style="font-size:10px;padding:2px 7px">{{ pending_signals | length }}</span>
       {% endif %}
     </button>
   </li>
@@ -38,7 +77,7 @@
     <button class="nav-link" id="tab-settings-tab" data-bs-toggle="tab"
             data-bs-target="#tab-settings" type="button" role="tab">
       <i class="bi bi-gear me-1"></i>設定
-      <span class="badge bg-secondary ms-1">{{ settings_guild_ids | length }}</span>
+      <span class="badge-soft ms-1" style="font-size:10px;padding:2px 7px">{{ settings_guild_ids | length }}</span>
     </button>
   </li>
   <li class="nav-item" role="presentation">
@@ -46,8 +85,26 @@
             data-bs-target="#tab-cache" type="button" role="tab">
       <i class="bi bi-music-note-beamed me-1"></i>キャッシュ
       {% if cache_entries %}
-      <span class="badge bg-secondary ms-1">{{ cache_entries | length }}</span>
+      <span class="badge-soft ms-1" style="font-size:10px;padding:2px 7px">{{ cache_entries | length }}</span>
       {% endif %}
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-notify-tab" data-bs-toggle="tab"
+            data-bs-target="#tab-notify" type="button" role="tab">
+      <i class="bi bi-bell me-1"></i>通知テスト
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-utils-tab" data-bs-toggle="tab"
+            data-bs-target="#tab-utils" type="button" role="tab">
+      <i class="bi bi-tools me-1"></i>ユーティリティ
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-logs-tab" data-bs-toggle="tab"
+            data-bs-target="#tab-logs" type="button" role="tab">
+      <i class="bi bi-terminal me-1"></i>ログ
     </button>
   </li>
 </ul>
@@ -57,10 +114,38 @@
   {# ── 送信タブ ─────────────────────────────────── #}
   <div class="tab-pane fade show active p-4" id="tab-send" role="tabpanel">
 
+    {# チャンネルID検索ヘルパー #}
+    <div class="mb-4 p-3 rounded" style="background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent)">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <p class="mb-0 small fw-semibold" style="color:var(--accent)">
+          <i class="bi bi-search me-1"></i>チャンネルID 検索ヘルパー
+        </p>
+        <span class="small" style="color:var(--text-tertiary)">チャンネルIDを確認してフォームにコピーできます</span>
+      </div>
+      <div class="d-flex gap-2">
+        <select id="helperGuildSelect" class="form-select form-select-sm" style="max-width:280px">
+          <option value="">— サーバーを選択 —</option>
+          {% for guild in guilds %}
+          <option value="{{ guild.id }}">{{ guild.name }}</option>
+          {% endfor %}
+        </select>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="helperFetchBtn">
+          <i class="bi bi-list-ul me-1"></i>チャンネル一覧
+        </button>
+      </div>
+      <div id="helperChannelList" class="dev-channel-picker mt-2" hidden>
+        <div class="dev-channel-picker-header">
+          <span class="small fw-semibold" style="color:var(--text-secondary)" id="helperGuildName"></span>
+          <span class="small" style="color:var(--text-tertiary)">クリックでフォームに入力</span>
+        </div>
+        <div class="dev-channel-list" id="helperChannelItems"></div>
+      </div>
+    </div>
+
     {# メッセージ送信 / 転送 #}
-    <h3 class="fs-6 fw-semibold text-body-secondary text-uppercase mb-3 d-flex align-items-center gap-2">
-      <i class="bi bi-chat-dots"></i>メッセージ
-    </h3>
+    <p class="small fw-semibold mb-3" style="color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.06em">
+      <i class="bi bi-chat-dots me-1"></i>メッセージ
+    </p>
     <div class="row g-4 mb-4">
       <div class="col-lg-6">
         <div class="p-3 rounded h-100" style="background:var(--surface-muted);border:1px solid var(--separator)">
@@ -69,7 +154,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div class="mb-2">
               <label class="form-label form-label-sm">チャンネルID</label>
-              <input type="text" name="channel_id" class="form-control form-control-sm font-monospace"
+              <input type="text" name="channel_id" class="form-control form-control-sm font-monospace ch-target"
                      placeholder="1234567890123456789" pattern="\d+" required>
             </div>
             <div class="mb-3">
@@ -96,7 +181,7 @@
             </div>
             <div class="mb-3">
               <label class="form-label form-label-sm">転送先チャンネルID</label>
-              <input type="text" name="target_channel_id" class="form-control form-control-sm font-monospace"
+              <input type="text" name="target_channel_id" class="form-control form-control-sm font-monospace ch-target"
                      placeholder="1234567890123456789" pattern="\d+" required>
             </div>
             <button type="submit" class="btn btn-sm btn-primary">
@@ -107,13 +192,13 @@
       </div>
     </div>
 
-    <hr class="my-3">
+    <hr style="border-color:var(--separator)">
 
     {# ニュース手動送信 #}
-    <h3 class="fs-6 fw-semibold text-body-secondary text-uppercase mb-3 d-flex align-items-center gap-2">
-      <i class="bi bi-newspaper"></i>ニュース手動送信
-    </h3>
-    <p class="small text-body-secondary mb-3">Google News RSS から直近1件を取得し、Groq要約付きでチャンネルに送信します。</p>
+    <p class="small fw-semibold mb-3 mt-3" style="color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.06em">
+      <i class="bi bi-newspaper me-1"></i>ニュース手動送信
+    </p>
+    <p class="small mb-3" style="color:var(--text-secondary)">Google News RSS から直近1件を取得し、Groq要約付きでチャンネルに送信します。</p>
     <form method="post" action="{{ url_for('dev.news_send') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="row g-3 align-items-end">
@@ -124,7 +209,7 @@
         </div>
         <div class="col-sm-4">
           <label class="form-label form-label-sm">送信先チャンネルID</label>
-          <input type="text" name="channel_id" class="form-control form-control-sm font-monospace"
+          <input type="text" name="channel_id" class="form-control form-control-sm font-monospace ch-target"
                  placeholder="1234567890123456789" pattern="\d+" required>
         </div>
         <div class="col-sm-3">
@@ -138,7 +223,7 @@
 
   {# ── 地震速報タブ ──────────────────────────────── #}
   <div class="tab-pane fade p-4" id="tab-eq" role="tabpanel">
-    <p class="small text-body-secondary mb-3">
+    <p class="small mb-3" style="color:var(--text-secondary)">
       P2PQuake 履歴から直近の確定地震情報を取得し、全ギルドへ再送信します。
     </p>
     {% if eq_history %}
@@ -187,8 +272,8 @@
       </table>
     </div>
     {% else %}
-    <div class="text-center py-5 text-body-secondary">
-      <i class="bi bi-wifi-off fs-2 d-block mb-2"></i>
+    <div class="empty-state">
+      <i class="bi bi-wifi-off"></i>
       P2PQuake から地震履歴を取得できませんでした。
     </div>
     {% endif %}
@@ -196,7 +281,7 @@
 
   {# ── タスクタブ ────────────────────────────────── #}
   <div class="tab-pane fade p-4" id="tab-tasks" role="tabpanel">
-    <p class="small text-body-secondary mb-3">
+    <p class="small mb-3" style="color:var(--text-secondary)">
       シグナルファイルを書き込みます。Bot が 30 秒以内に検知して実行します。
     </p>
     <div class="row g-3">
@@ -209,12 +294,13 @@
                   class="btn w-100 text-start py-3 px-3 {{ 'btn-outline-warning' if pending else 'btn-outline-secondary' }}"
                   style="min-height:80px">
             <div class="d-flex align-items-start gap-2">
-              <i class="bi bi-{{ 'hourglass-split text-warning' if pending else 'play-circle' }} mt-1 flex-shrink-0"></i>
+              <i class="bi bi-{{ 'hourglass-split' if pending else 'play-circle' }} mt-1 flex-shrink-0"
+                 style="color:{{ 'var(--warning)' if pending else 'var(--text-tertiary)' }}"></i>
               <div>
                 <div class="small fw-bold lh-sm">{{ task_name }}</div>
-                <div class="small text-body-secondary lh-sm mt-1">{{ task_label }}</div>
+                <div class="small lh-sm mt-1" style="color:var(--text-secondary)">{{ task_label }}</div>
                 {% if pending %}
-                <span class="badge bg-warning text-dark mt-2 fw-normal">待機中</span>
+                <span class="badge-soft warning mt-2" style="font-size:10px">待機中</span>
                 {% endif %}
               </div>
             </div>
@@ -227,7 +313,7 @@
 
   {# ── 設定タブ ──────────────────────────────────── #}
   <div class="tab-pane fade p-4" id="tab-settings" role="tabpanel">
-    <p class="small text-body-secondary mb-3">各ギルドの生 JSON を確認できます。</p>
+    <p class="small mb-3" style="color:var(--text-secondary)">各ギルドの生 JSON を確認・エクスポート・インポートできます。</p>
     {% if guilds %}
     <div class="table-responsive">
       <table class="table table-sm table-hover align-middle mb-0">
@@ -252,26 +338,65 @@
             <td><code class="small">{{ guild.id }}</code></td>
             <td class="text-center">
               {% if guild.id in settings_guild_ids %}
-              <span class="badge bg-success">あり</span>
+              <span class="badge-soft success">あり</span>
               {% else %}
-              <span class="badge bg-secondary">なし</span>
+              <span class="badge-soft">なし</span>
               {% endif %}
             </td>
             <td>
-              {% if guild.id in settings_guild_ids %}
-              <a href="/admin/dev/settings/{{ guild.id }}" class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-code-slash me-1"></i>JSON
-              </a>
-              {% endif %}
+              <div class="d-flex gap-1 justify-content-end flex-wrap">
+                {% if guild.id in settings_guild_ids %}
+                <a href="/admin/dev/settings/{{ guild.id }}" class="btn btn-sm btn-outline-secondary">
+                  <i class="bi bi-code-slash me-1"></i>JSON
+                </a>
+                <a href="/admin/dev/settings/{{ guild.id }}/export" class="btn btn-sm btn-outline-primary">
+                  <i class="bi bi-download me-1"></i>Export
+                </a>
+                {% endif %}
+                <button type="button" class="btn btn-sm btn-outline-warning"
+                        onclick="openImport('{{ guild.id }}', '{{ guild.name | replace("'","&#39;") }}')">
+                  <i class="bi bi-upload me-1"></i>Import
+                </button>
+              </div>
             </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+
+    {# インポートモーダル #}
+    <div class="modal fade" id="importModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content" style="background:var(--surface);border:1px solid var(--separator)">
+          <div class="modal-header" style="border-bottom:1px solid var(--separator)">
+            <h6 class="modal-title">設定インポート — <span id="importGuildName"></span></h6>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <form id="importForm" method="post" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="modal-body">
+              <p class="small mb-3" style="color:var(--text-secondary)">
+                JSON ファイルをアップロードするとギルド設定を丸ごと置換します。<br>
+                <strong style="color:var(--danger)">この操作は取り消せません。</strong>
+              </p>
+              <input type="file" name="file" class="form-control form-control-sm" accept=".json,application/json" required>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid var(--separator)">
+              <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">キャンセル</button>
+              <button type="submit" class="btn btn-sm btn-warning"
+                      onclick="return confirm('本当にこのギルドの設定を上書きしますか？')">
+                <i class="bi bi-upload me-1"></i>インポート実行
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
     {% else %}
-    <div class="text-center py-5 text-body-secondary">
-      <i class="bi bi-server fs-2 d-block mb-2"></i>
+    <div class="empty-state">
+      <i class="bi bi-server"></i>
       Bot が参加しているサーバーがありません。
     </div>
     {% endif %}
@@ -280,7 +405,7 @@
   {# ── キャッシュタブ ────────────────────────────── #}
   <div class="tab-pane fade p-4" id="tab-cache" role="tabpanel">
     <div class="d-flex justify-content-between align-items-center mb-3">
-      <p class="small text-body-secondary mb-0">ダウンロード済み MP3 のキャッシュ一覧です。</p>
+      <p class="small mb-0" style="color:var(--text-secondary)">ダウンロード済み MP3 のキャッシュ一覧です。</p>
       <form method="post" action="{{ url_for('dev.purge_cache') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="btn btn-sm btn-outline-danger"
@@ -317,9 +442,9 @@
             </td>
             <td class="text-center">
               {% if entry._expired %}
-              <span class="badge bg-warning text-dark">期限切れ</span>
+              <span class="badge-soft warning">期限切れ</span>
               {% else %}
-              <span class="badge bg-success">有効</span>
+              <span class="badge-soft success">有効</span>
               {% endif %}
             </td>
             <td>
@@ -338,20 +463,231 @@
       </table>
     </div>
     {% else %}
-    <div class="text-center py-5 text-body-secondary">
-      <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+    <div class="empty-state">
+      <i class="bi bi-inbox"></i>
       キャッシュエントリはありません。
     </div>
     {% endif %}
   </div>
 
+  {# ── 通知テストタブ ────────────────────────────── #}
+  <div class="tab-pane fade p-4" id="tab-notify" role="tabpanel">
+    <p class="small mb-4" style="color:var(--text-secondary)">
+      シグナルファイル経由で Bot に通知テスト送信を指示します。Bot が 30 秒以内に検知して実行します。
+    </p>
+    <div class="row g-4">
+      <div class="col-lg-6">
+        <div class="p-3 rounded h-100" style="background:var(--surface-muted);border:1px solid var(--separator)">
+          <p class="small fw-bold mb-1"><i class="bi bi-door-open me-2"></i>ウェルカムメッセージ</p>
+          <p class="small mb-3" style="color:var(--text-secondary)">
+            設定済みのウェルカムチャンネルへテスト送信します。
+          </p>
+          <form method="post" action="{{ url_for('dev.test_notify_welcome') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="mb-3">
+              <label class="form-label form-label-sm">対象ギルド</label>
+              <select name="guild_id" class="form-select form-select-sm" required>
+                <option value="">— サーバーを選択 —</option>
+                {% for guild in guilds %}
+                <option value="{{ guild.id }}">{{ guild.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary">
+              <i class="bi bi-send me-1"></i>ウェルカムをテスト送信
+            </button>
+          </form>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="p-3 rounded h-100" style="background:var(--surface-muted);border:1px solid var(--separator)">
+          <p class="small fw-bold mb-1"><i class="bi bi-mic me-2"></i>VC参加通知</p>
+          <p class="small mb-3" style="color:var(--text-secondary)">
+            設定済みの VC 通知チャンネルへテスト送信します。
+          </p>
+          <form method="post" action="{{ url_for('dev.test_notify_vc') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="mb-3">
+              <label class="form-label form-label-sm">対象ギルド</label>
+              <select name="guild_id" class="form-select form-select-sm" required>
+                <option value="">— サーバーを選択 —</option>
+                {% for guild in guilds %}
+                <option value="{{ guild.id }}">{{ guild.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary">
+              <i class="bi bi-send me-1"></i>VC通知をテスト送信
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── ユーティリティタブ ────────────────────────── #}
+  <div class="tab-pane fade p-4" id="tab-utils" role="tabpanel">
+
+    {# Discord ユーザー検索 #}
+    <p class="small fw-semibold mb-2" style="color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.06em">
+      <i class="bi bi-person-search me-1"></i>Discord ユーザー情報
+    </p>
+    <div class="p-3 rounded mb-4" style="background:var(--surface-muted);border:1px solid var(--separator)">
+      <div class="row g-3 align-items-end mb-3">
+        <div class="col-sm-8">
+          <label class="form-label form-label-sm">User ID (Snowflake)</label>
+          <input type="text" id="userLookupId" class="form-control form-control-sm font-monospace"
+                 placeholder="1234567890123456789" pattern="\d+" maxlength="20">
+        </div>
+        <div class="col-sm-4">
+          <button type="button" class="btn btn-sm btn-outline-primary w-100" id="userLookupBtn">
+            <i class="bi bi-search me-1"></i>検索
+          </button>
+        </div>
+      </div>
+      <div id="userLookupResult" hidden></div>
+    </div>
+
+    {# スティッキーメッセージ一覧 #}
+    <p class="small fw-semibold mb-2" style="color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.06em">
+      <i class="bi bi-pin-angle me-1"></i>スティッキーメッセージ一覧
+      <span class="badge-soft ms-1" style="font-size:10px;padding:2px 7px">{{ stickies | length }}</span>
+    </p>
+    {% if stickies %}
+    <div class="table-responsive mb-4">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Guild ID</th>
+            <th>Channel ID</th>
+            <th>Message ID</th>
+            <th>内容</th>
+            <th class="text-center">状態</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in stickies %}
+          <tr>
+            <td><code class="small">{{ s.guild_id }}</code></td>
+            <td><code class="small">{{ s.channel_id }}</code></td>
+            <td><code class="small">{{ s.message_id or "—" }}</code></td>
+            <td class="text-truncate" style="max-width:200px" title="{{ s.content }}">
+              {{ s.content[:60] }}{% if s.content | length > 60 %}…{% endif %}
+            </td>
+            <td class="text-center">
+              {% if s.pending_delete %}
+              <span class="badge-soft warning">削除待ち</span>
+              {% else %}
+              <span class="badge-soft success">有効</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state mb-4">
+      <i class="bi bi-pin-angle"></i>
+      スティッキーメッセージは設定されていません。
+    </div>
+    {% endif %}
+
+    {# 環境変数チェッカー #}
+    <p class="small fw-semibold mb-2" style="color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.06em">
+      <i class="bi bi-key me-1"></i>環境変数チェッカー
+    </p>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr>
+            <th>変数名</th>
+            <th>値</th>
+            <th class="text-center">状態</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in env_rows %}
+          <tr>
+            <td><code class="small">{{ row.key }}</code></td>
+            <td class="font-monospace small" style="color:var(--text-secondary)">
+              {% if row.value is none %}
+              <span style="color:var(--danger)">未設定</span>
+              {% elif row.secret %}
+              <span style="color:var(--text-tertiary)">{{ row.value }}</span>
+              {% else %}
+              {{ row.value }}
+              {% endif %}
+            </td>
+            <td class="text-center">
+              {% if row.status == "set" %}
+              <span class="badge-soft success">SET</span>
+              {% else %}
+              <span class="badge-soft danger">MISSING</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── ログビューアタブ ──────────────────────────── #}
+  <div class="tab-pane fade p-4" id="tab-logs" role="tabpanel">
+    <div class="d-flex align-items-center gap-3 mb-3">
+      <div class="d-flex gap-2 align-items-center">
+        <label class="form-label form-label-sm mb-0 fw-semibold">ソース:</label>
+        <div class="btn-group btn-group-sm" role="group">
+          <input type="radio" class="btn-check" name="logSource" id="logSourceBot" value="bot" checked>
+          <label class="btn btn-outline-secondary" for="logSourceBot">
+            <i class="bi bi-robot me-1"></i>bot.log
+          </label>
+          <input type="radio" class="btn-check" name="logSource" id="logSourceAdmin" value="admin">
+          <label class="btn btn-outline-secondary" for="logSourceAdmin">
+            <i class="bi bi-globe me-1"></i>admin.log
+          </label>
+        </div>
+      </div>
+      <div class="d-flex gap-2 align-items-center">
+        <label class="form-label form-label-sm mb-0 fw-semibold">行数:</label>
+        <select id="logLines" class="form-select form-select-sm" style="width:90px">
+          <option value="100">100</option>
+          <option value="200" selected>200</option>
+          <option value="500">500</option>
+          <option value="1000">1000</option>
+        </select>
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-primary ms-auto" id="logRefreshBtn">
+        <i class="bi bi-arrow-clockwise me-1"></i>更新
+      </button>
+      <div class="form-check form-switch mb-0">
+        <input class="form-check-input" type="checkbox" id="logAutoRefresh">
+        <label class="form-check-label small" for="logAutoRefresh">自動更新 (10s)</label>
+      </div>
+    </div>
+    <div id="logViewerWrap" style="background:var(--surface-muted);border:1px solid var(--separator);border-radius:10px;overflow:hidden">
+      <div style="padding:8px 14px;border-bottom:1px solid var(--separator);display:flex;align-items:center;gap:8px">
+        <span class="small font-monospace" id="logPathLabel" style="color:var(--text-tertiary)">—</span>
+        <span class="badge-soft ms-auto" id="logLineCount" style="font-size:10px">0 行</span>
+      </div>
+      <pre id="logContent"
+           style="margin:0;padding:14px;font-size:11.5px;line-height:1.6;max-height:520px;overflow-y:auto;
+                  white-space:pre-wrap;word-break:break-all;color:var(--text)">ログを読み込んでいます…</pre>
+    </div>
+  </div>
+
 </div>{# /tab-content #}
 
+{% endblock %}
+
+{% block extra_scripts %}
 <script>
-/* タブ状態をセッションストレージで保持 */
-const TAB_KEY = "devActiveTab";
-const tabEl = document.getElementById("devTabs");
-if (tabEl) {
+/* ── タブ状態をセッションストレージで保持 ── */
+(function () {
+  const TAB_KEY = "devActiveTab";
+  const tabEl = document.getElementById("devTabs");
+  if (!tabEl) return;
   const saved = sessionStorage.getItem(TAB_KEY);
   if (saved) {
     const btn = tabEl.querySelector(`[data-bs-target="${saved}"]`);
@@ -360,16 +696,166 @@ if (tabEl) {
   tabEl.addEventListener("shown.bs.tab", e => {
     sessionStorage.setItem(TAB_KEY, e.target.dataset.bsTarget);
   });
-}
+})();
 
-/* expires_at Unix タイムスタンプ → 日本語ロケール表示 */
+/* ── expires_at Unix タイムスタンプ → 日本語表示 ── */
 document.querySelectorAll("[data-ts]").forEach(el => {
   const ts = parseInt(el.dataset.ts, 10);
   if (ts) el.textContent = new Date(ts * 1000).toLocaleString("ja-JP", {
-    year:"numeric", month:"2-digit", day:"2-digit",
-    hour:"2-digit", minute:"2-digit"
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit"
   });
 });
-</script>
 
+/* ── チャンネルID 検索ヘルパー ── */
+(function () {
+  const guildSel  = document.getElementById("helperGuildSelect");
+  const fetchBtn  = document.getElementById("helperFetchBtn");
+  const listWrap  = document.getElementById("helperChannelList");
+  const listItems = document.getElementById("helperChannelItems");
+  const guildName = document.getElementById("helperGuildName");
+  if (!guildSel || !fetchBtn) return;
+
+  let lastGuildId = null;
+
+  fetchBtn.addEventListener("click", async () => {
+    const guildId = guildSel.value;
+    if (!guildId) return;
+
+    fetchBtn.disabled = true;
+    fetchBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>読み込み中…';
+
+    try {
+      const res = await fetch(`/admin/dev/api/channels?guild_id=${guildId}`);
+      const data = await res.json();
+      const channels = data.channels || [];
+
+      listItems.innerHTML = "";
+      if (channels.length === 0) {
+        listItems.innerHTML = '<div class="dev-channel-row"><span style="color:var(--text-tertiary)">チャンネルが見つかりませんでした</span></div>';
+      } else {
+        channels.forEach(ch => {
+          const row = document.createElement("div");
+          row.className = "dev-channel-row";
+          row.innerHTML = `
+            <span class="dev-channel-name"><i class="bi bi-hash me-1" style="opacity:.5"></i>${escHtml(ch.name)}</span>
+            <span class="dev-channel-id">${escHtml(ch.id)}</span>`;
+          row.addEventListener("click", () => {
+            document.querySelectorAll("input.ch-target").forEach(inp => {
+              inp.value = ch.id;
+            });
+            row.style.background = "var(--success-soft)";
+            setTimeout(() => row.style.background = "", 800);
+          });
+          listItems.appendChild(row);
+        });
+      }
+
+      guildName.textContent = guildSel.options[guildSel.selectedIndex].text;
+      listWrap.hidden = false;
+      lastGuildId = guildId;
+    } catch {
+      listItems.innerHTML = '<div class="dev-channel-row"><span style="color:var(--danger)">取得に失敗しました</span></div>';
+      listWrap.hidden = false;
+    } finally {
+      fetchBtn.disabled = false;
+      fetchBtn.innerHTML = '<i class="bi bi-list-ul me-1"></i>チャンネル一覧';
+    }
+  });
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+})();
+
+/* ── インポートモーダル ── */
+function openImport(guildId, guildName) {
+  document.getElementById("importGuildName").textContent = guildName;
+  document.getElementById("importForm").action = `/admin/dev/settings/${guildId}/import`;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById("importModal")).show();
+}
+
+/* ── Discord ユーザー検索 ── */
+(function () {
+  const btn    = document.getElementById("userLookupBtn");
+  const input  = document.getElementById("userLookupId");
+  const result = document.getElementById("userLookupResult");
+  if (!btn) return;
+
+  btn.addEventListener("click", async () => {
+    const uid = input.value.trim();
+    if (!/^\d+$/.test(uid)) { result.innerHTML = '<p class="small" style="color:var(--danger)">User ID は数値のみです。</p>'; result.hidden = false; return; }
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>検索中…';
+    try {
+      const res  = await fetch(`/admin/dev/api/user?user_id=${uid}`);
+      const data = await res.json();
+      if (data.error) {
+        result.innerHTML = `<p class="small" style="color:var(--danger)">${escHtml(data.error)}</p>`;
+      } else {
+        const avatar = data.avatar
+          ? `<img src="https://cdn.discordapp.com/avatars/${escHtml(data.id)}/${escHtml(data.avatar)}.webp?size=64" width="48" height="48" class="rounded-circle me-3" alt="">`
+          : `<div class="rounded-circle me-3 d-flex align-items-center justify-content-center" style="width:48px;height:48px;background:var(--surface-elevated)"><i class="bi bi-person" style="font-size:20px"></i></div>`;
+        const created = data._created_at ? new Date(data._created_at).toLocaleString("ja-JP") : "—";
+        result.innerHTML = `
+          <div class="d-flex align-items-center gap-3 p-3 rounded" style="background:var(--surface-elevated)">
+            ${avatar}
+            <div>
+              <div class="fw-bold">${escHtml(data.global_name || data.username || "—")}</div>
+              <div class="small font-monospace" style="color:var(--text-secondary)">@${escHtml(data.username || "—")} · ID: ${escHtml(data.id)}</div>
+              <div class="small" style="color:var(--text-tertiary)">アカウント作成: ${created}</div>
+              ${data.bot ? '<span class="badge-soft ms-0 mt-1" style="display:inline-block">BOT</span>' : ''}
+            </div>
+          </div>`;
+      }
+    } catch {
+      result.innerHTML = '<p class="small" style="color:var(--danger)">取得に失敗しました。</p>';
+    } finally {
+      result.hidden = false;
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-search me-1"></i>検索';
+    }
+  });
+  input.addEventListener("keydown", e => { if (e.key === "Enter") btn.click(); });
+})();
+
+/* ── ログビューア ── */
+(function () {
+  const content     = document.getElementById("logContent");
+  const pathLabel   = document.getElementById("logPathLabel");
+  const lineCount   = document.getElementById("logLineCount");
+  const refreshBtn  = document.getElementById("logRefreshBtn");
+  const autoToggle  = document.getElementById("logAutoRefresh");
+  if (!content) return;
+
+  let autoTimer = null;
+
+  async function loadLogs() {
+    const source = document.querySelector('input[name="logSource"]:checked')?.value || "bot";
+    const lines  = document.getElementById("logLines")?.value || "200";
+    try {
+      const res  = await fetch(`/admin/dev/api/logs?source=${source}&lines=${lines}`);
+      const data = await res.json();
+      const text = (data.lines || []).join("\n") || "(ログがありません)";
+      content.textContent = text;
+      pathLabel.textContent = data.path || "—";
+      lineCount.textContent = `${(data.lines || []).length} 行`;
+      content.scrollTop = content.scrollHeight;
+    } catch {
+      content.textContent = "ログの取得に失敗しました。";
+    }
+  }
+
+  refreshBtn?.addEventListener("click", loadLogs);
+  document.querySelectorAll('input[name="logSource"]').forEach(r => r.addEventListener("change", loadLogs));
+  document.getElementById("logLines")?.addEventListener("change", loadLogs);
+
+  autoToggle?.addEventListener("change", () => {
+    clearInterval(autoTimer);
+    if (autoToggle.checked) autoTimer = setInterval(loadLogs, 10000);
+  });
+
+  document.getElementById("tab-logs-tab")?.addEventListener("shown.bs.tab", loadLogs);
+})();
+</script>
 {% endblock %}

@@ -156,6 +156,14 @@ def update_guild_settings(guild_id: int, updates: dict[str, Any]) -> dict[str, A
     return _mutate_settings(_mutator)
 
 
+def replace_guild_settings(guild_id: int, new_settings: dict[str, Any]) -> None:
+    """指定ギルドの設定を丸ごと置換して保存する（インポート用）。"""
+    def _mutator(data: dict[str, Any]) -> None:
+        data.setdefault("guilds", {})[str(guild_id)] = dict(new_settings)
+
+    _mutate_settings(_mutator)
+
+
 def _get_or_create_guild(data: dict[str, Any], guild_id: int) -> dict[str, Any]:
     guilds: dict[str, Any] = data.setdefault("guilds", {})  # type: ignore[assignment]
     current = guilds.get(str(guild_id), {})

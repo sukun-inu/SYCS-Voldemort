@@ -80,6 +80,16 @@ Discord Bot（運用支援）+ FastAPI 管理 UI + FastAPI Web トラッカー�
   - ログ設定、AI 応答、ウェルカム/グッバイ、VC 通知
   - スティッキー、リアクションロール、ニュース
   - 地震アラート、DJAudio、セキュリティ
+- 開発者パネル（`/admin/dev`）— 特定ユーザー専用:
+  - メッセージ直接送信・転送 / ニュース手動配信 / 地震速報リプレイ
+  - 定期タスクの即時実行（シグナル）
+  - ギルド設定 JSON 閲覧・エクスポート・インポート
+  - 通知テスト送信（ウェルカム / VC 通知）
+  - Discord ユーザー検索（Snowflake → アカウント情報）
+  - スティッキーメッセージ全件一覧
+  - 環境変数チェッカー（秘密情報はマスク表示）
+  - DJAudio MP3 キャッシュ管理
+  - bot / admin ログビューア（自動更新対応）
 
 ### 1.13 Web トラッカー（FastAPI）
 - 金属価格 API
@@ -314,14 +324,19 @@ docker compose up -d --build
 | `/admin/settings/earthquake` | 地震通知チャンネル、最小震度、通知タイプ設定 |
 | `/admin/settings/security` | 信頼済みユーザー / バイパスロール管理 |
 | `/admin/settings/djaudio` | DJAudio 監視チャンネル・出力チャンネル・TTL・クールダウン・URL上限設定 |
+| `/admin/dev` | 開発者専用デバッグパネル（特定ユーザーのみアクセス可） |
 
 ---
 
 ## 8. データ保存先
 
 - `settings.json`: ギルドごとの Bot 設定
+- `data/logs/bot.log`: Discord Bot のログ（最大 1MB × 3世代）
+- `data/logs/admin.log`: 管理 UI のログ（最大 1MB × 3世代）
 - `data/djaudio_cache`: DJAudio の一時 MP3 キャッシュ
 - `migrations/` + DB: Web トラッカーの永続データ
+
+> `data/` の保存先は環境変数 `SETTINGS_DIR` で変更できます。Docker 運用時は Bot と管理 UI でボリュームを共有することでログビューアが機能します。
 
 ---
 

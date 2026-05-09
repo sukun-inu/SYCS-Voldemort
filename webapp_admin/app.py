@@ -2,7 +2,15 @@ import logging
 import os
 import secrets
 import json
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
+
+_LOG_FMT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+_log_dir = Path(os.getenv("SETTINGS_DIR", str(Path(__file__).parent.parent / "data"))) / "logs"
+_log_dir.mkdir(parents=True, exist_ok=True)
+_fh = RotatingFileHandler(_log_dir / "admin.log", maxBytes=1_000_000, backupCount=3, encoding="utf-8")
+_fh.setFormatter(logging.Formatter(_LOG_FMT))
+logging.getLogger().addHandler(_fh)
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles

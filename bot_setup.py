@@ -132,6 +132,41 @@ def setup_events(bot: Bot) -> None:
                     from services.earthquake_service import _notify_all_guilds
                     event = json.loads(sig_content)
                     await _notify_all_guilds(bot, event)
+                elif task_name == "test_welcome":
+                    payload = json.loads(sig_content)
+                    guild_id = int(payload.get("guild_id", 0))
+                    guild = bot.get_guild(guild_id)
+                    if guild:
+                        from services.settings_store import get_welcome_settings
+                        s = get_welcome_settings(guild_id)
+                        ch_id = s.get("channel_id")
+                        if ch_id:
+                            ch = guild.get_channel(int(ch_id))
+                            if isinstance(ch, discord.TextChannel):
+                                tmpl = s.get("message") or "{user} が **{server}** に参加しました！（現在 {count} 名）"
+                                text = (tmpl
+                                    .replace("{user}", "**@テストユーザー**")
+                                    .replace("{username}", "テストユーザー#0000")
+                                    .replace("{server}", guild.name)
+                                    .replace("{count}", str(guild.member_count)))
+                                await ch.send(f"🧪 **[テスト送信 — ウェルカム]**\n{text}")
+                elif task_name == "test_vc_notify":
+                    payload = json.loads(sig_content)
+                    guild_id = int(payload.get("guild_id", 0))
+                    guild = bot.get_guild(guild_id)
+                    if guild:
+                        from services.settings_store import get_vc_notify_channel_id
+                        ch_id = get_vc_notify_channel_id(guild_id)
+                        if ch_id:
+                            ch = guild.get_channel(ch_id)
+                            if isinstance(ch, discord.TextChannel):
+                                embed = discord.Embed(
+                                    title="🎙️ テストユーザー が参加しました",
+                                    description="VC: テストチャンネル",
+                                    color=discord.Color.blue(),
+                                )
+                                embed.set_footer(text="🧪 テスト送信 — VC通知")
+                                await ch.send(embed=embed)
                 logger.info("[DEV] シグナル完了: %s", task_name)
             except Exception as e:
                 logger.exception("[DEV] シグナル実行エラー %s: %s", task_name, e)

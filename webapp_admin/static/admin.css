@@ -1623,8 +1623,127 @@ hr {
   .health-card:first-child { border-top: 0; }
 }
 
-/* Dev panel — earthquake scale badge */
+/* Dev panel */
 .bg-orange { background-color: #e55000 !important; color: #fff !important; }
+
+.dev-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-pill);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.dev-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--danger);
+  flex-shrink: 0;
+  animation: dev-pulse 2s ease-in-out infinite;
+}
+
+@keyframes dev-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .35; }
+}
+
+.dev-status-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.dev-status-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.dev-status-item strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.dev-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  flex-shrink: 0;
+}
+
+.dev-channel-picker {
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.dev-channel-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--separator);
+  background: var(--surface-muted);
+}
+
+.dev-channel-list {
+  display: grid;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.dev-channel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--separator);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .15s;
+}
+
+.dev-channel-row:last-child { border-bottom: 0; }
+
+.dev-channel-row:hover { background: var(--table-hover); }
+
+.dev-channel-name {
+  color: var(--text);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dev-channel-id {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-family: monospace;
+  flex-shrink: 0;
+}
 
 /* ── ランディングページ モバイルナビ ──────────────────────── */
 
