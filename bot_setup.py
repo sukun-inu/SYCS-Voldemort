@@ -25,7 +25,7 @@ from services.user_state_service import (
     sync_guild_user_states,
 )
 from config import JST as _JST
-from services.settings_store import get_vc_notify_channel_id, get_vc_notify_role_id
+from services.settings_store import get_vc_notify_channel_id, get_vc_notify_filter_role_id, get_vc_notify_role_id
 from services.sticky_service import handle_sticky, process_pending_stickies
 from services.welcome_service import send_goodbye, send_welcome
 
@@ -69,13 +69,6 @@ _USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD = max(
 _USER_STATE_AUTO_REPAIR_WRITE_EVENTS = _env_bool("USER_STATE_AUTO_REPAIR_WRITE_EVENTS", False)
 
 _SIGNAL_DIR = Path(os.getenv("SETTINGS_DIR", str(Path(__file__).parent / "data"))) / "_dev_signals"
-
-
-def _is_public_vc(channel: discord.abc.GuildChannel | None) -> bool:
-    """@everyone が view_channel を持つチャンネルを「公開」とみなす。"""
-    if channel is None:
-        return False
-    return channel.permissions_for(channel.guild.default_role).view_channel
 
 
 def create_bot() -> Bot:
@@ -682,26 +675,21 @@ def setup_events(bot: Bot) -> None:
             if not isinstance(notify_ch, discord.TextChannel):
                 return
 
-            # 権限フィルタ: @everyone が view_channel を持たないチャンネルは通知しない
-            before_pub = _is_public_vc(before_ch)
-            after_pub  = _is_public_vc(after_ch)
+            # フィルターロールが設定されている場合、そのロールが view_channel を持つ VC のみ通知
+            filter_role_id = get_vc_notify_filter_role_id(member.guild.id)
+            if filter_role_id:
+                filter_role = member.guild.get_role(filter_role_id)
+                if filter_role:
+                    target_ch = after_ch if is_join else before_ch
+                    if target_ch and not target_ch.permissions_for(filter_role).view_channel:
+                        return
+
             if is_join:
-                if not after_pub:
-                    return
                 eff_action = "join"
             elif is_leave:
-                if not before_pub:
-                    return
                 eff_action = "leave"
-            else:  # is_move
-                if before_pub and after_pub:
-                    eff_action = "move"
-                elif after_pub:
-                    eff_action = "join"   # 非公開 → 公開: 参加として通知
-                elif before_pub:
-                    eff_action = "leave"  # 公開 → 非公開: 退出として通知
-                else:
-                    return  # 両方非公開: スキップ
+            else:
+                eff_action = "move"
 
             now_jst  = datetime.fromtimestamp(now_ts, tz=_JST)
             time_str = (

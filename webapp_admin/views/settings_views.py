@@ -20,6 +20,7 @@ from services.settings_store import (
     get_sticky_messages,
     get_trusted_user_ids,
     get_vc_notify_channel_id,
+    get_vc_notify_filter_role_id,
     get_vc_notify_role_id,
     get_welcome_settings,
     mark_sticky_pending_delete,
@@ -35,6 +36,7 @@ from services.settings_store import (
     set_response_channel_id,
     set_sticky_message,
     set_vc_notify_channel_id,
+    set_vc_notify_filter_role_id,
     set_vc_notify_role_id,
     set_welcome_channel,
     set_welcome_message,
@@ -169,6 +171,17 @@ async def vc_notify(request: Request, _=Depends(check_guild), _csrf=Depends(chec
                     flash(request, "VC 通知ロールを設定した。", "success")
                 except ValueError:
                     flash(request, "無効なロールIDです。", "warning")
+        elif action == "set_filter_role":
+            rid_str = form.get("vc_notify_filter_role_id", "")
+            if rid_str == "0" or not rid_str:
+                set_vc_notify_filter_role_id(gid, None)
+                flash(request, "通知フィルターロールを解除した（全 VC を通知）。", "success")
+            else:
+                try:
+                    set_vc_notify_filter_role_id(gid, int(rid_str))
+                    flash(request, "通知フィルターロールを設定した。", "success")
+                except ValueError:
+                    flash(request, "無効なロールIDです。", "warning")
         return RedirectResponse("/admin/settings/vc-notify", status_code=303)
 
     channels = await get_guild_channels(gid)
@@ -183,6 +196,7 @@ async def vc_notify(request: Request, _=Depends(check_guild), _csrf=Depends(chec
         role_map=role_map,
         current_ch=get_vc_notify_channel_id(gid),
         current_role=get_vc_notify_role_id(gid),
+        current_filter_role=get_vc_notify_filter_role_id(gid),
     )
 
 
