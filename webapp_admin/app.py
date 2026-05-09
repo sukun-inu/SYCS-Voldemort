@@ -24,6 +24,13 @@ from webapp_admin.templating import render
 logger = logging.getLogger(__name__)
 
 
+def _unwrap_exception_group(exc: BaseException) -> BaseException:
+    current = exc
+    while isinstance(current, BaseExceptionGroup) and current.exceptions:
+        current = current.exceptions[0]
+    return current
+
+
 def _compact_admin_guilds(value):
     if not isinstance(value, list):
         return []
@@ -160,6 +167,22 @@ def create_app() -> FastAPI:
         }
         msg = msgs.get(exc.status_code, "エラーが発生しました。")
         return render(request, "error.html", status_code=exc.status_code, code=exc.status_code, message=msg)
+
+    @app.exception_handler(ExceptionGroup)
+    async def exception_group_handler(request: Request, exc: ExceptionGroup):
+        root = _unwrap_exception_group(exc)
+        if isinstance(root, _NeedsLogin):
+            return RedirectResponse("/admin/login", status_code=303)
+        if isinstance(root, _NeedsGuild):
+            return RedirectResponse("/admin/guilds", status_code=303)
+        if isinstance(root, HTTPException):
+            return await http_exception_handler(request, root)
+
+        logger.error("Unhandled ExceptionGroup root=%r", root, exc_info=exc)
+        return render(
+            request, "error.html", status_code=500,
+            code=500, message="サーバーエラーが発生しました。",
+        )
 
     @app.middleware("http")
     async def metrics_middleware(request: Request, call_next):
