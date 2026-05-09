@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import math
 import os
 import time
 from datetime import datetime
@@ -71,10 +72,14 @@ def setup_events(bot: Bot) -> None:
         try:
             cpu = psutil.cpu_percent()
             mem = psutil.virtual_memory().percent
-            latency = round(bot.latency * 1000)
+            latency_raw = bot.latency
+            if isinstance(latency_raw, (int, float)) and math.isfinite(latency_raw):
+                latency_display = f"{round(latency_raw * 1000)}ms"
+            else:
+                latency_display = "N/A"
             await bot.change_presence(
                 activity=discord.Game(
-                    name=f"Ping: {latency}ms | CPU: {cpu}% | MEM: {mem}%"
+                    name=f"Ping: {latency_display} | CPU: {cpu}% | MEM: {mem}%"
                 )
             )
         except Exception as e:
