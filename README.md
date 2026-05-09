@@ -42,6 +42,7 @@ Discord Bot（運用支援）+ FastAPI 管理 UI + FastAPI Web トラッカー�
 
 ### 1.8 Google News フィード
 - キーワード検索を定期実行して新着を投稿
+- `GROQ_API_KEY` がある場合、本文を 400 文字以内で要約して添付
 - フィード上限: 1サーバー最大10件
 - 間隔: 5〜1440分
 - 重複抑止（既出記事ハッシュ管理）
@@ -159,6 +160,7 @@ docker compose up -d --build
 | `DISCORD_BOT_TOKEN` | Yes | Bot トークン |
 | `METALPRICE_API_KEY` | 推奨 | 金属価格 API |
 | `GROQ_API_KEY` | 任意 | AI 会話/モデレーション |
+| `NEWS_SUMMARY_MODEL` | 任意 | ニュース要約用モデル（既定 `llama-3.3-70b-versatile`） |
 | `VIRUSTOTAL_API_KEY` | 任意 | URL/ファイルスキャン |
 | `VT_MAX_DOWNLOAD_BYTES` | 任意 | VTスキャン時の最大ダウンロードサイズ（既定 `20971520` = 20MB） |
 | `SETTINGS_DIR` | 任意 | `settings.json` 保存先 |

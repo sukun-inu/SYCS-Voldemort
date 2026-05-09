@@ -1,6 +1,7 @@
 import hashlib
 import html
 import logging
+import os
 import re
 import time
 import xml.etree.ElementTree as ET
@@ -9,9 +10,10 @@ from urllib.parse import quote
 
 import aiohttp
 import discord
+from groq import AsyncGroq
 from discord.ext.commands import Bot
 
-from config import BOT_ICON_URL, JST as _JST
+from config import BOT_ICON_URL, GROQ_API_KEY, JST as _JST
 from services.settings_store import (
     get_all_guild_ids,
     get_news_feeds,
@@ -22,6 +24,12 @@ logger = logging.getLogger(__name__)
 
 _RSS_BASE = "https://news.google.com/rss/search?q={query}&hl=ja&gl=JP&ceid=JP:ja"
 _HEADERS  = {"User-Agent": "Mozilla/5.0 (compatible; DiscordBot/1.0)"}
+_NEWS_SUMMARY_MODEL = os.getenv("NEWS_SUMMARY_MODEL", "llama-3.3-70b-versatile")
+_NEWS_SUMMARY_MAX_CHARS = 400
+_NEWS_SUMMARY_CACHE_TTL_SEC = 6 * 3600
+
+_groq_client: AsyncGroq | None = None
+_summary_cache: dict[str, tuple[str, float]] = {}
 
 
 def _url_hash(url: str) -> str:
@@ -45,6 +53,74 @@ def _format_pub_date(raw: str) -> str:
         return f"{dt.year}年{dt.month}月{dt.day}日 {dt.hour}:{dt.minute:02d}"
     except Exception:
         return raw
+
+
+def _get_groq_client() -> AsyncGroq | None:
+    global _groq_client
+    if not GROQ_API_KEY:
+        return None
+    if _groq_client is None:
+        _groq_client = AsyncGroq(api_key=GROQ_API_KEY, timeout=20.0)
+    return _groq_client
+
+
+def _normalize_summary_text(text: str, max_len: int = _NEWS_SUMMARY_MAX_CHARS) -> str:
+    clean = str(text or "").strip()
+    clean = re.sub(r"[ \t]+", " ", clean)
+    clean = re.sub(r"\n{3,}", "\n\n", clean)
+    clean = re.sub(r"^要約[:：]\s*", "", clean)
+    if len(clean) <= max_len:
+        return clean
+    return clean[:max_len - 1].rstrip() + "…"
+
+
+async def _summarize_article(article: dict) -> str:
+    """Groq で 400文字以内要約を生成。失敗時は空文字。"""
+    body_parts = [
+        f"タイトル: {article.get('title', '')}".strip(),
+        f"配信元: {article.get('source', '')}".strip(),
+        f"本文抜粋: {article.get('desc', '')}".strip(),
+        f"URL: {article.get('link', '')}".strip(),
+    ]
+    source_text = "\n".join(p for p in body_parts if p and not p.endswith(":"))
+    if not source_text:
+        return ""
+
+    cache_key = _url_hash(f"{article.get('link', '')}|{article.get('title', '')}|{article.get('desc', '')}")
+    now = time.time()
+    cached = _summary_cache.get(cache_key)
+    if cached and now - cached[1] < _NEWS_SUMMARY_CACHE_TTL_SEC:
+        return cached[0]
+
+    client = _get_groq_client()
+    if client is None:
+        return ""
+
+    try:
+        response = await client.chat.completions.create(
+            model=_NEWS_SUMMARY_MODEL,
+            temperature=0.2,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "あなたはニュース要約アシスタントです。"
+                        "事実のみを簡潔に日本語で要約してください。"
+                        "推測・断定・誇張表現は避け、400文字以内で出力してください。"
+                        "前置きや箇条書き記号は不要です。"
+                    ),
+                },
+                {"role": "user", "content": source_text},
+            ],
+        )
+        content = (response.choices[0].message.content or "").strip()
+        summary = _normalize_summary_text(content)
+        if summary:
+            _summary_cache[cache_key] = (summary, now)
+        return summary
+    except Exception as e:
+        logger.warning("[news_service] summarize failed url=%s: %s", article.get("link", ""), e)
+        return ""
 
 
 async def _fetch_articles(session: aiohttp.ClientSession, query: str) -> list[dict]:
@@ -133,6 +209,7 @@ async def run_news_feeds(bot: Bot) -> None:
                 for article in reversed(new_articles[:5]):
                     h = _url_hash(article["link"])
                     try:
+                        summary = await _summarize_article(article)
                         embed = discord.Embed(
                             title=article["title"],
                             url=article["link"],
@@ -140,6 +217,8 @@ async def run_news_feeds(bot: Bot) -> None:
                         )
                         if article["desc"]:
                             embed.description = article["desc"]
+                        if summary:
+                            embed.add_field(name="要約 (Groq)", value=summary, inline=False)
                         if article["source"]:
                             embed.set_author(name=article["source"])
                         if article["pubDate"]:
