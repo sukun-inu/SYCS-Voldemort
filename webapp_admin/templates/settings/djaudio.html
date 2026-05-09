@@ -30,7 +30,7 @@
         </span>
       </div>
 
-      <form method="post">
+      <form method="post" data-autosave="true">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="set_channel">
         <div class="mb-4">
@@ -71,7 +71,7 @@
         </span>
       </div>
 
-      <form method="post">
+      <form method="post" data-autosave="true">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="set_output_channel">
         <div class="mb-3">
@@ -104,7 +104,7 @@
         <span class="status-chip">TTL {{ cache_ttl // 60 }}分 / CD {{ cooldown }}秒 / 最大{{ max_urls }}URL</span>
       </div>
 
-      <form method="post">
+      <form method="post" data-autosave="true">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="set_limits">
         <div class="mb-3">
