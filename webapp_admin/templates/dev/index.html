@@ -720,19 +720,24 @@ document.querySelectorAll("[data-ts]").forEach(el => {
 
   fetchBtn.addEventListener("click", async () => {
     const guildId = guildSel.value;
-    if (!guildId) return;
+    if (!guildId) {
+      guildSel.classList.add("is-invalid");
+      setTimeout(() => guildSel.classList.remove("is-invalid"), 1500);
+      return;
+    }
 
     fetchBtn.disabled = true;
     fetchBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>読み込み中…';
 
     try {
       const res = await fetch(`/admin/dev/api/channels?guild_id=${guildId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const channels = data.channels || [];
 
       listItems.innerHTML = "";
       if (channels.length === 0) {
-        listItems.innerHTML = '<div class="dev-channel-row"><span style="color:var(--text-tertiary)">チャンネルが見つかりませんでした</span></div>';
+        listItems.innerHTML = '<div class="dev-channel-row"><span style="color:var(--text-tertiary)">チャンネルが見つかりませんでした（Botがサーバーに参加しているか確認してください）</span></div>';
       } else {
         channels.forEach(ch => {
           const row = document.createElement("div");
@@ -754,8 +759,8 @@ document.querySelectorAll("[data-ts]").forEach(el => {
       guildName.textContent = guildSel.options[guildSel.selectedIndex].text;
       listWrap.hidden = false;
       lastGuildId = guildId;
-    } catch {
-      listItems.innerHTML = '<div class="dev-channel-row"><span style="color:var(--danger)">取得に失敗しました</span></div>';
+    } catch (err) {
+      listItems.innerHTML = `<div class="dev-channel-row"><span style="color:var(--danger)">取得に失敗しました: ${escHtml(String(err))}</span></div>`;
       listWrap.hidden = false;
     } finally {
       fetchBtn.disabled = false;
