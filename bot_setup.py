@@ -37,6 +37,13 @@ def _env_bool(name: str, default: bool) -> bool:
 _BOT_BACKGROUND_WORKER = _env_bool("BOT_BACKGROUND_WORKER", True)
 
 
+def _is_public_vc(channel: discord.abc.GuildChannel | None) -> bool:
+    """@everyone が view_channel を持つチャンネルを「公開」とみなす。"""
+    if channel is None:
+        return False
+    return channel.permissions_for(channel.guild.default_role).view_channel
+
+
 def create_bot() -> Bot:
     intents = discord.Intents.default()
     intents.message_content = True
@@ -273,6 +280,27 @@ def setup_events(bot: Bot) -> None:
             if not isinstance(notify_ch, discord.TextChannel):
                 return
 
+            # 権限フィルタ: @everyone が view_channel を持たないチャンネルは通知しない
+            before_pub = _is_public_vc(before_ch)
+            after_pub  = _is_public_vc(after_ch)
+            if is_join:
+                if not after_pub:
+                    return
+                eff_action = "join"
+            elif is_leave:
+                if not before_pub:
+                    return
+                eff_action = "leave"
+            else:  # is_move
+                if before_pub and after_pub:
+                    eff_action = "move"
+                elif after_pub:
+                    eff_action = "join"   # 非公開 → 公開: 参加として通知
+                elif before_pub:
+                    eff_action = "leave"  # 公開 → 非公開: 退出として通知
+                else:
+                    return  # 両方非公開: スキップ
+
             now_jst  = datetime.fromtimestamp(now_ts, tz=_JST)
             time_str = (
                 f"{now_jst.year}年{now_jst.month}月{now_jst.day}日 "
@@ -280,11 +308,11 @@ def setup_events(bot: Bot) -> None:
                 f"{now_jst.hour}:{now_jst.minute:02d}"
             )
 
-            if is_join:
+            if eff_action == "join":
                 title       = "VCに参加しました"
                 description = f"🔊 **{after_ch.name}** に参加しました\n\n{time_str}"
                 color       = discord.Color.green()
-            elif is_leave:
+            elif eff_action == "leave":
                 title       = "VCから切断しました"
                 desc_parts  = [f"🔊 **{before_ch.name}** から退出しました", "", time_str]
                 if duration_str:
