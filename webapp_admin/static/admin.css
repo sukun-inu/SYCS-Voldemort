@@ -1123,6 +1123,23 @@ textarea.form-control { min-height: 120px; resize: vertical; }
   white-space: nowrap;
 }
 
+details > summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+details > pre {
+  max-width: min(640px, 92vw);
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  padding: 8px;
+}
+
 .list-group-item {
   border-color: var(--separator);
   background: transparent;

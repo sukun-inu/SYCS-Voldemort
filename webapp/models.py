@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, Index, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Index, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -137,4 +137,76 @@ class WeeklyForecastDaily(Base):
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
+    )
+
+
+class UserStateCurrent(Base):
+    __tablename__ = "user_state_current"
+    __table_args__ = (
+        UniqueConstraint("guild_id", "user_id", name="uq_user_state_current_guild_user"),
+        Index("ix_user_state_current_guild_status", "guild_id", "status"),
+        Index("ix_user_state_current_guild_last_event_at", "guild_id", "last_event_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    username: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="unknown")
+    is_in_guild: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_banned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_timed_out: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    timed_out_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    roles_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    abilities_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    last_event_type: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    last_event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    last_joined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_left_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class UserStateEvent(Base):
+    __tablename__ = "user_state_event"
+    __table_args__ = (
+        Index("ix_user_state_event_guild_user_event_at", "guild_id", "user_id", "event_at"),
+        Index("ix_user_state_event_guild_event_type_event_at", "guild_id", "event_type", "event_at"),
+        Index("ix_user_state_event_event_at", "event_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(48), nullable=False)
+    status_after: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    actor_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    event_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )

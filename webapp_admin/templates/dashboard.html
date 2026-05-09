@@ -136,6 +136,9 @@
     <p class="page-description mb-0">設定編集とサーバー切り替えへすぐ移動できます。</p>
   </div>
   <div class="action-strip-actions">
+    <a href="{{ url_for('dashboard.user_state_dashboard') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-person-lines-fill me-2"></i>ユーザー状態監査
+    </a>
     <a href="{{ url_for('settings.logging_settings') }}" class="btn btn-outline-secondary">
       <i class="bi bi-gear me-2"></i>設定を編集
     </a>

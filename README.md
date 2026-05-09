@@ -23,6 +23,12 @@ Discord Bot（運用支援）+ FastAPI 管理 UI + FastAPI Web トラッカー�
   - ニックネーム変更、ロール変更
   - タイムアウト、BAN/UNBAN
 
+### 1.3.1 ユーザー状態監査DB（10年保持）
+- `user_state_current`: 各ユーザーの最新状態（在籍/BAN/Timeout/ロール/権限）を保持
+- `user_state_event`: 参加/退出、BAN/KICK、VC入退室、ロール変更などを時系列保存
+- 保持期間は既定10年（`USER_STATE_RETENTION_DAYS=3650`）で、古い履歴は定期削除
+- 管理UIの `/admin/users/state` で検索・閲覧可能
+
 ### 1.4 ウェルカム / グッバイ
 - 参加/退出時の自動メッセージ
 - テンプレート変数対応: `{user}` `{username}` `{server}` `{count}`
@@ -80,6 +86,7 @@ Discord Bot（運用支援）+ FastAPI 管理 UI + FastAPI Web トラッカー�
   - ログ設定、AI 応答、ウェルカム/グッバイ、VC 通知
   - スティッキー、リアクションロール、ニュース
   - 地震アラート、DJAudio、セキュリティ
+  - ユーザー状態監査（参加/退出、BAN/KICK、アビリティ履歴）
 - 開発者パネル（`/admin/dev`）— 特定ユーザー専用:
   - メッセージ直接送信・転送 / ニュース手動配信 / 地震速報リプレイ
   - 定期タスクの即時実行（シグナル）
@@ -108,6 +115,7 @@ Discord Bot（運用支援）+ FastAPI 管理 UI + FastAPI Web トラッカー�
 | 地震アラート | `/quake_channel_set` `/quake_min_scale_set` `/quake_notify_type` `/quake_status` | `/admin/settings/earthquake` |
 | セキュリティ除外設定 | `/trusted_member_*` `/bypass_role_*` | `/admin/settings/security` |
 | DJAudio-DL | `/djaudio_channel_set` `/djaudio_output_set` `/djaudio_status` | `/admin/settings/djaudio` |
+| ユーザー状態監査 | （イベント自動収集） | `/admin/users/state` |
 
 ---
 
@@ -177,6 +185,10 @@ docker compose up -d --build
 | `SETTINGS_LOCK_TIMEOUT_SECONDS` | 任意 | `settings.json` 更新ロック待機秒数（既定 `10`） |
 | `SETTINGS_LOCK_STALE_SECONDS` | 任意 | 古いロックファイルを破棄する閾値秒数（既定 `30`） |
 | `BOT_BACKGROUND_WORKER` | 任意 | `true/false`。定期ジョブ実行ノードかどうか（既定 `true`） |
+| `POSTGRES_HOST`/`POSTGRES_PORT`/`POSTGRES_DB`/`POSTGRES_USER` | ユーザー状態監査を使う場合推奨 | 状態監査DB接続先 |
+| `POSTGRES_PASSWORD` or `POSTGRES_PASSWORD_FILE` | ユーザー状態監査を使う場合推奨 | 状態監査DBパスワード |
+| `USER_STATE_RETENTION_DAYS` | 任意 | 状態監査履歴の保持日数（既定 `3650`） |
+| `USER_STATE_CLEANUP_INTERVAL_SECONDS` | 任意 | 古い履歴削除の実行間隔秒（既定 `21600`） |
 | `DJAUDIO_BASE_URL` | DJAudio時推奨 | MP3 配信 URL ベース |
 | `DJAUDIO_FFMPEG_PATH` | 任意 | ffmpeg 実行ファイルを明示指定 |
 | `DJAUDIO_AUTO_INSTALL_FFMPEG` | 任意 | `true/false`（既定 `true`） |
@@ -193,6 +205,8 @@ docker compose up -d --build
 | `ADMIN_FLASK_SECRET_KEY` | Yes | セッション署名キー |
 | `ADMIN_PORT` | 任意 | デフォルト `5001` |
 | `ADMIN_LIMITER_STORAGE_URI` | 任意 | レート制限ストレージ（既定 `memory://`、分散時はRedis推奨） |
+| `POSTGRES_HOST`/`POSTGRES_PORT`/`POSTGRES_DB`/`POSTGRES_USER` | ユーザー状態監査を表示する場合推奨 | 状態監査DB接続先 |
+| `POSTGRES_PASSWORD` or `POSTGRES_PASSWORD_FILE` | ユーザー状態監査を表示する場合推奨 | 状態監査DBパスワード |
 | `DEV_USER_ID` | 任意 | 開発者パネル（`/admin/dev`）にアクセスできる Discord ユーザーID。**未設定時はパネル全体が 404 で無効化される** |
 
 ### 5.3 Web トラッカー（`web_main.py`）
@@ -325,6 +339,7 @@ docker compose up -d --build
 | `/admin/settings/earthquake` | 地震通知チャンネル、最小震度、通知タイプ設定 |
 | `/admin/settings/security` | 信頼済みユーザー / バイパスロール管理 |
 | `/admin/settings/djaudio` | DJAudio 監視チャンネル・出力チャンネル・TTL・クールダウン・URL上限設定 |
+| `/admin/users/state` | ユーザー状態監査（現在状態 + 時系列履歴） |
 | `/admin/dev` | 開発者専用デバッグパネル（特定ユーザーのみアクセス可） |
 
 ---
@@ -335,7 +350,7 @@ docker compose up -d --build
 - `data/logs/bot.log`: Discord Bot のログ（最大 1MB × 3世代）
 - `data/logs/admin.log`: 管理 UI のログ（最大 1MB × 3世代）
 - `data/djaudio_cache`: DJAudio の一時 MP3 キャッシュ
-- `migrations/` + DB: Web トラッカーの永続データ
+- `migrations/` + DB: Web トラッカー + ユーザー状態監査の永続データ
 
 > `data/` の保存先は環境変数 `SETTINGS_DIR` で変更できます。Docker 運用時は Bot と管理 UI でボリュームを共有することでログビューアが機能します。
 

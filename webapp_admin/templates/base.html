@@ -95,6 +95,10 @@
            href="{{ url_for('dashboard.overview') }}" title="ダッシュボード" {% if request.url.path in ['/admin/', '/admin/overview'] %}aria-current="page"{% endif %}>
           <i class="bi bi-grid-1x2-fill"></i><span>ダッシュボード</span>
         </a>
+        <a class="sidebar-link {% if request.url.path == '/admin/users/state' %}active{% endif %}"
+           href="{{ url_for('dashboard.user_state_dashboard') }}" title="ユーザー状態監査" {% if request.url.path == '/admin/users/state' %}aria-current="page"{% endif %}>
+          <i class="bi bi-person-lines-fill"></i><span>ユーザー状態監査</span>
+        </a>
       </div>
 
       <div class="sidebar-group">

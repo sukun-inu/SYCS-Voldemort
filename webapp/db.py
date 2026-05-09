@@ -82,14 +82,14 @@ def _run_alembic_upgrade() -> None:
     command.upgrade(cfg, "head")
 
 
-def _run_alembic_stamp_head() -> None:
+def _run_alembic_stamp(revision: str) -> None:
     from alembic import command
     from alembic.config import Config
 
     cfg = Config()
     cfg.set_main_option("script_location", str(MIGRATIONS_DIR))
     cfg.set_main_option("sqlalchemy.url", DATABASE_URL)
-    command.stamp(cfg, "head")
+    command.stamp(cfg, revision)
 
 
 async def init_db() -> None:
@@ -97,10 +97,11 @@ async def init_db() -> None:
 
     if is_legacy:
         logger.warning(
-            "旧式DB（create_all 作成）を検出。Alembic の初期リビジョンをスタンプします。"
+            "旧式DB（create_all 作成）を検出。Alembic 初期リビジョン(0001)をスタンプ後、head へアップグレードします。"
         )
-        await asyncio.to_thread(_run_alembic_stamp_head)
-        logger.info("スタンプ完了。以降のマイグレーションは Alembic で管理されます。")
+        await asyncio.to_thread(_run_alembic_stamp, "0001")
+        await asyncio.to_thread(_run_alembic_upgrade)
+        logger.info("旧式DBの移行完了。以降のマイグレーションは Alembic で管理されます。")
     else:
         logger.info("Alembic マイグレーションを実行します。")
         await asyncio.to_thread(_run_alembic_upgrade)

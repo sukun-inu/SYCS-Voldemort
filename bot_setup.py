@@ -19,6 +19,7 @@ from services.logging_service import log_action
 from services.news_service import run_news_feeds
 from services.reaction_role_service import handle_reaction_add, handle_reaction_remove
 from services.security_service import handle_security_for_message, handle_security_for_voice_join
+from services.user_state_service import record_user_state_event
 from config import JST as _JST
 from services.settings_store import get_vc_notify_channel_id, get_vc_notify_role_id
 from services.sticky_service import handle_sticky, process_pending_stickies
@@ -63,6 +64,46 @@ def setup_events(bot: Bot) -> None:
     _ws_task: asyncio.Task | None = None
     _vc_join_times: dict[tuple[int, int], float] = {}  # (guild_id, user_id) → 入室時刻
     _vc_last_mention: dict[int, float] = {}            # guild_id → 最後にロールメンションを送った時刻
+
+    async def _find_recent_audit_entry(
+        guild: discord.Guild,
+        *,
+        action: discord.AuditLogAction,
+        target_user_id: int,
+        window_seconds: int = 20,
+        retries: int = 2,
+        retry_delay: float = 0.6,
+    ) -> discord.AuditLogEntry | None:
+        me = guild.me
+        if me is None or not me.guild_permissions.view_audit_log:
+            return None
+
+        for attempt in range(retries + 1):
+            try:
+                now_utc = discord.utils.utcnow()
+                async for entry in guild.audit_logs(limit=10, action=action):
+                    target = getattr(entry, "target", None)
+                    if getattr(target, "id", None) != target_user_id:
+                        continue
+
+                    created_at = getattr(entry, "created_at", None)
+                    if created_at is None:
+                        continue
+
+                    age = (now_utc - created_at).total_seconds()
+                    if 0 <= age <= window_seconds:
+                        return entry
+            except Exception as e:
+                logger.debug(
+                    "[BOT_SETUP] audit log lookup failed action=%s target=%s err=%s",
+                    action,
+                    target_user_id,
+                    e,
+                )
+
+            if attempt < retries:
+                await asyncio.sleep(retry_delay)
+        return None
 
     # --------------------------
     # ステータス更新
@@ -315,11 +356,12 @@ def setup_events(bot: Bot) -> None:
         if is_join:
             _vc_join_times[key] = now_ts
         duration_str = ""
+        duration_seconds: int | None = None
         if is_leave:
             join_ts = _vc_join_times.pop(key, None)
             if join_ts is not None:
-                elapsed = int(now_ts - join_ts)
-                h, r = divmod(elapsed, 3600)
+                duration_seconds = int(now_ts - join_ts)
+                h, r = divmod(duration_seconds, 3600)
                 m, s = divmod(r, 60)
                 duration_str = f"{h:02d}:{m:02d}:{s:02d}"
 
@@ -351,6 +393,65 @@ def setup_events(bot: Bot) -> None:
                 )
         except Exception as e:
             logger.exception("[BOT_SETUP] VC log_action error: %s", e)
+
+        # VC 参加 / 退出 / 移動 を永続化
+        try:
+            if is_join:
+                await record_user_state_event(
+                    guild_id=member.guild.id,
+                    user_id=member.id,
+                    event_type="voice_join",
+                    status_after="active",
+                    user=member,
+                    in_guild=True,
+                    is_banned=False,
+                    timed_out_until=member.timed_out_until,
+                    payload={
+                        "channel_before_id": None,
+                        "channel_before_name": None,
+                        "channel_after_id": int(after_ch.id) if after_ch else None,
+                        "channel_after_name": str(after_ch.name) if after_ch else None,
+                        "duration_seconds": None,
+                    },
+                )
+            elif is_leave:
+                await record_user_state_event(
+                    guild_id=member.guild.id,
+                    user_id=member.id,
+                    event_type="voice_leave",
+                    status_after="active",
+                    user=member,
+                    in_guild=True,
+                    is_banned=False,
+                    timed_out_until=member.timed_out_until,
+                    payload={
+                        "channel_before_id": int(before_ch.id) if before_ch else None,
+                        "channel_before_name": str(before_ch.name) if before_ch else None,
+                        "channel_after_id": None,
+                        "channel_after_name": None,
+                        "duration_seconds": duration_seconds,
+                        "duration_hms": duration_str or None,
+                    },
+                )
+            elif is_move:
+                await record_user_state_event(
+                    guild_id=member.guild.id,
+                    user_id=member.id,
+                    event_type="voice_move",
+                    status_after="active",
+                    user=member,
+                    in_guild=True,
+                    is_banned=False,
+                    timed_out_until=member.timed_out_until,
+                    payload={
+                        "channel_before_id": int(before_ch.id) if before_ch else None,
+                        "channel_before_name": str(before_ch.name) if before_ch else None,
+                        "channel_after_id": int(after_ch.id) if after_ch else None,
+                        "channel_after_name": str(after_ch.name) if after_ch else None,
+                    },
+                )
+        except Exception as e:
+            logger.exception("[BOT_SETUP] VC user_state persist error: %s", e)
 
         # VC 通知チャンネルへ（リッチエンベッド）
         try:
@@ -454,6 +555,25 @@ def setup_events(bot: Bot) -> None:
             logger.exception("[BOT_SETUP] on_member_join log_action error: %s", e)
 
         try:
+            await record_user_state_event(
+                guild_id=member.guild.id,
+                user_id=member.id,
+                event_type="member_join",
+                status_after="active",
+                user=member,
+                in_guild=True,
+                is_banned=False,
+                timed_out_until=member.timed_out_until,
+                payload={
+                    "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+                    "account_created_at": member.created_at.isoformat() if member.created_at else None,
+                    "member_count": int(member.guild.member_count or 0),
+                },
+            )
+        except Exception as e:
+            logger.exception("[BOT_SETUP] on_member_join user_state persist error: %s", e)
+
+        try:
             await send_welcome(member)
         except Exception as e:
             logger.exception("[BOT_SETUP] on_member_join welcome error: %s", e)
@@ -461,6 +581,25 @@ def setup_events(bot: Bot) -> None:
     @bot.event
     async def on_member_remove(member: discord.Member):
         roles = [r.mention for r in member.roles if not r.is_default()]
+        event_type = "member_leave"
+        status_after = "left"
+        actor_user: discord.abc.User | None = None
+        audit_reason: str | None = None
+
+        try:
+            kick_entry = await _find_recent_audit_entry(
+                member.guild,
+                action=discord.AuditLogAction.kick,
+                target_user_id=member.id,
+            )
+            if kick_entry is not None:
+                event_type = "member_kick"
+                status_after = "kicked"
+                actor_user = kick_entry.user
+                audit_reason = kick_entry.reason
+        except Exception as e:
+            logger.debug("[BOT_SETUP] on_member_remove kick lookup failed: %s", e)
+
         try:
             await log_action(
                 bot,
@@ -476,6 +615,30 @@ def setup_events(bot: Bot) -> None:
             )
         except Exception as e:
             logger.exception("[BOT_SETUP] on_member_remove log_action error: %s", e)
+
+        try:
+            await record_user_state_event(
+                guild_id=member.guild.id,
+                user_id=member.id,
+                event_type=event_type,
+                status_after=status_after,
+                user=member,
+                actor=actor_user,
+                reason=audit_reason,
+                in_guild=False,
+                is_banned=False,
+                timed_out_until=member.timed_out_until,
+                payload={
+                    "member_count": int(member.guild.member_count or 0),
+                    "roles": [
+                        {"id": int(r.id), "name": str(r.name), "position": int(r.position)}
+                        for r in member.roles
+                        if not r.is_default()
+                    ],
+                },
+            )
+        except Exception as e:
+            logger.exception("[BOT_SETUP] on_member_remove user_state persist error: %s", e)
 
         try:
             await send_goodbye(member)
@@ -503,6 +666,23 @@ def setup_events(bot: Bot) -> None:
                 )
             except Exception as e:
                 logger.exception("[BOT_SETUP] on_member_update nickname log_action error: %s", e)
+            try:
+                await record_user_state_event(
+                    guild_id=after.guild.id,
+                    user_id=after.id,
+                    event_type="member_nickname_changed",
+                    status_after="active",
+                    user=after,
+                    in_guild=True,
+                    is_banned=False,
+                    timed_out_until=after.timed_out_until,
+                    payload={
+                        "before_nickname": before.nick,
+                        "after_nickname": after.nick,
+                    },
+                )
+            except Exception as e:
+                logger.exception("[BOT_SETUP] on_member_update nickname user_state persist error: %s", e)
 
         # ロール変更
         before_roles = set(r.id for r in before.roles if not r.is_default())
@@ -527,6 +707,29 @@ def setup_events(bot: Bot) -> None:
                 )
             except Exception as e:
                 logger.exception("[BOT_SETUP] on_member_update role log_action error: %s", e)
+            try:
+                await record_user_state_event(
+                    guild_id=after.guild.id,
+                    user_id=after.id,
+                    event_type="member_role_changed",
+                    status_after="active",
+                    user=after,
+                    in_guild=True,
+                    is_banned=False,
+                    timed_out_until=after.timed_out_until,
+                    payload={
+                        "added_roles": [
+                            {"id": int(r.id), "name": str(r.name), "position": int(r.position)}
+                            for r in added_roles
+                        ],
+                        "removed_roles": [
+                            {"id": int(r.id), "name": str(r.name), "position": int(r.position)}
+                            for r in removed_roles
+                        ],
+                    },
+                )
+            except Exception as e:
+                logger.exception("[BOT_SETUP] on_member_update role user_state persist error: %s", e)
 
         # タイムアウト
         before_timeout = before.timed_out_until
@@ -546,6 +749,22 @@ def setup_events(bot: Bot) -> None:
                     )
                 except Exception as e:
                     logger.exception("[BOT_SETUP] on_member_update timeout log_action error: %s", e)
+                try:
+                    await record_user_state_event(
+                        guild_id=after.guild.id,
+                        user_id=after.id,
+                        event_type="member_timeout_set",
+                        status_after="active",
+                        user=after,
+                        in_guild=True,
+                        is_banned=False,
+                        timed_out_until=after_timeout,
+                        payload={
+                            "timed_out_until": after_timeout.isoformat(),
+                        },
+                    )
+                except Exception as e:
+                    logger.exception("[BOT_SETUP] on_member_update timeout user_state persist error: %s", e)
             else:
                 try:
                     await log_action(
@@ -557,12 +776,40 @@ def setup_events(bot: Bot) -> None:
                     )
                 except Exception as e:
                     logger.exception("[BOT_SETUP] on_member_update timeout_clear log_action error: %s", e)
+                try:
+                    await record_user_state_event(
+                        guild_id=after.guild.id,
+                        user_id=after.id,
+                        event_type="member_timeout_cleared",
+                        status_after="active",
+                        user=after,
+                        in_guild=True,
+                        is_banned=False,
+                        timed_out_until=None,
+                        payload={},
+                    )
+                except Exception as e:
+                    logger.exception("[BOT_SETUP] on_member_update timeout_clear user_state persist error: %s", e)
 
     # --------------------------
     # BAN / BAN 解除
     # --------------------------
     @bot.event
     async def on_member_ban(guild: discord.Guild, user: discord.User):
+        actor_user: discord.abc.User | None = None
+        audit_reason: str | None = None
+        try:
+            ban_entry = await _find_recent_audit_entry(
+                guild,
+                action=discord.AuditLogAction.ban,
+                target_user_id=user.id,
+            )
+            if ban_entry is not None:
+                actor_user = ban_entry.user
+                audit_reason = ban_entry.reason
+        except Exception as e:
+            logger.debug("[BOT_SETUP] on_member_ban audit lookup failed: %s", e)
+
         try:
             await log_action(
                 bot,
@@ -579,8 +826,38 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.exception("[BOT_SETUP] on_member_ban log_action error: %s", e)
 
+        try:
+            await record_user_state_event(
+                guild_id=guild.id,
+                user_id=user.id,
+                event_type="member_ban",
+                status_after="banned",
+                user=user,
+                actor=actor_user,
+                reason=audit_reason,
+                in_guild=False,
+                is_banned=True,
+                payload={},
+            )
+        except Exception as e:
+            logger.exception("[BOT_SETUP] on_member_ban user_state persist error: %s", e)
+
     @bot.event
     async def on_member_unban(guild: discord.Guild, user: discord.User):
+        actor_user: discord.abc.User | None = None
+        audit_reason: str | None = None
+        try:
+            unban_entry = await _find_recent_audit_entry(
+                guild,
+                action=discord.AuditLogAction.unban,
+                target_user_id=user.id,
+            )
+            if unban_entry is not None:
+                actor_user = unban_entry.user
+                audit_reason = unban_entry.reason
+        except Exception as e:
+            logger.debug("[BOT_SETUP] on_member_unban audit lookup failed: %s", e)
+
         try:
             await log_action(
                 bot,
@@ -595,6 +872,22 @@ def setup_events(bot: Bot) -> None:
             )
         except Exception as e:
             logger.exception("[BOT_SETUP] on_member_unban log_action error: %s", e)
+
+        try:
+            await record_user_state_event(
+                guild_id=guild.id,
+                user_id=user.id,
+                event_type="member_unban",
+                status_after="unbanned",
+                user=user,
+                actor=actor_user,
+                reason=audit_reason,
+                in_guild=False,
+                is_banned=False,
+                payload={},
+            )
+        except Exception as e:
+            logger.exception("[BOT_SETUP] on_member_unban user_state persist error: %s", e)
 
     # --------------------------
     # リアクションロール

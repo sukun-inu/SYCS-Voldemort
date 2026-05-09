@@ -46,6 +46,8 @@ services:
     container_name: sycs-voldemort
     restart: unless-stopped
     depends_on:
+      postgres:
+        condition: service_healthy
       postgres-secret-init:
         condition: service_completed_successfully
     environment:
@@ -63,10 +65,16 @@ services:
       - SETTINGS_LOCK_STALE_SECONDS=${SETTINGS_LOCK_STALE_SECONDS:-30}
       # マルチインスタンス時: 背景ジョブ担当のみ true
       - BOT_BACKGROUND_WORKER=${BOT_BACKGROUND_WORKER:-true}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-metal_prices}
+      - POSTGRES_USER=${POSTGRES_USER:-metal_user}
+      - POSTGRES_PASSWORD_FILE=/shared/postgres_password
       # DJAudio-DL: Discord に貼る MP3 ダウンロード URL のベース（外部からアクセス可能な admin の URL）
       - DJAUDIO_BASE_URL=${DJAUDIO_BASE_URL:-http://localhost:5001}
     volumes:
       - app_data:/app/data
+      - shared_secrets:/shared:ro
 
   sycs-voldemort-admin:
     build:
@@ -75,6 +83,8 @@ services:
     restart: unless-stopped
     command: python admin_main.py
     depends_on:
+      postgres:
+        condition: service_healthy
       postgres-secret-init:
         condition: service_completed_successfully
     ports:
@@ -104,9 +114,15 @@ services:
       - SETTINGS_DIR=/app/data
       - SETTINGS_LOCK_TIMEOUT_SECONDS=${SETTINGS_LOCK_TIMEOUT_SECONDS:-10}
       - SETTINGS_LOCK_STALE_SECONDS=${SETTINGS_LOCK_STALE_SECONDS:-30}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-metal_prices}
+      - POSTGRES_USER=${POSTGRES_USER:-metal_user}
+      - POSTGRES_PASSWORD_FILE=/shared/postgres_password
       - ADMIN_PORT=5001
     volumes:
       - app_data:/app/data
+      - shared_secrets:/shared:ro
 
   sycs-voldemort-web:
     build:

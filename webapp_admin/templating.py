@@ -25,6 +25,7 @@ _ROUTE_MAP: dict[str, str] = {
     "guild_select": "/admin/guilds",
     "select_guild": "/admin/guilds/select",
     "overview": "/admin/overview",
+    "user_state_dashboard": "/admin/users/state",
     "system_metrics": "/admin/api/metrics",
     "monitor_incidents": "/admin/api/incidents",
     "logging_settings": "/admin/settings/logging",
