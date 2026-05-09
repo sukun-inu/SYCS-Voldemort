@@ -15,7 +15,7 @@ from webapp_admin.extensions import limiter
 from webapp_admin.security import _NeedsLogin, check_csrf, sanitize
 from webapp_admin.templating import flash, render
 
-_DEV_USER_ID = os.getenv("DEV_USER_ID", "987278623641829436")
+_DEV_USER_ID = os.getenv("DEV_USER_ID")
 _DISCORD_API = "https://discord.com/api/v10"
 _P2PQUAKE_API = "https://api.p2pquake.net/v2/history"
 _TIMEOUT = aiohttp.ClientTimeout(total=10)
@@ -45,6 +45,8 @@ router = APIRouter()
 
 
 def _check_dev(request: Request) -> dict:
+    if not _DEV_USER_ID:
+        raise HTTPException(status_code=404)
     user = request.session.get("user")
     if not user:
         raise _NeedsLogin()

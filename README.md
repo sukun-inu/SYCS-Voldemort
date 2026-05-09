@@ -87,7 +87,7 @@ Discord Bot（運用支援）+ FastAPI 管理 UI + FastAPI Web トラッカー�
   - 通知テスト送信（ウェルカム / VC 通知）
   - Discord ユーザー検索（Snowflake → アカウント情報）
   - スティッキーメッセージ全件一覧
-  - 環境変数チェッカー（秘密情報はマスク表示）
+  - 環境変数チェッカー（秘密情報はマスク表示、デフォルト値がある変数は `DEFAULT` で表示）
   - DJAudio MP3 キャッシュ管理
   - bot / admin ログビューア（自動更新対応）
 
@@ -193,6 +193,7 @@ docker compose up -d --build
 | `ADMIN_FLASK_SECRET_KEY` | Yes | セッション署名キー |
 | `ADMIN_PORT` | 任意 | デフォルト `5001` |
 | `ADMIN_LIMITER_STORAGE_URI` | 任意 | レート制限ストレージ（既定 `memory://`、分散時はRedis推奨） |
+| `DEV_USER_ID` | 任意 | 開発者パネル（`/admin/dev`）にアクセスできる Discord ユーザーID。**未設定時はパネル全体が 404 で無効化される** |
 
 ### 5.3 Web トラッカー（`web_main.py`）
 
