@@ -6,15 +6,6 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>{% block title %}管理ダッシュボード{% endblock %} - SYCS Voldemort</title>
-  <script>
-    (function(){
-      var mq = window.matchMedia('(prefers-color-scheme: dark)');
-      document.documentElement.setAttribute('data-bs-theme', mq.matches ? 'dark' : 'light');
-      mq.addEventListener('change', function(e){
-        document.documentElement.setAttribute('data-bs-theme', e.matches ? 'dark' : 'light');
-      });
-    })();
-  </script>
   <link rel="icon" type="image/webp" href="{{ admin_asset_url('admin-icon.webp') }}">
   <link rel="apple-touch-icon" href="{{ admin_asset_url('admin-icon.webp') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">

@@ -2,8 +2,38 @@
 
 :root {
   --font-main: "Zen Kaku Gothic New", "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif;
+  /* Bootstrap 5 CSS variable bridge — design-system → Bootstrap tokens */
   --bs-body-font-family: var(--font-main);
   --bs-font-sans-serif: var(--font-main);
+  --bs-body-bg: var(--app-bg);
+  --bs-body-color: var(--text);
+  --bs-emphasis-color: var(--text);
+  --bs-secondary-color: var(--text-secondary);
+  --bs-tertiary-color: var(--text-tertiary);
+  --bs-secondary-bg: var(--surface-muted);
+  --bs-tertiary-bg: var(--surface-raised);
+  --bs-border-color: var(--separator);
+  --bs-border-color-translucent: var(--separator);
+  --bs-link-color: var(--accent);
+  --bs-link-hover-color: var(--accent-hover);
+  --bs-code-color: var(--text);
+  /* Nav tabs */
+  --bs-nav-link-color: var(--text-secondary);
+  --bs-nav-link-hover-color: var(--text);
+  --bs-nav-tabs-border-color: var(--separator);
+  --bs-nav-tabs-link-hover-border-color: var(--separator) var(--separator) transparent;
+  --bs-nav-tabs-link-active-color: var(--text);
+  --bs-nav-tabs-link-active-bg: var(--surface);
+  --bs-nav-tabs-link-active-border-color: var(--separator) var(--separator) var(--surface);
+  /* Contextual colors */
+  --bs-warning-bg-subtle: var(--warning-soft);
+  --bs-danger-bg-subtle: var(--danger-soft);
+  --bs-success-bg-subtle: var(--success-soft);
+  --bs-info-bg-subtle: var(--info-soft);
+  --bs-warning-text-emphasis: var(--warning);
+  --bs-danger-text-emphasis: var(--danger);
+  --bs-success-text-emphasis: var(--success);
+  --bs-info-text-emphasis: var(--info);
   --app-bg: #f5f5f7;
   --surface: #ffffff;
   --surface-raised: #fbfbfd;
@@ -1412,6 +1442,60 @@ textarea.form-control { min-height: 120px; resize: vertical; }
   background-color: var(--surface-muted) !important;
 }
 
+/* Nav tabs — Apple-style pill tabs above a card */
+.nav-tabs {
+  border-bottom: 1px solid var(--separator);
+  gap: 2px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.nav-tabs::-webkit-scrollbar { display: none; }
+
+.nav-tabs .nav-link {
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 9px 16px;
+  white-space: nowrap;
+}
+
+.nav-tabs .nav-link:hover {
+  border-color: var(--separator) var(--separator) transparent;
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.nav-tabs .nav-link.active,
+.nav-tabs .nav-item.show .nav-link {
+  border-color: var(--separator) var(--separator) var(--surface);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Tab content card that connects flush with nav-tabs */
+.tab-content.section-card {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* table-active: override Bootstrap's default rgba(0,0,0,.1) with surface-raised */
+.table > :not(caption) > tr.table-active > *,
+.table > thead.table-active > tr > * {
+  --bs-table-bg: var(--surface-raised);
+  background-color: var(--surface-raised) !important;
+  color: var(--text-secondary);
+}
+
+/* table-warning: uses --bs-warning-bg-subtle bridged above */
+.table > :not(caption) > tr.table-warning > * {
+  color: var(--text);
+}
+
 .badge {
   border-radius: var(--radius-pill);
   font-weight: 600;
@@ -1538,6 +1622,9 @@ hr {
   }
   .health-card:first-child { border-top: 0; }
 }
+
+/* Dev panel — earthquake scale badge */
+.bg-orange { background-color: #e55000 !important; color: #fff !important; }
 
 /* ── ランディングページ モバイルナビ ──────────────────────── */
 
