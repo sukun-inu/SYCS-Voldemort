@@ -86,4 +86,15 @@ def render(request: Request, template_name: str, status_code: int = 200, **ctx):
         "csrf_token": csrf_token,
         "url_for": _url_for,
     })
-    return templates.TemplateResponse(template_name, ctx, status_code=status_code)
+    # Starlette のバージョン差分:
+    # - 新: TemplateResponse(request=..., name=..., context=...)
+    # - 旧: TemplateResponse(name, context, ...)
+    try:
+        return templates.TemplateResponse(
+            request=request,
+            name=template_name,
+            context=ctx,
+            status_code=status_code,
+        )
+    except TypeError:
+        return templates.TemplateResponse(template_name, ctx, status_code=status_code)
