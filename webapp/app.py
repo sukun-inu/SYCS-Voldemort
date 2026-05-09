@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -237,19 +238,27 @@ def _pick_top_delta(snapshot: dict[str, dict[str, str | None]]) -> tuple[str, De
 
 
 async def _claim_dispatch_slot(session: AsyncSession, *, snapshot_date: date) -> int | None:
-    """通知送信スロットを先に確保して、多重インスタンスの重複送信を防ぐ。"""
-    dispatch = NotificationDispatch(
-        notification_type=NOTIFY_TOP_DELTA_TYPE,
-        snapshot_date=snapshot_date,
-        detail="pending",
+    """通知送信スロットを先に確保して、多重インスタンスの重複送信を防ぐ。
+
+    INSERT ... ON CONFLICT DO NOTHING を使うことで、競合時に PostgreSQL がエラーログを
+    吐かない。複数ワーカーが同時実行した場合、後着はスロット取得失敗として None を返す。
+    """
+    stmt = (
+        pg_insert(NotificationDispatch)
+        .values(
+            notification_type=NOTIFY_TOP_DELTA_TYPE,
+            snapshot_date=snapshot_date,
+            detail="pending",
+        )
+        .on_conflict_do_nothing(constraint="uq_notification_dispatch_type_date")
+        .returning(NotificationDispatch.id)
     )
-    session.add(dispatch)
-    try:
-        await session.commit()
-    except IntegrityError:
-        await session.rollback()
+    result = await session.execute(stmt)
+    row = result.fetchone()
+    if row is None:
         return None
-    return dispatch.id
+    await session.commit()
+    return row[0]
 
 
 async def _send_push_to_subscriptions(
