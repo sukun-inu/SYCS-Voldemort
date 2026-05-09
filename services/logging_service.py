@@ -180,7 +180,11 @@ async def log_action(
 
     if fields:
         for name, value in fields.items():
-            embed.add_field(name=name, value=value, inline=False)
+            # Discord API の制限: embed フィールドは 1024 文字以下
+            truncated_value = str(value)[:1024]
+            if len(str(value)) > 1024:
+                truncated_value += "... (省略)"
+            embed.add_field(name=name, value=truncated_value, inline=False)
 
     embed.set_footer(text=f"時刻 (JST): {jst_now.strftime('%Y-%m-%d %H:%M:%S')}")
 

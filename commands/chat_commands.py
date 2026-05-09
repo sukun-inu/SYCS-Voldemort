@@ -49,18 +49,6 @@ async def handle_chatgpt_message(bot: discord.Client, message: discord.Message):
     _user_last_used[key] = time.time()
     _cleanup_stale_instances()
 
-    await log_action(
-        bot,
-        message.guild.id,
-        "INFO",
-        "ChatGPT入力",
-        user=message.author,
-        fields={
-            "チャンネル": message.channel.mention,
-            "内容": message.content or "(内容なし)",
-        },
-    )
-
     async with message.channel.typing():
         try:
             response = await user_chatgpt[key].input_message(message.content)
@@ -76,17 +64,19 @@ async def handle_chatgpt_message(bot: discord.Client, message: discord.Message):
             await message.channel.send("ヴォルデモートでも手こずるとはな… 少し待ってから試せ。")
             return
 
-        preview = response[:1800] + ("..." if len(response) > 1800 else "")
-        await log_action(
-            bot,
-            message.guild.id,
-            "DEBUG",
-            "ChatGPT出力",
-            user=message.author,
-            fields={
-                "チャンネル": message.channel.mention,
-                "内容プレビュー": preview,
-            },
-        )
-
         await send_large_message(message.channel, response)
+
+    # typing コンテキスト外でログ出力（API呼び出しの競合を避ける）
+    preview = response[:1800] + ("..." if len(response) > 1800 else "")
+    await log_action(
+        bot,
+        message.guild.id,
+        "DEBUG",
+        "ChatGPT出力",
+        user=message.author,
+        fields={
+            "チャンネル": message.channel.mention,
+            "入力": (message.content or "(内容なし)")[:500],
+            "出力プレビュー": preview[:500],
+        },
+    )
