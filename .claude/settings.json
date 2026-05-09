@@ -3,7 +3,9 @@
     "allow": [
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Kawasaki\\\\Desktop\\\\Develop\\\\SYCS-Voldemort\" -Force)",
       "Bash(Select-Object Name)",
-      "Bash(grep -E \"\\\\.\\(html|js|css|json\\)$\")"
+      "Bash(grep -E \"\\\\.\\(html|js|css|json\\)$\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Kawasaki\\\\Desktop\\\\Develop\\\\SYCS-Voldemort\\\\webapp_admin\" -Filter \"*.py\" -Recurse)",
+      "Bash(Select-Object FullName)"
     ]
   }
 }

@@ -8,6 +8,7 @@ colorthief
 vt-py
 fastapi
 uvicorn
+jinja2
 SQLAlchemy
 asyncpg
 alembic
