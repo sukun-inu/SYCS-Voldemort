@@ -34,6 +34,7 @@
 - Discord OAuth URL の `prompt=none` 固定を廃止。
   - 既定は `prompt` 指定なし（通常のOAuth挙動）。
   - `DISCORD_OAUTH_PROMPT=none|consent` のときのみ明示指定。
+- セッション保存前に `admin_guilds` を軽量化し、JSON 非対応値のガードを追加。
 
 ## 6. 運用時に確認する環境変数
 - `ADMIN_FLASK_SECRET_KEY`: セッション署名キー（全インスタンス共通にする）
@@ -47,3 +48,4 @@
 - WebAdmin の保存キーと Bot 側の参照キーを必ず同時確認すること。
 - 画面側の `action` 値と `views/*.py` の `if action == ...` を一致させること。
 - 設定変更後は、`commands` と `services` の参照ロジックも同時に追うこと。
+- `request.session` には JSON シリアライズ可能な値のみ保存すること（巨大・複雑なオブジェクトは避ける）。

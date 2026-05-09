@@ -1,6 +1,7 @@
 import logging
 import os
 import secrets
+import json
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -21,6 +22,52 @@ from webapp_admin.security import _NeedsGuild, _NeedsLogin
 from webapp_admin.templating import render
 
 logger = logging.getLogger(__name__)
+
+
+def _compact_admin_guilds(value):
+    if not isinstance(value, list):
+        return []
+    compact: list[dict[str, str | None]] = []
+    for guild in value:
+        if not isinstance(guild, dict):
+            continue
+        try:
+            guild_id = str(int(guild.get("id")))
+        except (TypeError, ValueError):
+            continue
+        icon = guild.get("icon")
+        compact.append({
+            "id": guild_id,
+            "name": str(guild.get("name") or "Unknown"),
+            "icon": icon if isinstance(icon, str) else None,
+        })
+    return compact
+
+
+def _make_json_safe(value):
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(k): _make_json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_make_json_safe(v) for v in value]
+    return str(value)
+
+
+def _sanitize_session_payload(session: dict) -> None:
+    if "admin_guilds" in session:
+        session["admin_guilds"] = _compact_admin_guilds(session.get("admin_guilds"))
+
+    try:
+        json.dumps(session)
+        return
+    except (TypeError, ValueError):
+        pass
+
+    safe = _make_json_safe(session)
+    if isinstance(safe, dict):
+        session.clear()
+        session.update(safe)
 
 
 def create_app() -> FastAPI:
@@ -152,6 +199,14 @@ def create_app() -> FastAPI:
             "connect-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com "
             "https://fonts.gstatic.com https://static.cloudflareinsights.com"
         )
+        return response
+
+    @app.middleware("http")
+    async def session_serialization_guard_middleware(request: Request, call_next):
+        response = await call_next(request)
+        session = getattr(request, "session", None)
+        if isinstance(session, dict):
+            _sanitize_session_payload(session)
         return response
 
     app.add_middleware(SlowAPIMiddleware)

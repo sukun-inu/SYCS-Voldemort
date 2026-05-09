@@ -150,11 +150,17 @@ async def get_admin_guilds(access_token: str) -> list[dict]:
         get_user_guilds(access_token),
         _get_bot_guild_ids(),
     )
-    result = []
+    result: list[dict[str, str | None]] = []
     for g in user_guilds:
         try:
-            if (int(g.get("permissions", 0)) & _ADMINISTRATOR_BIT) and int(g["id"]) in bot_ids:
-                result.append(g)
+            guild_id = int(g["id"])
+            if (int(g.get("permissions", 0)) & _ADMINISTRATOR_BIT) and guild_id in bot_ids:
+                icon = g.get("icon")
+                result.append({
+                    "id": str(guild_id),
+                    "name": str(g.get("name") or "Unknown"),
+                    "icon": icon if isinstance(icon, str) else None,
+                })
         except (TypeError, ValueError):
             continue
     return result
