@@ -6,7 +6,9 @@
       "Bash(grep -E \"\\\\.\\(html|js|css|json\\)$\")",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Kawasaki\\\\Desktop\\\\Develop\\\\SYCS-Voldemort\\\\webapp_admin\" -Filter \"*.py\" -Recurse)",
       "Bash(Select-Object FullName)",
-      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Kawasaki\\\\Desktop\\\\Develop\\\\SYCS-Voldemort\" -Directory)"
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Kawasaki\\\\Desktop\\\\Develop\\\\SYCS-Voldemort\" -Directory)",
+      "Bash(python -)",
+      "Bash(del \"c:\\\\Users\\\\Kawasaki\\\\Desktop\\\\Develop\\\\SYCS-Voldemort\\\\webapp_admin\\\\static\\\\favicon.svg\")"
     ]
   }
 }
