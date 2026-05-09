@@ -24,11 +24,18 @@ from webapp_admin.templating import render
 logger = logging.getLogger(__name__)
 
 
+def _flatten_exception_group(exc: BaseException) -> list[BaseException]:
+    if isinstance(exc, BaseExceptionGroup):
+        leaves: list[BaseException] = []
+        for child in exc.exceptions:
+            leaves.extend(_flatten_exception_group(child))
+        return leaves
+    return [exc]
+
+
 def _unwrap_exception_group(exc: BaseException) -> BaseException:
-    current = exc
-    while isinstance(current, BaseExceptionGroup) and current.exceptions:
-        current = current.exceptions[0]
-    return current
+    leaves = _flatten_exception_group(exc)
+    return leaves[0] if leaves else exc
 
 
 def _compact_admin_guilds(value):
@@ -178,7 +185,15 @@ def create_app() -> FastAPI:
         if isinstance(root, HTTPException):
             return await http_exception_handler(request, root)
 
-        logger.error("Unhandled ExceptionGroup root=%r", root, exc_info=exc)
+        leaves = _flatten_exception_group(exc)
+        logger.error(
+            "Unhandled ExceptionGroup path=%s method=%s root=%s leaves=%s",
+            request.url.path,
+            request.method,
+            type(root).__name__,
+            [f"{type(leaf).__name__}: {leaf}" for leaf in leaves],
+            exc_info=exc,
+        )
         return render(
             request, "error.html", status_code=500,
             code=500, message="サーバーエラーが発生しました。",
@@ -197,6 +212,14 @@ def create_app() -> FastAPI:
                 record_error_response(response.status_code, snap)
         except Exception as exc:
             record_exception(exc, snap)
+            root = _unwrap_exception_group(exc) if isinstance(exc, BaseExceptionGroup) else exc
+            logger.exception(
+                "Request failed method=%s path=%s root=%s detail=%s",
+                request.method,
+                request.url.path,
+                type(root).__name__,
+                root,
+            )
             raise
         return response
 
