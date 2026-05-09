@@ -91,7 +91,7 @@ async def logging_settings(request: Request, _=Depends(check_guild), _csrf=Depen
             flash(request, "ChatGPT 応答チャンネルを更新した。", "success")
         return RedirectResponse("/admin/settings/logging", status_code=303)
 
-    channels = get_guild_channels(gid)
+    channels = await get_guild_channels(gid)
     ch_map = {c["id"]: c["name"] for c in channels}
     return render(
         request, "settings/logging.html",
@@ -131,7 +131,7 @@ async def welcome_settings(request: Request, _=Depends(check_guild), _csrf=Depen
             flash(request, "グッバイ設定を更新した。", "success")
         return RedirectResponse("/admin/settings/welcome", status_code=303)
 
-    channels = get_guild_channels(gid)
+    channels = await get_guild_channels(gid)
     ch_map = {c["id"]: c["name"] for c in channels}
     return render(
         request, "settings/welcome.html",
@@ -171,13 +171,13 @@ async def vc_notify(request: Request, _=Depends(check_guild), _csrf=Depends(chec
                     flash(request, "無効なロールIDです。", "warning")
         return RedirectResponse("/admin/settings/vc-notify", status_code=303)
 
-    channels = get_guild_channels(gid)
+    channels = await get_guild_channels(gid)
     ch_map = {c["id"]: c["name"] for c in channels}
     return render(
         request, "settings/vc_notify.html",
         channels=channels,
         ch_map=ch_map,
-        roles=get_guild_roles(gid),
+        roles=await get_guild_roles(gid),
         current_ch=get_vc_notify_channel_id(gid),
         current_role=get_vc_notify_role_id(gid),
     )
@@ -188,7 +188,7 @@ async def vc_notify(request: Request, _=Depends(check_guild), _csrf=Depends(chec
 @router.api_route("/sticky", methods=["GET", "POST"])
 async def sticky(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
     gid = request.session["guild_id"]
-    channels = get_guild_channels(gid)
+    channels = await get_guild_channels(gid)
     if request.method == "POST":
         form = await request.form()
         action = form.get("action", "")
@@ -220,7 +220,7 @@ async def sticky(request: Request, _=Depends(check_guild), _csrf=Depends(check_c
 @router.api_route("/reaction-roles", methods=["GET", "POST"])
 async def reaction_roles(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
     gid = request.session["guild_id"]
-    roles = get_guild_roles(gid)
+    roles = await get_guild_roles(gid)
     if request.method == "POST":
         form = await request.form()
         action = form.get("action", "")
@@ -270,7 +270,7 @@ async def reaction_roles(request: Request, _=Depends(check_guild), _csrf=Depends
 @router.api_route("/news-feeds", methods=["GET", "POST"])
 async def news_feeds(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
     gid = request.session["guild_id"]
-    channels = get_guild_channels(gid)
+    channels = await get_guild_channels(gid)
     if request.method == "POST":
         form = await request.form()
         action = form.get("action", "")
@@ -345,7 +345,7 @@ async def earthquake(request: Request, _=Depends(check_guild), _csrf=Depends(che
             flash(request, "通知タイプを更新した。", "success")
         return RedirectResponse("/admin/settings/earthquake", status_code=303)
 
-    channels = get_guild_channels(gid)
+    channels = await get_guild_channels(gid)
     ch_map = {c["id"]: c["name"] for c in channels}
     return render(
         request, "settings/earthquake.html",
@@ -364,7 +364,7 @@ async def earthquake(request: Request, _=Depends(check_guild), _csrf=Depends(che
 @router.api_route("/security", methods=["GET", "POST"])
 async def security_settings(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
     gid = request.session["guild_id"]
-    roles = get_guild_roles(gid)
+    roles = await get_guild_roles(gid)
     if request.method == "POST":
         form = await request.form()
         action = form.get("action", "")

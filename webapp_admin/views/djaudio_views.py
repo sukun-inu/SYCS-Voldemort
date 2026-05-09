@@ -108,7 +108,7 @@ async def file_info(guild_id: str, token: str):
 @router.api_route("/djaudio", methods=["GET", "POST"])
 async def djaudio_settings(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
     gid = request.session["guild_id"]
-    channels = get_guild_channels(gid)
+    channels = await get_guild_channels(gid)
 
     if request.method == "POST":
         form = await request.form()

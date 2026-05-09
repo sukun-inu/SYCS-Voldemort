@@ -1,10 +1,11 @@
+import asyncio
 import logging
 import os
 import time
 from typing import Optional
 from urllib.parse import urlencode
 
-import requests as req
+import aiohttp
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ _API = "https://discord.com/api/v10"
 _SCOPES = "identify guilds"
 _ADMINISTRATOR_BIT = 0x8
 
-_TIMEOUT = 10
+_TIMEOUT = aiohttp.ClientTimeout(total=10)
 
 
 def get_oauth_url(state: str) -> str:
@@ -32,110 +33,118 @@ def get_oauth_url(state: str) -> str:
     return f"https://discord.com/api/oauth2/authorize?{urlencode(params)}"
 
 
-def exchange_code(code: str) -> Optional[dict]:
+async def exchange_code(code: str) -> Optional[dict]:
     try:
-        resp = req.post(
-            f"{_API}/oauth2/token",
-            data={
-                "client_id": DISCORD_CLIENT_ID,
-                "client_secret": DISCORD_CLIENT_SECRET,
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": DISCORD_REDIRECT_URI,
-            },
-            timeout=_TIMEOUT,
-        )
-        resp.raise_for_status()
-        return resp.json()
+        async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
+            async with session.post(
+                f"{_API}/oauth2/token",
+                data={
+                    "client_id": DISCORD_CLIENT_ID,
+                    "client_secret": DISCORD_CLIENT_SECRET,
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": DISCORD_REDIRECT_URI,
+                },
+            ) as resp:
+                resp.raise_for_status()
+                return await resp.json()
     except Exception:
         return None
 
 
-def get_user_info(access_token: str) -> Optional[dict]:
+async def get_user_info(access_token: str) -> Optional[dict]:
     try:
-        resp = req.get(
-            f"{_API}/users/@me",
-            headers={"Authorization": f"Bearer {access_token}"},
-            timeout=_TIMEOUT,
-        )
-        resp.raise_for_status()
-        return resp.json()
+        async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
+            async with session.get(
+                f"{_API}/users/@me",
+                headers={"Authorization": f"Bearer {access_token}"},
+            ) as resp:
+                resp.raise_for_status()
+                return await resp.json()
     except Exception:
         return None
 
 
-def get_user_guilds(access_token: str) -> list[dict]:
+async def get_user_guilds(access_token: str) -> list[dict]:
     try:
-        resp = req.get(
-            f"{_API}/users/@me/guilds",
-            headers={"Authorization": f"Bearer {access_token}"},
-            timeout=_TIMEOUT,
-        )
-        resp.raise_for_status()
-        return resp.json()
+        async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
+            async with session.get(
+                f"{_API}/users/@me/guilds",
+                headers={"Authorization": f"Bearer {access_token}"},
+            ) as resp:
+                resp.raise_for_status()
+                return await resp.json()
     except Exception:
         return []
 
 
-def _get_bot_guild_ids() -> set[int]:
+async def _get_bot_guild_ids() -> set[int]:
     if not DISCORD_BOT_TOKEN:
         logger.warning("DISCORD_BOT_TOKEN が未設定のため Bot ギルド一覧を取得できません。")
         return set()
     try:
-        resp = req.get(
-            f"{_API}/users/@me/guilds",
-            headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
-            timeout=_TIMEOUT,
-        )
-        resp.raise_for_status()
-        ids = {int(g["id"]) for g in resp.json()}
-        if not ids:
-            logger.warning("Bot がどのサーバーにも参加していません。")
-        return ids
+        async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
+            async with session.get(
+                f"{_API}/users/@me/guilds",
+                headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+            ) as resp:
+                resp.raise_for_status()
+                ids = {int(g["id"]) for g in await resp.json()}
+                if not ids:
+                    logger.warning("Bot がどのサーバーにも参加していません。")
+                return ids
     except Exception as e:
         logger.warning("Bot ギルド一覧取得失敗: %s", e)
         return set()
 
 
 _guild_count_cache: tuple[int, float] | None = None
-_GUILD_COUNT_TTL = 300  # 5分キャッシュ
+_guild_count_lock = asyncio.Lock()
+_GUILD_COUNT_TTL = 300
 
 
-def get_bot_guild_count() -> int:
+async def get_bot_guild_count() -> int:
     """Bot が参加しているサーバー数を返す（5分キャッシュ）。"""
     global _guild_count_cache
     now = time.time()
     if _guild_count_cache and now - _guild_count_cache[1] < _GUILD_COUNT_TTL:
         return _guild_count_cache[0]
 
-    count = 0
-    if DISCORD_BOT_TOKEN:
-        try:
-            resp = req.get(
-                f"{_API}/users/@me/guilds?limit=200",
-                headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
-                timeout=_TIMEOUT,
-            )
-            resp.raise_for_status()
-            count = len(resp.json())
-        except Exception as e:
-            logger.warning("get_bot_guild_count: Discord API 失敗、フォールバックを使用: %s", e)
+    async with _guild_count_lock:
+        now = time.time()
+        if _guild_count_cache and now - _guild_count_cache[1] < _GUILD_COUNT_TTL:
+            return _guild_count_cache[0]
 
-    if count == 0:
-        try:
-            from services.settings_store import get_all_guild_ids
-            count = len(get_all_guild_ids())
-        except Exception as e:
-            logger.warning("get_bot_guild_count: settings_store フォールバックも失敗: %s", e)
+        count = 0
+        if DISCORD_BOT_TOKEN:
+            try:
+                async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
+                    async with session.get(
+                        f"{_API}/users/@me/guilds?limit=200",
+                        headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+                    ) as resp:
+                        resp.raise_for_status()
+                        count = len(await resp.json())
+            except Exception as e:
+                logger.warning("get_bot_guild_count: Discord API 失敗、フォールバックを使用: %s", e)
 
-    _guild_count_cache = (count, now)
-    return count
+        if count == 0:
+            try:
+                from services.settings_store import get_all_guild_ids
+                count = len(get_all_guild_ids())
+            except Exception as e:
+                logger.warning("get_bot_guild_count: settings_store フォールバックも失敗: %s", e)
+
+        _guild_count_cache = (count, now)
+        return count
 
 
-def get_admin_guilds(access_token: str) -> list[dict]:
+async def get_admin_guilds(access_token: str) -> list[dict]:
     """ユーザーが administrator 権限を持ち、Botが参加しているギルド一覧。"""
-    user_guilds = get_user_guilds(access_token)
-    bot_ids = _get_bot_guild_ids()
+    user_guilds, bot_ids = await asyncio.gather(
+        get_user_guilds(access_token),
+        _get_bot_guild_ids(),
+    )
     result = []
     for g in user_guilds:
         try:
@@ -146,35 +155,35 @@ def get_admin_guilds(access_token: str) -> list[dict]:
     return result
 
 
-def get_guild_channels(guild_id: int) -> list[dict]:
+async def get_guild_channels(guild_id: int) -> list[dict]:
     """テキストチャンネル (type=0) のみ返す。"""
     try:
-        resp = req.get(
-            f"{_API}/guilds/{guild_id}/channels",
-            headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
-            timeout=_TIMEOUT,
-        )
-        resp.raise_for_status()
-        return sorted(
-            [c for c in resp.json() if c.get("type") == 0],
-            key=lambda c: c.get("position", 0),
-        )
+        async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
+            async with session.get(
+                f"{_API}/guilds/{guild_id}/channels",
+                headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+            ) as resp:
+                resp.raise_for_status()
+                return sorted(
+                    [c for c in await resp.json() if c.get("type") == 0],
+                    key=lambda c: c.get("position", 0),
+                )
     except Exception:
         return []
 
 
-def get_guild_roles(guild_id: int) -> list[dict]:
+async def get_guild_roles(guild_id: int) -> list[dict]:
     """管理されていないロール（@everyone 除く）を返す。"""
     try:
-        resp = req.get(
-            f"{_API}/guilds/{guild_id}/roles",
-            headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
-            timeout=_TIMEOUT,
-        )
-        resp.raise_for_status()
-        return sorted(
-            [r for r in resp.json() if r.get("name") != "@everyone"],
-            key=lambda r: -r.get("position", 0),
-        )
+        async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
+            async with session.get(
+                f"{_API}/guilds/{guild_id}/roles",
+                headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+            ) as resp:
+                resp.raise_for_status()
+                return sorted(
+                    [r for r in await resp.json() if r.get("name") != "@everyone"],
+                    key=lambda r: -r.get("position", 0),
+                )
     except Exception:
         return []

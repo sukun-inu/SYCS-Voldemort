@@ -55,18 +55,18 @@ async def callback(request: Request):
         flash(request, "認証コードが取得できませんでした。", "danger")
         return RedirectResponse("/admin/login", status_code=303)
 
-    token_data = exchange_code(code)
+    token_data = await exchange_code(code)
     if not token_data or "access_token" not in token_data:
         flash(request, "Discord 認証に失敗しました。", "danger")
         return RedirectResponse("/admin/login", status_code=303)
 
     access_token = token_data["access_token"]
-    user_info = get_user_info(access_token)
+    user_info = await get_user_info(access_token)
     if not user_info:
         flash(request, "ユーザー情報の取得に失敗しました。", "danger")
         return RedirectResponse("/admin/login", status_code=303)
 
-    admin_guilds = get_admin_guilds(access_token)
+    admin_guilds = await get_admin_guilds(access_token)
     if not admin_guilds:
         flash(request, "管理者権限を持つサーバーが見つかりませんでした。Bot が参加しているサーバーで管理者権限が必要です。", "warning")
         return RedirectResponse("/admin/login", status_code=303)

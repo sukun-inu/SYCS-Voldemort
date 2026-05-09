@@ -62,7 +62,7 @@ def create_app() -> FastAPI:
 
     @app.get("/")
     async def landing(request: Request):
-        return render(request, "landing.html", invite_url=_invite_url(), guild_count=get_bot_guild_count())
+        return render(request, "landing.html", invite_url=_invite_url(), guild_count=await get_bot_guild_count())
 
     @app.get("/guide")
     async def guide(request: Request):

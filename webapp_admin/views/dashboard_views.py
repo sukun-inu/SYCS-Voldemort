@@ -91,7 +91,7 @@ async def overview(request: Request, _=Depends(check_guild)):
         "djaudio_cooldown": djaudio.cooldown,
         "djaudio_max_urls": djaudio.max_urls,
     }
-    channels = get_guild_channels(gid)
+    channels = await get_guild_channels(gid)
     ch_map = {str(c["id"]): c["name"] for c in channels}
     return render(request, "dashboard.html", stats=stats, ch_map=ch_map)
 
