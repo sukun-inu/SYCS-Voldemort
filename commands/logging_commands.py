@@ -89,7 +89,7 @@ def register_logging_commands(bot: Bot) -> None:
 
         set_response_channel_id(interaction.guild.id, None)
         await interaction.response.send_message(
-            "余への語りかけチャンネルを解除した。どこからでも語りかけるがよい。",
+            "余への語りかけチャンネルを解除した。再設定されるまで余は応答しない。",
             ephemeral=True,
         )
 
@@ -226,7 +226,7 @@ def register_logging_commands(bot: Bot) -> None:
         log_ch_text = f"<#{log_ch_id}>" if log_ch_id else "未設定"
 
         resp_ch_id = get_response_channel_id(guild_id)
-        resp_ch_text = f"<#{resp_ch_id}>" if resp_ch_id else "未設定"
+        resp_ch_text = f"<#{resp_ch_id}>" if resp_ch_id else "未設定（無効）"
 
         trusted_ids = get_trusted_user_ids(guild_id)
         if not trusted_ids:

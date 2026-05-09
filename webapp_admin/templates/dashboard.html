@@ -80,7 +80,7 @@
     ("bi-mic-fill", "info", "VC 通知", "settings.vc_notify",
      [("通知チャンネル", ch_name(stats.vc_notify_ch))]),
     ("bi-robot", "warning", "ChatGPT 応答", "settings.logging_settings",
-     [("応答チャンネル", ch_name(stats.chatgpt_ch) if stats.chatgpt_ch else "未設定（全チャンネル）")]),
+     [("応答チャンネル", ch_name(stats.chatgpt_ch))]),
     ("bi-music-note-beamed", "info", "DJAudio-DL", "djaudio.djaudio_settings",
      [("監視チャンネル", ch_name(stats.djaudio_watch_channel)),
       ("TTL / CD / URL上限", (stats.djaudio_cache_ttl // 60) ~ "分 / " ~ stats.djaudio_cooldown ~ "秒 / " ~ stats.djaudio_max_urls)]),
@@ -117,7 +117,7 @@
       <div class="metric-row">
         <span class="metric-label">{{ label }}</span>
         <span class="metric-value">
-          {% if value == "未設定" or value == "未設定（全チャンネル）" %}
+          {% if value == "未設定" %}
           <span class="metric-value-empty">{{ value }}</span>
           {% else %}
           {{ value }}

@@ -55,7 +55,7 @@
         <span class="status-label">現在</span>
         <span class="status-chip">
           <i class="bi bi-shield-fill"></i>
-          {% if current_role %}{{ current_role }}{% else %}未設定{% endif %}
+          {% if current_role %}{{ role_map.get(current_role|string, current_role) }}{% else %}未設定{% endif %}
         </span>
       </div>
 

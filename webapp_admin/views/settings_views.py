@@ -172,12 +172,15 @@ async def vc_notify(request: Request, _=Depends(check_guild), _csrf=Depends(chec
         return RedirectResponse("/admin/settings/vc-notify", status_code=303)
 
     channels = await get_guild_channels(gid)
+    roles = await get_guild_roles(gid)
+    role_map = {str(r["id"]): r["name"] for r in roles}
     ch_map = {c["id"]: c["name"] for c in channels}
     return render(
         request, "settings/vc_notify.html",
         channels=channels,
         ch_map=ch_map,
-        roles=await get_guild_roles(gid),
+        roles=roles,
+        role_map=role_map,
         current_ch=get_vc_notify_channel_id(gid),
         current_role=get_vc_notify_role_id(gid),
     )

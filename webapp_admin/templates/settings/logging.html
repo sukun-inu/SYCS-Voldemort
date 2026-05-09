@@ -69,7 +69,7 @@
         <span class="status-label">現在</span>
         <span class="status-chip">
           <i class="bi bi-hash"></i>
-          {% if chatgpt_ch %}{{ ch_map.get(chatgpt_ch|string, chatgpt_ch) }}{% else %}全チャンネル{% endif %}
+          {% if chatgpt_ch %}{{ ch_map.get(chatgpt_ch|string, chatgpt_ch) }}{% else %}未設定（無効）{% endif %}
         </span>
       </div>
 
@@ -80,14 +80,14 @@
         <div class="mb-4">
           <label class="form-label" for="chatgpt_channel_id">ChatGPT が応答するチャンネル</label>
           <select id="chatgpt_channel_id" name="chatgpt_channel_id" class="form-select">
-            <option value="0">全チャンネル</option>
+            <option value="0">未設定（無効）</option>
             {% for ch in channels %}
             <option value="{{ ch.id }}" {% if ch.id|string == chatgpt_ch|string %}selected{% endif %}>
               # {{ ch.name }}
             </option>
             {% endfor %}
           </select>
-          <div class="form-text">未設定の場合はすべてのチャンネルで応答します。</div>
+          <div class="form-text">未設定の場合は ChatGPT は応答しません。</div>
         </div>
 
         <div class="form-actions">

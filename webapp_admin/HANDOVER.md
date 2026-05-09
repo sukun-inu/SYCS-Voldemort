@@ -29,7 +29,7 @@
   - 実際の Bot 挙動（設定値の参照先）
 
 ## 5. 今回修正した不整合
-- ChatGPT 応答チャンネルが未設定 (`0`) のとき、本来「全チャンネル許可」なのに応答しない不具合を修正。
+- ChatGPT 応答チャンネルが未設定 (`0`) のときは「無効」として扱う仕様に統一（Bot / WebUI / 表示文言）。
 - サーバー選択 POST (`/admin/guilds/select`) に CSRF 検証を追加。
 - Discord OAuth URL の `prompt=none` 固定を廃止。
   - 既定は `prompt` 指定なし（通常のOAuth挙動）。

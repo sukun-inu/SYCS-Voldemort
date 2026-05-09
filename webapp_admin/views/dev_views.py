@@ -148,6 +148,53 @@ _ENV_DISPLAY: list[tuple[str, bool]] = [
     ("METALS_SITE_URL",           False),
 ]
 
+_ENV_ALIASES: dict[str, tuple[str, ...]] = {
+    # 旧名や運用時の別名がある場合に吸収する
+    "ADMIN_FLASK_SECRET_KEY": ("FLASK_SECRET_KEY",),
+}
+
+_CONFIG_ENV_ATTRS: dict[str, str] = {
+    # config.py 側で解決済みの実効値も参照する
+    "DISCORD_BOT_TOKEN": "DISCORD_BOT_TOKEN",
+    "OPENAI_API_KEY": "OPENAI_API_KEY",
+    "GROQ_API_KEY": "GROQ_API_KEY",
+    "VIRUSTOTAL_API_KEY": "VIRUSTOTAL_API_KEY",
+    "METALPRICE_API_KEY": "METALPRICE_API_KEY",
+    "DJAUDIO_BASE_URL": "DJAUDIO_BASE_URL",
+    "DJAUDIO_CACHE_DIR": "DJAUDIO_CACHE_DIR",
+    "METALS_SITE_URL": "METALS_SITE_URL",
+    "ADMIN_SITE_URL": "ADMIN_SITE_URL",
+}
+
+
+def _normalize_env_value(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, Path):
+        text = str(value)
+    else:
+        text = str(value)
+    text = text.strip()
+    return text or None
+
+
+def _resolve_env_value(key: str, cfg: object | None) -> str | None:
+    # 1) 環境変数（本命キー + 別名）
+    for candidate in (key, *_ENV_ALIASES.get(key, ())):
+        normalized = _normalize_env_value(os.environ.get(candidate))
+        if normalized is not None:
+            return normalized
+
+    # 2) config.py で解決済みの実効値
+    if cfg is not None:
+        attr = _CONFIG_ENV_ATTRS.get(key)
+        if attr:
+            normalized = _normalize_env_value(getattr(cfg, attr, None))
+            if normalized is not None:
+                return normalized
+
+    return None
+
 
 def _tail_file(path: Path, lines: int = 200) -> list[str]:
     try:
@@ -169,12 +216,13 @@ def _env_rows() -> list[dict]:
             "ADMIN_SITE_URL":          cfg.ADMIN_SITE_URL,
         }
     except Exception:
+        cfg = None
         _defaults = {}
 
     rows = []
     for key, secret in _ENV_DISPLAY:
-        val = os.environ.get(key)
-        if val is not None and val.strip():
+        val = _resolve_env_value(key, cfg)
+        if val is not None:
             display = f"{val[:4]}{'*' * min(len(val) - 4, 20)}" if secret and len(val) > 4 else ("****" if secret else val)
             status = "set"
         elif key in _defaults:
