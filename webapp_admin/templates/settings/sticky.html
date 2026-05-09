@@ -17,7 +17,7 @@
     </div>
     <div class="section-card-body">
       <form method="post" id="sticky-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="set">
         <div class="mb-3">
           <label class="form-label" for="sticky_channel_id">チャンネル</label>
@@ -77,7 +77,7 @@
                 <i class="bi bi-pencil"></i>
               </button>
               <form method="post" class="d-inline confirm-form" data-msg="このスティッキーを解除しますか？">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="action" value="remove">
                 <input type="hidden" name="channel_id" value="{{ ch_id }}">
                 <button type="submit" class="btn btn-sm btn-outline-danger" title="削除">

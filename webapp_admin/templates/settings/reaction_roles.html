@@ -22,7 +22,7 @@
     </div>
     <div class="section-card-body">
       <form method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="add">
         <div class="mb-3">
           <label class="form-label" for="message_id">メッセージID</label>
@@ -75,7 +75,7 @@
             <td>{{ role_map.get(role_id|string, role_id) }}</td>
             <td class="table-actions">
               <form method="post" class="d-inline confirm-form" data-msg="このエントリを削除しますか？">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="action" value="remove">
                 <input type="hidden" name="message_id" value="{{ msg_id }}">
                 <input type="hidden" name="emoji" value="{{ emoji }}">

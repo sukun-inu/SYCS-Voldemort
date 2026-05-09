@@ -1,0 +1,89 @@
+import os
+import secrets
+from pathlib import Path
+
+from fastapi import Request
+from fastapi.templating import Jinja2Templates
+
+_template_dir = Path(__file__).resolve().parent / "templates"
+_static_root = Path(__file__).resolve().parent / "static"
+
+templates = Jinja2Templates(directory=str(_template_dir))
+
+_ROUTE_MAP: dict[str, str] = {
+    "landing": "/",
+    "guide": "/guide",
+    "privacy": "/privacy",
+    "terms": "/terms",
+    "login": "/admin/login",
+    "oauth_start": "/admin/auth",
+    "callback": "/admin/callback",
+    "logout": "/admin/logout",
+    "index": "/admin/",
+    "admin_root": "/admin/",
+    "guild_select": "/admin/guilds",
+    "select_guild": "/admin/guilds/select",
+    "overview": "/admin/overview",
+    "system_metrics": "/admin/api/metrics",
+    "monitor_incidents": "/admin/api/incidents",
+    "logging_settings": "/admin/settings/logging",
+    "welcome_settings": "/admin/settings/welcome",
+    "vc_notify": "/admin/settings/vc-notify",
+    "sticky": "/admin/settings/sticky",
+    "reaction_roles": "/admin/settings/reaction-roles",
+    "news_feeds": "/admin/settings/news-feeds",
+    "earthquake": "/admin/settings/earthquake",
+    "security_settings": "/admin/settings/security",
+    "djaudio_settings": "/admin/settings/djaudio",
+    "dlaudio_health": "/dlaudio/health",
+    "serve_file": "/dlaudio/files/{guild_id}/{token}",
+    "file_info": "/dlaudio/info/{guild_id}/{token}",
+    "static": "/static/{path}",
+}
+
+
+def _url_for(name: str, **kwargs: str) -> str:
+    short = name.split(".")[-1] if "." in name else name
+    path = _ROUTE_MAP.get(short) or _ROUTE_MAP.get(name, f"/{name}")
+    for k, v in kwargs.items():
+        path = path.replace(f"{{{k}}}", str(v))
+    return path
+
+
+def _admin_asset_url(filename: str) -> str:
+    version_seed = os.environ.get("ADMIN_ASSET_VERSION", "admin")
+    version = version_seed
+    try:
+        asset_path = (_static_root / filename).resolve()
+        asset_path.relative_to(_static_root)
+        stat = asset_path.stat()
+        version = f"{version_seed}-{stat.st_mtime_ns:x}-{stat.st_size:x}"
+    except (OSError, ValueError):
+        pass
+    return f"/static/{filename}?v={version}"
+
+
+templates.env.globals["admin_asset_url"] = _admin_asset_url
+
+
+def _get_csrf_token(request: Request) -> str:
+    if "_csrf_token" not in request.session:
+        request.session["_csrf_token"] = secrets.token_hex(32)
+    return request.session["_csrf_token"]
+
+
+def flash(request: Request, message: str, category: str = "info") -> None:
+    request.session.setdefault("_flashes", []).append([category, message])
+
+
+def render(request: Request, template_name: str, status_code: int = 200, **ctx):
+    messages = request.session.pop("_flashes", [])
+    csrf_token = _get_csrf_token(request)
+    ctx.update({
+        "request": request,
+        "session": request.session,
+        "messages": messages,
+        "csrf_token": csrf_token,
+        "url_for": _url_for,
+    })
+    return templates.TemplateResponse(template_name, ctx, status_code=status_code)

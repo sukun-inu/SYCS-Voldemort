@@ -13,7 +13,7 @@
 <div class="guild-grid">
   {% for guild in guilds %}
   <form method="post" action="{{ url_for('dashboard.select_guild') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="hidden" name="guild_id" value="{{ guild.id }}">
     <button type="submit" class="guild-card-button">
       <div class="guild-card">

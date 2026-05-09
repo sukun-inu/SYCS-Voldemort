@@ -1,91 +1,90 @@
 import secrets
 
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from fastapi import APIRouter, Depends, Request
+from starlette.responses import RedirectResponse
 
 from webapp_admin.auth import DISCORD_CLIENT_ID, exchange_code, get_admin_guilds, get_oauth_url, get_user_info
 from webapp_admin.extensions import limiter
+from webapp_admin.security import check_login
+from webapp_admin.templating import flash, render
 
-auth_bp = Blueprint("auth", __name__)
+router = APIRouter()
 
 
 def _build_invite_url() -> str | None:
     if not DISCORD_CLIENT_ID:
         return None
     return (
-        "https://discord.com/api/oauth2/authorize"
+        f"https://discord.com/api/oauth2/authorize"
         f"?client_id={DISCORD_CLIENT_ID}"
         "&permissions=8&scope=bot+applications.commands"
     )
 
 
-@auth_bp.route("/login")
-@limiter.limit("30 per minute")
-def login():
-    if "user" in session:
-        return redirect(url_for("dashboard.index"))
-    return render_template("login.html", invite_url=_build_invite_url())
+@router.get("/login")
+@limiter.limit("30/minute")
+async def login(request: Request):
+    if "user" in request.session:
+        return RedirectResponse("/admin/overview", status_code=303)
+    return render(request, "login.html", invite_url=_build_invite_url())
 
 
-
-
-@auth_bp.route("/auth")
-@limiter.limit("10 per minute")
-def oauth_start():
+@router.get("/auth")
+@limiter.limit("10/minute")
+async def oauth_start(request: Request):
     state = secrets.token_urlsafe(32)
-    session["oauth_state"] = state
-    session.permanent = True
-    return redirect(get_oauth_url(state))
+    request.session["oauth_state"] = state
+    return RedirectResponse(get_oauth_url(state), status_code=303)
 
 
-@auth_bp.route("/callback")
-@limiter.limit("10 per minute")
-def callback():
-    if request.args.get("error"):
-        flash("Discord 認証がキャンセルされました。", "danger")
-        return redirect(url_for("auth.login"))
+@router.get("/callback")
+@limiter.limit("10/minute")
+async def callback(request: Request):
+    if request.query_params.get("error"):
+        flash(request, "Discord 認証がキャンセルされました。", "danger")
+        return RedirectResponse("/admin/login", status_code=303)
 
-    state = request.args.get("state", "")
-    expected = session.pop("oauth_state", None)
+    state = request.query_params.get("state", "")
+    expected = request.session.pop("oauth_state", None)
     if not expected or not secrets.compare_digest(state, expected):
-        flash("不正なリクエストです（state 不一致）。", "danger")
-        return redirect(url_for("auth.login"))
+        flash(request, "不正なリクエストです（state 不一致）。", "danger")
+        return RedirectResponse("/admin/login", status_code=303)
 
-    code = request.args.get("code", "")
+    code = request.query_params.get("code", "")
     if not code:
-        flash("認証コードが取得できませんでした。", "danger")
-        return redirect(url_for("auth.login"))
+        flash(request, "認証コードが取得できませんでした。", "danger")
+        return RedirectResponse("/admin/login", status_code=303)
 
     token_data = exchange_code(code)
     if not token_data or "access_token" not in token_data:
-        flash("Discord 認証に失敗しました。", "danger")
-        return redirect(url_for("auth.login"))
+        flash(request, "Discord 認証に失敗しました。", "danger")
+        return RedirectResponse("/admin/login", status_code=303)
 
     access_token = token_data["access_token"]
     user_info = get_user_info(access_token)
     if not user_info:
-        flash("ユーザー情報の取得に失敗しました。", "danger")
-        return redirect(url_for("auth.login"))
+        flash(request, "ユーザー情報の取得に失敗しました。", "danger")
+        return RedirectResponse("/admin/login", status_code=303)
 
     admin_guilds = get_admin_guilds(access_token)
     if not admin_guilds:
-        flash("管理者権限を持つサーバーが見つかりませんでした。Bot が参加しているサーバーで管理者権限が必要です。", "warning")
-        return redirect(url_for("auth.login"))
+        flash(request, "管理者権限を持つサーバーが見つかりませんでした。Bot が参加しているサーバーで管理者権限が必要です。", "warning")
+        return RedirectResponse("/admin/login", status_code=303)
 
-    session.clear()
-    session.permanent = True
-    session["user"] = {
+    request.session.clear()
+    request.session["user"] = {
         "id": user_info["id"],
         "username": user_info.get("username", ""),
         "global_name": user_info.get("global_name"),
         "avatar": user_info.get("avatar"),
     }
-    session["admin_guilds"] = admin_guilds
+    request.session["admin_guilds"] = admin_guilds
 
-    return redirect(url_for("dashboard.guild_select"))
+    return RedirectResponse("/admin/guilds", status_code=303)
 
 
-@auth_bp.route("/logout")
-def logout():
-    session.clear()
-    flash("ログアウトしました。", "info")
-    return redirect(url_for("auth.login"))
+@router.get("/logout")
+async def logout(request: Request):
+    request.session.clear()
+    flash(request, "ログアウトしました。", "info")
+    return RedirectResponse("/admin/login", status_code=303)

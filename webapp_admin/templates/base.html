@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <title>{% block title %}管理ダッシュボード{% endblock %} - SYCS Voldemort</title>
   <link rel="icon" type="image/webp" href="{{ admin_asset_url('admin-icon.webp') }}">
   <link rel="apple-touch-icon" href="{{ admin_asset_url('admin-icon.webp') }}">
@@ -90,64 +90,64 @@
     <nav class="sidebar-nav">
       <div class="sidebar-group">
         <span class="sidebar-label">概要</span>
-        <a class="sidebar-link {% if request.endpoint == 'dashboard.index' or request.endpoint == 'dashboard.overview' %}active{% endif %}"
-           href="{{ url_for('dashboard.overview') }}" title="ダッシュボード" {% if request.endpoint == 'dashboard.index' or request.endpoint == 'dashboard.overview' %}aria-current="page"{% endif %}>
+        <a class="sidebar-link {% if request.url.path in ['/admin/', '/admin/overview'] %}active{% endif %}"
+           href="{{ url_for('dashboard.overview') }}" title="ダッシュボード" {% if request.url.path in ['/admin/', '/admin/overview'] %}aria-current="page"{% endif %}>
           <i class="bi bi-grid-1x2-fill"></i><span>ダッシュボード</span>
         </a>
       </div>
 
       <div class="sidebar-group">
         <span class="sidebar-label">基本設定</span>
-        <a class="sidebar-link {% if request.endpoint == 'settings.logging_settings' %}active{% endif %}"
-           href="{{ url_for('settings.logging_settings') }}" title="ログ設定" {% if request.endpoint == 'settings.logging_settings' %}aria-current="page"{% endif %}>
+        <a class="sidebar-link {% if request.url.path == '/admin/settings/logging' %}active{% endif %}"
+           href="{{ url_for('settings.logging_settings') }}" title="ログ設定" {% if request.url.path == '/admin/settings/logging' %}aria-current="page"{% endif %}>
           <i class="bi bi-journal-text"></i><span>ログ設定</span>
         </a>
-        <a class="sidebar-link {% if request.endpoint == 'settings.welcome_settings' %}active{% endif %}"
-           href="{{ url_for('settings.welcome_settings') }}" title="ウェルカム/グッバイ" {% if request.endpoint == 'settings.welcome_settings' %}aria-current="page"{% endif %}>
+        <a class="sidebar-link {% if request.url.path == '/admin/settings/welcome' %}active{% endif %}"
+           href="{{ url_for('settings.welcome_settings') }}" title="ウェルカム/グッバイ" {% if request.url.path == '/admin/settings/welcome' %}aria-current="page"{% endif %}>
           <i class="bi bi-person-plus-fill"></i><span>ウェルカム/グッバイ</span>
         </a>
-        <a class="sidebar-link {% if request.endpoint == 'settings.vc_notify' %}active{% endif %}"
-           href="{{ url_for('settings.vc_notify') }}" title="VC 通知" {% if request.endpoint == 'settings.vc_notify' %}aria-current="page"{% endif %}>
+        <a class="sidebar-link {% if request.url.path == '/admin/settings/vc-notify' %}active{% endif %}"
+           href="{{ url_for('settings.vc_notify') }}" title="VC 通知" {% if request.url.path == '/admin/settings/vc-notify' %}aria-current="page"{% endif %}>
           <i class="bi bi-mic-fill"></i><span>VC 通知</span>
         </a>
       </div>
 
       <div class="sidebar-group">
         <span class="sidebar-label">自動通知</span>
-        <a class="sidebar-link {% if request.endpoint == 'settings.earthquake' %}active{% endif %}"
-           href="{{ url_for('settings.earthquake') }}" title="地震アラート" {% if request.endpoint == 'settings.earthquake' %}aria-current="page"{% endif %}>
+        <a class="sidebar-link {% if request.url.path == '/admin/settings/earthquake' %}active{% endif %}"
+           href="{{ url_for('settings.earthquake') }}" title="地震アラート" {% if request.url.path == '/admin/settings/earthquake' %}aria-current="page"{% endif %}>
           <i class="bi bi-exclamation-triangle-fill"></i><span>地震アラート</span>
         </a>
-        <a class="sidebar-link {% if request.endpoint == 'settings.news_feeds' %}active{% endif %}"
-           href="{{ url_for('settings.news_feeds') }}" title="ニュースフィード" {% if request.endpoint == 'settings.news_feeds' %}aria-current="page"{% endif %}>
+        <a class="sidebar-link {% if request.url.path == '/admin/settings/news-feeds' %}active{% endif %}"
+           href="{{ url_for('settings.news_feeds') }}" title="ニュースフィード" {% if request.url.path == '/admin/settings/news-feeds' %}aria-current="page"{% endif %}>
           <i class="bi bi-newspaper"></i><span>ニュースフィード</span>
         </a>
       </div>
 
       <div class="sidebar-group">
         <span class="sidebar-label">チャンネル機能</span>
-        <a class="sidebar-link {% if request.endpoint == 'settings.sticky' %}active{% endif %}"
-           href="{{ url_for('settings.sticky') }}" title="スティッキー" {% if request.endpoint == 'settings.sticky' %}aria-current="page"{% endif %}>
+        <a class="sidebar-link {% if request.url.path == '/admin/settings/sticky' %}active{% endif %}"
+           href="{{ url_for('settings.sticky') }}" title="スティッキー" {% if request.url.path == '/admin/settings/sticky' %}aria-current="page"{% endif %}>
           <i class="bi bi-pin-angle-fill"></i><span>スティッキー</span>
         </a>
-        <a class="sidebar-link {% if request.endpoint == 'settings.reaction_roles' %}active{% endif %}"
-           href="{{ url_for('settings.reaction_roles') }}" title="リアクションロール" {% if request.endpoint == 'settings.reaction_roles' %}aria-current="page"{% endif %}>
+        <a class="sidebar-link {% if request.url.path == '/admin/settings/reaction-roles' %}active{% endif %}"
+           href="{{ url_for('settings.reaction_roles') }}" title="リアクションロール" {% if request.url.path == '/admin/settings/reaction-roles' %}aria-current="page"{% endif %}>
           <i class="bi bi-emoji-smile-fill"></i><span>リアクションロール</span>
         </a>
       </div>
 
       <div class="sidebar-group">
         <span class="sidebar-label">メディア</span>
-        <a class="sidebar-link {% if request.endpoint == 'djaudio.djaudio_settings' %}active{% endif %}"
-           href="{{ url_for('djaudio.djaudio_settings') }}" title="DJAudio-DL" {% if request.endpoint == 'djaudio.djaudio_settings' %}aria-current="page"{% endif %}>
+        <a class="sidebar-link {% if request.url.path == '/admin/settings/djaudio' %}active{% endif %}"
+           href="{{ url_for('djaudio.djaudio_settings') }}" title="DJAudio-DL" {% if request.url.path == '/admin/settings/djaudio' %}aria-current="page"{% endif %}>
           <i class="bi bi-music-note-beamed"></i><span>DJAudio-DL</span>
         </a>
       </div>
 
       <div class="sidebar-group">
         <span class="sidebar-label">セキュリティ</span>
-        <a class="sidebar-link {% if request.endpoint == 'settings.security_settings' %}active{% endif %}"
-           href="{{ url_for('settings.security_settings') }}" title="セキュリティ設定" {% if request.endpoint == 'settings.security_settings' %}aria-current="page"{% endif %}>
+        <a class="sidebar-link {% if request.url.path == '/admin/settings/security' %}active{% endif %}"
+           href="{{ url_for('settings.security_settings') }}" title="セキュリティ設定" {% if request.url.path == '/admin/settings/security' %}aria-current="page"{% endif %}>
           <i class="bi bi-shield-fill-check"></i><span>セキュリティ設定</span>
         </a>
       </div>
@@ -156,7 +156,6 @@
   {% endif %}
 
   <main class="main-content">
-    {% with messages = get_flashed_messages(with_categories=True) %}
     {% if messages %}
     <div class="flash-stack">
       {% for cat, msg in messages %}
@@ -178,7 +177,6 @@
       {% endfor %}
     </div>
     {% endif %}
-    {% endwith %}
 
     {% block content %}{% endblock %}
   </main>

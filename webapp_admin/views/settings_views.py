@@ -1,13 +1,13 @@
 import uuid
 
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from fastapi import APIRouter, Depends, Request
+from starlette.responses import RedirectResponse
 
 from config import SCALE_LABELS
 from services.logging_service import get_log_settings, set_log_channel, set_log_level
 from services.settings_store import (
     add_bypass_roles,
     add_news_feed,
-    update_news_feed,
     add_reaction_role,
     add_trusted_users,
     get_bypass_role_ids,
@@ -38,17 +38,20 @@ from services.settings_store import (
     set_vc_notify_role_id,
     set_welcome_channel,
     set_welcome_message,
+    update_news_feed,
 )
 from webapp_admin.auth import get_guild_channels, get_guild_roles
 from webapp_admin.security import (
-    guild_required,
+    check_csrf,
+    check_guild,
     sanitize,
     validate_channel_id,
     validate_choice,
     validate_int,
 )
+from webapp_admin.templating import flash, render
 
-settings_bp = Blueprint("settings", __name__)
+router = APIRouter()
 
 _LOG_LEVELS = {"NONE", "ERROR", "INFO", "DEBUG"}
 _VALID_SCALES = {10, 20, 30, 40, 45, 50, 55, 60, 65, 70}
@@ -61,49 +64,37 @@ _NOTIFY_TYPE_LABELS: dict[str, str] = {
 }
 
 
-def _gid() -> int:
-    return session["guild_id"]
-
-
-def _channels():
-    return get_guild_channels(_gid())
-
-
-def _roles():
-    return get_guild_roles(_gid())
-
-
 # ── ログ設定 ───────────────────────────────────────────────
 
-@settings_bp.route("/logging", methods=["GET", "POST"])
-@guild_required
-def logging_settings():
-    gid = _gid()
+@router.api_route("/logging", methods=["GET", "POST"])
+async def logging_settings(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
+    gid = request.session["guild_id"]
     if request.method == "POST":
-        action = request.form.get("action", "")
+        form = await request.form()
+        action = form.get("action", "")
         if action == "set_log":
-            ch_id = request.form.get("log_channel_id", "")
-            level = sanitize(request.form.get("log_level", "INFO"), 10)
+            ch_id = form.get("log_channel_id", "")
+            level = sanitize(form.get("log_level", "INFO"), 10)
             validate_choice(level, _LOG_LEVELS)
             if ch_id and ch_id != "0":
                 set_log_channel(gid, validate_channel_id(ch_id))
             elif ch_id == "0":
                 set_log_channel(gid, None)
             set_log_level(gid, level)
-            flash("ログ設定を更新した。", "success")
+            flash(request, "ログ設定を更新した。", "success")
         elif action == "set_chatgpt":
-            ch_id = request.form.get("chatgpt_channel_id", "")
+            ch_id = form.get("chatgpt_channel_id", "")
             if ch_id == "0" or not ch_id:
                 set_response_channel_id(gid, None)
             else:
                 set_response_channel_id(gid, validate_channel_id(ch_id))
-            flash("ChatGPT 応答チャンネルを更新した。", "success")
-        return redirect(url_for("settings.logging_settings"))
+            flash(request, "ChatGPT 応答チャンネルを更新した。", "success")
+        return RedirectResponse("/admin/settings/logging", status_code=303)
 
-    channels = _channels()
+    channels = get_guild_channels(gid)
     ch_map = {c["id"]: c["name"] for c in channels}
-    return render_template(
-        "settings/logging.html",
+    return render(
+        request, "settings/logging.html",
         channels=channels,
         ch_map=ch_map,
         log_settings=get_log_settings(gid),
@@ -114,36 +105,36 @@ def logging_settings():
 
 # ── ウェルカム / グッバイ ─────────────────────────────────
 
-@settings_bp.route("/welcome", methods=["GET", "POST"])
-@guild_required
-def welcome_settings():
-    gid = _gid()
+@router.api_route("/welcome", methods=["GET", "POST"])
+async def welcome_settings(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
+    gid = request.session["guild_id"]
     if request.method == "POST":
-        action = request.form.get("action", "")
+        form = await request.form()
+        action = form.get("action", "")
         if action == "set_welcome":
-            ch_id = request.form.get("welcome_channel_id", "")
-            msg = sanitize(request.form.get("welcome_message", ""), 1000)
+            ch_id = form.get("welcome_channel_id", "")
+            msg = sanitize(form.get("welcome_message", ""), 1000)
             if ch_id == "0" or not ch_id:
                 set_welcome_channel(gid, None)
             else:
                 set_welcome_channel(gid, validate_channel_id(ch_id))
             set_welcome_message(gid, msg or None)
-            flash("ウェルカム設定を更新した。", "success")
+            flash(request, "ウェルカム設定を更新した。", "success")
         elif action == "set_goodbye":
-            ch_id = request.form.get("goodbye_channel_id", "")
-            msg = sanitize(request.form.get("goodbye_message", ""), 1000)
+            ch_id = form.get("goodbye_channel_id", "")
+            msg = sanitize(form.get("goodbye_message", ""), 1000)
             if ch_id == "0" or not ch_id:
                 set_goodbye_channel(gid, None)
             else:
                 set_goodbye_channel(gid, validate_channel_id(ch_id))
             set_goodbye_message(gid, msg or None)
-            flash("グッバイ設定を更新した。", "success")
-        return redirect(url_for("settings.welcome_settings"))
+            flash(request, "グッバイ設定を更新した。", "success")
+        return RedirectResponse("/admin/settings/welcome", status_code=303)
 
-    channels = _channels()
+    channels = get_guild_channels(gid)
     ch_map = {c["id"]: c["name"] for c in channels}
-    return render_template(
-        "settings/welcome.html",
+    return render(
+        request, "settings/welcome.html",
         channels=channels,
         ch_map=ch_map,
         welcome_s=get_welcome_settings(gid),
@@ -153,40 +144,40 @@ def welcome_settings():
 
 # ── VC 通知 ───────────────────────────────────────────────
 
-@settings_bp.route("/vc-notify", methods=["GET", "POST"])
-@guild_required
-def vc_notify():
-    gid = _gid()
+@router.api_route("/vc-notify", methods=["GET", "POST"])
+async def vc_notify(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
+    gid = request.session["guild_id"]
     if request.method == "POST":
-        action = request.form.get("action", "")
+        form = await request.form()
+        action = form.get("action", "")
         if action == "set_channel":
-            ch_id = request.form.get("vc_notify_channel_id", "")
+            ch_id = form.get("vc_notify_channel_id", "")
             if ch_id == "0" or not ch_id:
                 set_vc_notify_channel_id(gid, None)
-                flash("VC 通知チャンネルを解除した。", "success")
+                flash(request, "VC 通知チャンネルを解除した。", "success")
             else:
                 set_vc_notify_channel_id(gid, validate_channel_id(ch_id))
-                flash("VC 通知チャンネルを設定した。", "success")
+                flash(request, "VC 通知チャンネルを設定した。", "success")
         elif action == "set_role":
-            rid_str = request.form.get("vc_notify_role_id", "")
+            rid_str = form.get("vc_notify_role_id", "")
             if rid_str == "0" or not rid_str:
                 set_vc_notify_role_id(gid, None)
-                flash("VC 通知ロールを解除した。", "success")
+                flash(request, "VC 通知ロールを解除した。", "success")
             else:
                 try:
                     set_vc_notify_role_id(gid, int(rid_str))
-                    flash("VC 通知ロールを設定した。", "success")
+                    flash(request, "VC 通知ロールを設定した。", "success")
                 except ValueError:
-                    flash("無効なロールIDです。", "warning")
-        return redirect(url_for("settings.vc_notify"))
+                    flash(request, "無効なロールIDです。", "warning")
+        return RedirectResponse("/admin/settings/vc-notify", status_code=303)
 
-    channels = _channels()
+    channels = get_guild_channels(gid)
     ch_map = {c["id"]: c["name"] for c in channels}
-    return render_template(
-        "settings/vc_notify.html",
+    return render(
+        request, "settings/vc_notify.html",
         channels=channels,
         ch_map=ch_map,
-        roles=_roles(),
+        roles=get_guild_roles(gid),
         current_ch=get_vc_notify_channel_id(gid),
         current_role=get_vc_notify_role_id(gid),
     )
@@ -194,30 +185,30 @@ def vc_notify():
 
 # ── スティッキーメッセージ ────────────────────────────────
 
-@settings_bp.route("/sticky", methods=["GET", "POST"])
-@guild_required
-def sticky():
-    gid = _gid()
-    channels = _channels()
+@router.api_route("/sticky", methods=["GET", "POST"])
+async def sticky(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
+    gid = request.session["guild_id"]
+    channels = get_guild_channels(gid)
     if request.method == "POST":
-        action = request.form.get("action", "")
+        form = await request.form()
+        action = form.get("action", "")
         if action in ("add", "set"):
-            ch_id = request.form.get("channel_id", "")
-            content = sanitize(request.form.get("content", ""), 1000).strip()
+            ch_id = form.get("channel_id", "")
+            content = sanitize(form.get("content", ""), 1000).strip()
             if not content:
-                flash("内容を入力してください。", "warning")
-                return redirect(url_for("settings.sticky"))
+                flash(request, "内容を入力してください。", "warning")
+                return RedirectResponse("/admin/settings/sticky", status_code=303)
             set_sticky_message(gid, validate_channel_id(ch_id), content)
-            flash("スティッキーメッセージを設定した。", "success")
+            flash(request, "スティッキーメッセージを設定した。", "success")
         elif action == "remove":
-            ch_id = request.form.get("channel_id", "")
+            ch_id = form.get("channel_id", "")
             mark_sticky_pending_delete(gid, validate_channel_id(ch_id))
-            flash("スティッキーメッセージを解除した。", "success")
-        return redirect(url_for("settings.sticky"))
+            flash(request, "スティッキーメッセージを解除した。", "success")
+        return RedirectResponse("/admin/settings/sticky", status_code=303)
 
     ch_map = {c["id"]: c["name"] for c in channels}
-    return render_template(
-        "settings/sticky.html",
+    return render(
+        request, "settings/sticky.html",
         channels=channels,
         stickies=get_sticky_messages(gid),
         ch_map=ch_map,
@@ -226,48 +217,48 @@ def sticky():
 
 # ── リアクションロール ────────────────────────────────────
 
-@settings_bp.route("/reaction-roles", methods=["GET", "POST"])
-@guild_required
-def reaction_roles():
-    gid = _gid()
-    roles = _roles()
+@router.api_route("/reaction-roles", methods=["GET", "POST"])
+async def reaction_roles(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
+    gid = request.session["guild_id"]
+    roles = get_guild_roles(gid)
     if request.method == "POST":
-        action = request.form.get("action", "")
+        form = await request.form()
+        action = form.get("action", "")
         if action == "add":
-            msg_id_str = sanitize(request.form.get("message_id", ""), 20)
-            emoji = sanitize(request.form.get("emoji", ""), 50).strip()
-            role_id_str = request.form.get("role_id", "")
+            msg_id_str = sanitize(form.get("message_id", ""), 20)
+            emoji = sanitize(form.get("emoji", ""), 50).strip()
+            role_id_str = form.get("role_id", "")
             try:
                 msg_id = int(msg_id_str)
             except ValueError:
-                flash("メッセージIDは数値で入力してください。", "warning")
-                return redirect(url_for("settings.reaction_roles"))
+                flash(request, "メッセージIDは数値で入力してください。", "warning")
+                return RedirectResponse("/admin/settings/reaction-roles", status_code=303)
             if not emoji:
-                flash("絵文字を入力してください。", "warning")
-                return redirect(url_for("settings.reaction_roles"))
+                flash(request, "絵文字を入力してください。", "warning")
+                return RedirectResponse("/admin/settings/reaction-roles", status_code=303)
             try:
                 role_id = int(role_id_str)
             except ValueError:
-                flash("ロールを選択してください。", "warning")
-                return redirect(url_for("settings.reaction_roles"))
+                flash(request, "ロールを選択してください。", "warning")
+                return RedirectResponse("/admin/settings/reaction-roles", status_code=303)
             add_reaction_role(gid, msg_id, emoji, role_id)
-            flash("リアクションロールを追加した。", "success")
+            flash(request, "リアクションロールを追加した。", "success")
         elif action == "remove":
-            msg_id_str = sanitize(request.form.get("message_id", ""), 20)
-            emoji = sanitize(request.form.get("emoji", ""), 50).strip()
+            msg_id_str = sanitize(form.get("message_id", ""), 20)
+            emoji = sanitize(form.get("emoji", ""), 50).strip()
             try:
                 msg_id = int(msg_id_str)
             except ValueError:
-                flash("無効なメッセージIDです。", "warning")
-                return redirect(url_for("settings.reaction_roles"))
+                flash(request, "無効なメッセージIDです。", "warning")
+                return RedirectResponse("/admin/settings/reaction-roles", status_code=303)
             ok = remove_reaction_role(gid, msg_id, emoji)
-            flash("リアクションロールを削除した。" if ok else "該当するエントリが見つからなかった。",
+            flash(request, "リアクションロールを削除した。" if ok else "該当するエントリが見つからなかった。",
                   "success" if ok else "warning")
-        return redirect(url_for("settings.reaction_roles"))
+        return RedirectResponse("/admin/settings/reaction-roles", status_code=303)
 
     role_map = {str(r["id"]): r["name"] for r in roles}
-    return render_template(
-        "settings/reaction_roles.html",
+    return render(
+        request, "settings/reaction_roles.html",
         roles=roles,
         rr=get_reaction_roles(gid),
         role_map=role_map,
@@ -276,48 +267,48 @@ def reaction_roles():
 
 # ── ニュースフィード ──────────────────────────────────────
 
-@settings_bp.route("/news-feeds", methods=["GET", "POST"])
-@guild_required
-def news_feeds():
-    gid = _gid()
-    channels = _channels()
+@router.api_route("/news-feeds", methods=["GET", "POST"])
+async def news_feeds(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
+    gid = request.session["guild_id"]
+    channels = get_guild_channels(gid)
     if request.method == "POST":
-        action = request.form.get("action", "")
+        form = await request.form()
+        action = form.get("action", "")
         if action == "add":
-            ch_id = request.form.get("channel_id", "")
-            query = sanitize(request.form.get("query", ""), 200).strip()
-            interval_str = request.form.get("interval", "60")
+            ch_id = form.get("channel_id", "")
+            query = sanitize(form.get("query", ""), 200).strip()
+            interval_str = form.get("interval", "60")
             if not query:
-                flash("検索クエリを入力してください。", "warning")
-                return redirect(url_for("settings.news_feeds"))
+                flash(request, "検索クエリを入力してください。", "warning")
+                return RedirectResponse("/admin/settings/news-feeds", status_code=303)
             feeds = get_news_feeds(gid)
             if len(feeds) >= 10:
-                flash("フィードは最大 10 件まで登録できる。", "warning")
-                return redirect(url_for("settings.news_feeds"))
+                flash(request, "フィードは最大 10 件まで登録できる。", "warning")
+                return RedirectResponse("/admin/settings/news-feeds", status_code=303)
             fid = uuid.uuid4().hex[:8]
             add_news_feed(gid, fid, validate_channel_id(ch_id), query, validate_int(interval_str, 5, 1440))
-            flash(f"ニュースフィードを追加した。（ID: {fid}）", "success")
+            flash(request, f"ニュースフィードを追加した。（ID: {fid}）", "success")
         elif action == "edit":
-            fid = sanitize(request.form.get("feed_id", ""), 8)
-            ch_id = request.form.get("channel_id", "")
-            query = sanitize(request.form.get("query", ""), 200).strip()
-            interval_str = request.form.get("interval", "60")
+            fid = sanitize(form.get("feed_id", ""), 8)
+            ch_id = form.get("channel_id", "")
+            query = sanitize(form.get("query", ""), 200).strip()
+            interval_str = form.get("interval", "60")
             if not query:
-                flash("検索クエリを入力してください。", "warning")
-                return redirect(url_for("settings.news_feeds"))
+                flash(request, "検索クエリを入力してください。", "warning")
+                return RedirectResponse("/admin/settings/news-feeds", status_code=303)
             ok = update_news_feed(gid, fid, validate_channel_id(ch_id), query, validate_int(interval_str, 5, 1440))
-            flash("フィードを更新した。" if ok else "該当するフィードが見つからなかった。",
+            flash(request, "フィードを更新した。" if ok else "該当するフィードが見つからなかった。",
                   "success" if ok else "warning")
         elif action == "remove":
-            fid = sanitize(request.form.get("feed_id", ""), 8)
+            fid = sanitize(form.get("feed_id", ""), 8)
             ok = remove_news_feed(gid, fid)
-            flash("フィードを削除した。" if ok else "該当するフィードが見つからなかった。",
+            flash(request, "フィードを削除した。" if ok else "該当するフィードが見つからなかった。",
                   "success" if ok else "warning")
-        return redirect(url_for("settings.news_feeds"))
+        return RedirectResponse("/admin/settings/news-feeds", status_code=303)
 
     ch_map = {c["id"]: c["name"] for c in channels}
-    return render_template(
-        "settings/news_feeds.html",
+    return render(
+        request, "settings/news_feeds.html",
         channels=channels,
         feeds=get_news_feeds(gid),
         ch_map=ch_map,
@@ -326,38 +317,38 @@ def news_feeds():
 
 # ── 地震アラート ──────────────────────────────────────────
 
-@settings_bp.route("/earthquake", methods=["GET", "POST"])
-@guild_required
-def earthquake():
-    gid = _gid()
+@router.api_route("/earthquake", methods=["GET", "POST"])
+async def earthquake(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
+    gid = request.session["guild_id"]
     if request.method == "POST":
-        action = request.form.get("action", "")
+        form = await request.form()
+        action = form.get("action", "")
         if action == "set_channel":
-            ch_id = request.form.get("channel_id", "")
+            ch_id = form.get("channel_id", "")
             if ch_id == "0" or not ch_id:
                 set_earthquake_channel(gid, None)
-                flash("地震アラートチャンネルを解除した。", "success")
+                flash(request, "地震アラートチャンネルを解除した。", "success")
             else:
                 set_earthquake_channel(gid, validate_channel_id(ch_id))
-                flash("地震アラートチャンネルを設定した。", "success")
+                flash(request, "地震アラートチャンネルを設定した。", "success")
         elif action == "set_scale":
-            scale = validate_int(request.form.get("min_scale", "30"), 10, 70)
+            scale = validate_int(form.get("min_scale", "30"), 10, 70)
             if scale not in _VALID_SCALES:
-                flash("無効な震度値です。", "warning")
-                return redirect(url_for("settings.earthquake"))
+                flash(request, "無効な震度値です。", "warning")
+                return RedirectResponse("/admin/settings/earthquake", status_code=303)
             set_earthquake_min_scale(gid, scale)
-            flash(f"最小震度を {SCALE_LABELS.get(scale, scale)} に設定した。", "success")
+            flash(request, f"最小震度を {SCALE_LABELS.get(scale, scale)} に設定した。", "success")
         elif action == "set_notify_types":
             valid_keys = set(_NOTIFY_TYPE_LABELS.keys())
-            types = {k: (f"notify_{k}" in request.form) for k in valid_keys}
+            types = {k: (f"notify_{k}" in form) for k in valid_keys}
             set_earthquake_notify_types(gid, types)
-            flash("通知タイプを更新した。", "success")
-        return redirect(url_for("settings.earthquake"))
+            flash(request, "通知タイプを更新した。", "success")
+        return RedirectResponse("/admin/settings/earthquake", status_code=303)
 
-    channels = _channels()
+    channels = get_guild_channels(gid)
     ch_map = {c["id"]: c["name"] for c in channels}
-    return render_template(
-        "settings/earthquake.html",
+    return render(
+        request, "settings/earthquake.html",
         channels=channels,
         ch_map=ch_map,
         eq_s=get_earthquake_settings(gid),
@@ -370,52 +361,52 @@ def earthquake():
 
 # ── セキュリティ設定 ──────────────────────────────────────
 
-@settings_bp.route("/security", methods=["GET", "POST"])
-@guild_required
-def security_settings():
-    gid = _gid()
-    roles = _roles()
+@router.api_route("/security", methods=["GET", "POST"])
+async def security_settings(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
+    gid = request.session["guild_id"]
+    roles = get_guild_roles(gid)
     if request.method == "POST":
-        action = request.form.get("action", "")
+        form = await request.form()
+        action = form.get("action", "")
         if action == "add_trusted":
-            uid_str = sanitize(request.form.get("user_id", ""), 20)
+            uid_str = sanitize(form.get("user_id", ""), 20)
             try:
                 uid = int(uid_str)
             except ValueError:
-                flash("ユーザーIDは数値で入力してください。", "warning")
-                return redirect(url_for("settings.security_settings"))
+                flash(request, "ユーザーIDは数値で入力してください。", "warning")
+                return RedirectResponse("/admin/settings/security", status_code=303)
             add_trusted_users(gid, [uid])
-            flash(f"ユーザー {uid} を信頼済みに追加した。", "success")
+            flash(request, f"ユーザー {uid} を信頼済みに追加した。", "success")
         elif action == "remove_trusted":
-            uid_str = sanitize(request.form.get("user_id", ""), 20)
+            uid_str = sanitize(form.get("user_id", ""), 20)
             try:
                 uid = int(uid_str)
             except ValueError:
-                flash("無効なユーザーIDです。", "warning")
-                return redirect(url_for("settings.security_settings"))
+                flash(request, "無効なユーザーIDです。", "warning")
+                return RedirectResponse("/admin/settings/security", status_code=303)
             remove_trusted_users(gid, [uid])
-            flash(f"ユーザー {uid} を信頼済みから削除した。", "success")
+            flash(request, f"ユーザー {uid} を信頼済みから削除した。", "success")
         elif action == "add_bypass":
             try:
-                rid = int(request.form.get("role_id", ""))
+                rid = int(form.get("role_id", ""))
             except ValueError:
-                flash("ロールを選択してください。", "warning")
-                return redirect(url_for("settings.security_settings"))
+                flash(request, "ロールを選択してください。", "warning")
+                return RedirectResponse("/admin/settings/security", status_code=303)
             add_bypass_roles(gid, [rid])
-            flash("バイパスロールを追加した。", "success")
+            flash(request, "バイパスロールを追加した。", "success")
         elif action == "remove_bypass":
             try:
-                rid = int(request.form.get("role_id", ""))
+                rid = int(form.get("role_id", ""))
             except ValueError:
-                flash("無効なロールIDです。", "warning")
-                return redirect(url_for("settings.security_settings"))
+                flash(request, "無効なロールIDです。", "warning")
+                return RedirectResponse("/admin/settings/security", status_code=303)
             remove_bypass_roles(gid, [rid])
-            flash("バイパスロールを削除した。", "success")
-        return redirect(url_for("settings.security_settings"))
+            flash(request, "バイパスロールを削除した。", "success")
+        return RedirectResponse("/admin/settings/security", status_code=303)
 
     role_map = {str(r["id"]): r["name"] for r in roles}
-    return render_template(
-        "settings/security.html",
+    return render(
+        request, "settings/security.html",
         roles=roles,
         trusted_ids=get_trusted_user_ids(gid),
         bypass_ids=get_bypass_role_ids(gid),

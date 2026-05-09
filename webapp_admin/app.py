@@ -3,22 +3,27 @@ import os
 import secrets
 from pathlib import Path
 
-from flask import Flask, got_request_exception, request, url_for
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import RedirectResponse
 
-from webapp_admin.extensions import csrf, limiter
+from webapp_admin.extensions import limiter
 from webapp_admin.metrics import (
     record_error_response,
     record_exception,
     record_request,
     start_background_monitor,
 )
+from webapp_admin.security import _NeedsGuild, _NeedsLogin
+from webapp_admin.templating import render
 
 logger = logging.getLogger(__name__)
 
 
-def create_app() -> Flask:
-    app = Flask(__name__, template_folder="templates", static_folder="static")
-
+def create_app() -> FastAPI:
     secret = os.environ.get("ADMIN_FLASK_SECRET_KEY")
     if not secret:
         secret = secrets.token_hex(32)
@@ -26,44 +31,23 @@ def create_app() -> Flask:
             "ADMIN_FLASK_SECRET_KEY が未設定のため一時キーを生成しました。"
             "マルチインスタンス運用では固定値を設定してください。"
         )
-    app.config.update(
-        SECRET_KEY=secret,
-        SESSION_COOKIE_HTTPONLY=True,
-        SESSION_COOKIE_SAMESITE="Lax",
-        SESSION_COOKIE_SECURE=os.environ.get("FLASK_SECURE_COOKIES", "false").lower() == "true",
-        PERMANENT_SESSION_LIFETIME=3600,
-        WTF_CSRF_TIME_LIMIT=3600,
-        SEND_FILE_MAX_AGE_DEFAULT=0,
-        ADMIN_ASSET_VERSION=os.environ.get("ADMIN_ASSET_VERSION", "admin"),
-    )
 
-    static_root = Path(app.static_folder or "").resolve()
+    app = FastAPI(docs_url=None, redoc_url=None)
+    app.state.limiter = limiter
 
-    def admin_asset_url(filename: str) -> str:
-        version_seed = app.config.get("ADMIN_ASSET_VERSION", "admin")
-        version = version_seed
+    static_dir = Path(__file__).resolve().parent / "static"
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-        try:
-            asset_path = (static_root / filename).resolve()
-            asset_path.relative_to(static_root)
-            stat = asset_path.stat()
-            version = f"{version_seed}-{stat.st_mtime_ns:x}-{stat.st_size:x}"
-        except (OSError, ValueError):
-            pass
+    from webapp_admin.views.auth_views import router as auth_router
+    from webapp_admin.views.dashboard_views import router as dashboard_router
+    from webapp_admin.views.djaudio_views import dlaudio_router, router as djaudio_router
+    from webapp_admin.views.settings_views import router as settings_router
 
-        return url_for("static", filename=filename, v=version)
-
-    @app.context_processor
-    def inject_asset_helpers():
-        return {"admin_asset_url": admin_asset_url}
-
-    csrf.init_app(app)
-    limiter.init_app(app)
-
-    from webapp_admin.views.auth_views import auth_bp
-    from webapp_admin.views.dashboard_views import dashboard_bp
-    from webapp_admin.views.djaudio_views import djaudio_bp, dlaudio_bp
-    from webapp_admin.views.settings_views import settings_bp
+    app.include_router(auth_router, prefix="/admin")
+    app.include_router(dashboard_router, prefix="/admin")
+    app.include_router(settings_router, prefix="/admin/settings")
+    app.include_router(djaudio_router, prefix="/admin/settings")
+    app.include_router(dlaudio_router, prefix="/dlaudio")
 
     from webapp_admin.auth import DISCORD_CLIENT_ID, get_bot_guild_count
 
@@ -76,83 +60,88 @@ def create_app() -> Flask:
             "&permissions=8&scope=bot+applications.commands"
         )
 
-    @app.route("/")
-    @limiter.limit("60 per minute")
-    def landing():
-        from flask import render_template
-        return render_template(
-            "landing.html",
-            invite_url=_invite_url(),
-            guild_count=get_bot_guild_count(),
+    @app.get("/")
+    async def landing(request: Request):
+        return render(request, "landing.html", invite_url=_invite_url(), guild_count=get_bot_guild_count())
+
+    @app.get("/guide")
+    async def guide(request: Request):
+        return render(request, "guide.html", invite_url=_invite_url())
+
+    @app.get("/privacy")
+    async def privacy(request: Request):
+        return render(request, "privacy.html", invite_url=_invite_url())
+
+    @app.get("/terms")
+    async def terms(request: Request):
+        return render(request, "terms.html", invite_url=_invite_url())
+
+    @app.get("/admin/guide")
+    async def redirect_admin_guide():
+        return RedirectResponse("/guide", status_code=301)
+
+    @app.get("/admin/privacy")
+    async def redirect_admin_privacy():
+        return RedirectResponse("/privacy", status_code=301)
+
+    @app.get("/admin/terms")
+    async def redirect_admin_terms():
+        return RedirectResponse("/terms", status_code=301)
+
+    @app.exception_handler(_NeedsLogin)
+    async def needs_login_handler(request: Request, exc: _NeedsLogin):
+        return RedirectResponse("/admin/login", status_code=303)
+
+    @app.exception_handler(_NeedsGuild)
+    async def needs_guild_handler(request: Request, exc: _NeedsGuild):
+        return RedirectResponse("/admin/guilds", status_code=303)
+
+    @app.exception_handler(RateLimitExceeded)
+    async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+        return render(
+            request, "error.html", status_code=429,
+            code=429, message="リクエストが多すぎます。しばらく待ってから再試行してください。",
         )
 
-    @app.route("/guide")
-    @limiter.limit("60 per minute")
-    def guide():
-        from flask import render_template
-        return render_template("guide.html", invite_url=_invite_url())
-
-    @app.route("/privacy")
-    @limiter.limit("60 per minute")
-    def privacy():
-        from flask import render_template
-        return render_template("privacy.html", invite_url=_invite_url())
-
-    @app.route("/terms")
-    @limiter.limit("60 per minute")
-    def terms():
-        from flask import render_template
-        return render_template("terms.html", invite_url=_invite_url())
-
-    @app.route("/admin/guide")
-    def redirect_admin_guide():
-        from flask import redirect
-        return redirect(url_for("guide"), 301)
-
-    @app.route("/admin/privacy")
-    def redirect_admin_privacy():
-        from flask import redirect
-        return redirect(url_for("privacy"), 301)
-
-    @app.route("/admin/terms")
-    def redirect_admin_terms():
-        from flask import redirect
-        return redirect(url_for("terms"), 301)
-
-    app.register_blueprint(auth_bp, url_prefix="/admin")
-    app.register_blueprint(dashboard_bp, url_prefix="/admin")
-    app.register_blueprint(settings_bp, url_prefix="/admin/settings")
-    app.register_blueprint(djaudio_bp, url_prefix="/admin/settings")
-    app.register_blueprint(dlaudio_bp, url_prefix="/dlaudio")
-
-    def request_snapshot():
-        return {
-            "method": request.method,
-            "path": request.path,
-            "endpoint": request.endpoint,
-            "remote_addr": request.headers.get("CF-Connecting-IP") or request.remote_addr,
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        msgs = {
+            400: "不正なリクエストです。",
+            403: "アクセス権限がありません。",
+            404: "ページが見つかりません。",
+            500: "サーバーエラーが発生しました。",
         }
+        msg = msgs.get(exc.status_code, "エラーが発生しました。")
+        return render(request, "error.html", status_code=exc.status_code, code=exc.status_code, message=msg)
 
-    def log_unhandled_exception(sender, exception, **extra):
-        record_exception(exception, request_snapshot())
+    @app.middleware("http")
+    async def metrics_middleware(request: Request, call_next):
+        client_ip = request.headers.get("CF-Connecting-IP") or (
+            request.client.host if request.client else "unknown"
+        )
+        snap = {"method": request.method, "path": request.url.path, "endpoint": None, "remote_addr": client_ip}
+        try:
+            response = await call_next(request)
+            if not request.url.path.startswith("/static"):
+                record_request()
+                record_error_response(response.status_code, snap)
+        except Exception as exc:
+            record_exception(exc, snap)
+            raise
+        return response
 
-    got_request_exception.connect(log_unhandled_exception, app)
-    start_background_monitor(app.logger)
-
-    @app.after_request
-    def set_security_headers(response):
-        if request.endpoint == "static":
+    @app.middleware("http")
+    async def security_headers_middleware(request: Request, call_next):
+        response = await call_next(request)
+        secure = os.environ.get("FLASK_SECURE_COOKIES", "false").lower() == "true"
+        if request.url.path.startswith("/static"):
             response.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
-        else:
-            record_request()
-            record_error_response(response.status_code, request_snapshot())
-
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        if app.config.get("SESSION_COOKIE_SECURE"):
+        if secure:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
@@ -160,33 +149,24 @@ def create_app() -> Flask:
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
             "img-src 'self' https://cdn.discordapp.com data:; "
             "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; "
-            "connect-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com https://static.cloudflareinsights.com"
+            "connect-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com "
+            "https://fonts.gstatic.com https://static.cloudflareinsights.com"
         )
         return response
 
-    @app.errorhandler(400)
-    def bad_request(e):
-        from flask import render_template
-        return render_template("error.html", code=400, message="不正なリクエストです。"), 400
+    app.add_middleware(SlowAPIMiddleware)
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=secret,
+        session_cookie="admin_session",
+        max_age=3600,
+        same_site="lax",
+        https_only=os.environ.get("FLASK_SECURE_COOKIES", "false").lower() == "true",
+    )
 
-    @app.errorhandler(403)
-    def forbidden(e):
-        from flask import render_template
-        return render_template("error.html", code=403, message="アクセス権限がありません。"), 403
-
-    @app.errorhandler(429)
-    def too_many_requests(e):
-        from flask import render_template
-        return render_template("error.html", code=429, message="リクエストが多すぎます。しばらく待ってから再試行してください。"), 429
-
-    @app.errorhandler(500)
-    def internal_error(e):
-        from flask import render_template
-        return render_template("error.html", code=500, message="サーバーエラーが発生しました。"), 500
-
-    if os.environ.get("MINIFY_RESPONSES", "false").lower() == "true":
-        from flask_minify import Minify
-        Minify(app=app, html=True, js=False, cssless=False)
-        logger.info("Flask-Minify: HTML minification enabled")
+    start_background_monitor(logger)
 
     return app
+
+
+app = create_app()

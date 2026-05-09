@@ -45,7 +45,7 @@
       </div>
 
       <form method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="set_welcome">
         <div class="mb-3">
           <label class="form-label" for="welcome_channel_id">送信チャンネル</label>
@@ -85,7 +85,7 @@
       </div>
 
       <form method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="set_goodbye">
         <div class="mb-3">
           <label class="form-label" for="goodbye_channel_id">送信チャンネル</label>

@@ -1,5 +1,5 @@
 """
-DJAudio-DL: MP3 ファイル配信 + 設定管理 Blueprint。
+DJAudio-DL: MP3 ファイル配信 + 設定管理 Router。
 - /dlaudio/files/<guild_id>/<token>  → MP3 配信
 - /dlaudio/info/<guild_id>/<token>   → ファイル情報 JSON
 - /dlaudio/health                    → ヘルスチェック
@@ -9,7 +9,8 @@ DJAudio-DL: MP3 ファイル配信 + 設定管理 Blueprint。
 import logging
 from datetime import datetime, timezone
 
-from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, send_file, session, url_for
+from fastapi import APIRouter, Depends, HTTPException, Request
+from starlette.responses import FileResponse, JSONResponse, RedirectResponse
 
 from config import DJAUDIO_CACHE_DIR
 from services.djaudio_cache import get_meta
@@ -20,12 +21,13 @@ from services.settings_store import (
     set_djaudio_watch_channel,
 )
 from webapp_admin.auth import get_guild_channels
-from webapp_admin.security import guild_required, validate_channel_id, validate_int
+from webapp_admin.security import check_csrf, check_guild, validate_channel_id, validate_int
+from webapp_admin.templating import flash, render
 
 logger = logging.getLogger(__name__)
 
-djaudio_bp  = Blueprint("djaudio", __name__)
-dlaudio_bp  = Blueprint("dlaudio", __name__)  # ファイル配信用（URL prefix は /dlaudio）
+router = APIRouter()
+dlaudio_router = APIRouter()
 
 
 # ────────────────────────────────────────────
@@ -41,134 +43,108 @@ def _validate_guild_id(guild_id: str) -> bool:
 
 
 # ────────────────────────────────────────────
-# ファイル配信 Blueprint（/dlaudio）
+# ファイル配信 Router（/dlaudio）
 # ────────────────────────────────────────────
 
-@dlaudio_bp.route("/health")
-def health():
-    return jsonify({"status": "ok"})
+@dlaudio_router.get("/health")
+async def dlaudio_health():
+    return JSONResponse({"status": "ok"})
 
 
-@dlaudio_bp.route("/files/<guild_id>/<token>")
-def serve_file(guild_id: str, token: str):
+@dlaudio_router.get("/files/{guild_id}/{token}")
+async def serve_file(guild_id: str, token: str):
     if not _validate_guild_id(guild_id) or not _validate_token(token):
-        abort(404)
+        raise HTTPException(status_code=404)
 
     meta = get_meta(token)
     if meta is None:
-        abort(410)
+        raise HTTPException(status_code=410)
 
     if meta.get("guild_id") != guild_id:
         logger.warning("guild_id 不一致: URL=%s meta=%s token=%s", guild_id, meta.get("guild_id"), token)
-        abort(403)
+        raise HTTPException(status_code=403)
 
     mp3_path = DJAUDIO_CACHE_DIR / f"{token}.mp3"
     if not mp3_path.exists():
-        abort(410)
+        raise HTTPException(status_code=410)
 
-    raw_name  = meta.get("filename", f"{token}.mp3")
+    raw_name = meta.get("filename", f"{token}.mp3")
     safe_name = "".join(c for c in raw_name if c.isalnum() or c in " ._-").strip() or f"{token}.mp3"
     if not safe_name.endswith(".mp3"):
         safe_name += ".mp3"
 
     logger.info("配信: guild=%s token=%s → %s", guild_id, token, safe_name)
-    return send_file(
-        str(mp3_path),
-        as_attachment=True,
-        download_name=safe_name,
-        mimetype="audio/mpeg",
-    )
+    return FileResponse(str(mp3_path), media_type="audio/mpeg", filename=safe_name)
 
 
-@dlaudio_bp.route("/info/<guild_id>/<token>")
-def file_info(guild_id: str, token: str):
+@dlaudio_router.get("/info/{guild_id}/{token}")
+async def file_info(guild_id: str, token: str):
     if not _validate_guild_id(guild_id) or not _validate_token(token):
-        abort(404)
+        raise HTTPException(status_code=404)
 
     meta = get_meta(token)
     if meta is None:
-        abort(410)
+        raise HTTPException(status_code=410)
 
     if meta.get("guild_id") != guild_id:
-        abort(403)
+        raise HTTPException(status_code=403)
 
-    now       = datetime.now(timezone.utc).timestamp()
+    now = datetime.now(timezone.utc).timestamp()
     remaining = max(0, int(meta["expires_at"] - now))
-    return jsonify({
-        "token":             token,
-        "title":             meta.get("title", ""),
-        "filename":          meta.get("filename", ""),
-        "expires_at":        meta.get("expires_at"),
+    return JSONResponse({
+        "token": token,
+        "title": meta.get("title", ""),
+        "filename": meta.get("filename", ""),
+        "expires_at": meta.get("expires_at"),
         "remaining_seconds": remaining,
         "remaining_minutes": remaining // 60,
     })
 
 
-@dlaudio_bp.errorhandler(403)
-def forbidden(e):
-    return jsonify({"error": "アクセスが拒否されました", "code": 403}), 403
-
-
-@dlaudio_bp.errorhandler(404)
-def not_found(e):
-    return jsonify({"error": "ファイルが見つかりません", "code": 404}), 404
-
-
-@dlaudio_bp.errorhandler(410)
-def gone(e):
-    return jsonify({"error": "リンクの有効期限が切れています", "code": 410}), 410
-
-
 # ────────────────────────────────────────────
-# 設定管理 Blueprint（/admin/settings）
+# 設定管理 Router（/admin/settings）
 # ────────────────────────────────────────────
 
-def _gid() -> int:
-    return session["guild_id"]
-
-
-@djaudio_bp.route("/djaudio", methods=["GET", "POST"])
-@guild_required
-def djaudio_settings():
-    gid      = _gid()
+@router.api_route("/djaudio", methods=["GET", "POST"])
+async def djaudio_settings(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
+    gid = request.session["guild_id"]
     channels = get_guild_channels(gid)
 
     if request.method == "POST":
-        action = request.form.get("action")
+        form = await request.form()
+        action = form.get("action")
 
         if action == "set_channel":
-            raw_ch = request.form.get("channel_id", "")
+            raw_ch = form.get("channel_id", "")
             if raw_ch == "0" or not raw_ch:
                 set_djaudio_watch_channel(gid, None)
-                flash("監視チャンネルを解除しました。", "success")
+                flash(request, "監視チャンネルを解除しました。", "success")
             else:
-                ch_id = validate_channel_id(raw_ch)
-                set_djaudio_watch_channel(gid, ch_id)
-                flash("監視チャンネルを保存しました。", "success")
-            return redirect(url_for("djaudio.djaudio_settings"))
+                set_djaudio_watch_channel(gid, validate_channel_id(raw_ch))
+                flash(request, "監視チャンネルを保存しました。", "success")
+            return RedirectResponse("/admin/settings/djaudio", status_code=303)
 
         elif action == "set_output_channel":
-            raw_ch = request.form.get("output_channel_id", "")
+            raw_ch = form.get("output_channel_id", "")
             if raw_ch == "0" or not raw_ch:
                 set_djaudio_output_channel(gid, None)
-                flash("出力チャンネルを解除しました（監視チャンネルに返信します）。", "success")
+                flash(request, "出力チャンネルを解除しました（監視チャンネルに返信します）。", "success")
             else:
-                ch_id = validate_channel_id(raw_ch)
-                set_djaudio_output_channel(gid, ch_id)
-                flash("出力チャンネルを保存しました。", "success")
-            return redirect(url_for("djaudio.djaudio_settings"))
+                set_djaudio_output_channel(gid, validate_channel_id(raw_ch))
+                flash(request, "出力チャンネルを保存しました。", "success")
+            return RedirectResponse("/admin/settings/djaudio", status_code=303)
 
         elif action == "set_limits":
-            cache_ttl = validate_int(request.form.get("cache_ttl", "600"), min_val=60, max_val=86400)
-            cooldown  = validate_int(request.form.get("cooldown",  "30"),  min_val=0,  max_val=3600)
-            max_urls  = validate_int(request.form.get("max_urls",  "3"),   min_val=1,  max_val=10)
+            cache_ttl = validate_int(form.get("cache_ttl", "600"), min_val=60, max_val=86400)
+            cooldown = validate_int(form.get("cooldown", "30"), min_val=0, max_val=3600)
+            max_urls = validate_int(form.get("max_urls", "3"), min_val=1, max_val=10)
             set_djaudio_settings(gid, {"cache_ttl": cache_ttl, "cooldown": cooldown, "max_urls": max_urls})
-            flash("制限設定を保存しました。", "success")
-            return redirect(url_for("djaudio.djaudio_settings"))
+            flash(request, "制限設定を保存しました。", "success")
+            return RedirectResponse("/admin/settings/djaudio", status_code=303)
 
     runtime = get_djaudio_runtime_settings(gid)
-    return render_template(
-        "settings/djaudio.html",
+    return render(
+        request, "settings/djaudio.html",
         channels=channels,
         current_channel_id=runtime.watch_channel_id,
         current_output_channel_id=runtime.output_channel_id,

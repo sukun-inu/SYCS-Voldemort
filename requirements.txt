@@ -16,12 +16,10 @@ pywebpush
 cryptography
 statsmodels
 Pillow>=10.0.0
-flask>=3.0.0
-flask-wtf>=1.2.0
-flask-limiter>=3.5.0
+slowapi
+python-multipart
 yt-dlp
 mutagen
 imageio-ffmpeg
 rcssmin
 rjsmin
-flask-minify

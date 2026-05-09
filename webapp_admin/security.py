@@ -1,28 +1,38 @@
-from functools import wraps
+import secrets
 
-from flask import abort, redirect, session, url_for
+from fastapi import HTTPException, Request
 
 MAX_STR_LEN = 2000
 
 
-def login_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if "user" not in session:
-            return redirect(url_for("auth.login"))
-        return f(*args, **kwargs)
-    return decorated
+class _NeedsLogin(Exception):
+    pass
 
 
-def guild_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if "user" not in session:
-            return redirect(url_for("auth.login"))
-        if "guild_id" not in session:
-            return redirect(url_for("dashboard.guild_select"))
-        return f(*args, **kwargs)
-    return decorated
+class _NeedsGuild(Exception):
+    pass
+
+
+async def check_login(request: Request) -> None:
+    if "user" not in request.session:
+        raise _NeedsLogin()
+
+
+async def check_guild(request: Request) -> None:
+    if "user" not in request.session:
+        raise _NeedsLogin()
+    if "guild_id" not in request.session:
+        raise _NeedsGuild()
+
+
+async def check_csrf(request: Request) -> None:
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
+        return
+    form = await request.form()
+    token = str(form.get("csrf_token", "") or request.headers.get("X-CSRFToken", ""))
+    expected = request.session.get("_csrf_token", "")
+    if not token or not expected or not secrets.compare_digest(token, expected):
+        raise HTTPException(status_code=403)
 
 
 def sanitize(s: str, max_len: int = MAX_STR_LEN) -> str:
@@ -39,7 +49,7 @@ def validate_channel_id(value) -> int:
             raise ValueError
         return v
     except (TypeError, ValueError):
-        abort(400)
+        raise HTTPException(status_code=400)
 
 
 def validate_int(value, min_val: int = 0, max_val: int = 2 ** 63) -> int:
@@ -49,10 +59,10 @@ def validate_int(value, min_val: int = 0, max_val: int = 2 ** 63) -> int:
             raise ValueError
         return v
     except (TypeError, ValueError):
-        abort(400)
+        raise HTTPException(status_code=400)
 
 
 def validate_choice(value: str, choices: set) -> str:
     if value not in choices:
-        abort(400)
+        raise HTTPException(status_code=400)
     return value

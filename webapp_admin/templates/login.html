@@ -25,7 +25,6 @@
       </div>
     </div>
 
-    {% with messages = get_flashed_messages(with_categories=True) %}
     {% if messages %}
     <div class="flash-stack">
       {% for cat, msg in messages %}
@@ -45,7 +44,6 @@
       {% endfor %}
     </div>
     {% endif %}
-    {% endwith %}
 
     <a href="{{ url_for('auth.oauth_start') }}" class="btn btn-discord w-100">
       <svg class="me-2" width="18" height="18" viewBox="0 0 71 55" fill="currentColor">

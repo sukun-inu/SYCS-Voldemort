@@ -31,7 +31,7 @@
       </div>
 
       <form method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="set_channel">
         <div class="mb-4">
           <label class="form-label" for="djaudio_channel_id">URL を監視するチャンネル</label>
@@ -72,7 +72,7 @@
       </div>
 
       <form method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="set_output_channel">
         <div class="mb-3">
           <label class="form-label" for="djaudio_output_channel_id">MP3 リンクを送信するチャンネル</label>
@@ -105,7 +105,7 @@
       </div>
 
       <form method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="set_limits">
         <div class="mb-3">
           <label class="form-label" for="djaudio_cache_ttl">キャッシュ有効期間（秒）</label>

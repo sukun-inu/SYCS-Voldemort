@@ -18,7 +18,7 @@
     </div>
     <div class="section-card-body">
       <form method="post" class="mb-3">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="add_trusted">
         <div class="input-group">
           <input type="text" name="user_id" class="form-control" pattern="\d+"
@@ -34,7 +34,7 @@
         <div class="object-row">
           <span class="object-name font-monospace small"><i class="bi bi-person me-2"></i>{{ uid }}</span>
           <form method="post" class="confirm-form" data-msg="このユーザーを信頼済みから削除しますか？">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="action" value="remove_trusted">
             <input type="hidden" name="user_id" value="{{ uid }}">
             <button class="btn btn-sm btn-outline-danger" title="削除"><i class="bi bi-trash"></i></button>
@@ -60,7 +60,7 @@
     </div>
     <div class="section-card-body">
       <form method="post" class="mb-3">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="add_bypass">
         <div class="input-group">
           <select name="role_id" class="form-select" required>
@@ -81,7 +81,7 @@
         <div class="object-row">
           <span class="object-name"><i class="bi bi-tag me-2"></i>{{ role_map.get(rid|string, rid) }}</span>
           <form method="post" class="confirm-form" data-msg="このロールをバイパスから削除しますか？">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="action" value="remove_bypass">
             <input type="hidden" name="role_id" value="{{ rid }}">
             <button class="btn btn-sm btn-outline-danger" title="削除"><i class="bi bi-trash"></i></button>

@@ -25,7 +25,7 @@
       </div>
 
       <form method="post" data-autosave="true">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="set_channel">
         <div class="mb-4">
           <label class="form-label" for="eq_channel_id">地震情報を送信するチャンネル</label>
@@ -56,7 +56,7 @@
       </div>
 
       <form method="post" data-autosave="true">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="set_scale">
         <div class="mb-4">
           <label class="form-label" for="min_scale">通知する最小震度</label>
@@ -82,7 +82,7 @@
     <div class="section-card-body">
       <p class="text-muted mb-3">受信する通知の種類を選択します。無効にした種類は送信されません。</p>
       <form method="post" data-autosave="true">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="set_notify_types">
         <div class="row g-3 mb-4">
           {% for key, label in notify_type_labels.items() %}

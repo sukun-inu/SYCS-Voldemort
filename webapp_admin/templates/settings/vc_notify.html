@@ -25,7 +25,7 @@
       </div>
 
       <form method="post" data-autosave="true">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="set_channel">
         <div class="mb-4">
           <label class="form-label" for="vc_notify_channel_id">通知チャンネル</label>
@@ -60,7 +60,7 @@
       </div>
 
       <form method="post" data-autosave="true">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="set_role">
         <div class="mb-4">
           <label class="form-label" for="vc_notify_role_id">メンションするロール</label>
