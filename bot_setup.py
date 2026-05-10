@@ -298,6 +298,8 @@ def setup_events(bot: Bot) -> None:
     # --------------------------
     @tasks.loop(seconds=5)
     async def update_status():
+        if not bot.is_ready() or bot.is_closed():
+            return
         try:
             cpu = psutil.cpu_percent()
             mem = psutil.virtual_memory().percent
@@ -312,6 +314,8 @@ def setup_events(bot: Bot) -> None:
                 )
             )
         except Exception as e:
+            if "Cannot write to closing transport" in str(e) or "ClientConnectionResetError" in type(e).__name__:
+                return
             logger.exception("ステータス更新エラー: %s", e)
 
     # --------------------------
