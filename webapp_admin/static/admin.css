@@ -1012,6 +1012,19 @@ textarea.form-control { min-height: 120px; resize: vertical; }
   color: var(--accent);
 }
 
+/* Warning outline (used in dev UI for caution actions) */
+.btn-outline-warning {
+  border: 1px solid color-mix(in srgb, var(--warning) 34%, transparent);
+  background: transparent;
+  color: var(--warning);
+}
+
+.btn-outline-warning:hover {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
 .btn-outline-danger {
   border: 1px solid transparent;
   background: transparent;
