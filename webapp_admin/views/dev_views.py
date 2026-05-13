@@ -583,11 +583,20 @@ async def import_guild_settings(
     guild_id: str,
     _csrf=Depends(check_csrf),
     _dev=Depends(_check_dev),
-    file: UploadFile = File(...),
 ):
     if not re.fullmatch(r"\d+", guild_id):
         raise HTTPException(status_code=400)
-    content = await file.read(_MAX_IMPORT_BYTES + 1)
+    # check_csrf may have already consumed the form; read the form here (Starlette caches it).
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None:
+        flash(request, "ファイルがアップロードされていません。", "warning")
+        return RedirectResponse("/admin/dev#settings", status_code=303)
+    try:
+        content = await upload.read(_MAX_IMPORT_BYTES + 1)
+    except Exception:
+        flash(request, "ファイルの読み取りに失敗しました。", "danger")
+        return RedirectResponse("/admin/dev#settings", status_code=303)
     if len(content) > _MAX_IMPORT_BYTES:
         flash(request, f"ファイルサイズが上限({_MAX_IMPORT_BYTES // 1024} KB)を超えています。", "danger")
         return RedirectResponse("/admin/dev#settings", status_code=303)
@@ -599,7 +608,11 @@ async def import_guild_settings(
         flash(request, "無効なJSONファイルです。", "danger")
         return RedirectResponse("/admin/dev#settings", status_code=303)
     from services.settings_store import replace_guild_settings
-    replace_guild_settings(int(guild_id), new_settings)
+    try:
+        replace_guild_settings(int(guild_id), new_settings)
+    except Exception:
+        flash(request, "設定の保存に失敗しました。", "danger")
+        return RedirectResponse("/admin/dev#settings", status_code=303)
     flash(request, f"ギルド {guild_id} の設定をインポートしました。", "success")
     return RedirectResponse("/admin/dev#settings", status_code=303)
 
