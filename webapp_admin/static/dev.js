@@ -23,6 +23,37 @@ function escHtml(s) {
   });
 })();
 
+/* ── インラインイベント置換: import ボタンと data-confirm フォーム処理 ── */
+(function () {
+  // Import モーダルを開くボタン (.import-open)
+  document.querySelectorAll('.import-open').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.guildId;
+      const name = btn.dataset.guildName || '';
+      openImport(id, name);
+    });
+  });
+
+  // フォームに data-confirm が付いている場合、submit イベントで確認ダイアログを出す
+  document.addEventListener('submit', function (e) {
+    const form = e.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    const msg = form.dataset.confirm;
+    if (msg && !confirm(msg)) {
+      e.preventDefault();
+    }
+  }, true);
+
+  // フォーム以外の要素に data-confirm が付いている場合のフォールバック（リンクなど）
+  document.addEventListener('click', function (e) {
+    const el = e.target.closest('[data-confirm]');
+    if (!el) return;
+    if (el.tagName && el.tagName.toLowerCase() === 'form') return;
+    const msg = el.dataset.confirm;
+    if (msg && !confirm(msg)) e.preventDefault();
+  });
+})();
+
 /* ── expires_at Unix タイムスタンプ → 日本語表示 ── */
 document.querySelectorAll("[data-ts]").forEach(el => {
   const ts = parseInt(el.dataset.ts, 10);

@@ -257,11 +257,10 @@
             </td>
             <td class="small">{{ eq.get("domesticTsunami", "—") }}</td>
             <td>
-              <form method="post" action="{{ url_for('dev.earthquake_replay') }}" class="d-inline">
+              <form method="post" action="{{ url_for('dev.earthquake_replay') }}" class="d-inline" data-confirm="この地震情報を全サーバーに再送信しますか？">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="event_json" value="{{ ev | tojson }}">
-                <button type="submit" class="btn btn-sm btn-outline-warning"
-                        onclick="return confirm('この地震情報を全サーバーに再送信しますか？')">
+                <button type="submit" class="btn btn-sm btn-outline-warning">
                   <i class="bi bi-broadcast me-1"></i>リプレイ
                 </button>
               </form>
@@ -353,8 +352,9 @@
                   <i class="bi bi-download me-1"></i>Export
                 </a>
                 {% endif %}
-                <button type="button" class="btn btn-sm btn-outline-warning"
-                        onclick="openImport('{{ guild.id }}', '{{ guild.name | replace("'","&#39;") }}')">
+                <button type="button" class="btn btn-sm btn-outline-warning import-open"
+                        data-guild-id="{{ guild.id }}"
+                        data-guild-name="{{ guild.name | e }}">
                   <i class="bi bi-upload me-1"></i>Import
                 </button>
               </div>
@@ -373,7 +373,7 @@
             <h6 class="modal-title">設定インポート — <span id="importGuildName"></span></h6>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
-          <form id="importForm" method="post" enctype="multipart/form-data">
+          <form id="importForm" method="post" enctype="multipart/form-data" data-confirm="本当にこのギルドの設定を上書きしますか？">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div class="modal-body">
               <p class="small mb-3" style="color:var(--text-secondary)">
@@ -384,8 +384,7 @@
             </div>
             <div class="modal-footer" style="border-top:1px solid var(--separator)">
               <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">キャンセル</button>
-              <button type="submit" class="btn btn-sm btn-warning"
-                      onclick="return confirm('本当にこのギルドの設定を上書きしますか？')">
+              <button type="submit" class="btn btn-sm btn-warning">
                 <i class="bi bi-upload me-1"></i>インポート実行
               </button>
             </div>
@@ -406,10 +405,9 @@
   <div class="tab-pane fade p-4" id="tab-cache" role="tabpanel">
     <div class="d-flex justify-content-between align-items-center mb-3">
       <p class="small mb-0" style="color:var(--text-secondary)">ダウンロード済み MP3 のキャッシュ一覧です。</p>
-      <form method="post" action="{{ url_for('dev.purge_cache') }}">
+      <form method="post" action="{{ url_for('dev.purge_cache') }}" data-confirm="期限切れキャッシュを全削除しますか？">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit" class="btn btn-sm btn-outline-danger"
-                onclick="return confirm('期限切れキャッシュを全削除しますか？')">
+        <button type="submit" class="btn btn-sm btn-outline-danger">
           <i class="bi bi-trash3 me-1"></i>期限切れを一括削除
         </button>
       </form>
@@ -448,11 +446,10 @@
               {% endif %}
             </td>
             <td>
-              <form method="post" action="{{ url_for('dev.delete_cache_entry') }}" class="d-inline">
+              <form method="post" action="{{ url_for('dev.delete_cache_entry') }}" class="d-inline" data-confirm="このエントリを削除しますか？">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="token" value="{{ entry._token }}">
-                <button type="submit" class="btn btn-sm btn-outline-danger"
-                        onclick="return confirm('このエントリを削除しますか？')">
+                <button type="submit" class="btn btn-sm btn-outline-danger">
                   <i class="bi bi-trash3"></i>
                 </button>
               </form>
