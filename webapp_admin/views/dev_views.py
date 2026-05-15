@@ -315,13 +315,13 @@ async def send_message(
     content = sanitize(form.get("content", ""), 2000).strip()
     if not channel_id or not content:
         flash(request, "チャンネルIDとメッセージ内容は必須です。", "warning")
-        return RedirectResponse("/admin/dev#message", status_code=303)
+        return RedirectResponse("/admin/dev#tab-send", status_code=303)
     result = await _api("POST", f"/channels/{channel_id}/messages", json={"content": content})
     if result:
         flash(request, f"ch:{channel_id} へ送信しました。", "success")
     else:
         flash(request, "送信に失敗しました。チャンネルIDを確認してください。", "danger")
-    return RedirectResponse("/admin/dev#message", status_code=303)
+    return RedirectResponse("/admin/dev#tab-send", status_code=303)
 
 
 @router.post("/forward-message")
@@ -336,13 +336,13 @@ async def forward_message(
     m = re.match(r"https?://discord(?:app)?\.com/channels/\d+/(\d+)/(\d+)", msg_url)
     if not m:
         flash(request, "有効なDiscordメッセージURLを入力してください。", "warning")
-        return RedirectResponse("/admin/dev#message", status_code=303)
+        return RedirectResponse("/admin/dev#tab-send", status_code=303)
 
     src_ch, msg_id = m.group(1), m.group(2)
     msg = await _api("GET", f"/channels/{src_ch}/messages/{msg_id}")
     if not msg or not isinstance(msg, dict):
         flash(request, "元メッセージの取得に失敗しました。", "danger")
-        return RedirectResponse("/admin/dev#message", status_code=303)
+        return RedirectResponse("/admin/dev#tab-send", status_code=303)
 
     author = msg.get("author") or {}
     username = author.get("global_name") or author.get("username", "Unknown")
@@ -354,7 +354,7 @@ async def forward_message(
         flash(request, "メッセージを転送しました。", "success")
     else:
         flash(request, "転送先への送信に失敗しました。", "danger")
-    return RedirectResponse("/admin/dev#message", status_code=303)
+    return RedirectResponse("/admin/dev#tab-send", status_code=303)
 
 
 @router.get("/settings/{guild_id}")
@@ -367,7 +367,7 @@ async def settings_guild(
     guild_data = data.get("guilds", {}).get(guild_id)
     if guild_data is None:
         flash(request, "そのギルドの設定が見つかりません。", "warning")
-        return RedirectResponse("/admin/dev#settings", status_code=303)
+        return RedirectResponse("/admin/dev#tab-settings", status_code=303)
     return render(
         request, "dev/settings_guild.html",
         guild_id=guild_id,
@@ -384,11 +384,11 @@ async def delete_cache_entry(
     token = sanitize(form.get("token", ""), 64).strip()
     if not token or not re.fullmatch(r"[A-Za-z0-9_\-]+", token):
         flash(request, "無効なトークンです。", "warning")
-        return RedirectResponse("/admin/dev#cache", status_code=303)
+        return RedirectResponse("/admin/dev#tab-cache", status_code=303)
     from services.djaudio_cache import _delete_entry
     _delete_entry(token)
     flash(request, f"キャッシュ {token[:20]}… を削除しました。", "success")
-    return RedirectResponse("/admin/dev#cache", status_code=303)
+    return RedirectResponse("/admin/dev#tab-cache", status_code=303)
 
 
 @router.post("/cache/purge")
@@ -399,7 +399,7 @@ async def purge_cache(
     from services.djaudio_cache import _cleanup_expired
     await _cleanup_expired()
     flash(request, "期限切れキャッシュをすべて削除しました。", "success")
-    return RedirectResponse("/admin/dev#cache", status_code=303)
+    return RedirectResponse("/admin/dev#tab-cache", status_code=303)
 
 
 @router.post("/signal/{task_name}")
@@ -419,7 +419,7 @@ async def trigger_signal(
         encoding="utf-8",
     )
     flash(request, f"タスク '{task_name}' をキューに追加しました。数十秒以内に実行されます。", "info")
-    return RedirectResponse("/admin/dev#tasks", status_code=303)
+    return RedirectResponse("/admin/dev#tab-tasks", status_code=303)
 
 
 @router.post("/news-send")
@@ -432,7 +432,7 @@ async def news_send(
     channel_id = sanitize(form.get("channel_id", ""), 20).strip()
     if not query or not channel_id:
         flash(request, "クエリとチャンネルIDは必須です。", "warning")
-        return RedirectResponse("/admin/dev#news", status_code=303)
+        return RedirectResponse("/admin/dev#tab-send", status_code=303)
 
     from services.news_service import _fetch_articles, _format_pub_date, _summarize_article
 
@@ -441,7 +441,7 @@ async def news_send(
 
     if not articles:
         flash(request, "記事が見つかりませんでした。クエリを変えてお試しください。", "warning")
-        return RedirectResponse("/admin/dev#news", status_code=303)
+        return RedirectResponse("/admin/dev#tab-send", status_code=303)
 
     article = articles[0]
     embed: dict = {
@@ -473,7 +473,7 @@ async def news_send(
         flash(request, f"ニュース「{title_short}…」を ch:{channel_id} へ送信しました。", "success")
     else:
         flash(request, "送信に失敗しました。チャンネルIDを確認してください。", "danger")
-    return RedirectResponse("/admin/dev#news", status_code=303)
+    return RedirectResponse("/admin/dev#tab-send", status_code=303)
 
 
 @router.post("/earthquake-replay")
@@ -485,7 +485,7 @@ async def earthquake_replay(
     event_json = sanitize(form.get("event_json", ""), 100000).strip()
     if not event_json:
         flash(request, "イベントJSONが必要です。", "warning")
-        return RedirectResponse("/admin/dev#earthquake", status_code=303)
+        return RedirectResponse("/admin/dev#tab-eq", status_code=303)
 
     try:
         data = json.loads(event_json)
@@ -494,12 +494,12 @@ async def earthquake_replay(
             raise ValueError("earthquake / hypocenter キーが必要です")
     except (ValueError, json.JSONDecodeError) as e:
         flash(request, f"無効な地震イベントJSONです: {e}", "danger")
-        return RedirectResponse("/admin/dev#earthquake", status_code=303)
+        return RedirectResponse("/admin/dev#tab-eq", status_code=303)
 
     _SIGNAL_DIR.mkdir(parents=True, exist_ok=True)
     (_SIGNAL_DIR / "eq_replay.signal").write_text(event_json, encoding="utf-8")
     flash(request, "地震速報をリプレイキューに追加しました。数十秒以内に通知が送信されます。", "info")
-    return RedirectResponse("/admin/dev#earthquake", status_code=303)
+    return RedirectResponse("/admin/dev#tab-eq", status_code=303)
 
 
 @router.get("/api/channels")
@@ -591,30 +591,30 @@ async def import_guild_settings(
     upload = form.get("file")
     if upload is None:
         flash(request, "ファイルがアップロードされていません。", "warning")
-        return RedirectResponse("/admin/dev#settings", status_code=303)
+        return RedirectResponse("/admin/dev#tab-settings", status_code=303)
     try:
         content = await upload.read(_MAX_IMPORT_BYTES + 1)
     except Exception:
         flash(request, "ファイルの読み取りに失敗しました。", "danger")
-        return RedirectResponse("/admin/dev#settings", status_code=303)
+        return RedirectResponse("/admin/dev#tab-settings", status_code=303)
     if len(content) > _MAX_IMPORT_BYTES:
         flash(request, f"ファイルサイズが上限({_MAX_IMPORT_BYTES // 1024} KB)を超えています。", "danger")
-        return RedirectResponse("/admin/dev#settings", status_code=303)
+        return RedirectResponse("/admin/dev#tab-settings", status_code=303)
     try:
         new_settings = json.loads(content.decode("utf-8"))
         if not isinstance(new_settings, dict):
             raise ValueError
     except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
         flash(request, "無効なJSONファイルです。", "danger")
-        return RedirectResponse("/admin/dev#settings", status_code=303)
+        return RedirectResponse("/admin/dev#tab-settings", status_code=303)
     from services.settings_store import replace_guild_settings
     try:
         replace_guild_settings(int(guild_id), new_settings)
     except Exception:
         flash(request, "設定の保存に失敗しました。", "danger")
-        return RedirectResponse("/admin/dev#settings", status_code=303)
+        return RedirectResponse("/admin/dev#tab-settings", status_code=303)
     flash(request, f"ギルド {guild_id} の設定をインポートしました。", "success")
-    return RedirectResponse("/admin/dev#settings", status_code=303)
+    return RedirectResponse("/admin/dev#tab-settings", status_code=303)
 
 
 @router.post("/test-notify/welcome")
@@ -626,14 +626,14 @@ async def test_notify_welcome(
     guild_id = sanitize(form.get("guild_id", ""), 20).strip()
     if not guild_id or not re.fullmatch(r"\d+", guild_id):
         flash(request, "ギルドIDが無効です。", "warning")
-        return RedirectResponse("/admin/dev#notify", status_code=303)
+        return RedirectResponse("/admin/dev#tab-notify", status_code=303)
     _SIGNAL_DIR.mkdir(parents=True, exist_ok=True)
     (_SIGNAL_DIR / "test_welcome.signal").write_text(
         json.dumps({"guild_id": guild_id, "created_at": datetime.now(timezone.utc).isoformat()}),
         encoding="utf-8",
     )
     flash(request, f"ウェルカム通知テストをキューに追加しました。（ギルド: {guild_id}）", "info")
-    return RedirectResponse("/admin/dev#notify", status_code=303)
+    return RedirectResponse("/admin/dev#tab-notify", status_code=303)
 
 
 @router.post("/test-notify/vc")
@@ -645,11 +645,11 @@ async def test_notify_vc(
     guild_id = sanitize(form.get("guild_id", ""), 20).strip()
     if not guild_id or not re.fullmatch(r"\d+", guild_id):
         flash(request, "ギルドIDが無効です。", "warning")
-        return RedirectResponse("/admin/dev#notify", status_code=303)
+        return RedirectResponse("/admin/dev#tab-notify", status_code=303)
     _SIGNAL_DIR.mkdir(parents=True, exist_ok=True)
     (_SIGNAL_DIR / "test_vc_notify.signal").write_text(
         json.dumps({"guild_id": guild_id, "created_at": datetime.now(timezone.utc).isoformat()}),
         encoding="utf-8",
     )
     flash(request, f"VC通知テストをキューに追加しました。（ギルド: {guild_id}）", "info")
-    return RedirectResponse("/admin/dev#notify", status_code=303)
+    return RedirectResponse("/admin/dev#tab-notify", status_code=303)

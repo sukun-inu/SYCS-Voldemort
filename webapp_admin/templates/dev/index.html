@@ -259,7 +259,7 @@
             <td>
               <form method="post" action="{{ url_for('dev.earthquake_replay') }}" class="d-inline" data-confirm="この地震情報を全サーバーに再送信しますか？">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input type="hidden" name="event_json" value="{{ ev | tojson }}">
+                <input type="hidden" name="event_json" value="{{ ev | tojson | forceescape }}">
                 <button type="submit" class="btn btn-sm btn-outline-warning">
                   <i class="bi bi-broadcast me-1"></i>リプレイ
                 </button>
@@ -384,7 +384,7 @@
             </div>
             <div class="modal-footer" style="border-top:1px solid var(--separator)">
               <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">キャンセル</button>
-              <button type="submit" class="btn btn-sm btn-warning">
+              <button type="submit" class="btn btn-sm btn-outline-warning">
                 <i class="bi bi-upload me-1"></i>インポート実行
               </button>
             </div>

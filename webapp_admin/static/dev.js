@@ -8,12 +8,12 @@ function escHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
-/* ── タブ状態をセッションストレージで保持 ── */
+/* ── タブ状態をセッションストレージで保持（URLハッシュをフォールバックに使用） ── */
 (function () {
   const TAB_KEY = "devActiveTab";
   const tabEl = document.getElementById("devTabs");
   if (!tabEl) return;
-  const saved = sessionStorage.getItem(TAB_KEY);
+  const saved = sessionStorage.getItem(TAB_KEY) || location.hash || "";
   if (saved) {
     const btn = tabEl.querySelector(`[data-bs-target="${saved}"]`);
     if (btn) bootstrap.Tab.getOrCreateInstance(btn).show();
