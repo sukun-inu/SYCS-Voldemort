@@ -16,6 +16,7 @@ from services.tts_store import (
     set_tts_default_voice,
     set_tts_enabled,
     set_tts_max_lengths,
+    set_tts_read_name,
 )
 from services.tts_service import fetch_voices
 from webapp_admin.auth import get_guild_channels, get_guild_voice_channels
@@ -64,6 +65,7 @@ def _tts_context(gid: int, text_channels: list, voice_channels: list, available_
         default_rate=settings.get("default_rate", _DEFAULT_RATE),
         max_length=int(settings.get("max_length", _DEFAULT_MAX_LENGTH)),
         speak_max_length=int(settings.get("speak_max_length", _DEFAULT_SPEAK_MAX_LENGTH)),
+        read_name=bool(settings.get("read_name", True)),
         available_voices=available_voices,
         dictionary=get_tts_dictionary(gid),
         user_rows=user_rows,
@@ -155,10 +157,12 @@ async def tts_settings(request: Request, _=Depends(check_guild), _csrf=Depends(c
             except Exception:
                 flash(request, "読み上げ最大文字数は 10〜500 の範囲で指定してください。", "danger")
                 return RedirectResponse(_REDIRECT, status_code=303)
+            read_name = form.get("read_name") == "1"
             if voice:
                 set_tts_default_voice(gid, voice)
             set_tts_default_rate(gid, rate)
             set_tts_max_lengths(gid, max_length, speak_max_length)
+            set_tts_read_name(gid, read_name)
             flash(request, "デフォルト設定を保存しました。", "success")
             return RedirectResponse(_REDIRECT, status_code=303)
 

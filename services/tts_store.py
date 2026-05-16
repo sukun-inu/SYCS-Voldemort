@@ -132,3 +132,7 @@ def set_tts_default_rate(guild_id: int, rate: int) -> None:
 
 def set_tts_max_lengths(guild_id: int, max_length: int, speak_max_length: int) -> None:
     _update_nested(guild_id, "tts", {"max_length": max_length, "speak_max_length": speak_max_length})
+
+
+def set_tts_read_name(guild_id: int, read_name: bool) -> None:
+    _update_nested(guild_id, "tts", {"read_name": read_name})

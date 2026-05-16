@@ -19,6 +19,7 @@ from services.tts_store import (
     set_tts_default_rate,
     set_tts_default_voice,
     set_tts_enabled,
+    set_tts_read_name,
     set_user_tts_settings,
 )
 
@@ -132,9 +133,11 @@ async def tts_status(interaction: discord.Interaction) -> None:
         value="\n".join(watch_mentions) if watch_mentions else "未設定",
         inline=False,
     )
+    read_name = settings.get("read_name", True)
     embed.add_field(name="VCチャンネル", value=vc_mention, inline=True)
     embed.add_field(name="デフォルト声", value=str(default_voice), inline=True)
     embed.add_field(name="デフォルト速度", value=str(default_rate), inline=True)
+    embed.add_field(name="名前読み上げ", value="✅ あり" if read_name else "❌ なし", inline=True)
     embed.add_field(name="辞書登録数", value=str(dict_count), inline=True)
     await send_interaction(interaction, embed=embed, ephemeral=True)
 
@@ -172,6 +175,27 @@ async def _voice_autocomplete(
         for v in voices
         if current.lower() in v.lower()
     ][:25]
+
+
+@tts_group.command(name="read_name", description="メッセージ読み上げ時に発言者名を読み上げるか設定する")
+@app_commands.describe(enabled="on で名前あり、off で名前なし")
+@app_commands.choices(enabled=[
+    app_commands.Choice(name="on（名前を読み上げる）", value="on"),
+    app_commands.Choice(name="off（名前を読み上げない）", value="off"),
+])
+async def tts_read_name_cmd(
+    interaction: discord.Interaction,
+    enabled: str,
+) -> None:
+    if not await ensure_admin(interaction):
+        return
+    assert interaction.guild
+    read_name = enabled == "on"
+    set_tts_read_name(interaction.guild.id, read_name)
+    if read_name:
+        await send_ephemeral(interaction, "✅ 発言者名を読み上げるようにした。")
+    else:
+        await send_ephemeral(interaction, "✅ 発言者名を読み上げないようにした。")
 
 
 @tts_group.command(name="default_rate", description="サーバーのデフォルト読み上げ速度を設定する（100〜400）")

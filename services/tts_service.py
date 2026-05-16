@@ -165,7 +165,8 @@ async def enqueue_message(
     rate = int(user_cfg.get("rate") or settings.get("default_rate") or _DEFAULT_RATE)
 
     speak_max = int(settings.get("speak_max_length", 200))
-    speak_text = f"{member.display_name}。{cleaned}"
+    read_name = settings.get("read_name", True)
+    speak_text = f"{member.display_name}。{cleaned}" if read_name else cleaned
     if len(speak_text) > speak_max:
         speak_text = speak_text[:speak_max]
 

@@ -141,7 +141,7 @@
     <div class="section-card-body">
       <div class="status-strip">
         <span class="status-label">現在</span>
-        <span class="status-chip">{{ default_voice }} / {{ default_rate }} 語/分 / 本文 {{ max_length }} 字</span>
+        <span class="status-chip">{{ default_voice }} / {{ default_rate }} 語/分 / 本文 {{ max_length }} 字 / 名前{% if read_name %}あり{% else %}なし{% endif %}</span>
       </div>
       <form method="post" data-autosave="true">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -174,11 +174,27 @@
                  min="10" max="500" value="{{ max_length }}">
           <div class="form-text">本文の読み上げ上限（10〜500、デフォルト 100）。超過分は「以下省略」と読まれます。</div>
         </div>
-        <div class="mb-4">
+        <div class="mb-3">
           <label class="form-label" for="speak_max_length">読み上げ最大文字数</label>
           <input type="number" id="speak_max_length" name="speak_max_length" class="form-control"
                  min="10" max="500" value="{{ speak_max_length }}">
           <div class="form-text">「名前。本文」全体の上限（10〜500、デフォルト 200）。</div>
+        </div>
+        <div class="mb-4">
+          <div class="form-label mb-2">発言者名の読み上げ</div>
+          <div class="d-flex gap-3">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="read_name" id="read_name_on" value="1"
+                     {% if read_name %}checked{% endif %}>
+              <label class="form-check-label" for="read_name_on">読み上げる</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="read_name" id="read_name_off" value="0"
+                     {% if not read_name %}checked{% endif %}>
+              <label class="form-check-label" for="read_name_off">読み上げない</label>
+            </div>
+          </div>
+          <div class="form-text">有効にするとメッセージ本文の前に「表示名。」が読まれます。</div>
         </div>
         <div class="form-actions">
           <button class="btn btn-accent"><i class="bi bi-check-lg me-2"></i>保存</button>
