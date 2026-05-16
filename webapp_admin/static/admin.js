@@ -428,6 +428,21 @@ document.addEventListener('DOMContentLoaded', () => {
         credentials: 'same-origin',
       });
       if (!resp.ok) throw new Error(String(resp.status));
+
+      // 保存後、同セクションの status-strip をレスポンス HTML で更新する
+      try {
+        const html = await resp.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const section = form.closest('section');
+        if (section) {
+          const idx = [...document.querySelectorAll('section')].indexOf(section);
+          const newSection = doc.querySelectorAll('section')[idx];
+          const newStrip = newSection?.querySelector('.status-strip');
+          const strip = section.querySelector('.status-strip');
+          if (newStrip && strip) strip.innerHTML = newStrip.innerHTML;
+        }
+      } catch (_) {}
+
       if (iconEl) { iconEl.className = 'bi bi-cloud-check-fill autosave-icon ok'; }
       if (textEl)   textEl.textContent = '保存済み';
       window.setTimeout(() => {

@@ -222,7 +222,8 @@ async def fetch_voices(locale: str = "ja") -> list[str]:
                 if resp.status != 200:
                     return []
                 data = await resp.json()
-                return [v["name"] for v in data.get("voices", []) if v.get("name")]
+                voices = data if isinstance(data, list) else data.get("voices", [])
+                return [v["name"] for v in voices if isinstance(v, dict) and v.get("name")]
     except Exception as e:
         logger.exception("[TTS] fetch_voices error: %s", e)
         return []
