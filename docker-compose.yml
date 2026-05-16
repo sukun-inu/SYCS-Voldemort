@@ -122,6 +122,8 @@ services:
       - USER_STATE_CLEANUP_INTERVAL_SECONDS=${USER_STATE_CLEANUP_INTERVAL_SECONDS:-21600}
       # DJAudio-DL: Discord に貼る MP3 ダウンロード URL のベース（外部からアクセス可能な admin の URL）
       - DJAUDIO_BASE_URL=${DJAUDIO_BASE_URL:-http://localhost:5001}
+      # TTS: macOS TTS API サーバーの URL
+      - TTS_BASE_URL=${TTS_BASE_URL:-http://localhost:8080}
     volumes:
       - app_data:/app/data
       - shared_secrets:/shared:ro
