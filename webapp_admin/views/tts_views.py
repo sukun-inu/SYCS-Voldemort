@@ -17,6 +17,7 @@ from services.tts_store import (
     set_tts_enabled,
     set_tts_max_lengths,
     set_tts_read_name,
+    set_tts_vc_notify,
 )
 from services.tts_service import fetch_voices
 from webapp_admin.auth import get_guild_channels, get_guild_voice_channels
@@ -66,6 +67,7 @@ def _tts_context(gid: int, text_channels: list, voice_channels: list, available_
         max_length=int(settings.get("max_length", _DEFAULT_MAX_LENGTH)),
         speak_max_length=int(settings.get("speak_max_length", _DEFAULT_SPEAK_MAX_LENGTH)),
         read_name=bool(settings.get("read_name", True)),
+        vc_notify=bool(settings.get("vc_notify", False)),
         available_voices=available_voices,
         dictionary=get_tts_dictionary(gid),
         user_rows=user_rows,
@@ -84,6 +86,12 @@ async def tts_settings(request: Request, _=Depends(check_guild), _csrf=Depends(c
             enabled = form.get("enabled") == "1"
             set_tts_enabled(gid, enabled)
             flash(request, f"TTS読み上げを{'有効' if enabled else '無効'}にしました。", "success")
+            return RedirectResponse(_REDIRECT, status_code=303)
+
+        elif action == "toggle_vc_notify":
+            vc_notify = form.get("vc_notify") == "1"
+            set_tts_vc_notify(gid, vc_notify)
+            flash(request, f"VC参加・退出アナウンスを{'有効' if vc_notify else '無効'}にしました。", "success")
             return RedirectResponse(_REDIRECT, status_code=303)
 
         elif action == "set_vc":

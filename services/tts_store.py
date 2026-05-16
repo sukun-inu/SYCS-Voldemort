@@ -136,3 +136,7 @@ def set_tts_max_lengths(guild_id: int, max_length: int, speak_max_length: int) -
 
 def set_tts_read_name(guild_id: int, read_name: bool) -> None:
     _update_nested(guild_id, "tts", {"read_name": read_name})
+
+
+def set_tts_vc_notify(guild_id: int, enabled: bool) -> None:
+    _update_nested(guild_id, "tts", {"vc_notify": enabled})

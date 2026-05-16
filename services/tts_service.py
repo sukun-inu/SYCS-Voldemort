@@ -14,12 +14,29 @@ logger = logging.getLogger(__name__)
 _DEFAULT_VOICE = "Kyoko"
 _DEFAULT_RATE = 200
 _MAX_TEXT_LEN = 100
-_IDLE_TIMEOUT_SEC = 300  # 5分無音でVC自動退出
+_IDLE_TIMEOUT_SEC = 1800  # 30分無音でVC自動退出
+_RECONNECT_RETRIES = 3    # ハンドシェイク切断後の再接続試行回数
+_RECONNECT_DELAY_SEC = 2.0  # 再接続間隔（秒）
 
 # ギルドごとの状態
 _queues: dict[int, asyncio.Queue] = {}
 _tasks: dict[int, asyncio.Task] = {}
 _voice_clients: dict[int, discord.VoiceClient] = {}
+_temp_overrides: dict[int, dict] = {}  # guild_id -> {"vc_channel_id": int}
+
+
+def get_effective_vc_watch(guild_id: int, settings: dict) -> tuple[int | None, list[int]]:
+    """temp override があれば (temp_vc_id, []) を、なければ設定値を返す。"""
+    ov = _temp_overrides.get(guild_id)
+    if ov:
+        return int(ov["vc_channel_id"]), []
+    vc_id = settings.get("vc_channel_id")
+    watch_ids = [int(cid) for cid in settings.get("watch_channel_ids", [])]
+    return (int(vc_id) if vc_id else None), watch_ids
+
+
+def has_temp_override(guild_id: int) -> bool:
+    return guild_id in _temp_overrides
 
 
 def _clean_text(text: str, max_len: int) -> str:
@@ -79,6 +96,14 @@ async def _connect_or_move(
             except Exception:
                 pass
             _voice_clients.pop(guild.id, None)
+    elif existing and not existing.is_connected():
+        # ハンドシェイク切断などで接続が失われた古いVCを破棄してから再接続
+        logger.info("[TTS] stale voice client, cleaning up before reconnect guild=%s", guild.id)
+        try:
+            await existing.disconnect(force=True)
+        except Exception:
+            pass
+        _voice_clients.pop(guild.id, None)
 
     ch = guild.get_channel(vc_channel_id)
     if not isinstance(ch, discord.VoiceChannel):
@@ -99,6 +124,7 @@ async def _player_loop(bot: Bot, guild_id: int) -> None:
         try:
             item = await asyncio.wait_for(queue.get(), timeout=float(_IDLE_TIMEOUT_SEC))
         except asyncio.TimeoutError:
+            _temp_overrides.pop(guild_id, None)
             vc = _voice_clients.pop(guild_id, None)
             if vc and vc.is_connected():
                 await vc.disconnect()
@@ -113,8 +139,16 @@ async def _player_loop(bot: Bot, guild_id: int) -> None:
             queue.task_done()
             continue
 
-        vc = await _connect_or_move(guild, vc_channel_id)
+        vc = None
+        for _attempt in range(_RECONNECT_RETRIES + 1):
+            vc = await _connect_or_move(guild, vc_channel_id)
+            if vc is not None:
+                break
+            if _attempt < _RECONNECT_RETRIES:
+                logger.info("[TTS] reconnect attempt %d/%d guild=%s", _attempt + 1, _RECONNECT_RETRIES, guild_id)
+                await asyncio.sleep(_RECONNECT_DELAY_SEC)
         if vc is None:
+            logger.error("[TTS] failed to connect after %d attempts, dropping item guild=%s", _RECONNECT_RETRIES + 1, guild_id)
             queue.task_done()
             continue
 
@@ -148,7 +182,7 @@ async def enqueue_message(
     if not settings.get("enabled"):
         return
 
-    vc_channel_id = settings.get("vc_channel_id")
+    vc_channel_id, _ = get_effective_vc_watch(guild.id, settings)
     if not vc_channel_id:
         return
 
@@ -182,13 +216,61 @@ async def enqueue_message(
         _tasks[guild.id] = asyncio.create_task(_player_loop(bot, guild.id))
 
 
+async def enqueue_vc_event(
+    bot: Bot,
+    guild: discord.Guild,
+    member: discord.Member,
+    event: str,
+) -> None:
+    """VC参加・退出をTTSで読み上げる。event は 'join' または 'leave'。"""
+    from services.tts_store import get_tts_settings
+
+    settings = get_tts_settings(guild.id)
+    if not settings.get("enabled") or not settings.get("vc_notify"):
+        return
+    vc_channel_id, _ = get_effective_vc_watch(guild.id, settings)
+    if not vc_channel_id:
+        return
+
+    name = getattr(member, "display_name", None) or str(member)
+    text = f"{name}が参加しました" if event == "join" else f"{name}が退出しました"
+
+    voice = str(settings.get("default_voice") or _DEFAULT_VOICE)
+    rate = int(settings.get("default_rate") or _DEFAULT_RATE)
+
+    audio_url = await _synthesize(text, voice, rate)
+    if not audio_url:
+        return
+
+    queue = _queues.setdefault(guild.id, asyncio.Queue())
+    await queue.put((audio_url, int(vc_channel_id)))
+
+    task = _tasks.get(guild.id)
+    if task is None or task.done():
+        _tasks[guild.id] = asyncio.create_task(_player_loop(bot, guild.id))
+
+
+async def temp_join(bot: Bot, guild: discord.Guild, vc_channel_id: int) -> None:
+    """指定VCに一時参加し、そのVCのサブコメ欄を優先読み上げ対象とする。
+    退出時（disconnect / アイドルタイムアウト / 全員退出）に自動で元の設定に戻る。"""
+    _temp_overrides[guild.id] = {"vc_channel_id": vc_channel_id}
+    vc = await _connect_or_move(guild, vc_channel_id)
+    if vc is None:
+        _temp_overrides.pop(guild.id, None)
+        return
+    task = _tasks.get(guild.id)
+    if task is None or task.done():
+        _tasks[guild.id] = asyncio.create_task(_player_loop(bot, guild.id))
+
+
 async def auto_join(guild: discord.Guild, vc_channel_id: int) -> None:
     """TTSのVCに接続する（メッセージなしで先行参加用）。"""
     await _connect_or_move(guild, vc_channel_id)
 
 
 async def disconnect(guild_id: int) -> None:
-    """指定ギルドのVCから退出し、キューをクリアする。"""
+    """指定ギルドのVCから退出し、キューをクリアする。temp override も解除する。"""
+    _temp_overrides.pop(guild_id, None)
     task = _tasks.pop(guild_id, None)
     if task and not task.done():
         task.cancel()

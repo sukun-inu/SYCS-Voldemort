@@ -39,6 +39,32 @@
           </button>
         </div>
       </form>
+
+      <hr class="my-3">
+
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <div>
+          <div class="fw-semibold small"><i class="bi bi-box-arrow-in-right me-1"></i>VC参加・退出アナウンス</div>
+          <div class="text-muted" style="font-size:.8rem;">誰かが VC に入退出したとき Bot が読み上げます（Bot 自身も含む）。</div>
+        </div>
+        <span class="badge-soft {% if vc_notify %}success{% else %}secondary{% endif %} ms-3 text-nowrap">
+          {{ "有効" if vc_notify else "無効" }}
+        </span>
+      </div>
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="action" value="toggle_vc_notify">
+        <div class="d-flex gap-2">
+          <button type="submit" name="vc_notify" value="1"
+                  class="btn btn-sm {% if vc_notify %}btn-outline-success{% else %}btn-accent{% endif %}">
+            <i class="bi bi-check-circle me-1"></i>有効にする
+          </button>
+          <button type="submit" name="vc_notify" value="0"
+                  class="btn btn-sm {% if not vc_notify %}btn-outline-secondary{% else %}btn-outline-warning{% endif %}">
+            <i class="bi bi-x-circle me-1"></i>無効にする
+          </button>
+        </div>
+      </form>
     </div>
   </section>
 

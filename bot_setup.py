@@ -475,12 +475,11 @@ def setup_events(bot: Bot) -> None:
                 logger.exception("[BOT_SETUP] %s error: %s", name, e)
 
         async def _tts_handler() -> None:
-            from services.tts_service import enqueue_message as _tts_enqueue
+            from services.tts_service import enqueue_message as _tts_enqueue, get_effective_vc_watch as _get_vc_watch
             from services.tts_store import get_tts_settings as _get_tts_settings
             settings = _get_tts_settings(message.guild.id)
-            watch_ids = [int(cid) for cid in settings.get("watch_channel_ids", [])]
-            vc_channel_id = settings.get("vc_channel_id")
-            in_vc_text = vc_channel_id is not None and message.channel.id == int(vc_channel_id)
+            effective_vc_id, watch_ids = _get_vc_watch(message.guild.id, settings)
+            in_vc_text = effective_vc_id is not None and message.channel.id == effective_vc_id
             if (message.channel.id in watch_ids or in_vc_text) and isinstance(message.author, discord.Member):
                 await _tts_enqueue(bot, message.guild, message.author, message.content)
 
@@ -561,6 +560,28 @@ def setup_events(bot: Bot) -> None:
     # --------------------------
     @bot.event
     async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        # TTS VC参加・退出アナウンス（bot含む全メンバー対象のため早期returnの前に実行）
+        if member.guild is not None:
+            try:
+                _bch = before.channel
+                _ach = after.channel
+                _ev = (
+                    "join"  if _bch is None and _ach is not None else
+                    "leave" if _bch is not None and _ach is None else
+                    None
+                )
+                if _ev:
+                    from services.tts_service import enqueue_vc_event as _tts_vc_event, get_effective_vc_watch as _get_vc_watch
+                    from services.tts_store import get_tts_settings as _get_tts_settings
+                    _cfg = _get_tts_settings(member.guild.id)
+                    _vid, _ = _get_vc_watch(member.guild.id, _cfg)
+                    if _cfg.get("enabled") and _cfg.get("vc_notify") and _vid:
+                        _tch = _ach if _ev == "join" else _bch
+                        if _tch and _vid == _tch.id:
+                            await _tts_vc_event(bot, member.guild, member, _ev)
+            except Exception as e:
+                logger.exception("[BOT_SETUP] TTS vc_notify error: %s", e)
+
         if member.guild is None or member.bot:
             return
 
@@ -754,25 +775,26 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.exception("[BOT_SETUP] VC notify error: %s", e)
 
-        # TTS 自動参加: 設定済みVCに誰か入ったらBotも入る
+        # TTS 自動参加: 設定済みVCに誰か入ったらBotも入る（temp override 中はスキップ）
         try:
             if is_join and after_ch is not None:
-                from services.tts_service import auto_join as _tts_auto_join
+                from services.tts_service import auto_join as _tts_auto_join, has_temp_override as _has_temp
                 from services.tts_store import get_tts_settings as _get_tts_settings
                 _tts_cfg = _get_tts_settings(member.guild.id)
                 _tts_vc_id = _tts_cfg.get("vc_channel_id")
                 if _tts_cfg.get("enabled") and _tts_vc_id and int(_tts_vc_id) == after_ch.id:
-                    await _tts_auto_join(member.guild, int(_tts_vc_id))
+                    if not _has_temp(member.guild.id):
+                        await _tts_auto_join(member.guild, int(_tts_vc_id))
         except Exception as e:
             logger.exception("[BOT_SETUP] TTS auto_join error: %s", e)
 
-        # TTS 自動退出: VCに人間が誰もいなくなったらBotも退出
+        # TTS 自動退出: VCに人間が誰もいなくなったらBotも退出（temp override も解除）
         try:
             if (is_leave or is_move) and before_ch is not None:
-                from services.tts_service import disconnect as _tts_disconnect
+                from services.tts_service import disconnect as _tts_disconnect, get_effective_vc_watch as _get_vc_watch
                 from services.tts_store import get_tts_settings as _get_tts_settings
                 _tts_cfg = _get_tts_settings(member.guild.id)
-                _tts_vc_id = _tts_cfg.get("vc_channel_id")
+                _tts_vc_id, _ = _get_vc_watch(member.guild.id, _tts_cfg)
                 if _tts_vc_id and int(_tts_vc_id) == before_ch.id:
                     non_bots = [m for m in before_ch.members if not m.bot]
                     if not non_bots:

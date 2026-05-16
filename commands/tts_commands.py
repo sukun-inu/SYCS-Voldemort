@@ -142,7 +142,27 @@ async def tts_status(interaction: discord.Interaction) -> None:
     await send_interaction(interaction, embed=embed, ephemeral=True)
 
 
-@tts_group.command(name="leave", description="ボットをVCから退出させキューをクリアする")
+@tts_group.command(name="join", description="指定したVCに参加し、そのVCのコメント欄を優先読み上げ対象にする")
+@app_commands.describe(channel="参加するVCチャンネル")
+async def tts_join(
+    interaction: discord.Interaction,
+    channel: discord.VoiceChannel,
+) -> None:
+    if not await ensure_admin(interaction):
+        return
+    assert interaction.guild
+    settings = get_tts_settings(interaction.guild.id)
+    if not settings.get("enabled"):
+        await send_ephemeral(interaction, "❌ TTS が無効。先に `/tts enable` で有効にせよ。")
+        return
+    await tts_service.temp_join(interaction.client, interaction.guild, channel.id)
+    await send_ephemeral(
+        interaction,
+        f"✅ {channel.mention} に参加した。このVCのコメント欄を優先読み上げ中。\n`/tts leave` で退出・元の設定に戻る。",
+    )
+
+
+@tts_group.command(name="leave", description="ボットをVCから退出させキューをクリアする（temp join 中なら元の設定に戻る）")
 async def tts_leave(interaction: discord.Interaction) -> None:
     if not await ensure_admin(interaction):
         return
