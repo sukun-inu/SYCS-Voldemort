@@ -49,7 +49,7 @@
     </div>
     <p class="page-kicker">使い方ガイド</p>
     <h1>SYCS Voldemort</h1>
-    <p class="doc-lead">貴金属価格・AI 会話・音楽ダウンロード・地震アラートなど多機能な Discord Bot</p>
+    <p class="doc-lead">貴金属価格・AI 会話・音楽ダウンロード・TTS 読み上げ・地震アラートなど多機能な Discord Bot</p>
   </div>
 
   <!-- 一般コマンド -->
@@ -102,6 +102,49 @@
     </div>
   </div>
 
+  <!-- TTS 読み上げ -->
+  <div class="doc-section">
+    <h2><i class="bi bi-soundwave"></i>TTS 読み上げ<span class="badge-soft accent ms-2">自動</span></h2>
+    <p>管理者が設定した<strong>読み上げチャンネル</strong>にメッセージを投稿すると、指定した<strong>VC で自動読み上げ</strong>されます。VC に誰かが入ると Bot も自動参加し、全員退出で自動退出します。</p>
+    <ol class="doc-steps">
+      <li>管理者が <strong>Web 管理画面</strong> → TTS 読み上げ で VC チャンネルと読み上げチャンネルを設定し、有効にします。</li>
+      <li>設定した読み上げチャンネルにメッセージを投稿するか、対象 VC に入室します。</li>
+      <li>Bot が VC に自動参加し、メッセージを順番に読み上げます。</li>
+    </ol>
+    <h3>ユーザーコマンド</h3>
+    <div class="doc-cmd">
+      <div class="doc-cmd-entry">
+        <div class="doc-cmd-name">/voice set [voice] [rate]</div>
+        <p class="doc-cmd-desc">自分の読み上げ声と速度（語/分）を設定します。声の選択肢はサーバーの TTS API に依存します。</p>
+      </div>
+      <div class="doc-cmd-entry">
+        <div class="doc-cmd-name">/voice reset</div>
+        <p class="doc-cmd-desc">自分の声設定をデフォルトに戻します。</p>
+      </div>
+      <div class="doc-cmd-entry">
+        <div class="doc-cmd-name">/voice info</div>
+        <p class="doc-cmd-desc">現在の自分の声設定を確認します。</p>
+      </div>
+      <div class="doc-cmd-entry">
+        <div class="doc-cmd-name">/dict add [word] [reading]</div>
+        <p class="doc-cmd-desc">読み替え辞書に単語を登録します。登録した単語は読み上げ時に指定の読みに置換されます。</p>
+      </div>
+      <div class="doc-cmd-entry">
+        <div class="doc-cmd-name">/dict remove [word]</div>
+        <p class="doc-cmd-desc">辞書から単語を削除します。</p>
+      </div>
+      <div class="doc-cmd-entry">
+        <div class="doc-cmd-name">/dict list</div>
+        <p class="doc-cmd-desc">現在登録されている辞書の一覧を表示します。</p>
+      </div>
+    </div>
+    <div class="info-panel mt-3">
+      <p class="info-panel-title"><i class="bi bi-info-circle"></i>読み上げのルール</p>
+      URL は「URL」、メンションは「メンション」、カスタム絵文字は絵文字名に自動変換されます。
+      メッセージが字数制限を超えた場合は「以下省略」と読まれます（上限は管理者が設定）。
+    </div>
+  </div>
+
   <!-- AI 会話 -->
   <div class="doc-section">
     <h2><i class="bi bi-chat-dots-fill"></i>AI 会話（ヴォルデモート）<span class="badge-soft accent ms-2">自動</span></h2>
@@ -141,7 +184,7 @@
     <p>上記の自動機能はすべてサーバーの管理者が設定する必要があります。スラッシュコマンド（Discord 上）または <strong>Web 管理画面</strong>から設定できます。</p>
     <div class="info-panel mt-3">
       <p class="info-panel-title"><i class="bi bi-display"></i>Web 管理画面でできること</p>
-      各機能の送信先チャンネルや通知条件の設定、DJAudio のキャッシュ・クールダウン調整、ニュースフィードのキーワード管理、リアクションロールの絵文字とロールの紐づけ管理、セキュリティ設定（信頼済みユーザー・バイパスロール）。
+      各機能の送信先チャンネルや通知条件の設定、DJAudio のキャッシュ・クールダウン調整、ニュースフィードのキーワード管理、リアクションロールの絵文字とロールの紐づけ管理、TTS の VC・読み上げチャンネル・声・辞書管理、セキュリティ設定（信頼済みユーザー・バイパスロール）。
     </div>
   </div>
 

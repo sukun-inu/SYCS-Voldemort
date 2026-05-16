@@ -17,6 +17,7 @@ from services.tts_store import (
     set_tts_enabled,
     set_tts_max_lengths,
 )
+from services.tts_service import fetch_voices
 from webapp_admin.auth import get_guild_channels, get_guild_voice_channels
 from webapp_admin.security import check_csrf, check_guild, sanitize, validate_int
 from webapp_admin.templating import flash, render
@@ -32,7 +33,7 @@ _DEFAULT_MAX_LENGTH = 100
 _DEFAULT_SPEAK_MAX_LENGTH = 200
 
 
-def _tts_context(gid: int, text_channels: list, voice_channels: list) -> dict:
+def _tts_context(gid: int, text_channels: list, voice_channels: list, available_voices: list[str]) -> dict:
     settings = get_tts_settings(gid)
     watch_ids = [int(cid) for cid in settings.get("watch_channel_ids", [])]
     vc_id = settings.get("vc_channel_id")
@@ -63,6 +64,7 @@ def _tts_context(gid: int, text_channels: list, voice_channels: list) -> dict:
         default_rate=settings.get("default_rate", _DEFAULT_RATE),
         max_length=int(settings.get("max_length", _DEFAULT_MAX_LENGTH)),
         speak_max_length=int(settings.get("speak_max_length", _DEFAULT_SPEAK_MAX_LENGTH)),
+        available_voices=available_voices,
         dictionary=get_tts_dictionary(gid),
         user_rows=user_rows,
     )
@@ -133,6 +135,11 @@ async def tts_settings(request: Request, _=Depends(check_guild), _csrf=Depends(c
 
         elif action == "set_defaults":
             voice = sanitize(form.get("default_voice", ""), 100).strip()
+            if voice:
+                available = await fetch_voices()
+                if available and voice not in available:
+                    flash(request, f"「{voice}」は利用可能な声に含まれていません。", "danger")
+                    return RedirectResponse(_REDIRECT, status_code=303)
             try:
                 rate = validate_int(form.get("default_rate", "200"), min_val=100, max_val=400)
             except Exception:
@@ -187,9 +194,10 @@ async def tts_settings(request: Request, _=Depends(check_guild), _csrf=Depends(c
         flash(request, "不明なアクションです。", "warning")
         return RedirectResponse(_REDIRECT, status_code=303)
 
-    text_channels, voice_channels = await asyncio.gather(
+    text_channels, voice_channels, available_voices = await asyncio.gather(
         get_guild_channels(gid),
         get_guild_voice_channels(gid),
+        fetch_voices(),
     )
-    ctx = _tts_context(gid, text_channels, voice_channels)
+    ctx = _tts_context(gid, text_channels, voice_channels, available_voices)
     return render(request, "settings/tts.html", **ctx)

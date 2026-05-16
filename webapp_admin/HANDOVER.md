@@ -46,12 +46,17 @@
 
 ### 変更ファイル
 - `config.py`: `TTS_BASE_URL` 環境変数を追加（既定 `http://localhost:8080`）
+- `requirements.txt`: `discord.py` → `discord.py[voice]`（PyNaCl を含む）
+- `docker-compose.yml`: `sycs-voldemort` コンテナに `TTS_BASE_URL` 環境変数を追加
 - `webapp_admin/auth.py`: `get_guild_voice_channels()` を追加（type=2 VC のみ）
 - `webapp_admin/app.py`: `tts_router` を `/admin/settings` プレフィックスで登録
 - `webapp_admin/templates/base.html`: サイドバーの「メディア」グループに TTS リンクを追加
+- `webapp_admin/templates/landing.html`: TTS 機能カード追加・meta 説明更新
+- `webapp_admin/templates/guide.html`: TTS 節・コマンド説明追加
 - `commands/__init__.py`: `register_tts_commands` を登録
 - `bot_setup.py`:
   - `on_message` に TTS ハンドラを追加（watch_channel_ids に含まれるチャンネルで発火）
+  - `on_voice_state_update` の VC 通知ロジックを内部関数 `_vc_notify_handler()` に切り出し（早期 return が TTS 自動参加をスキップするバグ修正）
   - `on_voice_state_update` に自動参加・自動退出ロジックを追加
 
 ### settings.json のスキーマ（TTS部分）
@@ -63,6 +68,7 @@
   "default_voice": "Kyoko",
   "default_rate": 200,
   "max_length": 100,
+  "speak_max_length": 200,
   "user_settings": {
     "USER_ID": { "voice": "Otoya", "rate": 250 }
   },
@@ -75,9 +81,13 @@
 
 ### 追加修正時の注意
 - `watch_channel_ids` は `int` のリストとして保存するが、JSON 経由では文字列になる場合があるため `int(cid)` でキャストして比較すること
+- TTS API へのリクエストは `format=wav` で送信する（サーバー側に ffmpeg が不要）。`discord.FFmpegPCMAudio` が WAV を PCM に変換する
 - TTS API の `/api/v1/voices` は `locale=ja` でフィルタしている。英語音声も使いたい場合は `fetch_voices()` の引数を変更するか別途呼び出すこと
+- 管理 UI の声選択は GET 時に `fetch_voices()` を呼び出してドロップダウンを生成する。API が落ちている場合はテキスト入力にフォールバックする
+- `max_length`（本文上限）と `speak_max_length`（名前プレフィックス込み全体上限）は管理画面の「デフォルト声設定」フォームから変更可能
 - `_player_loop` は `asyncio.wait_for(..., timeout=300)` でアイドル退出する。Bot 再起動後はキューが消えるため再投稿が必要
 - 管理 UI の `action=reset_user` はユーザーIDを整数で受け取ること（`sanitize` → `int()` の順でバリデーション）
+- `on_voice_state_update` の VC 通知ブロックは内部関数化されており、VC 通知が無効でも TTS 自動参加・退出が動作する（旧実装では早期 return でスキップされていた）
 
 ## 7. 過去の修正不整合
 - ChatGPT 応答チャンネルが未設定 (`0`) のときは「無効」として扱う仕様に統一（Bot / WebUI / 表示文言）。

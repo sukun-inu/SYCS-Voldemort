@@ -4,9 +4,9 @@
 
 <div class="page-header">
   <div>
-    <p class="page-kicker">音声</p>
+    <p class="page-kicker">メディア</p>
     <h1 class="page-title"><i class="bi bi-soundwave"></i>TTS 読み上げ</h1>
-    <p class="page-description">テキストチャンネルのメッセージを VC で自動読み上げします。</p>
+    <p class="page-description">テキストチャンネルのメッセージをボイスチャンネルで自動読み上げします。</p>
   </div>
 </div>
 
@@ -16,17 +16,16 @@
   <section class="section-card span-6">
     <div class="section-card-header">
       <h2 class="section-card-title"><i class="bi bi-toggle-on"></i>基本設定</h2>
+      <span class="badge-soft {% if enabled %}success{% else %}danger{% endif %}">
+        {{ "有効" if enabled else "無効" }}
+      </span>
     </div>
     <div class="section-card-body">
-      <div class="status-strip mb-3">
-        <span class="status-label">状態</span>
-        <span class="status-chip {% if enabled %}text-success{% else %}text-danger{% endif %}">
-          <i class="bi bi-circle-fill me-1" style="font-size:.55rem;vertical-align:middle;"></i>
-          {{ "有効" if enabled else "無効" }}
-        </span>
-      </div>
-
-      <form method="post" data-autosave="true">
+      <p class="text-muted small mb-3">
+        有効にすると、読み上げチャンネルへのメッセージを設定した VC で読み上げます。
+        VC チャンネルと読み上げチャンネルの両方を設定してから有効にしてください。
+      </p>
+      <form method="post">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="toggle">
         <div class="d-flex gap-2">
@@ -35,7 +34,7 @@
             <i class="bi bi-check-circle me-1"></i>有効にする
           </button>
           <button type="submit" name="enabled" value="0"
-                  class="btn {% if not enabled %}btn-outline-danger{% else %}btn-outline-secondary{% endif %}">
+                  class="btn {% if not enabled %}btn-outline-danger{% else %}btn-outline-warning{% endif %}">
             <i class="bi bi-x-circle me-1"></i>無効にする
           </button>
         </div>
@@ -46,13 +45,13 @@
   {# ── VCチャンネル ── #}
   <section class="section-card span-6">
     <div class="section-card-header">
-      <h2 class="section-card-title"><i class="bi bi-speaker-fill"></i>VCチャンネル</h2>
+      <h2 class="section-card-title"><i class="bi bi-speaker-fill"></i>VC チャンネル</h2>
     </div>
     <div class="section-card-body">
       <div class="status-strip">
         <span class="status-label">現在</span>
         <span class="status-chip">
-          <i class="bi bi-volume-up-fill"></i>
+          <i class="bi bi-volume-up-fill me-1"></i>
           {% set vc_name = namespace(value="未設定") %}
           {% for vc in voice_channels %}
             {% if vc.id|string == vc_id|string %}{% set vc_name.value = vc.name %}{% endif %}
@@ -64,16 +63,16 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="set_vc">
         <div class="mb-4">
-          <label class="form-label" for="vc_channel_id">Botが入るVCチャンネル</label>
+          <label class="form-label" for="vc_channel_id">Bot が入る VC チャンネル</label>
           <select id="vc_channel_id" name="vc_channel_id" class="form-select">
             <option value="0">未設定（無効）</option>
             {% for vc in voice_channels %}
-            <option value="{{ vc.id }}"
-              {% if vc.id|string == vc_id|string %}selected{% endif %}>
+            <option value="{{ vc.id }}" {% if vc.id|string == vc_id|string %}selected{% endif %}>
               🔊 {{ vc.name }}
             </option>
             {% endfor %}
           </select>
+          <div class="form-text">誰かがこの VC に入ると Bot も自動参加し、全員退出で自動退出します。</div>
         </div>
         <div class="form-actions">
           <button class="btn btn-accent"><i class="bi bi-check-lg me-2"></i>保存</button>
@@ -86,28 +85,30 @@
   <section class="section-card span-12">
     <div class="section-card-header">
       <h2 class="section-card-title"><i class="bi bi-hash"></i>読み上げチャンネル</h2>
+      <span class="badge-soft accent">{{ watch_channels|length }} チャンネル</span>
     </div>
     <div class="section-card-body">
       {% if watch_channels %}
-      <div class="mb-4">
-        <p class="form-label mb-2">現在の読み上げ対象</p>
-        <div class="d-flex flex-wrap gap-2">
-          {% for ch in watch_channels %}
-          <form method="post" class="d-inline">
+      <div class="object-list mb-4">
+        {% for ch in watch_channels %}
+        <div class="object-row">
+          <span class="object-name"><i class="bi bi-hash me-2"></i>{{ ch.name }}</span>
+          <form method="post" class="confirm-form" data-msg="#{{ ch.name }} を読み上げ対象から削除しますか？">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="action" value="remove_watch">
             <input type="hidden" name="channel_id" value="{{ ch.id }}">
-            <button type="submit" class="btn btn-sm btn-outline-danger">
-              <i class="bi bi-hash"></i>{{ ch.name }}
-              <i class="bi bi-x-lg ms-1"></i>
-            </button>
+            <button class="btn btn-sm btn-outline-danger" title="削除"><i class="bi bi-trash"></i></button>
           </form>
-          {% endfor %}
         </div>
-        <div class="form-text mt-1">× ボタンで削除できます。</div>
+        {% endfor %}
       </div>
       {% else %}
-      <p class="text-muted mb-4">読み上げチャンネルはまだ設定されていません。</p>
+      <div class="empty-state mb-4">
+        <div>
+          <i class="bi bi-hash"></i>
+          <p class="mb-0">読み上げチャンネルはまだ設定されていません。</p>
+        </div>
+      </div>
       {% endif %}
 
       {% if available_channels %}
@@ -127,7 +128,7 @@
         </div>
       </form>
       {% else %}
-      <p class="text-muted small">追加できるチャンネルがありません。</p>
+      <p class="text-muted small mb-0">追加できるチャンネルがありません。</p>
       {% endif %}
     </div>
   </section>
@@ -140,16 +141,26 @@
     <div class="section-card-body">
       <div class="status-strip">
         <span class="status-label">現在</span>
-        <span class="status-chip">{{ default_voice }} / {{ default_rate }}語/分</span>
+        <span class="status-chip">{{ default_voice }} / {{ default_rate }} 語/分 / 本文 {{ max_length }} 字</span>
       </div>
       <form method="post" data-autosave="true">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="action" value="set_defaults">
         <div class="mb-3">
-          <label class="form-label" for="default_voice">声の名前</label>
+          <label class="form-label" for="default_voice">声</label>
+          {% if available_voices %}
+          <select id="default_voice" name="default_voice" class="form-select">
+            {% for v in available_voices %}
+            <option value="{{ v }}" {% if v == default_voice %}selected{% endif %}>{{ v }}</option>
+            {% endfor %}
+          </select>
+          {% else %}
           <input type="text" id="default_voice" name="default_voice" class="form-control"
                  value="{{ default_voice }}" placeholder="例: Kyoko">
-          <div class="form-text">macOS の TTS 音声名を入力してください（例: Kyoko, Otoya）。</div>
+          <div class="form-text text-warning">
+            <i class="bi bi-exclamation-triangle me-1"></i>TTS API に接続できないため手動入力してください。
+          </div>
+          {% endif %}
         </div>
         <div class="mb-3">
           <label class="form-label" for="default_rate">読み上げ速度（語/分）</label>
@@ -161,13 +172,13 @@
           <label class="form-label" for="max_length">メッセージ字数制限</label>
           <input type="number" id="max_length" name="max_length" class="form-control"
                  min="10" max="500" value="{{ max_length }}">
-          <div class="form-text">メッセージ本文の読み上げ上限文字数（10〜500、デフォルト 100）。超過分は「以下省略」と読まれます。</div>
+          <div class="form-text">本文の読み上げ上限（10〜500、デフォルト 100）。超過分は「以下省略」と読まれます。</div>
         </div>
         <div class="mb-4">
           <label class="form-label" for="speak_max_length">読み上げ最大文字数</label>
           <input type="number" id="speak_max_length" name="speak_max_length" class="form-control"
                  min="10" max="500" value="{{ speak_max_length }}">
-          <div class="form-text">名前プレフィックスを含む読み上げテキスト全体の上限（10〜500、デフォルト 200）。</div>
+          <div class="form-text">「名前。本文」全体の上限（10〜500、デフォルト 200）。</div>
         </div>
         <div class="form-actions">
           <button class="btn btn-accent"><i class="bi bi-check-lg me-2"></i>保存</button>
@@ -176,10 +187,11 @@
     </div>
   </section>
 
-  {# ── 辞書 ── #}
+  {# ── 読み上げ辞書 ── #}
   <section class="section-card span-6">
     <div class="section-card-header">
       <h2 class="section-card-title"><i class="bi bi-book-fill"></i>読み上げ辞書</h2>
+      <span class="badge-soft accent">{{ dictionary|length }} 件</span>
     </div>
     <div class="section-card-body">
       <form method="post" class="mb-4">
@@ -195,9 +207,7 @@
                    placeholder="読み（例: ディスコード）" maxlength="100" required>
           </div>
           <div class="col-auto">
-            <button class="btn btn-sm btn-accent h-100">
-              <i class="bi bi-plus-lg"></i>
-            </button>
+            <button class="btn btn-sm btn-accent h-100"><i class="bi bi-plus-lg"></i></button>
           </div>
         </div>
         <div class="form-text">単語を読み替えテキストに置換してから読み上げます。</div>
@@ -215,12 +225,12 @@
               <td class="font-monospace small">{{ word }}</td>
               <td class="small">{{ reading }}</td>
               <td class="text-end">
-                <form method="post" class="d-inline">
+                <form method="post" class="confirm-form d-inline"
+                      data-msg="「{{ word }}」を辞書から削除しますか？">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="action" value="remove_dict">
                   <input type="hidden" name="word" value="{{ word }}">
-                  <button type="submit" class="btn btn-xs btn-outline-danger"
-                          onclick="return confirm('「{{ word }}」を削除しますか？')">
+                  <button type="submit" class="btn btn-xs btn-outline-danger" title="削除">
                     <i class="bi bi-trash3"></i>
                   </button>
                 </form>
@@ -231,7 +241,12 @@
         </table>
       </div>
       {% else %}
-      <p class="text-muted small mb-0">辞書は空です。</p>
+      <div class="empty-state">
+        <div>
+          <i class="bi bi-book"></i>
+          <p class="mb-0">辞書は空です。</p>
+        </div>
+      </div>
       {% endif %}
     </div>
   </section>
@@ -241,13 +256,14 @@
   <section class="section-card span-12">
     <div class="section-card-header">
       <h2 class="section-card-title"><i class="bi bi-people-fill"></i>ユーザー個別設定</h2>
+      <span class="badge-soft accent">{{ user_rows|length }} 名</span>
     </div>
     <div class="section-card-body">
       <div class="table-responsive">
         <table class="table table-sm table-hover mb-0">
           <thead>
             <tr>
-              <th>ユーザーID</th>
+              <th>ユーザー ID</th>
               <th>声</th>
               <th>速度</th>
               <th></th>
@@ -260,12 +276,12 @@
               <td class="small">{{ row.voice }}</td>
               <td class="small">{{ row.rate }}</td>
               <td class="text-end">
-                <form method="post" class="d-inline">
+                <form method="post" class="confirm-form d-inline"
+                      data-msg="ユーザー {{ row.user_id }} の声設定をリセットしますか？">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="action" value="reset_user">
                   <input type="hidden" name="user_id" value="{{ row.user_id }}">
-                  <button type="submit" class="btn btn-xs btn-outline-warning"
-                          onclick="return confirm('ユーザー {{ row.user_id }} の設定をリセットしますか？')">
+                  <button type="submit" class="btn btn-xs btn-outline-warning" title="リセット">
                     <i class="bi bi-arrow-counterclockwise"></i> リセット
                   </button>
                 </form>
@@ -275,22 +291,26 @@
           </tbody>
         </table>
       </div>
-      <div class="form-text mt-2">ユーザーが /voice set で設定した個別の声設定です。</div>
+      <div class="form-text mt-2"><code>/voice set</code> でユーザーが設定した個別の声設定です。</div>
     </div>
   </section>
   {% endif %}
 
-  {# ── 情報パネル ── #}
+  {# ── 使い方 ── #}
   <div class="info-panel span-12">
     <p class="info-panel-title"><i class="bi bi-info-circle"></i>使い方</p>
-    <p class="mb-1">
-      1. VCチャンネルを選択して保存 &rarr; 2. 読み上げチャンネルを追加 &rarr; 3. 有効にする
+    <ol class="mb-2 ps-3">
+      <li>VC チャンネルを選択して保存する</li>
+      <li>読み上げチャンネルを 1 つ以上追加する</li>
+      <li>「有効にする」で読み上げ開始</li>
+    </ol>
+    <p class="mb-1 small text-muted">
+      VC に誰かが入ると Bot も自動参加し、全員が退出すると自動退出します。
+      URL・メンション・カスタム絵文字は自動で省略読みされます。
     </p>
     <p class="mb-0 small text-muted">
-      読み上げチャンネルに投稿されたメッセージが、設定したVCで自動的に読み上げられます。
-      ユーザーは <code>/voice set</code> で自分の声と速度を変更できます。
-      辞書で単語を登録すると、該当する単語を読み替えてから読み上げます。
-      VCに誰かが入ると Bot も自動参加し、全員が退出すると自動退出します。
+      ユーザーは <code>/voice set</code> で声・速度を個人設定できます。
+      <code>/dict add</code> で読み替え辞書への単語登録も可能です。
     </p>
   </div>
 
