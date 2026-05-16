@@ -678,7 +678,7 @@ def setup_events(bot: Bot) -> None:
             logger.exception("[BOT_SETUP] VC user_state persist error: %s", e)
 
         # VC 通知チャンネルへ（リッチエンベッド）
-        try:
+        async def _vc_notify_handler() -> None:
             if not (is_join or is_leave or is_move):
                 return
             vc_notify_id = get_vc_notify_channel_id(member.guild.id)
@@ -746,6 +746,9 @@ def setup_events(bot: Bot) -> None:
                     _vc_last_mention[gid] = now_ts
 
             await notify_ch.send(content=content, embed=embed)
+
+        try:
+            await _vc_notify_handler()
         except Exception as e:
             logger.exception("[BOT_SETUP] VC notify error: %s", e)
 

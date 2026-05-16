@@ -46,7 +46,7 @@ async def _synthesize(text: str, voice: str, rate: int) -> Optional[str]:
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{TTS_BASE_URL}/api/v1/synthesize",
-                json={"text": text, "voice": voice, "rate": rate, "format": "mp3"},
+                json={"text": text, "voice": voice, "rate": rate, "format": "wav"},
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
                 if resp.status != 200:
