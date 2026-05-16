@@ -479,7 +479,9 @@ def setup_events(bot: Bot) -> None:
             from services.tts_store import get_tts_settings as _get_tts_settings
             settings = _get_tts_settings(message.guild.id)
             watch_ids = [int(cid) for cid in settings.get("watch_channel_ids", [])]
-            if message.channel.id in watch_ids and isinstance(message.author, discord.Member):
+            vc_channel_id = settings.get("vc_channel_id")
+            in_vc_text = vc_channel_id is not None and message.channel.id == int(vc_channel_id)
+            if (message.channel.id in watch_ids or in_vc_text) and isinstance(message.author, discord.Member):
                 await _tts_enqueue(bot, message.guild, message.author, message.content)
 
         # 各ハンドラーは互いに独立しているため並列実行（VT スキャンが DJAudio をブロックしない）
