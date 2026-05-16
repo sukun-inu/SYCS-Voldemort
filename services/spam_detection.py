@@ -1,5 +1,5 @@
 import time
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 SPAM_REPEAT_THRESHOLD = 4
 SPAM_TIME_WINDOW = 15
@@ -24,11 +24,27 @@ def _maybe_cleanup() -> None:
         _user_message_times.pop(key, None)
 
 
-def is_spam(guild_id: int, user_id: int) -> bool:
+def check_spam(guild_id: int, user_id: int) -> Tuple[bool, int, float]:
+    """スパム判定。(スパムか, ウィンドウ内メッセージ数, 最短メッセージ間隔秒) を返す。"""
     now = time.time()
     key = (guild_id, user_id)
     history = _user_message_times.setdefault(key, [])
     history.append(now)
     history[:] = [t for t in history if now - t < SPAM_TIME_WINDOW]
     _maybe_cleanup()
-    return len(history) >= SPAM_REPEAT_THRESHOLD
+    count = len(history)
+
+    if len(history) >= 2:
+        sorted_times = sorted(history)
+        min_interval = min(
+            sorted_times[i + 1] - sorted_times[i] for i in range(len(sorted_times) - 1)
+        )
+    else:
+        min_interval = float("inf")
+
+    return count >= SPAM_REPEAT_THRESHOLD, count, min_interval
+
+
+def is_spam(guild_id: int, user_id: int) -> bool:
+    result, _, _ = check_spam(guild_id, user_id)
+    return result

@@ -9,7 +9,11 @@
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Kawasaki\\\\Desktop\\\\Develop\\\\SYCS-Voldemort\" -Directory)",
       "Bash(python -)",
       "Bash(del \"c:\\\\Users\\\\Kawasaki\\\\Desktop\\\\Develop\\\\SYCS-Voldemort\\\\webapp_admin\\\\static\\\\favicon.svg\")",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(python -c \"import services.spam_detection; import services.content_moderation; import services.security_service; print\\('OK'\\)\")",
+      "Bash(python -m py_compile services/spam_detection.py)",
+      "Bash(python -m py_compile services/content_moderation.py)",
+      "Bash(python -m py_compile services/security_service.py)"
     ]
   }
 }

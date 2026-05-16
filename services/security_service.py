@@ -10,14 +10,14 @@ from services.content_moderation import gpt_assess
 from services.logging_service import log_action, send_log_embed
 from services.raid_detection import check_vc_raid
 from services.settings_store import get_bypass_role_ids, get_response_channel_id, get_trusted_user_ids
-from services.spam_detection import is_spam
+from services.spam_detection import SPAM_TIME_WINDOW, check_spam
 from services.virustotal_service import MALICIOUS_THRESHOLD, vt_scan_target
 
 NEW_MEMBER_THRESHOLD_DAYS = 7
 MAX_LINKS = 5
 
 URL_REGEX = re.compile(r"https?://[^\s]+", re.IGNORECASE)
-UNICODE_TRICK_REGEX = re.compile(r"[\u202A-\u202E\u2066-\u2069]")
+UNICODE_TRICK_REGEX = re.compile(r"[‪-‮⁦-⁩]")
 
 logger = logging.getLogger(__name__)
 
@@ -143,12 +143,17 @@ def build_final_embed(
     reasons: List[str],
     logs: List[str],
 ) -> discord.Embed:
-    if "VT_DANGEROUS" in reasons or gpt_result == "DANGEROUS":
+    is_vt_dangerous = "VT_DANGEROUS" in reasons
+    is_vc_raid = "VC_RAID" in reasons
+    is_spam = "SPAM" in reasons
+    is_vt_suspicious = "VT_SUSPICIOUS" in reasons
+
+    if is_vt_dangerous or gpt_result == "DANGEROUS" or is_vc_raid:
         color = discord.Color.red()
         title = "危険な投稿を検出"
-    elif "VT_SUSPICIOUS" in reasons or gpt_result == "SUSPICIOUS":
+    elif is_vt_suspicious or gpt_result == "SUSPICIOUS" or is_spam:
         color = discord.Color.orange()
-        title = "注意：投稿に問題の可能性"
+        title = "注意：スパム/不審な投稿の可能性"
     else:
         color = discord.Color.green()
         title = "検査完了：問題なし"
@@ -180,13 +185,15 @@ def _check_content_flags(
     member: discord.Member,
     content: str,
     links: List[str],
-) -> Tuple[List[str], List[str]]:
+) -> Tuple[List[str], List[str], int, float]:
+    """(reason_flags, logs, spam_count, min_interval) を返す。"""
     reason_flags: List[str] = []
     logs: List[str] = []
 
-    if is_spam(member.guild.id, member.id):
+    spam_detected, spam_count, min_interval = check_spam(member.guild.id, member.id)
+    if spam_detected:
         reason_flags.append("SPAM")
-        logs.append("スパム検出")
+        logs.append(f"スパム検出（{spam_count}回/{SPAM_TIME_WINDOW}秒、最短間隔{min_interval:.1f}秒）")
 
     if len(links) >= MAX_LINKS:
         reason_flags.append("TOO_MANY_LINKS")
@@ -196,7 +203,7 @@ def _check_content_flags(
         reason_flags.append("UNICODE_TRICK")
         logs.append("ユニコードトリック検出")
 
-    return reason_flags, logs
+    return reason_flags, logs, spam_count, min_interval
 
 
 async def _run_vt_scans(
@@ -297,8 +304,13 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
             logger.debug("log_action failed", exc_info=True)
         return
 
-    reason_flags, flag_logs = _check_content_flags(member, content, links)
+    member_is_new = is_new_member(member)
+    reason_flags, flag_logs, spam_count, min_interval = _check_content_flags(member, content, links)
     logs.extend(flag_logs)
+
+    # スパム単体でも SUSPICIOUS 扱い（危険判定の引き上げは gpt_assess に委ねる）
+    if "SPAM" in reason_flags:
+        danger = True
 
     vt_results, progress_msg, vt_flags, vt_danger = await _run_vt_scans(
         bot, message.guild.id, links, attachments, logs
@@ -307,11 +319,18 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     if vt_danger:
         danger = True
 
-    gpt_result = await gpt_assess(content, vt_results)
+    gpt_result = await gpt_assess(
+        content, vt_results,
+        spam_count=spam_count,
+        min_interval=min_interval,
+        is_new_member=member_is_new,
+    )
     reason_flags.append(f"GPT:{gpt_result}")
     logs.append(f"GPT判定: {gpt_result}")
+    if gpt_result == "DANGEROUS":
+        danger = True
 
-    if is_new_member(member):
+    if member_is_new:
         reason_flags.append("NEW_MEMBER")
         logs.append("新規メンバー")
 
@@ -330,17 +349,18 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
         await strip_roles(member)
 
     embed = build_final_embed(vt_results, gpt_result, reason_flags, logs)
+
+    # 検査結果はログチャンネルのみに送信（テキストチャンネルには送らない）
     if links or attachments:
-        try:
-            if progress_msg:
+        if progress_msg:
+            try:
                 await progress_msg.edit(embed=embed)
-        except discord.HTTPException as e:
-            logger.warning("[security] progress_msg edit failed: %s", e)
-    if danger:
-        try:
-            await message.channel.send(embed=embed)
-        except discord.HTTPException as e:
-            logger.warning("[security] danger embed send failed: %s", e)
+            except discord.HTTPException as e:
+                logger.warning("[security] progress_msg edit failed: %s", e)
+        else:
+            await send_log_embed(bot, message.guild.id, "ERROR" if danger else "INFO", embed)
+    elif danger:
+        await send_log_embed(bot, message.guild.id, "ERROR", embed)
 
     try:
         await log_action(
@@ -352,6 +372,7 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
                 "理由": ", ".join(reason_flags) or "なし",
                 "GPT判定": gpt_result,
                 "リンク数": str(len(links)),
+                "スパム回数": str(spam_count) if spam_count > 1 else "なし",
             },
             embed_color=discord.Color.red() if danger else discord.Color.green(),
         )
@@ -384,13 +405,6 @@ async def handle_security_for_voice_join(
     if channel and check_vc_raid(member, channel.id):
         logs = [f"[{now_jst()}] VCレイド検出", f"チャンネル: {channel.name}"]
         await strip_roles(member)
-
-        try:
-            await channel.send(
-                embed=discord.Embed(title="VCレイド検出", description="\n".join(logs), color=discord.Color.red())
-            )
-        except Exception:
-            pass
 
         try:
             await log_action(
