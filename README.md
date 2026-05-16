@@ -73,7 +73,25 @@ Discord Bot（運用支援）+ FastAPI 管理 UI + FastAPI Web トラッカー�
   - クールダウン
   - 1メッセージあたりのURL上限
 
-### 1.11 セキュリティ検知
+### 1.11 TTS 読み上げ
+
+- 指定テキストチャンネルに投稿されたメッセージを、指定 VC で自動読み上げ
+- 外部 macOS TTS API（[OSX-tts.api.server](https://github.com/sukun-inu/OSX-tts.api.server)）を利用して音声合成し、FFmpeg 経由で VC 再生
+- 読み上げ前の自動テキスト前処理:
+  - URL → `URL`、メンション → `メンション`、チャンネルリンク → `チャンネル`、カスタム絵文字 → 絵文字名
+  - 最大文字数（既定 100 文字）を超えた部分は「以下省略」に置換
+- **辞書機能**: 単語 → 読み替えテキストの変換表をサーバーごとに管理
+- **ユーザー個別設定**: 声の名前・速度をユーザーごとに保存
+- **自動 VC 参加**: 設定済み VC に人間が入ると Bot も自動接続、全員退出で自動退出
+- **タイムアウト退出**: 5 分間メッセージがなければ自動で VC から退出
+- 複数メッセージはキューで順番に再生（同時再生なし）
+- 設定可能:
+  - 読み上げ対象テキストチャンネル（複数可）
+  - Bot が入る VC チャンネル
+  - サーバーデフォルトの声と速度
+  - 最大読み上げ文字数
+
+### 1.12 セキュリティ検知
 - スパム判定
 - Unicode トリック検知
 - VirusTotal URL/添付スキャン
@@ -81,13 +99,13 @@ Discord Bot（運用支援）+ FastAPI 管理 UI + FastAPI Web トラッカー�
 - VC レイド検知
 - 信頼済みユーザー / バイパスロールによる除外設定
 
-### 1.12 管理 UI（FastAPI）
+### 1.13 管理 UI（FastAPI）
 - Discord OAuth ログイン
 - サーバー単位設定
 - Web 上で以下を管理:
   - ログ設定、AI 応答、ウェルカム/グッバイ、VC 通知
   - スティッキー、リアクションロール、ニュース
-  - 地震アラート、DJAudio、セキュリティ
+  - 地震アラート、DJAudio、TTS 読み上げ、セキュリティ
   - ユーザー状態監査（参加/退出、BAN/KICK、アビリティ履歴）
 - 開発者パネル（`/admin/dev`）— 特定ユーザー専用:
   - メッセージ直接送信・転送 / ニュース手動配信 / 地震速報リプレイ
@@ -100,12 +118,12 @@ Discord Bot（運用支援）+ FastAPI 管理 UI + FastAPI Web トラッカー�
   - DJAudio MP3 キャッシュ管理
   - bot / admin ログビューア（自動更新対応）
 
-### 1.13 Web トラッカー（FastAPI）
+### 1.14 Web トラッカー（FastAPI）
 - 金属価格 API
 - 価格予測
 - Push 通知（PWA）
 
-### 1.14 機能と管理導線（早見表）
+### 1.15 機能と管理導線（早見表）
 | 機能 | Discord 側 | 管理 UI 側 |
 |---|---|---|
 | ログ / AI 応答チャンネル | `/log_channel_set` `/log_level_set` `/chat_channel_set` `/chat_channel_clear` | `/admin/settings/logging` |
@@ -117,6 +135,7 @@ Discord Bot（運用支援）+ FastAPI 管理 UI + FastAPI Web トラッカー�
 | 地震アラート | `/quake_channel_set` `/quake_min_scale_set` `/quake_notify_type` `/quake_status` | `/admin/settings/earthquake` |
 | セキュリティ除外設定 | `/trusted_member_*` `/bypass_role_*` | `/admin/settings/security` |
 | DJAudio-DL | `/djaudio_channel_set` `/djaudio_output_set` `/djaudio_status` | `/admin/settings/djaudio` |
+| TTS 読み上げ | `/tts *` `/voice *` `/dict *` | `/admin/settings/tts` |
 | ユーザー状態監査 | （イベント自動収集） | `/admin/users/state` |
 
 ---
@@ -204,6 +223,7 @@ docker compose up -d --build
 | `DJAUDIO_BASE_URL` | DJAudio時推奨 | MP3 配信 URL ベース |
 | `DJAUDIO_FFMPEG_PATH` | 任意 | ffmpeg 実行ファイルを明示指定 |
 | `DJAUDIO_AUTO_INSTALL_FFMPEG` | 任意 | `true/false`（既定 `true`） |
+| `TTS_BASE_URL` | TTS使用時必須 | macOS TTS API サーバーの URL（既定 `http://localhost:8080`） |
 
 ### 5.2 管理 UI（`admin_main.py`）
 
@@ -336,6 +356,36 @@ metalprice 側の定期処理（日次更新/予測更新/自動修復）は `sy
 | `/djaudio_output_set` | MP3 リンクの送信先チャンネル設定（未指定で解除→監視チャンネルに返信） |
 | `/djaudio_status` | DJAudio 設定表示 |
 
+### 6.6 TTS 読み上げ（管理者専用）
+
+| コマンド | 説明 |
+|---|---|
+| `/tts enable` | TTS 読み上げを有効化 |
+| `/tts disable` | TTS 読み上げを無効化 |
+| `/tts add_watch` | 読み上げ対象のテキストチャンネルを追加 |
+| `/tts remove_watch` | 読み上げ対象からテキストチャンネルを削除 |
+| `/tts vc` | Bot が入る VC チャンネルを設定 |
+| `/tts default_voice` | サーバーデフォルトの声を設定（オートコンプリート対応） |
+| `/tts default_rate` | サーバーデフォルトの速度を設定（100〜400語/分） |
+| `/tts status` | 現在の TTS 設定を表示 |
+| `/tts leave` | Bot を VC から退出させキューをクリア |
+
+### 6.7 TTS 声設定（全ユーザー）
+
+| コマンド | 説明 |
+|---|---|
+| `/voice set [voice] [rate]` | 自分の声と速度を設定（オートコンプリート対応） |
+| `/voice reset` | 自分の声設定をデフォルトに戻す |
+| `/voice info` | 自分の現在の声設定を表示 |
+
+### 6.8 TTS 辞書（全ユーザー）
+
+| コマンド | 説明 |
+|---|---|
+| `/dict add word reading` | 辞書に単語→読みを登録（例: `Discord` → `ディスコード`） |
+| `/dict remove word` | 辞書から単語を削除 |
+| `/dict list` | 辞書の一覧を表示（最大50件） |
+
 ---
 
 ## 7. 管理 UI の使い方
@@ -359,6 +409,7 @@ metalprice 側の定期処理（日次更新/予測更新/自動修復）は `sy
 | `/admin/settings/earthquake` | 地震通知チャンネル、最小震度、通知タイプ設定 |
 | `/admin/settings/security` | 信頼済みユーザー / バイパスロール管理 |
 | `/admin/settings/djaudio` | DJAudio 監視チャンネル・出力チャンネル・TTL・クールダウン・URL上限設定 |
+| `/admin/settings/tts` | TTS 有効化、VC・読み上げチャンネル設定、デフォルト声、辞書管理、ユーザー設定リセット |
 | `/admin/users/state` | ユーザー状態監査（現在状態 + 時系列履歴） |
 | `/admin/dev` | 開発者専用デバッグパネル（特定ユーザーのみアクセス可） |
 
@@ -386,6 +437,15 @@ metalprice 側の定期処理（日次更新/予測更新/自動修復）は `sy
 - `yt-dlp` が実行できるか
 - `DJAUDIO_BASE_URL` が外部アクセス可能な URL か
 - `/djaudio_channel_set` で監視チャンネルを設定済みか
+
+### TTS が動かない
+- `TTS_BASE_URL` が TTS API サーバーの正しい URL を指しているか
+- TTS API サーバー（OSX-tts.api.server）が起動しているか（`GET /api/v1/health` で確認）
+- `/tts enable` / 管理 UI で TTS が有効になっているか
+- `/tts vc` または管理 UI で VC チャンネルが設定されているか
+- `/tts add_watch` または管理 UI で読み上げチャンネルが設定されているか
+- Bot に VC への接続権限があるか
+- `ffmpeg` が Bot の実行環境でアクセス可能か（音声再生に使用）
 
 ### 管理 UI にログインできない
 - `DISCORD_CLIENT_ID/SECRET/REDIRECT_URI` が一致しているか
