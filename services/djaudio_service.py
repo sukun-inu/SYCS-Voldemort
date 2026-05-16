@@ -24,7 +24,7 @@ from config import (
 )
 from services.djaudio_cache import register_file, update_discord_message
 from services.djaudio_isrc_meta import enrich_metadata
-from services.djaudio_site_detection import detect_site, is_unsupported_url
+from services.djaudio_site_detection import detect_site, is_djaudio_allowed_url, is_unsupported_url
 from services.url_safety import URLSafetyError, validate_public_http_url
 from services.settings_store import (
     DJAudioRuntimeSettings,
@@ -252,21 +252,34 @@ async def handle_djaudio_message(bot: Bot, message: discord.Message) -> None:
         return
 
     supported_urls: list[str] = []
-    unsupported_reasons: list[str] = []
+    djaudio_rejected: list[str] = []   # DJ-Audio 非対応プラットフォーム・ドメイン
+    security_rejected: list[str] = []  # セキュリティ上の理由でブロック
+
     for url in urls:
-        reason = is_unsupported_url(url)
-        if reason:
-            unsupported_reasons.append(reason)
+        # ① DJ-Audio 判定：明示的非対応プラットフォーム（Spotify 等）
+        platform_reason = is_unsupported_url(url)
+        if platform_reason:
+            djaudio_rejected.append(platform_reason)
             continue
+        # ② DJ-Audio 判定：許可ドメインリストに含まれるか
+        if not is_djaudio_allowed_url(url):
+            djaudio_rejected.append("このURLのサービスはDJAudioでサポートされていないぞ。")
+            continue
+        # ③ セキュリティ判定：SSRF・プライベートIPなどのチェック
         try:
             validate_public_http_url(url)
         except URLSafetyError:
-            unsupported_reasons.append("この URL はセキュリティ上の理由で処理できぬ。")
+            security_rejected.append("この URL はセキュリティ上の理由で処理できぬ。")
             continue
         supported_urls.append(url)
 
     if not supported_urls:
-        notice = unsupported_reasons[0] if unsupported_reasons else "この URL は現在サポート対象外だ。"
+        if security_rejected:
+            notice = security_rejected[0]
+        elif djaudio_rejected:
+            notice = djaudio_rejected[0]
+        else:
+            notice = "この URL は現在サポート対象外だ。"
         await message.reply(f"❌ {notice}", mention_author=False)
         return
 

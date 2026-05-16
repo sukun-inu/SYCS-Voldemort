@@ -1,6 +1,7 @@
 """yt-dlp の info.json からソース媒体を判定するユーティリティ。"""
 
 import re
+from urllib.parse import urlparse
 
 SUPPORTED_SITES: frozenset[str] = frozenset({
     "youtube",
@@ -8,8 +9,39 @@ SUPPORTED_SITES: frozenset[str] = frozenset({
     "bandcamp",
     "nicovideo",
     "tiktok",
-    "generic",
 })
+
+# DJ-Audio が処理を受け付けるドメインの許可リスト
+_DJAUDIO_ALLOWED_HOSTS: frozenset[str] = frozenset({
+    "youtube.com",
+    "youtu.be",
+    "music.youtube.com",
+    "soundcloud.com",
+    "on.soundcloud.com",
+    "nicovideo.jp",
+    "nico.ms",
+    "tiktok.com",
+    "vm.tiktok.com",
+    "vt.tiktok.com",
+    "bandcamp.com",
+})
+
+
+def is_djaudio_allowed_url(url: str) -> bool:
+    """DJ-Audio が処理できるドメインであれば True を返す（許可リスト方式）。
+
+    bandcamp はアーティストサブドメイン（*.bandcamp.com）も許可する。
+    """
+    try:
+        hostname = (urlparse(url).hostname or "").lower().removeprefix("www.")
+    except Exception:
+        return False
+    if hostname in _DJAUDIO_ALLOWED_HOSTS:
+        return True
+    if hostname.endswith(".bandcamp.com"):
+        return True
+    return False
+
 
 _UNSUPPORTED_URL_RULES: list[tuple[re.Pattern, str]] = [
     (
