@@ -49,8 +49,13 @@ _sc_client_id: str | None = None
 _sc_client_id_fetched_at: float = -9999.0
 _sc_client_id_lock = asyncio.Lock()
 
-# SoundCloud JS バンドルから client_id を探す正規表現
-_SC_CLIENT_ID_RE = re.compile(r'[,{]client_id["\s]*:["\s]*"([A-Za-z0-9]{32})"')
+# SoundCloud JS バンドルから client_id を探す正規表現（複数パターン）
+_SC_CLIENT_ID_PATTERNS = [
+    re.compile(r'client_id\s*:\s*"([A-Za-z0-9]{20,64})"'),
+    re.compile(r'"client_id"\s*:\s*"([A-Za-z0-9]{20,64})"'),
+    re.compile(r'client_id\s*=\s*"([A-Za-z0-9]{20,64})"'),
+    re.compile(r"client_id\s*:\s*'([A-Za-z0-9]{20,64})'"),
+]
 
 
 def _get_semaphore() -> asyncio.Semaphore:
@@ -60,52 +65,102 @@ def _get_semaphore() -> asyncio.Semaphore:
     return _dl_semaphore
 
 
-async def _fetch_soundcloud_client_id(*, force: bool = False) -> str | None:
-    """SoundCloud の JS バンドルから client_id を動的取得してキャッシュする。
-    TTL は 12 時間。force=True でキャッシュを無視して再取得する。
+def _sync_fetch_sc_client_id_via_ytdlp() -> str | None:
+    """yt-dlp Python ライブラリ（pip版）を使って同期的に SoundCloud client_id を取得する。
+    subprocess バイナリとは別コードパスのため、バイナリが失敗しても成功する可能性がある。
     """
+    try:
+        from yt_dlp.extractor.soundcloud import SoundcloudIE  # type: ignore[import]
+        import yt_dlp  # type: ignore[import]
+
+        SoundcloudIE._CLIENT_ID = None  # クラスキャッシュをリセット
+        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+            ie = SoundcloudIE(ydl)
+            ie._real_initialize()
+
+        cid = SoundcloudIE._CLIENT_ID
+        if cid:
+            logger.info("yt-dlp Python API で client_id 取得成功: %s…", str(cid)[:8])
+            return cid
+        logger.error("yt-dlp Python API: client_id が空だった")
+    except Exception as e:
+        logger.error("yt-dlp Python API からの client_id 取得に失敗: %s", e, exc_info=True)
+    return None
+
+
+async def _scrape_sc_client_id_via_aiohttp() -> str | None:
+    """SoundCloud の HTML を直接 fetch して JS バンドルから client_id を正規表現で探す。"""
+    _UA = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    )
+    try:
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(
+            headers={"User-Agent": _UA}, timeout=timeout
+        ) as session:
+            try:
+                async with session.get("https://soundcloud.com") as resp:
+                    html = await resp.text()
+                logger.info("SoundCloud HTML 取得: status=%s len=%d", resp.status, len(html))
+            except Exception as e:
+                logger.error("SoundCloud HTML fetch に失敗: %s", e)
+                return None
+
+            script_urls: list[str] = re.findall(r'src=["\']([^"\']+\.js)["\']', html)
+            logger.info("スクリプト URL %d 件発見", len(script_urls))
+            if not script_urls:
+                logger.error("SoundCloud HTML にスクリプト URL がない (先頭500文字: %s)", html[:500])
+                return None
+
+            for script_url in list(reversed(script_urls))[:12]:
+                try:
+                    async with session.get(script_url) as resp:
+                        js = await resp.text()
+                    for pat in _SC_CLIENT_ID_PATTERNS:
+                        m = pat.search(js)
+                        if m:
+                            cid = m.group(1)
+                            logger.info("aiohttp scraper で client_id 取得成功: %s…", cid[:8])
+                            return cid
+                except Exception as e:
+                    logger.warning("スクリプト fetch 失敗 [%s]: %s", script_url, e)
+                    continue
+
+            logger.error(
+                "全スクリプトに client_id パターンが見つからなかった (試行 %d 件)",
+                min(len(script_urls), 12),
+            )
+    except Exception as e:
+        logger.error("aiohttp scraper が例外で終了: %s", e, exc_info=True)
+    return None
+
+
+async def _fetch_soundcloud_client_id(*, force: bool = False) -> str | None:
+    """SoundCloud client_id を取得してキャッシュする。TTL=12時間。"""
     global _sc_client_id, _sc_client_id_fetched_at
     async with _sc_client_id_lock:
         if not force and _sc_client_id and time.monotonic() - _sc_client_id_fetched_at < 43200:
             return _sc_client_id
-        logger.info("SoundCloud client_id を動的取得中...")
-        try:
-            headers = {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0.0.0 Safari/537.36"
-                )
-            }
-            timeout = aiohttp.ClientTimeout(total=20)
-            async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
-                async with session.get("https://soundcloud.com") as resp:
-                    html = await resp.text()
 
-                # crossorigin 付きスクリプト（アプリバンドル）を優先して収集
-                script_urls: list[str] = re.findall(
-                    r'<script[^>]+crossorigin[^>]+src=["\']([^"\']+\.js)["\']', html
-                )
-                if not script_urls:
-                    script_urls = re.findall(r'src=["\']([^"\']+\.js)["\']', html)
+        logger.info("SoundCloud client_id を動的取得中 (force=%s)...", force)
 
-                # 後ろから最大 8 本を試す（アプリバンドルは末尾寄り）
-                for script_url in list(reversed(script_urls))[:8]:
-                    try:
-                        async with session.get(script_url) as resp:
-                            js = await resp.text()
-                        m = _SC_CLIENT_ID_RE.search(js)
-                        if m:
-                            cid = m.group(1)
-                            _sc_client_id = cid
-                            _sc_client_id_fetched_at = time.monotonic()
-                            logger.info("SoundCloud client_id 取得成功: %s…", cid[:8])
-                            return cid
-                    except Exception:
-                        continue
-        except Exception as e:
-            logger.warning("SoundCloud client_id の動的取得に失敗: %s", e)
-        return None
+        # Method 1: yt-dlp Python ライブラリ（subprocess バイナリとは別コード）
+        cid = await asyncio.get_event_loop().run_in_executor(
+            None, _sync_fetch_sc_client_id_via_ytdlp
+        )
+
+        # Method 2: aiohttp スクレイパー
+        if not cid:
+            cid = await _scrape_sc_client_id_via_aiohttp()
+
+        if cid:
+            _sc_client_id = cid
+            _sc_client_id_fetched_at = time.monotonic()
+        else:
+            logger.error("すべての方法で SoundCloud client_id の取得に失敗した")
+
+        return cid
 
 
 # ──────────────────────────────────────────────
@@ -238,17 +293,20 @@ async def _download_as_mp3(url: str, output_dir: str) -> list[Path]:
     returncode, err = await _run_ytdlp(url, output_dir)
 
     if returncode != 0 and _SOUNDCLOUD_CLIENT_ID_ERR in err and _is_soundcloud_url(url):
-        # キャッシュ済み client_id で 1 回目のリトライ
+        logger.error("SoundCloud client_id エラーを検知。動的取得を試みる [%s]", url)
         cid = await _fetch_soundcloud_client_id()
         if cid:
-            logger.info("SoundCloud client_id を指定してリトライ [%s]", url)
+            logger.error("client_id 取得成功 (%s…)。リトライ開始 [%s]", cid[:8], url)
             returncode, err = await _run_ytdlp(url, output_dir, sc_client_id=cid)
+        else:
+            logger.error("client_id 取得失敗。リトライ不可 [%s]", url)
 
-        # それでも失敗した場合はキャッシュを強制更新して再取得しもう一度だけ試す
+        # それでも失敗した場合はキャッシュ強制更新してもう一度だけ試す
         if returncode != 0 and _SOUNDCLOUD_CLIENT_ID_ERR in err:
+            logger.error("client_id 指定でもエラー継続。強制再取得を試みる [%s]", url)
             new_cid = await _fetch_soundcloud_client_id(force=True)
             if new_cid and new_cid != cid:
-                logger.info("再取得した SoundCloud client_id でリトライ [%s]", url)
+                logger.error("新 client_id (%s…) で最終リトライ [%s]", new_cid[:8], url)
                 returncode, err = await _run_ytdlp(url, output_dir, sc_client_id=new_cid)
 
     if returncode != 0:
