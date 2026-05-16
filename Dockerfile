@@ -10,9 +10,14 @@ COPY requirements.txt .
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     fonts-noto-cjk \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir -r requirements.txt
+
+# yt-dlp は PyPI より GitHub バイナリの方が更新が速いため上書き
+RUN curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+    -o /usr/local/bin/yt-dlp && chmod a+rx /usr/local/bin/yt-dlp
 
 # アプリ本体をコピー
 COPY . .

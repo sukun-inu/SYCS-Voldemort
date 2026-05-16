@@ -39,12 +39,37 @@ _dl_semaphore: asyncio.Semaphore | None = None
 _user_cooldown: dict[tuple[int, int], float] = {}
 _processing: set[tuple[int, int, str]] = set()
 
+_ytdlp_update_lock = asyncio.Lock()
+_ytdlp_last_update: float = -9999.0  # 起動直後は即更新を許可
+_SOUNDCLOUD_CLIENT_ID_ERR = "Unable to extract client id"
+
 
 def _get_semaphore() -> asyncio.Semaphore:
     global _dl_semaphore
     if _dl_semaphore is None:
         _dl_semaphore = asyncio.Semaphore(DJAUDIO_DL_CONCURRENCY)
     return _dl_semaphore
+
+
+async def _try_update_ytdlp() -> bool:
+    """yt-dlp を自動更新する。直近1時間以内に更新済みなら skip して False を返す。"""
+    global _ytdlp_last_update
+    async with _ytdlp_update_lock:
+        if time.monotonic() - _ytdlp_last_update < 3600:
+            return False
+        logger.info("yt-dlp 自動更新を試みる...")
+        proc = await asyncio.create_subprocess_exec(
+            "yt-dlp", "-U",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await proc.communicate()
+        _ytdlp_last_update = time.monotonic()
+        if proc.returncode == 0:
+            logger.info("yt-dlp の自動更新が完了した")
+            return True
+        logger.warning("yt-dlp の自動更新に失敗した: %s", stderr.decode("utf-8", errors="replace")[-200:])
+        return False
 
 
 # ──────────────────────────────────────────────
@@ -132,7 +157,7 @@ def _load_info_json(mp3_path: Path) -> dict | None:
         return None
 
 
-async def _download_as_mp3(url: str, output_dir: str) -> list[Path]:
+async def _run_ytdlp(url: str, output_dir: str) -> tuple[int, str]:
     template = str(Path(output_dir) / "%(title).80s.%(ext)s")
     cmd = [
         "yt-dlp",
@@ -163,9 +188,20 @@ async def _download_as_mp3(url: str, output_dir: str) -> list[Path]:
         stderr=asyncio.subprocess.PIPE,
     )
     _, stderr = await proc.communicate()
+    return proc.returncode, stderr.decode("utf-8", errors="replace")
 
-    if proc.returncode != 0:
-        err = stderr.decode("utf-8", errors="replace")
+
+async def _download_as_mp3(url: str, output_dir: str) -> list[Path]:
+    returncode, err = await _run_ytdlp(url, output_dir)
+
+    if returncode != 0:
+        if _SOUNDCLOUD_CLIENT_ID_ERR in err:
+            updated = await _try_update_ytdlp()
+            if updated:
+                logger.info("yt-dlp 更新後にリトライ [%s]", url)
+                returncode, err = await _run_ytdlp(url, output_dir)
+
+    if returncode != 0:
         logger.error("yt-dlp エラー [%s]: %s", url, err[-400:])
         raise RuntimeError(err[-400:])
 
