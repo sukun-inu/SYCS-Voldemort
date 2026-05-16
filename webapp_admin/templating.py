@@ -37,6 +37,7 @@ _ROUTE_MAP: dict[str, str] = {
     "earthquake": "/admin/settings/earthquake",
     "security_settings": "/admin/settings/security",
     "djaudio_settings": "/admin/settings/djaudio",
+    "tts_settings": "/admin/settings/tts",
     "dev_index": "/admin/dev",
     "dev_send_message": "/admin/dev/send-message",
     "dev_forward_message": "/admin/dev/forward-message",
