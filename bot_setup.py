@@ -571,11 +571,20 @@ def setup_events(bot: Bot) -> None:
                     None
                 )
                 if _ev:
-                    from services.tts_service import enqueue_vc_event as _tts_vc_event, get_effective_vc_watch as _get_vc_watch
+                    from services.tts_service import enqueue_vc_event as _tts_vc_event, get_effective_vc_watch as _get_vc_watch, disconnect as _tts_disconnect
                     from services.tts_store import get_tts_settings as _get_tts_settings
                     _cfg = _get_tts_settings(member.guild.id)
                     _vid, _ = _get_vc_watch(member.guild.id, _cfg)
-                    if _cfg.get("enabled") and _cfg.get("vc_notify") and _vid:
+                    # 全員退出: 監視VCがBot以外0人になったらTTSを切断（再接続防止）
+                    if (
+                        _ev == "leave"
+                        and _bch is not None
+                        and _vid is not None
+                        and _bch.id == _vid
+                        and not any(m for m in _bch.members if not m.bot)
+                    ):
+                        await _tts_disconnect(member.guild.id)
+                    elif _cfg.get("enabled") and _cfg.get("vc_notify") and _vid:
                         _tch = _ach if _ev == "join" else _bch
                         if _tch and _vid == _tch.id:
                             await _tts_vc_event(bot, member.guild, member, _ev)
