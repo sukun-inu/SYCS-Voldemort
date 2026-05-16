@@ -12,6 +12,9 @@ import re
 import tempfile
 import time
 from pathlib import Path
+from urllib.parse import urlparse
+
+import aiohttp
 
 import discord
 from discord.ext.commands import Bot
@@ -39,9 +42,15 @@ _dl_semaphore: asyncio.Semaphore | None = None
 _user_cooldown: dict[tuple[int, int], float] = {}
 _processing: set[tuple[int, int, str]] = set()
 
-_ytdlp_update_lock = asyncio.Lock()
-_ytdlp_last_update: float = -9999.0  # 起動直後は即更新を許可
 _SOUNDCLOUD_CLIENT_ID_ERR = "Unable to extract client id"
+
+# SoundCloud client_id 動的取得キャッシュ
+_sc_client_id: str | None = None
+_sc_client_id_fetched_at: float = -9999.0
+_sc_client_id_lock = asyncio.Lock()
+
+# SoundCloud JS バンドルから client_id を探す正規表現
+_SC_CLIENT_ID_RE = re.compile(r'[,{]client_id["\s]*:["\s]*"([A-Za-z0-9]{32})"')
 
 
 def _get_semaphore() -> asyncio.Semaphore:
@@ -51,25 +60,52 @@ def _get_semaphore() -> asyncio.Semaphore:
     return _dl_semaphore
 
 
-async def _try_update_ytdlp() -> bool:
-    """yt-dlp を自動更新する。直近1時間以内に更新済みなら skip して False を返す。"""
-    global _ytdlp_last_update
-    async with _ytdlp_update_lock:
-        if time.monotonic() - _ytdlp_last_update < 3600:
-            return False
-        logger.info("yt-dlp 自動更新を試みる...")
-        proc = await asyncio.create_subprocess_exec(
-            "yt-dlp", "-U",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        _, stderr = await proc.communicate()
-        _ytdlp_last_update = time.monotonic()
-        if proc.returncode == 0:
-            logger.info("yt-dlp の自動更新が完了した")
-            return True
-        logger.warning("yt-dlp の自動更新に失敗した: %s", stderr.decode("utf-8", errors="replace")[-200:])
-        return False
+async def _fetch_soundcloud_client_id(*, force: bool = False) -> str | None:
+    """SoundCloud の JS バンドルから client_id を動的取得してキャッシュする。
+    TTL は 12 時間。force=True でキャッシュを無視して再取得する。
+    """
+    global _sc_client_id, _sc_client_id_fetched_at
+    async with _sc_client_id_lock:
+        if not force and _sc_client_id and time.monotonic() - _sc_client_id_fetched_at < 43200:
+            return _sc_client_id
+        logger.info("SoundCloud client_id を動的取得中...")
+        try:
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                )
+            }
+            timeout = aiohttp.ClientTimeout(total=20)
+            async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
+                async with session.get("https://soundcloud.com") as resp:
+                    html = await resp.text()
+
+                # crossorigin 付きスクリプト（アプリバンドル）を優先して収集
+                script_urls: list[str] = re.findall(
+                    r'<script[^>]+crossorigin[^>]+src=["\']([^"\']+\.js)["\']', html
+                )
+                if not script_urls:
+                    script_urls = re.findall(r'src=["\']([^"\']+\.js)["\']', html)
+
+                # 後ろから最大 8 本を試す（アプリバンドルは末尾寄り）
+                for script_url in list(reversed(script_urls))[:8]:
+                    try:
+                        async with session.get(script_url) as resp:
+                            js = await resp.text()
+                        m = _SC_CLIENT_ID_RE.search(js)
+                        if m:
+                            cid = m.group(1)
+                            _sc_client_id = cid
+                            _sc_client_id_fetched_at = time.monotonic()
+                            logger.info("SoundCloud client_id 取得成功: %s…", cid[:8])
+                            return cid
+                    except Exception:
+                        continue
+        except Exception as e:
+            logger.warning("SoundCloud client_id の動的取得に失敗: %s", e)
+        return None
 
 
 # ──────────────────────────────────────────────
@@ -157,7 +193,12 @@ def _load_info_json(mp3_path: Path) -> dict | None:
         return None
 
 
-async def _run_ytdlp(url: str, output_dir: str) -> tuple[int, str]:
+def _is_soundcloud_url(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower().removeprefix("www.")
+    return host in ("soundcloud.com", "on.soundcloud.com")
+
+
+async def _run_ytdlp(url: str, output_dir: str, sc_client_id: str | None = None) -> tuple[int, str]:
     template = str(Path(output_dir) / "%(title).80s.%(ext)s")
     cmd = [
         "yt-dlp",
@@ -180,8 +221,10 @@ async def _run_ytdlp(url: str, output_dir: str) -> tuple[int, str]:
         "-o", template,
         "--ffmpeg-location", DJAUDIO_FFMPEG_PATH,
         "--no-warnings",
-        url,
     ]
+    if sc_client_id:
+        cmd += ["--extractor-args", f"soundcloud:client_id={sc_client_id}"]
+    cmd.append(url)
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
@@ -194,12 +237,19 @@ async def _run_ytdlp(url: str, output_dir: str) -> tuple[int, str]:
 async def _download_as_mp3(url: str, output_dir: str) -> list[Path]:
     returncode, err = await _run_ytdlp(url, output_dir)
 
-    if returncode != 0:
-        if _SOUNDCLOUD_CLIENT_ID_ERR in err:
-            updated = await _try_update_ytdlp()
-            if updated:
-                logger.info("yt-dlp 更新後にリトライ [%s]", url)
-                returncode, err = await _run_ytdlp(url, output_dir)
+    if returncode != 0 and _SOUNDCLOUD_CLIENT_ID_ERR in err and _is_soundcloud_url(url):
+        # キャッシュ済み client_id で 1 回目のリトライ
+        cid = await _fetch_soundcloud_client_id()
+        if cid:
+            logger.info("SoundCloud client_id を指定してリトライ [%s]", url)
+            returncode, err = await _run_ytdlp(url, output_dir, sc_client_id=cid)
+
+        # それでも失敗した場合はキャッシュを強制更新して再取得しもう一度だけ試す
+        if returncode != 0 and _SOUNDCLOUD_CLIENT_ID_ERR in err:
+            new_cid = await _fetch_soundcloud_client_id(force=True)
+            if new_cid and new_cid != cid:
+                logger.info("再取得した SoundCloud client_id でリトライ [%s]", url)
+                returncode, err = await _run_ytdlp(url, output_dir, sc_client_id=new_cid)
 
     if returncode != 0:
         logger.error("yt-dlp エラー [%s]: %s", url, err[-400:])
