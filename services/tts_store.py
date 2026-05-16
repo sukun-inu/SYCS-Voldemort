@@ -128,3 +128,7 @@ def set_tts_default_voice(guild_id: int, voice: str) -> None:
 
 def set_tts_default_rate(guild_id: int, rate: int) -> None:
     _update_nested(guild_id, "tts", {"default_rate": rate})
+
+
+def set_tts_max_lengths(guild_id: int, max_length: int, speak_max_length: int) -> None:
+    _update_nested(guild_id, "tts", {"max_length": max_length, "speak_max_length": speak_max_length})

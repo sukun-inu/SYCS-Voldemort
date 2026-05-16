@@ -15,6 +15,7 @@ from services.tts_store import (
     set_tts_default_rate,
     set_tts_default_voice,
     set_tts_enabled,
+    set_tts_max_lengths,
 )
 from webapp_admin.auth import get_guild_channels, get_guild_voice_channels
 from webapp_admin.security import check_csrf, check_guild, sanitize, validate_int
@@ -27,6 +28,8 @@ router = APIRouter()
 _REDIRECT = "/admin/settings/tts"
 _DEFAULT_VOICE = "Kyoko"
 _DEFAULT_RATE = 200
+_DEFAULT_MAX_LENGTH = 100
+_DEFAULT_SPEAK_MAX_LENGTH = 200
 
 
 def _tts_context(gid: int, text_channels: list, voice_channels: list) -> dict:
@@ -58,6 +61,8 @@ def _tts_context(gid: int, text_channels: list, voice_channels: list) -> dict:
         voice_channels=voice_channels,
         default_voice=settings.get("default_voice", _DEFAULT_VOICE),
         default_rate=settings.get("default_rate", _DEFAULT_RATE),
+        max_length=int(settings.get("max_length", _DEFAULT_MAX_LENGTH)),
+        speak_max_length=int(settings.get("speak_max_length", _DEFAULT_SPEAK_MAX_LENGTH)),
         dictionary=get_tts_dictionary(gid),
         user_rows=user_rows,
     )
@@ -133,9 +138,20 @@ async def tts_settings(request: Request, _=Depends(check_guild), _csrf=Depends(c
             except Exception:
                 flash(request, "速度は 100〜400 の範囲で指定してください。", "danger")
                 return RedirectResponse(_REDIRECT, status_code=303)
+            try:
+                max_length = validate_int(form.get("max_length", "100"), min_val=10, max_val=500)
+            except Exception:
+                flash(request, "メッセージ字数制限は 10〜500 の範囲で指定してください。", "danger")
+                return RedirectResponse(_REDIRECT, status_code=303)
+            try:
+                speak_max_length = validate_int(form.get("speak_max_length", "200"), min_val=10, max_val=500)
+            except Exception:
+                flash(request, "読み上げ最大文字数は 10〜500 の範囲で指定してください。", "danger")
+                return RedirectResponse(_REDIRECT, status_code=303)
             if voice:
                 set_tts_default_voice(gid, voice)
             set_tts_default_rate(gid, rate)
+            set_tts_max_lengths(gid, max_length, speak_max_length)
             flash(request, "デフォルト設定を保存しました。", "success")
             return RedirectResponse(_REDIRECT, status_code=303)
 

@@ -151,11 +151,23 @@
                  value="{{ default_voice }}" placeholder="例: Kyoko">
           <div class="form-text">macOS の TTS 音声名を入力してください（例: Kyoko, Otoya）。</div>
         </div>
-        <div class="mb-4">
+        <div class="mb-3">
           <label class="form-label" for="default_rate">読み上げ速度（語/分）</label>
           <input type="number" id="default_rate" name="default_rate" class="form-control"
                  min="100" max="400" value="{{ default_rate }}">
           <div class="form-text">100〜400（デフォルト 200）</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="max_length">メッセージ字数制限</label>
+          <input type="number" id="max_length" name="max_length" class="form-control"
+                 min="10" max="500" value="{{ max_length }}">
+          <div class="form-text">メッセージ本文の読み上げ上限文字数（10〜500、デフォルト 100）。超過分は「以下省略」と読まれます。</div>
+        </div>
+        <div class="mb-4">
+          <label class="form-label" for="speak_max_length">読み上げ最大文字数</label>
+          <input type="number" id="speak_max_length" name="speak_max_length" class="form-control"
+                 min="10" max="500" value="{{ speak_max_length }}">
+          <div class="form-text">名前プレフィックスを含む読み上げテキスト全体の上限（10〜500、デフォルト 200）。</div>
         </div>
         <div class="form-actions">
           <button class="btn btn-accent"><i class="bi bi-check-lg me-2"></i>保存</button>

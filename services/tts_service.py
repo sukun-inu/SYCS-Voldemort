@@ -164,9 +164,10 @@ async def enqueue_message(
     voice = str(user_cfg.get("voice") or settings.get("default_voice") or _DEFAULT_VOICE)
     rate = int(user_cfg.get("rate") or settings.get("default_rate") or _DEFAULT_RATE)
 
+    speak_max = int(settings.get("speak_max_length", 200))
     speak_text = f"{member.display_name}。{cleaned}"
-    if len(speak_text) > 200:
-        speak_text = speak_text[:200]
+    if len(speak_text) > speak_max:
+        speak_text = speak_text[:speak_max]
 
     audio_url = await _synthesize(speak_text, voice, rate)
     if not audio_url:
