@@ -1,4 +1,4 @@
-discord.py
+discord.py[voice]
 groq
 aiohttp
 requests
