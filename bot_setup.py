@@ -474,12 +474,21 @@ def setup_events(bot: Bot) -> None:
             except Exception as e:
                 logger.exception("[BOT_SETUP] %s error: %s", name, e)
 
+        async def _tts_handler() -> None:
+            from services.tts_service import enqueue_message as _tts_enqueue
+            from services.tts_store import get_tts_settings as _get_tts_settings
+            settings = _get_tts_settings(message.guild.id)
+            watch_ids = [int(cid) for cid in settings.get("watch_channel_ids", [])]
+            if message.channel.id in watch_ids and isinstance(message.author, discord.Member):
+                await _tts_enqueue(bot, message.guild, message.author, message.content)
+
         # 各ハンドラーは互いに独立しているため並列実行（VT スキャンが DJAudio をブロックしない）
         await asyncio.gather(
             _safe(handle_security_for_message(bot, message), "security_service"),
             _safe(handle_chatgpt_message(bot, message), "chat_commands"),
             _safe(handle_sticky(message), "sticky"),
             _safe(handle_djaudio_message(bot, message), "djaudio"),
+            _safe(_tts_handler(), "tts"),
         )
 
         await bot.process_commands(message)
@@ -739,6 +748,32 @@ def setup_events(bot: Bot) -> None:
             await notify_ch.send(content=content, embed=embed)
         except Exception as e:
             logger.exception("[BOT_SETUP] VC notify error: %s", e)
+
+        # TTS 自動参加: 設定済みVCに誰か入ったらBotも入る
+        try:
+            if is_join and after_ch is not None:
+                from services.tts_service import auto_join as _tts_auto_join
+                from services.tts_store import get_tts_settings as _get_tts_settings
+                _tts_cfg = _get_tts_settings(member.guild.id)
+                _tts_vc_id = _tts_cfg.get("vc_channel_id")
+                if _tts_cfg.get("enabled") and _tts_vc_id and int(_tts_vc_id) == after_ch.id:
+                    await _tts_auto_join(member.guild, int(_tts_vc_id))
+        except Exception as e:
+            logger.exception("[BOT_SETUP] TTS auto_join error: %s", e)
+
+        # TTS 自動退出: VCに人間が誰もいなくなったらBotも退出
+        try:
+            if (is_leave or is_move) and before_ch is not None:
+                from services.tts_service import disconnect as _tts_disconnect
+                from services.tts_store import get_tts_settings as _get_tts_settings
+                _tts_cfg = _get_tts_settings(member.guild.id)
+                _tts_vc_id = _tts_cfg.get("vc_channel_id")
+                if _tts_vc_id and int(_tts_vc_id) == before_ch.id:
+                    non_bots = [m for m in before_ch.members if not m.bot]
+                    if not non_bots:
+                        await _tts_disconnect(member.guild.id)
+        except Exception as e:
+            logger.exception("[BOT_SETUP] TTS auto_leave error: %s", e)
 
     # --------------------------
     # メンバー参加・退出

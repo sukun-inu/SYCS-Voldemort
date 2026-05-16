@@ -148,6 +148,10 @@
            href="{{ url_for('djaudio.djaudio_settings') }}" title="DJAudio-DL" {% if request.url.path == '/admin/settings/djaudio' %}aria-current="page"{% endif %}>
           <i class="bi bi-music-note-beamed"></i><span>DJAudio-DL</span>
         </a>
+        <a class="sidebar-link {% if request.url.path == '/admin/settings/tts' %}active{% endif %}"
+           href="{{ url_for('tts.tts_settings') }}" title="TTS 読み上げ" {% if request.url.path == '/admin/settings/tts' %}aria-current="page"{% endif %}>
+          <i class="bi bi-soundwave"></i><span>TTS 読み上げ</span>
+        </a>
       </div>
 
       <div class="sidebar-group">

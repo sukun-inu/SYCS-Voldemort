@@ -183,6 +183,23 @@ async def get_guild_channels(guild_id: int) -> list[dict]:
         return []
 
 
+async def get_guild_voice_channels(guild_id: int) -> list[dict]:
+    """ボイスチャンネル (type=2) のみ返す。"""
+    try:
+        async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
+            async with session.get(
+                f"{_API}/guilds/{guild_id}/channels",
+                headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+            ) as resp:
+                resp.raise_for_status()
+                return sorted(
+                    [c for c in await resp.json() if c.get("type") == 2],
+                    key=lambda c: c.get("position", 0),
+                )
+    except Exception:
+        return []
+
+
 async def get_guild_roles(guild_id: int) -> list[dict]:
     """管理されていないロール（@everyone 除く）を返す。"""
     try:

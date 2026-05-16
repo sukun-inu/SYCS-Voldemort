@@ -8,7 +8,8 @@
       "Bash(Select-Object FullName)",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Kawasaki\\\\Desktop\\\\Develop\\\\SYCS-Voldemort\" -Directory)",
       "Bash(python -)",
-      "Bash(del \"c:\\\\Users\\\\Kawasaki\\\\Desktop\\\\Develop\\\\SYCS-Voldemort\\\\webapp_admin\\\\static\\\\favicon.svg\")"
+      "Bash(del \"c:\\\\Users\\\\Kawasaki\\\\Desktop\\\\Develop\\\\SYCS-Voldemort\\\\webapp_admin\\\\static\\\\favicon.svg\")",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }

@@ -7,6 +7,7 @@ from commands.djaudio_commands import register_djaudio_commands
 from commands.logging_commands import register_logging_commands
 from commands.metal_commands import register_metal_commands
 from commands.server_commands import register_server_commands
+from commands.tts_commands import register_tts_commands
 
 CommandRegistrar = Callable[[Bot], None]
 
@@ -22,6 +23,7 @@ COMMAND_MODULES: tuple[CommandModule, ...] = (
     CommandModule("logging", register_logging_commands),
     CommandModule("server", register_server_commands),
     CommandModule("djaudio", register_djaudio_commands),
+    CommandModule("tts", register_tts_commands),
 )
 
 
