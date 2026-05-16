@@ -151,13 +151,17 @@ TTS_BASE_URL           = (_read_env("TTS_BASE_URL") or "http://localhost:8080").
 
 METALS_SITE_URL = (_read_env("METALS_SITE_URL") or "https://metals.kawasaki-n3t.f5.si/").rstrip("/") + "/"
 ADMIN_SITE_URL  = (_read_env("ADMIN_SITE_URL")  or "https://vol.kawasaki-n3t.f5.si/admin/login")
-DJAUDIO_CACHE_TTL      = int(os.environ.get("DJAUDIO_CACHE_TTL_SECONDS", "600"))
-DJAUDIO_CACHE_DIR      = Path(os.environ.get("DJAUDIO_CACHE_DIR", str(_default_djaudio_cache)))
-DJAUDIO_COOLDOWN       = int(os.environ.get("DJAUDIO_COOLDOWN_SECONDS", "30"))
-DJAUDIO_MAX_URLS       = int(os.environ.get("DJAUDIO_MAX_URLS_PER_MSG", "3"))
-DJAUDIO_DL_CONCURRENCY = int(os.environ.get("DJAUDIO_DL_CONCURRENCY", "3"))
-DJAUDIO_DL_TIMEOUT     = int(os.environ.get("DJAUDIO_DL_TIMEOUT_SECONDS", "120"))
-DJAUDIO_FFMPEG_PATH    = _resolve_ffmpeg_path()
+DJAUDIO_CACHE_TTL        = int(os.environ.get("DJAUDIO_CACHE_TTL_SECONDS", "600"))
+DJAUDIO_CACHE_DIR        = Path(os.environ.get("DJAUDIO_CACHE_DIR", str(_default_djaudio_cache)))
+DJAUDIO_COOLDOWN         = int(os.environ.get("DJAUDIO_COOLDOWN_SECONDS", "30"))
+DJAUDIO_MAX_URLS         = int(os.environ.get("DJAUDIO_MAX_URLS_PER_MSG", "3"))
+DJAUDIO_DL_CONCURRENCY   = int(os.environ.get("DJAUDIO_DL_CONCURRENCY", "3"))
+DJAUDIO_DL_TIMEOUT       = int(os.environ.get("DJAUDIO_DL_TIMEOUT_SECONDS", "120"))
+DJAUDIO_FFMPEG_PATH      = _resolve_ffmpeg_path()
+# SoundCloudはサーバーIPをbotと判定して空レスポンスを返すため動的取得が不可能。
+# ブラウザの DevTools (Network タブ) で api-v2.soundcloud.com へのリクエストURLから
+# client_id=XXXX を見つけてこの環境変数に設定すること。
+SOUNDCLOUD_CLIENT_ID     = os.environ.get("SOUNDCLOUD_CLIENT_ID", "")
 
 # ChatGPTシステムメッセージ
 CHATGPT_SYSTEM_MESSAGE = (

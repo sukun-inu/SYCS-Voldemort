@@ -24,6 +24,7 @@ from config import (
     DJAUDIO_DL_CONCURRENCY,
     DJAUDIO_DL_TIMEOUT,
     DJAUDIO_FFMPEG_PATH,
+    SOUNDCLOUD_CLIENT_ID as _SC_ENV_CLIENT_ID,
 )
 from services.djaudio_cache import register_file, update_discord_message
 from services.djaudio_isrc_meta import enrich_metadata
@@ -137,9 +138,20 @@ async def _scrape_sc_client_id_via_aiohttp() -> str | None:
 
 
 async def _fetch_soundcloud_client_id(*, force: bool = False) -> str | None:
-    """SoundCloud client_id を取得してキャッシュする。TTL=12時間。"""
+    """SoundCloud client_id を取得してキャッシュする。TTL=12時間。
+    優先順: 環境変数 SOUNDCLOUD_CLIENT_ID → yt-dlp Python API → aiohttp scraper
+    """
     global _sc_client_id, _sc_client_id_fetched_at
     async with _sc_client_id_lock:
+        # 環境変数が設定されていれば常にそちらを優先（動的取得は行わない）
+        if _SC_ENV_CLIENT_ID:
+            if not force and _sc_client_id == _SC_ENV_CLIENT_ID:
+                return _sc_client_id
+            logger.info("SOUNDCLOUD_CLIENT_ID 環境変数を使用: %s…", _SC_ENV_CLIENT_ID[:8])
+            _sc_client_id = _SC_ENV_CLIENT_ID
+            _sc_client_id_fetched_at = time.monotonic()
+            return _sc_client_id
+
         if not force and _sc_client_id and time.monotonic() - _sc_client_id_fetched_at < 43200:
             return _sc_client_id
 
@@ -158,7 +170,11 @@ async def _fetch_soundcloud_client_id(*, force: bool = False) -> str | None:
             _sc_client_id = cid
             _sc_client_id_fetched_at = time.monotonic()
         else:
-            logger.error("すべての方法で SoundCloud client_id の取得に失敗した")
+            logger.error(
+                "すべての方法で SoundCloud client_id の取得に失敗した。"
+                "ブラウザの DevTools (Network タブ) で api-v2.soundcloud.com へのリクエストURLから "
+                "client_id=XXXX を見つけて環境変数 SOUNDCLOUD_CLIENT_ID に設定してください。"
+            )
 
         return cid
 

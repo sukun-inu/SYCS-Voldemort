@@ -584,7 +584,7 @@ def setup_events(bot: Bot) -> None:
                         and not any(m for m in _bch.members if not m.bot)
                     ):
                         await _tts_disconnect(member.guild.id)
-                    elif _cfg.get("enabled") and _cfg.get("vc_notify") and _vid:
+                    elif not member.bot and _cfg.get("enabled") and _cfg.get("vc_notify") and _vid:
                         _tch = _ach if _ev == "join" else _bch
                         if _tch and _vid == _tch.id:
                             await _tts_vc_event(bot, member.guild, member, _ev)

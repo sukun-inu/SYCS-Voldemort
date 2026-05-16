@@ -163,6 +163,13 @@ async def _player_loop(bot: Bot, guild_id: int) -> None:
             queue.task_done()
             continue
 
+        # 再接続前にVCに人間がいるか確認（disconnect後に合成が完了した場合の幽霊接続を防ぐ）
+        ch = guild.get_channel(vc_channel_id)
+        if isinstance(ch, discord.VoiceChannel) and not any(m for m in ch.members if not m.bot):
+            logger.info("[TTS] VC空のためスキップ guild=%s", guild_id)
+            queue.task_done()
+            continue
+
         vc = None
         for _attempt in range(_RECONNECT_RETRIES + 1):
             vc = await _connect_or_move(guild, vc_channel_id)
