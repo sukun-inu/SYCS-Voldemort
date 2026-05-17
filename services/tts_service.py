@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 _DEFAULT_VOICE = "Kyoko"
 _DEFAULT_RATE = 200
 _MAX_TEXT_LEN = 100
-_IDLE_TIMEOUT_SEC = 1800  # 30分無音でVC自動退出
+_IDLE_TIMEOUT_SEC = None  # アイドルタイムアウト無効（手動退出のみ）
 _RECONNECT_RETRIES = 3    # ハンドシェイク切断後の再接続試行回数
 _RECONNECT_DELAY_SEC = 2.0  # 再接続間隔（秒）
 
@@ -146,7 +146,7 @@ async def _player_loop(bot: Bot, guild_id: int) -> None:
     queue = _queues.setdefault(guild_id, asyncio.Queue())
     while True:
         try:
-            item = await asyncio.wait_for(queue.get(), timeout=float(_IDLE_TIMEOUT_SEC))
+            item = await asyncio.wait_for(queue.get(), timeout=_IDLE_TIMEOUT_SEC)
         except asyncio.TimeoutError:
             _temp_overrides.pop(guild_id, None)
             vc = _voice_clients.pop(guild_id, None)
