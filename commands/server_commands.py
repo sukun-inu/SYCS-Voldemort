@@ -164,9 +164,10 @@ def register_server_commands(bot: Bot) -> None:
         set_goodbye_message(interaction.guild.id, message)
         await interaction.response.send_message(f"グッバイメッセージを定めた。\n> {message}", ephemeral=True)
 
-    @bot.tree.command(name="welcome_goodbye_status", description="【管理者】ウェルカム/グッバイ設定を表示します")
+    @bot.tree.command(name="welcome_goodbye_status", description="ウェルカム/グッバイ設定を表示します")
     async def welcome_settings_cmd(interaction: discord.Interaction):
-        if not await _ensure_admin(interaction):
+        if interaction.guild is None:
+            await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return
         ws = get_welcome_settings(interaction.guild.id)
         gs = get_goodbye_settings(interaction.guild.id)
@@ -224,9 +225,10 @@ def register_server_commands(bot: Bot) -> None:
         await interaction.response.send_message("スティッキーメッセージを取り除いた。", ephemeral=True)
         await delete_sticky(interaction.channel, interaction.guild.id)
 
-    @bot.tree.command(name="sticky_list", description="【管理者】スティッキー設定一覧を表示します")
+    @bot.tree.command(name="sticky_list", description="スティッキー設定一覧を表示します")
     async def list_stickies_cmd(interaction: discord.Interaction):
-        if not await _ensure_admin(interaction):
+        if interaction.guild is None:
+            await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return
         stickies = get_sticky_messages(interaction.guild.id)
         if not stickies:
@@ -287,9 +289,10 @@ def register_server_commands(bot: Bot) -> None:
         else:
             await interaction.response.send_message("そのようなリアクションロールは見つからなかった。", ephemeral=True)
 
-    @bot.tree.command(name="reaction_role_list", description="【管理者】リアクションロール一覧を表示します")
+    @bot.tree.command(name="reaction_role_list", description="リアクションロール一覧を表示します")
     async def list_rr_cmd(interaction: discord.Interaction):
-        if not await _ensure_admin(interaction):
+        if interaction.guild is None:
+            await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return
         rr = get_reaction_roles(interaction.guild.id)
         if not rr:
@@ -344,9 +347,10 @@ def register_server_commands(bot: Bot) -> None:
         else:
             await interaction.response.send_message("そのようなフィードは見つからなかった。", ephemeral=True)
 
-    @bot.tree.command(name="news_feed_list", description="【管理者】ニュースフィード一覧を表示します")
+    @bot.tree.command(name="news_feed_list", description="ニュースフィード一覧を表示します")
     async def list_news_cmd(interaction: discord.Interaction):
-        if not await _ensure_admin(interaction):
+        if interaction.guild is None:
+            await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return
         feeds = get_news_feeds(interaction.guild.id)
         if not feeds:
@@ -385,9 +389,10 @@ def register_server_commands(bot: Bot) -> None:
         set_earthquake_min_scale(interaction.guild.id, scale)
         await interaction.response.send_message(f"地震アラートの最小震度を {scale} と定めた。", ephemeral=True)
 
-    @bot.tree.command(name="quake_status", description="【管理者】地震アラート設定を表示します")
+    @bot.tree.command(name="quake_status", description="地震アラート設定を表示します")
     async def eq_settings_cmd(interaction: discord.Interaction):
-        if not await _ensure_admin(interaction):
+        if interaction.guild is None:
+            await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return
         s = get_earthquake_settings(interaction.guild.id)
         types = get_earthquake_notify_types(interaction.guild.id)

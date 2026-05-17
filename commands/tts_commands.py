@@ -102,8 +102,6 @@ async def tts_vc(
 
 @tts_group.command(name="status", description="TTS設定の現在状況を表示する")
 async def tts_status(interaction: discord.Interaction) -> None:
-    if not await ensure_admin(interaction):
-        return
     assert interaction.guild
     guild = interaction.guild
     settings = get_tts_settings(guild.id)
@@ -148,8 +146,6 @@ async def tts_join(
     interaction: discord.Interaction,
     channel: discord.VoiceChannel,
 ) -> None:
-    if not await ensure_admin(interaction):
-        return
     assert interaction.guild
     settings = get_tts_settings(interaction.guild.id)
     if not settings.get("enabled"):
@@ -164,8 +160,6 @@ async def tts_join(
 
 @tts_group.command(name="leave", description="ボットをVCから退出させキューをクリアする（temp join 中なら元の設定に戻る）")
 async def tts_leave(interaction: discord.Interaction) -> None:
-    if not await ensure_admin(interaction):
-        return
     assert interaction.guild
     await tts_service.disconnect(interaction.guild.id)
     await send_ephemeral(interaction, "✅ VCから退出した。")

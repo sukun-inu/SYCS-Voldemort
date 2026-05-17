@@ -90,11 +90,11 @@ def register_djaudio_commands(bot: Bot) -> None:
 
     @bot.tree.command(
         name="djaudio_status",
-        description="【管理者】DJAudio の現在設定を表示します",
+        description="DJAudio の現在設定を表示します",
     )
-    @app_commands.checks.has_permissions(manage_channels=True)
     async def djaudio_status(interaction: discord.Interaction):
-        if not await _ensure_admin(interaction):
+        if interaction.guild is None:
+            await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return
         runtime = get_djaudio_runtime_settings(interaction.guild_id)
 
@@ -113,7 +113,4 @@ def register_djaudio_commands(bot: Bot) -> None:
         embed.add_field(name="最大URL / メッセージ", value=str(runtime.max_urls), inline=True)
         await interaction.response.send_message(embed=embed, ephemeral=True, view=admin_site_view())
 
-    bind_permission_error_handler(
-        djaudio_status,
-        missing_permissions_message="❌ チャンネル管理の権限がなければ使えぬ。",
-    )
+
