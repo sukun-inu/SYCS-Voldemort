@@ -11,6 +11,9 @@ from config import TTS_BASE_URL
 
 logger = logging.getLogger(__name__)
 
+if "localhost" in TTS_BASE_URL:
+    logger.warning("[TTS] TTS_BASE_URL=%s (デフォルト値。本番では TTS_BASE_URL 環境変数を設定してください)", TTS_BASE_URL)
+
 _DEFAULT_VOICE = "Kyoko"
 _DEFAULT_RATE = 200
 _MAX_TEXT_LEN = 100
