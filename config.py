@@ -146,7 +146,7 @@ def _resolve_ffmpeg_path() -> str:
 
     return "ffmpeg"
 
-DJAUDIO_BASE_URL       = (_read_env("DJAUDIO_BASE_URL") or "http://localhost:5001").rstrip("/")
+DJAUDIO_BASE_URL       = (_read_env("DJAUDIO_BASE_URL") or "http://localhost:5002").rstrip("/")
 TTS_BASE_URL           = (_read_env("TTS_BASE_URL") or "http://localhost:8080").rstrip("/")
 
 METALS_SITE_URL = (_read_env("METALS_SITE_URL") or "https://metals.kawasaki-n3t.f5.si/").rstrip("/") + "/"
