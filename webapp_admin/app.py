@@ -151,6 +151,7 @@ def create_app() -> FastAPI:
     from webapp_admin.views.djaudio_views import router as djaudio_router
     from webapp_admin.views.settings_views import router as settings_router
     from webapp_admin.views.tts_views import router as tts_router
+    from services.djaudio_cdn import dlaudio_router
 
     app.include_router(auth_router, prefix="/admin")
     app.include_router(dashboard_router, prefix="/admin")
@@ -158,6 +159,7 @@ def create_app() -> FastAPI:
     app.include_router(settings_router, prefix="/admin/settings")
     app.include_router(djaudio_router, prefix="/admin/settings")
     app.include_router(tts_router, prefix="/admin/settings")
+    app.include_router(dlaudio_router, prefix="/dlaudio")
 
     from webapp_admin.auth import DISCORD_CLIENT_ID, get_bot_guild_count
 
