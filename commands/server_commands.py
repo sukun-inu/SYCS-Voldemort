@@ -7,7 +7,7 @@ from discord.ext.commands import Bot
 
 from commands.guards import ensure_admin as _ensure_admin
 from commands.interaction_utils import admin_site_view
-from config import JST as _JST
+from config import JST as _JST, SCALE_LABELS
 from services.sticky_service import delete_sticky, post_sticky
 from services.settings_store import (
     add_news_feed,
@@ -268,8 +268,8 @@ def register_server_commands(bot: Bot) -> None:
 
     @bot.tree.command(name="reaction_role_remove", description="【管理者】リアクションロールを削除します")
     @app_commands.describe(
-        message_id="対象メッセージのID",
-        emoji="削除するリアクション絵文字",
+        message_id="対象メッセージのID（候補から選択できる）",
+        emoji="削除するリアクション絵文字（候補から選択できる）",
     )
     async def remove_rr_cmd(
         interaction: discord.Interaction,
@@ -288,6 +288,44 @@ def register_server_commands(bot: Bot) -> None:
             await interaction.response.send_message(f"リアクションロール ({emoji}) を取り除いた。", ephemeral=True)
         else:
             await interaction.response.send_message("そのようなリアクションロールは見つからなかった。", ephemeral=True)
+
+    @remove_rr_cmd.autocomplete("message_id")
+    async def _remove_rr_message_id_autocomplete(
+        interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        if interaction.guild is None:
+            return []
+        rr = get_reaction_roles(interaction.guild.id)
+        choices = []
+        for mid, mapping in rr.items():
+            if current and current not in str(mid):
+                continue
+            choices.append(app_commands.Choice(name=f"{mid}（{len(mapping)}件のロール）"[:100], value=str(mid)))
+        return choices[:25]
+
+    @remove_rr_cmd.autocomplete("emoji")
+    async def _remove_rr_emoji_autocomplete(
+        interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        if interaction.guild is None:
+            return []
+        rr = get_reaction_roles(interaction.guild.id)
+        selected_mid = str(getattr(interaction.namespace, "message_id", "") or "")
+        mapping = rr.get(selected_mid, {}) if selected_mid else {}
+        # message_id未選択時は全メッセージ分の絵文字から候補を出す
+        source = mapping.items() if mapping else (
+            (emoji, role_id) for mp in rr.values() for emoji, role_id in mp.items()
+        )
+        choices = []
+        for emoji, role_id in source:
+            if current and current.lower() not in emoji.lower():
+                continue
+            role = interaction.guild.get_role(role_id)
+            label = f"{emoji} → {role.name if role else role_id}"
+            choices.append(app_commands.Choice(name=label[:100], value=emoji))
+            if len(choices) >= 25:
+                break
+        return choices
 
     @bot.tree.command(name="reaction_role_list", description="リアクションロール一覧を表示します")
     async def list_rr_cmd(interaction: discord.Interaction):
@@ -337,7 +375,7 @@ def register_server_commands(bot: Bot) -> None:
         )
 
     @bot.tree.command(name="news_feed_remove", description="【管理者】ニュースフィードを削除します")
-    @app_commands.describe(feed_id="削除するフィードID（/news_feed_list で確認）")
+    @app_commands.describe(feed_id="削除するフィード（候補から選択できる）")
     async def remove_news_cmd(interaction: discord.Interaction, feed_id: str):
         if not await _ensure_admin(interaction):
             return
@@ -346,6 +384,25 @@ def register_server_commands(bot: Bot) -> None:
             await interaction.response.send_message(f"フィード `{feed_id}` を抹消した。", ephemeral=True)
         else:
             await interaction.response.send_message("そのようなフィードは見つからなかった。", ephemeral=True)
+
+    @remove_news_cmd.autocomplete("feed_id")
+    async def _remove_news_feed_id_autocomplete(
+        interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        if interaction.guild is None:
+            return []
+        feeds = get_news_feeds(interaction.guild.id)
+        current_lower = current.lower()
+        choices = []
+        for fid, f in feeds.items():
+            query = str(f.get("query", ""))
+            if current_lower and current_lower not in fid.lower() and current_lower not in query.lower():
+                continue
+            ch = interaction.guild.get_channel(f.get("channel_id"))
+            ch_text = f"#{ch.name}" if ch else "不明なチャンネル"
+            label = f"{query} ({ch_text}) [{fid}]"
+            choices.append(app_commands.Choice(name=label[:100], value=fid))
+        return choices[:25]
 
     @bot.tree.command(name="news_feed_list", description="ニュースフィード一覧を表示します")
     async def list_news_cmd(interaction: discord.Interaction):
@@ -375,19 +432,19 @@ def register_server_commands(bot: Bot) -> None:
         await interaction.response.send_message(f"{channel.mention} を地震アラートチャンネルと定めた。", ephemeral=True)
 
     @bot.tree.command(name="quake_min_scale_set", description="【管理者】地震通知の最小震度を設定します")
-    @app_commands.describe(scale="最小震度（10=1, 20=2, 30=3, 40=4, 45=4強, 50=5弱, 55=5強, 60=6弱, 65=6強, 70=7）")
+    @app_commands.describe(scale="通知する最小震度")
+    @app_commands.choices(scale=[
+        app_commands.Choice(name=f"震度 {label} 以上", value=code)
+        for code, label in SCALE_LABELS.items()
+    ])
     async def set_eq_scale(interaction: discord.Interaction, scale: int):
         if not await _ensure_admin(interaction):
             return
-        valid = {10, 20, 30, 40, 45, 50, 55, 60, 65, 70}
-        if scale not in valid:
-            await interaction.response.send_message(
-                f"有効な震度値はこれだ: {', '.join(str(v) for v in sorted(valid))}",
-                ephemeral=True,
-            )
-            return
         set_earthquake_min_scale(interaction.guild.id, scale)
-        await interaction.response.send_message(f"地震アラートの最小震度を {scale} と定めた。", ephemeral=True)
+        await interaction.response.send_message(
+            f"地震アラートの最小震度を 震度{SCALE_LABELS.get(scale, scale)} と定めた。",
+            ephemeral=True,
+        )
 
     @bot.tree.command(name="quake_status", description="地震アラート設定を表示します")
     async def eq_settings_cmd(interaction: discord.Interaction):

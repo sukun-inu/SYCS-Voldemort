@@ -127,7 +127,7 @@
   font-size: 14px;
   font-weight: 700;
   margin: 0 0 6px;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .feature-card p {
@@ -230,7 +230,7 @@
 .doc-section > h2 {
   font-size: 16px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--text);
   margin: 0 0 14px;
   display: flex;
   align-items: center;
@@ -242,7 +242,7 @@
 .doc-section > h3 {
   font-size: 13px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--text);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin: 24px 0 8px;

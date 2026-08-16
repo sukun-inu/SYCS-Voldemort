@@ -21,7 +21,9 @@
     <div class="section-card-body">
       <form method="get" action="{{ url_for('dashboard.user_state_dashboard') }}" class="row g-2">
         <div class="col-12 col-md-5">
+          <label class="form-label form-label-sm" for="user_state_q">ユーザー検索</label>
           <input
+            id="user_state_q"
             type="text"
             name="q"
             class="form-control"
@@ -30,7 +32,9 @@
           >
         </div>
         <div class="col-6 col-md-2">
+          <label class="form-label form-label-sm" for="user_state_limit" title="一覧に表示する件数（limit）">表示件数</label>
           <input
+            id="user_state_limit"
             type="number"
             name="limit"
             class="form-control"
@@ -40,7 +44,9 @@
           >
         </div>
         <div class="col-6 col-md-2">
+          <label class="form-label form-label-sm" for="user_state_event_limit" title="詳細の履歴を何件まで表示するか（event_limit）">履歴件数</label>
           <input
+            id="user_state_event_limit"
             type="number"
             name="event_limit"
             class="form-control"
@@ -49,7 +55,7 @@
             value="{{ event_limit }}"
           >
         </div>
-        <div class="col-12 col-md-3 d-flex gap-2">
+        <div class="col-12 col-md-3 d-flex gap-2 align-items-end">
           <button type="submit" class="btn btn-accent w-100">
             <i class="bi bi-filter me-1"></i>検索
           </button>
@@ -58,7 +64,7 @@
           </a>
         </div>
       </form>
-      <p class="form-text mb-0 mt-2">`limit` は一覧件数、`event_limit` は詳細履歴件数です。</p>
+      <p class="form-text mb-0 mt-2">表示件数は一覧の行数、履歴件数は選択したユーザーの詳細履歴の件数です。</p>
     </div>
   </section>
 
@@ -70,7 +76,7 @@
       </div>
     </div>
     <div class="table-responsive">
-      <table class="table table-hover align-middle">
+      <table class="table table-hover align-middle" data-table data-table-page-size="20">
         <thead>
           <tr>
             <th>ユーザー</th>
@@ -78,7 +84,7 @@
             <th>最終イベント</th>
             <th>ロール</th>
             <th>アビリティ</th>
-            <th class="table-actions">詳細</th>
+            <th class="table-actions" data-sort="none">詳細</th>
           </tr>
         </thead>
         <tbody>
@@ -265,7 +271,7 @@
       </div>
     </div>
     <div class="table-responsive">
-      <table class="table table-hover align-middle">
+      <table class="table table-hover align-middle" data-table data-table-page-size="25">
         <thead>
           <tr>
             <th>時刻 (JST)</th>
@@ -273,7 +279,7 @@
             <th>状態</th>
             <th>実行者</th>
             <th>理由</th>
-            <th>詳細</th>
+            <th data-sort="none">詳細</th>
           </tr>
         </thead>
         <tbody>
@@ -282,7 +288,7 @@
             <tr>
               <td>{{ event.event_at_label }}</td>
               <td>{{ event.event_label }}</td>
-              <td><span class="badge-soft {{ 'danger' if event.status_after in ['banned', 'kicked'] else 'accent' }}">{{ event.status_after }}</span></td>
+              <td><span class="badge-soft {{ event.status_after_tone }}">{{ event.status_after_label }}</span></td>
               <td>
                 {% if event.actor_user_id %}
                 <div>{{ event.actor_name or "-" }}</div>

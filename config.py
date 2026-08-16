@@ -45,6 +45,9 @@ VIRUSTOTAL_API_KEY = _read_env("VIRUSTOTAL_API_KEY")
 
 # API エンドポイント
 METALPRICE_BASE_URL = "https://api.metalpriceapi.com/v1/latest"
+# 金属価格APIの呼び出しをキャッシュする秒数（既定30分）。
+# コマンド連打や複数ユーザーの同時利用で無駄な外部API呼び出しが増えるのを防ぐ。
+METALPRICE_CACHE_TTL_SECONDS = int(os.environ.get("METALPRICE_CACHE_TTL_SECONDS", "1800"))
 
 # 純度情報
 CARAT_PURITY: Dict[str, float] = {

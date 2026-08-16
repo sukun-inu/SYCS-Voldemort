@@ -12,6 +12,10 @@ from services.settings_store import (
 )
 
 
+def _base_url_is_local() -> bool:
+    return "localhost" in DJAUDIO_BASE_URL or "127.0.0.1" in DJAUDIO_BASE_URL
+
+
 def register_djaudio_commands(bot: Bot) -> None:
 
     @bot.tree.command(
@@ -47,6 +51,13 @@ def register_djaudio_commands(bot: Bot) -> None:
             f"⏱️ キャッシュ有効期間: `{runtime.cache_ttl // 60}分`\n"
             f"⏳ クールダウン: `{runtime.cooldown}秒` / 最大URL: `{runtime.max_urls}`"
         )
+        if _base_url_is_local():
+            embed.add_field(
+                name="⚠️ 注意",
+                value="配信 URL ベースが `localhost` のままだ。このままではサーバー外の者はリンクを開けぬ。"
+                      "管理者は `DJAUDIO_BASE_URL` 環境変数を外部から到達可能な URL に設定せよ。",
+                inline=False,
+            )
         await interaction.response.send_message(embed=embed, ephemeral=True, view=admin_site_view())
 
     bind_permission_error_handler(
@@ -111,6 +122,12 @@ def register_djaudio_commands(bot: Bot) -> None:
         embed.add_field(name="キャッシュ有効期間", value=f"{runtime.cache_ttl // 60}分", inline=True)
         embed.add_field(name="クールダウン", value=f"{runtime.cooldown}秒", inline=True)
         embed.add_field(name="最大URL / メッセージ", value=str(runtime.max_urls), inline=True)
+        if _base_url_is_local():
+            embed.add_field(
+                name="⚠️ 配信 URL が localhost のまま",
+                value="サーバー外からリンクを開けない状態だ。`DJAUDIO_BASE_URL` を外部到達可能な URL に設定せよ。",
+                inline=False,
+            )
         await interaction.response.send_message(embed=embed, ephemeral=True, view=admin_site_view())
 
 

@@ -200,6 +200,56 @@ async def get_guild_voice_channels(guild_id: int) -> list[dict]:
         return []
 
 
+_user_info_cache: dict[int, tuple[Optional[dict], float]] = {}
+_user_info_cache_lock = asyncio.Lock()
+_USER_INFO_CACHE_TTL = 600
+
+
+async def get_discord_user(user_id: int) -> Optional[dict]:
+    """DiscordユーザーIDから基本情報（表示名・アバター等）を取得する（10分キャッシュ）。
+
+    見つからない/取得失敗時は None。設定ページで「生のユーザーID」を表示せず
+    名前解決して見せるために使う（チャンネル/ロールと同様の扱いに揃える）。
+    """
+    now = time.time()
+    cached = _user_info_cache.get(user_id)
+    if cached and now - cached[1] < _USER_INFO_CACHE_TTL:
+        return cached[0]
+
+    if not DISCORD_BOT_TOKEN:
+        return None
+
+    async with _user_info_cache_lock:
+        now = time.time()
+        cached = _user_info_cache.get(user_id)
+        if cached and now - cached[1] < _USER_INFO_CACHE_TTL:
+            return cached[0]
+
+        data: Optional[dict] = None
+        try:
+            async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
+                async with session.get(
+                    f"{_API}/users/{user_id}",
+                    headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+        except Exception as e:
+            logger.warning("get_discord_user(%s) 失敗: %s", user_id, e)
+
+        _user_info_cache[user_id] = (data, now)
+        return data
+
+
+async def get_discord_users(user_ids: list[int]) -> dict[int, Optional[dict]]:
+    """複数ユーザーIDをまとめて解決する（並列取得、内部はキャッシュ経由）。"""
+    unique_ids = list(dict.fromkeys(user_ids))
+    if not unique_ids:
+        return {}
+    results = await asyncio.gather(*[get_discord_user(uid) for uid in unique_ids])
+    return dict(zip(unique_ids, results))
+
+
 async def get_guild_roles(guild_id: int) -> list[dict]:
     """管理されていないロール（@everyone 除く）を返す。"""
     try:

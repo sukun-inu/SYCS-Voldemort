@@ -38,7 +38,7 @@ Discord Bot（運用支援）+ FastAPI 管理 UI + FastAPI Web トラッカー�
 ### 1.5 VC 通知
 - VC 参加/退出/移動を専用チャンネルへ通知
 - 退出時は通話時間を表示
-- ロールメンション通知（間隔制限あり）
+- ロールメンション通知（参加・移動時のみ。退出時はメンションしない。間隔制限あり）
 
 ### 1.6 スティッキーメッセージ
 - チャンネルごとに固定メッセージを維持
@@ -220,10 +220,11 @@ docker compose up -d --build
 | `USER_STATE_AUTO_REPAIR_WRITE_EVENTS` | 任意 | 定期修復時にも同期イベントを書き込む（既定 `false`） |
 | `USER_STATE_RETENTION_DAYS` | 任意 | 状態監査履歴の保持日数（既定 `3650`） |
 | `USER_STATE_CLEANUP_INTERVAL_SECONDS` | 任意 | 古い履歴削除の実行間隔秒（既定 `21600`） |
-| `DJAUDIO_BASE_URL` | DJAudio時推奨 | MP3 配信 URL ベース |
+| `DJAUDIO_BASE_URL` | DJAudio時推奨 | MP3 配信 URL ベース。未設定時は `http://localhost:5001` になり配信リンクが外部から開けなくなるため、本番では必ず外部到達可能な URL を設定すること（未設定/localhostのままだと起動時ログと `/djaudio_status` に警告が出る） |
 | `DJAUDIO_FFMPEG_PATH` | 任意 | ffmpeg 実行ファイルを明示指定 |
 | `DJAUDIO_AUTO_INSTALL_FFMPEG` | 任意 | `true/false`（既定 `true`） |
 | `TTS_BASE_URL` | TTS使用時必須 | macOS TTS API サーバーの URL（既定 `http://localhost:8080`） |
+| `METALPRICE_CACHE_TTL_SECONDS` | 任意 | 金属価格APIの呼び出し結果をキャッシュする秒数（既定 `1800` = 30分）。無料枠APIの呼び出し過多を防ぐ |
 
 ### 5.2 管理 UI（`admin_main.py`）
 
@@ -341,11 +342,11 @@ metalprice 側の定期処理（日次更新/予測更新/自動修復）は `sy
 
 | コマンド | 説明 |
 |---|---|
-| `/trusted_member_add` | 信頼済みユーザー追加 |
-| `/trusted_member_remove` | 信頼済みユーザー削除 |
+| `/trusted_member_add` | 信頼済みユーザー追加（実行後に表示されるユーザー選択メニューで複数選択可） |
+| `/trusted_member_remove` | 信頼済みユーザー削除（同上） |
 | `/trusted_member_list` | 信頼済みユーザー一覧 |
-| `/bypass_role_add` | バイパスロール追加 |
-| `/bypass_role_remove` | バイパスロール削除 |
+| `/bypass_role_add` | バイパスロール追加（実行後に表示されるロール選択メニューで複数選択可） |
+| `/bypass_role_remove` | バイパスロール削除（同上） |
 | `/bypass_role_list` | バイパスロール一覧 |
 
 ### 6.5 DJAudio
@@ -367,8 +368,10 @@ metalprice 側の定期処理（日次更新/予測更新/自動修復）は `sy
 | `/tts vc` | Bot が入る VC チャンネルを設定 |
 | `/tts default_voice` | サーバーデフォルトの声を設定（オートコンプリート対応） |
 | `/tts default_rate` | サーバーデフォルトの速度を設定（100〜400語/分） |
+| `/tts read_name` | メッセージ読み上げ時に発言者名を読み上げるか設定 |
 | `/tts status` | 現在の TTS 設定を表示 |
-| `/tts leave` | Bot を VC から退出させキューをクリア |
+| `/tts join` | 指定 VC に一時参加し、そのVCのコメント欄を優先読み上げ対象にする |
+| `/tts leave` | Bot を VC から退出させキューをクリア（`/tts join` 中なら元の設定に戻る） |
 
 ### 6.7 TTS 声設定（全ユーザー）
 

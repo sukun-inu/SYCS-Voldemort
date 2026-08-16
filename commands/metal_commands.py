@@ -84,10 +84,11 @@ def register_metal_commands(bot: discord.Client) -> None:
     @bot.tree.command(name="metal_all", description="金・銀・プラチナの現在価格をまとめて表示します")
     @app_commands.describe(g="計算するグラム数を入力してください")
     async def all_metals(interaction: discord.Interaction, g: float):
-        try:
-            if g <= 0:
-                raise ValueError("グラム数は正の値で指定せよ。")
+        if g <= 0:
+            await _respond_error(interaction, "グラム数は正の値で指定せよ。")
+            return
 
+        try:
             specs = list(METAL_COMMANDS.values())
             results = await asyncio.gather(
                 *[calculate_metal_value(g, spec.code, spec.purity) for spec in specs],

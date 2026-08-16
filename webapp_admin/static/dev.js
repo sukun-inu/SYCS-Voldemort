@@ -105,6 +105,7 @@ document.querySelectorAll("[data-ts]").forEach(el => {
             });
             row.style.background = "var(--success-soft)";
             setTimeout(() => row.style.background = "", 800);
+            window.showToast?.(`#${ch.name} のIDをフォームに入力しました`, "success", { duration: 2200 });
           });
           listItems.appendChild(row);
         });
@@ -115,6 +116,7 @@ document.querySelectorAll("[data-ts]").forEach(el => {
     } catch (err) {
       listItems.innerHTML = `<div class="dev-channel-row"><span style="color:var(--danger)">取得に失敗しました: ${escHtml(String(err))}</span></div>`;
       listWrap.hidden = false;
+      window.showToast?.("チャンネル一覧の取得に失敗しました", "danger");
     } finally {
       fetchBtn.disabled = false;
       fetchBtn.innerHTML = '<i class="bi bi-list-ul me-1"></i>チャンネル一覧';
@@ -168,6 +170,7 @@ function openImport(guildId, guildName) {
       }
     } catch {
       result.innerHTML = '<p class="small" style="color:var(--danger)">取得に失敗しました。</p>';
+      window.showToast?.("ユーザー情報の取得に失敗しました", "danger");
     } finally {
       result.hidden = false;
       btn.disabled = false;
@@ -201,6 +204,7 @@ function openImport(guildId, guildName) {
       content.scrollTop = content.scrollHeight;
     } catch {
       content.textContent = "ログの取得に失敗しました。";
+      window.showToast?.("ログの取得に失敗しました", "danger");
     }
   }
 

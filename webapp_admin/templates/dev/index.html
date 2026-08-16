@@ -228,7 +228,7 @@
     </p>
     {% if eq_history %}
     <div class="table-responsive">
-      <table class="table table-sm table-hover align-middle mb-0">
+      <table class="table table-sm table-hover align-middle mb-0" data-table data-table-page-size="10">
         <thead>
           <tr>
             <th>発生時刻</th>
@@ -236,7 +236,7 @@
             <th class="text-center">M</th>
             <th class="text-center">最大震度</th>
             <th>津波</th>
-            <th></th>
+            <th data-sort="none"></th>
           </tr>
         </thead>
         <tbody>
@@ -315,13 +315,13 @@
     <p class="small mb-3" style="color:var(--text-secondary)">各ギルドの生 JSON を確認・エクスポート・インポートできます。</p>
     {% if guilds %}
     <div class="table-responsive">
-      <table class="table table-sm table-hover align-middle mb-0">
+      <table class="table table-sm table-hover align-middle mb-0" data-table data-table-page-size="15">
         <thead>
           <tr>
             <th>サーバー名</th>
             <th>Guild ID</th>
             <th class="text-center">設定</th>
-            <th></th>
+            <th data-sort="none"></th>
           </tr>
         </thead>
         <tbody>
@@ -414,7 +414,7 @@
     </div>
     {% if cache_entries %}
     <div class="table-responsive">
-      <table class="table table-sm table-hover align-middle mb-0">
+      <table class="table table-sm table-hover align-middle mb-0" data-table data-table-page-size="15">
         <thead>
           <tr>
             <th>タイトル</th>
@@ -422,7 +422,7 @@
             <th class="text-end">サイズ</th>
             <th>有効期限</th>
             <th class="text-center">状態</th>
-            <th></th>
+            <th data-sort="none"></th>
           </tr>
         </thead>
         <tbody>
@@ -552,7 +552,7 @@
     </p>
     {% if stickies %}
     <div class="table-responsive mb-4">
-      <table class="table table-sm table-hover align-middle mb-0">
+      <table class="table table-sm table-hover align-middle mb-0" data-table data-table-page-size="10">
         <thead>
           <tr>
             <th>Guild ID</th>

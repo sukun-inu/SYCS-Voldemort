@@ -20,7 +20,7 @@ from services.tts_store import (
     set_tts_vc_notify,
 )
 from services.tts_service import fetch_voices
-from webapp_admin.auth import get_guild_channels, get_guild_voice_channels
+from webapp_admin.auth import get_discord_users, get_guild_channels, get_guild_voice_channels
 from webapp_admin.security import check_csrf, check_guild, sanitize, validate_int
 from webapp_admin.templating import flash, render
 
@@ -35,7 +35,7 @@ _DEFAULT_MAX_LENGTH = 100
 _DEFAULT_SPEAK_MAX_LENGTH = 200
 
 
-def _tts_context(gid: int, text_channels: list, voice_channels: list, available_voices: list[str]) -> dict:
+async def _tts_context(gid: int, text_channels: list, voice_channels: list, available_voices: list[str]) -> dict:
     settings = get_tts_settings(gid)
     watch_ids = [int(cid) for cid in settings.get("watch_channel_ids", [])]
     vc_id = settings.get("vc_channel_id")
@@ -53,6 +53,15 @@ def _tts_context(gid: int, text_channels: list, voice_channels: list, available_
                     "voice": cfg.get("voice", "（デフォルト）"),
                     "rate": cfg.get("rate", "（デフォルト）"),
                 })
+
+    discord_users = await get_discord_users([int(row["user_id"]) for row in user_rows])
+    for row in user_rows:
+        info = discord_users.get(int(row["user_id"]))
+        row["display_name"] = (info.get("global_name") or info.get("username")) if info else None
+        row["avatar_url"] = (
+            f"https://cdn.discordapp.com/avatars/{row['user_id']}/{info['avatar']}.webp?size=64"
+            if info and info.get("avatar") else None
+        )
 
     return dict(
         settings=settings,
@@ -211,5 +220,5 @@ async def tts_settings(request: Request, _=Depends(check_guild), _csrf=Depends(c
         get_guild_voice_channels(gid),
         fetch_voices(),
     )
-    ctx = _tts_context(gid, text_channels, voice_channels, available_voices)
+    ctx = await _tts_context(gid, text_channels, voice_channels, available_voices)
     return render(request, "settings/tts.html", **ctx)

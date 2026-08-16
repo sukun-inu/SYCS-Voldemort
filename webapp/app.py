@@ -10,6 +10,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -595,6 +596,22 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    # FastAPI/Pydanticの既定422レスポンスは detail がオブジェクト配列になり、
+    # フロント側でそのまま文字列化すると "[object Object]" のように壊れて見える。
+    # ここで常に人間向けの一文字列へ畳み込んでから返す。
+    errors = exc.errors()
+    if errors:
+        first = errors[0]
+        field = ".".join(str(p) for p in first.get("loc", []) if p not in ("query", "body", "path"))
+        msg = first.get("msg") or "入力値が不正です。"
+        message = f"{field}: {msg}" if field else msg
+    else:
+        message = "入力値が不正です。"
+    return JSONResponse({"detail": message}, status_code=422)
 
 
 @app.get("/", include_in_schema=False)

@@ -49,6 +49,36 @@ _EVENT_LABELS: dict[str, str] = {
     "voice_join": "VC参加",
     "voice_leave": "VC退出",
     "voice_move": "VC移動",
+    "sync_discovered_member": "定期同期で検出（メンバー）",
+    "sync_discovered_ban": "定期同期で検出（BAN）",
+    "sync_mark_left": "定期同期で退出を反映",
+}
+
+# 定期同期 (services/user_state_service.py の sync_guild_user_states) が書き込む
+# "sync_member_<source>" のようなイベント種別は、起点(source)部分が可変のため
+# 辞書に個別登録せず、接頭辞とsource名を組み合わせてラベル化する。
+_SYNC_PREFIX_LABELS: dict[str, str] = {
+    "sync_member_": "メンバー状態を同期",
+    "sync_ban_": "BAN状態を同期",
+    "sync_left_": "退出を同期反映",
+}
+_SYNC_SOURCE_LABELS: dict[str, str] = {
+    "on_ready": "起動時",
+    "auto_repair": "自動修復",
+    "manual_signal": "手動実行",
+    "startup_sync": "起動時",
+}
+
+_ABILITY_LABELS: dict[str, str] = {
+    "administrator": "管理者権限",
+    "manage_guild": "サーバー管理",
+    "kick_members": "メンバーをキック",
+    "ban_members": "メンバーをBAN",
+    "moderate_members": "タイムアウト権限",
+    "manage_roles": "ロール管理",
+    "trusted_user": "信頼済みユーザー",
+    "bypass_role": "セキュリティバイパス",
+    "is_bot": "BOT",
 }
 
 
@@ -71,7 +101,18 @@ def _status_tone(value: str | None) -> str:
 def _event_label(value: str | None) -> str:
     if not value:
         return "-"
-    return _EVENT_LABELS.get(value, value)
+    if value in _EVENT_LABELS:
+        return _EVENT_LABELS[value]
+    for prefix, base_label in _SYNC_PREFIX_LABELS.items():
+        if value.startswith(prefix):
+            source = value[len(prefix):]
+            source_label = _SYNC_SOURCE_LABELS.get(source, source)
+            return f"{base_label}（{source_label}）"
+    return value
+
+
+def _ability_label(value: str) -> str:
+    return _ABILITY_LABELS.get(value, value)
 
 
 def _fmt_jst(value: datetime | None) -> str:
@@ -193,7 +234,7 @@ async def user_state_dashboard(
         enabled_abilities: list[str] = []
         for key, enabled in abilities.items():
             if bool(enabled):
-                enabled_abilities.append(str(key))
+                enabled_abilities.append(_ability_label(str(key)))
 
         states.append(
             {
@@ -237,7 +278,7 @@ async def user_state_dashboard(
                     "timed_out_until_label": _fmt_jst(current.get("timed_out_until")),
                     "roles": current_roles,
                     "abilities_enabled": sorted(
-                        [str(k) for k, enabled in current_abilities.items() if bool(enabled)]
+                        _ability_label(str(k)) for k, enabled in current_abilities.items() if bool(enabled)
                     ),
                 }
 
@@ -252,6 +293,8 @@ async def user_state_dashboard(
                         **event,
                         "event_label": _event_label(event.get("event_type")),
                         "event_at_label": _fmt_jst(event.get("event_at")),
+                        "status_after_label": _status_label(event.get("status_after")),
+                        "status_after_tone": _status_tone(event.get("status_after")),
                         "payload_pretty": json.dumps(payload, ensure_ascii=False, indent=2),
                     }
                 )

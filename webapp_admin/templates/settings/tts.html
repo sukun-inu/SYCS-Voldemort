@@ -305,7 +305,7 @@
         <table class="table table-sm table-hover mb-0">
           <thead>
             <tr>
-              <th>ユーザー ID</th>
+              <th>ユーザー</th>
               <th>声</th>
               <th>速度</th>
               <th></th>
@@ -314,7 +314,13 @@
           <tbody>
             {% for row in user_rows %}
             <tr>
-              <td class="font-monospace small">{{ row.user_id }}</td>
+              <td class="small">
+                {% if row.avatar_url %}
+                <img src="{{ row.avatar_url }}" width="18" height="18" class="rounded-circle me-1" alt="">
+                {% endif %}
+                {{ row.display_name or "不明なユーザー" }}
+                <span class="text-muted font-monospace ms-1">ID: {{ row.user_id }}</span>
+              </td>
               <td class="small">{{ row.voice }}</td>
               <td class="small">{{ row.rate }}</td>
               <td class="text-end">

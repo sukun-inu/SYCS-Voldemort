@@ -390,7 +390,7 @@ def setup_events(bot: Bot) -> None:
                                 tmpl = s.get("message") or "{user} が **{server}** に参加しました！（現在 {count} 名）"
                                 text = (tmpl
                                     .replace("{user}", "**@テストユーザー**")
-                                    .replace("{username}", "テストユーザー#0000")
+                                    .replace("{username}", "テストユーザー")
                                     .replace("{server}", guild.name)
                                     .replace("{count}", str(guild.member_count)))
                                 await ch.send(f"🧪 **[テスト送信 — ウェルカム]**\n{text}")
@@ -768,10 +768,11 @@ def setup_events(bot: Bot) -> None:
             embed.set_author(name=member.display_name, icon_url=member.display_avatar.url)
             embed.set_thumbnail(url=member.display_avatar.url)
 
-            # ロールメンション: 同ギルドで直近 10 分以内に送信済みならスキップ
+            # ロールメンション: 退出時は通知しない（参加・移動時のみ）。
+            # 同ギルドで直近 10 分以内に送信済みならスキップ。
             content = None
             role_id = get_vc_notify_role_id(member.guild.id)
-            if role_id:
+            if role_id and eff_action != "leave":
                 gid = member.guild.id
                 if now_ts - _vc_last_mention.get(gid, 0.0) >= 600:
                     content = f"<@&{role_id}>"

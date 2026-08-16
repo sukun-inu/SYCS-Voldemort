@@ -479,4 +479,214 @@ document.addEventListener('DOMContentLoaded', () => {
     form.querySelectorAll('select, input[type="checkbox"], input[type="radio"], input[type="number"], input[type="range"]')
       .forEach((field) => field.addEventListener('change', () => scheduleAutoSave(form)));
   });
+
+  enhanceDataTables();
 });
+
+/* ============================================================
+   トースト通知
+   フラッシュメッセージ（フルページPOST向け）とは別に、JS駆動の
+   操作（チャンネル一覧のコピー、非同期フェッチの成否など）に
+   その場でフィードバックを返すための軽量な通知レイヤー。
+   ============================================================ */
+const _TOAST_ICONS = {
+  success: 'bi-check-circle-fill',
+  danger: 'bi-exclamation-circle-fill',
+  warning: 'bi-exclamation-triangle-fill',
+  info: 'bi-info-circle-fill',
+};
+
+function _getToastStack() {
+  let stack = document.querySelector('.toast-stack');
+  if (!stack) {
+    stack = document.createElement('div');
+    stack.className = 'toast-stack';
+    stack.setAttribute('aria-live', 'polite');
+    stack.setAttribute('aria-atomic', 'false');
+    document.body.appendChild(stack);
+  }
+  return stack;
+}
+
+function showToast(message, variant = 'info', { duration = 4000 } = {}) {
+  const stack = _getToastStack();
+  const toast = document.createElement('div');
+  toast.className = `app-toast ${variant}`;
+  toast.setAttribute('role', 'status');
+  const icon = _TOAST_ICONS[variant] || _TOAST_ICONS.info;
+  toast.innerHTML = `
+    <i class="bi ${icon}"></i>
+    <div class="app-toast-body"></div>
+    <button type="button" class="app-toast-close" aria-label="閉じる"><i class="bi bi-x"></i></button>
+  `;
+  toast.querySelector('.app-toast-body').textContent = message;
+
+  const remove = () => {
+    toast.classList.add('is-leaving');
+    toast.addEventListener('animationend', () => toast.remove(), { once: true });
+    setTimeout(() => toast.remove(), 300);
+  };
+
+  toast.querySelector('.app-toast-close').addEventListener('click', remove);
+  stack.appendChild(toast);
+
+  if (duration > 0) {
+    setTimeout(remove, duration);
+  }
+  return toast;
+}
+window.showToast = showToast;
+
+/* ============================================================
+   データテーブル拡張（並び替え・検索・ページネーション）
+   使い方: <table class="table" data-table data-table-page-size="15">
+   個別の列で並び替えを無効にしたい場合は <th data-sort="none"> を指定。
+   ============================================================ */
+function enhanceDataTables() {
+  document.querySelectorAll('table[data-table]').forEach((table) => {
+    try {
+      _enhanceOneTable(table);
+    } catch (err) {
+      console.error('enhanceDataTables failed for table', table, err);
+    }
+  });
+}
+
+function _enhanceOneTable(table) {
+  const tbody = table.tBodies[0];
+  if (!tbody) return;
+  const allRows = Array.from(tbody.rows);
+  if (allRows.length === 0) return;
+
+  const pageSize = parseInt(table.dataset.tablePageSize, 10) || 10;
+  const headerRow = table.tHead ? table.tHead.rows[0] : null;
+  const headers = headerRow ? Array.from(headerRow.cells) : [];
+
+  // ── ツールバー（検索 + 件数） ──
+  const toolbar = document.createElement('div');
+  toolbar.className = 'dt-toolbar';
+  toolbar.innerHTML = `
+    <div class="dt-search-wrap">
+      <i class="bi bi-search"></i>
+      <input type="search" class="dt-search" placeholder="このテーブルを検索…" aria-label="テーブル内検索">
+    </div>
+    <span class="dt-count"></span>
+  `;
+  const wrapper = table.closest('.table-responsive') || table.parentElement;
+  wrapper.parentElement.insertBefore(toolbar, wrapper);
+  const searchInput = toolbar.querySelector('.dt-search');
+  const countLabel = toolbar.querySelector('.dt-count');
+
+  // ── ページネーション ──
+  const pagination = document.createElement('div');
+  pagination.className = 'dt-pagination';
+  pagination.innerHTML = `
+    <span class="dt-pagination-info"></span>
+    <div class="dt-pagination-controls">
+      <button type="button" class="dt-page-btn" data-page-prev aria-label="前のページ"><i class="bi bi-chevron-left"></i></button>
+      <span class="dt-page-indicator"></span>
+      <button type="button" class="dt-page-btn" data-page-next aria-label="次のページ"><i class="bi bi-chevron-right"></i></button>
+    </div>
+  `;
+  wrapper.parentElement.insertBefore(pagination, wrapper.nextSibling);
+  const prevBtn = pagination.querySelector('[data-page-prev]');
+  const nextBtn = pagination.querySelector('[data-page-next]');
+  const pageIndicator = pagination.querySelector('.dt-page-indicator');
+  const pageInfo = pagination.querySelector('.dt-pagination-info');
+
+  let currentPage = 1;
+  let sortKey = -1;
+  let sortDir = 1; // 1 = 昇順, -1 = 降順
+  let filtered = allRows.slice();
+
+  // ── 並び替え可能な列ヘッダー ──
+  headers.forEach((th, idx) => {
+    if (th.dataset.sort === 'none') return;
+    th.setAttribute('data-sortable', '');
+    th.setAttribute('tabindex', '0');
+    th.setAttribute('role', 'button');
+    if (!th.querySelector('.dt-sort-icon')) {
+      const icon = document.createElement('span');
+      icon.className = 'dt-sort-icon';
+      icon.innerHTML = '<i class="bi bi-arrow-down-up"></i>';
+      th.appendChild(icon);
+    }
+    const onSort = () => {
+      if (sortKey === idx) {
+        sortDir *= -1;
+      } else {
+        sortKey = idx;
+        sortDir = 1;
+      }
+      headers.forEach((h) => h.classList.remove('dt-sort-asc', 'dt-sort-desc'));
+      th.classList.add(sortDir === 1 ? 'dt-sort-asc' : 'dt-sort-desc');
+      render();
+    };
+    th.addEventListener('click', onSort);
+    th.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSort(); }
+    });
+  });
+
+  function cellText(row, idx) {
+    const cell = row.cells[idx];
+    return cell ? cell.textContent.trim() : '';
+  }
+
+  function applyFilter() {
+    const q = searchInput.value.trim().toLowerCase();
+    filtered = q
+      ? allRows.filter((row) => row.textContent.toLowerCase().includes(q))
+      : allRows.slice();
+    currentPage = 1;
+  }
+
+  function applySort() {
+    if (sortKey < 0) return;
+    const collator = new Intl.Collator('ja', { numeric: true, sensitivity: 'base' });
+    filtered.sort((a, b) => collator.compare(cellText(a, sortKey), cellText(b, sortKey)) * sortDir);
+  }
+
+  function render() {
+    applySort();
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    currentPage = Math.min(currentPage, totalPages);
+    const start = (currentPage - 1) * pageSize;
+    const pageRows = filtered.slice(start, start + pageSize);
+
+    allRows.forEach((row) => { row.classList.add('dt-row-hidden'); if (row.parentElement !== tbody) tbody.appendChild(row); });
+    pageRows.forEach((row) => {
+      row.classList.remove('dt-row-hidden');
+      tbody.appendChild(row);
+    });
+
+    tbody.querySelectorAll('.dt-empty-row').forEach((r) => r.remove());
+    if (filtered.length === 0) {
+      const emptyRow = document.createElement('tr');
+      emptyRow.className = 'dt-empty-row';
+      const td = document.createElement('td');
+      td.colSpan = headers.length || 1;
+      td.textContent = '一致する行がありません。';
+      emptyRow.appendChild(td);
+      tbody.appendChild(emptyRow);
+    }
+
+    countLabel.textContent = searchInput.value.trim()
+      ? `${filtered.length} / ${allRows.length} 件`
+      : `${allRows.length} 件`;
+
+    pageInfo.textContent = filtered.length
+      ? `${start + 1}–${Math.min(start + pageSize, filtered.length)} / ${filtered.length} 件`
+      : '0 件';
+    pageIndicator.textContent = `${currentPage} / ${totalPages}`;
+    prevBtn.disabled = currentPage <= 1;
+    nextBtn.disabled = currentPage >= totalPages;
+    pagination.hidden = filtered.length <= pageSize && allRows.length <= pageSize;
+  }
+
+  searchInput.addEventListener('input', () => { applyFilter(); render(); });
+  prevBtn.addEventListener('click', () => { currentPage -= 1; render(); });
+  nextBtn.addEventListener('click', () => { currentPage += 1; render(); });
+
+  render();
+}

@@ -495,6 +495,25 @@ async function loadPurityOptions() {
   fillMetalSelector();
 }
 
+// APIの `detail` はサーバーの実装次第で「文字列」または「バリデーションエラーのオブジェクト配列」
+// (FastAPI/Pydanticが自動生成する形式) のどちらかになり得る。無条件に String() 化すると
+// 配列の場合に "[object Object]" のような表示になってしまうため、形に応じて安全に取り出す。
+function extractErrorMessage(detail) {
+  if (!detail) return "";
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const first = detail[0];
+    if (first && typeof first === "object" && typeof first.msg === "string") {
+      return first.msg;
+    }
+    return "";
+  }
+  if (typeof detail === "object" && typeof detail.msg === "string") {
+    return detail.msg;
+  }
+  return "";
+}
+
 async function calculatePurityPrice() {
   const metal = document.getElementById("calcMetal").value;
   const grams = Number(document.getElementById("calcGrams").value);
@@ -512,9 +531,7 @@ async function calculatePurityPrice() {
     let message = "純度計算に失敗しました。";
     try {
       const errorPayload = await response.json();
-      if (errorPayload.detail) {
-        message = String(errorPayload.detail);
-      }
+      message = extractErrorMessage(errorPayload.detail) || message;
     } catch (_) {}
     throw new Error(message);
   }

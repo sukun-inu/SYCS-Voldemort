@@ -37,6 +37,13 @@ from services.settings_store import (
 
 logger = logging.getLogger(__name__)
 
+if "localhost" in DJAUDIO_BASE_URL or "127.0.0.1" in DJAUDIO_BASE_URL:
+    logger.warning(
+        "[DJAudio] DJAUDIO_BASE_URL=%s (デフォルト値。本番では DJAUDIO_BASE_URL 環境変数を設定してください。"
+        "未設定のままだと配信リンクがサーバー外から開けません)",
+        DJAUDIO_BASE_URL,
+    )
+
 URL_PATTERN = re.compile(r"https?://[^\s]+")
 
 _dl_semaphore: asyncio.Semaphore | None = None

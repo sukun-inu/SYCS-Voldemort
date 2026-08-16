@@ -1,4 +1,4 @@
-from typing import Callable, List, Optional
+from typing import Callable, List
 
 import discord
 from discord import app_commands
@@ -25,14 +25,75 @@ async def _update_entity_list(
     update_fn: Callable,
     action_text: str,
     count_label: str,
+    *,
+    edit: bool = False,
 ) -> None:
     ids = [e.id for e in entities]
     updated = update_fn(interaction.guild.id, ids)
     mentions = ", ".join(e.mention for e in entities)
-    await interaction.response.send_message(
-        f"{action_text}: {mentions}\n（{count_label}: {len(updated)}）",
-        ephemeral=True,
-    )
+    content = f"{action_text}: {mentions}\n（{count_label}: {len(updated)}）"
+    if edit:
+        await interaction.response.edit_message(content=content, view=None)
+    else:
+        await interaction.response.send_message(content, ephemeral=True)
+
+
+class _EntityPickerView(discord.ui.View):
+    """UserSelect/RoleSelectで複数選択させてから確定するビュー。
+
+    Discordのスラッシュコマンドは可変長引数（member1, member2, ...のような固定枠なしで
+    好きな人数を選ぶ）を取れないため、コマンド実行後にこのビューを表示して選ばせる。
+    """
+
+    def __init__(
+        self,
+        author_id: int,
+        select_item: discord.ui.Select,
+        update_fn: Callable,
+        action_text: str,
+        count_label: str,
+    ):
+        super().__init__(timeout=120)
+        self.author_id = author_id
+        self.update_fn = update_fn
+        self.action_text = action_text
+        self.count_label = count_label
+        self.picked: list = []
+
+        self.select_item = select_item
+        self.select_item.callback = self._on_select
+        self.add_item(self.select_item)
+
+        self.confirm_button = discord.ui.Button(
+            label="確定", style=discord.ButtonStyle.primary, disabled=True
+        )
+        self.confirm_button.callback = self._on_confirm
+        self.add_item(self.confirm_button)
+
+    async def _check_author(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message("貴様にその操作の権限はない。", ephemeral=True)
+            return False
+        return True
+
+    async def _on_select(self, interaction: discord.Interaction) -> None:
+        if not await self._check_author(interaction):
+            return
+        self.picked = list(self.select_item.values)
+        self.confirm_button.disabled = not self.picked
+        self.confirm_button.label = f"確定（{len(self.picked)}件）" if self.picked else "確定"
+        await interaction.response.edit_message(view=self)
+
+    async def _on_confirm(self, interaction: discord.Interaction) -> None:
+        if not await self._check_author(interaction):
+            return
+        if not self.picked:
+            await interaction.response.send_message("何も選ばれておらぬ。", ephemeral=True)
+            return
+        await _update_entity_list(
+            interaction, self.picked, self.update_fn, self.action_text, self.count_label, edit=True
+        )
+        self.stop()
 
 
 def register_logging_commands(bot: Bot) -> None:
@@ -51,7 +112,13 @@ def register_logging_commands(bot: Bot) -> None:
         )
 
     @bot.tree.command(name="log_level_set", description="【管理者】ログレベルを設定します")
-    @app_commands.describe(level="NONE / ERROR / INFO / DEBUG のいずれか")
+    @app_commands.describe(level="記録するログの詳細さ")
+    @app_commands.choices(level=[
+        app_commands.Choice(name="NONE（ログを記録しない）", value="NONE"),
+        app_commands.Choice(name="ERROR（エラーのみ）", value="ERROR"),
+        app_commands.Choice(name="INFO（通常運用向け・推奨）", value="INFO"),
+        app_commands.Choice(name="DEBUG（詳細・調査向け）", value="DEBUG"),
+    ])
     async def set_log_level_cmd(interaction: discord.Interaction, level: str):
         if not await _ensure_admin_in_guild(interaction):
             return
@@ -93,49 +160,33 @@ def register_logging_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
-    @bot.tree.command(name="trusted_member_add", description="【管理者】信頼済みユーザーを追加します")
-    @app_commands.describe(
-        member1="信頼済みに追加するメンバー1",
-        member2="信頼済みに追加するメンバー2 (任意)",
-        member3="信頼済みに追加するメンバー3 (任意)",
-        member4="信頼済みに追加するメンバー4 (任意)",
-        member5="信頼済みに追加するメンバー5 (任意)",
-    )
-    async def add_trusted_members_cmd(
-        interaction: discord.Interaction,
-        member1: discord.Member,
-        member2: Optional[discord.Member] = None,
-        member3: Optional[discord.Member] = None,
-        member4: Optional[discord.Member] = None,
-        member5: Optional[discord.Member] = None,
-    ):
+    @bot.tree.command(name="trusted_member_add", description="【管理者】信頼済みユーザーを追加します（複数選択可）")
+    async def add_trusted_members_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
+        select = discord.ui.UserSelect(
+            placeholder="追加するユーザーを選択（複数選択可・最大25人）", min_values=1, max_values=25
+        )
+        view = _EntityPickerView(
+            interaction.user.id, select, add_trusted_users, "余の信頼を与えた", "信頼済みユーザー数"
+        )
+        await interaction.response.send_message(
+            "信頼済みに追加するユーザーを選んでから「確定」を押すがよい。", view=view, ephemeral=True
+        )
 
-        members = [m for m in [member1, member2, member3, member4, member5] if m is not None]
-        await _update_entity_list(interaction, members, add_trusted_users, "余の信頼を与えた", "信頼済みユーザー数")
-
-    @bot.tree.command(name="trusted_member_remove", description="【管理者】信頼済みユーザーを削除します")
-    @app_commands.describe(
-        member1="削除するメンバー1",
-        member2="削除するメンバー2 (任意)",
-        member3="削除するメンバー3 (任意)",
-        member4="削除するメンバー4 (任意)",
-        member5="削除するメンバー5 (任意)",
-    )
-    async def remove_trusted_members_cmd(
-        interaction: discord.Interaction,
-        member1: discord.Member,
-        member2: Optional[discord.Member] = None,
-        member3: Optional[discord.Member] = None,
-        member4: Optional[discord.Member] = None,
-        member5: Optional[discord.Member] = None,
-    ):
+    @bot.tree.command(name="trusted_member_remove", description="【管理者】信頼済みユーザーを削除します（複数選択可）")
+    async def remove_trusted_members_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
-
-        members = [m for m in [member1, member2, member3, member4, member5] if m is not None]
-        await _update_entity_list(interaction, members, remove_trusted_users, "余の信頼を取り消した", "信頼済みユーザー数")
+        select = discord.ui.UserSelect(
+            placeholder="削除するユーザーを選択（複数選択可・最大25人）", min_values=1, max_values=25
+        )
+        view = _EntityPickerView(
+            interaction.user.id, select, remove_trusted_users, "余の信頼を取り消した", "信頼済みユーザー数"
+        )
+        await interaction.response.send_message(
+            "信頼済みから削除するユーザーを選んでから「確定」を押すがよい。", view=view, ephemeral=True
+        )
 
     @bot.tree.command(name="trusted_member_list", description="【管理者】信頼済みユーザー一覧を表示します")
     async def list_trusted_members_cmd(interaction: discord.Interaction):
@@ -157,41 +208,33 @@ def register_logging_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
-    @bot.tree.command(name="bypass_role_add", description="【管理者】バイパスロールを追加します")
-    @app_commands.describe(
-        role1="追加するロール1",
-        role2="追加するロール2 (任意)",
-        role3="追加するロール3 (任意)",
-    )
-    async def add_bypass_roles_cmd(
-        interaction: discord.Interaction,
-        role1: discord.Role,
-        role2: Optional[discord.Role] = None,
-        role3: Optional[discord.Role] = None,
-    ):
+    @bot.tree.command(name="bypass_role_add", description="【管理者】バイパスロールを追加します（複数選択可）")
+    async def add_bypass_roles_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
+        select = discord.ui.RoleSelect(
+            placeholder="追加するロールを選択（複数選択可・最大25個）", min_values=1, max_values=25
+        )
+        view = _EntityPickerView(
+            interaction.user.id, select, add_bypass_roles, "バイパスロールに加えた", "バイパスロール数"
+        )
+        await interaction.response.send_message(
+            "バイパスロールに追加するロールを選んでから「確定」を押すがよい。", view=view, ephemeral=True
+        )
 
-        roles = [r for r in [role1, role2, role3] if r is not None]
-        await _update_entity_list(interaction, roles, add_bypass_roles, "バイパスロールに加えた", "バイパスロール数")
-
-    @bot.tree.command(name="bypass_role_remove", description="【管理者】バイパスロールを削除します")
-    @app_commands.describe(
-        role1="削除するロール1",
-        role2="削除するロール2 (任意)",
-        role3="削除するロール3 (任意)",
-    )
-    async def remove_bypass_roles_cmd(
-        interaction: discord.Interaction,
-        role1: discord.Role,
-        role2: Optional[discord.Role] = None,
-        role3: Optional[discord.Role] = None,
-    ):
+    @bot.tree.command(name="bypass_role_remove", description="【管理者】バイパスロールを削除します（複数選択可）")
+    async def remove_bypass_roles_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
-
-        roles = [r for r in [role1, role2, role3] if r is not None]
-        await _update_entity_list(interaction, roles, remove_bypass_roles, "バイパスロールから除いた", "バイパスロール数")
+        select = discord.ui.RoleSelect(
+            placeholder="削除するロールを選択（複数選択可・最大25個）", min_values=1, max_values=25
+        )
+        view = _EntityPickerView(
+            interaction.user.id, select, remove_bypass_roles, "バイパスロールから除いた", "バイパスロール数"
+        )
+        await interaction.response.send_message(
+            "バイパスロールから削除するロールを選んでから「確定」を押すがよい。", view=view, ephemeral=True
+        )
 
     @bot.tree.command(name="bypass_role_list", description="【管理者】バイパスロール一覧を表示します")
     async def list_bypass_roles_cmd(interaction: discord.Interaction):

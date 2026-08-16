@@ -42,7 +42,7 @@ from services.settings_store import (
     set_welcome_message,
     update_news_feed,
 )
-from webapp_admin.auth import get_guild_channels, get_guild_roles
+from webapp_admin.auth import get_discord_users, get_guild_channels, get_guild_roles
 from webapp_admin.security import (
     check_csrf,
     check_guild,
@@ -422,10 +422,23 @@ async def security_settings(request: Request, _=Depends(check_guild), _csrf=Depe
         return RedirectResponse("/admin/settings/security", status_code=303)
 
     role_map = {str(r["id"]): r["name"] for r in roles}
+    trusted_ids = get_trusted_user_ids(gid)
+    discord_users = await get_discord_users([int(uid) for uid in trusted_ids])
+    user_map = {
+        str(uid): {
+            "name": info.get("global_name") or info.get("username") or f"ID: {uid}",
+            "avatar_url": (
+                f"https://cdn.discordapp.com/avatars/{uid}/{info['avatar']}.webp?size=64"
+                if info and info.get("avatar") else None
+            ),
+        }
+        for uid, info in discord_users.items()
+    }
     return render(
         request, "settings/security.html",
         roles=roles,
-        trusted_ids=get_trusted_user_ids(gid),
+        trusted_ids=trusted_ids,
         bypass_ids=get_bypass_role_ids(gid),
         role_map=role_map,
+        user_map=user_map,
     )

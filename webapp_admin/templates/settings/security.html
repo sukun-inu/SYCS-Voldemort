@@ -31,8 +31,17 @@
       {% if trusted_ids %}
       <div class="object-list">
         {% for uid in trusted_ids %}
+        {% set u = user_map.get(uid|string) %}
         <div class="object-row">
-          <span class="object-name font-monospace small"><i class="bi bi-person me-2"></i>{{ uid }}</span>
+          <span class="object-name">
+            {% if u and u.avatar_url %}
+            <img src="{{ u.avatar_url }}" width="20" height="20" class="rounded-circle me-2" alt="">
+            {% else %}
+            <i class="bi bi-person me-2"></i>
+            {% endif %}
+            {{ u.name if u else "不明なユーザー" }}
+            <span class="text-muted small font-monospace ms-1">ID: {{ uid }}</span>
+          </span>
           <form method="post" class="confirm-form" data-msg="このユーザーを信頼済みから削除しますか？">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="action" value="remove_trusted">

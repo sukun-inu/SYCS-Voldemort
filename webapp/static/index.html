@@ -149,7 +149,7 @@
           <label for="calcMetal">金属</label>
           <select id="calcMetal"></select>
           <label for="calcGrams">グラム</label>
-          <input id="calcGrams" type="number" min="0.1" step="0.1" value="1" />
+          <input id="calcGrams" type="number" min="0.1" max="100000" step="0.1" value="1" />
           <button id="calcButton" type="button" class="button-secondary">計算</button>
         </div>
         <p id="calcMeta" class="meta">読み込み中...</p>
@@ -258,6 +258,6 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js" defer></script>
-  <script src="static/app.js?v=20260310-19" defer></script>
+  <script src="static/app.js?v=20260310-20" defer></script>
 </body>
 </html>
