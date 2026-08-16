@@ -12,7 +12,7 @@ from starlette.responses import RedirectResponse
 
 from config import DJAUDIO_CACHE_DIR, DISCORD_BOT_TOKEN
 from webapp_admin.extensions import limiter
-from webapp_admin.security import _NeedsLogin, check_csrf, sanitize
+from webapp_admin.security import _NeedsLogin, check_csrf, is_dev_user, sanitize
 from webapp_admin.templating import flash, render
 
 _DEV_USER_ID = os.getenv("DEV_USER_ID")
@@ -51,7 +51,7 @@ def _check_dev(request: Request) -> dict:
     user = request.session.get("user")
     if not user:
         raise _NeedsLogin()
-    if str(user.get("id", "")) != _DEV_USER_ID:
+    if not is_dev_user(request):
         raise HTTPException(status_code=403, detail="開発者専用ページです。")
     return user
 

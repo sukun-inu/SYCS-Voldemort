@@ -1,3 +1,4 @@
+import os
 import secrets
 
 from fastapi import HTTPException, Request
@@ -23,6 +24,20 @@ async def check_guild(request: Request) -> None:
         raise _NeedsLogin()
     if "guild_id" not in request.session:
         raise _NeedsGuild()
+
+
+def is_dev_user(request: Request) -> bool:
+    """ログイン中のユーザーが DEV_USER_ID と一致する「開発者」かどうか。
+
+    開発者パネル (dev_views._check_dev) 本体の認可判定と、
+    デスクトップUI（スタートメニューへの表示・直接URLアクセス時のリダイレクト可否）
+    の両方から参照する単一の情報源。DEV_USER_ID 未設定時は常に False。
+    """
+    dev_user_id = os.environ.get("DEV_USER_ID", "").strip()
+    if not dev_user_id:
+        return False
+    user = request.session.get("user") or {}
+    return str(user.get("id", "")) == dev_user_id
 
 
 async def check_csrf(request: Request) -> None:

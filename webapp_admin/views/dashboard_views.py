@@ -1,5 +1,4 @@
 import json
-import os
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -24,7 +23,7 @@ from services.settings_store import (
 from services.user_state_service import get_user_state_detail, list_recent_user_states
 from webapp_admin.auth import get_guild_channels
 from webapp_admin.metrics import collect_host_metrics, list_incidents
-from webapp_admin.security import check_csrf, check_guild, check_login
+from webapp_admin.security import check_csrf, check_guild, check_login, is_dev_user
 from webapp_admin.templating import flash, render
 
 router = APIRouter()
@@ -197,8 +196,7 @@ async def overview(request: Request, _=Depends(check_guild)):
     channels = await get_guild_channels(gid)
     ch_map = {str(c["id"]): c["name"] for c in channels}
 
-    dev_user_id = os.getenv("DEV_USER_ID", "").strip()
-    is_dev = bool(dev_user_id) and str(request.session.get("user", {}).get("id", "")) == dev_user_id
+    is_dev = is_dev_user(request)
 
     badge_by_app_id = {
         "news-feeds": stats["news_feed_count"] or None,

@@ -21,6 +21,7 @@ from starlette.responses import RedirectResponse
 
 from webapp_admin.apps_registry import APP_PATH_TO_ID
 from webapp_admin.extensions import limiter
+from webapp_admin.security import is_dev_user
 from webapp_admin.metrics import (
     record_error_response,
     record_exception,
@@ -262,7 +263,11 @@ def create_app() -> FastAPI:
             app_id = APP_PATH_TO_ID.get(request.url.path)
             sec_fetch_dest = request.headers.get("sec-fetch-dest", "").lower()
             if app_id and sec_fetch_dest and sec_fetch_dest != "iframe":
-                return RedirectResponse(f"/admin/overview?open={app_id}", status_code=303)
+                # 開発者パネルは通常のログイン/ギルド選択より厳しい認可（DEV_USER_ID一致）が
+                # 追加でかかっている。権限が無いユーザーをここで一律デスクトップへ流してしまうと、
+                # 本来返るべき403/404が握りつぶされてしまうため、その場合だけ素通しする。
+                if app_id != "dev" or is_dev_user(request):
+                    return RedirectResponse(f"/admin/overview?open={app_id}", status_code=303)
         return await call_next(request)
 
     @app.middleware("http")
