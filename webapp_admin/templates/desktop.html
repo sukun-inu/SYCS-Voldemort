@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>SYCS Voldemort — {{ session.guild_name }}</title>
+  <link rel="icon" type="image/png"  href="{{ admin_asset_url('favicon.png') }}">
+  <link rel="icon" type="image/webp" href="{{ admin_asset_url('admin-icon.webp') }}">
+  <link rel="apple-touch-icon"       href="{{ admin_asset_url('favicon.png') }}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="{{ admin_asset_url('admin.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('desktop.css') }}">
+</head>
+<body class="desktop-body">
+
+{# ── アプリ定義（サイドバーだった項目をタイル化。バッジは stats から） ── #}
+{% set app_groups = [
+  {
+    "label": "概要",
+    "apps": [
+      {"id": "user-state", "title": "ユーザー状態監査", "icon": "bi-person-lines-fill", "url": url_for('dashboard.user_state_dashboard')},
+    ]
+  },
+  {
+    "label": "基本設定",
+    "apps": [
+      {"id": "logging", "title": "ログ設定", "icon": "bi-journal-text", "url": url_for('settings.logging_settings')},
+      {"id": "welcome", "title": "ウェルカム/グッバイ", "icon": "bi-person-plus-fill", "url": url_for('settings.welcome_settings')},
+      {"id": "vc-notify", "title": "VC 通知", "icon": "bi-mic-fill", "url": url_for('settings.vc_notify')},
+    ]
+  },
+  {
+    "label": "自動通知",
+    "apps": [
+      {"id": "earthquake", "title": "地震アラート", "icon": "bi-exclamation-triangle-fill", "url": url_for('settings.earthquake')},
+      {"id": "news-feeds", "title": "ニュースフィード", "icon": "bi-newspaper", "url": url_for('settings.news_feeds'), "badge": stats.news_feed_count},
+    ]
+  },
+  {
+    "label": "チャンネル機能",
+    "apps": [
+      {"id": "sticky", "title": "スティッキー", "icon": "bi-pin-angle-fill", "url": url_for('settings.sticky'), "badge": stats.sticky_count},
+      {"id": "reaction-roles", "title": "リアクションロール", "icon": "bi-emoji-smile-fill", "url": url_for('settings.reaction_roles'), "badge": stats.rr_count},
+    ]
+  },
+  {
+    "label": "メディア",
+    "apps": [
+      {"id": "djaudio", "title": "DJAudio-DL", "icon": "bi-music-note-beamed", "url": url_for('djaudio.djaudio_settings')},
+      {"id": "tts", "title": "TTS 読み上げ", "icon": "bi-soundwave", "url": url_for('tts.tts_settings')},
+    ]
+  },
+  {
+    "label": "セキュリティ",
+    "apps": [
+      {"id": "security", "title": "セキュリティ設定", "icon": "bi-shield-fill-check", "url": url_for('settings.security_settings'), "badge": (stats.trusted_count + stats.bypass_count) or none},
+    ]
+  },
+] %}
+{% if is_dev %}
+{% set _ = app_groups.append({
+  "label": "開発者",
+  "apps": [
+    {"id": "dev", "title": "開発者パネル", "icon": "bi-bug-fill", "url": url_for('dev.index')},
+  ]
+}) %}
+{% endif %}
+
+<div class="desktop" id="desktop">
+  <div class="desktop-widgets">
+    <section class="section-card desktop-widget" data-metrics-url="{{ url_for('dashboard.system_metrics') }}">
+      <div class="section-card-header">
+        <div>
+          <h2 class="section-card-title"><i class="bi bi-activity"></i>ホストメトリクス</h2>
+          <p class="section-card-subtitle">CPU・メモリ・TPS・SLA目安</p>
+        </div>
+        <span class="badge-soft accent" data-metrics-updated>読み込み中</span>
+      </div>
+      <div class="host-metrics-grid">
+        {% set health_cards = [
+          ("cpu", "CPU", "bi-cpu", "accent"),
+          ("memory", "Memory", "bi-memory", "success"),
+          ("tps", "TPS", "bi-speedometer2", "info"),
+          ("sla", "SLA", "bi-shield-check", "warning"),
+        ] %}
+        {% for key, label, icon, tone in health_cards %}
+        <article class="health-card" data-metric-card="{{ key }}">
+          <div class="health-card-top">
+            <div class="metric-icon {{ tone if tone != 'accent' else '' }}">
+              <i class="bi {{ icon }}"></i>
+            </div>
+            <div>
+              <h3 class="health-card-title">{{ label }}</h3>
+              <p class="health-card-detail" data-metric-detail>取得中</p>
+            </div>
+          </div>
+          <div class="ring-chart tone-{{ tone }}" data-ring>
+            <span data-metric-display>--%</span>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="section-card desktop-widget" data-incidents-url="{{ url_for('dashboard.monitor_incidents') }}">
+      <div class="section-card-header">
+        <div>
+          <h2 class="section-card-title"><i class="bi bi-clock-history"></i>監視履歴</h2>
+          <p class="section-card-subtitle">ダウンタイム・5xx・未処理例外・リソース異常</p>
+        </div>
+        <span class="badge-soft accent" data-incidents-count>読み込み中</span>
+      </div>
+      <div class="incident-list" data-incident-list>
+        <div class="empty-state">
+          <div>
+            <i class="bi bi-hourglass-split"></i>
+            <p class="mb-0">履歴を読み込んでいます。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="desktop-hint">
+      <i class="bi bi-info-circle"></i>
+      左下の <strong>スタート</strong> からアプリを開いてください。ウィンドウはドラッグで移動、右下の隅でリサイズできます。
+    </div>
+  </div>
+
+  <div class="window-layer" id="windowLayer"></div>
+</div>
+
+{# ── スタートメニュー ── #}
+<div class="start-menu" id="startMenu" hidden>
+  <div class="start-menu-search-wrap">
+    <i class="bi bi-search"></i>
+    <input type="search" id="startMenuSearch" class="start-menu-search" placeholder="アプリを検索…" autocomplete="off">
+  </div>
+  <div class="start-menu-grid" id="startMenuGrid">
+    {% for group in app_groups %}
+    <div class="start-menu-group">
+      <p class="start-menu-group-label">{{ group.label }}</p>
+      <div class="start-menu-tiles">
+        {% for app in group.apps %}
+        <button type="button" class="app-tile"
+                data-app-id="{{ app.id }}"
+                data-app-title="{{ app.title }}"
+                data-app-icon="{{ app.icon }}"
+                data-app-url="{{ app.url }}">
+          <span class="app-tile-icon">
+            <i class="bi {{ app.icon }}"></i>
+            {% if app.badge %}<span class="app-tile-badge">{{ app.badge }}</span>{% endif %}
+          </span>
+          <span class="app-tile-label">{{ app.title }}</span>
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+<div class="start-menu-backdrop" id="startMenuBackdrop" hidden></div>
+
+{# ── タスクバー ── #}
+<footer class="taskbar">
+  <button type="button" class="taskbar-start" id="startButton" aria-label="スタートメニュー" aria-haspopup="true" aria-expanded="false">
+    <img src="{{ admin_asset_url('admin-icon.webp') }}" width="20" height="20" alt="">
+    <span>スタート</span>
+  </button>
+
+  <div class="taskbar-apps" id="taskbarApps" role="tablist" aria-label="開いているウィンドウ"></div>
+
+  <div class="taskbar-tray">
+    <a class="taskbar-tray-btn" href="{{ url_for('dashboard.guild_select') }}" title="サーバーを切り替え: {{ session.guild_name }}">
+      {% if session.guild_icon %}
+      <img src="https://cdn.discordapp.com/icons/{{ session.guild_id }}/{{ session.guild_icon }}.webp?size=64" width="20" height="20" alt="">
+      {% else %}
+      <span class="taskbar-tray-fallback">{{ session.guild_name[0] if session.guild_name else "S" }}</span>
+      {% endif %}
+      <span class="taskbar-tray-label">{{ session.guild_name }}</span>
+    </a>
+
+    <button type="button" class="taskbar-tray-btn taskbar-notify" id="notifyButton" title="監視履歴">
+      <i class="bi bi-bell"></i>
+      <span class="taskbar-badge" id="notifyBadge" hidden>0</span>
+    </button>
+
+    <div class="dropdown">
+      <button class="taskbar-tray-btn" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="ユーザーメニュー">
+        {% if session.user.avatar %}
+        <img src="https://cdn.discordapp.com/avatars/{{ session.user.id }}/{{ session.user.avatar }}.webp?size=64" width="20" height="20" alt="">
+        {% else %}
+        <span class="taskbar-tray-fallback">{{ (session.user.global_name or session.user.username or "U")[0] }}</span>
+        {% endif %}
+      </button>
+      <div class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+        <h6 class="dropdown-header">{{ session.user.global_name or session.user.username }}</h6>
+        <a class="dropdown-item" href="{{ url_for('guide') }}"><i class="bi bi-book me-2"></i>使い方ガイド</a>
+        <a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="bi bi-box-arrow-right me-2"></i>ログアウト</a>
+      </div>
+    </div>
+
+    <span class="taskbar-clock" id="taskbarClock">--:--</span>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ admin_asset_url('admin.js') }}"></script>
+<script src="{{ admin_asset_url('desktop.js') }}"></script>
+</body>
+</html>

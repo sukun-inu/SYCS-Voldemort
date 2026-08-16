@@ -14,7 +14,8 @@
   <link rel="stylesheet" href="{{ admin_asset_url('admin.css') }}">
   {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body{% if is_embedded %} class="is-embedded"{% endif %}>
+{% if not is_embedded %}
 <header class="topbar">
   <div class="topbar-inner">
     <div class="topbar-leading">
@@ -68,9 +69,10 @@
     </div>
   </div>
 </header>
+{% endif %}
 
-<div class="app-shell {% if not session.guild_id %}app-shell-plain{% endif %}">
-  {% if session.guild_id %}
+<div class="app-shell {% if not session.guild_id or is_embedded %}app-shell-plain{% endif %}{% if is_embedded %} app-shell-embedded{% endif %}">
+  {% if session.guild_id and not is_embedded %}
   <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
   <aside id="sidebar" class="sidebar" aria-label="管理メニュー">
     <div class="sidebar-context">

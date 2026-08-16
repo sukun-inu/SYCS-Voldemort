@@ -375,6 +375,18 @@ code {
   margin-right: auto;
 }
 
+/* デスクトップUIのウィンドウ(<iframe>)内に埋め込まれている場合: トップバー/サイドバー無し、余白最小化 */
+body.is-embedded { background: var(--canvas); }
+.app-shell.app-shell-embedded {
+  padding-top: 0;
+  min-height: 100vh;
+}
+.app-shell.app-shell-embedded .main-content {
+  margin-left: 0;
+  max-width: 100%;
+  padding: 16px;
+}
+
 /* ==========================================================================
    Sidebar — GitHubの設定ナビ準拠。選択状態は「色」ではなく
    「淡いグレー背景+太字」で示す。

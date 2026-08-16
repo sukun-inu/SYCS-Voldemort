@@ -103,6 +103,11 @@ def flash(request: Request, message: str, category: str = "info") -> None:
 def render(request: Request, template_name: str, status_code: int = 200, **ctx):
     messages = request.session.pop("_flashes", [])
     csrf_token = _get_csrf_token(request)
+    # デスクトップUIのウィンドウ（<iframe>）内で読み込まれているかをFetch Metadataヘッダで判定する。
+    # クエリパラメータ方式だとPOST後のリダイレクトで簡単に失われるが、
+    # Sec-Fetch-Dest はそのiframeナビゲーションが続く限りリダイレクト後も維持されるため頑丈。
+    is_embedded = request.headers.get("sec-fetch-dest", "").lower() == "iframe"
+    ctx.setdefault("is_embedded", is_embedded)
     ctx.update({
         "request": request,
         "session": request.session,

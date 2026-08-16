@@ -283,18 +283,21 @@ def create_app() -> FastAPI:
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
+        # デスクトップUIは設定ページを同一オリジンの<iframe>としてウィンドウ表示するため、
+        # 完全拒否(DENY)ではなく同一オリジンのみ許可(SAMEORIGIN)にする。
+        # 第三者サイトによるクリックジャッキング対策としての効果は維持される。
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         if secure:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; "
-            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "img-src 'self' https://cdn.discordapp.com data:; "
-            "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; "
-            "connect-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com "
-            "https://fonts.gstatic.com https://static.cloudflareinsights.com"
+            "font-src 'self' https://cdn.jsdelivr.net; "
+            "connect-src 'self' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; "
+            "frame-ancestors 'self'"
         )
         return response
 

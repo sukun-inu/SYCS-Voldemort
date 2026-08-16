@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -194,7 +195,11 @@ async def overview(request: Request, _=Depends(check_guild)):
     }
     channels = await get_guild_channels(gid)
     ch_map = {str(c["id"]): c["name"] for c in channels}
-    return render(request, "dashboard.html", stats=stats, ch_map=ch_map)
+
+    dev_user_id = os.getenv("DEV_USER_ID", "").strip()
+    is_dev = bool(dev_user_id) and str(request.session.get("user", {}).get("id", "")) == dev_user_id
+
+    return render(request, "desktop.html", stats=stats, ch_map=ch_map, is_dev=is_dev)
 
 
 @router.get("/users/state")
