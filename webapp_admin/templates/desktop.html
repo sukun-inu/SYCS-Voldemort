@@ -16,58 +16,9 @@
 </head>
 <body class="desktop-body">
 
-{# ── アプリ定義（サイドバーだった項目をタイル化。バッジは stats から） ── #}
-{% set app_groups = [
-  {
-    "label": "概要",
-    "apps": [
-      {"id": "user-state", "title": "ユーザー状態監査", "icon": "bi-person-lines-fill", "url": url_for('dashboard.user_state_dashboard')},
-    ]
-  },
-  {
-    "label": "基本設定",
-    "apps": [
-      {"id": "logging", "title": "ログ設定", "icon": "bi-journal-text", "url": url_for('settings.logging_settings')},
-      {"id": "welcome", "title": "ウェルカム/グッバイ", "icon": "bi-person-plus-fill", "url": url_for('settings.welcome_settings')},
-      {"id": "vc-notify", "title": "VC 通知", "icon": "bi-mic-fill", "url": url_for('settings.vc_notify')},
-    ]
-  },
-  {
-    "label": "自動通知",
-    "apps": [
-      {"id": "earthquake", "title": "地震アラート", "icon": "bi-exclamation-triangle-fill", "url": url_for('settings.earthquake')},
-      {"id": "news-feeds", "title": "ニュースフィード", "icon": "bi-newspaper", "url": url_for('settings.news_feeds'), "badge": stats.news_feed_count},
-    ]
-  },
-  {
-    "label": "チャンネル機能",
-    "apps": [
-      {"id": "sticky", "title": "スティッキー", "icon": "bi-pin-angle-fill", "url": url_for('settings.sticky'), "badge": stats.sticky_count},
-      {"id": "reaction-roles", "title": "リアクションロール", "icon": "bi-emoji-smile-fill", "url": url_for('settings.reaction_roles'), "badge": stats.rr_count},
-    ]
-  },
-  {
-    "label": "メディア",
-    "apps": [
-      {"id": "djaudio", "title": "DJAudio-DL", "icon": "bi-music-note-beamed", "url": url_for('djaudio.djaudio_settings')},
-      {"id": "tts", "title": "TTS 読み上げ", "icon": "bi-soundwave", "url": url_for('tts.tts_settings')},
-    ]
-  },
-  {
-    "label": "セキュリティ",
-    "apps": [
-      {"id": "security", "title": "セキュリティ設定", "icon": "bi-shield-fill-check", "url": url_for('settings.security_settings'), "badge": (stats.trusted_count + stats.bypass_count) or none},
-    ]
-  },
-] %}
-{% if is_dev %}
-{% set _ = app_groups.append({
-  "label": "開発者",
-  "apps": [
-    {"id": "dev", "title": "開発者パネル", "icon": "bi-bug-fill", "url": url_for('dev.index')},
-  ]
-}) %}
-{% endif %}
+{# app_groups はビュー（dashboard_views.overview）が apps_registry.APP_REGISTRY から組み立てて渡す。
+   タスクバー/スタートメニューのタイルと、直接URLアクセス時のリダイレクト先の対応表が
+   ズレないよう、Python側の単一の情報源を使う。 #}
 
 <div class="desktop" id="desktop">
   <div class="desktop-widgets">

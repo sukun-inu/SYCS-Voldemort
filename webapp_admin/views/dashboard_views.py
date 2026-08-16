@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from starlette.responses import JSONResponse, RedirectResponse
 
 from config import JST as _JST
+from webapp_admin.apps_registry import APP_REGISTRY
 from services.logging_service import get_log_settings
 from services.settings_store import (
     get_bypass_role_ids,
@@ -199,7 +200,30 @@ async def overview(request: Request, _=Depends(check_guild)):
     dev_user_id = os.getenv("DEV_USER_ID", "").strip()
     is_dev = bool(dev_user_id) and str(request.session.get("user", {}).get("id", "")) == dev_user_id
 
-    return render(request, "desktop.html", stats=stats, ch_map=ch_map, is_dev=is_dev)
+    badge_by_app_id = {
+        "news-feeds": stats["news_feed_count"] or None,
+        "sticky": stats["sticky_count"] or None,
+        "reaction-roles": stats["rr_count"] or None,
+        "security": (stats["trusted_count"] + stats["bypass_count"]) or None,
+    }
+    groups: dict[str, list[dict]] = {}
+    group_order: list[str] = []
+    for app in APP_REGISTRY:
+        if app.id == "dev" and not is_dev:
+            continue
+        if app.group not in groups:
+            groups[app.group] = []
+            group_order.append(app.group)
+        groups[app.group].append({
+            "id": app.id,
+            "title": app.title,
+            "icon": app.icon,
+            "url": app.path,
+            "badge": badge_by_app_id.get(app.id),
+        })
+    app_groups = [{"label": label, "apps": groups[label]} for label in group_order]
+
+    return render(request, "desktop.html", stats=stats, ch_map=ch_map, is_dev=is_dev, app_groups=app_groups)
 
 
 @router.get("/users/state")

@@ -19,6 +19,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse
 
+from webapp_admin.apps_registry import APP_PATH_TO_ID
 from webapp_admin.extensions import limiter
 from webapp_admin.metrics import (
     record_error_response,
@@ -249,6 +250,20 @@ def create_app() -> FastAPI:
             request, "error.html", status_code=500,
             code=500, message="サーバーエラーが発生しました。",
         )
+
+    @app.middleware("http")
+    async def desktop_redirect_middleware(request: Request, call_next):
+        # 設定ページ等（apps_registry に登録されたパス）へ直接アクセスされた場合、
+        # 旧来のサイドバー単独表示ではなく必ずデスクトップ+ウィンドウへ集約する。
+        # デスクトップのウィンドウ(<iframe>)内からの遷移は Sec-Fetch-Dest: iframe になるため対象外。
+        # このヘッダ自体が送られてこない（対応していない）クライアントは、埋め込み中かどうか
+        # 判別できないので安全側に倒して従来どおり素通しする（リダイレクトループを避けるため）。
+        if request.method == "GET":
+            app_id = APP_PATH_TO_ID.get(request.url.path)
+            sec_fetch_dest = request.headers.get("sec-fetch-dest", "").lower()
+            if app_id and sec_fetch_dest and sec_fetch_dest != "iframe":
+                return RedirectResponse(f"/admin/overview?open={app_id}", status_code=303)
+        return await call_next(request)
 
     @app.middleware("http")
     async def metrics_middleware(request: Request, call_next):

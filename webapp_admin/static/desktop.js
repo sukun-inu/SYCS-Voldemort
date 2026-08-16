@@ -370,6 +370,26 @@
     closeStartMenu();
   });
 
+  /* ── 直接URLアクセス時のリダイレクト（?open=<appId>）を受けて該当ウィンドウを開く ──
+     開いたら履歴からクエリを消す（リロード時に毎回再オープンされないように）。 */
+  (function openFromQueryParam() {
+    const params = new URLSearchParams(window.location.search);
+    const appId = params.get('open');
+    if (!appId) return;
+    const tile = document.querySelector(`.app-tile[data-app-id="${CSS.escape(appId)}"]`);
+    if (tile) {
+      openWindow({
+        id: tile.dataset.appId,
+        title: tile.dataset.appTitle,
+        icon: tile.dataset.appIcon,
+        url: tile.dataset.appUrl,
+      });
+    }
+    params.delete('open');
+    const qs = params.toString();
+    window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : ''));
+  })();
+
   /* ── ウィンドウリサイズ時、デスクトップ外にはみ出したウィンドウを引き戻す ── */
   window.addEventListener('resize', () => {
     const { w: dw, h: dh } = desktopSize();
