@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 _RSS_BASE = "https://news.google.com/rss/search?q={query}&hl=ja&gl=JP&ceid=JP:ja"
 _HEADERS  = {"User-Agent": "Mozilla/5.0 (compatible; DiscordBot/1.0)"}
-_NEWS_SUMMARY_MODEL = os.getenv("NEWS_SUMMARY_MODEL", "llama-3.3-70b-versatile")
+_NEWS_SUMMARY_MODEL = os.getenv("NEWS_SUMMARY_MODEL", "openai/gpt-oss-120b")
 _NEWS_SUMMARY_MAX_CHARS = 400
 _NEWS_SUMMARY_CACHE_TTL_SEC = 6 * 3600
 

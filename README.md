@@ -199,7 +199,7 @@ docker compose up -d --build
 | `DISCORD_BOT_TOKEN` | Yes | Bot トークン |
 | `METALPRICE_API_KEY` | 推奨 | 金属価格 API |
 | `GROQ_API_KEY` | 任意 | AI 会話/モデレーション |
-| `NEWS_SUMMARY_MODEL` | 任意 | ニュース要約用モデル（既定 `llama-3.3-70b-versatile`） |
+| `NEWS_SUMMARY_MODEL` | 任意 | ニュース要約用モデル（既定 `openai/gpt-oss-120b`） |
 | `VIRUSTOTAL_API_KEY` | 任意 | URL/ファイルスキャン |
 | `VT_MAX_DOWNLOAD_BYTES` | 任意 | VTスキャン時の最大ダウンロードサイズ（既定 `20971520` = 20MB） |
 | `SETTINGS_DIR` | 任意 | `settings.json` 保存先 |

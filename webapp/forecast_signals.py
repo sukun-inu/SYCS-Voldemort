@@ -36,7 +36,7 @@ def _get_groq_client(timeout: float) -> AsyncGroq:
 
 
 FORECAST_LLM_ENABLED = read_env_bool("FORECAST_LLM_ENABLED", True)
-FORECAST_LLM_MODEL = (os.getenv("FORECAST_LLM_MODEL") or "llama-3.3-70b-versatile").strip() or "llama-3.3-70b-versatile"
+FORECAST_LLM_MODEL = (os.getenv("FORECAST_LLM_MODEL") or "openai/gpt-oss-120b").strip() or "openai/gpt-oss-120b"
 FORECAST_LLM_TIMEOUT_SECONDS = max(8, int(os.getenv("FORECAST_LLM_TIMEOUT_SECONDS", "20")))
 
 NEWS_QUERY_BY_METAL = {

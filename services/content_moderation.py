@@ -63,7 +63,7 @@ async def gpt_assess(
 
     try:
         response = await _get_groq_client().chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="openai/gpt-oss-20b",
             messages=[
                 {"role": "system", "content": "You are a security moderation AI. Reply with only one word: DANGEROUS, SUSPICIOUS, or SAFE."},
                 {"role": "user", "content": prompt},

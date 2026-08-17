@@ -63,7 +63,7 @@ class ChatGPT:
     async def _call_chat_api(self, messages: List[Dict[str, str]]) -> Dict:
         client = _get_groq_client()
         response = await client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=messages,
             temperature=0.45,
         )
