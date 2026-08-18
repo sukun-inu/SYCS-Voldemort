@@ -1,0 +1,73 @@
+# SYCS Voldemort
+
+Discord サーバーの運営を楽にするための Bot と、その管理画面をまとめたものです。
+
+金や銀の相場を調べる、AI と雑談する、入退室を記録する、地震が来たら知らせる、
+音楽を流す、メッセージを読み上げる — こうした機能が1つの Bot に入っています。
+
+設定は **Discord のスラッシュコマンドからでも、ブラウザで開く管理画面からでも**
+変更できます。どの機能をどちらから触れるかは
+[docs/FEATURES.ja.md](docs/FEATURES.ja.md) の早見表にまとめてあります。
+
+English: [README.md](README.md)
+
+## 入っている機能
+
+- 貴金属（金・銀・プラチナ）の価格照会
+- AI との会話（応答するチャンネルを指定可能）
+- 監査ログ、ユーザー状態の長期保存
+- 入退室のあいさつ、ボイスチャンネルの参加通知
+- スティッキーメッセージ、リアクションロール
+- Google ニュースの配信、地震アラート（P2PQuake）
+- 音楽のダウンロード再生（DJAudio-DL）
+- テキスト読み上げ（声設定・辞書つき）
+- 不審な動きの検知
+- 管理画面（FastAPI）と、貴金属価格の Web トラッカー
+
+## 2. 全体構成
+
+| プロセス | エントリーポイント | 役割 |
+|---|---|---|
+| Discord Bot | `main.py` | Discord イベント処理とスラッシュコマンド |
+| Admin UI | `admin_main.py` | 管理画面（FastAPI） |
+| Web App | `web_main.py` | 金属価格トラッカー（FastAPI） |
+
+設定は `services/settings_store.py` が `settings.json` に永続化します。
+
+---
+
+## 3. クイックスタート（ローカル）
+
+### 3.1 依存インストール
+
+```bash
+pip install -r requirements.txt
+```
+
+DJAudio で必要な `ffmpeg` は、未検出時に自動取得されます（`imageio-ffmpeg`）。
+手動指定したい場合は `DJAUDIO_FFMPEG_PATH` を設定してください。
+
+### 3.2 起動
+
+```bash
+# 1) Discord Bot
+python main.py
+
+# 2) 管理 UI
+python admin_main.py
+
+# 3) Web トラッカー
+python web_main.py
+```
+
+---
+
+## ドキュメント
+
+| | |
+|---|---|
+| [docs/FEATURES.ja.md](docs/FEATURES.ja.md) | 全機能の詳細と、機能ごとの管理導線の早見表 |
+| [docs/COMMANDS.ja.md](docs/COMMANDS.ja.md) | スラッシュコマンド一覧（一般 / 管理 / セキュリティ / DJAudio / TTS） |
+| [docs/SETUP.ja.md](docs/SETUP.ja.md) | Docker Compose、環境変数、マルチインスタンス運用 |
+| [docs/ADMIN.ja.md](docs/ADMIN.ja.md) | 管理UIの使い方、データの保存先 |
+| [docs/TROUBLESHOOTING.ja.md](docs/TROUBLESHOOTING.ja.md) | よくある詰まりどころ、ディレクトリ概要 |
