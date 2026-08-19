@@ -7,6 +7,7 @@ const APP_BASE = new URL(
 const METALS = {
   gold: {
     label: "金 (Gold)",
+    icon: "bi-coin",
     borderColor: "#B28704",
     fillColor: "rgba(178,135,4,0.18)",
     deltaColor: "rgba(178,135,4,0.42)",
@@ -14,6 +15,7 @@ const METALS = {
   },
   silver: {
     label: "銀 (Silver)",
+    icon: "bi-award",
     borderColor: "#5D6A75",
     fillColor: "rgba(93,106,117,0.18)",
     deltaColor: "rgba(93,106,117,0.42)",
@@ -21,6 +23,7 @@ const METALS = {
   },
   platinum: {
     label: "プラチナ (Platinum)",
+    icon: "bi-gem",
     borderColor: "#0A7D88",
     fillColor: "rgba(10,125,136,0.18)",
     deltaColor: "rgba(10,125,136,0.42)",
@@ -50,7 +53,7 @@ const CHART_MAX_WIDTH_MOBILE_PX = 1200;
 const CHART_PX_PER_DAY_DESKTOP = 5;
 const CHART_PX_PER_DAY_MOBILE = 3;
 const CHART_DPR_CAP = 1.75;
-const SW_SCRIPT_VERSION = "20260820-4";
+const SW_SCRIPT_VERSION = "20260820-5";
 const FORECAST_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const THEME_STORAGE_KEY = "metalDailyTheme";
 
@@ -287,6 +290,80 @@ function initializeThemeToggle() {
   }
 }
 
+const QUICK_SEARCH_INDEX = [
+  { keywords: ["ダッシュボード", "dashboard", "top", "トップ", "ホーム", "home"], target: "#dashboardTop" },
+  { keywords: ["マーケット", "市場", "market", "最新価格", "予測", "forecast"], target: "#market-section" },
+  { keywords: ["純度", "計算", "calculator", "グラム", "換算"], target: "#calculator-section" },
+  {
+    keywords: ["チャート", "chart", "グラフ", "推移", "金", "gold", "銀", "silver", "プラチナ", "platinum"],
+    target: "#chart-section",
+  },
+  { keywords: ["faq", "よくある質問", "質問", "ヘルプ", "help"], target: "#faq-section" },
+];
+
+function initializeQuickSearch() {
+  const input = document.getElementById("quickSearchInput");
+  const wrapper = input?.closest(".topbar-search");
+  if (!input || !wrapper) {
+    return;
+  }
+
+  const jumpToMatch = () => {
+    const query = input.value.trim().toLowerCase();
+    if (!query) {
+      wrapper.classList.remove("has-error");
+      return;
+    }
+    const match = QUICK_SEARCH_INDEX.find((entry) =>
+      entry.keywords.some((keyword) => keyword.toLowerCase().includes(query) || query.includes(keyword.toLowerCase()))
+    );
+    const targetEl = match ? document.querySelector(match.target) : null;
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      wrapper.classList.remove("has-error");
+    } else {
+      wrapper.classList.add("has-error");
+    }
+  };
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      jumpToMatch();
+    }
+  });
+  input.addEventListener("input", () => {
+    wrapper.classList.remove("has-error");
+  });
+}
+
+function initializeChartTools() {
+  document.querySelectorAll(".chart-ma-toggle").forEach((button) => {
+    button.addEventListener("click", () => {
+      const metalKey = button.dataset.chart;
+      const chart = charts[metalKey];
+      if (!chart) {
+        return;
+      }
+      const nextVisible = !chart.isDatasetVisible(3);
+      chart.setDatasetVisibility(3, nextVisible);
+      chart.update();
+      button.classList.toggle("active", nextVisible);
+      button.setAttribute("aria-pressed", nextVisible ? "true" : "false");
+    });
+  });
+
+  document.querySelectorAll(".chart-zoom-reset").forEach((button) => {
+    button.addEventListener("click", () => {
+      const metalKey = button.dataset.chart;
+      const chart = charts[metalKey];
+      if (chart && typeof chart.resetZoom === "function") {
+        chart.resetZoom();
+      }
+    });
+  });
+}
+
 function initializeMarketToggle() {
   const buttons = document.querySelectorAll(".market-toggle-button[data-market-view]");
   if (!buttons.length) {
@@ -414,6 +491,48 @@ function setCalcLoadingState() {
   }
 }
 
+function buildTicker(latest) {
+  const track = document.getElementById("priceTickerTrack");
+  if (!track) {
+    return;
+  }
+  const itemsHtml = Object.entries(METALS)
+    .map(([key, meta]) => {
+      const data = latest[key] || {};
+      const delta = data.delta_from_previous;
+      const deltaClass = delta > 0 ? "is-up" : delta < 0 ? "is-down" : "is-flat";
+      const deltaIcon = delta > 0 ? "bi-caret-up-fill" : delta < 0 ? "bi-caret-down-fill" : "bi-dash";
+      return `
+        <span class="price-ticker-item" data-metal="${key}">
+          <i class="bi ${meta.icon || "bi-gem"}" aria-hidden="true"></i>
+          <span class="price-ticker-label">${meta.label}</span>
+          <span class="price-ticker-value">${formatYen(data.price_per_gram)}</span>
+          <span class="price-ticker-delta ${deltaClass}"><i class="bi ${deltaIcon}"></i>${formatDelta(delta)}</span>
+        </span>
+      `;
+    })
+    .join("");
+  // マーキー表示のため2セット連結し、CSSアニメーションで-50%スクロールしてループさせる。
+  track.innerHTML = itemsHtml + itemsHtml;
+}
+
+function updateChartCardHeaders(latest) {
+  Object.entries(METALS).forEach(([key]) => {
+    const data = latest[key] || {};
+    const priceEl = document.getElementById(`${key}ChartPrice`);
+    const deltaEl = document.getElementById(`${key}ChartDelta`);
+    if (priceEl) {
+      priceEl.textContent = formatYen(data.price_per_gram);
+    }
+    if (deltaEl) {
+      const delta = data.delta_from_previous;
+      const deltaClass = delta > 0 ? "text-success" : delta < 0 ? "text-danger" : "text-muted";
+      deltaEl.className = `chart-card-delta ${deltaClass}`;
+      deltaEl.textContent = formatDelta(delta);
+    }
+  });
+}
+
 function buildSummary(latest) {
   const root = document.getElementById("summaryCards");
   root.innerHTML = "";
@@ -421,17 +540,18 @@ function buildSummary(latest) {
   Object.entries(METALS).forEach(([key, meta]) => {
     const data = latest[key] || {};
     const delta = data.delta_from_previous;
-    const deltaClass = delta > 0 ? "text-success" : delta < 0 ? "text-danger" : "text-muted";
+    const deltaClass = delta > 0 ? "is-up" : delta < 0 ? "is-down" : "is-flat";
     const deltaIcon = delta > 0 ? "bi-arrow-up-short" : delta < 0 ? "bi-arrow-down-short" : "bi-dash";
     const col = document.createElement("div");
     col.className = "col-md-4";
     col.innerHTML = `
-      <article class="card summary-card h-100 shadow-sm" data-metal="${key}">
+      <article class="card summary-card summary-card--gradient h-100 shadow-sm" data-metal="${key}">
         <div class="card-body">
+          <i class="bi ${meta.icon || "bi-gem"} summary-card-icon" aria-hidden="true"></i>
           <h3 class="summary-card-title">${meta.label}</h3>
           <div class="summary-price">${formatYen(data.price_per_gram)}</div>
-          <div class="summary-delta ${deltaClass}"><i class="bi ${deltaIcon}"></i>前日差: ${formatDelta(delta)}</div>
-          <div class="text-muted small mt-2">基準日: ${data.date || "-"}</div>
+          <span class="summary-delta-pill ${deltaClass}"><i class="bi ${deltaIcon}"></i>前日差: ${formatDelta(delta)}</span>
+          <div class="summary-card-meta">基準日: ${data.date || "-"}</div>
         </div>
       </article>
     `;
@@ -494,7 +614,7 @@ function renderWeeklyForecast(payload) {
       return;
     }
     const changePct = Number(item.projected_change_pct_7d || 0);
-    const deltaClass = changePct > 0 ? "text-success" : changePct < 0 ? "text-danger" : "text-muted";
+    const deltaClass = changePct > 0 ? "is-up" : changePct < 0 ? "is-down" : "is-flat";
     const deltaIcon = changePct > 0 ? "bi-arrow-up-short" : changePct < 0 ? "bi-arrow-down-short" : "bi-dash";
     const confidencePct = Number(item.confidence || 0) * 100;
     const drivers = Array.isArray(item.drivers) ? item.drivers.slice(0, 2) : [];
@@ -502,12 +622,13 @@ function renderWeeklyForecast(payload) {
     const col = document.createElement("div");
     col.className = "col-md-4";
     col.innerHTML = `
-      <article class="card summary-card h-100 shadow-sm" data-metal="${key}">
+      <article class="card summary-card summary-card--gradient h-100 shadow-sm" data-metal="${key}">
         <div class="card-body">
+          <i class="bi ${metal.icon || "bi-gem"} summary-card-icon" aria-hidden="true"></i>
           <h3 class="summary-card-title">${metal.label} / 7日予測</h3>
           <div class="summary-price">${formatYen(item.projected_price_per_gram)}</div>
-          <div class="summary-delta ${deltaClass}"><i class="bi ${deltaIcon}"></i>予測変化: ${formatPercent(changePct, 3)}</div>
-          <div class="text-muted small mt-2">信頼度: ${new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 }).format(confidencePct)}%</div>
+          <span class="summary-delta-pill ${deltaClass}"><i class="bi ${deltaIcon}"></i>予測変化: ${formatPercent(changePct, 3)}</span>
+          <div class="summary-card-meta">信頼度: ${new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 }).format(confidencePct)}%</div>
           <div class="forecast-driver">${drivers.map((line) => escapeHtml(line)).join("<br>")}</div>
         </div>
       </article>
@@ -654,6 +775,43 @@ async function calculatePurityPrice() {
   renderPurityResult(payload);
 }
 
+function computeMovingAverage(values, windowSize) {
+  const result = new Array(values.length).fill(null);
+  for (let i = windowSize - 1; i < values.length; i++) {
+    let sum = 0;
+    let hasGap = false;
+    for (let j = i - windowSize + 1; j <= i; j++) {
+      const value = values[j];
+      if (value === null || value === undefined) {
+        hasGap = true;
+        break;
+      }
+      sum += value;
+    }
+    result[i] = hasGap ? null : sum / windowSize;
+  }
+  return result;
+}
+
+function updateChartStats(metalKey, prices) {
+  const values = prices.filter((value) => value !== null && value !== undefined);
+  const highEl = document.getElementById(`${metalKey}ChartHigh`);
+  const lowEl = document.getElementById(`${metalKey}ChartLow`);
+  const avgEl = document.getElementById(`${metalKey}ChartAvg`);
+  if (!values.length) {
+    if (highEl) highEl.textContent = "-";
+    if (lowEl) lowEl.textContent = "-";
+    if (avgEl) avgEl.textContent = "-";
+    return;
+  }
+  const high = Math.max(...values);
+  const low = Math.min(...values);
+  const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
+  if (highEl) highEl.textContent = formatYen(high);
+  if (lowEl) lowEl.textContent = formatYen(low);
+  if (avgEl) avgEl.textContent = formatYen(avg);
+}
+
 function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, historyEndDate = null) {
   const meta = METALS[metalKey];
   if (!meta || !window.Chart) {
@@ -664,6 +822,8 @@ function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, his
   const labels = dailyAxis.map((date) => formatDailyLabel(date));
   const prices = dailyAxis.map((date) => dailyMap.get(date)?.price_per_gram ?? null);
   const deltas = dailyAxis.map((date) => dailyMap.get(date)?.delta_from_previous ?? null);
+  const movingAverage = computeMovingAverage(prices, 7);
+  updateChartStats(metalKey, prices);
   const forecastMap = new Map(
     Array.isArray(forecastItem?.daily)
       ? forecastItem.daily.map((item) => [item.date, item.price_per_gram])
@@ -712,6 +872,9 @@ function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, his
     }
     if (existing.data.datasets?.[2]) {
       existing.data.datasets[2].data = forecastPrices;
+    }
+    if (existing.data.datasets?.[3]) {
+      existing.data.datasets[3].data = movingAverage;
     }
     if (!existing.options) {
       existing.options = {};
@@ -784,6 +947,20 @@ function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, his
           pointHoverRadius: 3,
           yAxisID: "yPrice",
         },
+        {
+          label: "7日移動平均",
+          data: movingAverage,
+          borderColor: "#3498db",
+          backgroundColor: "transparent",
+          borderWidth: 1.5,
+          borderDash: [2, 2],
+          tension: 0.15,
+          spanGaps: false,
+          fill: false,
+          pointRadius: 0,
+          hidden: true,
+          yAxisID: "yPrice",
+        },
       ],
     },
     options: {
@@ -830,6 +1007,15 @@ function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, his
           },
         },
         legend: { labels: { color: themeColors.text, boxWidth: 10 } },
+        zoom: {
+          pan: { enabled: true, mode: "x" },
+          zoom: {
+            wheel: { enabled: true },
+            pinch: { enabled: true },
+            mode: "x",
+          },
+          limits: { x: { minRange: 5 } },
+        },
       },
     },
   });
@@ -889,6 +1075,8 @@ function renderDashboardFromPayload(payload, forecastPayload = latestForecastPay
   document.getElementById("generatedAt").textContent =
     `更新頻度: 1日1回 (JST 00:00) / 表示期間: ${payload.range_start} - ${payload.range_end}`;
   buildSummary(payload.latest || {});
+  buildTicker(payload.latest || {});
+  updateChartCardHeaders(payload.latest || {});
 
   Object.keys(METALS).forEach((key) => {
     renderMetalChart(
@@ -917,6 +1105,10 @@ function setPushButtonState({ subscribed, disabled }) {
   button.dataset.subscribed = subscribed ? "true" : "false";
   button.disabled = !!disabled;
   button.textContent = subscribed ? "Push通知を無効化" : "Push通知を有効化";
+  const dot = document.getElementById("notifyDot");
+  if (dot) {
+    dot.classList.toggle("d-none", !subscribed);
+  }
 }
 
 async function syncPushSubscription(subscription) {
@@ -1118,6 +1310,8 @@ document.addEventListener("visibilitychange", () => {
 
 initializeThemeToggle();
 initializeMarketToggle();
+initializeQuickSearch();
+initializeChartTools();
 startForecastAutoRefresh();
 
 loadDashboard().catch((err) => {

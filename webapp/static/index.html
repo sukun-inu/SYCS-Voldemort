@@ -41,7 +41,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="static/icons/apple-touch-icon.png?v=20260310-2" />
   <link rel="stylesheet" href="static/vendor/bootstrap/css/bootstrap.min.css?v=5.3.3" />
   <link rel="stylesheet" href="static/vendor/bootstrap-icons/font/bootstrap-icons.min.css?v=1.11.3" />
-  <link rel="stylesheet" href="static/styles.css?v=20260820-4" />
+  <link rel="stylesheet" href="static/styles.css?v=20260820-5" />
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -128,6 +128,18 @@
             </ol>
           </nav>
         </div>
+        <div class="topbar-search" role="search">
+          <i class="bi bi-search" aria-hidden="true"></i>
+          <input
+            id="quickSearchInput"
+            type="search"
+            class="topbar-search-input"
+            placeholder="金属名・セクションを検索してジャンプ..."
+            aria-label="ページ内検索"
+            autocomplete="off"
+          />
+        </div>
+
         <div class="topbar-actions d-flex align-items-center gap-2 flex-wrap">
           <select id="daysSelect" class="form-select form-select-sm topbar-select" aria-label="表示期間">
             <option value="30" selected>30日</option>
@@ -138,15 +150,32 @@
           <button id="reloadButton" type="button" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-clockwise"></i> 更新
           </button>
-          <button id="pushButton" type="button" class="btn btn-primary btn-sm">Push通知を有効化</button>
-          <button id="themeToggle" type="button" class="btn btn-outline-secondary btn-sm topbar-theme-toggle" aria-label="ダークモード切り替え" aria-pressed="false" title="ダークモード切り替え">
+          <div class="dropdown notify-dropdown">
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm topbar-icon-btn position-relative"
+              data-bs-toggle="dropdown"
+              data-bs-auto-close="outside"
+              aria-expanded="false"
+              aria-label="Push通知"
+              title="Push通知"
+            >
+              <i class="bi bi-bell" aria-hidden="true"></i>
+              <span id="notifyDot" class="notify-dot d-none" aria-hidden="true"></span>
+            </button>
+            <div class="dropdown-menu dropdown-menu-end notify-dropdown-menu p-3">
+              <h3 class="notify-dropdown-title">Push通知</h3>
+              <p id="pushStatus" class="text-muted small">
+                <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Push初期化中...
+              </p>
+              <button id="pushButton" type="button" class="btn btn-primary btn-sm w-100">Push通知を有効化</button>
+            </div>
+          </div>
+          <button id="themeToggle" type="button" class="btn btn-outline-secondary btn-sm topbar-icon-btn" aria-label="ダークモード切り替え" aria-pressed="false" title="ダークモード切り替え">
             <i class="bi bi-moon-stars" aria-hidden="true"></i>
           </button>
         </div>
       </header>
-      <div class="topbar-substatus">
-        <span id="pushStatus" class="text-muted small"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Push初期化中...</span>
-      </div>
 
       <main class="page-content">
         <div class="page-header" id="dashboardTop">
@@ -154,6 +183,10 @@
           <h1>金・銀・プラチナの価格を、1画面で。</h1>
           <p class="text-muted page-lead">日次更新の相場、1週間予測、純度換算をすばやく確認できる資産モニタリングダッシュボード。</p>
           <p id="generatedAt" class="text-muted small mb-0">読み込み中...</p>
+        </div>
+
+        <div id="priceTicker" class="price-ticker" aria-label="価格ティッカー">
+          <div id="priceTickerTrack" class="price-ticker-track"></div>
         </div>
 
         <section id="market-section" class="content-section">
@@ -235,7 +268,20 @@
             <div class="col-lg-4">
               <article class="card shadow-sm chart-card h-100">
                 <div class="card-body">
-                  <h2 class="h6">金 (Gold)</h2>
+                  <div class="chart-card-head d-flex align-items-start justify-content-between">
+                    <h2 class="h6 mb-0"><i class="bi bi-coin"></i> 金 (Gold)</h2>
+                    <div class="chart-card-stat text-end">
+                      <div id="goldChartPrice" class="chart-card-price">-</div>
+                      <div id="goldChartDelta" class="chart-card-delta text-muted">-</div>
+                    </div>
+                  </div>
+                  <div class="chart-card-tools d-flex align-items-center gap-1 mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary chart-ma-toggle" data-chart="gold" aria-pressed="false">MA7</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary chart-zoom-reset" data-chart="gold" title="ズームをリセット" aria-label="ズームをリセット">
+                      <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                    <span class="text-muted small ms-auto d-none d-md-inline">ホイールでズーム・ドラッグで移動</span>
+                  </div>
                   <div class="chart-scroll">
                     <div class="chart-loading-overlay" aria-hidden="true">
                       <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -245,13 +291,31 @@
                       <canvas id="goldChart"></canvas>
                     </div>
                   </div>
+                  <div class="chart-stats-bar">
+                    <div class="chart-stat"><span class="chart-stat-label">高値</span><span id="goldChartHigh" class="chart-stat-value">-</span></div>
+                    <div class="chart-stat"><span class="chart-stat-label">安値</span><span id="goldChartLow" class="chart-stat-value">-</span></div>
+                    <div class="chart-stat"><span class="chart-stat-label">平均</span><span id="goldChartAvg" class="chart-stat-value">-</span></div>
+                  </div>
                 </div>
               </article>
             </div>
             <div class="col-lg-4">
               <article class="card shadow-sm chart-card h-100">
                 <div class="card-body">
-                  <h2 class="h6">銀 (Silver)</h2>
+                  <div class="chart-card-head d-flex align-items-start justify-content-between">
+                    <h2 class="h6 mb-0"><i class="bi bi-award"></i> 銀 (Silver)</h2>
+                    <div class="chart-card-stat text-end">
+                      <div id="silverChartPrice" class="chart-card-price">-</div>
+                      <div id="silverChartDelta" class="chart-card-delta text-muted">-</div>
+                    </div>
+                  </div>
+                  <div class="chart-card-tools d-flex align-items-center gap-1 mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary chart-ma-toggle" data-chart="silver" aria-pressed="false">MA7</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary chart-zoom-reset" data-chart="silver" title="ズームをリセット" aria-label="ズームをリセット">
+                      <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                    <span class="text-muted small ms-auto d-none d-md-inline">ホイールでズーム・ドラッグで移動</span>
+                  </div>
                   <div class="chart-scroll">
                     <div class="chart-loading-overlay" aria-hidden="true">
                       <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -261,13 +325,31 @@
                       <canvas id="silverChart"></canvas>
                     </div>
                   </div>
+                  <div class="chart-stats-bar">
+                    <div class="chart-stat"><span class="chart-stat-label">高値</span><span id="silverChartHigh" class="chart-stat-value">-</span></div>
+                    <div class="chart-stat"><span class="chart-stat-label">安値</span><span id="silverChartLow" class="chart-stat-value">-</span></div>
+                    <div class="chart-stat"><span class="chart-stat-label">平均</span><span id="silverChartAvg" class="chart-stat-value">-</span></div>
+                  </div>
                 </div>
               </article>
             </div>
             <div class="col-lg-4">
               <article class="card shadow-sm chart-card h-100">
                 <div class="card-body">
-                  <h2 class="h6">プラチナ (Platinum)</h2>
+                  <div class="chart-card-head d-flex align-items-start justify-content-between">
+                    <h2 class="h6 mb-0"><i class="bi bi-gem"></i> プラチナ (Platinum)</h2>
+                    <div class="chart-card-stat text-end">
+                      <div id="platinumChartPrice" class="chart-card-price">-</div>
+                      <div id="platinumChartDelta" class="chart-card-delta text-muted">-</div>
+                    </div>
+                  </div>
+                  <div class="chart-card-tools d-flex align-items-center gap-1 mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary chart-ma-toggle" data-chart="platinum" aria-pressed="false">MA7</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary chart-zoom-reset" data-chart="platinum" title="ズームをリセット" aria-label="ズームをリセット">
+                      <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                    <span class="text-muted small ms-auto d-none d-md-inline">ホイールでズーム・ドラッグで移動</span>
+                  </div>
                   <div class="chart-scroll">
                     <div class="chart-loading-overlay" aria-hidden="true">
                       <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -276,6 +358,11 @@
                     <div class="chart-track">
                       <canvas id="platinumChart"></canvas>
                     </div>
+                  </div>
+                  <div class="chart-stats-bar">
+                    <div class="chart-stat"><span class="chart-stat-label">高値</span><span id="platinumChartHigh" class="chart-stat-value">-</span></div>
+                    <div class="chart-stat"><span class="chart-stat-label">安値</span><span id="platinumChartLow" class="chart-stat-value">-</span></div>
+                    <div class="chart-stat"><span class="chart-stat-label">平均</span><span id="platinumChartAvg" class="chart-stat-value">-</span></div>
                   </div>
                 </div>
               </article>
@@ -380,6 +467,8 @@
 
   <script src="static/vendor/bootstrap/js/bootstrap.bundle.min.js?v=5.3.3" defer></script>
   <script src="static/vendor/chartjs/chart.umd.min.js?v=4.5.0" defer></script>
-  <script src="static/app.js?v=20260820-4" defer></script>
+  <script src="static/vendor/chartjs/hammer.min.js?v=2.0.8" defer></script>
+  <script src="static/vendor/chartjs/chartjs-plugin-zoom.min.js?v=2.2.0" defer></script>
+  <script src="static/app.js?v=20260820-5" defer></script>
 </body>
 </html>
