@@ -20,6 +20,9 @@
   --gold: #b8860b;
   --silver: #7f8c9a;
   --platinum: #16a2b8;
+  --gold-gradient: linear-gradient(135deg, #8a6416 0%, #d4af37 100%);
+  --silver-gradient: linear-gradient(135deg, #4b5768 0%, #94a3b8 100%);
+  --platinum-gradient: linear-gradient(135deg, #0f5f66 0%, #1fb8c4 100%);
 
   --bs-primary: #3498db;
   --bs-primary-rgb: 52, 152, 219;
@@ -240,7 +243,7 @@ a {
   min-width: 96px;
 }
 
-.topbar-theme-toggle {
+.topbar-icon-btn {
   width: 34px;
   padding: 0;
   display: inline-flex;
@@ -249,13 +252,63 @@ a {
   flex: 0 0 auto;
 }
 
-.topbar-substatus {
-  padding: 6px 20px;
-  background: var(--card-bg);
-  border-bottom: 1px solid var(--line);
-  min-height: 30px;
+.topbar-search {
   display: flex;
   align-items: center;
+  gap: 8px;
+  flex: 1 1 240px;
+  max-width: 360px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 14px;
+  color: var(--ink-soft);
+  transition: border-color 140ms ease;
+}
+
+.topbar-search.has-error {
+  border-color: var(--down);
+}
+
+.topbar-search-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  color: var(--ink);
+  font-size: 0.85rem;
+  width: 100%;
+}
+
+.topbar-search-input::placeholder {
+  color: var(--ink-soft);
+}
+
+.topbar-search-input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+/* ---------- Notification dropdown ---------- */
+
+.notify-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--up);
+  border: 2px solid var(--card-bg);
+}
+
+.notify-dropdown-menu {
+  min-width: 260px;
+}
+
+.notify-dropdown-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 6px;
 }
 
 /* ---------- Page content ---------- */
@@ -318,22 +371,111 @@ a {
   padding: 1.1rem;
 }
 
+/* ---------- Price ticker ---------- */
+
+.price-ticker {
+  overflow: hidden;
+  background: var(--sidebar-bg);
+  border-radius: 999px;
+  margin-bottom: 22px;
+  position: relative;
+}
+
+.price-ticker-track {
+  display: inline-flex;
+  white-space: nowrap;
+  padding: 10px 0;
+  animation: ticker-scroll 26s linear infinite;
+  will-change: transform;
+}
+
+.price-ticker:hover .price-ticker-track {
+  animation-play-state: paused;
+}
+
+.price-ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 22px;
+  font-size: 0.85rem;
+  color: #fff;
+  border-right: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.price-ticker-label {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.price-ticker-value {
+  font-weight: 700;
+}
+
+.price-ticker-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.price-ticker-delta.is-up {
+  color: var(--up);
+}
+
+.price-ticker-delta.is-down {
+  color: var(--down);
+}
+
+.price-ticker-delta.is-flat {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+@keyframes ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .price-ticker-track {
+    animation: none;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+}
+
 /* ---------- Summary / forecast cards (built by app.js) ---------- */
 
-.summary-card {
-  border-left: 4px solid var(--line);
+.summary-card--gradient {
+  border: none;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
 }
 
-.summary-card[data-metal="gold"] {
-  border-left-color: var(--gold);
+.summary-card--gradient[data-metal="gold"] {
+  background: var(--gold-gradient);
 }
 
-.summary-card[data-metal="silver"] {
-  border-left-color: var(--silver);
+.summary-card--gradient[data-metal="silver"] {
+  background: var(--silver-gradient);
 }
 
-.summary-card[data-metal="platinum"] {
-  border-left-color: var(--platinum);
+.summary-card--gradient[data-metal="platinum"] {
+  background: var(--platinum-gradient);
+}
+
+.summary-card-icon {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  font-size: 1.9rem;
+  opacity: 0.3;
 }
 
 .summary-card .card-body {
@@ -342,7 +484,7 @@ a {
 
 .summary-card-title {
   font-size: 0.8rem;
-  color: var(--ink-soft);
+  color: rgba(255, 255, 255, 0.86);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -352,22 +494,36 @@ a {
 .summary-price {
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--ink);
+  color: #fff;
   letter-spacing: -0.01em;
 }
 
-.summary-delta {
-  margin-top: 0.35rem;
-  font-size: 0.88rem;
-  font-weight: 600;
-  display: flex;
+.summary-delta-pill {
+  display: inline-flex;
   align-items: center;
   gap: 4px;
+  margin-top: 0.5rem;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.summary-delta-pill.is-down {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.summary-card-meta {
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.76);
 }
 
 .forecast-driver {
   margin-top: 0.5rem;
-  color: var(--ink-muted);
+  color: rgba(255, 255, 255, 0.82);
   font-size: 0.8rem;
   line-height: 1.4;
 }
@@ -461,7 +617,62 @@ a {
 }
 
 .chart-card h2.h6 {
-  margin-bottom: 0.6rem;
+  margin-bottom: 0;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.chart-card-head {
+  margin-bottom: 10px;
+}
+
+.chart-card-price {
+  font-size: 1.08rem;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.2;
+}
+
+.chart-card-delta {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.chart-card-tools .chart-ma-toggle,
+.chart-card-tools .chart-zoom-reset {
+  font-size: 0.74rem;
+  padding: 2px 9px;
+  line-height: 1.6;
+}
+
+.chart-card-tools .chart-ma-toggle.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.chart-stats-bar {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.chart-stat {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.chart-stat-label {
+  color: var(--ink-soft);
+}
+
+.chart-stat-value {
   font-weight: 700;
   color: var(--ink);
 }
@@ -611,13 +822,15 @@ a {
   .topbar {
     padding: 10px 14px;
   }
-
-  .topbar-substatus {
-    padding: 6px 14px;
-  }
 }
 
 @media (max-width: 767.98px) {
+  .topbar-search {
+    order: 3;
+    max-width: none;
+    flex-basis: 100%;
+  }
+
   .topbar-actions {
     width: 100%;
   }

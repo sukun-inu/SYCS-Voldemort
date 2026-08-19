@@ -1,4 +1,4 @@
-const CACHE_NAME = "metal-tracker-v9";
+const CACHE_NAME = "metal-tracker-v10";
 
 function scopedUrl(path) {
   return new URL(path, self.registration.scope).toString();
@@ -21,6 +21,8 @@ const APP_SHELL = [
   scopedUrl("static/vendor/bootstrap-icons/font/bootstrap-icons.min.css"),
   scopedUrl("static/vendor/bootstrap-icons/font/fonts/bootstrap-icons.woff2"),
   scopedUrl("static/vendor/chartjs/chart.umd.min.js"),
+  scopedUrl("static/vendor/chartjs/hammer.min.js"),
+  scopedUrl("static/vendor/chartjs/chartjs-plugin-zoom.min.js"),
 ];
 
 self.addEventListener("install", (event) => {
