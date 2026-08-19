@@ -6,7 +6,7 @@
   <meta name="description" content="METAL DAILYは金・銀・プラチナのJST基準リアルタイム価格・1週間予測・純度計算を提供するダッシュボードです。更新データは金融市場APIとGoogle Newsを参照し、プッシュ通知で昼に最新情報を届けます。最新の価格推移も直感的なグラフで確認可能。" />
   <meta name="robots" content="index,follow" />
   <base href="./" />
-  <meta name="theme-color" content="#f4efe6" />
+  <meta name="theme-color" content="#2a3f54" />
   <link rel="canonical" href="https://metals.kawasaki-n3t.f5.si/" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Metal Daily | 金属価格ダッシュボード" />
@@ -22,7 +22,9 @@
   <link rel="icon" type="image/png" sizes="192x192" href="static/icons/metal-logo-192.png?v=20260310-2" />
   <link rel="icon" type="image/svg+xml" href="static/icons/metal-logo.svg?v=20260310-1" />
   <link rel="apple-touch-icon" sizes="180x180" href="static/icons/apple-touch-icon.png?v=20260310-2" />
-  <link rel="stylesheet" href="static/styles.css?v=20260310-15" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <link rel="stylesheet" href="static/styles.css?v=20260820-2" />
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -62,202 +64,302 @@
   </script>
 </head>
 <body>
-  <main class="app-shell">
-    <header class="hero-card panel-card">
-      <div class="hero-title-wrap">
-        <p class="eyebrow">METAL DAILY SNAPSHOT</p>
-        <h1>金・銀・プラチナの価格を、1画面で。</h1>
-        <p class="hero-copy">日次更新の相場、1週間予測、純度換算をすばやく確認できる資産モニタリングダッシュボード。</p>
-        <p id="generatedAt" class="meta hero-meta">読み込み中...</p>
+  <div class="app-wrapper d-flex">
+    <aside class="sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="appSidebar" aria-label="サイドナビゲーション">
+      <div class="sidebar-brand d-flex align-items-center justify-content-between">
+        <a href="#dashboardTop" class="brand-link d-flex align-items-center gap-2 text-decoration-none">
+          <img src="static/icons/metal-logo.svg" width="28" height="28" alt="" class="brand-logo" />
+          <span class="brand-text">METAL DAILY</span>
+        </a>
+        <button type="button" class="btn-close btn-close-white d-lg-none" data-bs-dismiss="offcanvas" data-bs-target="#appSidebar" aria-label="メニューを閉じる"></button>
       </div>
-      <div class="hero-chips">
-        <span class="chip">更新: JST 00:00</span>
-        <span id="notifyTimeChip" class="chip">通知: JST 11:00</span>
+      <nav class="sidebar-nav">
+        <ul class="nav flex-column">
+          <li class="nav-item">
+            <a class="nav-link active" href="#dashboardTop"><i class="bi bi-speedometer2"></i><span>ダッシュボード</span></a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#market-section"><i class="bi bi-graph-up-arrow"></i><span>マーケットビュー</span></a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#calculator-section"><i class="bi bi-calculator"></i><span>純度計算</span></a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#chart-section"><i class="bi bi-bar-chart-line"></i><span>価格チャート</span></a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#faq-section"><i class="bi bi-question-circle"></i><span>FAQ</span></a>
+          </li>
+        </ul>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="sidebar-chip"><i class="bi bi-arrow-repeat"></i>更新 JST 00:00</span>
+        <span id="notifyTimeChip" class="sidebar-chip"><i class="bi bi-bell"></i>通知: JST 11:00</span>
       </div>
-    </header>
+    </aside>
 
-    <section class="dashboard-grid" aria-label="主要ダッシュボード">
-      <section class="controls-card panel-card" aria-label="操作パネル">
-        <div class="section-heading">
-          <h2>表示設定</h2>
-          <p>期間変更、手動更新、通知設定をここから操作</p>
+    <div class="app-main flex-grow-1 min-w-0">
+      <header class="topbar d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2 min-w-0">
+          <button class="btn topbar-toggle d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#appSidebar" aria-controls="appSidebar" aria-label="メニューを開く">
+            <i class="bi bi-list"></i>
+          </button>
+          <nav aria-label="breadcrumb" class="d-none d-sm-block">
+            <ol class="breadcrumb mb-0">
+              <li class="breadcrumb-item"><i class="bi bi-house-door"></i> Home</li>
+              <li class="breadcrumb-item active" aria-current="page">Dashboard</li>
+            </ol>
+          </nav>
         </div>
-        <div class="control-row">
-          <label for="daysSelect">表示期間</label>
-          <select id="daysSelect">
+        <div class="topbar-actions d-flex align-items-center gap-2 flex-wrap">
+          <select id="daysSelect" class="form-select form-select-sm topbar-select" aria-label="表示期間">
             <option value="30" selected>30日</option>
             <option value="90">90日</option>
             <option value="180">180日</option>
             <option value="365">365日</option>
           </select>
-          <button id="reloadButton" type="button" class="button-secondary">更新</button>
+          <button id="reloadButton" type="button" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-clockwise"></i> 更新
+          </button>
+          <button id="pushButton" type="button" class="btn btn-primary btn-sm">Push通知を有効化</button>
         </div>
-        <div class="control-row">
-          <button id="pushButton" type="button" class="button-primary">Push通知を有効化</button>
-          <span id="pushStatus" class="meta inline-meta">Push初期化中...</span>
-        </div>
-      </section>
-
-      <section class="market-panel panel-card" aria-label="最新価格と1週間予測">
-        <div class="market-panel-head">
-          <div class="section-heading">
-            <h2>マーケットビュー</h2>
-            <p>最新価格と1週間予測を切り替えて表示</p>
-          </div>
-          <div class="market-toggle" role="tablist" aria-label="表示切り替え">
-            <button
-              id="marketViewSummary"
-              class="market-toggle-button is-active"
-              type="button"
-              role="tab"
-              aria-selected="true"
-              aria-controls="marketPaneSummary"
-              data-market-view="summary"
-            >
-              最新価格
-            </button>
-            <button
-              id="marketViewForecast"
-              class="market-toggle-button"
-              type="button"
-              role="tab"
-              aria-selected="false"
-              aria-controls="marketPaneForecast"
-              data-market-view="forecast"
-            >
-              1週間予測
-            </button>
-          </div>
-        </div>
-
-        <section id="marketPaneSummary" class="market-pane" role="tabpanel" aria-labelledby="marketViewSummary">
-          <div id="summaryCards" class="summary-grid" aria-label="最新価格"></div>
-        </section>
-
-        <section id="marketPaneForecast" class="market-pane" role="tabpanel" aria-labelledby="marketViewForecast" hidden>
-          <p id="forecastMeta" class="meta">予測データを読み込み中...</p>
-          <div id="forecastCards" class="summary-grid forecast-grid"></div>
-        </section>
-      </section>
-
-      <section class="calculator-card panel-card" aria-label="純度計算">
-        <div class="section-heading">
-          <h2>純度計算</h2>
-          <p>最新の日次価格 × グラム × 純度係数</p>
-        </div>
-        <div class="calculator-form">
-          <label for="calcMetal">金属</label>
-          <select id="calcMetal"></select>
-          <label for="calcGrams">グラム</label>
-          <input id="calcGrams" type="number" min="0.1" max="100000" step="0.1" value="1" />
-          <button id="calcButton" type="button" class="button-secondary">計算</button>
-        </div>
-        <p id="calcMeta" class="meta">読み込み中...</p>
-        <div id="calcResult" class="calc-result"></div>
-      </section>
-    </section>
-
-    <section class="chart-section panel-card" aria-label="価格チャート">
-      <div class="section-heading">
-        <h2>価格チャート</h2>
-        <p>金・銀・プラチナの推移を期間別で比較</p>
+      </header>
+      <div class="topbar-substatus">
+        <span id="pushStatus" class="text-muted small"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Push初期化中...</span>
       </div>
-      <section class="chart-grid">
-        <article class="chart-card">
-          <h2>金 (Gold)</h2>
-          <div class="chart-scroll">
-            <div class="chart-loading-overlay" aria-hidden="true">
-              <span class="loading-spinner"></span>
-              <span>価格情報を読み込み中...</span>
+
+      <main class="page-content">
+        <div class="page-header" id="dashboardTop">
+          <p class="eyebrow">METAL DAILY SNAPSHOT</p>
+          <h1>金・銀・プラチナの価格を、1画面で。</h1>
+          <p class="text-muted page-lead">日次更新の相場、1週間予測、純度換算をすばやく確認できる資産モニタリングダッシュボード。</p>
+          <p id="generatedAt" class="text-muted small mb-0">読み込み中...</p>
+        </div>
+
+        <section id="market-section" class="content-section">
+          <div class="section-title d-flex align-items-end justify-content-between flex-wrap gap-2">
+            <div>
+              <h2>マーケットビュー</h2>
+              <p class="text-muted mb-0">最新価格と1週間予測を切り替えて表示</p>
             </div>
-            <div class="chart-track">
-              <canvas id="goldChart"></canvas>
+            <div class="btn-group market-toggle" role="tablist" aria-label="表示切り替え">
+              <button
+                id="marketViewSummary"
+                class="btn btn-outline-primary market-toggle-button is-active"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="marketPaneSummary"
+                data-market-view="summary"
+              >
+                最新価格
+              </button>
+              <button
+                id="marketViewForecast"
+                class="btn btn-outline-primary market-toggle-button"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="marketPaneForecast"
+                data-market-view="forecast"
+              >
+                1週間予測
+              </button>
             </div>
           </div>
-        </article>
-        <article class="chart-card">
-          <h2>銀 (Silver)</h2>
-          <div class="chart-scroll">
-            <div class="chart-loading-overlay" aria-hidden="true">
-              <span class="loading-spinner"></span>
-              <span>価格情報を読み込み中...</span>
-            </div>
-            <div class="chart-track">
-              <canvas id="silverChart"></canvas>
+
+          <section id="marketPaneSummary" class="market-pane" role="tabpanel" aria-labelledby="marketViewSummary">
+            <div id="summaryCards" class="row g-3" aria-label="最新価格"></div>
+          </section>
+
+          <section id="marketPaneForecast" class="market-pane" role="tabpanel" aria-labelledby="marketViewForecast" hidden>
+            <p id="forecastMeta" class="text-muted small">予測データを読み込み中...</p>
+            <div id="forecastCards" class="row g-3" aria-label="1週間予測"></div>
+          </section>
+        </section>
+
+        <section id="calculator-section" class="content-section">
+          <div class="card shadow-sm calculator-card">
+            <div class="card-body">
+              <div class="section-title">
+                <h2>純度計算</h2>
+                <p class="text-muted mb-3">最新の日次価格 × グラム × 純度係数</p>
+              </div>
+              <div class="row g-2 align-items-end calculator-form">
+                <div class="col-sm-4 col-md-3">
+                  <label for="calcMetal" class="form-label">金属</label>
+                  <select id="calcMetal" class="form-select"></select>
+                </div>
+                <div class="col-sm-4 col-md-3">
+                  <label for="calcGrams" class="form-label">グラム</label>
+                  <input id="calcGrams" type="number" min="0.1" max="100000" step="0.1" value="1" class="form-control" />
+                </div>
+                <div class="col-sm-4 col-md-2">
+                  <button id="calcButton" type="button" class="btn btn-primary w-100">
+                    <i class="bi bi-calculator"></i> 計算
+                  </button>
+                </div>
+              </div>
+              <p id="calcMeta" class="text-muted small mt-3">読み込み中...</p>
+              <div id="calcResult" class="calc-result"></div>
             </div>
           </div>
-        </article>
-        <article class="chart-card">
-          <h2>プラチナ (Platinum)</h2>
-          <div class="chart-scroll">
-            <div class="chart-loading-overlay" aria-hidden="true">
-              <span class="loading-spinner"></span>
-              <span>価格情報を読み込み中...</span>
+        </section>
+
+        <section id="chart-section" class="content-section">
+          <div class="section-title">
+            <h2>価格チャート</h2>
+            <p class="text-muted mb-0">金・銀・プラチナの推移を期間別で比較</p>
+          </div>
+          <div class="row g-3 chart-grid">
+            <div class="col-lg-4">
+              <article class="card shadow-sm chart-card h-100">
+                <div class="card-body">
+                  <h2 class="h6">金 (Gold)</h2>
+                  <div class="chart-scroll">
+                    <div class="chart-loading-overlay" aria-hidden="true">
+                      <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                      <span>価格情報を読み込み中...</span>
+                    </div>
+                    <div class="chart-track">
+                      <canvas id="goldChart"></canvas>
+                    </div>
+                  </div>
+                </div>
+              </article>
             </div>
-            <div class="chart-track">
-              <canvas id="platinumChart"></canvas>
+            <div class="col-lg-4">
+              <article class="card shadow-sm chart-card h-100">
+                <div class="card-body">
+                  <h2 class="h6">銀 (Silver)</h2>
+                  <div class="chart-scroll">
+                    <div class="chart-loading-overlay" aria-hidden="true">
+                      <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                      <span>価格情報を読み込み中...</span>
+                    </div>
+                    <div class="chart-track">
+                      <canvas id="silverChart"></canvas>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </div>
+            <div class="col-lg-4">
+              <article class="card shadow-sm chart-card h-100">
+                <div class="card-body">
+                  <h2 class="h6">プラチナ (Platinum)</h2>
+                  <div class="chart-scroll">
+                    <div class="chart-loading-overlay" aria-hidden="true">
+                      <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                      <span>価格情報を読み込み中...</span>
+                    </div>
+                    <div class="chart-track">
+                      <canvas id="platinumChart"></canvas>
+                    </div>
+                  </div>
+                </div>
+              </article>
             </div>
           </div>
-        </article>
-      </section>
-    </section>
+        </section>
 
-    <section class="knowledge-grid" aria-label="サービス説明とFAQ">
-      <section class="info-section panel-card" aria-label="METAL DAILYの提供機能">
-        <div class="section-heading">
-          <h2>METAL DAILY とは</h2>
-          <p>価格把握から換算・通知までを一体化した監視ビュー</p>
-        </div>
-        <p class="section-lead">MetalpriceAPIとGoogle News（RSS）から取得した金・銀・プラチナ価格をJST 00:00基準で更新。予測・換算・履歴確認を1画面で完結できます。</p>
-        <div class="info-grid">
-          <article class="info-card">
-            <h3>更新頻度とソース</h3>
-            <p>毎日00:00（JST）に価格を更新。USD/JPYと関連ニュースを加味して1週間予測を再計算します。</p>
-          </article>
-          <article class="info-card">
-            <h3>通知と計算ツール</h3>
-            <p>毎日11:00（JST）にブラウザ通知を配信。重量と純度を入力するだけで最新価格から即座に円換算できます。</p>
-          </article>
-        </div>
-        <div class="info-meta">
-          <p><span>対象金属</span>Gold（金） / Silver（銀） / Platinum（プラチナ）</p>
-          <p><span>提供機能</span>価格推移チャート / 1週間予測 / 純度計算 / Push通知</p>
-        </div>
-      </section>
+        <section class="content-section" aria-label="サービス説明とFAQ">
+          <div class="row g-3 align-items-stretch">
+            <div class="col-lg-6">
+              <div class="card shadow-sm h-100">
+                <div class="card-body">
+                  <div class="section-title">
+                    <h2>METAL DAILY とは</h2>
+                    <p class="text-muted mb-2">価格把握から換算・通知までを一体化した監視ビュー</p>
+                  </div>
+                  <p class="text-muted">MetalpriceAPIとGoogle News（RSS）から取得した金・銀・プラチナ価格をJST 00:00基準で更新。予測・換算・履歴確認を1画面で完結できます。</p>
+                  <div class="row row-cols-1 row-cols-sm-2 g-2 info-grid">
+                    <div class="col">
+                      <div class="info-card h-100">
+                        <h3><i class="bi bi-clock-history"></i> 更新頻度とソース</h3>
+                        <p>毎日00:00（JST）に価格を更新。USD/JPYと関連ニュースを加味して1週間予測を再計算します。</p>
+                      </div>
+                    </div>
+                    <div class="col">
+                      <div class="info-card h-100">
+                        <h3><i class="bi bi-bell"></i> 通知と計算ツール</h3>
+                        <p>毎日11:00（JST）にブラウザ通知を配信。重量と純度を入力するだけで最新価格から即座に円換算できます。</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="info-meta">
+                    <div><span>対象金属</span>Gold（金） / Silver（銀） / Platinum（プラチナ）</div>
+                    <div><span>提供機能</span>価格推移チャート / 1週間予測 / 純度計算 / Push通知</div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-      <section class="faq-section panel-card" aria-label="よくある質問">
-        <div class="section-heading">
-          <h2>FAQ</h2>
-          <p>運用と使い方に関するよくある質問</p>
-        </div>
-        <div class="faq-stack">
-          <details class="faq-item">
-            <summary>データソースはどこですか？</summary>
-            <p>MetalpriceAPIとGoogle News（RSS）を参照し、価格データとニュースデータを突合して表示しています。</p>
-          </details>
-          <details class="faq-item">
-            <summary>通知は何時に届きますか？</summary>
-            <p>毎日11:00（JST）にブラウザ通知を配信。未設定の場合は「Push通知を有効化」ボタンから登録できます。</p>
-          </details>
-          <details class="faq-item">
-            <summary>過去データは見られますか？</summary>
-            <p>表示期間セレクタで30日、90日、180日、365日の履歴を切り替えて確認できます。</p>
-          </details>
-          <details class="faq-item">
-            <summary>純度計算はどの金属に対応していますか？</summary>
-            <p>金・銀・プラチナの3種に対応しており、純度係数を掛け合わせた概算価格を計算できます。</p>
-          </details>
-        </div>
-      </section>
-    </section>
-  </main>
+            <div class="col-lg-6" id="faq-section">
+              <div class="card shadow-sm h-100">
+                <div class="card-body">
+                  <div class="section-title">
+                    <h2>FAQ</h2>
+                    <p class="text-muted mb-2">運用と使い方に関するよくある質問</p>
+                  </div>
+                  <div class="accordion" id="faqAccordion">
+                    <div class="accordion-item">
+                      <h3 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqAnswer1">
+                          データソースはどこですか？
+                        </button>
+                      </h3>
+                      <div id="faqAnswer1" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body">MetalpriceAPIとGoogle News（RSS）を参照し、価格データとニュースデータを突合して表示しています。</div>
+                      </div>
+                    </div>
+                    <div class="accordion-item">
+                      <h3 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqAnswer2">
+                          通知は何時に届きますか？
+                        </button>
+                      </h3>
+                      <div id="faqAnswer2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body">毎日11:00（JST）にブラウザ通知を配信。未設定の場合は「Push通知を有効化」ボタンから登録できます。</div>
+                      </div>
+                    </div>
+                    <div class="accordion-item">
+                      <h3 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqAnswer3">
+                          過去データは見られますか？
+                        </button>
+                      </h3>
+                      <div id="faqAnswer3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body">表示期間セレクタで30日、90日、180日、365日の履歴を切り替えて確認できます。</div>
+                      </div>
+                    </div>
+                    <div class="accordion-item">
+                      <h3 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqAnswer4">
+                          純度計算はどの金属に対応していますか？
+                        </button>
+                      </h3>
+                      <div id="faqAnswer4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body">金・銀・プラチナの3種に対応しており、純度係数を掛け合わせた概算価格を計算できます。</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
 
-  <footer class="app-footer" aria-label="予測情報ソースと著作権">
-    <small id="forecastSource">読み込み中...</small>
-    <small>&copy; 2026 Hibiki Suzuki</small>
-  </footer>
+      <footer class="app-footer d-flex justify-content-between flex-wrap gap-2">
+        <small id="forecastSource">読み込み中...</small>
+        <small>&copy; 2026 Hibiki Suzuki</small>
+      </footer>
+    </div>
+  </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js" defer></script>
-  <script src="static/app.js?v=20260310-20" defer></script>
+  <script src="static/app.js?v=20260820-2" defer></script>
 </body>
 </html>

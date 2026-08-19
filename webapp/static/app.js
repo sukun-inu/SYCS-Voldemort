@@ -52,7 +52,7 @@ const CHART_MAX_WIDTH_MOBILE_PX = 1200;
 const CHART_PX_PER_DAY_DESKTOP = 5;
 const CHART_PX_PER_DAY_MOBILE = 3;
 const CHART_DPR_CAP = 1.75;
-const SW_SCRIPT_VERSION = "20260310-2";
+const SW_SCRIPT_VERSION = "20260820-2";
 const FORECAST_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 function appUrl(path) {
@@ -172,7 +172,7 @@ function escapeHtml(value) {
 }
 
 function loadingInlineMarkup(text) {
-  return `<span class="loading-inline"><span class="loading-spinner" aria-hidden="true"></span>${escapeHtml(text)}</span>`;
+  return `<span class="d-inline-flex align-items-center gap-2"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>${escapeHtml(text)}</span>`;
 }
 
 function setMarketView(view) {
@@ -235,15 +235,19 @@ function renderSummarySkeleton() {
   root.setAttribute("aria-busy", "true");
   root.innerHTML = "";
   Object.keys(METALS).forEach(() => {
-    const card = document.createElement("article");
-    card.className = "summary-card skeleton-card";
-    card.innerHTML = `
-      <div class="skeleton-line skeleton-title"></div>
-      <div class="skeleton-line skeleton-price"></div>
-      <div class="skeleton-line skeleton-delta"></div>
-      <div class="skeleton-line skeleton-meta"></div>
+    const col = document.createElement("div");
+    col.className = "col-md-4";
+    col.innerHTML = `
+      <article class="card summary-card h-100 shadow-sm placeholder-glow">
+        <div class="card-body">
+          <span class="placeholder col-6 mb-2"></span>
+          <div class="placeholder col-8" style="height:1.5rem;"></div>
+          <span class="placeholder col-5 mt-2"></span>
+          <span class="placeholder col-7 mt-2"></span>
+        </div>
+      </article>
     `;
-    root.appendChild(card);
+    root.appendChild(col);
   });
 }
 
@@ -255,16 +259,20 @@ function renderForecastSkeleton() {
   root.setAttribute("aria-busy", "true");
   root.innerHTML = "";
   Object.keys(METALS).forEach(() => {
-    const card = document.createElement("article");
-    card.className = "summary-card skeleton-card";
-    card.innerHTML = `
-      <div class="skeleton-line skeleton-title"></div>
-      <div class="skeleton-line skeleton-price"></div>
-      <div class="skeleton-line skeleton-delta"></div>
-      <div class="skeleton-line skeleton-meta"></div>
-      <div class="skeleton-line skeleton-driver"></div>
+    const col = document.createElement("div");
+    col.className = "col-md-4";
+    col.innerHTML = `
+      <article class="card summary-card h-100 shadow-sm placeholder-glow">
+        <div class="card-body">
+          <span class="placeholder col-6 mb-2"></span>
+          <div class="placeholder col-8" style="height:1.5rem;"></div>
+          <span class="placeholder col-5 mt-2"></span>
+          <span class="placeholder col-7 mt-2"></span>
+          <span class="placeholder col-9 mt-2"></span>
+        </div>
+      </article>
     `;
-    root.appendChild(card);
+    root.appendChild(col);
   });
 }
 
@@ -310,7 +318,8 @@ function setCalcLoadingState() {
   }
   if (result) {
     result.setAttribute("aria-busy", "true");
-    result.innerHTML = '<div class="calc-loading"><span class="loading-spinner" aria-hidden="true"></span>計算中...</div>';
+    result.innerHTML =
+      '<div class="d-inline-flex align-items-center gap-2 text-muted small"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>計算中...</div>';
   }
 }
 
@@ -321,16 +330,21 @@ function buildSummary(latest) {
   Object.entries(METALS).forEach(([key, meta]) => {
     const data = latest[key] || {};
     const delta = data.delta_from_previous;
-    const deltaClass = delta > 0 ? "delta-up" : delta < 0 ? "delta-down" : "";
-    const card = document.createElement("article");
-    card.className = "summary-card";
-    card.innerHTML = `
-      <h3>${meta.label}</h3>
-      <div class="summary-price">${formatYen(data.price_per_gram)}</div>
-      <div class="summary-delta ${deltaClass}">前日差: ${formatDelta(delta)}</div>
-      <div class="meta">基準日: ${data.date || "-"}</div>
+    const deltaClass = delta > 0 ? "text-success" : delta < 0 ? "text-danger" : "text-muted";
+    const deltaIcon = delta > 0 ? "bi-arrow-up-short" : delta < 0 ? "bi-arrow-down-short" : "bi-dash";
+    const col = document.createElement("div");
+    col.className = "col-md-4";
+    col.innerHTML = `
+      <article class="card summary-card h-100 shadow-sm" data-metal="${key}">
+        <div class="card-body">
+          <h3 class="summary-card-title">${meta.label}</h3>
+          <div class="summary-price">${formatYen(data.price_per_gram)}</div>
+          <div class="summary-delta ${deltaClass}"><i class="bi ${deltaIcon}"></i>前日差: ${formatDelta(delta)}</div>
+          <div class="text-muted small mt-2">基準日: ${data.date || "-"}</div>
+        </div>
+      </article>
     `;
-    root.appendChild(card);
+    root.appendChild(col);
   });
 }
 
@@ -389,20 +403,25 @@ function renderWeeklyForecast(payload) {
       return;
     }
     const changePct = Number(item.projected_change_pct_7d || 0);
-    const deltaClass = changePct > 0 ? "delta-up" : changePct < 0 ? "delta-down" : "";
+    const deltaClass = changePct > 0 ? "text-success" : changePct < 0 ? "text-danger" : "text-muted";
+    const deltaIcon = changePct > 0 ? "bi-arrow-up-short" : changePct < 0 ? "bi-arrow-down-short" : "bi-dash";
     const confidencePct = Number(item.confidence || 0) * 100;
     const drivers = Array.isArray(item.drivers) ? item.drivers.slice(0, 2) : [];
 
-    const card = document.createElement("article");
-    card.className = "summary-card";
-    card.innerHTML = `
-      <h3>${metal.label} / 7日予測</h3>
-      <div class="summary-price">${formatYen(item.projected_price_per_gram)}</div>
-      <div class="summary-delta ${deltaClass}">予測変化: ${formatPercent(changePct, 3)}</div>
-      <div class="meta">信頼度: ${new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 }).format(confidencePct)}%</div>
-      <div class="forecast-driver">${drivers.map((line) => escapeHtml(line)).join("<br>")}</div>
+    const col = document.createElement("div");
+    col.className = "col-md-4";
+    col.innerHTML = `
+      <article class="card summary-card h-100 shadow-sm" data-metal="${key}">
+        <div class="card-body">
+          <h3 class="summary-card-title">${metal.label} / 7日予測</h3>
+          <div class="summary-price">${formatYen(item.projected_price_per_gram)}</div>
+          <div class="summary-delta ${deltaClass}"><i class="bi ${deltaIcon}"></i>予測変化: ${formatPercent(changePct, 3)}</div>
+          <div class="text-muted small mt-2">信頼度: ${new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 }).format(confidencePct)}%</div>
+          <div class="forecast-driver">${drivers.map((line) => escapeHtml(line)).join("<br>")}</div>
+        </div>
+      </article>
     `;
-    root.appendChild(card);
+    root.appendChild(col);
   });
 }
 
@@ -473,15 +492,17 @@ function renderPurityResult(payload) {
     .map(([grade, value]) => `<tr><td>${escapeHtml(grade)}</td><td>${formatYenInt(value)}</td></tr>`)
     .join("");
   document.getElementById("calcResult").innerHTML = `
-    <table class="calc-table">
-      <thead>
-        <tr><th>純度</th><th>価格</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>純金属換算</td><td>${formatYenInt(payload.pure_value)}</td></tr>
-        ${rows}
-      </tbody>
-    </table>
+    <div class="table-responsive">
+      <table class="table table-striped table-hover align-middle mb-0">
+        <thead>
+          <tr><th>純度</th><th>価格</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>純金属換算</td><td>${formatYenInt(payload.pure_value)}</td></tr>
+          ${rows}
+        </tbody>
+      </table>
+    </div>
   `;
 }
 
