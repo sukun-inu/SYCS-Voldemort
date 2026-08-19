@@ -41,10 +41,8 @@ let lastForecastGeneratedAt = null;
 let forecastRefreshTimerId = null;
 let forecastRefreshInFlight = false;
 
-const CHART_CDN_LIST = [
-  "https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js",
-  "https://unpkg.com/chart.js@4.5.0/dist/chart.umd.min.js",
-];
+// 外部CDNへは依存せず、自ホストにバンドルしたChart.jsのみを読み込む(CSPをdefault-src 'self'寄りに保つため)。
+const CHART_CDN_LIST = ["static/vendor/chartjs/chart.umd.min.js?v=4.5.0"];
 const CHART_MIN_WIDTH_DESKTOP_PX = 640;
 const CHART_MAX_WIDTH_DESKTOP_PX = 2000;
 const CHART_MIN_WIDTH_MOBILE_PX = 420;
@@ -52,7 +50,7 @@ const CHART_MAX_WIDTH_MOBILE_PX = 1200;
 const CHART_PX_PER_DAY_DESKTOP = 5;
 const CHART_PX_PER_DAY_MOBILE = 3;
 const CHART_DPR_CAP = 1.75;
-const SW_SCRIPT_VERSION = "20260820-2";
+const SW_SCRIPT_VERSION = "20260820-3";
 const FORECAST_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 function appUrl(path) {

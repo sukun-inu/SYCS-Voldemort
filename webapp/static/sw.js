@@ -1,4 +1,4 @@
-const CACHE_NAME = "metal-tracker-v7";
+const CACHE_NAME = "metal-tracker-v8";
 
 function scopedUrl(path) {
   return new URL(path, self.registration.scope).toString();
@@ -14,6 +14,13 @@ const APP_SHELL = [
   scopedUrl("static/icons/metal-logo-maskable-512.png"),
   scopedUrl("static/icons/apple-touch-icon.png"),
   scopedUrl("static/icons/metal-logo.svg"),
+  // Bootstrap/Chart.jsは外部CDNではなく自ホストにバンドルしているため、
+  // オフラインでも崩れないようapp shellとしてプリキャッシュする。
+  scopedUrl("static/vendor/bootstrap/css/bootstrap.min.css"),
+  scopedUrl("static/vendor/bootstrap/js/bootstrap.bundle.min.js"),
+  scopedUrl("static/vendor/bootstrap-icons/font/bootstrap-icons.min.css"),
+  scopedUrl("static/vendor/bootstrap-icons/font/fonts/bootstrap-icons.woff2"),
+  scopedUrl("static/vendor/chartjs/chart.umd.min.js"),
 ];
 
 self.addEventListener("install", (event) => {
