@@ -5,6 +5,10 @@
   --sidebar-active: #1abb9c;
   --topbar-bg: #ffffff;
   --content-bg: #f7f7f7;
+  --card-bg: #ffffff;
+  --surface-muted: #f7f9fb;
+  --overlay-bg: rgba(255, 255, 255, 0.86);
+  --hover-bg: #eef1f4;
   --ink: #2a3f54;
   --ink-soft: #8a94a6;
   --ink-muted: #5c6b7a;
@@ -31,6 +35,22 @@
   --bs-border-radius-lg: 0.75rem;
   --bs-link-color: var(--primary);
   --bs-link-hover-color: var(--primary-dark);
+}
+
+/* ダークモード: html[data-bs-theme="dark"] はJS(app.js)がlocalStorage/OS設定に応じて切り替える。
+   サイドバーはライト/ダーク共通で常時ダーク基調のため、ここでは触らない。 */
+[data-bs-theme="dark"] {
+  color-scheme: dark;
+  --topbar-bg: #1c2027;
+  --content-bg: #14171c;
+  --card-bg: #1e222a;
+  --surface-muted: #232833;
+  --overlay-bg: rgba(20, 23, 28, 0.86);
+  --hover-bg: #262c36;
+  --ink: #e7eaf0;
+  --ink-soft: #98a2b3;
+  --ink-muted: #b6c0cc;
+  --line: #2c323d;
 }
 
 * {
@@ -186,7 +206,7 @@ a {
 
 .topbar-toggle {
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--card-bg);
   color: var(--ink);
   width: 38px;
   height: 38px;
@@ -220,10 +240,19 @@ a {
   min-width: 96px;
 }
 
+.topbar-theme-toggle {
+  width: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
 .topbar-substatus {
   padding: 6px 20px;
-  background: #fff;
-  border-bottom: 1px solid #eef0f2;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--line);
   min-height: 30px;
   display: flex;
   align-items: center;
@@ -281,6 +310,7 @@ a {
 /* ---------- Cards (generic) ---------- */
 
 .card {
+  --bs-card-bg: var(--card-bg);
   border-color: var(--line);
 }
 
@@ -395,7 +425,7 @@ a {
 }
 
 .btn-outline-secondary:hover {
-  background: #eef1f4;
+  background: var(--hover-bg);
   border-color: var(--line);
   color: var(--ink);
 }
@@ -442,9 +472,9 @@ a {
   max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  border: 1px solid #eef0f2;
+  border: 1px solid var(--line);
   border-radius: 0.5rem;
-  background: #fbfbfc;
+  background: var(--surface-muted);
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
 }
@@ -462,7 +492,7 @@ a {
   opacity: 0;
   pointer-events: none;
   transition: opacity 140ms ease;
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--overlay-bg);
 }
 
 .chart-card.is-loading .chart-loading-overlay {
@@ -483,7 +513,7 @@ a {
 /* ---------- Info cards ---------- */
 
 .info-card {
-  background: #f7f9fb;
+  background: var(--surface-muted);
   border: 1px solid var(--line);
   border-radius: 0.5rem;
   padding: 0.85rem 1rem;
@@ -518,7 +548,7 @@ a {
 .info-meta > div {
   font-size: 0.8rem;
   color: var(--ink-muted);
-  background: #f7f9fb;
+  background: var(--surface-muted);
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 0.45rem 0.8rem;

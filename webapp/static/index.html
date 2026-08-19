@@ -2,6 +2,23 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
+  <script>
+    // 表示が切り替わって見えてしまう(FOUC)のを防ぐため、CSSより前に同期で適用する。
+    (function () {
+      try {
+        var stored = localStorage.getItem("metalDailyTheme");
+        var theme =
+          stored === "light" || stored === "dark"
+            ? stored
+            : window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+        document.documentElement.setAttribute("data-bs-theme", theme);
+      } catch (_) {
+        document.documentElement.setAttribute("data-bs-theme", "light");
+      }
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="METAL DAILYは金・銀・プラチナのJST基準リアルタイム価格・1週間予測・純度計算を提供するダッシュボードです。更新データは金融市場APIとGoogle Newsを参照し、プッシュ通知で昼に最新情報を届けます。最新の価格推移も直感的なグラフで確認可能。" />
   <meta name="robots" content="index,follow" />
@@ -24,7 +41,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="static/icons/apple-touch-icon.png?v=20260310-2" />
   <link rel="stylesheet" href="static/vendor/bootstrap/css/bootstrap.min.css?v=5.3.3" />
   <link rel="stylesheet" href="static/vendor/bootstrap-icons/font/bootstrap-icons.min.css?v=1.11.3" />
-  <link rel="stylesheet" href="static/styles.css?v=20260820-2" />
+  <link rel="stylesheet" href="static/styles.css?v=20260820-4" />
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -122,6 +139,9 @@
             <i class="bi bi-arrow-clockwise"></i> 更新
           </button>
           <button id="pushButton" type="button" class="btn btn-primary btn-sm">Push通知を有効化</button>
+          <button id="themeToggle" type="button" class="btn btn-outline-secondary btn-sm topbar-theme-toggle" aria-label="ダークモード切り替え" aria-pressed="false" title="ダークモード切り替え">
+            <i class="bi bi-moon-stars" aria-hidden="true"></i>
+          </button>
         </div>
       </header>
       <div class="topbar-substatus">
@@ -360,6 +380,6 @@
 
   <script src="static/vendor/bootstrap/js/bootstrap.bundle.min.js?v=5.3.3" defer></script>
   <script src="static/vendor/chartjs/chart.umd.min.js?v=4.5.0" defer></script>
-  <script src="static/app.js?v=20260820-3" defer></script>
+  <script src="static/app.js?v=20260820-4" defer></script>
 </body>
 </html>

@@ -50,8 +50,9 @@ const CHART_MAX_WIDTH_MOBILE_PX = 1200;
 const CHART_PX_PER_DAY_DESKTOP = 5;
 const CHART_PX_PER_DAY_MOBILE = 3;
 const CHART_DPR_CAP = 1.75;
-const SW_SCRIPT_VERSION = "20260820-3";
+const SW_SCRIPT_VERSION = "20260820-4";
 const FORECAST_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const THEME_STORAGE_KEY = "metalDailyTheme";
 
 function appUrl(path) {
   return new URL(path.replace(/^\/+/, ""), APP_BASE).toString();
@@ -192,6 +193,98 @@ function setMarketView(view) {
   forecastButton.setAttribute("tabindex", isSummary ? "-1" : "0");
   summaryPane.hidden = !isSummary;
   forecastPane.hidden = isSummary;
+}
+
+function getStoredTheme() {
+  try {
+    return localStorage.getItem(THEME_STORAGE_KEY);
+  } catch (_) {
+    return null;
+  }
+}
+
+function setStoredTheme(theme) {
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch (_) {}
+}
+
+function getPreferredTheme() {
+  const stored = getStoredTheme();
+  if (stored === "light" || stored === "dark") {
+    return stored;
+  }
+  return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+// Chart.jsはCSSを見てくれないため、テーマ切り替え時は軸・凡例の色をJS側で明示的に渡し直す。
+function getChartThemeColors() {
+  const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
+  return {
+    text: isDark ? "#98a2b3" : "#5c6b7a",
+    grid: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+  };
+}
+
+function applyChartsTheme() {
+  const colors = getChartThemeColors();
+  Object.values(charts).forEach((chart) => {
+    if (!chart || !chart.options) {
+      return;
+    }
+    const scales = chart.options.scales || {};
+    ["x", "yPrice", "yDelta"].forEach((axisKey) => {
+      const axis = scales[axisKey];
+      if (!axis) {
+        return;
+      }
+      if (axis.ticks) {
+        axis.ticks.color = colors.text;
+      }
+      if (axis.grid) {
+        axis.grid.color = colors.grid;
+      }
+    });
+    if (chart.options.plugins?.legend?.labels) {
+      chart.options.plugins.legend.labels.color = colors.text;
+    }
+    chart.update("none");
+  });
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-bs-theme", theme);
+  const toggle = document.getElementById("themeToggle");
+  if (toggle) {
+    const icon = toggle.querySelector("i");
+    if (icon) {
+      icon.className = theme === "dark" ? "bi bi-sun" : "bi bi-moon-stars";
+    }
+    toggle.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+  }
+  applyChartsTheme();
+}
+
+function initializeThemeToggle() {
+  applyTheme(getPreferredTheme());
+
+  const toggle = document.getElementById("themeToggle");
+  if (toggle) {
+    toggle.addEventListener("click", () => {
+      const next = document.documentElement.getAttribute("data-bs-theme") === "dark" ? "light" : "dark";
+      setStoredTheme(next);
+      applyTheme(next);
+    });
+  }
+
+  // ユーザーが一度も手動切り替えしていない間だけ、OS側のテーマ変更に追従する。
+  if (window.matchMedia) {
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (event) => {
+      if (!getStoredTheme()) {
+        applyTheme(event.matches ? "dark" : "light");
+      }
+    });
+  }
 }
 
 function initializeMarketToggle() {
@@ -605,6 +698,7 @@ function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, his
   }
   const xMaxTicks = isMobile ? 7 : 11;
   const chartDpr = Math.min(window.devicePixelRatio || 1, CHART_DPR_CAP);
+  const themeColors = getChartThemeColors();
 
   const existing = charts[metalKey];
   if (existing) {
@@ -702,7 +796,9 @@ function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, his
         yPrice: {
           type: "linear",
           position: "left",
+          grid: { color: themeColors.grid },
           ticks: {
+            color: themeColors.text,
             callback: (value) => new Intl.NumberFormat("ja-JP").format(value),
           },
         },
@@ -711,12 +807,15 @@ function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, his
           position: "right",
           grid: { drawOnChartArea: false },
           ticks: {
+            color: themeColors.text,
             callback: (value) => new Intl.NumberFormat("ja-JP").format(value),
           },
         },
         x: {
           type: "category",
+          grid: { color: themeColors.grid },
           ticks: {
+            color: themeColors.text,
             autoSkip: true,
             maxTicksLimit: xMaxTicks,
             maxRotation: 0,
@@ -730,7 +829,7 @@ function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, his
             title: (items) => (items.length ? dailyAxis[items[0].dataIndex] : ""),
           },
         },
-        legend: { labels: { boxWidth: 10 } },
+        legend: { labels: { color: themeColors.text, boxWidth: 10 } },
       },
     },
   });
@@ -1017,6 +1116,7 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+initializeThemeToggle();
 initializeMarketToggle();
 startForecastAutoRefresh();
 
