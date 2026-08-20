@@ -443,6 +443,39 @@ a {
 
 .market-section-meta {
   margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.market-section-meta[hidden] {
+  display: none;
+}
+
+.forecast-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: var(--surface-muted);
+  color: var(--ink-muted);
+}
+
+.forecast-meta-chip i {
+  font-size: 0.85rem;
+}
+
+.forecast-meta-chip.is-up {
+  background: rgba(26, 187, 156, 0.14);
+  color: var(--up);
+}
+
+.forecast-meta-chip.is-down {
+  background: rgba(231, 76, 60, 0.12);
+  color: var(--down);
 }
 
 .text-success {

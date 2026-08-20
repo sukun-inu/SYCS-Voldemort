@@ -132,6 +132,26 @@ function toIsoDate(date) {
   return `${year}-${month}-${day}`;
 }
 
+const JST_DATETIME_FORMATTER = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+function formatJstDateTime(isoString) {
+  if (!isoString) {
+    return "-";
+  }
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+  return JST_DATETIME_FORMATTER.format(date);
+}
+
 function enumerateDailyAxis(startIso, endIso) {
   const start = parseIsoDate(startIso);
   const end = parseIsoDate(endIso);
@@ -513,11 +533,17 @@ function updateForecastMeta(payload) {
   }
   const usdJpy = payload?.signals?.usd_jpy || {};
   const horizonDays = Number(payload?.horizon_days || 7);
-  const generatedAt = payload?.generated_at || "-";
-  const fxText = usdJpy.available
-    ? `USD/JPY 週次: ${formatPercent(Number(usdJpy.weekly_change_pct || 0), 3)}`
-    : "USD/JPY: 取得失敗";
-  meta.textContent = `生成時刻: ${generatedAt} / 予測期間: ${horizonDays}日 / ${fxText}`;
+  const generatedAt = formatJstDateTime(payload?.generated_at);
+  const fxAvailable = !!usdJpy.available;
+  const fxValue = Number(usdJpy.weekly_change_pct || 0);
+  const fxClass = fxAvailable ? (fxValue > 0 ? "is-up" : fxValue < 0 ? "is-down" : "") : "";
+  const fxText = fxAvailable ? formatPercent(fxValue, 2) : "取得失敗";
+
+  meta.innerHTML = [
+    `<span class="forecast-meta-chip"><i class="bi bi-clock-history" aria-hidden="true"></i>生成 ${escapeHtml(generatedAt)} (JST)</span>`,
+    `<span class="forecast-meta-chip"><i class="bi bi-calendar-range" aria-hidden="true"></i>予測期間 ${horizonDays}日</span>`,
+    `<span class="forecast-meta-chip ${fxClass}"><i class="bi bi-currency-exchange" aria-hidden="true"></i>USD/JPY週次 ${escapeHtml(fxText)}</span>`,
+  ].join("");
   updateForecastSourceFooter(payload);
 }
 
