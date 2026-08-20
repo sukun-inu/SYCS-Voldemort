@@ -90,6 +90,8 @@ docker compose up -d --build
 | `FORECAST_REFRESH_EXTRA_HOURS_JST` | 任意 | 週次予測を日中に強制リフレッシュするJST時刻（カンマ区切り、既定 `6,12,18`）。0時分はJST 00:00の日次スナップショットジョブが既にカバーしているため対象外。以前は毎時(1日24回)リフレッシュしGroq/ニュースRSS/為替APIを浪費していたため間引いた |
 | `FORECAST_LLM_WEIGHT` | 任意 | AI(Groq)判定のスコア×確信度が予測日次リターンに反映される係数（既定 `0.008`）。heuristic_daily_returnのclamp(±4%/日)は別途維持される |
 | `FORECAST_HISTORY_WINDOW_MIN_DAYS` | 任意 | SARIMAX予測に与える価格履歴の最小日数（既定 `120`）。長いほど季節性・トレンドを学習しやすいが、DBクエリ・計算コストは増える |
+| `FORECAST_SUMMARY_ENABLED` | 任意 | `true/false`。「予測の根拠」の専門的な箇条書きをGroqで平易な要約文に言い換えるか（既定 `true`）。scoring用のGroq呼び出しとは別に、予測リフレッシュ1回につき+1回呼び出す |
+| `FORECAST_SUMMARY_TIMEOUT_SECONDS` | 任意 | 上記要約呼び出しのタイムアウト秒数（既定 `20`） |
 | `TRUST_CF_HEADERS` | 任意 | `true/false`。CFヘッダを信頼するか（既定 `false`） |
 | `REQUIRE_CF_CONNECTING_IP` | 任意 | `true/false`。CFヘッダ必須化（既定 `false`） |
 | `TRUSTED_PROXY_CIDRS` | 任意 | Forwardedヘッダを信頼するプロキシCIDR（既定 `127.0.0.1/32,::1/128`） |

@@ -37,6 +37,15 @@ FORECAST_LLM_ENABLED = read_env_bool("FORECAST_LLM_ENABLED", True)
 FORECAST_LLM_MODEL = (os.getenv("FORECAST_LLM_MODEL") or "openai/gpt-oss-120b").strip() or "openai/gpt-oss-120b"
 FORECAST_LLM_TIMEOUT_SECONDS = max(8, int(os.getenv("FORECAST_LLM_TIMEOUT_SECONDS", "20")))
 
+# 「予測の根拠」に出す統計モデル内訳(SARIMAXの係数やシグナル合成値など)が専門的で
+# わかりにくいというフィードバックを受け、Groqで一般利用者向けの平易な要約文に
+# 言い換えさせる機能。fetch_llm_signal(スコアリング用)とは別呼び出しになる
+# ("drivers"はforecast_for_metal計算後でないと確定しないため合成不可)が、
+# 予測リフレッシュ1回につき+1回(既存のscoring callと合わせて計2回)に収まり、
+# 共有レート制限(services/groq_client)の対象にもなっているため安全。
+FORECAST_SUMMARY_ENABLED = read_env_bool("FORECAST_SUMMARY_ENABLED", True)
+FORECAST_SUMMARY_TIMEOUT_SECONDS = max(8, int(os.getenv("FORECAST_SUMMARY_TIMEOUT_SECONDS", "20")))
+
 NEWS_QUERY_BY_METAL = {
     "gold": "gold price xau bullion federal reserve inflation usd jpy",
     "silver": "silver price xag bullion industrial demand usd jpy",
@@ -317,3 +326,73 @@ async def fetch_llm_signal(
         "rationales": rationales,
         "global_comment": clip_text(str(parsed.get("global_comment", "")).strip(), 180),
     }
+
+
+async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str]:
+    """forecast_for_metalが確定させたdrivers(統計モデル内訳・トレンド・為替・ニュース・
+    AI判定感応の箇条書き)を、金融の専門知識が無い利用者にも伝わる短い日本語の説明文に
+    Groqで言い換えさせる。3金属分をまとめて1回の呼び出しにし、失敗時は空文字を返して
+    呼び出し元(フロントエンド)が従来通りdriversの箇条書き表示にフォールバックできる
+    ようにする。"""
+    empty = {key: "" for key in METAL_COMMANDS.keys()}
+    if not FORECAST_SUMMARY_ENABLED or not GROQ_API_KEY:
+        return empty
+
+    metals_input: dict[str, Any] = {}
+    for metal_key in METAL_COMMANDS.keys():
+        item = forecast.get(metal_key)
+        if not isinstance(item, dict):
+            continue
+        drivers = [str(driver) for driver in (item.get("drivers") or []) if str(driver).strip()]
+        if not drivers:
+            continue
+        metals_input[metal_key] = {
+            "projected_change_pct_7d": item.get("projected_change_pct_7d"),
+            "confidence": item.get("confidence"),
+            "technical_notes": drivers,
+        }
+
+    if not metals_input:
+        return empty
+
+    system_prompt = (
+        "You are a friendly Japanese financial writer explaining a precious-metal price "
+        "forecast to everyday retail users with no finance background. For each metal, "
+        "rewrite technical_notes (bullet points of model internals: statistical model "
+        "output, trend, FX sensitivity, news sentiment, AI judgement) into ONE short "
+        "paragraph in natural Japanese (roughly 60-100 characters), plain language, no "
+        "jargon or model names, at most one number. Return STRICT JSON only, no markdown."
+    )
+    user_prompt = (
+        "Inputs JSON:\n"
+        f"{json_dumps({'metals': metals_input})}\n"
+        "Return JSON schema:\n"
+        "{\"summaries\":{\"gold\":\"...\",\"silver\":\"...\",\"platinum\":\"...\"}}\n"
+        "Omit keys for metals not present in the input."
+    )
+
+    try:
+        response = await create_chat_completion(
+            _get_groq_client(float(FORECAST_SUMMARY_TIMEOUT_SECONDS)),
+            bucket=_GROQ_BUCKET,
+            model=FORECAST_LLM_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.3,
+            max_tokens=500,
+        )
+        content = response.choices[0].message.content or ""
+    except Exception as exc:
+        logger.warning("予測根拠の要約取得に失敗: %s", exc)
+        return empty
+
+    parsed = extract_first_json_object(str(content)) or {}
+    raw_summaries = parsed.get("summaries", {}) if isinstance(parsed.get("summaries"), dict) else {}
+    summaries = dict(empty)
+    for metal_key in METAL_COMMANDS.keys():
+        text = str(raw_summaries.get(metal_key, "")).strip()
+        if text:
+            summaries[metal_key] = clip_text(text, 200)
+    return summaries

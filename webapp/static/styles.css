@@ -522,6 +522,39 @@ a {
   margin-top: 2px;
 }
 
+.market-widget-forecast-note-summary {
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+.market-widget-forecast-note-details {
+  margin-top: 6px;
+}
+
+.market-widget-forecast-note-details > summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-size: 0.76rem;
+  font-weight: 600;
+  list-style: none;
+}
+
+.market-widget-forecast-note-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.market-widget-forecast-note-details > summary::before {
+  content: "▸ ";
+}
+
+.market-widget-forecast-note-details[open] > summary::before {
+  content: "▾ ";
+}
+
+.market-widget-forecast-note-details .market-widget-forecast-note-list {
+  margin-top: 6px;
+}
+
 .market-section-meta {
   display: flex;
   flex-wrap: wrap;
