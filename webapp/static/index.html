@@ -41,7 +41,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="static/icons/apple-touch-icon.png?v=20260310-2" />
   <link rel="stylesheet" href="static/vendor/bootstrap/css/bootstrap.min.css?v=5.3.3" />
   <link rel="stylesheet" href="static/vendor/bootstrap-icons/font/bootstrap-icons.min.css?v=1.11.3" />
-  <link rel="stylesheet" href="static/styles.css?v=20260820-13" />
+  <link rel="stylesheet" href="static/styles.css?v=20260820-14" />
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -89,13 +89,44 @@
           <span class="brand-text">METAL DAILY</span>
         </a>
         <div class="topbar-actions d-flex align-items-center gap-3 flex-wrap">
-          <select id="daysSelect" class="form-select form-select-sm topbar-select" aria-label="表示期間">
-            <option value="30" selected>30日</option>
-            <option value="90">90日</option>
-            <option value="180">180日</option>
-            <option value="365">365日</option>
-            <option value="all">全期間</option>
-          </select>
+          <div class="dropdown range-dropdown">
+            <button
+              type="button"
+              id="rangeDropdownButton"
+              class="btn btn-outline-secondary btn-sm topbar-range-btn"
+              data-bs-toggle="dropdown"
+              data-bs-auto-close="outside"
+              aria-expanded="false"
+              aria-label="表示期間を選択"
+            >
+              <i class="bi bi-calendar3" aria-hidden="true"></i>
+              <span id="rangeDropdownLabel">30日</span>
+              <i class="bi bi-chevron-down range-caret" aria-hidden="true"></i>
+            </button>
+            <div class="dropdown-menu range-dropdown-menu p-3">
+              <div class="range-preset-group" role="group" aria-label="表示期間プリセット">
+                <button type="button" class="range-preset-btn is-active" data-range-days="30">30日</button>
+                <button type="button" class="range-preset-btn" data-range-days="90">90日</button>
+                <button type="button" class="range-preset-btn" data-range-days="180">180日</button>
+                <button type="button" class="range-preset-btn" data-range-days="365">365日</button>
+                <button type="button" class="range-preset-btn" data-range-days="all">全期間</button>
+              </div>
+              <hr class="range-divider" />
+              <p class="text-muted small mb-2">期間を指定</p>
+              <div class="range-custom-form">
+                <div class="range-custom-field">
+                  <label for="rangeStartInput" class="form-label small mb-1">開始日</label>
+                  <input type="date" id="rangeStartInput" class="form-control form-control-sm" />
+                </div>
+                <div class="range-custom-field">
+                  <label for="rangeEndInput" class="form-label small mb-1">終了日</label>
+                  <input type="date" id="rangeEndInput" class="form-control form-control-sm" />
+                </div>
+                <button type="button" id="rangeApplyButton" class="btn btn-primary btn-sm w-100">この期間を表示</button>
+                <p id="rangeCustomError" class="text-danger small mb-0" hidden></p>
+              </div>
+            </div>
+          </div>
           <div class="topbar-tool-group d-flex align-items-center gap-2">
             <button id="reloadButton" type="button" class="btn btn-outline-secondary btn-sm topbar-icon-btn" aria-label="更新" title="更新">
               <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
@@ -146,9 +177,10 @@
       <div class="row g-3">
         <div class="col-lg-8">
           <section id="market-section" class="content-section">
-            <div class="section-title d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-              <h2 class="mb-0">マーケット</h2>
-              <div class="btn-group market-toggle" role="tablist" aria-label="表示切り替え">
+            <div class="section-title d-flex align-items-center flex-wrap gap-2 mb-3">
+              <h2 class="visually-hidden">マーケット</h2>
+              <p id="forecastMeta" class="text-muted small market-section-meta mb-0" hidden>予測データを読み込み中...</p>
+              <div class="btn-group market-toggle ms-auto" role="tablist" aria-label="表示切り替え">
                 <button
                   id="marketViewSummary"
                   class="btn btn-outline-primary market-toggle-button is-active"
@@ -171,7 +203,6 @@
                 </button>
               </div>
             </div>
-            <p id="forecastMeta" class="text-muted small market-section-meta" hidden>予測データを読み込み中...</p>
 
             <div class="market-widget-stack">
               <article class="card shadow-sm market-widget" data-metal="gold">
@@ -402,6 +433,6 @@
 
   <script src="static/vendor/bootstrap/js/bootstrap.bundle.min.js?v=5.3.3" defer></script>
   <script src="static/vendor/lightweight-charts/lightweight-charts.standalone.production.js?v=5.2.1" defer></script>
-  <script src="static/app.js?v=20260820-14" defer></script>
+  <script src="static/app.js?v=20260820-15" defer></script>
 </body>
 </html>

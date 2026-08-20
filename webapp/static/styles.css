@@ -159,9 +159,62 @@ a {
   border-bottom-color: var(--primary);
 }
 
-.topbar-select {
-  width: auto;
-  min-width: 96px;
+.topbar-range-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.range-caret {
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+}
+
+.range-dropdown-menu {
+  min-width: 260px;
+}
+
+.range-preset-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.range-preset-btn {
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--ink-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 999px;
+}
+
+.range-preset-btn:hover {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+.range-preset-btn.is-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.range-divider {
+  margin: 12px 0;
+  border-color: var(--line);
+  opacity: 1;
+}
+
+.range-custom-form {
+  display: grid;
+  gap: 8px;
+}
+
+.range-custom-field .form-label {
+  color: var(--ink-muted);
 }
 
 .topbar-icon-btn {
@@ -442,9 +495,9 @@ a {
 }
 
 .market-section-meta {
-  margin: 0 0 14px;
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
 }
 
@@ -770,8 +823,13 @@ a {
     width: 100%;
   }
 
-  .topbar-select {
+  .range-dropdown {
     flex: 1 1 auto;
+  }
+
+  .topbar-range-btn {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 

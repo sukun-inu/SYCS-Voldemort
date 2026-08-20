@@ -720,34 +720,54 @@ async def health() -> dict[str, str]:
 async def price_history(
     days: int = Query(default=365, ge=7, le=3650),
     all_time: bool = Query(default=False, alias="all"),
+    start: date | None = Query(default=None),
+    end: date | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
     today = datetime.now(JST).date()
-    cache_key = f"history:{today.isoformat()}:{'all' if all_time else days}"
+    is_custom_range = start is not None or end is not None
+
+    if is_custom_range:
+        # 「いつからいつまで」を自由に指定して遡れるようにするカスタム範囲。
+        # 未来日・開始/終了の前後逆転・過大なスパンはここで安全な範囲に丸める。
+        range_end = min(end, today) if end is not None else today
+        range_start = start if start is not None else (range_end - timedelta(days=364))
+        if range_start > range_end:
+            range_start, range_end = range_end, range_start
+        range_end = min(range_end, today)
+        earliest_allowed = range_end - timedelta(days=3649)
+        if range_start < earliest_allowed:
+            range_start = earliest_allowed
+        effective_days = (range_end - range_start).days + 1
+        cache_key = f"history:{today.isoformat()}:custom:{range_start.isoformat()}:{range_end.isoformat()}"
+    else:
+        range_end = today
+        effective_days = days
+        if all_time:
+            earliest = await load_earliest_snapshot_date(session)
+            if earliest is not None:
+                # サーバが記録している最古のスナップショットまでを1回のクエリで
+                # 取得できるようdaysを動的に計算する(取得可能な全期間を参照したい、
+                # というユーザー要望への対応)。
+                effective_days = min(3650, max(7, (today - earliest).days + 1))
+        range_start = range_end - timedelta(days=effective_days - 1)
+        cache_key = f"history:{today.isoformat()}:{'all' if all_time else effective_days}"
+
     cached = await history_cache.get(cache_key)
     if cached is not None:
         return JSONResponse(cached, headers=_cache_headers(API_RESPONSE_CACHE_SECONDS))
 
-    effective_days = days
-    if all_time:
-        earliest = await load_earliest_snapshot_date(session)
-        if earliest is not None:
-            # サーバが記録している最古のスナップショットまでを1回のクエリで
-            # 取得できるようdaysを動的に計算する(取得可能な全期間を参照したい、
-            # というユーザー要望への対応)。
-            effective_days = min(3650, max(7, (today - earliest).days + 1))
-
-    history = await load_history(session, effective_days)
+    history = await load_history(session, effective_days, end_date=range_end)
     latest_snapshot = await _get_latest_prices(session)
     latest = _latest_prices_public(latest_snapshot)
-    start_date = today - timedelta(days=effective_days - 1)
     payload = {
         "timezone": "Asia/Tokyo",
         "snapshot_policy": "daily_at_jst_midnight",
-        "range_start": start_date.isoformat(),
-        "range_end": today.isoformat(),
+        "range_start": range_start.isoformat(),
+        "range_end": range_end.isoformat(),
         "days": effective_days,
         "all_time": all_time,
+        "custom_range": is_custom_range,
         "metals": history,
         "latest": latest,
     }

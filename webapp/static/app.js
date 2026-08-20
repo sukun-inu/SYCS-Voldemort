@@ -153,6 +153,18 @@ function formatJstDateTime(isoString) {
   return JST_DATETIME_FORMATTER.format(date);
 }
 
+const JST_DATE_PARTS_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Tokyo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function todayJstIso() {
+  // en-CAロケールはYYYY-MM-DD形式を返すため、そのままISO日付として使える。
+  return JST_DATE_PARTS_FORMATTER.format(new Date());
+}
+
 function enumerateDailyAxis(startIso, endIso) {
   const start = parseIsoDate(startIso);
   const end = parseIsoDate(endIso);
@@ -952,8 +964,7 @@ async function loadDashboard() {
   setDashboardLoadingState();
   try {
     await ensureChartLibrary();
-    const rangeValue = document.getElementById("daysSelect").value || "30";
-    const historyQuery = rangeValue === "all" ? "all=true" : `days=${Number(rangeValue) || 30}`;
+    const historyQuery = buildRangeQuery(currentRangeState);
     const response = await fetch(`${appUrl("api/prices/history")}?${historyQuery}`);
     if (!response.ok) {
       throw new Error("データ取得に失敗しました。");
@@ -1176,31 +1187,153 @@ document.getElementById("reloadButton").addEventListener("click", () => {
   });
 });
 
-document.getElementById("daysSelect").addEventListener("change", (event) => {
+const DEFAULT_RANGE_STATE = { mode: "preset", days: 30 };
+let currentRangeState = { ...DEFAULT_RANGE_STATE };
+
+function buildRangeQuery(state) {
+  if (state.mode === "all") {
+    return "all=true";
+  }
+  if (state.mode === "custom" && state.start && state.end) {
+    return `start=${encodeURIComponent(state.start)}&end=${encodeURIComponent(state.end)}`;
+  }
+  return `days=${Number(state.days) || 30}`;
+}
+
+function getRangeLabel(state) {
+  if (state.mode === "all") {
+    return "全期間";
+  }
+  if (state.mode === "custom" && state.start && state.end) {
+    const shorten = (iso) => iso.replaceAll("-", "/").slice(2);
+    return `${shorten(state.start)}〜${shorten(state.end)}`;
+  }
+  return `${Number(state.days) || 30}日`;
+}
+
+function isValidRangeState(state) {
+  if (!state || typeof state !== "object") {
+    return false;
+  }
+  if (state.mode === "all") {
+    return true;
+  }
+  if (state.mode === "preset") {
+    return [30, 90, 180, 365].includes(Number(state.days));
+  }
+  if (state.mode === "custom") {
+    return typeof state.start === "string" && typeof state.end === "string" && state.start <= state.end;
+  }
+  return false;
+}
+
+function syncRangeUi(state) {
+  const label = document.getElementById("rangeDropdownLabel");
+  if (label) {
+    label.textContent = getRangeLabel(state);
+  }
+  document.querySelectorAll(".range-preset-btn").forEach((button) => {
+    const isMatch =
+      (state.mode === "all" && button.dataset.rangeDays === "all") ||
+      (state.mode === "preset" && button.dataset.rangeDays === String(state.days));
+    button.classList.toggle("is-active", isMatch);
+  });
+  if (state.mode === "custom") {
+    const startInput = document.getElementById("rangeStartInput");
+    const endInput = document.getElementById("rangeEndInput");
+    if (startInput) {
+      startInput.value = state.start;
+    }
+    if (endInput) {
+      endInput.value = state.end;
+    }
+  }
+}
+
+function closeRangeDropdown() {
+  const button = document.getElementById("rangeDropdownButton");
+  if (!button || typeof bootstrap === "undefined") {
+    return;
+  }
+  const instance = bootstrap.Dropdown.getOrCreateInstance(button);
+  instance.hide();
+}
+
+function applyRangeState(state) {
+  if (!isValidRangeState(state)) {
+    return;
+  }
+  currentRangeState = state;
   try {
-    localStorage.setItem(DAYS_RANGE_STORAGE_KEY, event.target.value);
+    localStorage.setItem(DAYS_RANGE_STORAGE_KEY, JSON.stringify(state));
   } catch (_) {}
+  syncRangeUi(state);
+  closeRangeDropdown();
   loadDashboard().catch((err) => {
     console.error(err);
     alert(err.message || "ダッシュボードの更新に失敗しました。");
   });
-});
+}
 
-function restoreStoredDaysRange() {
-  const select = document.getElementById("daysSelect");
-  if (!select) {
-    return;
+function restoreStoredRangeState() {
+  const todayIso = todayJstIso();
+  const startInput = document.getElementById("rangeStartInput");
+  const endInput = document.getElementById("rangeEndInput");
+  if (startInput) {
+    startInput.max = todayIso;
   }
+  if (endInput) {
+    endInput.max = todayIso;
+  }
+
   let stored = null;
   try {
-    stored = localStorage.getItem(DAYS_RANGE_STORAGE_KEY);
+    const raw = localStorage.getItem(DAYS_RANGE_STORAGE_KEY);
+    stored = raw ? JSON.parse(raw) : null;
   } catch (_) {
     stored = null;
   }
-  if (stored && Array.from(select.options).some((option) => option.value === stored)) {
-    select.value = stored;
-  }
+  const state = isValidRangeState(stored) ? stored : { ...DEFAULT_RANGE_STATE };
+  currentRangeState = state;
+  syncRangeUi(state);
 }
+
+document.querySelectorAll(".range-preset-btn").forEach((button) => {
+  button.addEventListener("click", () => {
+    const { rangeDays } = button.dataset;
+    applyRangeState(rangeDays === "all" ? { mode: "all" } : { mode: "preset", days: Number(rangeDays) });
+  });
+});
+
+document.getElementById("rangeApplyButton").addEventListener("click", () => {
+  const startInput = document.getElementById("rangeStartInput");
+  const endInput = document.getElementById("rangeEndInput");
+  const errorEl = document.getElementById("rangeCustomError");
+  const start = startInput?.value || "";
+  const end = endInput?.value || "";
+  const todayIso = todayJstIso();
+
+  let errorMessage = "";
+  if (!start || !end) {
+    errorMessage = "開始日と終了日の両方を指定してください。";
+  } else if (start > end) {
+    errorMessage = "開始日は終了日より前の日付を指定してください。";
+  } else if (end > todayIso) {
+    errorMessage = "終了日は今日以前の日付を指定してください。";
+  }
+
+  if (errorMessage) {
+    if (errorEl) {
+      errorEl.textContent = errorMessage;
+      errorEl.hidden = false;
+    }
+    return;
+  }
+  if (errorEl) {
+    errorEl.hidden = true;
+  }
+  applyRangeState({ mode: "custom", start, end });
+});
 
 document.getElementById("calcButton").addEventListener("click", () => {
   calculatePurityPrice().catch((err) => {
@@ -1244,7 +1377,7 @@ document.addEventListener("visibilitychange", () => {
 initializeThemeToggle();
 initializeMarketToggle();
 initializeChartTools();
-restoreStoredDaysRange();
+restoreStoredRangeState();
 startForecastAutoRefresh();
 
 loadDashboard().catch((err) => {
