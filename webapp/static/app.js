@@ -47,7 +47,7 @@ let currentMarketView = "summary";
 const CHART_CDN_LIST = [
   "static/vendor/lightweight-charts/lightweight-charts.standalone.production.js?v=5.2.1",
 ];
-const SW_SCRIPT_VERSION = "20260820-11";
+const SW_SCRIPT_VERSION = "20260820-12";
 const FORECAST_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const THEME_STORAGE_KEY = "metalDailyTheme";
 const DAYS_RANGE_STORAGE_KEY = "metalDailyDaysRange";
@@ -540,9 +540,13 @@ function renderForecastReasonBox(noteEl, metalKey, item) {
   if (llmRationale && !drivers.some((driver) => driver.includes(llmRationale))) {
     drivers.push(`AI判定所見: ${llmRationale}`);
   }
+  // SARIMAXの係数や合成シグナル値など専門的な箇条書きは分かりにくいというフィードバックを
+  // 受け、Groqが生成した平易な要約文(item.summary)があればそちらを主表示にする。
+  // 要約が無い(生成失敗/無効化/旧キャッシュ)場合は従来通り箇条書きをそのまま見せる。
+  const summary = String(item?.summary || "").trim();
 
   noteEl.replaceChildren();
-  noteEl.hidden = drivers.length === 0;
+  noteEl.hidden = drivers.length === 0 && !summary;
   if (noteEl.hidden) {
     return;
   }
@@ -555,17 +559,38 @@ function renderForecastReasonBox(noteEl, metalKey, item) {
   const titleText = document.createElement("span");
   titleText.textContent = "予測の根拠";
   title.append(icon, titleText);
+  noteEl.append(title);
 
-  const list = document.createElement("ul");
-  list.className = "market-widget-forecast-note-list";
-  // 現行モデルが出す全内訳（統計モデル・トレンド・為替・ニュース・AI所見）を示す。
-  // 長大な外部入力が混入してもカードを壊さないよう件数には上限を設ける。
-  drivers.slice(0, 7).forEach((driver) => {
-    const listItem = document.createElement("li");
-    listItem.textContent = driver;
-    list.append(listItem);
-  });
-  noteEl.append(title, list);
+  const buildList = () => {
+    const list = document.createElement("ul");
+    list.className = "market-widget-forecast-note-list";
+    // 現行モデルが出す全内訳（統計モデル・トレンド・為替・ニュース・AI所見）を示す。
+    // 長大な外部入力が混入してもカードを壊さないよう件数には上限を設ける。
+    drivers.slice(0, 7).forEach((driver) => {
+      const listItem = document.createElement("li");
+      listItem.textContent = driver;
+      list.append(listItem);
+    });
+    return list;
+  };
+
+  if (summary) {
+    const summaryEl = document.createElement("p");
+    summaryEl.className = "market-widget-forecast-note-summary";
+    summaryEl.textContent = summary;
+    noteEl.append(summaryEl);
+
+    if (drivers.length > 0) {
+      const details = document.createElement("details");
+      details.className = "market-widget-forecast-note-details";
+      const detailsLabel = document.createElement("summary");
+      detailsLabel.textContent = "詳細を見る";
+      details.append(detailsLabel, buildList());
+      noteEl.append(details);
+    }
+  } else {
+    noteEl.append(buildList());
+  }
 }
 
 function updateMarketWidgets() {

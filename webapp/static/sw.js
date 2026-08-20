@@ -1,4 +1,4 @@
-const CACHE_NAME = "metal-tracker-v22";
+const CACHE_NAME = "metal-tracker-v23";
 
 function scopedUrl(path) {
   return new URL(path, self.registration.scope).toString();

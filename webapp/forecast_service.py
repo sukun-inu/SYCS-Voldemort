@@ -22,6 +22,7 @@ from .forecast_models import (
 from .forecast_signals import (
     FORECAST_LLM_MODEL,
     FORECAST_LLM_TIMEOUT_SECONDS,
+    fetch_forecast_summaries,
     fetch_llm_signal,
     fetch_news_signals,
     fetch_usdjpy_signal,
@@ -94,6 +95,13 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
     if not forecast:
         raise RuntimeError("予測に必要な価格履歴データがありません。")
 
+    # driversはforecast_for_metal計算後でないと確定しないため、scoring用のfetch_llm_signal
+    # とは別にもう一度Groqを呼び、平易な要約文をここで確定させてから各金属へ埋め込む。
+    summaries = await fetch_forecast_summaries(forecast=forecast)
+    for metal_key, summary_text in summaries.items():
+        if metal_key in forecast and summary_text:
+            forecast[metal_key]["summary"] = summary_text
+
     uses_sarimax = any(
         item.get("model_variant") == "sarimax_fused_v1"
         for item in forecast.values()
@@ -159,6 +167,20 @@ def _forecast_payload_from_db(
     for row in rows:
         by_metal.setdefault(row.metal_key, []).append(row)
 
+    headlines_payload = json_loads(meta.news_headlines_json, {})
+    if isinstance(headlines_payload, dict) and "sample_headlines" in headlines_payload:
+        sample_headlines = headlines_payload.get("sample_headlines") or {}
+        llm_payload = headlines_payload.get("llm") or {}
+        stat_model_payload = headlines_payload.get("stat_model") or {}
+        accuracy_payload = headlines_payload.get("accuracy") or {}
+        summaries_payload = headlines_payload.get("summaries") or {}
+    else:
+        sample_headlines = headlines_payload if isinstance(headlines_payload, dict) else {}
+        llm_payload = {}
+        stat_model_payload = {}
+        accuracy_payload = {}
+        summaries_payload = {}
+
     forecast: dict[str, Any] = {}
     for metal_key, metal_rows in by_metal.items():
         sorted_rows = sorted(metal_rows, key=lambda row: row.forecast_date)
@@ -179,19 +201,8 @@ def _forecast_payload_from_db(
             "implied_daily_return_pct": float(first.implied_daily_return_pct),
             "daily": daily,
             "drivers": json_loads(first.drivers_json, []),
+            "summary": str(summaries_payload.get(metal_key, "")) if isinstance(summaries_payload, dict) else "",
         }
-
-    headlines_payload = json_loads(meta.news_headlines_json, {})
-    if isinstance(headlines_payload, dict) and "sample_headlines" in headlines_payload:
-        sample_headlines = headlines_payload.get("sample_headlines") or {}
-        llm_payload = headlines_payload.get("llm") or {}
-        stat_model_payload = headlines_payload.get("stat_model") or {}
-        accuracy_payload = headlines_payload.get("accuracy") or {}
-    else:
-        sample_headlines = headlines_payload if isinstance(headlines_payload, dict) else {}
-        llm_payload = {}
-        stat_model_payload = {}
-        accuracy_payload = {}
 
     if not llm_payload:
         llm_payload = {
@@ -401,6 +412,10 @@ async def store_weekly_forecast(
             "available": bool(accuracy.get("available")),
             "lookback_days": int(safe_float(accuracy.get("lookback_days")) or 14),
             "mean_abs_error_pct": accuracy.get("mean_abs_error_pct", {}),
+        },
+        "summaries": {
+            metal_key: str((forecast_map.get(metal_key) or {}).get("summary", ""))
+            for metal_key in METAL_COMMANDS.keys()
         },
     })
 
