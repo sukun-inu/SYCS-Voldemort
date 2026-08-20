@@ -41,7 +41,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="static/icons/apple-touch-icon.png?v=20260310-2" />
   <link rel="stylesheet" href="static/vendor/bootstrap/css/bootstrap.min.css?v=5.3.3" />
   <link rel="stylesheet" href="static/vendor/bootstrap-icons/font/bootstrap-icons.min.css?v=1.11.3" />
-  <link rel="stylesheet" href="static/styles.css?v=20260820-15" />
+  <link rel="stylesheet" href="static/styles.css?v=20260820-16" />
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -218,6 +218,9 @@
                       <button type="button" class="btn btn-sm btn-outline-secondary chart-zoom-reset" data-chart="gold" title="ズームをリセット" aria-label="ズームをリセット">
                         <i class="bi bi-arrow-counterclockwise"></i>
                       </button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary chart-maximize-btn" data-chart="gold" title="拡大表示" aria-label="拡大表示">
+                        <i class="bi bi-arrows-fullscreen"></i>
+                      </button>
                     </div>
                   </div>
                   <div class="market-widget-price-row">
@@ -226,18 +229,20 @@
                     <span id="goldWidgetMeta" class="market-widget-meta text-muted small">-</span>
                   </div>
                   <div id="goldWidgetForecastNote" class="market-widget-forecast-note" hidden></div>
-                  <div class="chart-container">
-                    <div class="chart-loading-overlay" aria-hidden="true">
-                      <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                      <span>価格情報を読み込み中...</span>
+                  <div class="chart-block" data-chart-block="gold">
+                    <div class="chart-container">
+                      <div class="chart-loading-overlay" aria-hidden="true">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <span>価格情報を読み込み中...</span>
+                      </div>
+                      <div id="goldChart" class="chart-canvas"></div>
+                      <div id="goldChartTooltip" class="chart-tooltip" role="status" hidden></div>
                     </div>
-                    <div id="goldChart" class="chart-canvas"></div>
-                    <div id="goldChartTooltip" class="chart-tooltip" role="status" hidden></div>
-                  </div>
-                  <div class="chart-stats-bar">
-                    <div class="chart-stat"><span class="chart-stat-label">高値</span><span id="goldChartHigh" class="chart-stat-value">-</span></div>
-                    <div class="chart-stat"><span class="chart-stat-label">安値</span><span id="goldChartLow" class="chart-stat-value">-</span></div>
-                    <div class="chart-stat"><span class="chart-stat-label">平均</span><span id="goldChartAvg" class="chart-stat-value">-</span></div>
+                    <div class="chart-stats-bar">
+                      <div class="chart-stat"><span class="chart-stat-label">高値</span><span id="goldChartHigh" class="chart-stat-value">-</span></div>
+                      <div class="chart-stat"><span class="chart-stat-label">安値</span><span id="goldChartLow" class="chart-stat-value">-</span></div>
+                      <div class="chart-stat"><span class="chart-stat-label">平均</span><span id="goldChartAvg" class="chart-stat-value">-</span></div>
+                    </div>
                   </div>
                 </div>
               </article>
@@ -255,6 +260,9 @@
                       <button type="button" class="btn btn-sm btn-outline-secondary chart-zoom-reset" data-chart="silver" title="ズームをリセット" aria-label="ズームをリセット">
                         <i class="bi bi-arrow-counterclockwise"></i>
                       </button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary chart-maximize-btn" data-chart="silver" title="拡大表示" aria-label="拡大表示">
+                        <i class="bi bi-arrows-fullscreen"></i>
+                      </button>
                     </div>
                   </div>
                   <div class="market-widget-price-row">
@@ -263,18 +271,20 @@
                     <span id="silverWidgetMeta" class="market-widget-meta text-muted small">-</span>
                   </div>
                   <div id="silverWidgetForecastNote" class="market-widget-forecast-note" hidden></div>
-                  <div class="chart-container">
-                    <div class="chart-loading-overlay" aria-hidden="true">
-                      <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                      <span>価格情報を読み込み中...</span>
+                  <div class="chart-block" data-chart-block="silver">
+                    <div class="chart-container">
+                      <div class="chart-loading-overlay" aria-hidden="true">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <span>価格情報を読み込み中...</span>
+                      </div>
+                      <div id="silverChart" class="chart-canvas"></div>
+                      <div id="silverChartTooltip" class="chart-tooltip" role="status" hidden></div>
                     </div>
-                    <div id="silverChart" class="chart-canvas"></div>
-                    <div id="silverChartTooltip" class="chart-tooltip" role="status" hidden></div>
-                  </div>
-                  <div class="chart-stats-bar">
-                    <div class="chart-stat"><span class="chart-stat-label">高値</span><span id="silverChartHigh" class="chart-stat-value">-</span></div>
-                    <div class="chart-stat"><span class="chart-stat-label">安値</span><span id="silverChartLow" class="chart-stat-value">-</span></div>
-                    <div class="chart-stat"><span class="chart-stat-label">平均</span><span id="silverChartAvg" class="chart-stat-value">-</span></div>
+                    <div class="chart-stats-bar">
+                      <div class="chart-stat"><span class="chart-stat-label">高値</span><span id="silverChartHigh" class="chart-stat-value">-</span></div>
+                      <div class="chart-stat"><span class="chart-stat-label">安値</span><span id="silverChartLow" class="chart-stat-value">-</span></div>
+                      <div class="chart-stat"><span class="chart-stat-label">平均</span><span id="silverChartAvg" class="chart-stat-value">-</span></div>
+                    </div>
                   </div>
                 </div>
               </article>
@@ -292,6 +302,9 @@
                       <button type="button" class="btn btn-sm btn-outline-secondary chart-zoom-reset" data-chart="platinum" title="ズームをリセット" aria-label="ズームをリセット">
                         <i class="bi bi-arrow-counterclockwise"></i>
                       </button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary chart-maximize-btn" data-chart="platinum" title="拡大表示" aria-label="拡大表示">
+                        <i class="bi bi-arrows-fullscreen"></i>
+                      </button>
                     </div>
                   </div>
                   <div class="market-widget-price-row">
@@ -300,18 +313,20 @@
                     <span id="platinumWidgetMeta" class="market-widget-meta text-muted small">-</span>
                   </div>
                   <div id="platinumWidgetForecastNote" class="market-widget-forecast-note" hidden></div>
-                  <div class="chart-container">
-                    <div class="chart-loading-overlay" aria-hidden="true">
-                      <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                      <span>価格情報を読み込み中...</span>
+                  <div class="chart-block" data-chart-block="platinum">
+                    <div class="chart-container">
+                      <div class="chart-loading-overlay" aria-hidden="true">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <span>価格情報を読み込み中...</span>
+                      </div>
+                      <div id="platinumChart" class="chart-canvas"></div>
+                      <div id="platinumChartTooltip" class="chart-tooltip" role="status" hidden></div>
                     </div>
-                    <div id="platinumChart" class="chart-canvas"></div>
-                    <div id="platinumChartTooltip" class="chart-tooltip" role="status" hidden></div>
-                  </div>
-                  <div class="chart-stats-bar">
-                    <div class="chart-stat"><span class="chart-stat-label">高値</span><span id="platinumChartHigh" class="chart-stat-value">-</span></div>
-                    <div class="chart-stat"><span class="chart-stat-label">安値</span><span id="platinumChartLow" class="chart-stat-value">-</span></div>
-                    <div class="chart-stat"><span class="chart-stat-label">平均</span><span id="platinumChartAvg" class="chart-stat-value">-</span></div>
+                    <div class="chart-stats-bar">
+                      <div class="chart-stat"><span class="chart-stat-label">高値</span><span id="platinumChartHigh" class="chart-stat-value">-</span></div>
+                      <div class="chart-stat"><span class="chart-stat-label">安値</span><span id="platinumChartLow" class="chart-stat-value">-</span></div>
+                      <div class="chart-stat"><span class="chart-stat-label">平均</span><span id="platinumChartAvg" class="chart-stat-value">-</span></div>
+                    </div>
                   </div>
                 </div>
               </article>
@@ -431,8 +446,29 @@
     </footer>
   </div>
 
+  <!-- チャート拡大表示モーダル。金属ごとにモーダルを複製せず、開いた瞬間にその金属の
+       .chart-block(チャート本体+統計バー)をこのモーダル内へDOM移動し、閉じたら元の
+       位置へ戻す。Lightweight Chartsのインスタンスを再生成しないため、ズーム状態や
+       Δ/MA7の表示状態がそのまま保たれる。 -->
+  <div class="modal chart-maximize-modal" id="chartMaximizeModal" tabindex="-1" aria-hidden="true" aria-labelledby="chartMaximizeModalLabel">
+    <div class="modal-dialog modal-fullscreen">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title" id="chartMaximizeModalLabel">
+            <i id="chartMaximizeModalIcon" class="bi bi-graph-up" aria-hidden="true"></i>
+            <span id="chartMaximizeModalTitle">チャート</span>
+          </h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+        </div>
+        <div class="modal-body chart-maximize-body">
+          <div id="chartMaximizeSlot" class="chart-maximize-slot"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="static/vendor/bootstrap/js/bootstrap.bundle.min.js?v=5.3.3" defer></script>
   <script src="static/vendor/lightweight-charts/lightweight-charts.standalone.production.js?v=5.2.1" defer></script>
-  <script src="static/app.js?v=20260820-16" defer></script>
+  <script src="static/app.js?v=20260820-17" defer></script>
 </body>
 </html>
