@@ -41,7 +41,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="static/icons/apple-touch-icon.png?v=20260310-2" />
   <link rel="stylesheet" href="static/vendor/bootstrap/css/bootstrap.min.css?v=5.3.3" />
   <link rel="stylesheet" href="static/vendor/bootstrap-icons/font/bootstrap-icons.min.css?v=1.11.3" />
-  <link rel="stylesheet" href="static/styles.css?v=20260820-10" />
+  <link rel="stylesheet" href="static/styles.css?v=20260820-11" />
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -137,14 +137,7 @@
       </nav>
     </header>
 
-    <main class="page-content">
-      <div class="page-header" id="dashboardTop">
-        <p class="eyebrow">METAL DAILY SNAPSHOT</p>
-        <h1>金・銀・プラチナの価格を、1画面で。</h1>
-        <p class="text-muted page-lead">日次更新の相場、1週間予測、純度換算をすばやく確認できる資産モニタリングダッシュボード。</p>
-        <p id="generatedAt" class="text-muted small mb-0">読み込み中...</p>
-      </div>
-
+    <main class="page-content" id="dashboardTop">
       <div id="priceTicker" class="price-ticker" aria-label="価格ティッカー">
         <div id="priceTickerTrack" class="price-ticker-track"></div>
       </div>
@@ -332,6 +325,7 @@
                   <div class="info-card">
                     <h3><i class="bi bi-clock-history"></i> 更新頻度とソース</h3>
                     <p>毎日00:00（JST）に価格を更新。USD/JPYと関連ニュースを加味して1週間予測を再計算します。</p>
+                    <p id="generatedAt" class="mt-2">読み込み中...</p>
                   </div>
                   <div class="info-card">
                     <h3><i class="bi bi-bell"></i> 通知と計算ツール</h3>
@@ -410,6 +404,6 @@
 
   <script src="static/vendor/bootstrap/js/bootstrap.bundle.min.js?v=5.3.3" defer></script>
   <script src="static/vendor/lightweight-charts/lightweight-charts.standalone.production.js?v=5.2.1" defer></script>
-  <script src="static/app.js?v=20260820-11" defer></script>
+  <script src="static/app.js?v=20260820-12" defer></script>
 </body>
 </html>

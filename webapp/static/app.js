@@ -972,7 +972,7 @@ function renderDashboardFromPayload(payload, forecastPayload = latestForecastPay
   }
   const dailyAxis = enumerateDailyAxis(payload.range_start, axisEnd);
   document.getElementById("generatedAt").textContent =
-    `更新頻度: 1日1回 (JST 00:00) / 表示期間: ${payload.range_start} - ${payload.range_end}`;
+    `表示期間: ${payload.range_start} - ${payload.range_end}`;
   buildTicker(payload.latest || {});
   updateMarketWidgets();
 
