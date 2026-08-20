@@ -160,7 +160,6 @@ _ENV_DISPLAY: list[tuple[str, bool]] = [
     ("USER_STATE_CLEANUP_INTERVAL_SECONDS", False),
     ("METAL_AUTO_REPAIR_ENABLED", False),
     ("METAL_AUTO_REPAIR_INTERVAL_MINUTES", False),
-    ("METAL_AUTO_REPAIR_LOOKBACK_DAYS", False),
     ("METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH", False),
     ("SETTINGS_DIR",              False),
     ("DJAUDIO_BASE_URL",          False),

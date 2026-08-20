@@ -63,12 +63,9 @@ def _forecast_has_drift(payload: dict[str, Any] | None, *, latest_snapshot_date_
 async def repair_metalprice_integrity(
     session: AsyncSession,
     *,
-    lookback_days: int = 60,
     force_forecast_refresh: bool = False,
 ) -> dict[str, int]:
-    safe_lookback_days = max(7, min(3650, int(lookback_days)))
     today = jst_today()
-    start_date = today - timedelta(days=safe_lookback_days - 1)
 
     stats: dict[str, int] = {
         "rows_scanned": 0,
@@ -110,11 +107,13 @@ async def repair_metalprice_integrity(
             stats["missing_data_repair_attempted"] = 1
             await store_snapshot(session, today, skip_if_exists=False)
 
-    stmt = (
-        select(MetalPriceDaily)
-        .where(MetalPriceDaily.snapshot_date >= start_date)
-        .order_by(MetalPriceDaily.metal_key.asc(), MetalPriceDaily.snapshot_date.asc())
-    )
+    # delta_from_previous・metal_codeの整合性チェックは全行を読み込んでメモリ上で照合し、
+    # 差分があった行だけをUPDATEする純粋なローカル計算(MetalpriceAPIなど外部APIは一切
+    # 消費しない)。以前はlookback_days(既定60日)で範囲を絞っていたため、「全期間」表示
+    # 追加後に60日より古い行のdelta_from_previousがNULLのまま永久に直らない不整合が
+    # 発生していた。日次1行×金属3種の規模では全履歴走査でも軽量なため、範囲を絞らず
+    # 常に全件を対象にする。
+    stmt = select(MetalPriceDaily).order_by(MetalPriceDaily.metal_key.asc(), MetalPriceDaily.snapshot_date.asc())
     rows = list((await session.scalars(stmt)).all())
     prev_price_by_metal: dict[str, Decimal] = {}
 
