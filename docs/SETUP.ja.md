@@ -83,8 +83,7 @@ docker compose up -d --build
 | `WEB_PORT` | 任意 | デフォルト `8000` |
 | `WEB_SCHEDULER_ENABLED` | 任意 | `true/false`。日次更新/Push通知ジョブを実行するか（既定 `true`） |
 | `METAL_AUTO_REPAIR_ENABLED` | 任意 | `true/false`。metalprice DBの定期自動修復を実行するか（既定 `true`） |
-| `METAL_AUTO_REPAIR_INTERVAL_MINUTES` | 任意 | 自動修復の実行間隔（分、既定 `30`） |
-| `METAL_AUTO_REPAIR_LOOKBACK_DAYS` | 任意 | 自動修復で整合性チェックする履歴日数（既定 `60`） |
+| `METAL_AUTO_REPAIR_INTERVAL_MINUTES` | 任意 | 自動修復の実行間隔（分、既定 `30`）。delta_from_previous・metal_codeの整合性チェックは外部APIを消費しない純粋なローカル計算のため、範囲を絞らず常に全履歴が対象 |
 | `METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH` | 任意 | 各修復時に予測キャッシュ再生成を強制（既定 `false`） |
 | `METAL_REPAIR_RETRY_COOLDOWN_HOURS` | 任意 | 本日分の価格データ欠損を検知した際、API再取得を再試行するまでのクールダウン時間（時間、既定 `6`）。MetalpriceAPIの無料枠(月100回)を無条件リトライで食いつぶさないための制限 |
 | `FORECAST_REFRESH_EXTRA_HOURS_JST` | 任意 | 週次予測を日中に強制リフレッシュするJST時刻（カンマ区切り、既定 `6,12,18`）。0時分はJST 00:00の日次スナップショットジョブが既にカバーしているため対象外。以前は毎時(1日24回)リフレッシュしGroq/ニュースRSS/為替APIを浪費していたため間引いた |

@@ -118,7 +118,6 @@ STARTUP_TEST_FORCE_SNAPSHOT_REFRESH = read_env_bool("STARTUP_TEST_FORCE_SNAPSHOT
 WEB_SCHEDULER_ENABLED = read_env_bool("WEB_SCHEDULER_ENABLED", True)
 METAL_AUTO_REPAIR_ENABLED = read_env_bool("METAL_AUTO_REPAIR_ENABLED", True)
 METAL_AUTO_REPAIR_INTERVAL_MINUTES = max(5, int(os.getenv("METAL_AUTO_REPAIR_INTERVAL_MINUTES", "30")))
-METAL_AUTO_REPAIR_LOOKBACK_DAYS = max(7, int(os.getenv("METAL_AUTO_REPAIR_LOOKBACK_DAYS", "60")))
 METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH = read_env_bool("METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH", False)
 
 history_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=64)
@@ -494,7 +493,6 @@ async def auto_repair_metalprice_data(*, force_forecast_refresh: bool = False) -
             try:
                 stats = await repair_metalprice_integrity(
                     session,
-                    lookback_days=METAL_AUTO_REPAIR_LOOKBACK_DAYS,
                     force_forecast_refresh=force_forecast_refresh,
                 )
                 await _clear_response_caches()
