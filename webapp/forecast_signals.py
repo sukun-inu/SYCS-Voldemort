@@ -2,6 +2,7 @@ import asyncio
 import logging
 import math
 import os
+import re
 from typing import Any
 from urllib.parse import quote_plus
 from xml.etree import ElementTree
@@ -45,17 +46,30 @@ NEWS_QUERY_BY_METAL = {
     "platinum": "platinum price xpt auto catalyst industrial demand usd jpy",
 }
 
+# 検索クエリが英語のみのため、ここも英語トークンのみとする(日本語記事はほぼヒットしないため
+# 日本語トークンは実質死んでいた)。"up"/"down"のような短い語は単語境界で囲まないと
+# support/upgrade/breakdown 等の無関係な語に部分一致してしまうため、_news_score側で
+# 正規表現の単語境界(\b)マッチに統一している。
 POSITIVE_TOKENS = (
     "surge", "rise", "rises", "up", "gain", "gains", "record high", "bullish",
     "safe haven", "demand jumps", "demand grows", "weaker dollar", "dollar weakens",
-    "cuts rates", "inflation fears", "上昇", "高騰", "最高値",
+    "rate cut", "rate cuts", "cuts rates", "inflation fears", "recession fears",
 )
 
 NEGATIVE_TOKENS = (
     "fall", "falls", "drop", "drops", "down", "loss", "losses", "bearish", "selloff",
-    "strong dollar", "dollar strengthens", "yields rise", "rate hike", "recession hopes",
-    "下落", "急落", "安値",
+    "strong dollar", "dollar strengthens", "yields rise", "yields rising", "rate hike", "rate hikes",
 )
+
+
+def _compile_token_pattern(token: str) -> "re.Pattern[str]":
+    # 複数語のトークンは語順通り・単語境界つきでマッチさせる(部分文字列マッチの誤検出を防ぐ)。
+    words = [re.escape(word) for word in token.split()]
+    return re.compile(r"\b" + r"\s+".join(words) + r"\b")
+
+
+_POSITIVE_PATTERNS = [_compile_token_pattern(token) for token in POSITIVE_TOKENS]
+_NEGATIVE_PATTERNS = [_compile_token_pattern(token) for token in NEGATIVE_TOKENS]
 
 
 async def fetch_usdjpy_signal(session: aiohttp.ClientSession) -> dict[str, Any]:
@@ -102,8 +116,8 @@ async def fetch_usdjpy_signal(session: aiohttp.ClientSession) -> dict[str, Any]:
 
 def _news_score(text: str) -> int:
     normalized = text.lower()
-    score = sum(1 for token in POSITIVE_TOKENS if token in normalized)
-    score -= sum(1 for token in NEGATIVE_TOKENS if token in normalized)
+    score = sum(1 for pattern in _POSITIVE_PATTERNS if pattern.search(normalized))
+    score -= sum(1 for pattern in _NEGATIVE_PATTERNS if pattern.search(normalized))
     return score
 
 

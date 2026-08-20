@@ -81,6 +81,7 @@ docker compose up -d --build
 | `METAL_AUTO_REPAIR_INTERVAL_MINUTES` | 任意 | 自動修復の実行間隔（分、既定 `30`） |
 | `METAL_AUTO_REPAIR_LOOKBACK_DAYS` | 任意 | 自動修復で整合性チェックする履歴日数（既定 `60`） |
 | `METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH` | 任意 | 各修復時に予測キャッシュ再生成を強制（既定 `false`） |
+| `METAL_REPAIR_RETRY_COOLDOWN_HOURS` | 任意 | 本日分の価格データ欠損を検知した際、API再取得を再試行するまでのクールダウン時間（時間、既定 `6`）。MetalpriceAPIの無料枠(月100回)を無条件リトライで食いつぶさないための制限 |
 | `TRUST_CF_HEADERS` | 任意 | `true/false`。CFヘッダを信頼するか（既定 `false`） |
 | `REQUIRE_CF_CONNECTING_IP` | 任意 | `true/false`。CFヘッダ必須化（既定 `false`） |
 | `TRUSTED_PROXY_CIDRS` | 任意 | Forwardedヘッダを信頼するプロキシCIDR（既定 `127.0.0.1/32,::1/128`） |
@@ -92,13 +93,17 @@ docker compose up -d --build
 詳細な環境変数は `config.py` と `docker-compose.yml` を参照してください。
 
 metalprice 側の定期処理（日次更新/予測更新/自動修復）は `sycs-voldemort-web` コンテナ内の `webapp/app.py` のスケジューラで実行されます。
+`WEB_WORKERS`（既定 `2`）で複数ワーカーを起動している場合でも、PostgreSQLのadvisory lockを取得できた
+ワーカー1つだけが定期ジョブを担当するため、同一コンテナ内での二重実行は自動的に防止されます
+（`webapp/app.py` の `_try_acquire_scheduler_lock`）。これは**別コンテナ/別ホストの複数インスタンス**
+までは排他できないため、その場合は下記の通り `WEB_SCHEDULER_ENABLED` を明示的に1台だけ有効にしてください。
 
 ### 5.4 マルチインスタンス運用の推奨
 
 - Discord Bot を複数インスタンスで動かす場合:
   - 定期ジョブ担当 1台だけ `BOT_BACKGROUND_WORKER=true`
   - それ以外は `BOT_BACKGROUND_WORKER=false`
-- Web トラッカーを複数インスタンスで動かす場合:
+- Web トラッカーを複数インスタンス（別コンテナ/別ホスト）で動かす場合:
   - スケジューラ担当 1台だけ `WEB_SCHEDULER_ENABLED=true`
   - それ以外は `WEB_SCHEDULER_ENABLED=false`
 - Reverse Proxy 配下で運用する場合:

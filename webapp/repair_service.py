@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+import os
+from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
@@ -12,11 +13,19 @@ from config import METAL_COMMANDS
 
 from .forecast_service import load_stored_weekly_forecast, refresh_weekly_forecast_cache
 from .models import MetalPriceDaily
-from .snapshot_service import PRICE_SCALE, TRACKED_METALS, jst_today, load_latest_rows, store_snapshot
+from .snapshot_service import JST, PRICE_SCALE, TRACKED_METALS, jst_today, load_latest_rows, store_snapshot
 
 logger = logging.getLogger(__name__)
 
 _TRACKED_KEYS = {m.key for m in TRACKED_METALS}
+
+# MetalpriceAPIが無料枠(月100回)のため、本日データ欠損時のAPI再取得を無条件で繰り返すと
+# (このジョブ自体が既定30分おきに実行される)、API失敗→欠損継続→再試行…の無限ループで
+# 枠を食いつぶしてしまう。ここにクールダウンを設け、一定時間は再取得を試みないようにする。
+MISSING_DATA_REPAIR_COOLDOWN = timedelta(
+    hours=max(1, int(os.getenv("METAL_REPAIR_RETRY_COOLDOWN_HOURS", "6")))
+)
+_last_missing_data_repair_attempt: datetime | None = None
 
 
 def _quantize_delta(value: Decimal) -> Decimal:
@@ -69,9 +78,13 @@ async def repair_metalprice_integrity(
         "missing_today_before": 0,
         "missing_today_after": 0,
         "forecast_refreshed": 0,
+        "missing_data_repair_attempted": 0,
+        "missing_data_repair_skipped_cooldown": 0,
     }
 
-    # 今日の不足データはAPI再取得で補完を試みる。
+    # 今日の不足データはAPI再取得で補完を試みるが、クールダウン中は無条件リトライで
+    # API枠を消費しないようスキップする。
+    global _last_missing_data_repair_attempt
     today_rows_before = list(
         (await session.scalars(select(MetalPriceDaily).where(MetalPriceDaily.snapshot_date == today))).all()
     )
@@ -79,7 +92,23 @@ async def repair_metalprice_integrity(
     missing_today_before = _TRACKED_KEYS - today_keys_before
     stats["missing_today_before"] = len(missing_today_before)
     if missing_today_before:
-        await store_snapshot(session, today, skip_if_exists=False)
+        now = datetime.now(JST)
+        cooldown_until = (
+            _last_missing_data_repair_attempt + MISSING_DATA_REPAIR_COOLDOWN
+            if _last_missing_data_repair_attempt is not None
+            else None
+        )
+        if cooldown_until is not None and now < cooldown_until:
+            stats["missing_data_repair_skipped_cooldown"] = 1
+            logger.info(
+                "本日データ欠損(%d件)を検知したがクールダウン中のため再取得をスキップ。次回試行可能: %s",
+                len(missing_today_before),
+                cooldown_until.isoformat(),
+            )
+        else:
+            _last_missing_data_repair_attempt = now
+            stats["missing_data_repair_attempted"] = 1
+            await store_snapshot(session, today, skip_if_exists=False)
 
     stmt = (
         select(MetalPriceDaily)

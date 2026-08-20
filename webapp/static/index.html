@@ -41,7 +41,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="static/icons/apple-touch-icon.png?v=20260310-2" />
   <link rel="stylesheet" href="static/vendor/bootstrap/css/bootstrap.min.css?v=5.3.3" />
   <link rel="stylesheet" href="static/vendor/bootstrap-icons/font/bootstrap-icons.min.css?v=1.11.3" />
-  <link rel="stylesheet" href="static/styles.css?v=20260820-5" />
+  <link rel="stylesheet" href="static/styles.css?v=20260820-9" />
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -96,13 +96,10 @@
             <a class="nav-link active" href="#dashboardTop"><i class="bi bi-speedometer2"></i><span>ダッシュボード</span></a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="#market-section"><i class="bi bi-graph-up-arrow"></i><span>マーケットビュー</span></a>
+            <a class="nav-link" href="#market-section"><i class="bi bi-graph-up-arrow"></i><span>マーケット</span></a>
           </li>
           <li class="nav-item">
             <a class="nav-link" href="#calculator-section"><i class="bi bi-calculator"></i><span>純度計算</span></a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="#chart-section"><i class="bi bi-bar-chart-line"></i><span>価格チャート</span></a>
           </li>
           <li class="nav-item">
             <a class="nav-link" href="#faq-section"><i class="bi bi-question-circle"></i><span>FAQ</span></a>
@@ -128,52 +125,42 @@
             </ol>
           </nav>
         </div>
-        <div class="topbar-search" role="search">
-          <i class="bi bi-search" aria-hidden="true"></i>
-          <input
-            id="quickSearchInput"
-            type="search"
-            class="topbar-search-input"
-            placeholder="金属名・セクションを検索してジャンプ..."
-            aria-label="ページ内検索"
-            autocomplete="off"
-          />
-        </div>
-
-        <div class="topbar-actions d-flex align-items-center gap-2 flex-wrap">
+        <div class="topbar-actions d-flex align-items-center gap-3 flex-wrap">
           <select id="daysSelect" class="form-select form-select-sm topbar-select" aria-label="表示期間">
             <option value="30" selected>30日</option>
             <option value="90">90日</option>
             <option value="180">180日</option>
             <option value="365">365日</option>
           </select>
-          <button id="reloadButton" type="button" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-arrow-clockwise"></i> 更新
-          </button>
-          <div class="dropdown notify-dropdown">
-            <button
-              type="button"
-              class="btn btn-outline-secondary btn-sm topbar-icon-btn position-relative"
-              data-bs-toggle="dropdown"
-              data-bs-auto-close="outside"
-              aria-expanded="false"
-              aria-label="Push通知"
-              title="Push通知"
-            >
-              <i class="bi bi-bell" aria-hidden="true"></i>
-              <span id="notifyDot" class="notify-dot d-none" aria-hidden="true"></span>
+          <div class="topbar-tool-group d-flex align-items-center gap-2">
+            <button id="reloadButton" type="button" class="btn btn-outline-secondary btn-sm topbar-icon-btn" aria-label="更新" title="更新">
+              <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
             </button>
-            <div class="dropdown-menu dropdown-menu-end notify-dropdown-menu p-3">
-              <h3 class="notify-dropdown-title">Push通知</h3>
-              <p id="pushStatus" class="text-muted small">
-                <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Push初期化中...
-              </p>
-              <button id="pushButton" type="button" class="btn btn-primary btn-sm w-100">Push通知を有効化</button>
+            <div class="dropdown notify-dropdown">
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm topbar-icon-btn position-relative"
+                data-bs-toggle="dropdown"
+                data-bs-auto-close="outside"
+                aria-expanded="false"
+                aria-label="Push通知"
+                title="Push通知"
+              >
+                <i class="bi bi-bell" aria-hidden="true"></i>
+                <span id="notifyDot" class="notify-dot d-none" aria-hidden="true"></span>
+              </button>
+              <div class="dropdown-menu dropdown-menu-end notify-dropdown-menu p-3">
+                <h3 class="notify-dropdown-title">Push通知</h3>
+                <p id="pushStatus" class="text-muted small">
+                  <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Push初期化中...
+                </p>
+                <button id="pushButton" type="button" class="btn btn-primary btn-sm w-100">Push通知を有効化</button>
+              </div>
             </div>
+            <button id="themeToggle" type="button" class="btn btn-outline-secondary btn-sm topbar-icon-btn" aria-label="ダークモード切り替え" aria-pressed="false" title="ダークモード切り替え">
+              <i class="bi bi-moon-stars" aria-hidden="true"></i>
+            </button>
           </div>
-          <button id="themeToggle" type="button" class="btn btn-outline-secondary btn-sm topbar-icon-btn" aria-label="ダークモード切り替え" aria-pressed="false" title="ダークモード切り替え">
-            <i class="bi bi-moon-stars" aria-hidden="true"></i>
-          </button>
         </div>
       </header>
 
@@ -189,267 +176,251 @@
           <div id="priceTickerTrack" class="price-ticker-track"></div>
         </div>
 
-        <section id="market-section" class="content-section">
-          <div class="section-title d-flex align-items-end justify-content-between flex-wrap gap-2">
-            <div>
-              <h2>マーケットビュー</h2>
-              <p class="text-muted mb-0">最新価格と1週間予測を切り替えて表示</p>
-            </div>
-            <div class="btn-group market-toggle" role="tablist" aria-label="表示切り替え">
-              <button
-                id="marketViewSummary"
-                class="btn btn-outline-primary market-toggle-button is-active"
-                type="button"
-                role="tab"
-                aria-selected="true"
-                aria-controls="marketPaneSummary"
-                data-market-view="summary"
-              >
-                最新価格
-              </button>
-              <button
-                id="marketViewForecast"
-                class="btn btn-outline-primary market-toggle-button"
-                type="button"
-                role="tab"
-                aria-selected="false"
-                aria-controls="marketPaneForecast"
-                data-market-view="forecast"
-              >
-                1週間予測
-              </button>
-            </div>
-          </div>
-
-          <section id="marketPaneSummary" class="market-pane" role="tabpanel" aria-labelledby="marketViewSummary">
-            <div id="summaryCards" class="row g-3" aria-label="最新価格"></div>
-          </section>
-
-          <section id="marketPaneForecast" class="market-pane" role="tabpanel" aria-labelledby="marketViewForecast" hidden>
-            <p id="forecastMeta" class="text-muted small">予測データを読み込み中...</p>
-            <div id="forecastCards" class="row g-3" aria-label="1週間予測"></div>
-          </section>
-        </section>
-
-        <section id="calculator-section" class="content-section">
-          <div class="card shadow-sm calculator-card">
-            <div class="card-body">
-              <div class="section-title">
-                <h2>純度計算</h2>
-                <p class="text-muted mb-3">最新の日次価格 × グラム × 純度係数</p>
-              </div>
-              <div class="row g-2 align-items-end calculator-form">
-                <div class="col-sm-4 col-md-3">
-                  <label for="calcMetal" class="form-label">金属</label>
-                  <select id="calcMetal" class="form-select"></select>
+        <div class="row g-3">
+          <div class="col-lg-8">
+            <section id="market-section" class="content-section">
+              <div class="section-title d-flex align-items-end justify-content-between flex-wrap gap-2">
+                <div>
+                  <h2>マーケット</h2>
+                  <p class="text-muted mb-0">最新価格と1週間予測を切り替えて表示</p>
                 </div>
-                <div class="col-sm-4 col-md-3">
-                  <label for="calcGrams" class="form-label">グラム</label>
-                  <input id="calcGrams" type="number" min="0.1" max="100000" step="0.1" value="1" class="form-control" />
-                </div>
-                <div class="col-sm-4 col-md-2">
-                  <button id="calcButton" type="button" class="btn btn-primary w-100">
-                    <i class="bi bi-calculator"></i> 計算
+                <div class="btn-group market-toggle" role="tablist" aria-label="表示切り替え">
+                  <button
+                    id="marketViewSummary"
+                    class="btn btn-outline-primary market-toggle-button is-active"
+                    type="button"
+                    role="tab"
+                    aria-selected="true"
+                    data-market-view="summary"
+                  >
+                    最新価格
+                  </button>
+                  <button
+                    id="marketViewForecast"
+                    class="btn btn-outline-primary market-toggle-button"
+                    type="button"
+                    role="tab"
+                    aria-selected="false"
+                    data-market-view="forecast"
+                  >
+                    1週間予測
                   </button>
                 </div>
               </div>
-              <p id="calcMeta" class="text-muted small mt-3">読み込み中...</p>
-              <div id="calcResult" class="calc-result"></div>
-            </div>
-          </div>
-        </section>
+              <p id="forecastMeta" class="text-muted small market-section-meta" hidden>予測データを読み込み中...</p>
 
-        <section id="chart-section" class="content-section">
-          <div class="section-title">
-            <h2>価格チャート</h2>
-            <p class="text-muted mb-0">金・銀・プラチナの推移を期間別で比較</p>
-          </div>
-          <div class="row g-3 chart-grid">
-            <div class="col-lg-4">
-              <article class="card shadow-sm chart-card h-100">
-                <div class="card-body">
-                  <div class="chart-card-head d-flex align-items-start justify-content-between">
-                    <h2 class="h6 mb-0"><i class="bi bi-coin"></i> 金 (Gold)</h2>
-                    <div class="chart-card-stat text-end">
-                      <div id="goldChartPrice" class="chart-card-price">-</div>
-                      <div id="goldChartDelta" class="chart-card-delta text-muted">-</div>
-                    </div>
-                  </div>
-                  <div class="chart-card-tools d-flex align-items-center gap-1 mb-2">
-                    <button type="button" class="btn btn-sm btn-outline-secondary chart-ma-toggle" data-chart="gold" aria-pressed="false">MA7</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary chart-zoom-reset" data-chart="gold" title="ズームをリセット" aria-label="ズームをリセット">
-                      <i class="bi bi-arrow-counterclockwise"></i>
-                    </button>
-                    <span class="text-muted small ms-auto d-none d-md-inline">ホイールでズーム・ドラッグで移動</span>
-                  </div>
-                  <div class="chart-scroll">
-                    <div class="chart-loading-overlay" aria-hidden="true">
-                      <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                      <span>価格情報を読み込み中...</span>
-                    </div>
-                    <div class="chart-track">
-                      <canvas id="goldChart"></canvas>
-                    </div>
-                  </div>
-                  <div class="chart-stats-bar">
-                    <div class="chart-stat"><span class="chart-stat-label">高値</span><span id="goldChartHigh" class="chart-stat-value">-</span></div>
-                    <div class="chart-stat"><span class="chart-stat-label">安値</span><span id="goldChartLow" class="chart-stat-value">-</span></div>
-                    <div class="chart-stat"><span class="chart-stat-label">平均</span><span id="goldChartAvg" class="chart-stat-value">-</span></div>
-                  </div>
-                </div>
-              </article>
-            </div>
-            <div class="col-lg-4">
-              <article class="card shadow-sm chart-card h-100">
-                <div class="card-body">
-                  <div class="chart-card-head d-flex align-items-start justify-content-between">
-                    <h2 class="h6 mb-0"><i class="bi bi-award"></i> 銀 (Silver)</h2>
-                    <div class="chart-card-stat text-end">
-                      <div id="silverChartPrice" class="chart-card-price">-</div>
-                      <div id="silverChartDelta" class="chart-card-delta text-muted">-</div>
-                    </div>
-                  </div>
-                  <div class="chart-card-tools d-flex align-items-center gap-1 mb-2">
-                    <button type="button" class="btn btn-sm btn-outline-secondary chart-ma-toggle" data-chart="silver" aria-pressed="false">MA7</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary chart-zoom-reset" data-chart="silver" title="ズームをリセット" aria-label="ズームをリセット">
-                      <i class="bi bi-arrow-counterclockwise"></i>
-                    </button>
-                    <span class="text-muted small ms-auto d-none d-md-inline">ホイールでズーム・ドラッグで移動</span>
-                  </div>
-                  <div class="chart-scroll">
-                    <div class="chart-loading-overlay" aria-hidden="true">
-                      <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                      <span>価格情報を読み込み中...</span>
-                    </div>
-                    <div class="chart-track">
-                      <canvas id="silverChart"></canvas>
-                    </div>
-                  </div>
-                  <div class="chart-stats-bar">
-                    <div class="chart-stat"><span class="chart-stat-label">高値</span><span id="silverChartHigh" class="chart-stat-value">-</span></div>
-                    <div class="chart-stat"><span class="chart-stat-label">安値</span><span id="silverChartLow" class="chart-stat-value">-</span></div>
-                    <div class="chart-stat"><span class="chart-stat-label">平均</span><span id="silverChartAvg" class="chart-stat-value">-</span></div>
-                  </div>
-                </div>
-              </article>
-            </div>
-            <div class="col-lg-4">
-              <article class="card shadow-sm chart-card h-100">
-                <div class="card-body">
-                  <div class="chart-card-head d-flex align-items-start justify-content-between">
-                    <h2 class="h6 mb-0"><i class="bi bi-gem"></i> プラチナ (Platinum)</h2>
-                    <div class="chart-card-stat text-end">
-                      <div id="platinumChartPrice" class="chart-card-price">-</div>
-                      <div id="platinumChartDelta" class="chart-card-delta text-muted">-</div>
-                    </div>
-                  </div>
-                  <div class="chart-card-tools d-flex align-items-center gap-1 mb-2">
-                    <button type="button" class="btn btn-sm btn-outline-secondary chart-ma-toggle" data-chart="platinum" aria-pressed="false">MA7</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary chart-zoom-reset" data-chart="platinum" title="ズームをリセット" aria-label="ズームをリセット">
-                      <i class="bi bi-arrow-counterclockwise"></i>
-                    </button>
-                    <span class="text-muted small ms-auto d-none d-md-inline">ホイールでズーム・ドラッグで移動</span>
-                  </div>
-                  <div class="chart-scroll">
-                    <div class="chart-loading-overlay" aria-hidden="true">
-                      <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                      <span>価格情報を読み込み中...</span>
-                    </div>
-                    <div class="chart-track">
-                      <canvas id="platinumChart"></canvas>
-                    </div>
-                  </div>
-                  <div class="chart-stats-bar">
-                    <div class="chart-stat"><span class="chart-stat-label">高値</span><span id="platinumChartHigh" class="chart-stat-value">-</span></div>
-                    <div class="chart-stat"><span class="chart-stat-label">安値</span><span id="platinumChartLow" class="chart-stat-value">-</span></div>
-                    <div class="chart-stat"><span class="chart-stat-label">平均</span><span id="platinumChartAvg" class="chart-stat-value">-</span></div>
-                  </div>
-                </div>
-              </article>
-            </div>
-          </div>
-        </section>
-
-        <section class="content-section" aria-label="サービス説明とFAQ">
-          <div class="row g-3 align-items-stretch">
-            <div class="col-lg-6">
-              <div class="card shadow-sm h-100">
-                <div class="card-body">
-                  <div class="section-title">
-                    <h2>METAL DAILY とは</h2>
-                    <p class="text-muted mb-2">価格把握から換算・通知までを一体化した監視ビュー</p>
-                  </div>
-                  <p class="text-muted">MetalpriceAPIとGoogle News（RSS）から取得した金・銀・プラチナ価格をJST 00:00基準で更新。予測・換算・履歴確認を1画面で完結できます。</p>
-                  <div class="row row-cols-1 row-cols-sm-2 g-2 info-grid">
-                    <div class="col">
-                      <div class="info-card h-100">
-                        <h3><i class="bi bi-clock-history"></i> 更新頻度とソース</h3>
-                        <p>毎日00:00（JST）に価格を更新。USD/JPYと関連ニュースを加味して1週間予測を再計算します。</p>
+              <div class="market-widget-stack">
+                <article class="card shadow-sm market-widget" data-metal="gold">
+                  <div class="card-body">
+                    <div class="market-widget-head d-flex align-items-start justify-content-between flex-wrap gap-2">
+                      <div class="market-widget-title">
+                        <i class="bi bi-coin" aria-hidden="true"></i>
+                        <span>金 (Gold)</span>
+                      </div>
+                      <div class="market-widget-tools d-flex align-items-center gap-1">
+                        <button type="button" class="btn btn-sm btn-outline-secondary chart-delta-toggle" data-chart="gold" title="前日差バーの表示切り替え" aria-pressed="false">Δ</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary chart-ma-toggle" data-chart="gold" aria-pressed="false">MA7</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary chart-zoom-reset" data-chart="gold" title="ズームをリセット" aria-label="ズームをリセット">
+                          <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
                       </div>
                     </div>
-                    <div class="col">
-                      <div class="info-card h-100">
-                        <h3><i class="bi bi-bell"></i> 通知と計算ツール</h3>
-                        <p>毎日11:00（JST）にブラウザ通知を配信。重量と純度を入力するだけで最新価格から即座に円換算できます。</p>
+                    <div class="market-widget-price-row">
+                      <div id="goldWidgetPrice" class="market-widget-price">-</div>
+                      <span id="goldWidgetDelta" class="market-widget-delta-pill">-</span>
+                      <span id="goldWidgetMeta" class="market-widget-meta text-muted small">-</span>
+                    </div>
+                    <p id="goldWidgetForecastNote" class="market-widget-forecast-note text-muted small" hidden></p>
+                    <div class="chart-container">
+                      <div class="chart-loading-overlay" aria-hidden="true">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <span>価格情報を読み込み中...</span>
                       </div>
+                      <div id="goldChart" class="chart-canvas"></div>
+                      <div id="goldChartTooltip" class="chart-tooltip" role="status" hidden></div>
+                    </div>
+                    <div class="chart-stats-bar">
+                      <div class="chart-stat"><span class="chart-stat-label">高値</span><span id="goldChartHigh" class="chart-stat-value">-</span></div>
+                      <div class="chart-stat"><span class="chart-stat-label">安値</span><span id="goldChartLow" class="chart-stat-value">-</span></div>
+                      <div class="chart-stat"><span class="chart-stat-label">平均</span><span id="goldChartAvg" class="chart-stat-value">-</span></div>
                     </div>
                   </div>
-                  <div class="info-meta">
-                    <div><span>対象金属</span>Gold（金） / Silver（銀） / Platinum（プラチナ）</div>
-                    <div><span>提供機能</span>価格推移チャート / 1週間予測 / 純度計算 / Push通知</div>
+                </article>
+
+                <article class="card shadow-sm market-widget" data-metal="silver">
+                  <div class="card-body">
+                    <div class="market-widget-head d-flex align-items-start justify-content-between flex-wrap gap-2">
+                      <div class="market-widget-title">
+                        <i class="bi bi-award" aria-hidden="true"></i>
+                        <span>銀 (Silver)</span>
+                      </div>
+                      <div class="market-widget-tools d-flex align-items-center gap-1">
+                        <button type="button" class="btn btn-sm btn-outline-secondary chart-delta-toggle" data-chart="silver" title="前日差バーの表示切り替え" aria-pressed="false">Δ</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary chart-ma-toggle" data-chart="silver" aria-pressed="false">MA7</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary chart-zoom-reset" data-chart="silver" title="ズームをリセット" aria-label="ズームをリセット">
+                          <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="market-widget-price-row">
+                      <div id="silverWidgetPrice" class="market-widget-price">-</div>
+                      <span id="silverWidgetDelta" class="market-widget-delta-pill">-</span>
+                      <span id="silverWidgetMeta" class="market-widget-meta text-muted small">-</span>
+                    </div>
+                    <p id="silverWidgetForecastNote" class="market-widget-forecast-note text-muted small" hidden></p>
+                    <div class="chart-container">
+                      <div class="chart-loading-overlay" aria-hidden="true">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <span>価格情報を読み込み中...</span>
+                      </div>
+                      <div id="silverChart" class="chart-canvas"></div>
+                      <div id="silverChartTooltip" class="chart-tooltip" role="status" hidden></div>
+                    </div>
+                    <div class="chart-stats-bar">
+                      <div class="chart-stat"><span class="chart-stat-label">高値</span><span id="silverChartHigh" class="chart-stat-value">-</span></div>
+                      <div class="chart-stat"><span class="chart-stat-label">安値</span><span id="silverChartLow" class="chart-stat-value">-</span></div>
+                      <div class="chart-stat"><span class="chart-stat-label">平均</span><span id="silverChartAvg" class="chart-stat-value">-</span></div>
+                    </div>
                   </div>
-                </div>
+                </article>
+
+                <article class="card shadow-sm market-widget" data-metal="platinum">
+                  <div class="card-body">
+                    <div class="market-widget-head d-flex align-items-start justify-content-between flex-wrap gap-2">
+                      <div class="market-widget-title">
+                        <i class="bi bi-gem" aria-hidden="true"></i>
+                        <span>プラチナ (Platinum)</span>
+                      </div>
+                      <div class="market-widget-tools d-flex align-items-center gap-1">
+                        <button type="button" class="btn btn-sm btn-outline-secondary chart-delta-toggle" data-chart="platinum" title="前日差バーの表示切り替え" aria-pressed="false">Δ</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary chart-ma-toggle" data-chart="platinum" aria-pressed="false">MA7</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary chart-zoom-reset" data-chart="platinum" title="ズームをリセット" aria-label="ズームをリセット">
+                          <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="market-widget-price-row">
+                      <div id="platinumWidgetPrice" class="market-widget-price">-</div>
+                      <span id="platinumWidgetDelta" class="market-widget-delta-pill">-</span>
+                      <span id="platinumWidgetMeta" class="market-widget-meta text-muted small">-</span>
+                    </div>
+                    <p id="platinumWidgetForecastNote" class="market-widget-forecast-note text-muted small" hidden></p>
+                    <div class="chart-container">
+                      <div class="chart-loading-overlay" aria-hidden="true">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <span>価格情報を読み込み中...</span>
+                      </div>
+                      <div id="platinumChart" class="chart-canvas"></div>
+                      <div id="platinumChartTooltip" class="chart-tooltip" role="status" hidden></div>
+                    </div>
+                    <div class="chart-stats-bar">
+                      <div class="chart-stat"><span class="chart-stat-label">高値</span><span id="platinumChartHigh" class="chart-stat-value">-</span></div>
+                      <div class="chart-stat"><span class="chart-stat-label">安値</span><span id="platinumChartLow" class="chart-stat-value">-</span></div>
+                      <div class="chart-stat"><span class="chart-stat-label">平均</span><span id="platinumChartAvg" class="chart-stat-value">-</span></div>
+                    </div>
+                  </div>
+                </article>
               </div>
-            </div>
+              <p class="text-muted small chart-zoom-hint"><i class="bi bi-info-circle"></i> チャートはホイールでズーム、ドラッグで移動できます。</p>
+            </section>
+          </div>
 
-            <div class="col-lg-6" id="faq-section">
-              <div class="card shadow-sm h-100">
-                <div class="card-body">
-                  <div class="section-title">
-                    <h2>FAQ</h2>
-                    <p class="text-muted mb-2">運用と使い方に関するよくある質問</p>
+          <div class="col-lg-4">
+            <div class="side-panel-stack">
+              <section id="calculator-section" class="content-section">
+                <div class="card shadow-sm calculator-card">
+                  <div class="card-body">
+                    <div class="section-title">
+                      <h2>純度計算</h2>
+                      <p class="text-muted mb-3">最新の日次価格 × グラム × 純度係数</p>
+                    </div>
+                    <div class="calculator-form">
+                      <label for="calcMetal" class="form-label">金属</label>
+                      <select id="calcMetal" class="form-select"></select>
+                      <label for="calcGrams" class="form-label">グラム</label>
+                      <input id="calcGrams" type="number" min="0.1" max="100000" step="0.1" value="1" class="form-control" />
+                      <button id="calcButton" type="button" class="btn btn-primary w-100">
+                        <i class="bi bi-calculator"></i> 計算
+                      </button>
+                    </div>
+                    <p id="calcMeta" class="text-muted small mt-3">読み込み中...</p>
+                    <div id="calcResult" class="calc-result"></div>
                   </div>
-                  <div class="accordion" id="faqAccordion">
-                    <div class="accordion-item">
-                      <h3 class="accordion-header">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqAnswer1">
-                          データソースはどこですか？
-                        </button>
-                      </h3>
-                      <div id="faqAnswer1" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                        <div class="accordion-body">MetalpriceAPIとGoogle News（RSS）を参照し、価格データとニュースデータを突合して表示しています。</div>
-                      </div>
+                </div>
+              </section>
+
+              <section class="content-section" aria-label="サービス説明">
+                <div class="card shadow-sm h-100">
+                  <div class="card-body">
+                    <div class="section-title">
+                      <h2>METAL DAILY とは</h2>
                     </div>
-                    <div class="accordion-item">
-                      <h3 class="accordion-header">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqAnswer2">
-                          通知は何時に届きますか？
-                        </button>
-                      </h3>
-                      <div id="faqAnswer2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                        <div class="accordion-body">毎日11:00（JST）にブラウザ通知を配信。未設定の場合は「Push通知を有効化」ボタンから登録できます。</div>
-                      </div>
+                    <p class="text-muted small">MetalpriceAPIとGoogle News（RSS）から取得した金・銀・プラチナ価格をJST 00:00基準で更新。予測・換算・履歴確認を1画面で完結できます。</p>
+                    <div class="info-card">
+                      <h3><i class="bi bi-clock-history"></i> 更新頻度とソース</h3>
+                      <p>毎日00:00（JST）に価格を更新。USD/JPYと関連ニュースを加味して1週間予測を再計算します。</p>
                     </div>
-                    <div class="accordion-item">
-                      <h3 class="accordion-header">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqAnswer3">
-                          過去データは見られますか？
-                        </button>
-                      </h3>
-                      <div id="faqAnswer3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                        <div class="accordion-body">表示期間セレクタで30日、90日、180日、365日の履歴を切り替えて確認できます。</div>
-                      </div>
+                    <div class="info-card">
+                      <h3><i class="bi bi-bell"></i> 通知と計算ツール</h3>
+                      <p>毎日11:00（JST）にブラウザ通知を配信。重量と純度を入力するだけで最新価格から即座に円換算できます。</p>
                     </div>
-                    <div class="accordion-item">
-                      <h3 class="accordion-header">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqAnswer4">
-                          純度計算はどの金属に対応していますか？
-                        </button>
-                      </h3>
-                      <div id="faqAnswer4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-                        <div class="accordion-body">金・銀・プラチナの3種に対応しており、純度係数を掛け合わせた概算価格を計算できます。</div>
-                      </div>
+                    <div class="info-meta">
+                      <div><span>対象金属</span>Gold（金） / Silver（銀） / Platinum（プラチナ）</div>
+                      <div><span>提供機能</span>価格推移チャート / 1週間予測 / 純度計算 / Push通知</div>
                     </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+
+        <section id="faq-section" class="content-section" aria-label="よくある質問">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <div class="section-title">
+                <h2>FAQ</h2>
+                <p class="text-muted mb-2">運用と使い方に関するよくある質問</p>
+              </div>
+              <div class="accordion" id="faqAccordion">
+                <div class="accordion-item">
+                  <h3 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqAnswer1">
+                      データソースはどこですか？
+                    </button>
+                  </h3>
+                  <div id="faqAnswer1" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                    <div class="accordion-body">MetalpriceAPIとGoogle News（RSS）を参照し、価格データとニュースデータを突合して表示しています。</div>
+                  </div>
+                </div>
+                <div class="accordion-item">
+                  <h3 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqAnswer2">
+                      通知は何時に届きますか？
+                    </button>
+                  </h3>
+                  <div id="faqAnswer2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                    <div class="accordion-body">毎日11:00（JST）にブラウザ通知を配信。未設定の場合は「Push通知を有効化」ボタンから登録できます。</div>
+                  </div>
+                </div>
+                <div class="accordion-item">
+                  <h3 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqAnswer3">
+                      過去データは見られますか？
+                    </button>
+                  </h3>
+                  <div id="faqAnswer3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                    <div class="accordion-body">表示期間セレクタで30日、90日、180日、365日の履歴を切り替えて確認できます。</div>
+                  </div>
+                </div>
+                <div class="accordion-item">
+                  <h3 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqAnswer4">
+                      純度計算はどの金属に対応していますか？
+                    </button>
+                  </h3>
+                  <div id="faqAnswer4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                    <div class="accordion-body">金・銀・プラチナの3種に対応しており、純度係数を掛け合わせた概算価格を計算できます。</div>
                   </div>
                 </div>
               </div>
@@ -466,9 +437,7 @@
   </div>
 
   <script src="static/vendor/bootstrap/js/bootstrap.bundle.min.js?v=5.3.3" defer></script>
-  <script src="static/vendor/chartjs/chart.umd.min.js?v=4.5.0" defer></script>
-  <script src="static/vendor/chartjs/hammer.min.js?v=2.0.8" defer></script>
-  <script src="static/vendor/chartjs/chartjs-plugin-zoom.min.js?v=2.2.0" defer></script>
-  <script src="static/app.js?v=20260820-5" defer></script>
+  <script src="static/vendor/lightweight-charts/lightweight-charts.standalone.production.js?v=5.2.1" defer></script>
+  <script src="static/app.js?v=20260820-10" defer></script>
 </body>
 </html>

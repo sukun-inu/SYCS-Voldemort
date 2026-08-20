@@ -8,29 +8,27 @@ const METALS = {
   gold: {
     label: "金 (Gold)",
     icon: "bi-coin",
-    borderColor: "#B28704",
+    lineColor: "#B28704",
     fillColor: "rgba(178,135,4,0.18)",
-    deltaColor: "rgba(178,135,4,0.42)",
-    canvasId: "goldChart",
+    containerId: "goldChart",
   },
   silver: {
     label: "銀 (Silver)",
     icon: "bi-award",
-    borderColor: "#5D6A75",
+    lineColor: "#5D6A75",
     fillColor: "rgba(93,106,117,0.18)",
-    deltaColor: "rgba(93,106,117,0.42)",
-    canvasId: "silverChart",
+    containerId: "silverChart",
   },
   platinum: {
     label: "プラチナ (Platinum)",
     icon: "bi-gem",
-    borderColor: "#0A7D88",
+    lineColor: "#0A7D88",
     fillColor: "rgba(10,125,136,0.18)",
-    deltaColor: "rgba(10,125,136,0.42)",
-    canvasId: "platinumChart",
+    containerId: "platinumChart",
   },
 };
 
+// metalKeyごとに { chart, priceSeries, deltaSeries, forecastSeries, maSeries, resizeObserver } を保持する。
 const charts = {};
 let purityOptions = {};
 let swRegistration = null;
@@ -39,21 +37,17 @@ let pushPublicKey = null;
 let pushNotifyTimeJst = "11:00";
 let latestHistoryPayload = null;
 let latestForecastPayload = null;
-let lastChartMobileMode = null;
 let lastForecastGeneratedAt = null;
 let forecastRefreshTimerId = null;
 let forecastRefreshInFlight = false;
+let currentMarketView = "summary";
 
-// 外部CDNへは依存せず、自ホストにバンドルしたChart.jsのみを読み込む(CSPをdefault-src 'self'寄りに保つため)。
-const CHART_CDN_LIST = ["static/vendor/chartjs/chart.umd.min.js?v=4.5.0"];
-const CHART_MIN_WIDTH_DESKTOP_PX = 640;
-const CHART_MAX_WIDTH_DESKTOP_PX = 2000;
-const CHART_MIN_WIDTH_MOBILE_PX = 420;
-const CHART_MAX_WIDTH_MOBILE_PX = 1200;
-const CHART_PX_PER_DAY_DESKTOP = 5;
-const CHART_PX_PER_DAY_MOBILE = 3;
-const CHART_DPR_CAP = 1.75;
-const SW_SCRIPT_VERSION = "20260820-5";
+// 外部CDNへは依存せず、自ホストにバンドルしたLightweight Chartsのみを読み込む
+// (CSPをdefault-src 'self'寄りに保つため)。
+const CHART_CDN_LIST = [
+  "static/vendor/lightweight-charts/lightweight-charts.standalone.production.js?v=5.2.1",
+];
+const SW_SCRIPT_VERSION = "20260820-9";
 const FORECAST_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const THEME_STORAGE_KEY = "metalDailyTheme";
 
@@ -63,17 +57,6 @@ function appUrl(path) {
 
 function appScopePath() {
   return new URL("./", APP_BASE).pathname;
-}
-
-function isMobileChartViewport() {
-  return window.matchMedia("(max-width: 860px)").matches;
-}
-
-function resolveChartTrackWidth(days, isMobile) {
-  const pxPerDay = isMobile ? CHART_PX_PER_DAY_MOBILE : CHART_PX_PER_DAY_DESKTOP;
-  const minWidth = isMobile ? CHART_MIN_WIDTH_MOBILE_PX : CHART_MIN_WIDTH_DESKTOP_PX;
-  const maxWidth = isMobile ? CHART_MAX_WIDTH_MOBILE_PX : CHART_MAX_WIDTH_DESKTOP_PX;
-  return Math.min(maxWidth, Math.max(minWidth, days * pxPerDay));
 }
 
 function loadExternalScript(src) {
@@ -89,7 +72,7 @@ function loadExternalScript(src) {
 }
 
 async function ensureChartLibrary() {
-  if (window.Chart) {
+  if (window.LightweightCharts) {
     return;
   }
 
@@ -97,14 +80,14 @@ async function ensureChartLibrary() {
   for (const src of CHART_CDN_LIST) {
     try {
       await loadExternalScript(src);
-      if (window.Chart) {
+      if (window.LightweightCharts) {
         return;
       }
     } catch (err) {
       lastError = err;
     }
   }
-  throw lastError || new Error("Chart.jsの読み込みに失敗しました。");
+  throw lastError || new Error("Lightweight Chartsの読み込みに失敗しました。");
 }
 
 function formatYen(value) {
@@ -180,9 +163,7 @@ function loadingInlineMarkup(text) {
 function setMarketView(view) {
   const summaryButton = document.getElementById("marketViewSummary");
   const forecastButton = document.getElementById("marketViewForecast");
-  const summaryPane = document.getElementById("marketPaneSummary");
-  const forecastPane = document.getElementById("marketPaneForecast");
-  if (!summaryButton || !forecastButton || !summaryPane || !forecastPane) {
+  if (!summaryButton || !forecastButton) {
     return;
   }
 
@@ -194,8 +175,21 @@ function setMarketView(view) {
   forecastButton.setAttribute("aria-selected", isSummary ? "false" : "true");
   summaryButton.setAttribute("tabindex", isSummary ? "0" : "-1");
   forecastButton.setAttribute("tabindex", isSummary ? "-1" : "0");
-  summaryPane.hidden = !isSummary;
-  forecastPane.hidden = isSummary;
+
+  currentMarketView = normalizedView;
+  const meta = document.getElementById("forecastMeta");
+  if (meta) {
+    meta.hidden = isSummary;
+  }
+  updateMarketWidgets();
+
+  // 7日予測線は「最新価格」表示中はノイズになるため、予測モードの時だけ出す。
+  Object.values(charts).forEach((entry) => {
+    if (!entry?.forecastSeries) {
+      return;
+    }
+    entry.forecastSeries.applyOptions({ visible: !isSummary });
+  });
 }
 
 function getStoredTheme() {
@@ -226,32 +220,31 @@ function getChartThemeColors() {
   return {
     text: isDark ? "#98a2b3" : "#5c6b7a",
     grid: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+    background: isDark ? "#1e222a" : "#ffffff",
+    crosshair: isDark ? "#5c6b7a" : "#9aa4b5",
   };
 }
 
 function applyChartsTheme() {
   const colors = getChartThemeColors();
-  Object.values(charts).forEach((chart) => {
-    if (!chart || !chart.options) {
+  Object.values(charts).forEach((entry) => {
+    if (!entry?.chart) {
       return;
     }
-    const scales = chart.options.scales || {};
-    ["x", "yPrice", "yDelta"].forEach((axisKey) => {
-      const axis = scales[axisKey];
-      if (!axis) {
-        return;
-      }
-      if (axis.ticks) {
-        axis.ticks.color = colors.text;
-      }
-      if (axis.grid) {
-        axis.grid.color = colors.grid;
-      }
+    entry.chart.applyOptions({
+      layout: {
+        textColor: colors.text,
+        background: { type: "solid", color: colors.background },
+      },
+      grid: {
+        vertLines: { color: colors.grid },
+        horzLines: { color: colors.grid },
+      },
+      crosshair: {
+        vertLine: { color: colors.crosshair },
+        horzLine: { color: colors.crosshair },
+      },
     });
-    if (chart.options.plugins?.legend?.labels) {
-      chart.options.plugins.legend.labels.color = colors.text;
-    }
-    chart.update("none");
   });
 }
 
@@ -290,64 +283,28 @@ function initializeThemeToggle() {
   }
 }
 
-const QUICK_SEARCH_INDEX = [
-  { keywords: ["ダッシュボード", "dashboard", "top", "トップ", "ホーム", "home"], target: "#dashboardTop" },
-  { keywords: ["マーケット", "市場", "market", "最新価格", "予測", "forecast"], target: "#market-section" },
-  { keywords: ["純度", "計算", "calculator", "グラム", "換算"], target: "#calculator-section" },
-  {
-    keywords: ["チャート", "chart", "グラフ", "推移", "金", "gold", "銀", "silver", "プラチナ", "platinum"],
-    target: "#chart-section",
-  },
-  { keywords: ["faq", "よくある質問", "質問", "ヘルプ", "help"], target: "#faq-section" },
-];
-
-function initializeQuickSearch() {
-  const input = document.getElementById("quickSearchInput");
-  const wrapper = input?.closest(".topbar-search");
-  if (!input || !wrapper) {
-    return;
-  }
-
-  const jumpToMatch = () => {
-    const query = input.value.trim().toLowerCase();
-    if (!query) {
-      wrapper.classList.remove("has-error");
-      return;
-    }
-    const match = QUICK_SEARCH_INDEX.find((entry) =>
-      entry.keywords.some((keyword) => keyword.toLowerCase().includes(query) || query.includes(keyword.toLowerCase()))
-    );
-    const targetEl = match ? document.querySelector(match.target) : null;
-    if (targetEl) {
-      targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
-      wrapper.classList.remove("has-error");
-    } else {
-      wrapper.classList.add("has-error");
-    }
-  };
-
-  input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      jumpToMatch();
-    }
-  });
-  input.addEventListener("input", () => {
-    wrapper.classList.remove("has-error");
-  });
-}
-
 function initializeChartTools() {
   document.querySelectorAll(".chart-ma-toggle").forEach((button) => {
     button.addEventListener("click", () => {
-      const metalKey = button.dataset.chart;
-      const chart = charts[metalKey];
-      if (!chart) {
+      const entry = charts[button.dataset.chart];
+      if (!entry?.maSeries) {
         return;
       }
-      const nextVisible = !chart.isDatasetVisible(3);
-      chart.setDatasetVisibility(3, nextVisible);
-      chart.update();
+      const nextVisible = !entry.maSeries.options().visible;
+      entry.maSeries.applyOptions({ visible: nextVisible });
+      button.classList.toggle("active", nextVisible);
+      button.setAttribute("aria-pressed", nextVisible ? "true" : "false");
+    });
+  });
+
+  document.querySelectorAll(".chart-delta-toggle").forEach((button) => {
+    button.addEventListener("click", () => {
+      const entry = charts[button.dataset.chart];
+      if (!entry?.deltaSeries) {
+        return;
+      }
+      const nextVisible = !entry.deltaSeries.options().visible;
+      entry.deltaSeries.applyOptions({ visible: nextVisible });
       button.classList.toggle("active", nextVisible);
       button.setAttribute("aria-pressed", nextVisible ? "true" : "false");
     });
@@ -355,10 +312,9 @@ function initializeChartTools() {
 
   document.querySelectorAll(".chart-zoom-reset").forEach((button) => {
     button.addEventListener("click", () => {
-      const metalKey = button.dataset.chart;
-      const chart = charts[metalKey];
-      if (chart && typeof chart.resetZoom === "function") {
-        chart.resetZoom();
+      const entry = charts[button.dataset.chart];
+      if (entry?.chart) {
+        entry.chart.timeScale().fitContent();
       }
     });
   });
@@ -395,59 +351,10 @@ function compareIsoDate(a, b) {
   return a < b ? -1 : 1;
 }
 
-function renderSummarySkeleton() {
-  const root = document.getElementById("summaryCards");
-  if (!root) {
-    return;
-  }
-  root.setAttribute("aria-busy", "true");
-  root.innerHTML = "";
-  Object.keys(METALS).forEach(() => {
-    const col = document.createElement("div");
-    col.className = "col-md-4";
-    col.innerHTML = `
-      <article class="card summary-card h-100 shadow-sm placeholder-glow">
-        <div class="card-body">
-          <span class="placeholder col-6 mb-2"></span>
-          <div class="placeholder col-8" style="height:1.5rem;"></div>
-          <span class="placeholder col-5 mt-2"></span>
-          <span class="placeholder col-7 mt-2"></span>
-        </div>
-      </article>
-    `;
-    root.appendChild(col);
-  });
-}
-
-function renderForecastSkeleton() {
-  const root = document.getElementById("forecastCards");
-  if (!root) {
-    return;
-  }
-  root.setAttribute("aria-busy", "true");
-  root.innerHTML = "";
-  Object.keys(METALS).forEach(() => {
-    const col = document.createElement("div");
-    col.className = "col-md-4";
-    col.innerHTML = `
-      <article class="card summary-card h-100 shadow-sm placeholder-glow">
-        <div class="card-body">
-          <span class="placeholder col-6 mb-2"></span>
-          <div class="placeholder col-8" style="height:1.5rem;"></div>
-          <span class="placeholder col-5 mt-2"></span>
-          <span class="placeholder col-7 mt-2"></span>
-          <span class="placeholder col-9 mt-2"></span>
-        </div>
-      </article>
-    `;
-    root.appendChild(col);
-  });
-}
-
 function setChartLoadingState(isLoading) {
-  Object.values(METALS).forEach(({ canvasId }) => {
-    const canvas = document.getElementById(canvasId);
-    const card = canvas?.closest(".chart-card");
+  Object.values(METALS).forEach(({ containerId }) => {
+    const container = document.getElementById(containerId);
+    const card = container?.closest(".market-widget");
     if (!card) {
       return;
     }
@@ -461,7 +368,6 @@ function setForecastLoadingState() {
   if (meta) {
     meta.innerHTML = loadingInlineMarkup("予測データを読み込み中...");
   }
-  renderForecastSkeleton();
   const source = document.getElementById("forecastSource");
   if (source) {
     source.innerHTML = loadingInlineMarkup("予想ソースを取得中...");
@@ -473,7 +379,6 @@ function setDashboardLoadingState() {
   if (generated) {
     generated.innerHTML = loadingInlineMarkup("価格データを読み込み中...");
   }
-  renderSummarySkeleton();
   setForecastLoadingState();
   setChartLoadingState(true);
 }
@@ -516,58 +421,69 @@ function buildTicker(latest) {
   track.innerHTML = itemsHtml + itemsHtml;
 }
 
-function updateChartCardHeaders(latest) {
-  Object.entries(METALS).forEach(([key]) => {
-    const data = latest[key] || {};
-    const priceEl = document.getElementById(`${key}ChartPrice`);
-    const deltaEl = document.getElementById(`${key}ChartDelta`);
-    if (priceEl) {
-      priceEl.textContent = formatYen(data.price_per_gram);
-    }
-    if (deltaEl) {
-      const delta = data.delta_from_previous;
-      const deltaClass = delta > 0 ? "text-success" : delta < 0 ? "text-danger" : "text-muted";
-      deltaEl.className = `chart-card-delta ${deltaClass}`;
-      deltaEl.textContent = formatDelta(delta);
-    }
-  });
-}
+// summaryCards/forecastCardsという別カードには分けず、マーケットビュートグルの状態に応じて
+// 各金属のチャートウィジェット(価格行)を書き換える一つの関数に統合している(情報の重複を避けるため)。
+function updateMarketWidgets() {
+  const latest = latestHistoryPayload?.latest || {};
+  const forecast = latestForecastPayload?.forecast || {};
+  const isForecast = currentMarketView === "forecast";
 
-function buildSummary(latest) {
-  const root = document.getElementById("summaryCards");
-  root.innerHTML = "";
-  root.setAttribute("aria-busy", "false");
-  Object.entries(METALS).forEach(([key, meta]) => {
-    const data = latest[key] || {};
-    const delta = data.delta_from_previous;
-    const deltaClass = delta > 0 ? "is-up" : delta < 0 ? "is-down" : "is-flat";
-    const deltaIcon = delta > 0 ? "bi-arrow-up-short" : delta < 0 ? "bi-arrow-down-short" : "bi-dash";
-    const col = document.createElement("div");
-    col.className = "col-md-4";
-    col.innerHTML = `
-      <article class="card summary-card summary-card--gradient h-100 shadow-sm" data-metal="${key}">
-        <div class="card-body">
-          <i class="bi ${meta.icon || "bi-gem"} summary-card-icon" aria-hidden="true"></i>
-          <h3 class="summary-card-title">${meta.label}</h3>
-          <div class="summary-price">${formatYen(data.price_per_gram)}</div>
-          <span class="summary-delta-pill ${deltaClass}"><i class="bi ${deltaIcon}"></i>前日差: ${formatDelta(delta)}</span>
-          <div class="summary-card-meta">基準日: ${data.date || "-"}</div>
-        </div>
-      </article>
-    `;
-    root.appendChild(col);
+  Object.keys(METALS).forEach((key) => {
+    const priceEl = document.getElementById(`${key}WidgetPrice`);
+    const deltaEl = document.getElementById(`${key}WidgetDelta`);
+    const metaEl = document.getElementById(`${key}WidgetMeta`);
+    const noteEl = document.getElementById(`${key}WidgetForecastNote`);
+    if (!priceEl || !deltaEl || !metaEl) {
+      return;
+    }
+
+    if (isForecast) {
+      const item = forecast[key];
+      if (!item) {
+        priceEl.textContent = "-";
+        deltaEl.textContent = "-";
+        deltaEl.className = "market-widget-delta-pill";
+        metaEl.textContent = "予測データがありません";
+        if (noteEl) {
+          noteEl.hidden = true;
+        }
+        return;
+      }
+      const changePct = Number(item.projected_change_pct_7d || 0);
+      const deltaClass = changePct > 0 ? "is-up" : changePct < 0 ? "is-down" : "is-flat";
+      const deltaIcon = changePct > 0 ? "bi-arrow-up-short" : changePct < 0 ? "bi-arrow-down-short" : "bi-dash";
+      const confidencePct = Number(item.confidence || 0) * 100;
+      const drivers = Array.isArray(item.drivers) ? item.drivers.slice(0, 2) : [];
+
+      priceEl.textContent = formatYen(item.projected_price_per_gram);
+      deltaEl.className = `market-widget-delta-pill ${deltaClass}`;
+      deltaEl.innerHTML = `<i class="bi ${deltaIcon}"></i>予測変化: ${formatPercent(changePct, 3)}`;
+      metaEl.textContent = `信頼度: ${new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 }).format(confidencePct)}%`;
+      if (noteEl) {
+        noteEl.hidden = drivers.length === 0;
+        noteEl.textContent = drivers.join(" / ");
+      }
+    } else {
+      const data = latest[key] || {};
+      const delta = data.delta_from_previous;
+      const deltaClass = delta > 0 ? "is-up" : delta < 0 ? "is-down" : "is-flat";
+      const deltaIcon = delta > 0 ? "bi-arrow-up-short" : delta < 0 ? "bi-arrow-down-short" : "bi-dash";
+
+      priceEl.textContent = formatYen(data.price_per_gram);
+      deltaEl.className = `market-widget-delta-pill ${deltaClass}`;
+      deltaEl.innerHTML = `<i class="bi ${deltaIcon}"></i>前日差: ${formatDelta(delta)}`;
+      metaEl.textContent = `基準日: ${data.date || "-"}`;
+      if (noteEl) {
+        noteEl.hidden = true;
+      }
+    }
   });
 }
 
 function setForecastError(message) {
   const meta = document.getElementById("forecastMeta");
-  const root = document.getElementById("forecastCards");
   if (meta) {
     meta.textContent = message;
-  }
-  if (root) {
-    root.setAttribute("aria-busy", "false");
-    root.innerHTML = "";
   }
   const source = document.getElementById("forecastSource");
   if (source) {
@@ -590,14 +506,11 @@ function updateForecastSourceFooter(payload) {
   source.textContent = `予想ソース: USD/JPY(${usdSource})・ニュース(${newsSource})${llmLabel} / 基準日: ${asOfDate}`;
 }
 
-function renderWeeklyForecast(payload) {
-  const root = document.getElementById("forecastCards");
+function updateForecastMeta(payload) {
   const meta = document.getElementById("forecastMeta");
-  if (!root || !meta) {
+  if (!meta) {
     return;
   }
-
-  root.setAttribute("aria-busy", "false");
   const usdJpy = payload?.signals?.usd_jpy || {};
   const horizonDays = Number(payload?.horizon_days || 7);
   const generatedAt = payload?.generated_at || "-";
@@ -606,35 +519,6 @@ function renderWeeklyForecast(payload) {
     : "USD/JPY: 取得失敗";
   meta.textContent = `生成時刻: ${generatedAt} / 予測期間: ${horizonDays}日 / ${fxText}`;
   updateForecastSourceFooter(payload);
-
-  root.innerHTML = "";
-  Object.entries(METALS).forEach(([key, metal]) => {
-    const item = payload?.forecast?.[key];
-    if (!item) {
-      return;
-    }
-    const changePct = Number(item.projected_change_pct_7d || 0);
-    const deltaClass = changePct > 0 ? "is-up" : changePct < 0 ? "is-down" : "is-flat";
-    const deltaIcon = changePct > 0 ? "bi-arrow-up-short" : changePct < 0 ? "bi-arrow-down-short" : "bi-dash";
-    const confidencePct = Number(item.confidence || 0) * 100;
-    const drivers = Array.isArray(item.drivers) ? item.drivers.slice(0, 2) : [];
-
-    const col = document.createElement("div");
-    col.className = "col-md-4";
-    col.innerHTML = `
-      <article class="card summary-card summary-card--gradient h-100 shadow-sm" data-metal="${key}">
-        <div class="card-body">
-          <i class="bi ${metal.icon || "bi-gem"} summary-card-icon" aria-hidden="true"></i>
-          <h3 class="summary-card-title">${metal.label} / 7日予測</h3>
-          <div class="summary-price">${formatYen(item.projected_price_per_gram)}</div>
-          <span class="summary-delta-pill ${deltaClass}"><i class="bi ${deltaIcon}"></i>予測変化: ${formatPercent(changePct, 3)}</span>
-          <div class="summary-card-meta">信頼度: ${new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 }).format(confidencePct)}%</div>
-          <div class="forecast-driver">${drivers.map((line) => escapeHtml(line)).join("<br>")}</div>
-        </div>
-      </article>
-    `;
-    root.appendChild(col);
-  });
 }
 
 async function loadWeeklyForecast() {
@@ -664,7 +548,7 @@ async function refreshForecastSnapshot({ forceApply = false } = {}) {
     latestForecastPayload = forecastPayload;
     lastForecastGeneratedAt = generatedAt;
     if (hasChanged) {
-      renderWeeklyForecast(forecastPayload);
+      updateForecastMeta(forecastPayload);
       renderDashboardFromPayload(latestHistoryPayload, forecastPayload);
     }
   } catch (error) {
@@ -812,18 +696,106 @@ function updateChartStats(metalKey, prices) {
   if (avgEl) avgEl.textContent = formatYen(avg);
 }
 
+// Lightweight Chartsの各シリーズは [{time, value}, ...] の疎データ配列を受け取る形式のため、
+// Chart.js時代の「日付ごとに値かnullが並ぶ配列」からnullを除いて変換する。
+function toSeriesData(dailyAxis, values) {
+  const points = [];
+  dailyAxis.forEach((date, index) => {
+    const value = values[index];
+    if (value === null || value === undefined) {
+      return;
+    }
+    points.push({ time: date, value });
+  });
+  return points;
+}
+
+function toDeltaSeriesData(dailyAxis, deltas) {
+  const points = [];
+  dailyAxis.forEach((date, index) => {
+    const value = deltas[index];
+    if (value === null || value === undefined) {
+      return;
+    }
+    points.push({
+      time: date,
+      value,
+      color: value >= 0 ? "rgba(26, 187, 156, 0.55)" : "rgba(231, 76, 60, 0.55)",
+    });
+  });
+  return points;
+}
+
+// Lightweight ChartsのTime型は "YYYY-MM-DD" 文字列で渡すと内部でBusinessDayオブジェクトに
+// 変換されて返ってくることがあるため、両方の形をISO文字列へ正規化する。
+function lightweightTimeToIsoDate(time) {
+  if (typeof time === "string") {
+    return time;
+  }
+  if (time && typeof time === "object" && "year" in time) {
+    const month = String(time.month).padStart(2, "0");
+    const day = String(time.day).padStart(2, "0");
+    return `${time.year}-${month}-${day}`;
+  }
+  return null;
+}
+
+function initializeChartTooltip(metalKey, chart, priceSeries, deltaSeries) {
+  const tooltipEl = document.getElementById(`${metalKey}ChartTooltip`);
+  const container = document.getElementById(METALS[metalKey].containerId);
+  if (!tooltipEl || !container) {
+    return;
+  }
+
+  chart.subscribeCrosshairMove((param) => {
+    const priceData = param.point && param.time ? param.seriesData.get(priceSeries) : null;
+    if (!param.point || !param.time || !priceData || param.point.x < 0 || param.point.y < 0) {
+      tooltipEl.hidden = true;
+      return;
+    }
+
+    const isoDate = lightweightTimeToIsoDate(param.time);
+    let html = `<div class="chart-tooltip-date">${escapeHtml(isoDate || "")}</div>` +
+      `<div class="chart-tooltip-price">${escapeHtml(formatYen(priceData.value))}</div>`;
+
+    if (deltaSeries.options().visible) {
+      const deltaData = param.seriesData.get(deltaSeries);
+      if (deltaData) {
+        const deltaClass = deltaData.value >= 0 ? "text-success" : "text-danger";
+        html += `<div class="chart-tooltip-delta ${deltaClass}">前日差: ${escapeHtml(formatDelta(deltaData.value))}</div>`;
+      }
+    }
+
+    tooltipEl.innerHTML = html;
+    tooltipEl.hidden = false;
+
+    const containerWidth = container.clientWidth;
+    const tooltipWidth = tooltipEl.offsetWidth;
+    let left = param.point.x + 14;
+    if (left + tooltipWidth > containerWidth) {
+      left = param.point.x - tooltipWidth - 14;
+    }
+    tooltipEl.style.left = `${Math.max(0, left)}px`;
+    tooltipEl.style.top = `${Math.max(0, param.point.y - 10)}px`;
+  });
+
+  container.addEventListener("mouseleave", () => {
+    tooltipEl.hidden = true;
+  });
+}
+
 function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, historyEndDate = null) {
   const meta = METALS[metalKey];
-  if (!meta || !window.Chart) {
+  if (!meta || !window.LightweightCharts) {
     return;
   }
 
   const dailyMap = new Map(history.map((item) => [item.date, item]));
-  const labels = dailyAxis.map((date) => formatDailyLabel(date));
   const prices = dailyAxis.map((date) => dailyMap.get(date)?.price_per_gram ?? null);
   const deltas = dailyAxis.map((date) => dailyMap.get(date)?.delta_from_previous ?? null);
   const movingAverage = computeMovingAverage(prices, 7);
   updateChartStats(metalKey, prices);
+
   const forecastMap = new Map(
     Array.isArray(forecastItem?.daily)
       ? forecastItem.daily.map((item) => [item.date, item.price_per_gram])
@@ -841,184 +813,112 @@ function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, his
       forecastPrices[index] = value;
     }
   });
-  const canvas = document.getElementById(meta.canvasId);
-  if (!canvas) {
+
+  const container = document.getElementById(meta.containerId);
+  if (!container) {
     return;
-  }
-  const chartTrack = canvas.closest(".chart-track");
-  const isMobile = isMobileChartViewport();
-  const chartWidth = resolveChartTrackWidth(dailyAxis.length, isMobile);
-  if (chartTrack) {
-    chartTrack.style.width = `${chartWidth}px`;
   }
 
-  const context = canvas.getContext("2d");
-  if (!context) {
-    return;
-  }
-  const xMaxTicks = isMobile ? 7 : 11;
-  const chartDpr = Math.min(window.devicePixelRatio || 1, CHART_DPR_CAP);
-  const themeColors = getChartThemeColors();
+  const priceData = toSeriesData(dailyAxis, prices);
+  const deltaData = toDeltaSeriesData(dailyAxis, deltas);
+  const forecastData = toSeriesData(dailyAxis, forecastPrices);
+  const maData = toSeriesData(dailyAxis, movingAverage);
 
   const existing = charts[metalKey];
   if (existing) {
-    existing.data.labels = labels;
-    if (existing.data.datasets?.[0]) {
-      existing.data.datasets[0].data = prices;
-      existing.data.datasets[0].pointRadius = dailyAxis.length <= 120 ? 1 : 0;
-    }
-    if (existing.data.datasets?.[1]) {
-      existing.data.datasets[1].data = deltas;
-    }
-    if (existing.data.datasets?.[2]) {
-      existing.data.datasets[2].data = forecastPrices;
-    }
-    if (existing.data.datasets?.[3]) {
-      existing.data.datasets[3].data = movingAverage;
-    }
-    if (!existing.options) {
-      existing.options = {};
-    }
-    existing.options.devicePixelRatio = chartDpr;
-    if (!existing.options.scales) {
-      existing.options.scales = {};
-    }
-    if (!existing.options.scales.x) {
-      existing.options.scales.x = { type: "category", ticks: {} };
-    }
-    if (!existing.options.scales.x.ticks) {
-      existing.options.scales.x.ticks = {};
-    }
-    existing.options.scales.x.ticks.autoSkip = true;
-    existing.options.scales.x.ticks.maxTicksLimit = xMaxTicks;
-    existing.options.scales.x.ticks.maxRotation = 0;
-    existing.options.scales.x.ticks.minRotation = 0;
-
-    if (!existing.options.plugins) {
-      existing.options.plugins = {};
-    }
-    if (!existing.options.plugins.tooltip) {
-      existing.options.plugins.tooltip = {};
-    }
-    if (!existing.options.plugins.tooltip.callbacks) {
-      existing.options.plugins.tooltip.callbacks = {};
-    }
-    existing.options.plugins.tooltip.callbacks.title = (items) => (items.length ? dailyAxis[items[0].dataIndex] : "");
-    existing.update("none");
+    existing.priceSeries.setData(priceData);
+    existing.deltaSeries.setData(deltaData);
+    existing.forecastSeries.setData(forecastData);
+    existing.forecastSeries.applyOptions({ visible: currentMarketView === "forecast" });
+    existing.maSeries.setData(maData);
+    existing.chart.timeScale().fitContent();
     return;
   }
 
-  charts[metalKey] = new window.Chart(context, {
-    type: "line",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: "価格 (円/g)",
-          data: prices,
-          borderColor: meta.borderColor,
-          backgroundColor: meta.fillColor,
-          tension: 0,
-          stepped: true,
-          spanGaps: false,
-          fill: true,
-          pointRadius: dailyAxis.length <= 120 ? 1.5 : 0,
-          yAxisID: "yPrice",
-        },
-        {
-          label: "前日差 (円)",
-          type: "bar",
-          data: deltas,
-          backgroundColor: meta.deltaColor,
-          borderWidth: 0,
-          yAxisID: "yDelta",
-        },
-        {
-          label: "7日予測 (円/g)",
-          data: forecastPrices,
-          borderColor: meta.borderColor,
-          backgroundColor: "transparent",
-          borderDash: [6, 5],
-          borderWidth: 2,
-          tension: 0,
-          spanGaps: false,
-          fill: false,
-          pointRadius: 1.5,
-          pointHoverRadius: 3,
-          yAxisID: "yPrice",
-        },
-        {
-          label: "7日移動平均",
-          data: movingAverage,
-          borderColor: "#3498db",
-          backgroundColor: "transparent",
-          borderWidth: 1.5,
-          borderDash: [2, 2],
-          tension: 0.15,
-          spanGaps: false,
-          fill: false,
-          pointRadius: 0,
-          hidden: true,
-          yAxisID: "yPrice",
-        },
-      ],
+  const themeColors = getChartThemeColors();
+  const LC = window.LightweightCharts;
+  const chart = LC.createChart(container, {
+    // autoSize: コンテナのResizeObserverをライブラリ側が内蔵しており、サイドバー開閉や
+    // ウィンドウ幅変更に自動追従してくれる(固定幅+横スクロールだった従来方式が丸ごと不要になる)。
+    autoSize: true,
+    layout: {
+      textColor: themeColors.text,
+      background: { type: "solid", color: themeColors.background },
+      fontFamily:
+        "'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif",
+      attributionLogo: false,
     },
-    options: {
-      devicePixelRatio: chartDpr,
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
-      interaction: { mode: "index", intersect: false },
-      scales: {
-        yPrice: {
-          type: "linear",
-          position: "left",
-          grid: { color: themeColors.grid },
-          ticks: {
-            color: themeColors.text,
-            callback: (value) => new Intl.NumberFormat("ja-JP").format(value),
-          },
-        },
-        yDelta: {
-          type: "linear",
-          position: "right",
-          grid: { drawOnChartArea: false },
-          ticks: {
-            color: themeColors.text,
-            callback: (value) => new Intl.NumberFormat("ja-JP").format(value),
-          },
-        },
-        x: {
-          type: "category",
-          grid: { color: themeColors.grid },
-          ticks: {
-            color: themeColors.text,
-            autoSkip: true,
-            maxTicksLimit: xMaxTicks,
-            maxRotation: 0,
-            minRotation: 0,
-          },
-        },
-      },
-      plugins: {
-        tooltip: {
-          callbacks: {
-            title: (items) => (items.length ? dailyAxis[items[0].dataIndex] : ""),
-          },
-        },
-        legend: { labels: { color: themeColors.text, boxWidth: 10 } },
-        zoom: {
-          pan: { enabled: true, mode: "x" },
-          zoom: {
-            wheel: { enabled: true },
-            pinch: { enabled: true },
-            mode: "x",
-          },
-          limits: { x: { minRange: 5 } },
-        },
-      },
+    grid: {
+      vertLines: { color: themeColors.grid },
+      horzLines: { color: themeColors.grid },
+    },
+    crosshair: {
+      mode: LC.CrosshairMode.Normal,
+      vertLine: { color: themeColors.crosshair, labelBackgroundColor: meta.lineColor },
+      horzLine: { color: themeColors.crosshair, labelBackgroundColor: meta.lineColor },
+    },
+    rightPriceScale: { borderVisible: false },
+    timeScale: {
+      borderVisible: false,
+      tickMarkFormatter: (time) => formatDailyLabel(lightweightTimeToIsoDate(time) || ""),
+    },
+    localization: {
+      priceFormatter: (value) => new Intl.NumberFormat("ja-JP").format(value),
     },
   });
+
+  const priceSeries = chart.addSeries(LC.AreaSeries, {
+    lineType: LC.LineType.WithSteps,
+    lineColor: meta.lineColor,
+    topColor: meta.fillColor,
+    bottomColor: "rgba(0, 0, 0, 0)",
+    lineWidth: 2,
+    priceScaleId: "right",
+    priceLineVisible: false,
+    crosshairMarkerRadius: 3,
+  });
+
+  // 前日差は価格と桁が違うため専用スケールに分離し、Δボタンで表示するまでは
+  // スケールごと非表示にしておく(Chart.js版のyDelta.display=falseと同じ意図)。
+  const deltaSeries = chart.addSeries(LC.HistogramSeries, {
+    priceScaleId: "delta",
+    priceLineVisible: false,
+    lastValueVisible: false,
+    visible: false,
+  });
+  chart.priceScale("delta").applyOptions({
+    scaleMargins: { top: 0.75, bottom: 0 },
+    visible: false,
+  });
+
+  const forecastSeries = chart.addSeries(LC.LineSeries, {
+    color: meta.lineColor,
+    lineStyle: LC.LineStyle.Dashed,
+    lineWidth: 2,
+    priceScaleId: "right",
+    priceLineVisible: false,
+    lastValueVisible: false,
+    visible: currentMarketView === "forecast",
+  });
+
+  const maSeries = chart.addSeries(LC.LineSeries, {
+    color: "#3498db",
+    lineStyle: LC.LineStyle.Dashed,
+    lineWidth: 1,
+    priceScaleId: "right",
+    priceLineVisible: false,
+    lastValueVisible: false,
+    visible: false,
+  });
+
+  priceSeries.setData(priceData);
+  deltaSeries.setData(deltaData);
+  forecastSeries.setData(forecastData);
+  maSeries.setData(maData);
+  chart.timeScale().fitContent();
+
+  charts[metalKey] = { chart, priceSeries, deltaSeries, forecastSeries, maSeries };
+  initializeChartTooltip(metalKey, chart, priceSeries, deltaSeries);
 }
 
 async function loadDashboard() {
@@ -1040,7 +940,7 @@ async function loadDashboard() {
       const forecastPayload = await loadWeeklyForecast();
       latestForecastPayload = forecastPayload;
       lastForecastGeneratedAt = String(forecastPayload?.generated_at || "");
-      renderWeeklyForecast(forecastPayload);
+      updateForecastMeta(forecastPayload);
       renderDashboardFromPayload(payload, forecastPayload);
     } catch (error) {
       console.error(error);
@@ -1057,7 +957,6 @@ function renderDashboardFromPayload(payload, forecastPayload = latestForecastPay
   if (!payload) {
     return;
   }
-  lastChartMobileMode = isMobileChartViewport();
   let axisEnd = payload.range_end;
   if (forecastPayload?.forecast) {
     Object.keys(METALS).forEach((metalKey) => {
@@ -1074,9 +973,8 @@ function renderDashboardFromPayload(payload, forecastPayload = latestForecastPay
   const dailyAxis = enumerateDailyAxis(payload.range_start, axisEnd);
   document.getElementById("generatedAt").textContent =
     `更新頻度: 1日1回 (JST 00:00) / 表示期間: ${payload.range_start} - ${payload.range_end}`;
-  buildSummary(payload.latest || {});
   buildTicker(payload.latest || {});
-  updateChartCardHeaders(payload.latest || {});
+  updateMarketWidgets();
 
   Object.keys(METALS).forEach((key) => {
     renderMetalChart(
@@ -1288,18 +1186,6 @@ document.getElementById("pushButton").addEventListener("click", async () => {
   }
 });
 
-window.addEventListener("resize", () => {
-  const mode = isMobileChartViewport();
-  if (lastChartMobileMode === null) {
-    lastChartMobileMode = mode;
-    return;
-  }
-  if (mode !== lastChartMobileMode) {
-    lastChartMobileMode = mode;
-    renderDashboardFromPayload(latestHistoryPayload, latestForecastPayload);
-  }
-});
-
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     refreshForecastSnapshot().catch((error) => {
@@ -1310,7 +1196,6 @@ document.addEventListener("visibilitychange", () => {
 
 initializeThemeToggle();
 initializeMarketToggle();
-initializeQuickSearch();
 initializeChartTools();
 startForecastAutoRefresh();
 
