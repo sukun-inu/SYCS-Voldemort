@@ -125,8 +125,11 @@ async def load_earliest_snapshot_date(session: AsyncSession) -> date | None:
     return await session.scalar(select(func.min(MetalPriceDaily.snapshot_date)))
 
 
-async def load_history(session: AsyncSession, days: int) -> dict[str, list[dict[str, float | str | None]]]:
-    start_date = jst_today() - timedelta(days=days - 1)
+async def load_history(
+    session: AsyncSession, days: int, *, end_date: date | None = None
+) -> dict[str, list[dict[str, float | str | None]]]:
+    end = end_date or jst_today()
+    start_date = end - timedelta(days=days - 1)
     stmt = (
         select(
             MetalPriceDaily.metal_key,
@@ -134,7 +137,7 @@ async def load_history(session: AsyncSession, days: int) -> dict[str, list[dict[
             MetalPriceDaily.price_per_gram,
             MetalPriceDaily.delta_from_previous,
         )
-        .where(MetalPriceDaily.snapshot_date >= start_date)
+        .where(MetalPriceDaily.snapshot_date >= start_date, MetalPriceDaily.snapshot_date <= end)
         .order_by(MetalPriceDaily.snapshot_date.asc())
     )
     rows = (await session.execute(stmt)).all()
