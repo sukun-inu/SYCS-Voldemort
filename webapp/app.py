@@ -16,15 +16,15 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 from config import METAL_COMMANDS
 from services.url_safety import URLSafetyError, validate_public_http_url
 from .cache import TTLCache
-from .db import SessionLocal, close_db, init_db
+from .db import SessionLocal, close_db, engine, init_db
 from .forecast_service import load_stored_weekly_forecast, refresh_weekly_forecast_cache
 from .models import NotificationDispatch, PushSubscription
 from .push_service import (
@@ -483,7 +483,9 @@ async def auto_repair_metalprice_data(*, force_forecast_refresh: bool = False) -
                 )
                 await _clear_response_caches()
                 logger.info(
-                    "metalprice自動修復を実行した。rows_scanned=%s rows_fixed=%s code_fixed=%s delta_fixed=%s missing_today_before=%s missing_today_after=%s forecast_refreshed=%s",
+                    "metalprice自動修復を実行した。rows_scanned=%s rows_fixed=%s code_fixed=%s delta_fixed=%s "
+                    "missing_today_before=%s missing_today_after=%s forecast_refreshed=%s "
+                    "repair_attempted=%s repair_skipped_cooldown=%s",
                     stats.get("rows_scanned", 0),
                     stats.get("rows_fixed", 0),
                     stats.get("metal_code_fixed", 0),
@@ -491,6 +493,8 @@ async def auto_repair_metalprice_data(*, force_forecast_refresh: bool = False) -
                     stats.get("missing_today_before", 0),
                     stats.get("missing_today_after", 0),
                     stats.get("forecast_refreshed", 0),
+                    stats.get("missing_data_repair_attempted", 0),
+                    stats.get("missing_data_repair_skipped_cooldown", 0),
                 )
                 return
             except Exception as e:
@@ -506,13 +510,56 @@ async def collect_daily_data(*, force_snapshot_refresh: bool = False, force_fore
     await collect_weekly_forecast_cache(force_refresh=force_forecast_refresh)
 
 
+# uvicorn --workers での複数プロセス起動やマルチインスタンス構成で、日次スナップショット・
+# 自動修復・週次予測などの定期ジョブが複数プロセスで重複実行されるのを防ぐためのロック。
+# MetalpriceAPIが無料枠(月100回)のため、二重実行は外部API消費が単純に倍になり致命的。
+SCHEDULER_ADVISORY_LOCK_KEY = 721045501
+_scheduler_lock_conn: AsyncConnection | None = None
+
+
+async def _try_acquire_scheduler_lock() -> bool:
+    """PostgreSQLのsession-level advisory lockを取得できたプロセスだけが定期ジョブを担当する。
+    取得に使った接続を保持し続けている間だけロックが有効。"""
+    global _scheduler_lock_conn
+    conn = await engine.connect()
+    try:
+        result = await conn.execute(text("SELECT pg_try_advisory_lock(:key)"), {"key": SCHEDULER_ADVISORY_LOCK_KEY})
+        acquired = bool(result.scalar())
+    except Exception:
+        await conn.close()
+        raise
+    if acquired:
+        _scheduler_lock_conn = conn
+    else:
+        await conn.close()
+    return acquired
+
+
+async def _release_scheduler_lock() -> None:
+    global _scheduler_lock_conn
+    conn = _scheduler_lock_conn
+    _scheduler_lock_conn = None
+    if conn is None:
+        return
+    try:
+        await conn.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": SCHEDULER_ADVISORY_LOCK_KEY})
+    except Exception:
+        logger.exception("[WEB] スケジューラのadvisory lock解放に失敗した。")
+    finally:
+        await conn.close()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await init_db()
     refresh_vapid_config()
     scheduler: AsyncIOScheduler | None = None
+    has_scheduler_lock = False
 
     if WEB_SCHEDULER_ENABLED:
+        has_scheduler_lock = await _try_acquire_scheduler_lock()
+
+    if WEB_SCHEDULER_ENABLED and has_scheduler_lock:
         await collect_daily_data()
         if METAL_AUTO_REPAIR_ENABLED:
             await auto_repair_metalprice_data(
@@ -562,7 +609,12 @@ async def lifespan(_: FastAPI):
                 misfire_grace_time=max(300, METAL_AUTO_REPAIR_INTERVAL_MINUTES * 60),
             )
         scheduler.start()
-        logger.info("WEB_SCHEDULER_ENABLED=true: background scheduler started")
+        logger.info("WEB_SCHEDULER_ENABLED=true: background scheduler started (advisory lock acquired)")
+    elif WEB_SCHEDULER_ENABLED:
+        logger.info(
+            "WEB_SCHEDULER_ENABLED=true だが他プロセスが定期ジョブのadvisory lockを保持しているため、"
+            "このワーカーではスケジューラを起動しない。"
+        )
     else:
         logger.info("WEB_SCHEDULER_ENABLED=false: startup jobs and scheduler are disabled")
 
@@ -571,6 +623,8 @@ async def lifespan(_: FastAPI):
     finally:
         if scheduler is not None:
             scheduler.shutdown(wait=False)
+        if has_scheduler_lock:
+            await _release_scheduler_lock()
         await close_db()
 
 
