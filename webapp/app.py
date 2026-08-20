@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select, text, update
@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 from config import METAL_COMMANDS
 from services.url_safety import URLSafetyError, validate_public_http_url
 from .cache import TTLCache
+from .asset_version import render_index_html, render_service_worker
 from .db import SessionLocal, close_db, engine, init_db
 from .forecast_accuracy_service import reconcile_forecast_accuracy
 from .forecast_service import load_stored_weekly_forecast, refresh_weekly_forecast_cache
@@ -693,7 +694,29 @@ app.add_middleware(
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# Cloudflare配下では、originがCache-Controlを返さないとCF側が独自のTTLを勝手に
+# 付与してしまい(実測で max-age=300 が注入され Age がそれを超える状態になっていた)、
+# キャッシュ挙動が読めなくなる。ここでoriginが明示することで、ブラウザ・CFとも
+# 意図した通りに振る舞わせる。
+#   ?v= 付き … 内容ハッシュ入りURLなので中身が変わればURLも変わる。永久キャッシュ可。
+#   ?v= 無し … sw.jsのプリキャッシュ等が使う素のURL。短命にして取り直させる。
+STATIC_IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"
+STATIC_DEFAULT_CACHE_CONTROL = "public, max-age=300, must-revalidate"
+
+
+class VersionedStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            query = scope.get("query_string", b"").decode("latin-1", "ignore")
+            versioned = any(part.startswith("v=") and len(part) > 2 for part in query.split("&"))
+            response.headers["Cache-Control"] = (
+                STATIC_IMMUTABLE_CACHE_CONTROL if versioned else STATIC_DEFAULT_CACHE_CONTROL
+            )
+        return response
+
+
+app.mount("/static", VersionedStaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.exception_handler(RequestValidationError)
@@ -712,29 +735,41 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse({"detail": message}, status_code=422)
 
 
-@app.get("/", include_in_schema=False)
-async def index() -> FileResponse:
-    return FileResponse(
-        INDEX_FILE,
-        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+NO_STORE_CACHE_CONTROL = "no-store, no-cache, must-revalidate, max-age=0"
+
+APP_JS_FILE = STATIC_DIR / "app.js"
+STYLES_CSS_FILE = STATIC_DIR / "styles.css"
+
+
+def _index_response() -> HTMLResponse:
+    # index.html自体は常にno-storeで配らせ、その中に埋め込む app.js / styles.css の
+    # `?v=` を内容ハッシュへ差し替える。手動でのバージョン更新が不要になり、
+    # 「中身は新しいのにURLが同じでキャッシュが効き続ける」事故を構造的に防ぐ。
+    return HTMLResponse(
+        render_index_html(INDEX_FILE, APP_JS_FILE, STYLES_CSS_FILE),
+        headers={"Cache-Control": NO_STORE_CACHE_CONTROL},
     )
+
+
+@app.get("/", include_in_schema=False)
+async def index() -> HTMLResponse:
+    return _index_response()
 
 
 @app.get("/index.html", include_in_schema=False)
-async def index_html() -> FileResponse:
-    return FileResponse(
-        INDEX_FILE,
-        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
-    )
+async def index_html() -> HTMLResponse:
+    return _index_response()
 
 
 @app.get("/sw.js", include_in_schema=False)
-async def service_worker() -> FileResponse:
-    return FileResponse(
-        SW_FILE,
+async def service_worker() -> PlainTextResponse:
+    # CACHE_NAME も内容ハッシュから生成する。アセットが変わったときだけ名前が変わり、
+    # activate時に古いキャッシュが確実に破棄される(手動更新漏れが起きない)。
+    return PlainTextResponse(
+        render_service_worker(SW_FILE, APP_JS_FILE, STYLES_CSS_FILE),
         media_type="application/javascript",
         headers={
-            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Cache-Control": NO_STORE_CACHE_CONTROL,
             "Service-Worker-Allowed": APP_PUBLIC_ROOT,
         },
     )
@@ -953,4 +988,4 @@ async def fallback_page(page_path: str) -> FileResponse:
     first = page_path.split("/", 1)[0] if page_path else ""
     if first in RESERVED_TOP_LEVEL_PATHS:
         raise HTTPException(status_code=404, detail="Not Found")
-    return FileResponse(INDEX_FILE)
+    return _index_response()
