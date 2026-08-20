@@ -91,6 +91,9 @@ docker compose up -d --build
 | `FORECAST_HISTORY_WINDOW_MIN_DAYS` | 任意 | SARIMAX予測に与える価格履歴の最小日数（既定 `120`）。長いほど季節性・トレンドを学習しやすいが、DBクエリ・計算コストは増える |
 | `FORECAST_SUMMARY_ENABLED` | 任意 | `true/false`。「予測の根拠」の専門的な箇条書きをGroqで平易な要約文に言い換えるか（既定 `true`）。scoring用のGroq呼び出しとは別に、予測リフレッシュ1回につき+1回呼び出す |
 | `FORECAST_SUMMARY_TIMEOUT_SECONDS` | 任意 | 上記要約呼び出しのタイムアウト秒数（既定 `20`） |
+| `FORECAST_LLM_MAX_COMPLETION_TOKENS` | 任意 | AI判定呼び出しの生成トークン上限（既定 `3000`）。gpt-ossは推論モデルで**推論トークンもこの枠を消費する**ため、小さすぎるとcontentが空になりJSONパースが失敗する |
+| `FORECAST_SUMMARY_MAX_COMPLETION_TOKENS` | 任意 | 根拠要約呼び出しの生成トークン上限（既定 `3000`）。同上 |
+| `FORECAST_LLM_REASONING_EFFORT` | 任意 | Groq推論モデルの推論の深さ（既定 `low`）。空文字にするとパラメータ自体を送らずモデル既定に任せる |
 | `TRUST_CF_HEADERS` | 任意 | `true/false`。CFヘッダを信頼するか（既定 `false`） |
 | `REQUIRE_CF_CONNECTING_IP` | 任意 | `true/false`。CFヘッダ必須化（既定 `false`） |
 | `TRUSTED_PROXY_CIDRS` | 任意 | Forwardedヘッダを信頼するプロキシCIDR（既定 `127.0.0.1/32,::1/128`） |

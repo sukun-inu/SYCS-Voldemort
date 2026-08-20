@@ -5,7 +5,7 @@ import random
 import time
 from typing import Any
 
-from groq import AsyncGroq, RateLimitError
+from groq import AsyncGroq, BadRequestError, RateLimitError
 
 from config import GROQ_API_KEY
 
@@ -107,3 +107,68 @@ async def create_chat_completion(client: AsyncGroq, *, bucket: str, **create_kwa
                 )
                 await asyncio.sleep(delay)
                 attempt += 1
+
+
+# --- JSON応答を要求する呼び出し用のヘルパー -------------------------------------
+#
+# Groqの `openai/gpt-oss-*` は推論(reasoning)モデルで、推論トークンも生成トークンとして
+# max_tokens / max_completion_tokens の枠を消費する。予測系の2箇所だけが小さな
+# max_tokens(420/500)を指定していたため、推論だけで枠を使い切って `message.content` が
+# 空(または途中で切れたJSON)になり、パースが常に失敗していた。
+# (他の3機能はmax_tokensを指定しておらずモデル既定の大きな枠が使われるため無事だった)
+#
+# ここでは以下をまとめて面倒みる:
+#   * response_format={"type":"json_object"} でJSONとして妥当な応答を保証する
+#   * reasoning_format="hidden" で推論テキストが content に混ざらないようにする
+#   * max_completion_tokens に十分な枠を渡す(max_tokensは非推奨)
+#   * 上記パラメータを解釈できないモデルが設定された場合(400)は、最小構成へ自動フォール
+#     バックして呼び出し自体は成立させる(枠だけは広げたまま維持する)
+JSON_RESPONSE_FORMAT = {"type": "json_object"}
+
+
+async def create_json_chat_completion(
+    client: AsyncGroq,
+    *,
+    bucket: str,
+    model: str,
+    messages: list[dict[str, Any]],
+    max_completion_tokens: int,
+    temperature: float | None = None,
+    reasoning_effort: str | None = None,
+) -> tuple[str, str | None]:
+    """JSON応答を要求してcontentを取り出す。戻り値は (content, finish_reason)。
+
+    パース側で診断できるよう finish_reason も返す("length"なら枠不足が明白になる)。
+    """
+    base_kwargs: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "max_completion_tokens": max_completion_tokens,
+    }
+    if temperature is not None:
+        base_kwargs["temperature"] = temperature
+
+    preferred_kwargs = dict(base_kwargs)
+    preferred_kwargs["response_format"] = JSON_RESPONSE_FORMAT
+    preferred_kwargs["reasoning_format"] = "hidden"
+    if reasoning_effort:
+        preferred_kwargs["reasoning_effort"] = reasoning_effort
+
+    try:
+        response = await create_chat_completion(client, bucket=bucket, **preferred_kwargs)
+    except BadRequestError as exc:
+        # 設定されたモデルがresponse_format/reasoning_*に対応していない場合の保険。
+        # 枠(max_completion_tokens)だけは維持したまま素の呼び出しへ落とす。
+        logger.warning(
+            "GroqのJSONモード指定が拒否されたため最小構成で再試行する bucket=%s model=%s err=%s",
+            bucket,
+            model,
+            exc,
+        )
+        response = await create_chat_completion(client, bucket=bucket, **base_kwargs)
+
+    choice = response.choices[0] if response.choices else None
+    message = getattr(choice, "message", None)
+    content = getattr(message, "content", None) or ""
+    finish_reason = getattr(choice, "finish_reason", None)
+    return str(content), finish_reason

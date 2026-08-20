@@ -11,7 +11,7 @@ from xml.etree import ElementTree
 import aiohttp
 
 from config import GROQ_API_KEY, METAL_COMMANDS
-from services.groq_client import create_chat_completion, get_groq_client
+from services.groq_client import create_json_chat_completion, get_groq_client
 from .forecast_utils import (
     GOOGLE_NEWS_RSS_URL,
     USDJPY_TIMESERIES_BASE_URL,
@@ -45,6 +45,16 @@ FORECAST_LLM_TIMEOUT_SECONDS = max(8, int(os.getenv("FORECAST_LLM_TIMEOUT_SECOND
 # 共有レート制限(services/groq_client)の対象にもなっているため安全。
 FORECAST_SUMMARY_ENABLED = read_env_bool("FORECAST_SUMMARY_ENABLED", True)
 FORECAST_SUMMARY_TIMEOUT_SECONDS = max(8, int(os.getenv("FORECAST_SUMMARY_TIMEOUT_SECONDS", "20")))
+
+# gpt-ossは推論モデルで、推論トークンも生成枠を消費する。以前は max_tokens=420/500 という
+# 小さすぎる枠を渡していたため、推論だけで枠を使い切って content が空になり、JSONパースが
+# 常に失敗していた(scoresもrationalesも常に0/空、AI判定が予測に一切効いていなかった)。
+# 推論分を見込んだ十分な枠を確保する。
+FORECAST_LLM_MAX_COMPLETION_TOKENS = max(512, int(os.getenv("FORECAST_LLM_MAX_COMPLETION_TOKENS", "3000")))
+FORECAST_SUMMARY_MAX_COMPLETION_TOKENS = max(512, int(os.getenv("FORECAST_SUMMARY_MAX_COMPLETION_TOKENS", "3000")))
+# 推論の深さ。gpt-ossでは "low" で十分な品質が得られ、レイテンシとトークン消費を抑えられる。
+# 空文字を設定するとパラメータ自体を送らない(モデル既定に任せる)。
+FORECAST_LLM_REASONING_EFFORT = (os.getenv("FORECAST_LLM_REASONING_EFFORT", "low") or "").strip()
 
 NEWS_QUERY_BY_METAL = {
     "gold": "gold price xau bullion federal reserve inflation usd jpy",
@@ -287,7 +297,7 @@ async def fetch_llm_signal(
     )
 
     try:
-        response = await create_chat_completion(
+        content, finish_reason = await create_json_chat_completion(
             _get_groq_client(float(FORECAST_LLM_TIMEOUT_SECONDS)),
             bucket=_GROQ_BUCKET,
             model=FORECAST_LLM_MODEL,
@@ -296,13 +306,24 @@ async def fetch_llm_signal(
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.15,
-            max_tokens=420,
+            max_completion_tokens=FORECAST_LLM_MAX_COMPLETION_TOKENS,
+            reasoning_effort=FORECAST_LLM_REASONING_EFFORT or None,
         )
-        content = response.choices[0].message.content or ""
     except Exception as exc:
         logger.warning("LLM予測判定の取得に失敗: %s", exc)
         return {**_empty, "global_comment": "LLM call failed"}
-    parsed = extract_first_json_object(str(content)) or {}
+
+    parsed = extract_first_json_object(content)
+    if not parsed:
+        # パース不能時に静かに0を返すと「AI判定が効いていない」ことに気付けないため、
+        # 診断材料(finish_reason・content長・先頭)を必ず残し、available=Falseで返す。
+        logger.warning(
+            "LLM予測判定のJSONパースに失敗した。finish_reason=%s content_len=%s content_head=%r",
+            finish_reason,
+            len(content),
+            content[:200],
+        )
+        return {**_empty, "global_comment": "LLM response not parseable"}
     metal_result = parsed.get("metals", {}) if isinstance(parsed.get("metals"), dict) else {}
 
     scores: dict[str, float] = {}
@@ -372,7 +393,7 @@ async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str
     )
 
     try:
-        response = await create_chat_completion(
+        content, finish_reason = await create_json_chat_completion(
             _get_groq_client(float(FORECAST_SUMMARY_TIMEOUT_SECONDS)),
             bucket=_GROQ_BUCKET,
             model=FORECAST_LLM_MODEL,
@@ -381,14 +402,22 @@ async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.3,
-            max_tokens=500,
+            max_completion_tokens=FORECAST_SUMMARY_MAX_COMPLETION_TOKENS,
+            reasoning_effort=FORECAST_LLM_REASONING_EFFORT or None,
         )
-        content = response.choices[0].message.content or ""
     except Exception as exc:
         logger.warning("予測根拠の要約取得に失敗: %s", exc)
         return empty
 
-    parsed = extract_first_json_object(str(content)) or {}
+    parsed = extract_first_json_object(content)
+    if not parsed:
+        logger.warning(
+            "予測根拠の要約JSONパースに失敗した。finish_reason=%s content_len=%s content_head=%r",
+            finish_reason,
+            len(content),
+            content[:200],
+        )
+        return empty
     raw_summaries = parsed.get("summaries", {}) if isinstance(parsed.get("summaries"), dict) else {}
     summaries = dict(empty)
     for metal_key in METAL_COMMANDS.keys():
