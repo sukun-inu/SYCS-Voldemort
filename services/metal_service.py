@@ -70,20 +70,45 @@ async def fetch_metal_prices_per_gram(metal_codes: Sequence[str]) -> dict[str, f
         if not still_missing:
             return resolved
 
-        fetched = await _fetch_metal_prices_live(still_missing)
+        batch_failed = False
+        try:
+            fetched = await _fetch_metal_prices_live(still_missing)
+        except MetalPriceError as exc:
+            # カンマ区切りの複数指定をAPIが受け付けなかった場合の保険。ここで諦めると
+            # その日の日次スナップショットごと落ちてしまい、まさに解消したかった
+            # 「データ欠損」を自分で作ることになるため、必ず個別取得へ落とす。
+            if len(still_missing) <= 1:
+                raise
+            logger.warning(
+                "金属APIのバッチ取得に失敗したため個別取得へフォールバックする codes=%s err=%s",
+                ",".join(still_missing),
+                exc,
+            )
+            fetched = {}
+            batch_failed = True
+
         now = time.monotonic()
         for code, price in fetched.items():
             _price_cache[code] = (price, now)
         resolved.update(fetched)
 
-        # バッチ応答に欠けたコードのみ個別取得へ落とす。
+        # バッチで取れなかったコードを個別に取り直す。1金属の失敗で全体を落とさないよう、
+        # ここでは例外を握って次の金属へ進む(取得できたぶんは保存対象として残す)。
         leftovers = [code for code in still_missing if code not in fetched]
         for code in leftovers:
-            logger.warning("金属APIのバッチ応答に %s が含まれなかったため個別取得へフォールバックする。", code)
-            price = await _fetch_metal_prices_live([code])
+            if not batch_failed:
+                logger.warning("金属APIのバッチ応答に %s が含まれなかったため個別取得へフォールバックする。", code)
+            try:
+                price = await _fetch_metal_prices_live([code])
+            except MetalPriceError as exc:
+                logger.error("金属価格の個別取得にも失敗した code=%s err=%s", code, exc)
+                continue
             if code in price:
                 _price_cache[code] = (price[code], time.monotonic())
                 resolved[code] = price[code]
+
+        if not resolved:
+            raise MetalPriceError(f"{','.join(still_missing)} の価格取得に失敗した。")
 
     return resolved
 
