@@ -25,6 +25,7 @@ from config import METAL_COMMANDS
 from services.url_safety import URLSafetyError, validate_public_http_url
 from .cache import TTLCache
 from .db import SessionLocal, close_db, engine, init_db
+from .forecast_accuracy_service import reconcile_forecast_accuracy
 from .forecast_service import load_stored_weekly_forecast, refresh_weekly_forecast_cache
 from .models import NotificationDispatch, PushSubscription
 from .push_service import (
@@ -62,6 +63,15 @@ PURITY_OPTIONS_CACHE_SECONDS = max(60, int(os.getenv("PURITY_OPTIONS_CACHE_SECON
 PUSH_PUBLIC_KEY_CACHE_SECONDS = max(300, int(os.getenv("PUSH_PUBLIC_KEY_CACHE_SECONDS", "3600")))
 FORECAST_CACHE_SECONDS = max(60, int(os.getenv("FORECAST_CACHE_SECONDS", "1800")))
 FORECAST_REFRESH_MINUTE_JST = max(0, min(59, int(os.getenv("FORECAST_REFRESH_MINUTE_JST", "5"))))
+# JST 00:00の日次スナップショット直後は既にjst_daily_metal_snapshot_and_forecastが
+# 予測を更新するため、ここには含めない。価格データ自体は1日1回しか変わらないため、
+# 日中はニュース動向を拾う目的でこの時刻にだけ強制リフレッシュする(以前は毎時実行して
+# いたが、Groq/ニュースRSS/為替APIを無駄に24回/日叩いていたため間引いた)。
+FORECAST_REFRESH_EXTRA_HOURS_JST = [
+    hour.strip()
+    for hour in os.getenv("FORECAST_REFRESH_EXTRA_HOURS_JST", "6,12,18").split(",")
+    if hour.strip()
+]
 PUSH_NOTIFY_HOUR_JST = max(0, min(23, int(os.getenv("PUSH_NOTIFY_HOUR_JST", "11"))))
 PUSH_NOTIFY_MINUTE_JST = max(0, min(59, int(os.getenv("PUSH_NOTIFY_MINUTE_JST", "0"))))
 NOTIFY_TOP_DELTA_TYPE = "daily_top_delta"
@@ -511,8 +521,31 @@ async def auto_repair_metalprice_data(*, force_forecast_refresh: bool = False) -
                 return
 
 
+async def reconcile_forecast_accuracy_job() -> None:
+    """前日までの予測と、直前に確定した実勢価格を突き合わせて答え合わせする。
+    日次スナップショット保存の直後(新しい実勢価格が入った直後)に呼ぶ。"""
+    for attempt in range(2):
+        async with SessionLocal() as session:
+            try:
+                stats = await reconcile_forecast_accuracy(session)
+                logger.info(
+                    "予測精度の答え合わせを実行した。checked=%s matched=%s unmatched=%s",
+                    stats.get("checked", 0),
+                    stats.get("matched", 0),
+                    stats.get("unmatched", 0),
+                )
+                return
+            except Exception as e:
+                await session.rollback()
+                if attempt == 0 and await _try_db_self_heal(context="reconcile_forecast_accuracy_job", exc=e):
+                    continue
+                logger.exception("予測精度の答え合わせに失敗した。")
+                return
+
+
 async def collect_daily_data(*, force_snapshot_refresh: bool = False, force_forecast_refresh: bool = False) -> None:
     await collect_daily_snapshot(force_refresh=force_snapshot_refresh)
+    await reconcile_forecast_accuracy_job()
     await collect_weekly_forecast_cache(force_refresh=force_forecast_refresh)
 
 
@@ -584,16 +617,23 @@ async def lifespan(_: FastAPI):
             max_instances=1,
             misfire_grace_time=3600,
         )
-        scheduler.add_job(
-            collect_weekly_forecast_cache,
-            CronTrigger(minute=FORECAST_REFRESH_MINUTE_JST, timezone=JST),
-            kwargs={"force_refresh": True},
-            id="jst_hourly_forecast_refresh",
-            replace_existing=True,
-            coalesce=True,
-            max_instances=1,
-            misfire_grace_time=1800,
-        )
+        if FORECAST_REFRESH_EXTRA_HOURS_JST:
+            # JST 00:00分はjst_daily_metal_snapshot_and_forecastで既にカバー済みのため、
+            # ここでは日中の追加リフレッシュ(既定6/12/18時)のみを強制更新する。
+            scheduler.add_job(
+                collect_weekly_forecast_cache,
+                CronTrigger(
+                    hour=",".join(FORECAST_REFRESH_EXTRA_HOURS_JST),
+                    minute=FORECAST_REFRESH_MINUTE_JST,
+                    timezone=JST,
+                ),
+                kwargs={"force_refresh": True},
+                id="jst_intraday_forecast_refresh",
+                replace_existing=True,
+                coalesce=True,
+                max_instances=1,
+                misfire_grace_time=1800,
+            )
         scheduler.add_job(
             dispatch_top_delta_notification,
             CronTrigger(hour=PUSH_NOTIFY_HOUR_JST, minute=PUSH_NOTIFY_MINUTE_JST, timezone=JST),

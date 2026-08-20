@@ -28,6 +28,11 @@ docker compose up -d --build
 | `METALPRICE_API_KEY` | 推奨 | 金属価格 API |
 | `GROQ_API_KEY` | 任意 | AI 会話/モデレーション。metalprice の週次予測AI判定にも使用（`sycs-voldemort-web`にも設定要） |
 | `NEWS_SUMMARY_MODEL` | 任意 | ニュース要約用モデル（既定 `openai/gpt-oss-120b`） |
+| `GROQ_MAX_CONCURRENT_REQUESTS` | 任意 | Groq呼び出しの用途別(会話/モデレーション/ニュース要約/metalprice予測)同時実行数上限（既定 `3`）。`services/groq_client.py`が共通で使用 |
+| `GROQ_MIN_REQUEST_INTERVAL_SECONDS` | 任意 | Groq呼び出しの用途別最小間隔秒（既定 `0.25`） |
+| `GROQ_MAX_RETRIES` | 任意 | Groqが429(レート制限)を返した際の最大リトライ回数（既定 `2`） |
+| `GROQ_RETRY_BASE_DELAY_SECONDS` | 任意 | 429リトライの基準待機秒(指数バックオフ、`Retry-After`ヘッダが無い場合に使用、既定 `2.0`) |
+| `GROQ_RETRY_MAX_DELAY_SECONDS` | 任意 | 429リトライ待機秒の上限（既定 `20.0`） |
 | `VIRUSTOTAL_API_KEY` | 任意 | URL/ファイルスキャン |
 | `VT_MAX_DOWNLOAD_BYTES` | 任意 | VTスキャン時の最大ダウンロードサイズ（既定 `20971520` = 20MB） |
 | `SETTINGS_DIR` | 任意 | `settings.json` 保存先 |
@@ -82,6 +87,9 @@ docker compose up -d --build
 | `METAL_AUTO_REPAIR_LOOKBACK_DAYS` | 任意 | 自動修復で整合性チェックする履歴日数（既定 `60`） |
 | `METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH` | 任意 | 各修復時に予測キャッシュ再生成を強制（既定 `false`） |
 | `METAL_REPAIR_RETRY_COOLDOWN_HOURS` | 任意 | 本日分の価格データ欠損を検知した際、API再取得を再試行するまでのクールダウン時間（時間、既定 `6`）。MetalpriceAPIの無料枠(月100回)を無条件リトライで食いつぶさないための制限 |
+| `FORECAST_REFRESH_EXTRA_HOURS_JST` | 任意 | 週次予測を日中に強制リフレッシュするJST時刻（カンマ区切り、既定 `6,12,18`）。0時分はJST 00:00の日次スナップショットジョブが既にカバーしているため対象外。以前は毎時(1日24回)リフレッシュしGroq/ニュースRSS/為替APIを浪費していたため間引いた |
+| `FORECAST_LLM_WEIGHT` | 任意 | AI(Groq)判定のスコア×確信度が予測日次リターンに反映される係数（既定 `0.008`）。heuristic_daily_returnのclamp(±4%/日)は別途維持される |
+| `FORECAST_HISTORY_WINDOW_MIN_DAYS` | 任意 | SARIMAX予測に与える価格履歴の最小日数（既定 `120`）。長いほど季節性・トレンドを学習しやすいが、DBクエリ・計算コストは増える |
 | `TRUST_CF_HEADERS` | 任意 | `true/false`。CFヘッダを信頼するか（既定 `false`） |
 | `REQUIRE_CF_CONNECTING_IP` | 任意 | `true/false`。CFヘッダ必須化（既定 `false`） |
 | `TRUSTED_PROXY_CIDRS` | 任意 | Forwardedヘッダを信頼するプロキシCIDR（既定 `127.0.0.1/32,::1/128`） |

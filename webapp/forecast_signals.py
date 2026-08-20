@@ -10,9 +10,8 @@ from xml.etree import ElementTree
 
 import aiohttp
 
-from groq import AsyncGroq
-
 from config import GROQ_API_KEY, METAL_COMMANDS
+from services.groq_client import create_chat_completion, get_groq_client
 from .forecast_utils import (
     GOOGLE_NEWS_RSS_URL,
     USDJPY_TIMESERIES_BASE_URL,
@@ -27,14 +26,11 @@ from .forecast_models import daily_trend, daily_volatility, extract_prices
 
 logger = logging.getLogger(__name__)
 
-_groq_client: AsyncGroq | None = None
+_GROQ_BUCKET = "forecast"
 
 
-def _get_groq_client(timeout: float) -> AsyncGroq:
-    global _groq_client
-    if _groq_client is None:
-        _groq_client = AsyncGroq(api_key=GROQ_API_KEY, timeout=timeout)
-    return _groq_client
+def _get_groq_client(timeout: float):
+    return get_groq_client(timeout=timeout, bucket=_GROQ_BUCKET)
 
 
 FORECAST_LLM_ENABLED = read_env_bool("FORECAST_LLM_ENABLED", True)
@@ -197,7 +193,9 @@ async def fetch_news_signals(session: aiohttp.ClientSession) -> dict[str, Any]:
         titles, score = await task
         sentiment[metal_key] = score
         article_counts[metal_key] = len(titles)
-        sample_headlines[metal_key] = titles[:3]
+        # LLM判定に渡す材料を増やすため、以前(上位3件)より広めに保持しておく。
+        # _fetch_news_for_queryは既に上位18件を取得・スコアリング済みなので追加のRSS取得は発生しない。
+        sample_headlines[metal_key] = titles[:8]
 
     return {
         "available": any(count > 0 for count in article_counts.values()),
@@ -213,6 +211,7 @@ async def fetch_llm_signal(
     history_by_metal: dict[str, list[dict[str, Any]]],
     fx_signal: dict[str, Any],
     news_signal: dict[str, Any],
+    recent_accuracy: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     _empty = {
         "available": False,
@@ -231,7 +230,8 @@ async def fetch_llm_signal(
     metal_input: dict[str, Any] = {}
     for metal_key in METAL_COMMANDS.keys():
         prices = extract_prices(history_by_metal.get(metal_key, []))
-        headlines = list((news_signal.get("sample_headlines", {}) or {}).get(metal_key, []))[:4]
+        headlines = list((news_signal.get("sample_headlines", {}) or {}).get(metal_key, []))[:8]
+        recent_error = (recent_accuracy or {}).get(metal_key)
         metal_input[metal_key] = {
             "latest_price_per_gram": round(prices[-1], 2) if prices else None,
             "trend_14d_pct_per_day": round(daily_trend(prices) * 100, 4) if prices else 0.0,
@@ -239,6 +239,9 @@ async def fetch_llm_signal(
             "news_sentiment": float((news_signal.get("sentiment", {}) or {}).get(metal_key, 0.0)),
             "news_article_count": int((news_signal.get("article_counts", {}) or {}).get(metal_key, 0)),
             "headlines": [clip_text(item, 140) for item in headlines],
+            # 直近の自分自身の予測誤差(平均絶対誤差%)。過去の判断がどれだけ外れて
+            # いたかを踏まえて確信度を調整させるためのフィードバック信号。
+            "recent_forecast_mean_abs_error_pct": round(recent_error, 3) if recent_error is not None else None,
         }
 
     user_payload = {
@@ -254,7 +257,11 @@ async def fetch_llm_signal(
         "You are a conservative financial signal analyst for precious metals. "
         "Use only provided inputs. Return STRICT JSON only, no markdown. "
         "For each metal (gold, silver, platinum), output sentiment score [-1,1], "
-        "confidence [0,1], and a short rationale."
+        "confidence [0,1], and a short rationale. "
+        "Each metal includes recent_forecast_mean_abs_error_pct: your own forecast's "
+        "recent average error rate (null if unavailable). If this value is high, be more "
+        "conservative and lower your confidence; if low and your signal is strong, you may "
+        "raise confidence accordingly."
     )
     user_prompt = (
         "Inputs JSON:\n"
@@ -271,7 +278,9 @@ async def fetch_llm_signal(
     )
 
     try:
-        response = await _get_groq_client(float(FORECAST_LLM_TIMEOUT_SECONDS)).chat.completions.create(
+        response = await create_chat_completion(
+            _get_groq_client(float(FORECAST_LLM_TIMEOUT_SECONDS)),
+            bucket=_GROQ_BUCKET,
             model=FORECAST_LLM_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},

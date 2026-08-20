@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import METAL_COMMANDS
 
+from .forecast_accuracy_service import load_recent_forecast_error, record_forecast_snapshot
 from .forecast_models import (
     FORECAST_SARIMAX_ENABLED,
     FORECAST_SARIMAX_MIN_HISTORY,
@@ -30,10 +32,16 @@ from .snapshot_service import JST, load_history
 
 logger = logging.getLogger(__name__)
 
+# SARIMAXに与える価格履歴の最小日数。以前は horizon_days*8 (7日予測なら56日)固定
+# だったが、「全期間」データが取得可能になったことで、より長い季節性・トレンドを
+# 学習させられるようになったため引き上げ、環境変数で調整可能にする。
+FORECAST_HISTORY_WINDOW_MIN_DAYS = max(45, int(os.getenv("FORECAST_HISTORY_WINDOW_MIN_DAYS", "120")))
+
 
 async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7) -> dict[str, Any]:
-    history_window_days = max(45, horizon_days * 8)
+    history_window_days = max(FORECAST_HISTORY_WINDOW_MIN_DAYS, horizon_days * 20)
     history_by_metal = await load_history(session, history_window_days)
+    recent_accuracy = await load_recent_forecast_error(session)
 
     timeout = aiohttp.ClientTimeout(
         total=max(FORECAST_LLM_TIMEOUT_SECONDS + 10, 30),
@@ -55,6 +63,7 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
             history_by_metal=history_by_metal,
             fx_signal=fx_signal,
             news_signal=news_signal,
+            recent_accuracy=recent_accuracy,
         )
 
     today = datetime.now(JST)
@@ -131,6 +140,11 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
                 "available": SARIMAX_AVAILABLE,
                 "min_history": FORECAST_SARIMAX_MIN_HISTORY,
             },
+            "accuracy": {
+                "available": bool(recent_accuracy),
+                "lookback_days": 14,
+                "mean_abs_error_pct": recent_accuracy,
+            },
         },
         "forecast": forecast,
     }
@@ -172,10 +186,12 @@ def _forecast_payload_from_db(
         sample_headlines = headlines_payload.get("sample_headlines") or {}
         llm_payload = headlines_payload.get("llm") or {}
         stat_model_payload = headlines_payload.get("stat_model") or {}
+        accuracy_payload = headlines_payload.get("accuracy") or {}
     else:
         sample_headlines = headlines_payload if isinstance(headlines_payload, dict) else {}
         llm_payload = {}
         stat_model_payload = {}
+        accuracy_payload = {}
 
     if not llm_payload:
         llm_payload = {
@@ -193,6 +209,8 @@ def _forecast_payload_from_db(
             "available": SARIMAX_AVAILABLE,
             "min_history": FORECAST_SARIMAX_MIN_HISTORY,
         }
+    if not accuracy_payload:
+        accuracy_payload = {"available": False, "lookback_days": 14, "mean_abs_error_pct": {}}
 
     return {
         "timezone": "Asia/Tokyo",
@@ -216,6 +234,7 @@ def _forecast_payload_from_db(
             },
             "llm": llm_payload,
             "stat_model": stat_model_payload,
+            "accuracy": accuracy_payload,
         },
         "forecast": forecast,
     }
@@ -347,6 +366,7 @@ async def store_weekly_forecast(
     news = signal_data.get("news", {}) if isinstance(signal_data.get("news"), dict) else {}
     llm = signal_data.get("llm", {}) if isinstance(signal_data.get("llm"), dict) else {}
     stat_model = signal_data.get("stat_model", {}) if isinstance(signal_data.get("stat_model"), dict) else {}
+    accuracy = signal_data.get("accuracy", {}) if isinstance(signal_data.get("accuracy"), dict) else {}
 
     meta.as_of_date = as_of_date
     meta.generated_at = generated_at
@@ -377,6 +397,11 @@ async def store_weekly_forecast(
             "available": bool(stat_model.get("available", SARIMAX_AVAILABLE)),
             "min_history": int(safe_float(stat_model.get("min_history")) or FORECAST_SARIMAX_MIN_HISTORY),
         },
+        "accuracy": {
+            "available": bool(accuracy.get("available")),
+            "lookback_days": int(safe_float(accuracy.get("lookback_days")) or 14),
+            "mean_abs_error_pct": accuracy.get("mean_abs_error_pct", {}),
+        },
     })
 
     await session.flush()
@@ -391,4 +416,9 @@ async def refresh_weekly_forecast_cache(
 ) -> dict[str, Any]:
     payload = await build_weekly_forecast(session, horizon_days=horizon_days)
     await store_weekly_forecast(session, payload, horizon_days=horizon_days)
+    try:
+        await record_forecast_snapshot(session, payload)
+    except Exception:
+        # 精度トラッキングの記録失敗は予測配信自体の失敗にしない。
+        logger.exception("予測精度ログの記録に失敗した。")
     return payload
