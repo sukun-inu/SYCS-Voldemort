@@ -121,6 +121,10 @@ async def store_today_snapshot(session: AsyncSession, *, skip_if_exists: bool = 
     return await store_snapshot(session, jst_today(), skip_if_exists=skip_if_exists)
 
 
+async def load_earliest_snapshot_date(session: AsyncSession) -> date | None:
+    return await session.scalar(select(func.min(MetalPriceDaily.snapshot_date)))
+
+
 async def load_history(session: AsyncSession, days: int) -> dict[str, list[dict[str, float | str | None]]]:
     start_date = jst_today() - timedelta(days=days - 1)
     stmt = (

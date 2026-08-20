@@ -50,6 +50,7 @@ const CHART_CDN_LIST = [
 const SW_SCRIPT_VERSION = "20260820-9";
 const FORECAST_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const THEME_STORAGE_KEY = "metalDailyTheme";
+const DAYS_RANGE_STORAGE_KEY = "metalDailyDaysRange";
 
 function appUrl(path) {
   return new URL(path.replace(/^\/+/, ""), APP_BASE).toString();
@@ -951,8 +952,9 @@ async function loadDashboard() {
   setDashboardLoadingState();
   try {
     await ensureChartLibrary();
-    const days = Number(document.getElementById("daysSelect").value || 30);
-    const response = await fetch(`${appUrl("api/prices/history")}?days=${days}`);
+    const rangeValue = document.getElementById("daysSelect").value || "30";
+    const historyQuery = rangeValue === "all" ? "all=true" : `days=${Number(rangeValue) || 30}`;
+    const response = await fetch(`${appUrl("api/prices/history")}?${historyQuery}`);
     if (!response.ok) {
       throw new Error("データ取得に失敗しました。");
     }
@@ -1174,12 +1176,31 @@ document.getElementById("reloadButton").addEventListener("click", () => {
   });
 });
 
-document.getElementById("daysSelect").addEventListener("change", () => {
+document.getElementById("daysSelect").addEventListener("change", (event) => {
+  try {
+    localStorage.setItem(DAYS_RANGE_STORAGE_KEY, event.target.value);
+  } catch (_) {}
   loadDashboard().catch((err) => {
     console.error(err);
     alert(err.message || "ダッシュボードの更新に失敗しました。");
   });
 });
+
+function restoreStoredDaysRange() {
+  const select = document.getElementById("daysSelect");
+  if (!select) {
+    return;
+  }
+  let stored = null;
+  try {
+    stored = localStorage.getItem(DAYS_RANGE_STORAGE_KEY);
+  } catch (_) {
+    stored = null;
+  }
+  if (stored && Array.from(select.options).some((option) => option.value === stored)) {
+    select.value = stored;
+  }
+}
 
 document.getElementById("calcButton").addEventListener("click", () => {
   calculatePurityPrice().catch((err) => {
@@ -1223,6 +1244,7 @@ document.addEventListener("visibilitychange", () => {
 initializeThemeToggle();
 initializeMarketToggle();
 initializeChartTools();
+restoreStoredDaysRange();
 startForecastAutoRefresh();
 
 loadDashboard().catch((err) => {
