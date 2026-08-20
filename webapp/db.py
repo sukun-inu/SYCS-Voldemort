@@ -97,20 +97,35 @@ def _run_alembic_stamp(revision: str) -> None:
     command.stamp(cfg, revision)
 
 
-async def init_db() -> None:
-    is_legacy = await _detect_legacy_db()
+# uvicorn --workers での複数プロセス起動時、各ワーカーが起動時に init_db() を呼ぶため、
+# ガード無しだと複数ワーカーが同時に `alembic upgrade head` を実行してしまう。CREATE TABLE
+# など同じDDLが競合し "duplicate key value violates unique constraint
+# pg_class_relname_nsp_index"（SERIAL列が暗黙に作るシーケンスの衝突）のようなエラーで起動が
+# 失敗することを本番で確認した。app.py の SCHEDULER_ADVISORY_LOCK_KEY と同じ advisory lock
+# パターンでマイグレーション実行そのものを直列化する（webapp/app.py 側の定期ジョブ用ロックとは
+# 別のキーを使い、両者が干渉しないようにする）。
+DB_MIGRATION_ADVISORY_LOCK_KEY = 721045777
 
-    if is_legacy:
-        logger.warning(
-            "旧式DB（create_all 作成）を検出。Alembic 初期リビジョン(0001)をスタンプ後、head へアップグレードします。"
-        )
-        await asyncio.to_thread(_run_alembic_stamp, "0001")
-        await asyncio.to_thread(_run_alembic_upgrade)
-        logger.info("旧式DBの移行完了。以降のマイグレーションは Alembic で管理されます。")
-    else:
-        logger.info("Alembic マイグレーションを実行します。")
-        await asyncio.to_thread(_run_alembic_upgrade)
-        logger.info("マイグレーション完了。")
+
+async def init_db() -> None:
+    async with engine.connect() as conn:
+        await conn.execute(text("SELECT pg_advisory_lock(:key)"), {"key": DB_MIGRATION_ADVISORY_LOCK_KEY})
+        try:
+            is_legacy = await _detect_legacy_db()
+
+            if is_legacy:
+                logger.warning(
+                    "旧式DB（create_all 作成）を検出。Alembic 初期リビジョン(0001)をスタンプ後、head へアップグレードします。"
+                )
+                await asyncio.to_thread(_run_alembic_stamp, "0001")
+                await asyncio.to_thread(_run_alembic_upgrade)
+                logger.info("旧式DBの移行完了。以降のマイグレーションは Alembic で管理されます。")
+            else:
+                logger.info("Alembic マイグレーションを実行します。")
+                await asyncio.to_thread(_run_alembic_upgrade)
+                logger.info("マイグレーション完了。")
+        finally:
+            await conn.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": DB_MIGRATION_ADVISORY_LOCK_KEY})
 
 
 async def close_db() -> None:
