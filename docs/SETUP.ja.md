@@ -88,7 +88,11 @@ docker compose up -d --build
 | `METAL_REPAIR_RETRY_COOLDOWN_HOURS` | 任意 | 本日分の価格データ欠損を検知した際、API再取得を再試行するまでのクールダウン時間（時間、既定 `6`）。MetalpriceAPIの無料枠(月100回)を無条件リトライで食いつぶさないための制限 |
 | `FORECAST_REFRESH_EXTRA_HOURS_JST` | 任意 | 週次予測を日中に強制リフレッシュするJST時刻（カンマ区切り、既定 `6,12,18`）。0時分はJST 00:00の日次スナップショットジョブが既にカバーしているため対象外。以前は毎時(1日24回)リフレッシュしGroq/ニュースRSS/為替APIを浪費していたため間引いた |
 | `FORECAST_LLM_WEIGHT` | 任意 | AI(Groq)判定のスコア×確信度が予測日次リターンに反映される係数（既定 `0.008`）。heuristic_daily_returnのclamp(±4%/日)は別途維持される |
-| `FORECAST_HISTORY_WINDOW_MIN_DAYS` | 任意 | SARIMAX予測に与える価格履歴の最小日数（既定 `120`）。長いほど季節性・トレンドを学習しやすいが、DBクエリ・計算コストは増える |
+| `FORECAST_HISTORY_WINDOW_MIN_DAYS` | 任意 | 予測区間の推定に使う価格履歴の日数（既定 `120`）。重複ありの7日リターンを集めるため、長いほど経験分位点が安定する |
+| `FORECAST_INTERVAL_PROB` | 任意 | 予測区間の名目確率（既定 `0.8` = 80%区間） |
+| `FORECAST_TILT_MAX_PCT_PER_DAY` | 任意 | 中心値の傾きの上限（%/日、既定 `0.15`）。時系列外挿に予測力が無いと実測で判明したため、外部シグナルが中心を動かせる幅を厳しく制限する |
+| `FORECAST_WIDTH_REFERENCE_PCT` | 任意 | 信頼度を区間の狭さから求めるときの基準（既定 `12.0`）。7日の片側幅がこの%なら幅由来の寄与が0になる |
+| `FORECAST_INTERVAL_WIDTH_MULTIPLIER` | 任意 | 予測区間の幅にかける補正係数（既定 `1.35`）。重複ありの7日リターンは強く自己相関するため標本分位点が裾を過小評価する。本番実データ102点で較正し、補正なし66.7%→補正後81.4%の被覆率になった |
 | `FORECAST_SUMMARY_ENABLED` | 任意 | `true/false`。「予測の根拠」の専門的な箇条書きをGroqで平易な要約文に言い換えるか（既定 `true`）。scoring用のGroq呼び出しとは別に、予測リフレッシュ1回につき+1回呼び出す |
 | `FORECAST_SUMMARY_TIMEOUT_SECONDS` | 任意 | 上記要約呼び出しのタイムアウト秒数（既定 `20`） |
 | `FORECAST_LLM_MAX_COMPLETION_TOKENS` | 任意 | AI判定呼び出しの生成トークン上限（既定 `3000`）。gpt-ossは推論モデルで**推論トークンもこの枠を消費する**ため、小さすぎるとcontentが空になりJSONパースが失敗する |

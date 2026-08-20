@@ -13,10 +13,9 @@ from config import METAL_COMMANDS
 
 from .forecast_accuracy_service import load_recent_forecast_error, record_forecast_snapshot
 from .forecast_models import (
-    FORECAST_SARIMAX_ENABLED,
-    FORECAST_SARIMAX_MIN_HISTORY,
-    SARIMAX_AVAILABLE,
-    extract_price_series,
+    FORECAST_INTERVAL_PROB,
+    FORECAST_TILT_MAX_PCT_PER_DAY,
+    MODEL_VARIANT,
     forecast_for_metal,
 )
 from .forecast_signals import (
@@ -33,9 +32,8 @@ from .snapshot_service import JST, load_history
 
 logger = logging.getLogger(__name__)
 
-# SARIMAXに与える価格履歴の最小日数。以前は horizon_days*8 (7日予測なら56日)固定
-# だったが、「全期間」データが取得可能になったことで、より長い季節性・トレンドを
-# 学習させられるようになったため引き上げ、環境変数で調整可能にする。
+# 予測区間の推定に使う価格履歴の日数。重複ありの7日リターンを十分な本数集めるため、
+# 長めに取る(経験分位点には最低20本必要)。
 FORECAST_HISTORY_WINDOW_MIN_DAYS = max(45, int(os.getenv("FORECAST_HISTORY_WINDOW_MIN_DAYS", "120")))
 
 
@@ -43,6 +41,8 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
     history_window_days = max(FORECAST_HISTORY_WINDOW_MIN_DAYS, horizon_days * 20)
     history_by_metal = await load_history(session, history_window_days)
     recent_accuracy = await load_recent_forecast_error(session)
+    mae_by_metal = recent_accuracy.get("mean_abs_error_pct", {})
+    coverage_by_metal = recent_accuracy.get("coverage", {})
 
     timeout = aiohttp.ClientTimeout(
         total=max(FORECAST_LLM_TIMEOUT_SECONDS + 10, 30),
@@ -64,7 +64,7 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
             history_by_metal=history_by_metal,
             fx_signal=fx_signal,
             news_signal=news_signal,
-            recent_accuracy=recent_accuracy,
+            recent_accuracy=mae_by_metal,
         )
 
     today = datetime.now(JST)
@@ -74,14 +74,9 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
     }
     forecast: dict[str, Any] = {}
     for metal_key in METAL_COMMANDS.keys():
-        series = extract_price_series(history_by_metal.get(metal_key, []))
-        if not series:
-            continue
-        price_dates = [date_str for date_str, _ in series]
-        prices = [price for _, price in series]
-        forecast[metal_key] = forecast_for_metal(
+        item = forecast_for_metal(
             metal_key=metal_key,
-            prices=prices,
+            history_items=history_by_metal.get(metal_key, []),
             horizon_days=horizon_days,
             today=today,
             fx_daily_factor=float(fx_signal.get("daily_factor", 0.0)),
@@ -92,12 +87,14 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
             llm_confidence=float((llm_signal.get("confidences", {}) or {}).get(metal_key, 0.0)),
             llm_rationale=str((llm_signal.get("rationales", {}) or {}).get(metal_key, "")),
             llm_available=bool(llm_signal.get("available")),
-            price_dates=price_dates,
             fx_returns_by_date=fx_returns_by_date,
-            # 金属ごとの直近平均絶対誤差。答え合わせ済みデータが無い金属はNoneのまま渡し、
+            # 答え合わせ済みデータが無い金属はNoneのまま渡し、
             # forecast_for_metal側で信頼度に上限を掛ける。
-            recent_mae_pct=recent_accuracy.get(metal_key),
+            recent_mae_pct=mae_by_metal.get(metal_key),
+            recent_coverage=coverage_by_metal.get(metal_key),
         )
+        if item is not None:
+            forecast[metal_key] = item
 
     if not forecast:
         raise RuntimeError("予測に必要な価格履歴データがありません。")
@@ -109,16 +106,10 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
         if metal_key in forecast and summary_text:
             forecast[metal_key]["summary"] = summary_text
 
-    uses_sarimax = any(
-        item.get("model_variant") == "sarimax_fused_v1"
-        for item in forecast.values()
-        if isinstance(item, dict)
-    )
-    model_name = "sarimax_fused_v1" if uses_sarimax else "heuristic_fx_news_v1"
+    model_name = MODEL_VARIANT
     model_description = (
-        "USD/JPY・ニュース・AIを合算した外生シグナルを含むSARIMAX予測。"
-        if uses_sarimax
-        else "直近価格トレンド + USD/JPY + ニュース見出し極性を合成した簡易予測。"
+        f"現在価格を中心に、過去の7日変動分布から求めた{FORECAST_INTERVAL_PROB:.0%}予測区間を示すモデル。"
+        "USD/JPY・ニュース・AI判定は中心をわずかに傾けるだけに留める。"
     )
 
     return {
@@ -150,15 +141,15 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
                 "rationales": llm_signal.get("rationales", {}),
                 "global_comment": llm_signal.get("global_comment", ""),
             },
-            "stat_model": {
-                "enabled": FORECAST_SARIMAX_ENABLED,
-                "available": SARIMAX_AVAILABLE,
-                "min_history": FORECAST_SARIMAX_MIN_HISTORY,
+            "interval": {
+                "prob": FORECAST_INTERVAL_PROB,
+                "tilt_max_pct_per_day": FORECAST_TILT_MAX_PCT_PER_DAY * 100,
             },
             "accuracy": {
-                "available": bool(recent_accuracy),
-                "lookback_days": 14,
-                "mean_abs_error_pct": recent_accuracy,
+                "available": bool(mae_by_metal or coverage_by_metal),
+                "lookback_days": int(recent_accuracy.get("lookback_days", 14)),
+                "mean_abs_error_pct": mae_by_metal,
+                "coverage": coverage_by_metal,
             },
         },
         "forecast": forecast,
@@ -178,14 +169,14 @@ def _forecast_payload_from_db(
     if isinstance(headlines_payload, dict) and "sample_headlines" in headlines_payload:
         sample_headlines = headlines_payload.get("sample_headlines") or {}
         llm_payload = headlines_payload.get("llm") or {}
-        stat_model_payload = headlines_payload.get("stat_model") or {}
+        interval_payload = headlines_payload.get("interval") or {}
         accuracy_payload = headlines_payload.get("accuracy") or {}
         summaries_payload = headlines_payload.get("summaries") or {}
         breakdown_payload = headlines_payload.get("driver_breakdowns") or {}
     else:
         sample_headlines = headlines_payload if isinstance(headlines_payload, dict) else {}
         llm_payload = {}
-        stat_model_payload = {}
+        interval_payload = {}
         accuracy_payload = {}
         summaries_payload = {}
         breakdown_payload = {}
@@ -199,15 +190,34 @@ def _forecast_payload_from_db(
                 "date": row.forecast_date.isoformat(),
                 "price_per_gram": float(row.price_per_gram),
                 "delta_from_previous": float(row.delta_from_previous) if row.delta_from_previous is not None else None,
+                # 区間列は 0004 で追加したため、それ以前に保存された行では NULL になる。
+                # その場合は None のまま返し、フロントエンドは帯なしで描画する。
+                "lower_price_per_gram": float(row.lower_price_per_gram) if row.lower_price_per_gram is not None else None,
+                "upper_price_per_gram": float(row.upper_price_per_gram) if row.upper_price_per_gram is not None else None,
             }
             for row in sorted_rows
         ]
+        last_daily = daily[-1] if daily else {}
+        start_price = float(first.start_price_per_gram)
+        projected_lower = last_daily.get("lower_price_per_gram")
+        projected_upper = last_daily.get("upper_price_per_gram")
         forecast[metal_key] = {
             "start_price_per_gram": float(first.start_price_per_gram),
             "projected_price_per_gram": float(first.projected_price_per_gram),
             "projected_change_pct_7d": float(first.projected_change_pct_7d),
             "confidence": float(first.confidence),
             "implied_daily_return_pct": float(first.implied_daily_return_pct),
+            "projected_lower_per_gram": projected_lower,
+            "projected_upper_per_gram": projected_upper,
+            "projected_lower_change_pct": (
+                round((projected_lower - start_price) / start_price * 100, 3)
+                if projected_lower is not None and start_price > 0 else None
+            ),
+            "projected_upper_change_pct": (
+                round((projected_upper - start_price) / start_price * 100, 3)
+                if projected_upper is not None and start_price > 0 else None
+            ),
+            "interval_prob": float(safe_float(interval_payload.get("prob")) or FORECAST_INTERVAL_PROB),
             "daily": daily,
             "drivers": json_loads(first.drivers_json, []),
             "summary": str(summaries_payload.get(metal_key, "")) if isinstance(summaries_payload, dict) else "",
@@ -228,11 +238,10 @@ def _forecast_payload_from_db(
             "rationales": {},
             "global_comment": "",
         }
-    if not stat_model_payload:
-        stat_model_payload = {
-            "enabled": FORECAST_SARIMAX_ENABLED,
-            "available": SARIMAX_AVAILABLE,
-            "min_history": FORECAST_SARIMAX_MIN_HISTORY,
+    if not interval_payload:
+        interval_payload = {
+            "prob": FORECAST_INTERVAL_PROB,
+            "tilt_max_pct_per_day": FORECAST_TILT_MAX_PCT_PER_DAY * 100,
         }
     if not accuracy_payload:
         accuracy_payload = {"available": False, "lookback_days": 14, "mean_abs_error_pct": {}}
@@ -258,7 +267,7 @@ def _forecast_payload_from_db(
                 "sample_headlines": sample_headlines,
             },
             "llm": llm_payload,
-            "stat_model": stat_model_payload,
+            "interval": interval_payload,
             "accuracy": accuracy_payload,
         },
         "forecast": forecast,
@@ -343,6 +352,8 @@ async def store_weekly_forecast(
                 "projected_change_pct_7d": as_decimal(item.get("projected_change_pct_7d"), PCT_SCALE),
                 "confidence": as_decimal(item.get("confidence"), PCT_SCALE),
                 "implied_daily_return_pct": as_decimal(item.get("implied_daily_return_pct"), PCT_SCALE),
+                "lower_price_per_gram": as_decimal(daily_item.get("lower_price_per_gram"), PRICE_SCALE),
+                "upper_price_per_gram": as_decimal(daily_item.get("upper_price_per_gram"), PRICE_SCALE),
                 "drivers_json": json_dumps(item.get("drivers", [])),
             }
 
@@ -366,6 +377,8 @@ async def store_weekly_forecast(
         row.projected_change_pct_7d = row_payload["projected_change_pct_7d"] or Decimal("0")
         row.confidence = row_payload["confidence"] or Decimal("0")
         row.implied_daily_return_pct = row_payload["implied_daily_return_pct"] or Decimal("0")
+        row.lower_price_per_gram = row_payload["lower_price_per_gram"]
+        row.upper_price_per_gram = row_payload["upper_price_per_gram"]
         row.drivers_json = row_payload["drivers_json"]
 
     for row in existing_rows:
@@ -390,7 +403,7 @@ async def store_weekly_forecast(
     usd_jpy = signal_data.get("usd_jpy", {}) if isinstance(signal_data.get("usd_jpy"), dict) else {}
     news = signal_data.get("news", {}) if isinstance(signal_data.get("news"), dict) else {}
     llm = signal_data.get("llm", {}) if isinstance(signal_data.get("llm"), dict) else {}
-    stat_model = signal_data.get("stat_model", {}) if isinstance(signal_data.get("stat_model"), dict) else {}
+    interval = signal_data.get("interval", {}) if isinstance(signal_data.get("interval"), dict) else {}
     accuracy = signal_data.get("accuracy", {}) if isinstance(signal_data.get("accuracy"), dict) else {}
 
     meta.as_of_date = as_of_date
@@ -417,10 +430,11 @@ async def store_weekly_forecast(
             "rationales": llm.get("rationales", {}),
             "global_comment": str(llm.get("global_comment", "")),
         },
-        "stat_model": {
-            "enabled": bool(stat_model.get("enabled", FORECAST_SARIMAX_ENABLED)),
-            "available": bool(stat_model.get("available", SARIMAX_AVAILABLE)),
-            "min_history": int(safe_float(stat_model.get("min_history")) or FORECAST_SARIMAX_MIN_HISTORY),
+        "interval": {
+            "prob": float(safe_float(interval.get("prob")) or FORECAST_INTERVAL_PROB),
+            "tilt_max_pct_per_day": float(
+                safe_float(interval.get("tilt_max_pct_per_day")) or FORECAST_TILT_MAX_PCT_PER_DAY * 100
+            ),
         },
         "accuracy": {
             "available": bool(accuracy.get("available")),

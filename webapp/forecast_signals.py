@@ -37,7 +37,7 @@ FORECAST_LLM_ENABLED = read_env_bool("FORECAST_LLM_ENABLED", True)
 FORECAST_LLM_MODEL = (os.getenv("FORECAST_LLM_MODEL") or "openai/gpt-oss-120b").strip() or "openai/gpt-oss-120b"
 FORECAST_LLM_TIMEOUT_SECONDS = max(8, int(os.getenv("FORECAST_LLM_TIMEOUT_SECONDS", "20")))
 
-# 「予測の根拠」に出す統計モデル内訳(SARIMAXの係数やシグナル合成値など)が専門的で
+# 「予測の根拠」に出すモデル内訳(区間の算出根拠やシグナル寄与など)が専門的で
 # わかりにくいというフィードバックを受け、Groqで一般利用者向けの平易な要約文に
 # 言い換えさせる機能。fetch_llm_signal(スコアリング用)とは別呼び出しになる
 # ("drivers"はforecast_for_metal計算後でないと確定しないため合成不可)が、
@@ -360,39 +360,51 @@ async def fetch_llm_signal(
     }
 
 
-# 予測の向きが「ほぼ横ばい」とみなせる閾値(7日間の合計変化率, %)。
+# 予測レンジが「ほぼ横ばい」とみなせる閾値(7日間の変化率, %)。
 FORECAST_FLAT_THRESHOLD_PCT = 0.3
 
-# 要約文が予測の向きと逆のことを言っていないかを検査するための語彙。
+# 要約文がレンジと矛盾していないかを検査するための語彙。
 _UP_WORDS = ("値上がり", "上昇", "上向き", "上振れ", "高くなる", "上がる", "強含み", "反発")
 _DOWN_WORDS = ("値下がり", "下落", "下向き", "下振れ", "安くなる", "下がる", "弱含み", "反落")
 
 
-def _direction_of(change_pct: float) -> str:
-    if change_pct > FORECAST_FLAT_THRESHOLD_PCT:
+def _range_direction(lower_pct: float, upper_pct: float) -> str:
+    """予測レンジ全体がどちらに寄っているかを返す。
+
+    点予測をやめてレンジ表示にしたため、「向き」はレンジが0をまたぐかどうかで決まる。
+    レンジが0をまたいでいる場合は 'unclear' とし、上下どちらの断定もさせない。
+    """
+    if lower_pct > FORECAST_FLAT_THRESHOLD_PCT:
         return "up"
-    if change_pct < -FORECAST_FLAT_THRESHOLD_PCT:
+    if upper_pct < -FORECAST_FLAT_THRESHOLD_PCT:
         return "down"
-    return "flat"
+    if abs(lower_pct) <= FORECAST_FLAT_THRESHOLD_PCT and abs(upper_pct) <= FORECAST_FLAT_THRESHOLD_PCT:
+        return "flat"
+    return "unclear"
 
 
 def _contradicts_direction(summary: str, direction: str) -> bool:
-    """要約文が予測の向きと明確に矛盾している場合にTrueを返す。
+    """要約文がレンジと明確に矛盾している場合にTrueを返す。
 
-    LLMは「直近は上向きですが今後は値下がり」のように両方の語を含む文も書くため、
-    両方含む場合は矛盾と断定しない(文末側の結論が正しいことが多く、誤判定で
-    有用な要約を捨てる方が損失が大きい)。片方の語しか含まず、それが予測の向きと
-    逆の場合のみ矛盾とみなす。
+    - 'up' / 'down' … 逆向きの語だけを含む文を弾く。
+    - 'unclear'     … レンジが0をまたいでいるのに片側だけを断定している文を弾く
+                      (根拠が無いのに「値上がりします」と言い切るのを防ぐ)。
+    - 'flat'        … 検査しない。
+
+    「直近は上向きですが今後は値下がり」のように両方の語を含む文は、背景と結論を
+    並べた正しい書き方なので破棄しない。
     """
-    if direction not in ("up", "down"):
-        return False
     has_up = any(word in summary for word in _UP_WORDS)
     has_down = any(word in summary for word in _DOWN_WORDS)
     if has_up and has_down:
         return False
     if direction == "up":
-        return has_down and not has_up
-    return has_up and not has_down
+        return has_down
+    if direction == "down":
+        return has_up
+    if direction == "unclear":
+        return has_up or has_down
+    return False
 
 
 async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str]:
@@ -414,19 +426,21 @@ async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str
         drivers = [str(driver) for driver in (item.get("drivers") or []) if str(driver).strip()]
         if not drivers:
             continue
-        change_pct = safe_float(item.get("projected_change_pct_7d")) or 0.0
-        direction = _direction_of(change_pct)
+        lower_pct = safe_float(item.get("projected_lower_change_pct"))
+        upper_pct = safe_float(item.get("projected_upper_change_pct"))
+        if lower_pct is None or upper_pct is None:
+            continue
+        direction = _range_direction(lower_pct, upper_pct)
         expected_direction[metal_key] = direction
-        # driversは「モデルの最終出力(統計モデル)」と「入力シグナル(直近トレンド・
-        # 為替・ニュース・AI判定)」が混在しており、両者の符号が逆になることがある
-        # (例: 直近トレンドは+0.455%/日でもSARIMAXの出力は-0.430%/日)。結論を
-        # supporting_notesと対等に並べるとLLMが入力シグナル側に引きずられ、実際は
-        # 下落予測なのに「上昇が見込まれます」と逆の要約を書いてしまうため、
-        # 「結論」と「補足」を明確に分けて渡す。
+        # supporting_notes には内部の入力シグナルが混ざっており、レンジの結論と符号が
+        # 逆になることがある。結論と対等に並べるとLLMがシグナル側に引きずられて
+        # 事実と異なる断定を書くため、「結論」と「補足」を明確に分けて渡す。
         metals_input[metal_key] = {
             "conclusion": {
+                "range_low_pct_over_next_7_days": round(lower_pct, 2),
+                "range_high_pct_over_next_7_days": round(upper_pct, 2),
+                "interval_probability": safe_float(item.get("interval_prob")),
                 "direction": direction,
-                "total_change_pct_over_next_7_days": round(change_pct, 3),
                 "confidence_0_to_1": safe_float(item.get("confidence")),
             },
             "supporting_notes": drivers,
@@ -438,21 +452,22 @@ async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str
     system_prompt = (
         "You are a friendly Japanese financial writer explaining a precious-metal price "
         "forecast to everyday retail users with no finance background.\n"
-        "For each metal write ONE short paragraph in natural Japanese (roughly 60-100 "
-        "characters), plain language, no jargon and no model names.\n"
+        "The forecast is a RANGE, not a single predicted price. For each metal write ONE "
+        "short paragraph in natural Japanese (roughly 60-100 characters), plain language, "
+        "no jargon and no model names.\n"
         "CRITICAL RULES:\n"
-        "1. `conclusion` is the authoritative forecast result. Your paragraph MUST agree "
-        "with `conclusion.direction` ('up' = 値上がり, 'down' = 値下がり, 'flat' = 横ばい). "
-        "Never state the opposite direction.\n"
-        "2. `supporting_notes` are internal model details. Some of them are INPUT signals "
-        "that may point the opposite way from the final result. They must NOT override "
-        "`conclusion`. Use them only to briefly explain the background.\n"
-        "3. If you mention a percentage it must be "
-        "`conclusion.total_change_pct_over_next_7_days`, which is the TOTAL change over the "
-        "next 7 days (not a per-day figure). Never quote per-day numbers from "
-        "`supporting_notes`. Mentioning no number at all is acceptable.\n"
-        "4. When the direction conflicts with the background signals, say so honestly "
-        "(e.g. 「直近は上向きですが、今後1週間は値下がりが見込まれます」).\n"
+        "1. `conclusion` is the authoritative forecast result. Describe the RANGE "
+        "(`range_low_pct_over_next_7_days` to `range_high_pct_over_next_7_days`, which are "
+        "TOTAL percent changes over the next 7 days, never per-day figures).\n"
+        "2. Respect `conclusion.direction`:\n"
+        "   up = the whole range is above zero; 値上がり方向と述べてよい。\n"
+        "   down = the whole range is below zero; 値下がり方向と述べてよい。\n"
+        "   flat = the range is tight around zero; 横ばいと述べる。\n"
+        "   unclear = the range straddles zero; 上がるとも下がるとも断定してはいけない。"
+        "「上下どちらもあり得ます」のように幅で表現する。\n"
+        "3. `supporting_notes` are internal model details and may point the opposite way "
+        "from `conclusion`. They must NOT override it. Use them only for brief background.\n"
+        "4. Never quote per-day numbers from `supporting_notes`. Mentioning no number is fine.\n"
         "Return STRICT JSON only, no markdown."
     )
     user_prompt = (
