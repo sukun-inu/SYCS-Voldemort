@@ -4,18 +4,16 @@ from typing import Any, Dict, List
 from groq import AsyncGroq
 
 from config import GROQ_API_KEY
+from services.groq_client import create_chat_completion, get_groq_client
 from services.virustotal_service import MALICIOUS_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
-_groq_client: AsyncGroq | None = None
+_GROQ_BUCKET = "moderation"
 
 
 def _get_groq_client() -> AsyncGroq:
-    global _groq_client
-    if _groq_client is None:
-        _groq_client = AsyncGroq(api_key=GROQ_API_KEY, timeout=20.0)
-    return _groq_client
+    return get_groq_client(timeout=20.0, bucket=_GROQ_BUCKET)
 
 
 async def gpt_assess(
@@ -62,7 +60,9 @@ async def gpt_assess(
     )
 
     try:
-        response = await _get_groq_client().chat.completions.create(
+        response = await create_chat_completion(
+            _get_groq_client(),
+            bucket=_GROQ_BUCKET,
             model="openai/gpt-oss-20b",
             messages=[
                 {"role": "system", "content": "You are a security moderation AI. Reply with only one word: DANGEROUS, SUSPICIOUS, or SAFE."},

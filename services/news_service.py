@@ -14,6 +14,7 @@ from groq import AsyncGroq
 from discord.ext.commands import Bot
 
 from config import BOT_ICON_URL, GROQ_API_KEY, JST as _JST
+from services.groq_client import create_chat_completion, get_groq_client
 from services.settings_store import (
     get_all_guild_ids,
     get_news_feeds,
@@ -27,8 +28,8 @@ _HEADERS  = {"User-Agent": "Mozilla/5.0 (compatible; DiscordBot/1.0)"}
 _NEWS_SUMMARY_MODEL = os.getenv("NEWS_SUMMARY_MODEL", "openai/gpt-oss-120b")
 _NEWS_SUMMARY_MAX_CHARS = 400
 _NEWS_SUMMARY_CACHE_TTL_SEC = 6 * 3600
+_GROQ_BUCKET = "news_summary"
 
-_groq_client: AsyncGroq | None = None
 _summary_cache: dict[str, tuple[str, float]] = {}
 
 
@@ -56,12 +57,9 @@ def _format_pub_date(raw: str) -> str:
 
 
 def _get_groq_client() -> AsyncGroq | None:
-    global _groq_client
     if not GROQ_API_KEY:
         return None
-    if _groq_client is None:
-        _groq_client = AsyncGroq(api_key=GROQ_API_KEY, timeout=20.0)
-    return _groq_client
+    return get_groq_client(timeout=20.0, bucket=_GROQ_BUCKET)
 
 
 def _normalize_summary_text(text: str, max_len: int = _NEWS_SUMMARY_MAX_CHARS) -> str:
@@ -97,7 +95,9 @@ async def _summarize_article(article: dict) -> str:
         return ""
 
     try:
-        response = await client.chat.completions.create(
+        response = await create_chat_completion(
+            client,
+            bucket=_GROQ_BUCKET,
             model=_NEWS_SUMMARY_MODEL,
             temperature=0.2,
             messages=[

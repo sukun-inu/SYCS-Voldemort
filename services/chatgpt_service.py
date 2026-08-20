@@ -5,21 +5,18 @@ from typing import Dict, List
 from groq import AsyncGroq
 
 from config import CHATGPT_SYSTEM_MESSAGE, GROQ_API_KEY, JST as _JST
+from services.groq_client import create_chat_completion, get_groq_client
 
 logger = logging.getLogger(__name__)
 
 MAX_HISTORY_ENTRIES = 20
-
-_groq_client: AsyncGroq | None = None
+_GROQ_BUCKET = "chat"
 
 
 def _get_groq_client() -> AsyncGroq:
-    global _groq_client
-    if _groq_client is None:
-        if not GROQ_API_KEY:
-            raise RuntimeError("GROQ_API_KEY が設定されていない。")
-        _groq_client = AsyncGroq(api_key=GROQ_API_KEY, timeout=30.0)
-    return _groq_client
+    if not GROQ_API_KEY:
+        raise RuntimeError("GROQ_API_KEY が設定されていない。")
+    return get_groq_client(timeout=30.0, bucket=_GROQ_BUCKET)
 
 
 class ChatGPT:
@@ -62,7 +59,9 @@ class ChatGPT:
 
     async def _call_chat_api(self, messages: List[Dict[str, str]]) -> Dict:
         client = _get_groq_client()
-        response = await client.chat.completions.create(
+        response = await create_chat_completion(
+            client,
+            bucket=_GROQ_BUCKET,
             model="openai/gpt-oss-120b",
             messages=messages,
             temperature=0.45,

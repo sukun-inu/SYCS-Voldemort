@@ -20,6 +20,12 @@ except Exception:
 FORECAST_SARIMAX_ENABLED = (os.getenv("FORECAST_SARIMAX_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"})
 FORECAST_SARIMAX_MIN_HISTORY = max(14, int(os.getenv("FORECAST_SARIMAX_MIN_HISTORY", "24")))
 
+# AI(Groq)判定のスコア×確信度が予測日次リターンにどれだけ反映されるかの係数。
+# 以前は0.0035で固定されており、確信度・スコアが最大でも1日あたり最大0.35%しか
+# 予測を動かせず、AI判定がほぼ無視される状態だった。既定値を引き上げつつ環境変数で
+# 調整可能にする(heuristic_daily_returnのclamp ±4%/日は維持され暴走はしない)。
+FORECAST_LLM_WEIGHT = max(0.0, float(os.getenv("FORECAST_LLM_WEIGHT", "0.008")))
+
 FX_BETA_BY_METAL = {
     "gold": 0.30,
     "silver": 0.45,
@@ -138,7 +144,7 @@ def forecast_for_metal(
     fx_beta = FX_BETA_BY_METAL.get(metal_key, 0.35)
     fx_component = fx_daily_factor * fx_beta
     news_component = news_score * 0.0025
-    llm_component = llm_score * llm_confidence * 0.0035
+    llm_component = llm_score * llm_confidence * FORECAST_LLM_WEIGHT
     signal_component = fx_component + news_component + llm_component
     heuristic_daily_return = clamp((trend * 0.60) + signal_component, -0.04, 0.04)
 

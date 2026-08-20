@@ -140,6 +140,40 @@ class WeeklyForecastDaily(Base):
     )
 
 
+class ForecastAccuracyLog(Base):
+    """週次予測の的中率を後から検証するための記録。WeeklyForecastDailyは
+    リフレッシュのたびに上書き削除されるため、予測時点のスナップショットを
+    別テーブルに残し、対象日の実勢価格が判明した時点で答え合わせする。"""
+
+    __tablename__ = "forecast_accuracy_log"
+    __table_args__ = (
+        UniqueConstraint("metal_key", "as_of_date", "forecast_date", name="uq_forecast_accuracy_key_asof_date"),
+        Index("ix_forecast_accuracy_forecast_date", "forecast_date"),
+        Index("ix_forecast_accuracy_metal_forecast_date", "metal_key", "forecast_date"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    metal_key: Mapped[str] = mapped_column(String(32), nullable=False)
+    as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
+    forecast_date: Mapped[date] = mapped_column(Date, nullable=False)
+    horizon_offset_days: Mapped[int] = mapped_column(nullable=False)
+    predicted_price_per_gram: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    model_variant: Mapped[str] = mapped_column(String(32), nullable=False)
+    actual_price_per_gram: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    error_pct: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
 class UserStateCurrent(Base):
     __tablename__ = "user_state_current"
     __table_args__ = (
