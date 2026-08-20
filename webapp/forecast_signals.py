@@ -349,6 +349,41 @@ async def fetch_llm_signal(
     }
 
 
+# 予測の向きが「ほぼ横ばい」とみなせる閾値(7日間の合計変化率, %)。
+FORECAST_FLAT_THRESHOLD_PCT = 0.3
+
+# 要約文が予測の向きと逆のことを言っていないかを検査するための語彙。
+_UP_WORDS = ("値上がり", "上昇", "上向き", "上振れ", "高くなる", "上がる", "強含み", "反発")
+_DOWN_WORDS = ("値下がり", "下落", "下向き", "下振れ", "安くなる", "下がる", "弱含み", "反落")
+
+
+def _direction_of(change_pct: float) -> str:
+    if change_pct > FORECAST_FLAT_THRESHOLD_PCT:
+        return "up"
+    if change_pct < -FORECAST_FLAT_THRESHOLD_PCT:
+        return "down"
+    return "flat"
+
+
+def _contradicts_direction(summary: str, direction: str) -> bool:
+    """要約文が予測の向きと明確に矛盾している場合にTrueを返す。
+
+    LLMは「直近は上向きですが今後は値下がり」のように両方の語を含む文も書くため、
+    両方含む場合は矛盾と断定しない(文末側の結論が正しいことが多く、誤判定で
+    有用な要約を捨てる方が損失が大きい)。片方の語しか含まず、それが予測の向きと
+    逆の場合のみ矛盾とみなす。
+    """
+    if direction not in ("up", "down"):
+        return False
+    has_up = any(word in summary for word in _UP_WORDS)
+    has_down = any(word in summary for word in _DOWN_WORDS)
+    if has_up and has_down:
+        return False
+    if direction == "up":
+        return has_down and not has_up
+    return has_up and not has_down
+
+
 async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str]:
     """forecast_for_metalが確定させたdrivers(統計モデル内訳・トレンド・為替・ニュース・
     AI判定感応の箇条書き)を、金融の専門知識が無い利用者にも伝わる短い日本語の説明文に
@@ -360,6 +395,7 @@ async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str
         return empty
 
     metals_input: dict[str, Any] = {}
+    expected_direction: dict[str, str] = {}
     for metal_key in METAL_COMMANDS.keys():
         item = forecast.get(metal_key)
         if not isinstance(item, dict):
@@ -367,10 +403,22 @@ async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str
         drivers = [str(driver) for driver in (item.get("drivers") or []) if str(driver).strip()]
         if not drivers:
             continue
+        change_pct = safe_float(item.get("projected_change_pct_7d")) or 0.0
+        direction = _direction_of(change_pct)
+        expected_direction[metal_key] = direction
+        # driversは「モデルの最終出力(統計モデル)」と「入力シグナル(直近トレンド・
+        # 為替・ニュース・AI判定)」が混在しており、両者の符号が逆になることがある
+        # (例: 直近トレンドは+0.455%/日でもSARIMAXの出力は-0.430%/日)。結論を
+        # supporting_notesと対等に並べるとLLMが入力シグナル側に引きずられ、実際は
+        # 下落予測なのに「上昇が見込まれます」と逆の要約を書いてしまうため、
+        # 「結論」と「補足」を明確に分けて渡す。
         metals_input[metal_key] = {
-            "projected_change_pct_7d": item.get("projected_change_pct_7d"),
-            "confidence": item.get("confidence"),
-            "technical_notes": drivers,
+            "conclusion": {
+                "direction": direction,
+                "total_change_pct_over_next_7_days": round(change_pct, 3),
+                "confidence_0_to_1": safe_float(item.get("confidence")),
+            },
+            "supporting_notes": drivers,
         }
 
     if not metals_input:
@@ -378,11 +426,23 @@ async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str
 
     system_prompt = (
         "You are a friendly Japanese financial writer explaining a precious-metal price "
-        "forecast to everyday retail users with no finance background. For each metal, "
-        "rewrite technical_notes (bullet points of model internals: statistical model "
-        "output, trend, FX sensitivity, news sentiment, AI judgement) into ONE short "
-        "paragraph in natural Japanese (roughly 60-100 characters), plain language, no "
-        "jargon or model names, at most one number. Return STRICT JSON only, no markdown."
+        "forecast to everyday retail users with no finance background.\n"
+        "For each metal write ONE short paragraph in natural Japanese (roughly 60-100 "
+        "characters), plain language, no jargon and no model names.\n"
+        "CRITICAL RULES:\n"
+        "1. `conclusion` is the authoritative forecast result. Your paragraph MUST agree "
+        "with `conclusion.direction` ('up' = 値上がり, 'down' = 値下がり, 'flat' = 横ばい). "
+        "Never state the opposite direction.\n"
+        "2. `supporting_notes` are internal model details. Some of them are INPUT signals "
+        "that may point the opposite way from the final result. They must NOT override "
+        "`conclusion`. Use them only to briefly explain the background.\n"
+        "3. If you mention a percentage it must be "
+        "`conclusion.total_change_pct_over_next_7_days`, which is the TOTAL change over the "
+        "next 7 days (not a per-day figure). Never quote per-day numbers from "
+        "`supporting_notes`. Mentioning no number at all is acceptable.\n"
+        "4. When the direction conflicts with the background signals, say so honestly "
+        "(e.g. 「直近は上向きですが、今後1週間は値下がりが見込まれます」).\n"
+        "Return STRICT JSON only, no markdown."
     )
     user_prompt = (
         "Inputs JSON:\n"
@@ -422,6 +482,20 @@ async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str
     summaries = dict(empty)
     for metal_key in METAL_COMMANDS.keys():
         text = str(raw_summaries.get(metal_key, "")).strip()
-        if text:
-            summaries[metal_key] = clip_text(text, 200)
+        if not text:
+            continue
+        # プロンプトで向きを守るよう強く指示しているが、LLMが従う保証は無い。
+        # 実際に「-2.97%の下落予測」に対して「上昇が期待できます」と真逆の要約が
+        # 出た事例があったため、コード側でも検査し、矛盾する要約は採用しない
+        # (空文字にすればフロントエンドが従来のdrivers箇条書き表示へ戻る)。
+        direction = expected_direction.get(metal_key, "flat")
+        if _contradicts_direction(text, direction):
+            logger.warning(
+                "予測の向きと矛盾する要約を破棄した metal=%s direction=%s summary=%r",
+                metal_key,
+                direction,
+                text[:120],
+            )
+            continue
+        summaries[metal_key] = clip_text(text, 200)
     return summaries
