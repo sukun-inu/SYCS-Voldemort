@@ -100,16 +100,16 @@
               aria-label="表示期間を選択"
             >
               <i class="bi bi-calendar3" aria-hidden="true"></i>
-              <span id="rangeDropdownLabel">30日</span>
+              <span id="rangeDropdownLabel">全期間</span>
               <i class="bi bi-chevron-down range-caret" aria-hidden="true"></i>
             </button>
             <div class="dropdown-menu range-dropdown-menu p-3">
               <div class="range-preset-group" role="group" aria-label="表示期間プリセット">
-                <button type="button" class="range-preset-btn is-active" data-range-days="30">30日</button>
+                <button type="button" class="range-preset-btn" data-range-days="30">30日</button>
                 <button type="button" class="range-preset-btn" data-range-days="90">90日</button>
                 <button type="button" class="range-preset-btn" data-range-days="180">180日</button>
                 <button type="button" class="range-preset-btn" data-range-days="365">365日</button>
-                <button type="button" class="range-preset-btn" data-range-days="all">全期間</button>
+                <button type="button" class="range-preset-btn is-active" data-range-days="all">全期間</button>
               </div>
               <hr class="range-divider" />
               <p class="text-muted small mb-2">期間を指定</p>
@@ -179,24 +179,24 @@
           <section id="market-section" class="content-section">
             <div class="section-title d-flex align-items-center flex-wrap gap-2 mb-3">
               <h2 class="visually-hidden">マーケット</h2>
-              <p id="forecastMeta" class="text-muted small market-section-meta mb-0" hidden>予測データを読み込み中...</p>
+              <p id="forecastMeta" class="text-muted small market-section-meta mb-0">予測データを読み込み中...</p>
               <div class="btn-group market-toggle ms-auto" role="tablist" aria-label="表示切り替え">
                 <button
                   id="marketViewSummary"
-                  class="btn btn-outline-primary market-toggle-button is-active"
+                  class="btn btn-outline-primary market-toggle-button"
                   type="button"
                   role="tab"
-                  aria-selected="true"
+                  aria-selected="false"
                   data-market-view="summary"
                 >
                   最新価格
                 </button>
                 <button
                   id="marketViewForecast"
-                  class="btn btn-outline-primary market-toggle-button"
+                  class="btn btn-outline-primary market-toggle-button is-active"
                   type="button"
                   role="tab"
-                  aria-selected="false"
+                  aria-selected="true"
                   data-market-view="forecast"
                 >
                   1週間予測
@@ -213,8 +213,8 @@
                       <span>金 (Gold)</span>
                     </div>
                     <div class="market-widget-tools d-flex align-items-center gap-1">
-                      <button type="button" class="btn btn-sm btn-outline-secondary chart-delta-toggle" data-chart="gold" title="前日差バーの表示切り替え" aria-pressed="false">Δ</button>
-                      <button type="button" class="btn btn-sm btn-outline-secondary chart-ma-toggle" data-chart="gold" aria-pressed="false">MA7</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary chart-delta-toggle active" data-chart="gold" title="前日差バーの表示切り替え" aria-pressed="true">Δ</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary chart-ma-toggle active" data-chart="gold" aria-pressed="true">MA7</button>
                       <button type="button" class="btn btn-sm btn-outline-secondary chart-zoom-reset" data-chart="gold" title="ズームをリセット" aria-label="ズームをリセット">
                         <i class="bi bi-arrow-counterclockwise"></i>
                       </button>
@@ -225,7 +225,7 @@
                     <span id="goldWidgetDelta" class="market-widget-delta-pill">-</span>
                     <span id="goldWidgetMeta" class="market-widget-meta text-muted small">-</span>
                   </div>
-                  <p id="goldWidgetForecastNote" class="market-widget-forecast-note text-muted small" hidden></p>
+                  <div id="goldWidgetForecastNote" class="market-widget-forecast-note" hidden></div>
                   <div class="chart-container">
                     <div class="chart-loading-overlay" aria-hidden="true">
                       <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -250,8 +250,8 @@
                       <span>銀 (Silver)</span>
                     </div>
                     <div class="market-widget-tools d-flex align-items-center gap-1">
-                      <button type="button" class="btn btn-sm btn-outline-secondary chart-delta-toggle" data-chart="silver" title="前日差バーの表示切り替え" aria-pressed="false">Δ</button>
-                      <button type="button" class="btn btn-sm btn-outline-secondary chart-ma-toggle" data-chart="silver" aria-pressed="false">MA7</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary chart-delta-toggle active" data-chart="silver" title="前日差バーの表示切り替え" aria-pressed="true">Δ</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary chart-ma-toggle active" data-chart="silver" aria-pressed="true">MA7</button>
                       <button type="button" class="btn btn-sm btn-outline-secondary chart-zoom-reset" data-chart="silver" title="ズームをリセット" aria-label="ズームをリセット">
                         <i class="bi bi-arrow-counterclockwise"></i>
                       </button>
@@ -262,7 +262,7 @@
                     <span id="silverWidgetDelta" class="market-widget-delta-pill">-</span>
                     <span id="silverWidgetMeta" class="market-widget-meta text-muted small">-</span>
                   </div>
-                  <p id="silverWidgetForecastNote" class="market-widget-forecast-note text-muted small" hidden></p>
+                  <div id="silverWidgetForecastNote" class="market-widget-forecast-note" hidden></div>
                   <div class="chart-container">
                     <div class="chart-loading-overlay" aria-hidden="true">
                       <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -287,8 +287,8 @@
                       <span>プラチナ (Platinum)</span>
                     </div>
                     <div class="market-widget-tools d-flex align-items-center gap-1">
-                      <button type="button" class="btn btn-sm btn-outline-secondary chart-delta-toggle" data-chart="platinum" title="前日差バーの表示切り替え" aria-pressed="false">Δ</button>
-                      <button type="button" class="btn btn-sm btn-outline-secondary chart-ma-toggle" data-chart="platinum" aria-pressed="false">MA7</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary chart-delta-toggle active" data-chart="platinum" title="前日差バーの表示切り替え" aria-pressed="true">Δ</button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary chart-ma-toggle active" data-chart="platinum" aria-pressed="true">MA7</button>
                       <button type="button" class="btn btn-sm btn-outline-secondary chart-zoom-reset" data-chart="platinum" title="ズームをリセット" aria-label="ズームをリセット">
                         <i class="bi bi-arrow-counterclockwise"></i>
                       </button>
@@ -299,7 +299,7 @@
                     <span id="platinumWidgetDelta" class="market-widget-delta-pill">-</span>
                     <span id="platinumWidgetMeta" class="market-widget-meta text-muted small">-</span>
                   </div>
-                  <p id="platinumWidgetForecastNote" class="market-widget-forecast-note text-muted small" hidden></p>
+                  <div id="platinumWidgetForecastNote" class="market-widget-forecast-note" hidden></div>
                   <div class="chart-container">
                     <div class="chart-loading-overlay" aria-hidden="true">
                       <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
