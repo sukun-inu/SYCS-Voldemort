@@ -47,7 +47,7 @@ let currentMarketView = "summary";
 const CHART_CDN_LIST = [
   "static/vendor/lightweight-charts/lightweight-charts.standalone.production.js?v=5.2.1",
 ];
-const SW_SCRIPT_VERSION = "20260820-9";
+const SW_SCRIPT_VERSION = "20260820-10";
 const FORECAST_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const THEME_STORAGE_KEY = "metalDailyTheme";
 const DAYS_RANGE_STORAGE_KEY = "metalDailyDaysRange";
