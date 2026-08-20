@@ -3,6 +3,7 @@ import logging
 import math
 import os
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import quote_plus
 from xml.etree import ElementTree
@@ -14,7 +15,7 @@ from groq import AsyncGroq
 from config import GROQ_API_KEY, METAL_COMMANDS
 from .forecast_utils import (
     GOOGLE_NEWS_RSS_URL,
-    USDJPY_DAILY_CSV_URL,
+    USDJPY_TIMESERIES_BASE_URL,
     clip_text,
     clamp,
     extract_first_json_object,
@@ -72,28 +73,51 @@ _POSITIVE_PATTERNS = [_compile_token_pattern(token) for token in POSITIVE_TOKENS
 _NEGATIVE_PATTERNS = [_compile_token_pattern(token) for token in NEGATIVE_TOKENS]
 
 
+_USDJPY_SOURCE_NAME = "Frankfurter (ECB)"
+
+
+def _empty_usdjpy_signal() -> dict[str, Any]:
+    return {
+        "available": False,
+        "source": _USDJPY_SOURCE_NAME,
+        "latest": None,
+        "weekly_change_pct": 0.0,
+        "daily_factor": 0.0,
+        "daily_returns": [],
+    }
+
+
 async def fetch_usdjpy_signal(session: aiohttp.ClientSession) -> dict[str, Any]:
+    # ECBは平日のみレートを発表するため、直近1週間の変化率(6営業日前との比較)を安全に
+    # 取れるよう45日分の範囲で取得する。
+    today = datetime.now(timezone.utc).date()
+    start = today - timedelta(days=45)
+    url = f"{USDJPY_TIMESERIES_BASE_URL}/{start.isoformat()}..{today.isoformat()}?from=USD&to=JPY"
+
     try:
-        async with session.get(USDJPY_DAILY_CSV_URL) as response:
+        async with session.get(url) as response:
             if response.status != 200:
                 raise RuntimeError(f"status={response.status}")
-            text = await response.text()
+            payload = await response.json(content_type=None)
     except Exception as exc:
         logger.warning("USD/JPYデータ取得に失敗: %s", exc)
-        return {"available": False, "source": "Stooq", "latest": None, "weekly_change_pct": 0.0, "daily_factor": 0.0, "daily_returns": []}
+        return _empty_usdjpy_signal()
+
+    rates = payload.get("rates") if isinstance(payload, dict) else None
+    if not isinstance(rates, dict) or not rates:
+        logger.warning("USD/JPYデータのレスポンス形式が想定外: %r", payload)
+        return _empty_usdjpy_signal()
 
     closes: list[float] = []
-    for line in text.splitlines()[1:]:
-        parts = [part.strip() for part in line.split(",")]
-        if len(parts) < 5:
-            continue
-        close_value = safe_float(parts[4])
+    for date_str in sorted(rates.keys()):
+        entry = rates.get(date_str)
+        close_value = safe_float(entry.get("JPY")) if isinstance(entry, dict) else None
         if close_value is None or close_value <= 0:
             continue
         closes.append(close_value)
 
     if len(closes) < 2:
-        return {"available": False, "source": "Stooq", "latest": None, "weekly_change_pct": 0.0, "daily_factor": 0.0, "daily_returns": []}
+        return _empty_usdjpy_signal()
 
     latest = closes[-1]
     anchor = closes[-6] if len(closes) >= 6 else closes[0]
@@ -106,7 +130,7 @@ async def fetch_usdjpy_signal(session: aiohttp.ClientSession) -> dict[str, Any]:
     ]
     return {
         "available": True,
-        "source": "Stooq",
+        "source": _USDJPY_SOURCE_NAME,
         "latest": round(latest, 4),
         "weekly_change_pct": round(weekly_change * 100, 3),
         "daily_factor": daily_factor,

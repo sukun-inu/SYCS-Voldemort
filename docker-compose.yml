@@ -214,6 +214,7 @@ services:
     environment:
       - TZ=Asia/Tokyo
       - METALPRICE_API_KEY=${METALPRICE_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
       - WEB_WORKERS=${WEB_WORKERS:-2}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432

@@ -496,11 +496,11 @@ function updateForecastSourceFooter(payload) {
   if (!source) {
     return;
   }
-  const usdSource = payload?.signals?.usd_jpy?.source || "Stooq";
+  const usdSource = payload?.signals?.usd_jpy?.source || "Frankfurter (ECB)";
   const newsSource = payload?.signals?.news?.source || "Google News RSS";
   const llm = payload?.signals?.llm || {};
   const llmLabel = llm?.available
-    ? `・AI判定(${llm.model || "gpt-4.1-mini"})`
+    ? `・AI判定(${llm.model || "openai/gpt-oss-120b"})`
     : "";
   const asOfDate = payload?.as_of_date || "-";
   source.textContent = `予想ソース: USD/JPY(${usdSource})・ニュース(${newsSource})${llmLabel} / 基準日: ${asOfDate}`;

@@ -7,7 +7,10 @@ from typing import Any
 PRICE_SCALE = Decimal("0.0001")
 PCT_SCALE = Decimal("0.000001")
 
-USDJPY_DAILY_CSV_URL = "https://stooq.com/q/d/l/?s=usdjpy&i=d"
+# Stooqは2026年8月頃からサーバーサイドアクセスに対しJS実行が必要なPoW型bot検証を
+# 挟むようになり、aiohttpから直接CSVを取得できなくなった。代わりにECB公式レートを
+# APIキー不要で配信するFrankfurter(https://frankfurter.dev)を使う。
+USDJPY_TIMESERIES_BASE_URL = "https://api.frankfurter.dev/v1"
 GOOGLE_NEWS_RSS_URL = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
 
 

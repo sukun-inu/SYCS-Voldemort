@@ -1,8 +1,5 @@
 :root {
-  --sidebar-width: 230px;
-  --sidebar-bg: #2a3f54;
-  --sidebar-text: #a7b1c2;
-  --sidebar-active: #1abb9c;
+  --ticker-bg: #2a3f54;
   --topbar-bg: #ffffff;
   --content-bg: #f7f7f7;
   --card-bg: #ffffff;
@@ -41,7 +38,7 @@
 }
 
 /* ダークモード: html[data-bs-theme="dark"] はJS(app.js)がlocalStorage/OS設定に応じて切り替える。
-   サイドバーはライト/ダーク共通で常時ダーク基調のため、ここでは触らない。 */
+   価格ティッカーはライト/ダーク共通で常時ダーク基調のため、--ticker-bg はここでは触らない。 */
 [data-bs-theme="dark"] {
   color-scheme: dark;
   --topbar-bg: #1c2027;
@@ -88,11 +85,6 @@ a {
 
 /* ---------- Layout shell ---------- */
 
-.app-wrapper {
-  min-height: 100vh;
-  align-items: stretch;
-}
-
 .app-main {
   display: flex;
   flex-direction: column;
@@ -100,142 +92,71 @@ a {
   min-width: 0;
 }
 
-/* ---------- Sidebar ---------- */
-
-.sidebar {
-  --bs-offcanvas-width: var(--sidebar-width);
-  --bs-offcanvas-bg: var(--sidebar-bg);
-  --bs-offcanvas-color: var(--sidebar-text);
-  width: var(--sidebar-width);
-  flex: 0 0 var(--sidebar-width);
-  background: var(--sidebar-bg);
-  color: var(--sidebar-text);
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  border: 0;
-}
-
-@media (min-width: 992px) {
-  .sidebar {
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    z-index: 1030;
-  }
-}
-
-.sidebar-brand {
-  padding: 18px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.brand-link {
-  color: #fff;
-}
-
-.brand-logo {
-  border-radius: 6px;
-  background: #fff;
-  padding: 2px;
-}
-
-.brand-text {
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  font-size: 1.02rem;
-  color: #fff;
-}
-
-.sidebar-nav {
-  padding: 14px 0;
-  flex: 1 1 auto;
-  overflow-y: auto;
-}
-
-.sidebar-nav .nav-link {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--sidebar-text);
-  padding: 11px 18px;
-  font-size: 0.89rem;
-  border-left: 3px solid transparent;
-  border-radius: 0;
-}
-
-.sidebar-nav .nav-link i {
-  font-size: 1rem;
-  width: 1.1rem;
-  text-align: center;
-}
-
-.sidebar-nav .nav-link:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
-}
-
-.sidebar-nav .nav-link.active {
-  background: rgba(26, 187, 156, 0.16);
-  color: #fff;
-  border-left-color: var(--sidebar-active);
-}
-
-.sidebar-footer {
-  padding: 14px 16px 20px;
-  display: grid;
-  gap: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.sidebar-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.74rem;
-  color: var(--sidebar-text);
-}
-
 /* ---------- Topbar ---------- */
 
 .topbar {
   background: var(--topbar-bg);
   border-bottom: 1px solid var(--line);
-  padding: 10px 20px;
+  padding: 10px 20px 0;
   position: sticky;
   top: 0;
   z-index: 1020;
 }
 
-.topbar-toggle {
-  border: 1px solid var(--line);
-  background: var(--card-bg);
+.topbar-row {
+  padding-bottom: 10px;
+}
+
+.brand-link {
   color: var(--ink);
-  width: 38px;
-  height: 38px;
+}
+
+.brand-logo {
+  border-radius: 6px;
+}
+
+.brand-text {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+/* 2段目: ページ内アンカーへのナビゲーション。項目が少ないため折り返さず横スクロールにする */
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  border-top: 1px solid var(--line);
+  scrollbar-width: thin;
+}
+
+.topbar-nav-link {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 0.5rem;
-  padding: 0;
-}
-
-.breadcrumb {
-  --bs-breadcrumb-divider-color: var(--ink-soft);
-}
-
-.breadcrumb-item {
-  font-size: 0.82rem;
-  color: var(--ink-soft);
-}
-
-.breadcrumb-item.active {
-  color: var(--ink);
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 9px 14px;
+  font-size: 0.85rem;
   font-weight: 600;
+  color: var(--ink-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
 }
 
-.breadcrumb-item i {
-  margin-right: 4px;
+.topbar-nav-link i {
+  font-size: 0.95rem;
+}
+
+.topbar-nav-link:hover {
+  color: var(--ink);
+}
+
+.topbar-nav-link.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
 }
 
 .topbar-select {
@@ -290,7 +211,7 @@ a {
 
 .page-header {
   margin-bottom: 22px;
-  scroll-margin-top: 80px;
+  scroll-margin-top: 112px;
 }
 
 .eyebrow {
@@ -316,7 +237,7 @@ a {
 
 .content-section {
   margin-bottom: 28px;
-  scroll-margin-top: 80px;
+  scroll-margin-top: 112px;
 }
 
 .side-panel-stack {
@@ -355,7 +276,7 @@ a {
 
 .price-ticker {
   overflow: hidden;
-  background: var(--sidebar-bg);
+  background: var(--ticker-bg);
   border-radius: 999px;
   margin-bottom: 22px;
   position: relative;
