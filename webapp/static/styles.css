@@ -432,7 +432,8 @@ a {
 
 .market-widget-tools .chart-ma-toggle,
 .market-widget-tools .chart-delta-toggle,
-.market-widget-tools .chart-zoom-reset {
+.market-widget-tools .chart-zoom-reset,
+.market-widget-tools .chart-maximize-btn {
   font-size: 0.74rem;
   padding: 2px 9px;
   line-height: 1.6;
@@ -740,6 +741,57 @@ a {
 
 .chart-zoom-hint {
   margin-top: 4px;
+}
+
+/* ---------- チャート拡大表示モーダル ---------- */
+/* .chart-blockはカード内では素のブロック要素(chart-container高さ260px)のまま。
+   #chartMaximizeSlotの直下に来た瞬間だけ、この記述でflex拡張してモーダルいっぱいに
+   広げる。JS側でクラス切り替えをせずDOM位置だけで見た目が決まるようにしている。 */
+.chart-maximize-modal .modal-content {
+  background: var(--card-bg);
+  color: var(--ink);
+}
+
+.chart-maximize-modal .modal-header {
+  border-bottom: 1px solid var(--line);
+}
+
+.chart-maximize-modal .modal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+.chart-maximize-modal .modal-body {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 1.25rem 1.5rem;
+  min-height: 0;
+}
+
+.chart-maximize-slot {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.chart-maximize-slot .chart-block {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+}
+
+.chart-maximize-slot .chart-container {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+.chart-maximize-slot .chart-stats-bar {
+  flex: 0 0 auto;
 }
 
 /* ---------- Info cards ---------- */

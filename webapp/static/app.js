@@ -47,7 +47,7 @@ let currentMarketView = "summary";
 const CHART_CDN_LIST = [
   "static/vendor/lightweight-charts/lightweight-charts.standalone.production.js?v=5.2.1",
 ];
-const SW_SCRIPT_VERSION = "20260820-10";
+const SW_SCRIPT_VERSION = "20260820-11";
 const FORECAST_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const THEME_STORAGE_KEY = "metalDailyTheme";
 const DAYS_RANGE_STORAGE_KEY = "metalDailyDaysRange";
@@ -358,6 +358,70 @@ function initializeChartTools() {
       }
     });
   });
+}
+
+// 「別ウィンドウで最大化」の代わりに、同一ページ内のフルスクリーンモーダルへ
+// .chart-block(チャート本体+統計バー)そのものをDOM移動する方式にしている。
+// Lightweight Chartsのインスタンスを再生成しないため、ズーム位置・Δ/MA7の表示状態・
+// 予測開始の境界線などがすべてそのまま維持される。autoSize:trueのResizeObserverが
+// コンテナのサイズ変化を検知して自動で拡縮するので、明示的なresize呼び出しも不要。
+let maximizedChartState = null; // { metalKey, parent, nextSibling } | null
+
+function restoreMaximizedChartBlock() {
+  if (!maximizedChartState) {
+    return;
+  }
+  const { parent, nextSibling } = maximizedChartState;
+  const slot = document.getElementById("chartMaximizeSlot");
+  const block = slot?.firstElementChild || null;
+  maximizedChartState = null;
+  if (block && parent) {
+    parent.insertBefore(block, nextSibling || null);
+  }
+}
+
+function openChartMaximize(metalKey) {
+  const meta = METALS[metalKey];
+  const block = document.querySelector(`.chart-block[data-chart-block="${metalKey}"]`);
+  const modalEl = document.getElementById("chartMaximizeModal");
+  const slot = document.getElementById("chartMaximizeSlot");
+  if (!meta || !block || !modalEl || !slot || typeof bootstrap === "undefined") {
+    return;
+  }
+
+  // 通常はモーダルを閉じてからでないと次を開けないが、念のため先に元へ戻しておく。
+  restoreMaximizedChartBlock();
+
+  maximizedChartState = {
+    metalKey,
+    parent: block.parentElement,
+    nextSibling: block.nextElementSibling,
+  };
+  slot.append(block);
+
+  const titleEl = document.getElementById("chartMaximizeModalTitle");
+  const iconEl = document.getElementById("chartMaximizeModalIcon");
+  if (titleEl) {
+    titleEl.textContent = meta.label;
+  }
+  if (iconEl) {
+    iconEl.className = `bi ${meta.icon || "bi-graph-up"}`;
+  }
+
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+function initializeChartMaximize() {
+  document.querySelectorAll(".chart-maximize-btn").forEach((button) => {
+    button.addEventListener("click", () => openChartMaximize(button.dataset.chart));
+  });
+
+  // モーダルを閉じた瞬間(バックドロップクリック・ESC・×ボタンいずれも同じイベント)に
+  // 元の位置へ戻す。開いている間にウィンドウが閉じられる操作は無いため、この1箇所で十分。
+  const modalEl = document.getElementById("chartMaximizeModal");
+  if (modalEl) {
+    modalEl.addEventListener("hidden.bs.modal", restoreMaximizedChartBlock);
+  }
 }
 
 function initializeMarketToggle() {
@@ -1562,6 +1626,7 @@ document.addEventListener("visibilitychange", () => {
 initializeThemeToggle();
 initializeMarketToggle();
 initializeChartTools();
+initializeChartMaximize();
 restoreStoredRangeState();
 startForecastAutoRefresh();
 
