@@ -555,6 +555,85 @@ a {
   margin-top: 6px;
 }
 
+/* 予測根拠の構造化内訳。決定要因 / 寄与シグナル / 参考値 を視覚的に分ける。 */
+.market-widget-forecast-note-list.is-structured {
+  list-style: none;
+  padding-left: 0;
+}
+
+.market-widget-forecast-note-list.is-structured .forecast-driver {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+
+.market-widget-forecast-note-list.is-structured .forecast-driver:first-child {
+  border-top: none;
+}
+
+.forecast-driver-role {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.5;
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+}
+
+.forecast-driver-primary .forecast-driver-role {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.forecast-driver-signal .forecast-driver-role {
+  background: transparent;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.forecast-driver-label {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.forecast-driver-primary .forecast-driver-label {
+  font-weight: 700;
+}
+
+.forecast-driver-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.forecast-driver-value.is-up {
+  color: var(--up);
+}
+
+.forecast-driver-value.is-down {
+  color: var(--down);
+}
+
+.forecast-driver-detail {
+  flex: 1 1 100%;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+/* 参考値は「今回の計算に効いていない」ことが一目で分かるよう控えめにする。 */
+.forecast-driver-reference .forecast-driver-label,
+.forecast-driver-reference .forecast-driver-value {
+  opacity: 0.65;
+  font-weight: 600;
+}
+
 .market-section-meta {
   display: flex;
   flex-wrap: wrap;

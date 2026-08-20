@@ -544,9 +544,10 @@ function renderForecastReasonBox(noteEl, metalKey, item) {
   // 受け、Groqが生成した平易な要約文(item.summary)があればそちらを主表示にする。
   // 要約が無い(生成失敗/無効化/旧キャッシュ)場合は従来通り箇条書きをそのまま見せる。
   const summary = String(item?.summary || "").trim();
+  const breakdown = Array.isArray(item?.driver_breakdown) ? item.driver_breakdown : [];
 
   noteEl.replaceChildren();
-  noteEl.hidden = drivers.length === 0 && !summary;
+  noteEl.hidden = drivers.length === 0 && breakdown.length === 0 && !summary;
   if (noteEl.hidden) {
     return;
   }
@@ -561,12 +562,56 @@ function renderForecastReasonBox(noteEl, metalKey, item) {
   title.append(icon, titleText);
   noteEl.append(title);
 
-  const buildList = () => {
+  // 構造化された内訳(driver_breakdown)があれば役割ごとに描き分ける。
+  // role: primary=実際に予測値を決めた要因 / signal=寄与した入力シグナル /
+  //       reference=参考値(今回の計算には直接効いていない)
+  // 以前は全部を同じ箇条書きで並べていたため、「項目はほぼプラスなのに予測はマイナス」
+  // という状態が理解不能に見えていた。
+  const ROLE_LABEL = { primary: "決定要因", signal: "寄与シグナル", reference: "参考値" };
+
+  const buildBreakdownList = () => {
+    const list = document.createElement("ul");
+    list.className = "market-widget-forecast-note-list is-structured";
+    breakdown.slice(0, 9).forEach((row) => {
+      const role = ROLE_LABEL[row.role] ? row.role : "reference";
+      const listItem = document.createElement("li");
+      listItem.className = `forecast-driver forecast-driver-${role}`;
+
+      const badge = document.createElement("span");
+      badge.className = "forecast-driver-role";
+      badge.textContent = ROLE_LABEL[role];
+
+      const label = document.createElement("span");
+      label.className = "forecast-driver-label";
+      label.textContent = row.label ?? "";
+
+      listItem.append(badge, label);
+
+      const value = row.value_pct_per_day;
+      if (typeof value === "number" && Number.isFinite(value)) {
+        const valueEl = document.createElement("span");
+        const cls = value > 0 ? "is-up" : value < 0 ? "is-down" : "is-flat";
+        valueEl.className = `forecast-driver-value ${cls}`;
+        valueEl.textContent = `${value > 0 ? "+" : ""}${value.toFixed(3)}%/日`;
+        listItem.append(valueEl);
+      }
+
+      if (row.detail) {
+        const detail = document.createElement("span");
+        detail.className = "forecast-driver-detail";
+        detail.textContent = row.detail;
+        listItem.append(detail);
+      }
+      list.append(listItem);
+    });
+    return list;
+  };
+
+  const buildPlainList = () => {
     const list = document.createElement("ul");
     list.className = "market-widget-forecast-note-list";
-    // 現行モデルが出す全内訳（統計モデル・トレンド・為替・ニュース・AI所見）を示す。
-    // 長大な外部入力が混入してもカードを壊さないよう件数には上限を設ける。
-    drivers.slice(0, 7).forEach((driver) => {
+    // 旧キャッシュ(構造化内訳が無い)向けのフォールバック表示。
+    drivers.slice(0, 9).forEach((driver) => {
       const listItem = document.createElement("li");
       listItem.textContent = driver;
       list.append(listItem);
@@ -574,13 +619,15 @@ function renderForecastReasonBox(noteEl, metalKey, item) {
     return list;
   };
 
+  const buildList = () => (breakdown.length > 0 ? buildBreakdownList() : buildPlainList());
+
   if (summary) {
     const summaryEl = document.createElement("p");
     summaryEl.className = "market-widget-forecast-note-summary";
     summaryEl.textContent = summary;
     noteEl.append(summaryEl);
 
-    if (drivers.length > 0) {
+    if (drivers.length > 0 || breakdown.length > 0) {
       const details = document.createElement("details");
       details.className = "market-widget-forecast-note-details";
       const detailsLabel = document.createElement("summary");

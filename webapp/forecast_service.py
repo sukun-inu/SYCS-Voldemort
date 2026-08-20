@@ -16,7 +16,7 @@ from .forecast_models import (
     FORECAST_SARIMAX_ENABLED,
     FORECAST_SARIMAX_MIN_HISTORY,
     SARIMAX_AVAILABLE,
-    extract_prices,
+    extract_price_series,
     forecast_for_metal,
 )
 from .forecast_signals import (
@@ -68,21 +68,23 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
         )
 
     today = datetime.now(JST)
+    fx_returns_by_date = {
+        str(key): safe_float(value) or 0.0
+        for key, value in (fx_signal.get("daily_returns_by_date") or {}).items()
+    }
     forecast: dict[str, Any] = {}
     for metal_key in METAL_COMMANDS.keys():
-        prices = extract_prices(history_by_metal.get(metal_key, []))
-        if not prices:
+        series = extract_price_series(history_by_metal.get(metal_key, []))
+        if not series:
             continue
+        price_dates = [date_str for date_str, _ in series]
+        prices = [price for _, price in series]
         forecast[metal_key] = forecast_for_metal(
             metal_key=metal_key,
             prices=prices,
             horizon_days=horizon_days,
             today=today,
             fx_daily_factor=float(fx_signal.get("daily_factor", 0.0)),
-            fx_history_returns=[
-                safe_float(value) or 0.0
-                for value in list(fx_signal.get("daily_returns", []) or [])
-            ],
             news_score=float(news_signal["sentiment"].get(metal_key, 0.0)),
             article_count=int(news_signal["article_counts"].get(metal_key, 0)),
             fx_available=bool(fx_signal.get("available")),
@@ -90,6 +92,11 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
             llm_confidence=float((llm_signal.get("confidences", {}) or {}).get(metal_key, 0.0)),
             llm_rationale=str((llm_signal.get("rationales", {}) or {}).get(metal_key, "")),
             llm_available=bool(llm_signal.get("available")),
+            price_dates=price_dates,
+            fx_returns_by_date=fx_returns_by_date,
+            # 金属ごとの直近平均絶対誤差。答え合わせ済みデータが無い金属はNoneのまま渡し、
+            # forecast_for_metal側で信頼度に上限を掛ける。
+            recent_mae_pct=recent_accuracy.get(metal_key),
         )
 
     if not forecast:
@@ -174,12 +181,14 @@ def _forecast_payload_from_db(
         stat_model_payload = headlines_payload.get("stat_model") or {}
         accuracy_payload = headlines_payload.get("accuracy") or {}
         summaries_payload = headlines_payload.get("summaries") or {}
+        breakdown_payload = headlines_payload.get("driver_breakdowns") or {}
     else:
         sample_headlines = headlines_payload if isinstance(headlines_payload, dict) else {}
         llm_payload = {}
         stat_model_payload = {}
         accuracy_payload = {}
         summaries_payload = {}
+        breakdown_payload = {}
 
     forecast: dict[str, Any] = {}
     for metal_key, metal_rows in by_metal.items():
@@ -202,6 +211,11 @@ def _forecast_payload_from_db(
             "daily": daily,
             "drivers": json_loads(first.drivers_json, []),
             "summary": str(summaries_payload.get(metal_key, "")) if isinstance(summaries_payload, dict) else "",
+            # 旧キャッシュには driver_breakdowns が無いため、その場合は空リストにして
+            # フロントエンドが従来の drivers 箇条書き表示へフォールバックできるようにする。
+            "driver_breakdown": (
+                breakdown_payload.get(metal_key) or [] if isinstance(breakdown_payload, dict) else []
+            ),
         }
 
     if not llm_payload:
@@ -415,6 +429,10 @@ async def store_weekly_forecast(
         },
         "summaries": {
             metal_key: str((forecast_map.get(metal_key) or {}).get("summary", ""))
+            for metal_key in METAL_COMMANDS.keys()
+        },
+        "driver_breakdowns": {
+            metal_key: (forecast_map.get(metal_key) or {}).get("driver_breakdown", [])
             for metal_key in METAL_COMMANDS.keys()
         },
     })
