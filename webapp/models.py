@@ -126,6 +126,9 @@ class WeeklyForecastDaily(Base):
     projected_change_pct_7d: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
     confidence: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
     implied_daily_return_pct: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    # 予測区間の下限・上限。0004 で追加したため、それ以前の行は NULL のまま残る。
+    lower_price_per_gram: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    upper_price_per_gram: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     drivers_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -159,8 +162,13 @@ class ForecastAccuracyLog(Base):
     horizon_offset_days: Mapped[int] = mapped_column(nullable=False)
     predicted_price_per_gram: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     model_variant: Mapped[str] = mapped_column(String(32), nullable=False)
+    # 予測時点の区間。答え合わせ時に実勢価格が区間内だったかを within_interval に記録する。
+    # 区間予測にとって被覆率は最も本質的な品質指標(名目80%なら実測も80%であるべき)。
+    lower_price_per_gram: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    upper_price_per_gram: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     actual_price_per_gram: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     error_pct: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
+    within_interval: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

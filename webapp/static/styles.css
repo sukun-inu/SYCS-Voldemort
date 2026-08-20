@@ -461,6 +461,17 @@ a {
   letter-spacing: -0.01em;
 }
 
+/* レンジ表示は数値が長くなるため、点予測より少し小さくして折り返しに耐えるようにする。 */
+.market-widget-price.is-range {
+  font-size: 1.25rem;
+  letter-spacing: 0;
+}
+
+.market-widget-delta-pill.is-flat {
+  background: var(--surface-muted);
+  color: var(--ink-muted);
+}
+
 .market-widget-delta-pill {
   display: inline-flex;
   align-items: center;

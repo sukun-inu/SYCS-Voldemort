@@ -1,3 +1,24 @@
+"""7日先の価格レンジ(予測区間)を組み立てるモデル。
+
+## なぜ点予測をやめたか
+
+本番の実データでウォークフォワード検証したところ、旧SARIMAXモデルは
+「7日後も今日と同じ価格」と言うだけのランダムウォークより明確に劣っていた。
+
+    平均絶対誤差   モデル 5.51%  /  naive 3.37%  /  trend 3.94%
+    方向的中率     モデル 40.6%(コイン投げ以下)
+    naiveに勝った割合 18.6%
+
+さらに102回中102回すべてマイナス予測になっており、実質「標本期間内のドリフトの
+外挿」でしかなかった。ドリフト減衰係数λを較正すると **λ=0(=現在価格をそのまま
+中心にする)が最良** で、λを上げるほど単調に悪化した。
+
+そこで点予測をやめ、「現在価格を中心とし、過去の値動きから求めた区間で幅を示す」
+モデルに置き換えた。外部シグナル(為替・ニュース・AI判定)は履歴を再現できず
+有効性が未検証のため、中心をわずかに傾ける tilt としてのみ残し、影響を
+FORECAST_TILT_MAX_PCT_PER_DAY で厳しく制限している。
+"""
+
 import logging
 import math
 import os
@@ -5,26 +26,34 @@ from datetime import datetime, timedelta
 from statistics import pstdev
 from typing import Any
 
+from .forecast_series import (
+    build_return_series,
+    count_gaps,
+    horizon_interval,
+    parse_price_history,
+    robust_daily_sigma,
+)
 from .forecast_utils import clamp, safe_float
 
 logger = logging.getLogger(__name__)
 
-try:
-    from statsmodels.tsa.statespace.sarimax import SARIMAX  # type: ignore
+MODEL_VARIANT = "interval_rw_v1"
 
-    SARIMAX_AVAILABLE = True
-except Exception:
-    SARIMAX = None
-    SARIMAX_AVAILABLE = False
-
-FORECAST_SARIMAX_ENABLED = (os.getenv("FORECAST_SARIMAX_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"})
-FORECAST_SARIMAX_MIN_HISTORY = max(14, int(os.getenv("FORECAST_SARIMAX_MIN_HISTORY", "24")))
-
-# AI(Groq)判定のスコア×確信度が予測日次リターンにどれだけ反映されるかの係数。
-# 以前は0.0035で固定されており、確信度・スコアが最大でも1日あたり最大0.35%しか
-# 予測を動かせず、AI判定がほぼ無視される状態だった。既定値を引き上げつつ環境変数で
-# 調整可能にする(heuristic_daily_returnのclamp ±4%/日は維持され暴走はしない)。
+# AI(Groq)判定のスコア×確信度が中心値の傾き(tilt)にどれだけ反映されるかの係数。
 FORECAST_LLM_WEIGHT = max(0.0, float(os.getenv("FORECAST_LLM_WEIGHT", "0.008")))
+
+# 中心値の傾きの上限(%/日)。時系列外挿に予測力が無いことは実証済みで、外部シグナルの
+# 有効性は未検証のため、中心が現在価格から大きく離れないよう厳しく抑える。
+# 既定 0.15%/日 = 7日で約 ±1.05%。
+FORECAST_TILT_MAX_PCT_PER_DAY = max(0.0, float(os.getenv("FORECAST_TILT_MAX_PCT_PER_DAY", "0.15"))) / 100.0
+
+# 予測区間の名目確率。既定80%(10%〜90%分位)。
+FORECAST_INTERVAL_PROB = min(0.99, max(0.5, float(os.getenv("FORECAST_INTERVAL_PROB", "0.8"))))
+
+# 為替β(金属リターンのUSD/JPY感応度)を実データから推定する際の設定。共通日が足りない
+# 場合や為替側の分散がほぼ0の場合は下の既定値へフォールバックする。
+FX_BETA_MIN_SAMPLES = max(20, int(os.getenv("FORECAST_FX_BETA_MIN_SAMPLES", "40")))
+FX_BETA_BOUNDS = (-0.5, 1.5)
 
 FX_BETA_BY_METAL = {
     "gold": 0.30,
@@ -32,15 +61,7 @@ FX_BETA_BY_METAL = {
     "platinum": 0.40,
 }
 
-
-# 為替βを実データから推定する際の設定。推定は「金属の日次リターンをUSD/JPYの日次
-# リターンで回帰したときの傾き(OLSのβ)」で、共通日が足りない/分散がほぼ0の場合は
-# 下の既定値へフォールバックする。極端な推定値で予測が暴れないよう範囲も制限する。
-FX_BETA_MIN_SAMPLES = max(20, int(os.getenv("FORECAST_FX_BETA_MIN_SAMPLES", "40")))
-FX_BETA_BOUNDS = (-0.5, 1.5)
-
 # 直近の平均絶対誤差(MAE%)を信頼度へ反映するための閾値。
-# GOOD以下なら加点、BAD以上なら大きく減点し、間は線形補間する。
 FORECAST_ACCURACY_GOOD_MAE_PCT = max(0.1, float(os.getenv("FORECAST_ACCURACY_GOOD_MAE_PCT", "1.5")))
 FORECAST_ACCURACY_BAD_MAE_PCT = max(
     FORECAST_ACCURACY_GOOD_MAE_PCT + 0.1, float(os.getenv("FORECAST_ACCURACY_BAD_MAE_PCT", "6.0"))
@@ -51,11 +72,23 @@ FORECAST_ACCURACY_MAX_PENALTY = 0.30
 FORECAST_CONFIDENCE_CAP_WITHOUT_ACCURACY = min(
     0.95, max(0.3, float(os.getenv("FORECAST_CONFIDENCE_CAP_WITHOUT_ACCURACY", "0.75")))
 )
+# 信頼度を区間の狭さから求めるときの基準。7日の片側幅がこの%なら信頼度への寄与が0になる。
+FORECAST_WIDTH_REFERENCE_PCT = max(1.0, float(os.getenv("FORECAST_WIDTH_REFERENCE_PCT", "12.0")))
+
+
+def extract_prices(history_items: list[dict[str, Any]]) -> list[float]:
+    prices: list[float] = []
+    for item in history_items:
+        value = safe_float(item.get("price_per_gram"))
+        if value is None or value <= 0:
+            continue
+        prices.append(value)
+    return prices
 
 
 def extract_price_series(history_items: list[dict[str, Any]]) -> list[tuple[str, float]]:
     """(日付, 価格) の並びを返す。extract_pricesと違い日付を保持するため、
-    為替リターンとの日付突き合わせ(β推定・exog整列)に使える。"""
+    為替リターンとの日付突き合わせ(β推定)に使える。"""
     series: list[tuple[str, float]] = []
     for item in history_items:
         value = safe_float(item.get("price_per_gram"))
@@ -121,14 +154,16 @@ def accuracy_confidence_adjustment(mae_pct: float | None) -> float:
     return FORECAST_ACCURACY_MAX_BONUS - ratio * (FORECAST_ACCURACY_MAX_BONUS + FORECAST_ACCURACY_MAX_PENALTY)
 
 
-def extract_prices(history_items: list[dict[str, Any]]) -> list[float]:
-    prices: list[float] = []
-    for item in history_items:
-        value = safe_float(item.get("price_per_gram"))
-        if value is None or value <= 0:
-            continue
-        prices.append(value)
-    return prices
+def coverage_confidence_adjustment(coverage: float | None, *, nominal: float) -> float:
+    """区間の実測被覆率が名目からどれだけずれているかを信頼度に反映する。
+
+    被覆率は区間予測にとって最も本質的な品質指標(名目80%なら実測も80%であるべき)。
+    ずれが大きいほど減点する。
+    """
+    if coverage is None or not math.isfinite(coverage):
+        return 0.0
+    gap = abs(coverage - nominal)
+    return -clamp(gap * 0.5, 0.0, 0.15)
 
 
 def daily_trend(prices: list[float], *, window: int = 14) -> float:
@@ -158,61 +193,10 @@ def daily_volatility(prices: list[float], *, window: int = 14) -> float:
     return float(pstdev(returns))
 
 
-def sarimax_fused_returns(
-    prices: list[float],
-    horizon_days: int,
-    *,
-    exog_history: list[float],
-    exog_future: list[float],
-) -> list[float] | None:
-    if not FORECAST_SARIMAX_ENABLED or not SARIMAX_AVAILABLE:
-        return None
-    if len(prices) < FORECAST_SARIMAX_MIN_HISTORY:
-        return None
-
-    log_returns: list[float] = [
-        math.log(current / previous)
-        for previous, current in zip(prices, prices[1:])
-        if previous > 0 and current > 0
-    ]
-
-    if len(log_returns) < (FORECAST_SARIMAX_MIN_HISTORY - 1):
-        return None
-
-    expected_len = len(log_returns)
-    history = list(exog_history[-expected_len:])
-    if len(history) < expected_len:
-        history = ([0.0] * (expected_len - len(history))) + history
-    future = list(exog_future[:horizon_days])
-    if len(future) < horizon_days:
-        fallback = future[-1] if future else 0.0
-        future = future + ([fallback] * (horizon_days - len(future)))
-
-    exog_train = [[value] for value in history]
-    exog_forecast = [[value] for value in future]
-    seasonal_order = (1, 0, 0, 7) if len(log_returns) >= 21 else (0, 0, 0, 0)
-    try:
-        model = SARIMAX(
-            log_returns,
-            exog=exog_train,
-            order=(1, 0, 1),
-            seasonal_order=seasonal_order,
-            trend="c",
-            enforce_stationarity=False,
-            enforce_invertibility=False,
-        )
-        fitted = model.fit(disp=False, maxiter=120)
-        forecast_returns = fitted.forecast(steps=horizon_days, exog=exog_forecast)
-        return [clamp(float(value), -0.06, 0.06) for value in forecast_returns]
-    except Exception as exc:
-        logger.warning("SARIMAX予測の計算に失敗。heuristicへフォールバック err=%s", exc)
-        return None
-
-
 def forecast_for_metal(
     *,
     metal_key: str,
-    prices: list[float],
+    history_items: list[dict[str, Any]],
     horizon_days: int,
     today: datetime,
     fx_daily_factor: float,
@@ -223,132 +207,133 @@ def forecast_for_metal(
     llm_confidence: float,
     llm_rationale: str,
     llm_available: bool,
-    price_dates: list[str] | None = None,
     fx_returns_by_date: dict[str, float] | None = None,
     recent_mae_pct: float | None = None,
-) -> dict[str, Any]:
+    recent_coverage: float | None = None,
+) -> dict[str, Any] | None:
+    """1金属ぶんの予測レンジを組み立てる。履歴が足りなければ None。"""
+    dated_series = parse_price_history(history_items)
+    if len(dated_series) < 2:
+        return None
+
+    prices = [price for _, price in dated_series]
     start_price = prices[-1]
-    trend = daily_trend(prices)
-    volatility = daily_volatility(prices)
+    returns = build_return_series(dated_series)
+    if not returns:
+        return None
+
+    sigma = robust_daily_sigma(returns)
+    gaps = count_gaps(dated_series)
 
     # --- 為替β: 実データから推定し、無理ならハードコードの既定値へフォールバック ---
     fallback_beta = FX_BETA_BY_METAL.get(metal_key, 0.35)
     fx_returns_by_date = fx_returns_by_date or {}
-    metal_returns: dict[str, float] = {}
-    if price_dates and len(price_dates) == len(prices):
-        metal_returns = daily_returns_by_date(list(zip(price_dates, prices)))
+    str_series = [(d.isoformat(), p) for d, p in dated_series]
+    metal_returns = daily_returns_by_date(str_series)
     fx_beta, beta_samples = estimate_fx_beta(metal_returns, fx_returns_by_date, fallback=fallback_beta)
 
+    # --- 中心値の傾き(tilt) ---
     fx_component = fx_daily_factor * fx_beta
     news_component = news_score * 0.0025
     llm_component = llm_score * llm_confidence * FORECAST_LLM_WEIGHT
-    signal_component = fx_component + news_component + llm_component
-    heuristic_daily_return = clamp((trend * 0.60) + signal_component, -0.04, 0.04)
+    raw_tilt = fx_component + news_component + llm_component
+    tilt = clamp(raw_tilt, -FORECAST_TILT_MAX_PCT_PER_DAY, FORECAST_TILT_MAX_PCT_PER_DAY)
 
-    # --- exog: 金属側の日次リターン列に日付で揃える(為替が無い日は0) ---
-    # ECBは平日のみ公表で金属スナップショットは毎日あるため、位置合わせではズレる。
-    history_steps = max(0, len(prices) - 1)
-    if price_dates and len(price_dates) == len(prices):
-        fx_hist = [fx_returns_by_date.get(date_str, 0.0) for date_str in price_dates[1:]]
-    else:
-        fx_hist = [0.0] * history_steps
-    exog_history = [clamp(value * fx_beta, -0.08, 0.08) for value in fx_hist]
-    exog_future = [clamp(signal_component, -0.08, 0.08) for _ in range(horizon_days)]
-
-    stat_returns = sarimax_fused_returns(
-        prices, horizon_days, exog_history=exog_history, exog_future=exog_future
+    # --- 予測区間 ---
+    lower_log, upper_log, interval_method, interval_samples = horizon_interval(
+        dated_series, returns, horizon_days=horizon_days, interval_prob=FORECAST_INTERVAL_PROB
     )
-    uses_stat_model = stat_returns is not None
 
+    # --- 日次の経路: 中心は tilt で線形、区間は √t で広がる円錐 ---
     daily: list[dict[str, Any]] = []
-    projected_returns: list[float] = []
-    current = start_price
+    previous_center = start_price
     for offset in range(1, horizon_days + 1):
-        if uses_stat_model and stat_returns is not None:
-            projected_return = clamp(stat_returns[offset - 1], -0.05, 0.05)
-            next_value = max(0.01, current * math.exp(projected_return))
-        else:
-            projected_return = heuristic_daily_return
-            next_value = max(0.01, current * (1.0 + projected_return))
-        projected_returns.append(projected_return)
-        forecast_date = (today + timedelta(days=offset)).date().isoformat()
+        scale = math.sqrt(offset / horizon_days)
+        center = start_price * math.exp(tilt * offset)
+        lower = center * math.exp(lower_log * scale)
+        upper = center * math.exp(upper_log * scale)
         daily.append({
-            "date": forecast_date,
-            "price_per_gram": round(next_value, 2),
-            "delta_from_previous": round(next_value - current, 2),
+            "date": (today + timedelta(days=offset)).date().isoformat(),
+            "price_per_gram": round(center, 2),
+            "delta_from_previous": round(center - previous_center, 2),
+            "lower_price_per_gram": round(lower, 2),
+            "upper_price_per_gram": round(upper, 2),
         })
-        current = next_value
+        previous_center = center
 
-    projected_change = ((current - start_price) / start_price) if start_price > 0 else 0.0
-    effective_daily_return = (
-        sum(projected_returns) / len(projected_returns) if projected_returns else heuristic_daily_return
-    )
+    final = daily[-1]
+    projected_center = final["price_per_gram"]
+    projected_lower = final["lower_price_per_gram"]
+    projected_upper = final["upper_price_per_gram"]
+    projected_change = ((projected_center - start_price) / start_price) if start_price > 0 else 0.0
+    lower_change_pct = ((projected_lower - start_price) / start_price * 100) if start_price > 0 else 0.0
+    upper_change_pct = ((projected_upper - start_price) / start_price * 100) if start_price > 0 else 0.0
 
     # --- 信頼度 ---
-    confidence = 0.35
-    if len(prices) >= 30:
-        confidence += 0.25
-    elif len(prices) >= 14:
-        confidence += 0.12
-    if fx_available:
-        confidence += 0.15
-    if article_count >= 8:
-        confidence += 0.15
-    elif article_count >= 3:
+    # 区間予測にとって本質的な品質指標は被覆率(名目80%なら実測も80%か)なので、
+    # それを軸に据える。従来のように「入力データが揃っているか」だけで高い値を
+    # 出さないよう、実績が無いうちは上限を掛ける。
+    half_width_pct = (upper_change_pct - lower_change_pct) / 2.0
+    width_score = clamp(1.0 - half_width_pct / FORECAST_WIDTH_REFERENCE_PCT, 0.0, 1.0)
+    confidence = 0.25 + 0.45 * width_score
+    if len(prices) >= 60:
+        confidence += 0.10
+    elif len(prices) >= 30:
+        confidence += 0.05
+    if interval_method == "empirical":
         confidence += 0.08
-    if llm_available:
-        confidence += 0.07 * clamp(llm_confidence, 0.0, 1.0)
-    if uses_stat_model:
-        confidence += 0.12
-    confidence -= min(0.20, volatility * 6.0)
-    if abs(effective_daily_return) > 0.025:
-        confidence -= 0.05
+    if fx_available:
+        confidence += 0.04
+    if article_count >= 8:
+        confidence += 0.04
+    if gaps:
+        # 欠損があるぶん区間推定の材料が減っているため素直に減点する。
+        confidence -= min(0.10, 0.02 * gaps)
 
-    # 以前の信頼度は「入力データが揃っているか」しか見ておらず、実際に当たったかどうかが
-    # 一切反映されていなかった(大きく外していても95%と表示され得た)。答え合わせ済みの
-    # 直近MAEを反映し、実績が無いうちは上限を掛けて過信を防ぐ。
     accuracy_adjustment = accuracy_confidence_adjustment(recent_mae_pct)
-    confidence += accuracy_adjustment
-    if recent_mae_pct is None:
+    coverage_adjustment = coverage_confidence_adjustment(recent_coverage, nominal=FORECAST_INTERVAL_PROB)
+    confidence += accuracy_adjustment + coverage_adjustment
+    if recent_mae_pct is None and recent_coverage is None:
         confidence = min(confidence, FORECAST_CONFIDENCE_CAP_WITHOUT_ACCURACY)
     confidence = clamp(confidence, 0.1, 0.95)
 
     # --- 根拠の内訳 ---
-    # role の意味:
-    #   primary   … 実際に予測値を決めた要因
-    #   signal    … 予測へ寄与した入力シグナル
-    #   reference … 参考値。今回の計算には直接効いていない
-    # SARIMAX使用時は統計モデルの出力がそのまま予測値になり、直近トレンドはモデル内部の
-    # ARMA項が別途推定するため「参考値」に落ちる。ここを混ぜて表示していたせいで
-    # 「箇条書きは全部プラスなのに予測はマイナス」という誤解が生じていた。
-    breakdown: list[dict[str, Any]] = []
-    if uses_stat_model and stat_returns:
-        avg_baseline = sum(stat_returns) / len(stat_returns)
-        breakdown.append({
-            "label": "統計モデル(SARIMAX)",
-            "value_pct_per_day": round(avg_baseline * 100, 3),
+    # role: primary=予測値を決めた要因 / signal=中心の傾きへの寄与 / reference=参考値
+    breakdown: list[dict[str, Any]] = [
+        {
+            "label": "現在価格(レンジの中心)",
+            "value_pct_per_day": None,
             "role": "primary",
-            "detail": "この値がそのまま予測値になります",
-        })
-    else:
-        breakdown.append({
-            "label": "直近トレンド(統計モデル未使用のため主因)",
-            "value_pct_per_day": round(trend * 0.60 * 100, 3),
+            "detail": (
+                "7日先の価格は現在価格を中心に置くのが実測で最も誤差が小さいため、"
+                "中心は現在価格に固定し、幅で不確実性を示しています"
+            ),
+        },
+        {
+            "label": f"予測レンジ({FORECAST_INTERVAL_PROB:.0%})",
+            "value_pct_per_day": None,
             "role": "primary",
-            "detail": "統計モデルを使えないためトレンドから直接算出しています",
-        })
+            "detail": (
+                f"{lower_change_pct:+.2f}% 〜 {upper_change_pct:+.2f}%"
+                + (
+                    f"(過去の7日変動{interval_samples}件の分布から算出)"
+                    if interval_method == "empirical"
+                    else f"(データ不足のため日次ボラ{sigma * 100:.2f}%×√7で近似)"
+                )
+            ),
+        },
+    ]
 
-    beta_detail = (
-        f"β={fx_beta:.3f}(直近{beta_samples}日の実データから推定)"
-        if beta_samples
-        else f"β={fx_beta:.3f}(既定値。推定に必要なデータが不足)"
-    )
     signal_rows: list[dict[str, Any]] = [
         {
             "label": "USD/JPY感応",
             "value_pct_per_day": round(fx_component * 100, 3),
             "role": "signal",
-            "detail": beta_detail,
+            "detail": (
+                f"β={fx_beta:.3f}(直近{beta_samples}日の実データから推定)"
+                if beta_samples
+                else f"β={fx_beta:.3f}(既定値。推定に必要なデータが不足)"
+            ),
         },
         {
             "label": "ニュース感応",
@@ -363,18 +348,35 @@ def forecast_for_metal(
             "detail": f"スコア {llm_score:+.3f} / 確信度 {llm_confidence:.3f}",
         },
     ]
-    # 寄与の大きい順に並べ、どれが効いているかを一目で分かるようにする。
     signal_rows.sort(key=lambda row: abs(row["value_pct_per_day"]), reverse=True)
     breakdown.extend(signal_rows)
 
-    if uses_stat_model:
+    if abs(raw_tilt) > FORECAST_TILT_MAX_PCT_PER_DAY:
         breakdown.append({
-            "label": "直近トレンド",
-            "value_pct_per_day": round(trend * 100, 3),
+            "label": "傾きの上限",
+            "value_pct_per_day": round(tilt * 100, 3),
             "role": "reference",
-            "detail": "参考値。統計モデルが別途推定するため予測値には直接効いていません",
+            "detail": (
+                f"シグナル合計 {raw_tilt * 100:+.3f}%/日 は上限"
+                f"±{FORECAST_TILT_MAX_PCT_PER_DAY * 100:.2f}%/日 に丸めています"
+            ),
         })
 
+    if gaps:
+        breakdown.append({
+            "label": "データ欠損",
+            "value_pct_per_day": None,
+            "role": "reference",
+            "detail": f"履歴に{gaps}箇所の欠損あり。該当区間は1日あたりへ正規化して扱っています",
+        })
+
+    if recent_coverage is not None:
+        breakdown.append({
+            "label": "直近の的中(区間内に収まった割合)",
+            "value_pct_per_day": None,
+            "role": "reference",
+            "detail": f"{recent_coverage:.0%}(名目 {FORECAST_INTERVAL_PROB:.0%} / 信頼度を {coverage_adjustment:+.2f} 補正)",
+        })
     if recent_mae_pct is not None:
         breakdown.append({
             "label": "直近14日の平均誤差",
@@ -382,7 +384,7 @@ def forecast_for_metal(
             "role": "reference",
             "detail": f"{recent_mae_pct:.2f}%(信頼度を {accuracy_adjustment:+.2f} 補正)",
         })
-    else:
+    if recent_mae_pct is None and recent_coverage is None:
         breakdown.append({
             "label": "答え合わせ実績",
             "value_pct_per_day": None,
@@ -398,7 +400,6 @@ def forecast_for_metal(
             "detail": llm_rationale,
         })
 
-    # 旧フォーマット(文字列の箇条書き)も、古いキャッシュとの互換と要約プロンプト用に維持する。
     drivers: list[str] = []
     for row in breakdown:
         value = row["value_pct_per_day"]
@@ -407,13 +408,22 @@ def forecast_for_metal(
 
     return {
         "start_price_per_gram": round(start_price, 2),
-        "projected_price_per_gram": round(current, 2),
+        "projected_price_per_gram": projected_center,
+        "projected_lower_per_gram": projected_lower,
+        "projected_upper_per_gram": projected_upper,
         "projected_change_pct_7d": round(projected_change * 100, 3),
+        "projected_lower_change_pct": round(lower_change_pct, 3),
+        "projected_upper_change_pct": round(upper_change_pct, 3),
+        "interval_prob": FORECAST_INTERVAL_PROB,
+        "interval_method": interval_method,
+        "interval_samples": interval_samples,
         "confidence": round(confidence, 3),
-        "implied_daily_return_pct": round(effective_daily_return * 100, 4),
-        "model_variant": "sarimax_fused_v1" if uses_stat_model else "heuristic_fx_news_v1",
+        "implied_daily_return_pct": round(tilt * 100, 4),
+        "model_variant": MODEL_VARIANT,
         "fx_beta": round(fx_beta, 4),
         "fx_beta_samples": beta_samples,
+        "daily_sigma_pct": round(sigma * 100, 4),
+        "history_gaps": gaps,
         "daily": daily,
         "drivers": drivers,
         "driver_breakdown": breakdown,

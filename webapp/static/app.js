@@ -98,6 +98,14 @@ function formatYen(value) {
   return `${new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 }).format(value)} 円/g`;
 }
 
+function formatYenPlain(value) {
+  // レンジ表示で「◯◯ 〜 ◯◯ 円/g」と繋げるため、単位を付けない数値だけを返す。
+  if (value === null || value === undefined) {
+    return "-";
+  }
+  return new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 }).format(value);
+}
+
 function formatYenInt(value) {
   if (value === null || value === undefined) {
     return "-";
@@ -229,6 +237,7 @@ function setMarketView(view) {
       !isSummary,
       entry.forecastAnchorDate
     );
+    entry.forecastBand?.setBand(entry.forecastBandPoints, !isSummary);
   });
 }
 
@@ -667,15 +676,44 @@ function updateMarketWidgets() {
         }
         return;
       }
+      // 点予測は実測でランダムウォークに負けていたため、レンジを主表示にして
+      // 中心値は参考として小さく添える(1週間先の向きは断定できないという事実を素直に出す)。
       const changePct = Number(item.projected_change_pct_7d || 0);
-      const deltaClass = changePct > 0 ? "is-up" : changePct < 0 ? "is-down" : "is-flat";
-      const deltaIcon = changePct > 0 ? "bi-arrow-up-short" : changePct < 0 ? "bi-arrow-down-short" : "bi-dash";
       const confidencePct = Number(item.confidence || 0) * 100;
+      const lower = item.projected_lower_per_gram;
+      const upper = item.projected_upper_per_gram;
+      const lowerPct = item.projected_lower_change_pct;
+      const upperPct = item.projected_upper_change_pct;
+      const hasRange = Number.isFinite(lower) && Number.isFinite(upper);
+      const intervalPct = Math.round(Number(item.interval_prob || 0.8) * 100);
 
-      priceEl.textContent = formatYen(item.projected_price_per_gram);
-      deltaEl.className = `market-widget-delta-pill ${deltaClass}`;
-      deltaEl.innerHTML = `<i class="bi ${deltaIcon}"></i>予測変化: ${formatPercent(changePct, 3)}`;
-      metaEl.textContent = `信頼度: ${new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 }).format(confidencePct)}%`;
+      if (hasRange) {
+        priceEl.classList.add("is-range");
+        priceEl.textContent = `${formatYenPlain(lower)} 〜 ${formatYenPlain(upper)} 円/g`;
+        // レンジが0をまたぐなら向きを断定しない。
+        const straddles = Number(lowerPct) < 0 && Number(upperPct) > 0;
+        const rangeClass = straddles ? "is-flat" : Number(lowerPct) > 0 ? "is-up" : "is-down";
+        const rangeIcon = straddles
+          ? "bi-arrows-expand-vertical"
+          : Number(lowerPct) > 0 ? "bi-arrow-up-short" : "bi-arrow-down-short";
+        deltaEl.className = `market-widget-delta-pill ${rangeClass}`;
+        deltaEl.innerHTML =
+          `<i class="bi ${rangeIcon}"></i>${intervalPct}%の確率で ` +
+          `${formatPercent(Number(lowerPct), 1)} 〜 ${formatPercent(Number(upperPct), 1)}`;
+      } else {
+        // 区間を持たない旧キャッシュ向けのフォールバック。
+        priceEl.classList.remove("is-range");
+        const deltaClass = changePct > 0 ? "is-up" : changePct < 0 ? "is-down" : "is-flat";
+        const deltaIcon = changePct > 0 ? "bi-arrow-up-short" : changePct < 0 ? "bi-arrow-down-short" : "bi-dash";
+        priceEl.textContent = formatYen(item.projected_price_per_gram);
+        deltaEl.className = `market-widget-delta-pill ${deltaClass}`;
+        deltaEl.innerHTML = `<i class="bi ${deltaIcon}"></i>予測変化: ${formatPercent(changePct, 3)}`;
+      }
+
+      const confidenceText = `信頼度: ${new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 }).format(confidencePct)}%`;
+      metaEl.textContent = hasRange
+        ? `中心 ${formatYen(item.projected_price_per_gram)} / ${confidenceText}`
+        : confidenceText;
       renderForecastReasonBox(noteEl, key, item);
     } else {
       const data = latest[key] || {};
@@ -1103,6 +1141,127 @@ function createForecastBoundaryPrimitive() {
   };
 }
 
+// 予測レンジ(予測区間)をチャート上に帯として塗るプリミティブ。
+// 点予測はランダムウォークに負けることが実測で分かったため、UI上も「幅」を主役にする。
+// 境界線プリミティブと同じ Lightweight Charts v5 のプラグイン方式。価格→座標の変換に
+// series.priceToCoordinate() を使うため、価格系列に attach して用いる。
+const FORECAST_BAND_FILL = "rgba(52, 152, 219, 0.16)";
+const FORECAST_BAND_EDGE = "rgba(52, 152, 219, 0.45)";
+
+function createForecastBandPrimitive() {
+  let chartRef = null;
+  let seriesRef = null;
+  let requestUpdateFn = null;
+  const state = { points: [], visible: false, coords: [] };
+
+  const paneView = {
+    zOrder() {
+      return "bottom";
+    },
+    update() {
+      if (!chartRef || !seriesRef || !state.visible || state.points.length === 0) {
+        state.coords = [];
+        return;
+      }
+      const timeScale = chartRef.timeScale();
+      const coords = [];
+      state.points.forEach((point) => {
+        const x = timeScale.timeToCoordinate(point.time);
+        const lower = seriesRef.priceToCoordinate(point.lower);
+        const upper = seriesRef.priceToCoordinate(point.upper);
+        if (x !== null && lower !== null && upper !== null) {
+          coords.push({ x, lower, upper });
+        }
+      });
+      state.coords = coords;
+    },
+    renderer() {
+      const coords = state.coords;
+      const visible = state.visible;
+      return {
+        draw(target) {
+          if (!visible || coords.length < 2) {
+            return;
+          }
+          target.useMediaCoordinateSpace(({ context }) => {
+            context.save();
+            context.beginPath();
+            context.moveTo(coords[0].x, coords[0].upper);
+            for (let i = 1; i < coords.length; i++) {
+              context.lineTo(coords[i].x, coords[i].upper);
+            }
+            for (let i = coords.length - 1; i >= 0; i--) {
+              context.lineTo(coords[i].x, coords[i].lower);
+            }
+            context.closePath();
+            context.fillStyle = FORECAST_BAND_FILL;
+            context.fill();
+
+            context.strokeStyle = FORECAST_BAND_EDGE;
+            context.lineWidth = 1;
+            context.setLineDash([3, 3]);
+            for (const edge of ["upper", "lower"]) {
+              context.beginPath();
+              context.moveTo(coords[0].x, coords[0][edge]);
+              for (let i = 1; i < coords.length; i++) {
+                context.lineTo(coords[i].x, coords[i][edge]);
+              }
+              context.stroke();
+            }
+            context.restore();
+          });
+        },
+      };
+    },
+  };
+
+  return {
+    attached({ chart, series, requestUpdate }) {
+      chartRef = chart;
+      seriesRef = series;
+      requestUpdateFn = requestUpdate;
+      paneView.update();
+    },
+    detached() {
+      chartRef = null;
+      seriesRef = null;
+      requestUpdateFn = null;
+    },
+    updateAllViews() {
+      paneView.update();
+    },
+    paneViews() {
+      return [paneView];
+    },
+    // points: [{ time, lower, upper }, ...] / visible: この瞬間に帯を描くか
+    setBand(points, visible) {
+      state.points = Array.isArray(points) ? points : [];
+      state.visible = Boolean(visible && state.points.length >= 2);
+      paneView.update();
+      if (requestUpdateFn) {
+        requestUpdateFn();
+      }
+    },
+  };
+}
+
+function buildForecastBandPoints(forecastItem, anchorDate, anchorPrice) {
+  const daily = Array.isArray(forecastItem?.daily) ? forecastItem.daily : [];
+  const points = [];
+  // 実績最終日を起点に含めると帯が価格線から連続して見える。
+  if (anchorDate && Number.isFinite(anchorPrice)) {
+    points.push({ time: anchorDate, lower: anchorPrice, upper: anchorPrice });
+  }
+  daily.forEach((item) => {
+    const lower = item?.lower_price_per_gram;
+    const upper = item?.upper_price_per_gram;
+    if (item?.date && Number.isFinite(lower) && Number.isFinite(upper)) {
+      points.push({ time: item.date, lower, upper });
+    }
+  });
+  return points.length >= 2 ? points : [];
+}
+
 function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, historyEndDate = null) {
   const meta = METALS[metalKey];
   if (!meta || !window.LightweightCharts) {
@@ -1154,6 +1313,9 @@ function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, his
     return;
   }
 
+  const anchorPrice = anchorIndex >= 0 ? prices[anchorIndex] : null;
+  const bandPoints = buildForecastBandPoints(forecastItem, anchorDate, anchorPrice);
+
   const priceData = toSeriesData(dailyAxis, prices);
   const deltaData = toDeltaSeriesData(dailyAxis, deltas);
   const forecastData = toSeriesData(dailyAxis, forecastPrices);
@@ -1174,6 +1336,8 @@ function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, his
       currentMarketView === "forecast",
       anchorDate
     );
+    existing.forecastBandPoints = bandPoints;
+    existing.forecastBand?.setBand(bandPoints, currentMarketView === "forecast");
     return;
   }
 
@@ -1262,9 +1426,14 @@ function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, his
 
   // v5以降ではプリミティブを系列へ安全に重ねられる。古いライブラリが読み込まれた場合は
   // 境界線なしで通常のチャート表示を続け、画面全体の初期化を失敗させない。
+  const supportsPrimitives = typeof priceSeries.attachPrimitive === "function";
   const forecastBoundary = createForecastBoundaryPrimitive();
-  if (typeof priceSeries.attachPrimitive === "function") {
+  const forecastBand = createForecastBandPrimitive();
+  if (supportsPrimitives) {
+    // 帯を先にattachして価格線より下に来るようにする(zOrderもbottom指定)。
+    priceSeries.attachPrimitive(forecastBand);
     priceSeries.attachPrimitive(forecastBoundary);
+    forecastBand.setBand(bandPoints, currentMarketView === "forecast");
     forecastBoundary.setBoundary(forecastStartDate, currentMarketView === "forecast", anchorDate);
   }
 
@@ -1274,9 +1443,11 @@ function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, his
     deltaSeries,
     forecastSeries,
     maSeries,
-    forecastBoundary: typeof priceSeries.attachPrimitive === "function" ? forecastBoundary : null,
+    forecastBoundary: supportsPrimitives ? forecastBoundary : null,
+    forecastBand: supportsPrimitives ? forecastBand : null,
     forecastStartDate,
     forecastAnchorDate: anchorDate,
+    forecastBandPoints: bandPoints,
   };
   initializeChartTooltip(metalKey, chart, priceSeries, deltaSeries);
 }

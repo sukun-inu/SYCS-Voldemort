@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -9,7 +8,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import METAL_COMMANDS
-from services.metal_service import fetch_metal_price_per_gram
+from services.metal_service import fetch_metal_prices_per_gram
 
 from .models import MetalPriceDaily
 
@@ -36,15 +35,22 @@ def _as_decimal(value: float) -> Decimal:
 
 
 async def _fetch_all_prices() -> dict[str, Decimal]:
-    tasks = [fetch_metal_price_per_gram(metal.code) for metal in TRACKED_METALS]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    # 全金属を1リクエストでまとめて取得する。金属ごとに個別リクエストしていた頃は
+    # 日次スナップショットだけで3回/日=約90回/月を消費し、無料枠(100回/月)を
+    # Discordコマンドや修復リトライと奪い合って毎月10日前後のデータ欠損を起こしていた。
+    try:
+        by_code = await fetch_metal_prices_per_gram([metal.code for metal in TRACKED_METALS])
+    except Exception as exc:
+        logger.error("価格取得に失敗した。", exc_info=exc)
+        raise RuntimeError("すべての金属価格の取得に失敗した。") from exc
 
     prices: dict[str, Decimal] = {}
-    for metal, result in zip(TRACKED_METALS, results):
-        if isinstance(result, Exception):
-            logger.error("価格取得に失敗: %s (%s)", metal.key, metal.code, exc_info=result)
+    for metal in TRACKED_METALS:
+        value = by_code.get(metal.code)
+        if value is None:
+            logger.error("価格取得に失敗: %s (%s)", metal.key, metal.code)
             continue
-        prices[metal.key] = _as_decimal(result)
+        prices[metal.key] = _as_decimal(value)
 
     if not prices:
         raise RuntimeError("すべての金属価格の取得に失敗した。")
