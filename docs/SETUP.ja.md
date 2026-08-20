@@ -94,6 +94,10 @@ docker compose up -d --build
 | `FORECAST_LLM_MAX_COMPLETION_TOKENS` | 任意 | AI判定呼び出しの生成トークン上限（既定 `3000`）。gpt-ossは推論モデルで**推論トークンもこの枠を消費する**ため、小さすぎるとcontentが空になりJSONパースが失敗する |
 | `FORECAST_SUMMARY_MAX_COMPLETION_TOKENS` | 任意 | 根拠要約呼び出しの生成トークン上限（既定 `3000`）。同上 |
 | `FORECAST_LLM_REASONING_EFFORT` | 任意 | Groq推論モデルの推論の深さ（既定 `low`）。空文字にするとパラメータ自体を送らずモデル既定に任せる |
+| `FORECAST_FX_BETA_MIN_SAMPLES` | 任意 | 為替β（金属リターンのUSD/JPY感応度）を実データから推定するのに必要な最小サンプル日数（既定 `40`）。不足時は金属ごとのハードコード既定値へフォールバックする |
+| `FORECAST_ACCURACY_GOOD_MAE_PCT` | 任意 | 直近平均絶対誤差がこの値以下なら信頼度を加点（既定 `1.5`) |
+| `FORECAST_ACCURACY_BAD_MAE_PCT` | 任意 | 直近平均絶対誤差がこの値以上なら信頼度を大きく減点（既定 `6.0`) |
+| `FORECAST_CONFIDENCE_CAP_WITHOUT_ACCURACY` | 任意 | 答え合わせ実績がまだ無い金属の信頼度上限（既定 `0.75`）。実績ゼロで高い信頼度を出す過信を防ぐ |
 | `TRUST_CF_HEADERS` | 任意 | `true/false`。CFヘッダを信頼するか（既定 `false`） |
 | `REQUIRE_CF_CONNECTING_IP` | 任意 | `true/false`。CFヘッダ必須化（既定 `false`） |
 | `TRUSTED_PROXY_CIDRS` | 任意 | Forwardedヘッダを信頼するプロキシCIDR（既定 `127.0.0.1/32,::1/128`） |

@@ -99,6 +99,7 @@ def _empty_usdjpy_signal() -> dict[str, Any]:
         "weekly_change_pct": 0.0,
         "daily_factor": 0.0,
         "daily_returns": [],
+        "daily_returns_by_date": {},
     }
 
 
@@ -123,26 +124,35 @@ async def fetch_usdjpy_signal(session: aiohttp.ClientSession) -> dict[str, Any]:
         logger.warning("USD/JPYデータのレスポンス形式が想定外: %r", payload)
         return _empty_usdjpy_signal()
 
-    closes: list[float] = []
+    dated_closes: list[tuple[str, float]] = []
     for date_str in sorted(rates.keys()):
         entry = rates.get(date_str)
         close_value = safe_float(entry.get("JPY")) if isinstance(entry, dict) else None
         if close_value is None or close_value <= 0:
             continue
-        closes.append(close_value)
+        dated_closes.append((date_str, close_value))
 
-    if len(closes) < 2:
+    if len(dated_closes) < 2:
         return _empty_usdjpy_signal()
 
+    closes = [value for _, value in dated_closes]
     latest = closes[-1]
     anchor = closes[-6] if len(closes) >= 6 else closes[0]
     weekly_change = ((latest - anchor) / anchor) if anchor > 0 else 0.0
     daily_factor = weekly_change / 5.0
-    daily_returns: list[float] = [
-        (current - previous) / previous
-        for previous, current in zip(closes, closes[1:])
-        if previous > 0
-    ]
+
+    # 為替β(金属リターンがUSD/JPYリターンにどれだけ反応するか)を実データから推定
+    # するには、金属側の日次系列と日付で突き合わせる必要がある。ECBは平日のみ公表で
+    # 金属スナップショットは毎日あるため、位置合わせではズレる。日付付きで返す。
+    daily_returns: list[float] = []
+    daily_returns_by_date: dict[str, float] = {}
+    for (_, previous), (current_date, current) in zip(dated_closes, dated_closes[1:]):
+        if previous <= 0:
+            continue
+        value = (current - previous) / previous
+        daily_returns.append(value)
+        daily_returns_by_date[current_date] = value
+
     return {
         "available": True,
         "source": _USDJPY_SOURCE_NAME,
@@ -150,6 +160,7 @@ async def fetch_usdjpy_signal(session: aiohttp.ClientSession) -> dict[str, Any]:
         "weekly_change_pct": round(weekly_change * 100, 3),
         "daily_factor": daily_factor,
         "daily_returns": daily_returns[-240:],
+        "daily_returns_by_date": daily_returns_by_date,
     }
 
 
