@@ -442,7 +442,7 @@ a {
 }
 
 .market-section-meta {
-  margin-top: 6px;
+  margin: 0 0 14px;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
