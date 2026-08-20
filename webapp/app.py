@@ -42,7 +42,13 @@ from .security import (
     load_trusted_proxy_cidrs,
     read_env_bool,
 )
-from .snapshot_service import JST, load_history, load_latest_rows, store_today_snapshot
+from .snapshot_service import (
+    JST,
+    load_earliest_snapshot_date,
+    load_history,
+    load_latest_rows,
+    store_today_snapshot,
+)
 
 logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent
@@ -713,24 +719,35 @@ async def health() -> dict[str, str]:
 @app.get("/api/prices/history")
 async def price_history(
     days: int = Query(default=365, ge=7, le=3650),
+    all_time: bool = Query(default=False, alias="all"),
     session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
     today = datetime.now(JST).date()
-    cache_key = f"history:{today.isoformat()}:{days}"
+    cache_key = f"history:{today.isoformat()}:{'all' if all_time else days}"
     cached = await history_cache.get(cache_key)
     if cached is not None:
         return JSONResponse(cached, headers=_cache_headers(API_RESPONSE_CACHE_SECONDS))
 
-    history = await load_history(session, days)
+    effective_days = days
+    if all_time:
+        earliest = await load_earliest_snapshot_date(session)
+        if earliest is not None:
+            # サーバが記録している最古のスナップショットまでを1回のクエリで
+            # 取得できるようdaysを動的に計算する(取得可能な全期間を参照したい、
+            # というユーザー要望への対応)。
+            effective_days = min(3650, max(7, (today - earliest).days + 1))
+
+    history = await load_history(session, effective_days)
     latest_snapshot = await _get_latest_prices(session)
     latest = _latest_prices_public(latest_snapshot)
-    start_date = today - timedelta(days=days - 1)
+    start_date = today - timedelta(days=effective_days - 1)
     payload = {
         "timezone": "Asia/Tokyo",
         "snapshot_policy": "daily_at_jst_midnight",
         "range_start": start_date.isoformat(),
         "range_end": today.isoformat(),
-        "days": days,
+        "days": effective_days,
+        "all_time": all_time,
         "metals": history,
         "latest": latest,
     }
