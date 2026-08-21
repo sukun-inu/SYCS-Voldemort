@@ -126,6 +126,25 @@ def check_dev(request: Request) -> dict:
 
 # ── 内部ヘルパー ─────────────────────────────────────────────
 
+def describe_exception(exc: BaseException, *, timeout: float | None = None) -> str:
+    """外部呼び出しの失敗理由を、ログにも画面にも出せる一文にする。
+
+    TimeoutError のように str() が空になる例外が多く、そのまま "%s" で出すと
+    「失敗しました: 」という何も分からないログになるため、必ず型名を含める。
+    """
+    if isinstance(exc, asyncio.TimeoutError):
+        return f"タイムアウト（{timeout:g}秒以内に応答なし）" if timeout else "タイムアウト"
+    if isinstance(exc, aiohttp.ClientConnectorCertificateError):
+        return f"TLS証明書エラー（{exc}）"
+    if isinstance(exc, aiohttp.ClientConnectorError):
+        return f"接続できません（DNSまたはネットワーク到達性: {exc.os_error if exc.os_error else exc}）"
+    if isinstance(exc, aiohttp.ClientResponseError):
+        return f"HTTP {exc.status} {exc.message}"
+    if isinstance(exc, aiohttp.ClientError):
+        return f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+    return f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+
+
 async def _discord(method: str, path: str, **kwargs) -> Any:
     if not DISCORD_BOT_TOKEN:
         return None
@@ -137,9 +156,18 @@ async def _discord(method: str, path: str, **kwargs) -> Any:
                 headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
                 **kwargs,
             ) as resp:
-                return await resp.json() if resp.status < 400 else None
+                if resp.status >= 400:
+                    body = (await resp.text())[:200]
+                    logger.warning(
+                        "Discord API が %s を返しました %s %s: %s", resp.status, method, path, body
+                    )
+                    return None
+                return await resp.json()
     except Exception as exc:
-        logger.warning("Discord API 呼び出しに失敗 %s %s: %s", method, path, exc)
+        logger.warning(
+            "Discord API 呼び出しに失敗 %s %s: %s", method, path,
+            describe_exception(exc, timeout=_TIMEOUT.total),
+        )
         return None
 
 
@@ -324,13 +352,21 @@ async def overview(request: Request, _=Depends(check_dev)):
 @limiter.limit("10/minute")
 async def earthquakes(request: Request, _=Depends(check_dev), limit: int = Query(5, ge=1, le=20)):
     """リプレイ用の直近の地震情報。外部APIを叩くので概要とは分けている。"""
+    history: Any = []
+    error: str | None = None
     try:
         async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
             async with session.get(_P2PQUAKE_API, params={"codes": "551", "limit": str(limit)}) as resp:
-                history = await resp.json() if resp.status == 200 else []
+                if resp.status == 200:
+                    history = await resp.json()
+                else:
+                    error = f"HTTP {resp.status}"
+                    logger.warning("地震履歴の取得に失敗 %s: %s", _P2PQUAKE_API, error)
     except Exception as exc:
-        logger.warning("地震履歴の取得に失敗: %s", exc)
-        history = []
+        error = describe_exception(exc, timeout=_TIMEOUT.total)
+        # 相手先が落ちている / 経路が塞がっている、のどちらかを判別できるように
+        # URL と理由を必ず残す（この呼び出しはコンテナからの外向き通信）。
+        logger.warning("地震履歴の取得に失敗 %s: %s", _P2PQUAKE_API, error)
 
     events = []
     for item in history if isinstance(history, list) else []:
@@ -345,7 +381,7 @@ async def earthquakes(request: Request, _=Depends(check_dev), limit: int = Query
             "scale_label": SCALE_LABELS.get(scale, "不明"),
             "json": json.dumps(item, ensure_ascii=False),
         })
-    return JSONResponse({"events": events})
+    return JSONResponse({"events": events, "error": error})
 
 
 # ── 送信系 ───────────────────────────────────────────────────

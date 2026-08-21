@@ -69,7 +69,12 @@ async def resolve(sources: Iterable[ChoiceSource], guild_id: int) -> dict[str, l
     resolved: dict[str, list[dict[str, str]]] = {}
     for source, result in zip(wanted, results):
         if isinstance(result, BaseException):
-            logger.warning("選択肢の取得に失敗しました source=%s: %s", source.value, result)
+            from webapp_admin.api.dev import describe_exception
+
+            logger.warning(
+                "選択肢の取得に失敗しました source=%s guild=%s: %s",
+                source.value, guild_id, describe_exception(result),
+            )
             resolved[source.value] = []
         else:
             resolved[source.value] = result
