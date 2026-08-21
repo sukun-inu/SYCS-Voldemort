@@ -8,12 +8,12 @@
   <link rel="icon" type="image/png"  href="{{ admin_asset_url('favicon.png') }}">
   <link rel="icon" type="image/webp" href="{{ admin_asset_url('admin-icon.webp') }}">
   <link rel="apple-touch-icon"       href="{{ admin_asset_url('favicon.png') }}">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="{{ admin_asset_url('admin.css') }}">
-  <link rel="stylesheet" href="{{ admin_asset_url('guide.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/tokens.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/base.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/components.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/public.css') }}">
 </head>
-<body>
+<body class="public">
 
 <header class="topbar">
   <div class="topbar-inner">
@@ -26,11 +26,11 @@
       </a>
     </div>
     <div class="topbar-actions">
-      <a href="{{ url_for('guide') }}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-book"></i>使い方ガイド
+      <a href="{{ url_for('guide') }}" class="btn btn-sm">
+        {{ icon('book') }}使い方ガイド
       </a>
-      <a href="{{ url_for('auth.login') }}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-gear-fill"></i>管理画面
+      <a href="{{ url_for('auth.login') }}" class="btn btn-sm">
+        {{ icon('gear-fill') }}管理画面
       </a>
     </div>
   </div>
@@ -45,7 +45,7 @@
   </div>
 
   <div class="doc-section">
-    <h2><i class="bi bi-info-circle-fill"></i>はじめに</h2>
+    <h2>{{ icon('info-circle-fill') }}はじめに</h2>
     <p>
       SYCS Voldemort（以下「本 Bot」）は、Discord 上で動作する多機能 Bot およびその Web 管理画面を提供するサービスです。
       本プライバシーポリシーは、本サービスがどのような情報をどのような目的で取り扱うかを説明するものです。
@@ -54,7 +54,7 @@
   </div>
 
   <div class="doc-section">
-    <h2><i class="bi bi-database-fill"></i>収集する情報</h2>
+    <h2>{{ icon('database-fill') }}収集する情報</h2>
 
     <h3>サーバー設定情報</h3>
     <p>
@@ -87,7 +87,7 @@
   </div>
 
   <div class="doc-section">
-    <h2><i class="bi bi-list-check"></i>情報の利用目的</h2>
+    <h2>{{ icon('list-check') }}情報の利用目的</h2>
     <p>収集した情報は以下の目的にのみ使用します。</p>
     <ul>
       <li>地震アラート・AI 会話・DJAudio-DL・ウェルカム通知などの Bot 機能の提供</li>
@@ -99,7 +99,7 @@
   </div>
 
   <div class="doc-section">
-    <h2><i class="bi bi-boxes"></i>利用する第三者サービス</h2>
+    <h2>{{ icon('boxes') }}利用する第三者サービス</h2>
     <p>
       本 Bot は以下の外部サービスの API を使用しています。各サービスへの情報送信は機能提供に必要な範囲に限られます。各サービスのプライバシーポリシーも合わせてご確認ください。
     </p>
@@ -115,7 +115,7 @@
   </div>
 
   <div class="doc-section">
-    <h2><i class="bi bi-shield-fill-check"></i>データの保管・削除</h2>
+    <h2>{{ icon('shield-fill-check') }}データの保管・削除</h2>
 
     <h3>保管場所とアクセス</h3>
     <p>
@@ -140,20 +140,18 @@
   </div>
 
   <div class="doc-section">
-    <h2><i class="bi bi-arrow-clockwise"></i>ポリシーの変更</h2>
+    <h2>{{ icon('arrow-clockwise') }}ポリシーの変更</h2>
     <p>
       本プライバシーポリシーは予告なく変更される場合があります。重要な変更がある場合はこのページに反映されます。最終更新日を定期的にご確認ください。
     </p>
   </div>
 
   <div class="doc-links">
-    <a href="{{ url_for('terms') }}" class="btn btn-outline-secondary">
-      <i class="bi bi-file-text"></i>利用規約
+    <a href="{{ url_for('terms') }}" class="btn">
+      {{ icon('file-text') }}利用規約
     </a>
   </div>
 
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

@@ -3,66 +3,55 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>ログイン - SYCS Voldemort</title>
   <link rel="icon" type="image/png"  href="{{ admin_asset_url('favicon.png') }}">
   <link rel="icon" type="image/webp" href="{{ admin_asset_url('admin-icon.webp') }}">
   <link rel="apple-touch-icon"       href="{{ admin_asset_url('favicon.png') }}">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="{{ admin_asset_url('admin.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/tokens.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/base.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/components.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/public.css') }}">
 </head>
 <body class="auth-page">
-  <div class="login-card">
-    <div class="login-lockup">
-      <div class="login-logo">
-        <img class="login-logo-image" src="{{ admin_asset_url('admin-icon.webp') }}" width="64" height="64" alt="">
-      </div>
-      <div>
-        <h1 class="login-title">SYCS Voldemort</h1>
-        <p class="login-subtitle">Bot 管理ダッシュボード</p>
-      </div>
+  <main class="login-card">
+    <div class="login-logo">
+      <img class="login-logo-image" src="{{ admin_asset_url('admin-icon.webp') }}" width="64" height="64" alt="">
     </div>
+    <h1 class="login-title">SYCS Voldemort</h1>
+    <p class="login-subtitle">Bot 管理ダッシュボード</p>
 
     {% if messages %}
-    <div class="flash-stack">
+    <div class="stack login-flash">
       {% for cat, msg in messages %}
-      <div class="alert alert-{{ cat }} alert-dismissible fade show" role="alert" data-auto-dismiss="true">
-        <div class="alert-content">
-          {% if cat == 'danger' %}
-          <i class="bi bi-exclamation-circle-fill"></i>
-          {% elif cat == 'warning' %}
-          <i class="bi bi-exclamation-triangle-fill"></i>
-          {% else %}
-          <i class="bi bi-info-circle-fill"></i>
-          {% endif %}
-          <div>{{ msg }}</div>
-        </div>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+      <div class="toast {{ 'danger' if cat in ('danger', 'error') else 'info' }}" role="status">
+        {{ icon('exclamation-circle-fill' if cat in ('danger', 'error') else 'info-circle-fill') }}
+        <div class="grow">{{ msg }}</div>
       </div>
       {% endfor %}
     </div>
     {% endif %}
 
-    <a href="{{ url_for('auth.oauth_start') }}" class="btn btn-discord w-100">
-      <svg class="me-2" width="18" height="18" viewBox="0 0 71 55" fill="currentColor">
-        <path d="M60.1 4.9A58.5 58.5 0 0 0 45.5.9a40.3 40.3 0 0 0-1.8 3.7 54.2 54.2 0 0 0-16.3 0A38.7 38.7 0 0 0 25.6.9 58.4 58.4 0 0 0 11 4.9C1.6 18.9-1 32.5.3 45.9A58.8 58.8 0 0 0 17.9 54a43.6 43.6 0 0 0 3.8-6.1 38.3 38.3 0 0 1-6-2.9l1.4-1.1a41.9 41.9 0 0 0 35.8 0l1.5 1.1a38.2 38.2 0 0 1-6 2.9 43.5 43.5 0 0 0 3.8 6.1A58.7 58.7 0 0 0 70.7 45.9C72.2 30.3 68 16.8 60.1 4.9ZM23.7 37.8c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.3 6.4 7.2c0 4-2.8 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.3 6.4 7.2c0 4-2.8 7.2-6.4 7.2Z"/>
-      </svg>
-      Discord でログイン
-    </a>
+    <div class="login-actions">
+      <a href="{{ url_for('auth.oauth_start') }}" class="btn btn-discord btn-lg btn-block">
+        <svg width="18" height="18" viewBox="0 0 71 55" fill="currentColor" aria-hidden="true" focusable="false">
+          <path d="M60.1 4.9A58.5 58.5 0 0 0 45.5.9a40.3 40.3 0 0 0-1.8 3.7 54.2 54.2 0 0 0-16.3 0A38.7 38.7 0 0 0 25.6.9 58.4 58.4 0 0 0 11 4.9C1.6 18.9-1 32.5.3 45.9A58.8 58.8 0 0 0 17.9 54a43.6 43.6 0 0 0 3.8-6.1 38.3 38.3 0 0 1-6-2.9l1.4-1.1a41.9 41.9 0 0 0 35.8 0l1.5 1.1a38.2 38.2 0 0 1-6 2.9 43.5 43.5 0 0 0 3.8 6.1A58.7 58.7 0 0 0 70.7 45.9C72.2 30.3 68 16.8 60.1 4.9ZM23.7 37.8c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.3 6.4 7.2c0 4-2.8 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.3 6.4 7.2c0 4-2.8 7.2-6.4 7.2Z"/>
+        </svg>
+        Discord でログイン
+      </a>
 
-    <div class="login-actions mt-3 d-flex gap-2">
-      <a href="{{ url_for('guide') }}" class="btn btn-outline-secondary flex-fill">
-        <i class="bi bi-book me-1"></i>使い方ガイド
-      </a>
-      {% if invite_url %}
-      <a href="{{ invite_url }}" class="btn btn-outline-success flex-fill" target="_blank" rel="noopener noreferrer">
-        <i class="bi bi-plus-circle me-1"></i>Bot を招待
-      </a>
-      {% endif %}
+      <div class="login-links">
+        <a href="{{ url_for('guide') }}" class="btn">{{ icon('book') }}使い方ガイド</a>
+        {% if invite_url %}
+        <a href="{{ invite_url }}" class="btn" target="_blank" rel="noopener noreferrer">
+          {{ icon('plus-circle') }}Bot を招待
+        </a>
+        {% endif %}
+      </div>
     </div>
 
     <p class="login-note">
-      <i class="bi bi-info-circle me-1"></i>
+      {{ icon('info-circle') }}
       Bot が参加しているサーバーで管理者権限が必要です。
     </p>
 
@@ -71,9 +60,6 @@
       <span class="login-legal-sep">·</span>
       <a href="{{ url_for('privacy') }}">プライバシーポリシー</a>
     </div>
-  </div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
-<script src="{{ admin_asset_url('admin.js') }}"></script>
+  </main>
 </body>
 </html>
