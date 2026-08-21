@@ -221,6 +221,40 @@ def main():
         check("TTS API 不通なら声欄が手入力になる",
               page.locator('.window[data-app-id="tts"] .field[data-key="default_voice"] input').count() == 1)
 
+        # ── ウィンドウの移動とリサイズ ──
+        # ここが壊れても画面は正常に見えるため、必ず実際に動かして確かめる
+        win = page.locator('.window[data-app-id="logging"]')
+        before = win.bounding_box()
+
+        bar = page.locator('.window[data-app-id="logging"] .window-titlebar')
+        bar_box = bar.bounding_box()
+        page.mouse.move(bar_box["x"] + 120, bar_box["y"] + 12)
+        page.mouse.down()
+        page.mouse.move(bar_box["x"] + 220, bar_box["y"] + 92, steps=8)
+        page.mouse.up()
+        moved = win.bounding_box()
+        check("タイトルバーでウィンドウを動かせる",
+              abs(moved["x"] - before["x"]) > 50 and abs(moved["y"] - before["y"]) > 40,
+              f'{int(before["x"])},{int(before["y"])} -> {int(moved["x"])},{int(moved["y"])}')
+
+        handle = page.locator('.window[data-app-id="logging"] .window-resize')
+        grip = handle.bounding_box()
+        check("リサイズのつまみが右下の角にある",
+              grip is not None
+              and abs((grip["x"] + grip["width"]) - (moved["x"] + moved["width"])) < 12
+              and abs((grip["y"] + grip["height"]) - (moved["y"] + moved["height"])) < 12,
+              f'つまみ {int(grip["x"])},{int(grip["y"])} / 窓右下 '
+              f'{int(moved["x"] + moved["width"])},{int(moved["y"] + moved["height"])}' if grip else "つまみ無し")
+
+        page.mouse.move(grip["x"] + grip["width"] / 2, grip["y"] + grip["height"] / 2)
+        page.mouse.down()
+        page.mouse.move(grip["x"] + 140, grip["y"] + 110, steps=8)
+        page.mouse.up()
+        resized = win.bounding_box()
+        check("つまみでリサイズできる",
+              resized["width"] - moved["width"] > 80 and resized["height"] - moved["height"] > 60,
+              f'{int(moved["width"])}x{int(moved["height"])} -> {int(resized["width"])}x{int(resized["height"])}')
+
         # ── ウィンドウ操作 ──
         check("ウィンドウが3枚開いている", page.locator(".window").count() == 3)
         page.locator('.window[data-app-id="tts"] .window-control').first.click()  # 最小化
