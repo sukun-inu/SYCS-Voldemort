@@ -25,7 +25,7 @@
   <div id="window-layer"></div>
 </div>
 
-<footer class="taskbar">
+<footer class="taskbar" data-specular>
   <button class="start-button" id="start-button" type="button" aria-haspopup="true" aria-expanded="false">
     <img src="{{ admin_asset_url('admin-icon.webp') }}" width="18" height="18" alt="">
     <span>スタート</span>
@@ -56,14 +56,14 @@
   </div>
 </footer>
 
-<div class="start-menu" id="start-menu" hidden>
+<div class="start-menu lens" id="start-menu" data-specular hidden>
   <div class="start-search">
     <input class="input" id="start-search" type="search" placeholder="アプリを検索…" autocomplete="off" aria-label="アプリを検索">
   </div>
   <div class="start-groups" id="start-groups"></div>
 </div>
 
-<div class="menu" id="user-menu" hidden>
+<div class="menu lens" id="user-menu" hidden>
   <p class="menu-header">{{ session.user.global_name or session.user.username }}</p>
   <a class="menu-item" href="{{ url_for('guide') }}">{{ icon('book') }}使い方ガイド</a>
   <a class="menu-item" href="{{ url_for('dashboard.guild_select') }}">{{ icon('arrow-left-right') }}サーバーを切り替え</a>

@@ -37,7 +37,7 @@
     <form method="post" action="{{ url_for('dashboard.select_guild') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="guild_id" value="{{ guild.id }}">
-      <button type="submit" class="guild-card">
+      <button type="submit" class="guild-card lens" data-specular>
         {% if guild.icon %}
         <img class="guild-avatar" src="https://cdn.discordapp.com/icons/{{ guild.id }}/{{ guild.icon }}.webp?size=128"
              width="44" height="44" alt="">
@@ -63,5 +63,6 @@
     <a href="{{ url_for('auth.logout') }}">別のアカウントでログインする</a>
   </p>
 </main>
+<script type="module" src="{{ admin_asset_url('js/aero.js') }}"></script>
 </body>
 </html>

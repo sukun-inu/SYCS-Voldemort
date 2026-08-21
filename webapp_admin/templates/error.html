@@ -14,7 +14,7 @@
 </head>
 <body class="aero-page">
 <main class="error-page">
-  <section class="error-card">
+  <section class="error-card lens" data-specular>
     <p class="error-code">SYCS Voldemort · {{ code }}</p>
     <h1 class="error-message">{{ message }}</h1>
     <p class="muted small">{{ description or "リクエストを処理できませんでした。" }}</p>
@@ -24,5 +24,6 @@
     </div>
   </section>
 </main>
+<script type="module" src="{{ admin_asset_url('js/aero.js') }}"></script>
 </body>
 </html>

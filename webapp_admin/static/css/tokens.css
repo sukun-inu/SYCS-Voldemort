@@ -48,25 +48,41 @@
   --radius-pill: 999px;
 
 
-  /* ── ガラス表現（管理画面 = Aero） ────────────────────────
-     枠だけを透過させ、中身の面は不透明に保つ。Aero の見た目であり
-     可読性も落ちないため。 */
-  --glass-bg: rgba(255, 255, 255, 0.58);
-  --glass-bg-strong: rgba(255, 255, 255, 0.80);
-  --glass-highlight: rgba(255, 255, 255, 0.85);
-  --glass-edge: rgba(90, 125, 165, 0.45);
-  --glass-blur: blur(22px) saturate(170%);
+  /* ── ガラス表現（Aero の骨格 + Liquid Glass の光り方） ────
+     枠はガラス、中身の面は不透明。そのうえで、縁だけが光る鏡面リムと
+     彩度を持ち上げたぼかしで、板ガラスではなくレンズのように見せる。 */
+  --glass-bg: rgba(255, 255, 255, 0.42);
+  --glass-bg-strong: rgba(255, 255, 255, 0.66);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+  --glass-edge: rgba(120, 155, 195, 0.32);
+  --glass-blur: blur(30px) saturate(190%) brightness(1.04);
+
+  /* レンズの縁。左上と右下だけが強く光る（面全体は光らせない） */
+  --lens-rim: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(255, 255, 255, 0.28) 18%,
+    rgba(255, 255, 255, 0.04) 42%,
+    rgba(255, 255, 255, 0.10) 62%,
+    rgba(255, 255, 255, 0.75) 100%
+  );
+  /* 上端の緩やかな艶。Aero の硬い分割線は使わない */
   --gloss: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.55) 0%,
-    rgba(255, 255, 255, 0.18) 46%,
-    rgba(255, 255, 255, 0.02) 50%,
-    rgba(255, 255, 255, 0.14) 100%
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(255, 255, 255, 0.10) 55%,
+    rgba(255, 255, 255, 0.02) 100%
   );
-  --glow-focus: 0 0 0 1px rgba(70, 170, 255, 0.6), 0 0 20px rgba(70, 170, 255, 0.45);
-  --shadow-aero: 0 20px 52px rgba(8, 28, 60, 0.32), 0 3px 10px rgba(8, 28, 60, 0.22);
+  --spec: rgba(255, 255, 255, 0.30);
+  --glow-focus: 0 0 0 1px rgba(90, 180, 255, 0.5), 0 0 28px rgba(80, 170, 255, 0.4);
+  --shadow-aero: 0 32px 64px -16px rgba(4, 20, 50, 0.45), 0 10px 26px -10px rgba(4, 20, 50, 0.35);
   --taskbar-ink: #eaf3ff;
   --taskbar-ink-muted: rgba(234, 243, 255, 0.72);
+
+  /* 連続的な角丸（外側ほど大きく） */
+  --radius-glass: 18px;
+  --radius-pane: 12px;
+  --radius-control: 10px;
 
   --taskbar-height: 44px;
   --titlebar-height: 36px;
@@ -103,18 +119,26 @@
     --attention-soft: rgba(210, 153, 34, 0.16);
 
 
-    --glass-bg: rgba(18, 26, 38, 0.62);
-    --glass-bg-strong: rgba(16, 23, 34, 0.86);
-    --glass-highlight: rgba(255, 255, 255, 0.18);
-    --glass-edge: rgba(0, 0, 0, 0.65);
+    --glass-bg: rgba(16, 24, 36, 0.52);
+    --glass-bg-strong: rgba(14, 21, 32, 0.74);
+    --glass-highlight: rgba(255, 255, 255, 0.22);
+    --glass-edge: rgba(140, 180, 225, 0.20);
+    --lens-rim: linear-gradient(
+      135deg,
+      rgba(190, 225, 255, 0.55) 0%,
+      rgba(190, 225, 255, 0.14) 20%,
+      rgba(255, 255, 255, 0.02) 45%,
+      rgba(190, 225, 255, 0.08) 65%,
+      rgba(190, 225, 255, 0.42) 100%
+    );
     --gloss: linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.16) 0%,
-      rgba(255, 255, 255, 0.05) 46%,
-      rgba(255, 255, 255, 0.01) 50%,
-      rgba(255, 255, 255, 0.05) 100%
+      rgba(255, 255, 255, 0.14) 0%,
+      rgba(255, 255, 255, 0.04) 55%,
+      rgba(255, 255, 255, 0.01) 100%
     );
-    --shadow-aero: 0 20px 52px rgba(0, 0, 0, 0.6), 0 3px 10px rgba(0, 0, 0, 0.45);
+    --spec: rgba(180, 220, 255, 0.18);
+    --shadow-aero: 0 34px 68px -16px rgba(0, 0, 0, 0.72), 0 10px 26px -10px rgba(0, 0, 0, 0.5);
 
     --shadow-window: 0 10px 28px rgba(1, 4, 9, 0.6);
     --shadow-popover: 0 8px 24px rgba(1, 4, 9, 0.6);
