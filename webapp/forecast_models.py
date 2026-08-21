@@ -240,8 +240,13 @@ def forecast_for_metal(
     tilt = clamp(raw_tilt, -FORECAST_TILT_MAX_PCT_PER_DAY, FORECAST_TILT_MAX_PCT_PER_DAY)
 
     # --- 予測区間 ---
-    lower_log, upper_log, interval_method, interval_samples = horizon_interval(
-        dated_series, returns, horizon_days=horizon_days, interval_prob=FORECAST_INTERVAL_PROB
+    lower_log, upper_log, interval_method, interval_samples, interval_multiplier = horizon_interval(
+        dated_series,
+        returns,
+        horizon_days=horizon_days,
+        interval_prob=FORECAST_INTERVAL_PROB,
+        # 実測被覆率が得られていれば、名目とのズレで幅を自己補正させる。
+        measured_coverage=recent_coverage,
     )
 
     # --- 日次の経路: 中心は tilt で線形、区間は √t で広がる円錐 ---
@@ -316,10 +321,11 @@ def forecast_for_metal(
             "detail": (
                 f"{lower_change_pct:+.2f}% 〜 {upper_change_pct:+.2f}%"
                 + (
-                    f"(過去の7日変動{interval_samples}件の分布から算出)"
+                    f"(過去の7日変動{interval_samples}件の分布から算出"
                     if interval_method == "empirical"
-                    else f"(データ不足のため日次ボラ{sigma * 100:.2f}%×√7で近似)"
+                    else f"(データ不足のため日次ボラ{sigma * 100:.2f}%×√7で近似"
                 )
+                + f" / 幅補正×{interval_multiplier:.2f})"
             ),
         },
     ]
@@ -417,6 +423,7 @@ def forecast_for_metal(
         "interval_prob": FORECAST_INTERVAL_PROB,
         "interval_method": interval_method,
         "interval_samples": interval_samples,
+        "interval_width_multiplier": round(interval_multiplier, 4),
         "confidence": round(confidence, 3),
         "implied_daily_return_pct": round(tilt * 100, 4),
         "model_variant": MODEL_VARIANT,
