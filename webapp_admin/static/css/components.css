@@ -1,0 +1,248 @@
+/* ==========================================================================
+   コンポーネント
+   フォーム・ボタン・一覧・タブ・トーストなど、ウィンドウの中身を作る部品。
+   Bootstrap の置き換えとして必要なものだけを持つ。
+   ========================================================================== */
+
+/* ── ボタン ───────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 12px;
+  min-height: 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--canvas-subtle);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+}
+.btn:hover:not(:disabled) { background: var(--canvas-inset); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--success-emphasis);
+  border-color: transparent;
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) { background: var(--success); }
+
+.btn-danger { color: var(--danger); }
+.btn-danger:hover:not(:disabled) { background: var(--danger-soft); border-color: var(--danger); }
+
+.btn-quiet { background: transparent; border-color: transparent; color: var(--fg-muted); }
+.btn-quiet:hover:not(:disabled) { background: var(--canvas-inset); color: var(--fg); }
+
+.btn-sm { min-height: 26px; padding: 2px 8px; font-size: 12px; }
+.btn-icon { padding: 4px 7px; min-height: 28px; }
+
+/* ── フォーム ─────────────────────────────────────────────── */
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field-label { font-size: 13px; font-weight: 600; }
+.field-help { font-size: 12px; color: var(--fg-muted); }
+.field-error { font-size: 12px; color: var(--danger); display: none; }
+.field.has-error .field-error { display: block; }
+.field.is-disabled { opacity: .55; }
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  padding: 5px 10px;
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--canvas);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13.5px;
+}
+.textarea { min-height: 92px; resize: vertical; line-height: 1.7; }
+.input:focus, .select:focus, .textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.field.has-error .input,
+.field.has-error .select,
+.field.has-error .textarea { border-color: var(--danger); }
+.input:disabled, .select:disabled, .textarea:disabled { background: var(--canvas-inset); cursor: not-allowed; }
+
+.input-row { display: flex; gap: 8px; align-items: flex-start; }
+.input-row > .field { flex: 1 1 0; min-width: 0; }
+
+/* チェックボックス / スイッチ */
+.check { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.check input { margin: 3px 0 0; width: 15px; height: 15px; accent-color: var(--accent); }
+.check-text { font-size: 13.5px; }
+.check-list { display: flex; flex-direction: column; gap: 6px; }
+
+/* ── セクション ───────────────────────────────────────────── */
+.section { border: 1px solid var(--border); border-radius: var(--radius); background: var(--canvas); }
+.section + .section { margin-top: 14px; }
+.section-head {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--canvas-subtle);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.section-title { font-size: 13.5px; }
+.section-help { font-size: 12px; color: var(--fg-muted); }
+.section-body { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+
+/* ── タブ ─────────────────────────────────────────────────── */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.tab {
+  padding: 7px 12px;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--fg-muted);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--fg); }
+.tab.is-active { color: var(--fg); font-weight: 600; border-bottom-color: var(--accent); }
+.tabpanel { padding-top: 14px; }
+
+/* ── 一覧（コレクション） ─────────────────────────────────── */
+.list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); }
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 13.5px;
+}
+.list-row + .list-row { border-top: 1px solid var(--border-muted); }
+.list-row:hover { background: var(--canvas-subtle); }
+.list-main { min-width: 0; }
+.list-sub { font-size: 12px; color: var(--fg-muted); }
+
+.empty {
+  padding: 18px 14px;
+  text-align: center;
+  color: var(--fg-muted);
+  font-size: 13px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+/* ── チップ・バッジ ───────────────────────────────────────── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  color: var(--fg-muted);
+  background: var(--canvas-subtle);
+}
+.chip.accent { color: var(--accent); border-color: transparent; background: var(--accent-soft); }
+.chip.danger { color: var(--danger); border-color: transparent; background: var(--danger-soft); }
+
+/* ── 保存バー ─────────────────────────────────────────────── */
+.savebar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  background: var(--canvas-overlay);
+}
+.savebar-status { font-size: 12.5px; color: var(--fg-muted); }
+.savebar-status.is-dirty { color: var(--attention); }
+.savebar-status.is-error { color: var(--danger); }
+
+/* ── 読み込み中 ───────────────────────────────────────────── */
+.spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  flex: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+/* ── トースト ─────────────────────────────────────────────── */
+.toast-stack {
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--taskbar-height) + 16px);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+}
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  background: var(--canvas-overlay);
+  box-shadow: var(--shadow-popover);
+  font-size: 13px;
+  animation: toast-in .16s ease-out;
+}
+.toast.success { border-left-color: var(--success); }
+.toast.danger { border-left-color: var(--danger); }
+.toast.info { border-left-color: var(--accent); }
+.toast-close { margin-left: auto; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ── メトリクス（システム監視） ───────────────────────────── */
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.metric { display: flex; flex-direction: column; gap: 6px; }
+.metric-label { font-size: 12.5px; color: var(--fg-muted); }
+.metric-value { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.meter { height: 6px; border-radius: var(--radius-pill); background: var(--canvas-inset); overflow: hidden; }
+.meter-fill { display: block; height: 100%; background: var(--accent); transition: width .3s ease; }
+.metric.tone-success .meter-fill { background: var(--success); }
+.metric.tone-warning .meter-fill { background: var(--attention); }
+.metric.tone-info .meter-fill { background: var(--accent); }
+
+.list-row.severity-critical { border-left: 3px solid var(--danger); }
+.list-row.severity-warning { border-left: 3px solid var(--attention); }
+.list-row.severity-info { border-left: 3px solid var(--accent); }
+
+/* ── ログ / JSON ビューア ─────────────────────────────────── */
+.log-view {
+  margin: 0;
+  padding: 12px;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--canvas-inset);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre;
+  color: var(--fg);
+}

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>SYCS Voldemort — {{ session.guild_name }}</title>
+  <link rel="icon" type="image/png"  href="{{ admin_asset_url('favicon.png') }}">
+  <link rel="icon" type="image/webp" href="{{ admin_asset_url('admin-icon.webp') }}">
+  <link rel="apple-touch-icon"       href="{{ admin_asset_url('favicon.png') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/tokens.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/base.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/components.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/desktop.css') }}">
+</head>
+<body class="desktop-body">
+
+{# タイル一覧は /admin/api/apps から取得する。サーバがHTMLに埋め込むのはシェルの骨だけ。 #}
+<div class="desktop" id="desktop">
+  <div class="desktop-hint">
+    <p>左下の <strong>スタート</strong> からアプリを開いてください。</p>
+    <p class="small">ウィンドウはタイトルバーで移動、右下の隅でリサイズできます。</p>
+  </div>
+  <div id="window-layer"></div>
+</div>
+
+<footer class="taskbar">
+  <button class="start-button" id="start-button" type="button" aria-haspopup="true" aria-expanded="false">
+    <img src="{{ admin_asset_url('admin-icon.webp') }}" width="18" height="18" alt="">
+    <span>スタート</span>
+  </button>
+
+  <div class="taskbar-apps" id="taskbar-apps" aria-label="開いているウィンドウ"></div>
+
+  <div class="taskbar-tray">
+    <a class="tray-button" href="{{ url_for('dashboard.guild_select') }}" title="サーバーを切り替え">
+      {% if session.guild_icon %}
+      <img class="tray-avatar" src="https://cdn.discordapp.com/icons/{{ session.guild_id }}/{{ session.guild_icon }}.webp?size=64" width="20" height="20" alt="">
+      {% else %}
+      <span class="tray-fallback">{{ session.guild_name[0] if session.guild_name else "S" }}</span>
+      {% endif %}
+      <span class="truncate">{{ session.guild_name }}</span>
+    </a>
+
+    <button class="tray-button" id="user-button" type="button" aria-haspopup="true" aria-expanded="false"
+            title="{{ session.user.global_name or session.user.username }}">
+      {% if session.user.avatar %}
+      <img class="tray-avatar" src="https://cdn.discordapp.com/avatars/{{ session.user.id }}/{{ session.user.avatar }}.webp?size=64" width="20" height="20" alt="">
+      {% else %}
+      <span class="tray-fallback">{{ (session.user.global_name or session.user.username or "U")[0] }}</span>
+      {% endif %}
+    </button>
+
+    <span class="taskbar-clock" id="taskbar-clock">--:--</span>
+  </div>
+</footer>
+
+<div class="start-menu" id="start-menu" hidden>
+  <div class="start-search">
+    <input class="input" id="start-search" type="search" placeholder="アプリを検索…" autocomplete="off" aria-label="アプリを検索">
+  </div>
+  <div class="start-groups" id="start-groups"></div>
+</div>
+
+<div class="menu" id="user-menu" hidden>
+  <p class="menu-header">{{ session.user.global_name or session.user.username }}</p>
+  <a class="menu-item" href="{{ url_for('guide') }}">{{ icon('book') }}使い方ガイド</a>
+  <a class="menu-item" href="{{ url_for('dashboard.guild_select') }}">{{ icon('arrow-left-right') }}サーバーを切り替え</a>
+  <a class="menu-item" href="{{ url_for('auth.logout') }}">{{ icon('box-arrow-right') }}ログアウト</a>
+</div>
+
+<script type="module" src="{{ admin_asset_url('js/main.js') }}"></script>
+</body>
+</html>
