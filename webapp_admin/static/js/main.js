@@ -5,6 +5,7 @@ import * as api from "./lib/api.js";
 import { el } from "./lib/dom.js";
 import { toast } from "./lib/toast.js";
 import { Desktop } from "./wm/desktop.js";
+import { attachSpecular } from "./wm/specular.js";
 
 function targetFromLocation() {
   // 設定ページへ直接アクセスした場合、サーバが /admin/overview?open=<id> へ寄せる。
@@ -34,6 +35,7 @@ async function boot() {
   }
 
   const desktop = new Desktop({ groups });
+  attachSpecular();
 
   const layout = Desktop.loadLayout();
   if (layout.length) {

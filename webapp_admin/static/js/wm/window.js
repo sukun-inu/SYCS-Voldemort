@@ -35,13 +35,13 @@ export class AppWindow {
     this.el = el(
       "div",
       {
-        class: "window",
+        class: "window lens",
         style: { left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` },
         dataset: { appId },
       },
       el(
         "div",
-        { class: "window-titlebar" },
+        { class: "window-titlebar", "data-specular": "" },
         icon(iconName || "bi-app", "window-icon"),
         this.titleEl,
         this.dirtyEl,

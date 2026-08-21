@@ -4,6 +4,54 @@
    Bootstrap の置き換えとして必要なものだけを持つ。
    ========================================================================== */
 
+/* ── レンズの縁: 面ではなく縁だけを光らせる ────────────────
+   1px の枠を gradient で塗り、mask で中身を抜いて縁だけ残す。 */
+.lens { position: relative; }
+.lens::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--lens-rim);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── ポインタに追従する鏡面ハイライト ──────────────────────
+   座標は JS が --spec-x / --spec-y に入れる（wm/specular.js）。 */
+[data-specular] { --spec-x: 50%; --spec-y: 0%; position: relative; }
+[data-specular]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(220px 140px at var(--spec-x) var(--spec-y), var(--spec), transparent 72%);
+  opacity: 0;
+  transition: opacity .3s ease;
+  pointer-events: none;
+}
+[data-specular]:hover::after { opacity: 1; }
+
+.desktop-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: rgba(233, 244, 255, 0.86);
+  font-size: 13px;
+  line-height: 2;
+  text-shadow: 0 1px 12px rgba(0, 20, 50, 0.75);
+  pointer-events: none;
+}
+.desktop-hint strong { color: #fff; }
+.desktop.has-windows .desktop-hint { display: none; }
+
 /* ── ボタン ───────────────────────────────────────────────── */
 .btn {
   display: inline-flex;
