@@ -483,6 +483,55 @@ class DevApiTests(unittest.TestCase):
         self.assertIn(response.status_code, (400, 404))
 
 
+class ExternalFailureTests(unittest.TestCase):
+    """外部APIが応答しないときに、原因が分かる形で残ること。
+
+    TimeoutError は str() が空になるため、素朴に "%s" で出すと理由の無いログに
+    なってしまう。型名まで含めていることを確かめる。
+    """
+
+    def test_timeout_is_described_with_its_cause(self):
+        import asyncio as _asyncio
+
+        from webapp_admin.api.dev import describe_exception
+
+        described = describe_exception(_asyncio.TimeoutError(), timeout=10)
+        self.assertNotEqual(described.strip(), "")
+        self.assertIn("タイムアウト", described)
+        self.assertIn("10", described)
+
+    def test_unknown_exception_keeps_its_type_name(self):
+        from webapp_admin.api.dev import describe_exception
+
+        self.assertIn("ValueError", describe_exception(ValueError()))
+
+    def test_earthquake_endpoint_reports_the_reason(self):
+        import asyncio as _asyncio
+
+        client = make_client(user_id="4242")
+
+        class _FailingSession:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            def get(self, *args, **kwargs):
+                raise _asyncio.TimeoutError()
+
+        with patch("webapp_admin.api.dev.aiohttp.ClientSession", _FailingSession):
+            response = client.get("/admin/api/dev/earthquakes")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["events"], [])
+        self.assertIn("タイムアウト", payload["error"])
+
+
 class LegacyUrlTests(unittest.TestCase):
     """旧ページのURLはデスクトップの該当ウィンドウへ寄せる。"""
 

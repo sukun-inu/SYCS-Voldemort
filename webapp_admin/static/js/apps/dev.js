@@ -193,6 +193,7 @@ function earthquakeTab() {
   const loadButton = actionButton("直近の地震を取得", "bi-arrow-clockwise", async () => {
     clear(historyList).append(loading());
     const result = await api.get(`${BASE}/earthquakes`);
+    // サーバは失敗しても200で返す（理由は error に入る）。原因を画面にも出す。
     clear(historyList).append(
       rows(
         result.events,
@@ -208,7 +209,7 @@ function earthquakeTab() {
               onclick: () => { eventJson.value = event.json; toast("JSONを読み込みました", "success", { duration: 2000 }); },
             }, "選ぶ")
           ),
-        "取得できませんでした。"
+        result.error ? `取得できませんでした: ${result.error}` : "地震情報がありません。"
       )
     );
     return null;

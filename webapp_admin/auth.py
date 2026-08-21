@@ -179,7 +179,15 @@ async def get_guild_channels(guild_id: int) -> list[dict]:
                     [c for c in await resp.json() if c.get("type") == 0],
                     key=lambda c: c.get("position", 0),
                 )
-    except Exception:
+    except Exception as exc:
+        # 黙って空を返すと、画面には「一覧を取得できませんでした」とだけ出て
+        # 原因が追えない。理由を必ずログへ残す。
+        from webapp_admin.api.dev import describe_exception
+
+        logger.warning(
+            "チャンネル一覧の取得に失敗 guild_id=%s: %s", guild_id,
+            describe_exception(exc, timeout=_TIMEOUT.total),
+        )
         return []
 
 
@@ -196,7 +204,15 @@ async def get_guild_voice_channels(guild_id: int) -> list[dict]:
                     [c for c in await resp.json() if c.get("type") == 2],
                     key=lambda c: c.get("position", 0),
                 )
-    except Exception:
+    except Exception as exc:
+        # 黙って空を返すと、画面には「一覧を取得できませんでした」とだけ出て
+        # 原因が追えない。理由を必ずログへ残す。
+        from webapp_admin.api.dev import describe_exception
+
+        logger.warning(
+            "ボイスチャンネル一覧の取得に失敗 guild_id=%s: %s", guild_id,
+            describe_exception(exc, timeout=_TIMEOUT.total),
+        )
         return []
 
 
@@ -263,5 +279,13 @@ async def get_guild_roles(guild_id: int) -> list[dict]:
                     [r for r in await resp.json() if r.get("name") != "@everyone"],
                     key=lambda r: -r.get("position", 0),
                 )
-    except Exception:
+    except Exception as exc:
+        # 黙って空を返すと、画面には「一覧を取得できませんでした」とだけ出て
+        # 原因が追えない。理由を必ずログへ残す。
+        from webapp_admin.api.dev import describe_exception
+
+        logger.warning(
+            "ロール一覧の取得に失敗 guild_id=%s: %s", guild_id,
+            describe_exception(exc, timeout=_TIMEOUT.total),
+        )
         return []
