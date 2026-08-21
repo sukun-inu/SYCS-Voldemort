@@ -591,6 +591,77 @@ class IconTests(unittest.TestCase):
         )
 
 
+class StylesheetTests(unittest.TestCase):
+    """テンプレートの class が、どこかの CSS で定義されていること。
+
+    Bootstrap を外したあとも `badge-soft` や `ms-2` のような当時のクラスが
+    残っていて、見た目だけが無言で崩れていた。名前の付け間違いも同じ形で出る。
+    """
+
+    ADMIN = Path(__file__).resolve().parent.parent / "webapp_admin"
+    # 見た目を持たない、JS からも引かない純粋な目印（意図して許すもの）
+    ALLOWED = {"public", "aero-page", "auth-page"}
+
+    def _class_names(self, text: str) -> set[str]:
+        import re
+
+        names: set[str] = set()
+        for attr in re.findall(r'class="([^"]*)"', text):
+            attr = re.sub(r"\{[%{].*?[%}]\}", " ", attr)  # Jinja の式は数えない
+            names.update(attr.split())
+        return names
+
+    def test_no_undefined_classes_in_templates(self):
+        import re
+
+        css = " ".join(
+            path.read_text(encoding="utf-8")
+            for path in (self.ADMIN / "static" / "css").glob("*.css")
+        )
+        js = " ".join(
+            path.read_text(encoding="utf-8")
+            for path in (self.ADMIN / "static" / "js").rglob("*.js")
+        )
+        defined = set(re.findall(r"\.([A-Za-z][\w-]*)", css))
+
+        unknown: dict[str, set[str]] = {}
+        for path in (self.ADMIN / "templates").glob("*.html"):
+            for name in self._class_names(path.read_text(encoding="utf-8")):
+                if name in defined or name in self.ALLOWED:
+                    continue
+                # JS が掴むためだけの目印は CSS に無くてよい
+                if f'"{name}"' in js or f"'{name}'" in js or f".{name}" in js:
+                    continue
+                unknown.setdefault(name, set()).add(path.name)
+
+        self.assertEqual(
+            unknown, {},
+            "CSS にもJSにも無い class がテンプレートに残っています: "
+            + ", ".join(f"{name}({'/'.join(sorted(files))})" for name, files in sorted(unknown.items())),
+        )
+
+    def test_public_pages_do_not_redefine_shared_classes(self):
+        """公開ページ用の CSS が、共通部品の名前を上書きしないこと。
+
+        以前 public.css が base.css の .row（汎用の横並び）をグリッドに
+        書き換えていて、公開ページで .row を使うと崩れる状態だった。
+        """
+        import re
+
+        css_dir = self.ADMIN / "static" / "css"
+        shared = set()
+        for name in ("base.css", "components.css"):
+            for selector in re.findall(r"^\s*\.([A-Za-z][\w-]*)\s*[,{]", (css_dir / name).read_text(encoding="utf-8"), re.M):
+                shared.add(selector)
+
+        public = (css_dir / "public.css").read_text(encoding="utf-8")
+        clashes = sorted(
+            name for name in re.findall(r"^\s*\.([A-Za-z][\w-]*)\s*[,{]", public, re.M)
+            if name in shared
+        )
+        self.assertEqual(clashes, [], f"共通クラスを公開ページ CSS が上書きしています: {clashes}")
+
+
 class DocsTests(unittest.TestCase):
     """ドキュメントの設定表がスキーマと一致していること。"""
 

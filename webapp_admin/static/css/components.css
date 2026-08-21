@@ -245,24 +245,40 @@
   gap: 8px;
   max-width: min(360px, calc(100vw - 32px));
 }
+/* 通知もガラス。下の壁紙やウィンドウが透けるが、
+   文字が乗る面だけは彩度と明度を持ち上げて読めるようにしておく。 */
 .toast {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-left-width: 3px;
-  border-radius: var(--radius);
-  background: var(--canvas-overlay);
-  box-shadow: var(--shadow-popover);
+  padding: 11px 13px;
+  border: 1px solid var(--glass-edge);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--toast-bg);
+  -webkit-backdrop-filter: var(--toast-blur);
+  backdrop-filter: var(--toast-blur);
+  box-shadow: var(--shadow-popover), inset 0 1px 0 var(--glass-highlight);
   font-size: 13px;
-  animation: toast-in .16s ease-out;
+  animation: toast-in .18s ease-out;
 }
+/* backdrop-filter が使えない環境では透かさない（読めなくなるため） */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .toast { background: var(--canvas-overlay); }
+}
+.toast > .grow { position: relative; z-index: 1; }
 .toast.success { border-left-color: var(--success); }
 .toast.danger { border-left-color: var(--danger); }
 .toast.info { border-left-color: var(--accent); }
-.toast-close { margin-left: auto; }
-@keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.toast > .icon { position: relative; z-index: 1; margin-top: 1px; flex: none; }
+.toast.success > .icon { color: var(--success); }
+.toast.danger > .icon { color: var(--danger); }
+.toast.info > .icon { color: var(--accent); }
+/* ガラスの上では薄い灰色が沈むので、地の文字色を使って少しだけ落とす */
+.toast-close { margin-left: auto; position: relative; z-index: 1; color: var(--fg); opacity: .55; }
+.toast-close:hover { opacity: 1; background: var(--glass-highlight); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
 
 /* ── メトリクス（システム監視） ───────────────────────────── */
 .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }

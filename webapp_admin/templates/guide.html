@@ -17,9 +17,9 @@
 
 <header class="topbar">
   <div class="topbar-inner">
-    <div class="topbar-leading">
+    <div>
       <a class="brand-link" href="{{ url_for('landing') }}">
-        <span class="brand-mark">
+        <span>
           <img class="brand-mark-image" src="{{ admin_asset_url('admin-icon.webp') }}" width="28" height="28" alt="">
         </span>
         <span class="brand-name">SYCS Voldemort</span>
@@ -78,32 +78,32 @@
 
   <!-- DJAudio-DL -->
   <div class="doc-section">
-    <h2>{{ icon('music-note-beamed') }}DJAudio-DL <span class="badge-soft accent ms-2">自動</span></h2>
+    <h2>{{ icon('music-note-beamed') }}DJAudio-DL <span class="chip accent">自動</span></h2>
     <p>管理者が設定した<strong>監視チャンネル</strong>に URL を貼るだけで MP3 ダウンロードリンクが送信されます。<strong>出力チャンネル</strong>を別途設定すると、リンクをそちらへ転送することもできます。</p>
-    <ol class="doc-steps">
+    <ol class="step-list">
       <li>管理者が設定した<strong>監視チャンネル</strong>に URL を貼り付けます。</li>
       <li>Bot が <strong>⏳ リアクション</strong>を付けて処理開始を知らせます。</li>
       <li>変換完了後、<strong>✅ リアクション</strong>と共に<strong>期限付きダウンロードリンク</strong>を送信します（出力チャンネル設定時はそちらへ）。</li>
     </ol>
     <h3>対応サービス</h3>
     <div class="doc-chips">
-      <span class="badge-soft success">YouTube / YouTube Music</span>
-      <span class="badge-soft success">SoundCloud</span>
-      <span class="badge-soft success">Bandcamp</span>
-      <span class="badge-soft success">ニコニコ動画</span>
-      <span class="badge-soft success">TikTok</span>
-      <span class="badge-soft success">汎用直リンク</span>
-      <span class="badge-soft danger">Spotify 非対応</span>
-      <span class="badge-soft danger">Apple Music 非対応</span>
-      <span class="badge-soft danger">Amazon Music 非対応</span>
+      <span class="chip success">YouTube / YouTube Music</span>
+      <span class="chip success">SoundCloud</span>
+      <span class="chip success">Bandcamp</span>
+      <span class="chip success">ニコニコ動画</span>
+      <span class="chip success">TikTok</span>
+      <span class="chip success">汎用直リンク</span>
+      <span class="chip danger">Spotify 非対応</span>
+      <span class="chip danger">Apple Music 非対応</span>
+      <span class="chip danger">Amazon Music 非対応</span>
     </div>
   </div>
 
   <!-- TTS 読み上げ -->
   <div class="doc-section">
-    <h2>{{ icon('soundwave') }}TTS 読み上げ<span class="badge-soft accent ms-2">自動</span></h2>
+    <h2>{{ icon('soundwave') }}TTS 読み上げ<span class="chip accent">自動</span></h2>
     <p>管理者が設定した<strong>読み上げチャンネル</strong>にメッセージを投稿すると、指定した<strong>VC で自動読み上げ</strong>されます。VC に誰かが入ると Bot も自動参加し、全員退出で自動退出します。</p>
-    <ol class="doc-steps">
+    <ol class="step-list">
       <li>管理者が <strong>Web 管理画面</strong> → TTS 読み上げ で VC チャンネルと読み上げチャンネルを設定し、有効にします。</li>
       <li>設定した読み上げチャンネルにメッセージを投稿するか、対象 VC に入室します。</li>
       <li>Bot が VC に自動参加し、メッセージを順番に読み上げます。</li>
@@ -135,7 +135,7 @@
         <p class="doc-cmd-desc">現在登録されている辞書の一覧を表示します。</p>
       </div>
     </div>
-    <div class="info-panel mt-3">
+    <div class="info-panel">
       <p class="info-panel-title">{{ icon('info-circle') }}読み上げのルール</p>
       URL は「URL」、メンションは「メンション」、カスタム絵文字は絵文字名に自動変換されます。
       メッセージが字数制限を超えた場合は「以下省略」と読まれます（上限は管理者が設定）。
@@ -144,7 +144,7 @@
 
   <!-- AI 会話 -->
   <div class="doc-section">
-    <h2>{{ icon('chat-dots-fill') }}AI 会話（ヴォルデモート）<span class="badge-soft accent ms-2">自動</span></h2>
+    <h2>{{ icon('chat-dots-fill') }}AI 会話（ヴォルデモート）<span class="chip accent">自動</span></h2>
     <p>管理者が指定した<strong>応答チャンネル</strong>にメッセージを送るだけで Bot が返信します。応答チャンネルが未設定の場合、すべてのチャンネルで反応します。</p>
     <ul>
       <li>直前のやりとりを踏まえた連続した対話が可能です。</li>
@@ -154,7 +154,7 @@
 
   <!-- 地震アラート -->
   <div class="doc-section">
-    <h2>{{ icon('activity') }}地震アラート<span class="badge-soft accent ms-2">自動</span></h2>
+    <h2>{{ icon('activity') }}地震アラート<span class="chip accent">自動</span></h2>
     <p>管理者が設定した通知チャンネルに地震情報をリアルタイムで通知します。</p>
     <ul>
       <li><strong>P2PQuake 連携</strong> — WebSocket で日本全国の地震情報をリアルタイム受信します。</li>
@@ -177,9 +177,9 @@
 
   <!-- 管理者向け -->
   <div class="doc-section">
-    <h2>{{ icon('shield-fill-check') }}管理者向け設定<span class="badge-soft danger ms-2">要管理者権限</span></h2>
+    <h2>{{ icon('shield-fill-check') }}管理者向け設定<span class="chip danger">要管理者権限</span></h2>
     <p>上記の自動機能はすべてサーバーの管理者が設定する必要があります。スラッシュコマンド（Discord 上）または <strong>Web 管理画面</strong>から設定できます。</p>
-    <div class="info-panel mt-3">
+    <div class="info-panel">
       <p class="info-panel-title">{{ icon('display') }}Web 管理画面でできること</p>
       各機能の送信先チャンネルや通知条件の設定、DJAudio のキャッシュ・クールダウン調整、ニュースフィードのキーワード管理、リアクションロールの絵文字とロールの紐づけ管理、TTS の VC・読み上げチャンネル・声・辞書管理、セキュリティ設定（信頼済みユーザー・バイパスロール）。
     </div>

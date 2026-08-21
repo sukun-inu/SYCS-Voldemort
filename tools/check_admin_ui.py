@@ -372,6 +372,23 @@ def main():
               page.locator('.window[data-app-id="djaudio"]').count() == 1
               and "open=" not in page.url, page.url)
 
+        # ── 通知（トースト） ──
+        toast = page.evaluate("""async () => {
+          const m = await import('/static/js/lib/toast.js');
+          const node = m.toast('設定を保存しました', 'success', { duration: 0 });
+          const s = getComputedStyle(node);
+          const alpha = (s.backgroundColor.match(/[\\d.]+/g) || [])[3];
+          return {
+            glass: s.backdropFilter !== 'none' || s.webkitBackdropFilter !== 'none',
+            alpha: alpha === undefined ? 1 : Number(alpha),
+            lens: node.classList.contains('lens'),
+            width: Math.round(node.getBoundingClientRect().width),
+          };
+        }""")
+        check("通知がガラス（背後が透ける）",
+              toast["glass"] and toast["alpha"] < 0.9 and toast["lens"],
+              f'不透明度 {toast["alpha"]:.2f} / 幅 {toast["width"]}px')
+
         # ── 公開ページ（新CSSへ移行済み） ──
         for path_, needle in [("/", ".landing-hero"), ("/guide", ".doc-wrap"),
                               ("/privacy", ".doc-section"), ("/terms", ".doc-section")]:
@@ -381,6 +398,40 @@ def main():
             check(f"公開ページ {path_}", visible and icons > 0, f'アイコン {icons} 個')
             if path_ == "/":
                 page.screenshot(path=SHOT_PUBLIC, full_page=False)
+
+                # 機能カードの枠が最後まで埋まっていること。
+                # 埋まらないセルが残ると、中身のない箱だけが罫線で描かれる。
+                tail = page.evaluate("""() => {
+                  const grid = document.querySelector('.feature-grid');
+                  const last = grid.lastElementChild;
+                  const g = grid.getBoundingClientRect(), l = last.getBoundingClientRect();
+                  const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').length;
+                  return { gap: Math.round(g.right - l.right), cols };
+                }""")
+                check("機能カードの枠に空きセルが残らない", tail["gap"] <= 2,
+                      f'{tail["cols"]} 列 / 右端の差 {tail["gap"]}px')
+
+            if path_ in ("/", "/guide"):
+                # 手順リスト。li を flex にすると、地の文と <strong> が
+                # それぞれ別の列に分かれて文章が崩れる（実際に壊れていた）。
+                steps = page.evaluate("""() => {
+                  const li = document.querySelector('.step-list li');
+                  if (!li) return null;
+                  const s = getComputedStyle(li);
+                  const marker = getComputedStyle(li, '::before');
+                  return {
+                    display: s.display,
+                    padding: parseFloat(s.paddingLeft),
+                    markerPosition: marker.position,
+                    lines: li.getClientRects().length,
+                  };
+                }""")
+                check(f"{path_} の手順が1つの文として流れる",
+                      steps is not None
+                      and steps["display"] not in ("flex", "grid", "inline-flex")
+                      and steps["markerPosition"] == "absolute"
+                      and steps["padding"] >= 24,
+                      f'display:{steps and steps["display"]} / 番号:{steps and steps["markerPosition"]}')
 
         # ログイン画面はセッションが無い状態でしか出ない（ある場合はデスクトップへ飛ぶ）
         anon = browser.new_context(viewport={"width": 1360, "height": 860})

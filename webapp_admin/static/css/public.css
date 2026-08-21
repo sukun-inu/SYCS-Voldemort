@@ -76,6 +76,12 @@ body.public {
   --invert-ink: #ffffff;
   --halo: radial-gradient(60% 100% at 50% 0%, rgba(0, 112, 243, 0.16), transparent 70%);
   --grid-line: rgba(0, 0, 0, 0.055);
+  --tone-accent: #0060df;
+  --tone-accent-edge: rgba(0, 96, 223, 0.32);
+  --tone-success: #0a7c3e;
+  --tone-success-edge: rgba(10, 124, 62, 0.32);
+  --tone-danger: #c62a2f;
+  --tone-danger-edge: rgba(198, 42, 47, 0.32);
 
   background: var(--bg);
   color: var(--ink);
@@ -97,6 +103,12 @@ body.public {
     --invert-ink: #000000;
     --halo: radial-gradient(60% 100% at 50% 0%, rgba(0, 112, 243, 0.28), transparent 70%);
     --grid-line: rgba(255, 255, 255, 0.06);
+    --tone-accent: #52a8ff;
+    --tone-accent-edge: rgba(82, 168, 255, 0.34);
+    --tone-success: #4cc38a;
+    --tone-success-edge: rgba(76, 195, 138, 0.34);
+    --tone-danger: #ff6369;
+    --tone-danger-edge: rgba(255, 99, 105, 0.34);
   }
 }
 
@@ -244,7 +256,6 @@ body.public .btn-lg { min-height: 46px; padding: 12px 22px; font-size: 15px; }
 
 /* ── セクション ───────────────────────────────────────────── */
 .landing-section { padding: 96px 0; border-top: 1px solid var(--hair); }
-.landing-section-last { border-bottom: 1px solid var(--hair); }
 .landing-section h2 {
   font-size: clamp(26px, 3.6vw, 38px);
   font-weight: 600;
@@ -273,33 +284,53 @@ body.public h3 { text-wrap: balance; }
   margin-bottom: 10px;
 }
 
-.landing-steps { display: flex; flex-direction: column; gap: 0; margin-top: 28px; counter-reset: step; border-top: 1px solid var(--hair); }
-.landing-steps li {
-  display: flex;
-  gap: 18px;
-  padding: 22px 4px;
-  border-bottom: 1px solid var(--hair);
+/* 手順リスト。番号は絶対配置の ::before で置く。
+   li を flex にすると、中の <strong> や地の文がそれぞれ列に分かれてしまう。 */
+.step-list {
+  list-style: none;
+  padding: 0;
+  margin-top: 18px;
+  counter-reset: step;
+}
+.step-list li {
+  position: relative;
+  padding-left: 34px;
   font-size: 15px;
   color: var(--ink-2);
-  line-height: 1.8;
+  line-height: 1.85;
 }
-.landing-steps li::before {
+.step-list li::before {
   counter-increment: step;
   content: counter(step, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 0;
+  line-height: inherit;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--ink-3);
-  flex: none;
-  padding-top: 3px;
 }
-.landing-steps strong { color: var(--ink); font-weight: 500; }
+.step-list strong { color: var(--ink); font-weight: 500; }
+.step-list > li + li { margin-top: 12px; }
 
+/* ランディングでは1手順ずつ罫線で区切る */
+.landing-steps { margin-top: 28px; border-top: 1px solid var(--hair); }
+.landing-steps li {
+  padding: 22px 4px 22px 38px;
+  border-bottom: 1px solid var(--hair);
+  line-height: 1.8;
+}
+.landing-steps li::before { left: 4px; top: 22px; }
+.landing-steps > li + li { margin-top: 0; }
+
+.landing-footer { border-top: 1px solid var(--hair); }
 .landing-footer-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: 10px 20px;
+  align-items: center;
   justify-content: center;
-  padding: 40px 24px 56px;
+  padding: 34px 24px 40px;
   font-size: 13.5px;
   color: var(--ink-3);
 }
@@ -307,7 +338,8 @@ body.public h3 { text-wrap: balance; }
 .landing-footer-links a:hover { color: var(--ink); }
 
 /* ── カード ───────────────────────────────────────────────── */
-.row {
+/* base.css の .row（汎用の横並び）とは別物なので、名前を分ける */
+.feature-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(272px, 1fr));
   margin-top: 32px;
@@ -315,7 +347,9 @@ body.public h3 { text-wrap: balance; }
   border-radius: 12px;
   overflow: hidden;
 }
-.row > * { min-width: 0; }
+.feature-grid > * { min-width: 0; }
+/* 最後の1枚で残りの列を埋める。埋まらないセルがあると枠だけが残ってしまう */
+.feature-grid > :last-child { grid-column: 1 / -1; }
 
 .feature-card {
   height: 100%;
@@ -326,6 +360,20 @@ body.public h3 { text-wrap: balance; }
   transition: background-color .15s ease;
 }
 .feature-card:hover { background: var(--bg-soft); }
+/* 全幅になる最後の1枚だけは横組みにする（縦組みだと右側が間延びする） */
+@media (min-width: 600px) {
+  .feature-grid > .feature-card:last-child {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .feature-grid > .feature-card:last-child .feature-card-icon { margin-bottom: 0; flex: none; }
+  .feature-grid > .feature-card:last-child h3 { margin-bottom: 4px; }
+  .feature-grid > .feature-card:last-child .feature-card-body { flex: 1 1 auto; min-width: 0; }
+  .feature-grid > .feature-card:last-child .feature-card-link { flex: none; margin-top: 0; }
+}
+.feature-card-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 14px; font-weight: 500; }
+.feature-card-link .icon { width: 14px; height: 14px; }
 .feature-card h3 {
   font-size: 16px;
   font-weight: 600;
@@ -347,9 +395,10 @@ body.public h3 { text-wrap: balance; }
 .feature-card-icon .icon { width: 17px; height: 17px; }
 
 /* ── 読み物ページ ─────────────────────────────────────────── */
-.doc-wrap { max-width: 780px; margin: 0 auto; padding: 0 24px 96px; }
+.doc-wrap { max-width: 780px; margin: 0 auto; padding: 0 24px 64px; }
 .doc-hero { text-align: center; padding: 84px 0 48px; }
-.doc-hero-logo img { border-radius: 18px; }
+.doc-hero-logo { margin-bottom: 22px; }
+.doc-hero-logo img { border-radius: 18px; display: inline-block; }
 .doc-hero h1 {
   font-size: clamp(30px, 5vw, 48px);
   font-weight: 600;
@@ -367,14 +416,16 @@ body.public h3 { text-wrap: balance; }
   margin-bottom: 14px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
 }
 .doc-section h2 .icon { margin-right: 0; width: 17px; height: 17px; }
 .doc-section h3 { font-size: 16px; font-weight: 600; margin: 26px 0 10px; letter-spacing: -0.02em; }
 .doc-section p { color: var(--ink-2); font-size: 15px; line-height: 1.9; margin-bottom: 14px; }
 .doc-section ul { list-style: none; padding: 0; color: var(--ink-2); font-size: 15px; line-height: 1.9; }
-.doc-section li { position: relative; padding-left: 18px; margin-bottom: 8px; }
-.doc-section li::before {
+/* ダッシュの行頭記号は ul のみ。ol（手順リスト）は番号を出すので巻き込まない */
+.doc-section ul > li { position: relative; padding-left: 18px; margin-bottom: 8px; }
+.doc-section ul > li::before {
   content: "";
   position: absolute;
   left: 2px;
@@ -403,41 +454,55 @@ body.public h3 { text-wrap: balance; }
   border-bottom: 1px solid var(--hair);
 }
 .doc-cmd-name { font-family: var(--font-mono); font-size: 13.5px; color: var(--ink); font-weight: 500; }
-.doc-cmd-desc { color: var(--ink-2); font-size: 14px; flex: 1 1 240px; }
+.doc-cmd-desc { color: var(--ink-2); font-size: 14px; flex: 1 1 320px; }
+/* 直後にセクションの罫線が来るので、リスト末尾の線は引かない（二重線に見える） */
+.doc-cmd-entry:last-child { border-bottom: none; padding-bottom: 4px; }
 
-.doc-steps { display: flex; flex-direction: column; gap: 14px; margin-top: 18px; counter-reset: docstep; }
-.doc-steps li { display: flex; gap: 14px; font-size: 15px; color: var(--ink-2); line-height: 1.85; }
-.doc-steps li::before {
-  counter-increment: docstep;
-  content: counter(docstep, decimal-leading-zero);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--ink-3);
-  flex: none;
-  padding-top: 3px;
-}
-
-.doc-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
-.doc-chips .chip {
+/* チップ。components.css の .chip は管理画面の配色なので、公開ページ側で塗り直す */
+body.public .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid var(--hair);
   background: var(--bg-soft);
   color: var(--ink-2);
   border-radius: var(--radius-pill);
   font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
   padding: 3px 11px;
+  white-space: nowrap;
 }
+/* 状態は左の点で示す。面を塗り分けると誌面がうるさくなる */
+body.public .chip::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .8;
+  flex: none;
+}
+body.public .chip.accent { color: var(--tone-accent); border-color: var(--tone-accent-edge); }
+body.public .chip.success { color: var(--tone-success); border-color: var(--tone-success-edge); }
+body.public .chip.danger { color: var(--tone-danger); border-color: var(--tone-danger-edge); }
+/* 見出しの中のチップは、見出しに引きずられて太らないように */
+body.public h2 .chip,
+body.public h3 .chip { font-size: 12px; position: relative; top: 1px; }
+
+.doc-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
 .doc-links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 26px; font-size: 14px; }
 .doc-legal {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   justify-content: center;
-  padding: 32px 24px 56px;
+  padding: 32px 24px 0;
   border-top: 1px solid var(--hair);
   color: var(--ink-3);
   font-size: 12.5px;
 }
-.doc-legal-sep { color: var(--hair-strong); }
+.doc-legal-sep { color: var(--ink-3); opacity: .6; }
 
 .info-panel {
   padding: 18px 20px;

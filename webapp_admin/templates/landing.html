@@ -55,9 +55,9 @@
 
 <header class="topbar">
   <div class="topbar-inner">
-    <div class="topbar-leading">
+    <div>
       <a class="brand-link" href="{{ url_for('landing') }}">
-        <span class="brand-mark">
+        <span>
           <img class="brand-mark-image" src="{{ admin_asset_url('admin-icon.webp') }}" width="28" height="28" alt="">
         </span>
         <span class="brand-name">SYCS Voldemort</span>
@@ -133,55 +133,46 @@
   <div class="landing-inner">
     <p class="landing-section-kicker">Features</p>
     <h2>主な機能</h2>
-    <div class="row g-3">
-      <div class="col-12 col-md-6 col-lg-4">
-        <div class="feature-card">
-          <div class="feature-card-icon">{{ icon('graph-up') }}</div>
-          <h3>貴金属価格</h3>
-          <p>金・銀・プラチナのリアルタイム価格を照会。グラム数を指定すると合計額も計算します。</p>
-        </div>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-card-icon">{{ icon('graph-up') }}</div>
+        <h3>貴金属価格</h3>
+        <p>金・銀・プラチナのリアルタイム価格を照会。グラム数を指定すると合計額も計算します。</p>
       </div>
-      <div class="col-12 col-md-6 col-lg-4">
-        <div class="feature-card">
-          <div class="feature-card-icon">{{ icon('chat-dots-fill') }}</div>
-          <h3>AI 会話</h3>
-          <p>ヴォルデモート卿の人格で問いに答えてやろう。会話の文脈を記憶した連続対話が可能。</p>
-        </div>
+      <div class="feature-card">
+        <div class="feature-card-icon">{{ icon('chat-dots-fill') }}</div>
+        <h3>AI 会話</h3>
+        <p>ヴォルデモート卿の人格で問いに答えてやろう。会話の文脈を記憶した連続対話が可能。</p>
       </div>
-      <div class="col-12 col-md-6 col-lg-4">
-        <div class="feature-card">
-          <div class="feature-card-icon">{{ icon('music-note-beamed') }}</div>
-          <h3>DJAudio-DL</h3>
-          <p>YouTube・SoundCloud 等の URL を貼るだけで MP3 ダウンロードリンクを自動返信。</p>
-        </div>
+      <div class="feature-card">
+        <div class="feature-card-icon">{{ icon('music-note-beamed') }}</div>
+        <h3>DJAudio-DL</h3>
+        <p>YouTube・SoundCloud 等の URL を貼るだけで MP3 ダウンロードリンクを自動返信。</p>
       </div>
-      <div class="col-12 col-md-6 col-lg-4">
-        <div class="feature-card">
-          <div class="feature-card-icon">{{ icon('activity') }}</div>
-          <h3>地震アラート</h3>
-          <p>P2PQuake 連携で日本全国の地震情報をリアルタイム通知。EEW・津波予報にも対応。</p>
-        </div>
+      <div class="feature-card">
+        <div class="feature-card-icon">{{ icon('activity') }}</div>
+        <h3>地震アラート</h3>
+        <p>P2PQuake 連携で日本全国の地震情報をリアルタイム通知。EEW・津波予報にも対応。</p>
       </div>
-      <div class="col-12 col-md-6 col-lg-4">
-        <div class="feature-card">
-          <div class="feature-card-icon">{{ icon('bell-fill') }}</div>
-          <h3>自動通知・管理</h3>
-          <p>VC 通知・ウェルカム／グッバイ・スティッキー・リアクションロール・Google News フィード。</p>
-        </div>
+      <div class="feature-card">
+        <div class="feature-card-icon">{{ icon('bell-fill') }}</div>
+        <h3>自動通知・管理</h3>
+        <p>VC 通知・ウェルカム／グッバイ・スティッキー・リアクションロール・Google News フィード。</p>
       </div>
-      <div class="col-12 col-md-6 col-lg-4">
-        <div class="feature-card">
-          <div class="feature-card-icon">{{ icon('soundwave') }}</div>
-          <h3>TTS 読み上げ</h3>
-          <p>テキストチャンネルのメッセージを VC で自動読み上げ。声・速度をユーザーごとに設定でき、読み替え辞書も搭載。</p>
-        </div>
+      <div class="feature-card">
+        <div class="feature-card-icon">{{ icon('soundwave') }}</div>
+        <h3>TTS 読み上げ</h3>
+        <p>テキストチャンネルのメッセージを VC で自動読み上げ。声・速度をユーザーごとに設定でき、読み替え辞書も搭載。</p>
       </div>
-      <div class="col-12 col-md-6 col-lg-4">
-        <div class="feature-card">
-          <div class="feature-card-icon">{{ icon('display') }}</div>
+      <div class="feature-card">
+        <div class="feature-card-icon">{{ icon('display') }}</div>
+        <div class="feature-card-body">
           <h3>Web 管理画面</h3>
           <p>Discord OAuth でログインするだけ。全機能の設定をブラウザから簡単に管理できます。</p>
         </div>
+        <a class="feature-card-link" href="{{ url_for('auth.login') }}">
+          管理画面を開く{{ icon('arrow-right') }}
+        </a>
       </div>
     </div>
   </div>
@@ -192,32 +183,24 @@
   <div class="landing-inner">
     <p class="landing-section-kicker">Get started</p>
     <h2>はじめ方</h2>
-    <ol class="doc-steps landing-steps">
-      <li>
-        <span>上部の<strong>招待ボタン</strong>から Bot をサーバーに追加します。管理者権限が必要です。</span>
-      </li>
-      <li>
-        <span><strong>管理画面</strong>に Discord アカウントでログインし、使いたい機能のチャンネルを設定します。</span>
-      </li>
-      <li>
-        <span>設定完了。Discord 上でコマンドを叩くか、URL を貼るだけで <strong>Bot が応答</strong>します。</span>
-      </li>
+    <ol class="step-list landing-steps">
+      <li>上部の<strong>招待ボタン</strong>から Bot をサーバーに追加します。管理者権限が必要です。</li>
+      <li><strong>管理画面</strong>に Discord アカウントでログインし、使いたい機能のチャンネルを設定します。</li>
+      <li>設定完了。Discord 上でコマンドを叩くか、URL を貼るだけで <strong>Bot が応答</strong>します。</li>
     </ol>
   </div>
 </section>
 
 <!-- Footer -->
-<section class="landing-section landing-section-last">
-  <div class="landing-inner">
-    <div class="doc-legal">
-      <a href="https://metals.kawasaki-n3t.f5.si/" target="_blank" rel="noopener noreferrer">貴金属価格トラッカー</a>
-      <span class="doc-legal-sep">·</span>
-      <a href="{{ url_for('terms') }}">利用規約</a>
-      <span class="doc-legal-sep">·</span>
-      <a href="{{ url_for('privacy') }}">プライバシーポリシー</a>
-    </div>
+<footer class="landing-footer">
+  <div class="landing-footer-links">
+    <a href="https://metals.kawasaki-n3t.f5.si/" target="_blank" rel="noopener noreferrer">貴金属価格トラッカー</a>
+    <span class="doc-legal-sep">·</span>
+    <a href="{{ url_for('terms') }}">利用規約</a>
+    <span class="doc-legal-sep">·</span>
+    <a href="{{ url_for('privacy') }}">プライバシーポリシー</a>
   </div>
-</section>
+</footer>
 <script src="{{ admin_asset_url('js/public.js') }}"></script>
 </body>
 </html>

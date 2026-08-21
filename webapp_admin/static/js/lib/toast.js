@@ -20,7 +20,7 @@ function stack() {
 export function toast(message, variant = "info", { duration = 4000 } = {}) {
   const node = el(
     "div",
-    { class: `toast ${variant}`, role: "status" },
+    { class: `toast lens ${variant}`, role: "status", "data-specular": "" },
     icon(ICONS[variant] || ICONS.info),
     el("div", { class: "grow", text: message }),
     el(
