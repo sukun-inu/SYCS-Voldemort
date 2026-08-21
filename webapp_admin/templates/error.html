@@ -1,31 +1,28 @@
-{% extends "base.html" %}
-{% block title %}エラー {{ code }}{% endblock %}
-{% block content %}
-
-<div class="error-view">
-  <section class="error-panel">
-    <div class="error-icon">
-      <i class="bi bi-exclamation-triangle-fill"></i>
-    </div>
-    <h1 class="error-code">{{ code }}</h1>
-    <h2 class="error-message">{{ message }}</h2>
-    <p class="page-description">リクエストを処理できませんでした。</p>
-
-    {% if description %}
-    <div class="info-panel mt-4 text-start">
-      <p class="mb-0">{{ description }}</p>
-    </div>
-    {% endif %}
-
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>エラー {{ code }} - SYCS Voldemort</title>
+  <link rel="icon" type="image/png"  href="{{ admin_asset_url('favicon.png') }}">
+  <link rel="icon" type="image/webp" href="{{ admin_asset_url('admin-icon.webp') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/tokens.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/base.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/components.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/page.css') }}">
+</head>
+<body>
+<main class="error-page">
+  <section class="error-card">
+    <p class="error-code">SYCS Voldemort · {{ code }}</p>
+    <h1 class="error-message">{{ message }}</h1>
+    <p class="muted small">{{ description or "リクエストを処理できませんでした。" }}</p>
     <div class="error-actions">
-      <a href="javascript:history.back()" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left me-2"></i>前のページに戻る
-      </a>
-      <a href="{{ url_for('dashboard.index') }}" class="btn btn-accent">
-        <i class="bi bi-house-fill me-2"></i>ダッシュボードへ戻る
-      </a>
+      <a class="btn" href="javascript:history.back()">{{ icon('arrow-left') }}前のページへ</a>
+      <a class="btn btn-primary" href="{{ url_for('dashboard.index') }}">{{ icon('house-fill') }}管理画面へ</a>
     </div>
   </section>
-</div>
-
-{% endblock %}
+</main>
+</body>
+</html>

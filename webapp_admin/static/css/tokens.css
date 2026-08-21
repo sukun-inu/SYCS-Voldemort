@@ -1,0 +1,87 @@
+/* ==========================================================================
+   デザイントークン
+   配色は従来の管理コンソール（GitHub Primer 準拠のフラットな配色）を引き継ぐ。
+   Bootstrap には依存しない。色・余白・角丸・重なり順はすべてここで定義する。
+   ========================================================================== */
+
+:root {
+  color-scheme: light dark;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN",
+    "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", Meiryo, Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "Cascadia Code", Consolas, "SFMono-Regular",
+    "Yu Gothic UI", monospace;
+
+  /* 面 */
+  --canvas: #ffffff;
+  --canvas-subtle: #f6f8fa;
+  --canvas-inset: #eef1f4;
+  --canvas-overlay: #ffffff;
+
+  /* 線 */
+  --border: #d0d7de;
+  --border-muted: #dce1e6;
+
+  /* 文字 */
+  --fg: #1f2328;
+  --fg-muted: #636c76;
+  --fg-subtle: #8c959f;
+
+  /* 意味を持つ色 */
+  --accent: #0969da;
+  --accent-hover: #0550ae;
+  --accent-soft: rgba(9, 105, 218, 0.08);
+  --success: #1a7f37;
+  --success-emphasis: #1f883d;
+  --success-soft: rgba(26, 127, 55, 0.10);
+  --danger: #d1242f;
+  --danger-soft: rgba(209, 36, 47, 0.10);
+  --attention: #9a6700;
+  --attention-soft: rgba(154, 103, 0, 0.12);
+
+  /* 立体 */
+  --shadow-window: 0 10px 28px rgba(31, 35, 40, 0.16);
+  --shadow-popover: 0 8px 24px rgba(140, 149, 159, 0.22);
+
+  --radius: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  --taskbar-height: 44px;
+  --titlebar-height: 36px;
+
+  --z-window: 10;
+  --z-taskbar: 1000;
+  --z-menu: 1100;
+  --z-toast: 1200;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #0d1117;
+    --canvas-subtle: #161b22;
+    --canvas-inset: #010409;
+    --canvas-overlay: #161b22;
+
+    --border: #30363d;
+    --border-muted: #21262d;
+
+    --fg: #e6edf3;
+    --fg-muted: #9198a1;
+    --fg-subtle: #6e7681;
+
+    --accent: #4493f8;
+    --accent-hover: #6cb6ff;
+    --accent-soft: rgba(68, 147, 248, 0.14);
+    --success: #3fb950;
+    --success-emphasis: #238636;
+    --success-soft: rgba(63, 185, 80, 0.14);
+    --danger: #f85149;
+    --danger-soft: rgba(248, 81, 73, 0.14);
+    --attention: #d29922;
+    --attention-soft: rgba(210, 153, 34, 0.16);
+
+    --shadow-window: 0 10px 28px rgba(1, 4, 9, 0.6);
+    --shadow-popover: 0 8px 24px rgba(1, 4, 9, 0.6);
+  }
+}

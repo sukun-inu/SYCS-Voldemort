@@ -62,6 +62,19 @@ python web_main.py
 
 ---
 
+## 4. 開発時の確認
+
+```bash
+python -m unittest discover -s tests -t .   # 管理UIの API テスト（DB 不要）
+python tools/check_admin_schema.py          # 設定スキーマと services の噛み合わせ
+python tools/check_admin_ui.py              # 管理画面を実ブラウザで操作して確認
+python tools/generate_admin_docs.py         # docs/ADMIN.ja.md の設定表を再生成
+```
+
+いずれも一時ディレクトリを `SETTINGS_DIR` にして動くため、本物の `settings.json` は変更しません。
+
+---
+
 ## ドキュメント
 
 | | |

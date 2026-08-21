@@ -1,0 +1,302 @@
+/* ==========================================================================
+   デスクトップ・ウィンドウ・タスクバー・スタートメニュー
+   ウィンドウの中身は iframe ではなく DOM。中身のスタイルは components.css。
+   ========================================================================== */
+
+body.desktop-body { overflow: hidden; }
+
+.desktop {
+  position: fixed;
+  inset: 0 0 var(--taskbar-height) 0;
+  overflow: hidden;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, var(--accent-soft), transparent 60%),
+    var(--canvas-subtle);
+}
+
+#window-layer { position: absolute; inset: 0; }
+
+.desktop-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: var(--fg-subtle);
+  font-size: 13px;
+  line-height: 2;
+  pointer-events: none;
+}
+.desktop-hint kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--canvas);
+  font-size: 11.5px;
+}
+.desktop.has-windows .desktop-hint { display: none; }
+
+/* ── ウィンドウ ───────────────────────────────────────────── */
+.window {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  min-width: 320px;
+  min-height: 200px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--canvas-overlay);
+  box-shadow: var(--shadow-window);
+  overflow: hidden;
+  z-index: var(--z-window);
+}
+.window.is-focused { border-color: var(--accent); }
+.window.is-minimized { display: none; }
+.window.is-maximized {
+  inset: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  border-radius: 0;
+  border-width: 0 0 1px 0;
+}
+
+.window-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 12px;
+  height: var(--titlebar-height);
+  flex: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--canvas-subtle);
+  cursor: grab;
+  user-select: none;
+}
+.window.is-maximized .window-titlebar { cursor: default; }
+.window-icon { color: var(--fg-muted); font-size: 13px; }
+.window-title { font-size: 13px; font-weight: 600; }
+.window-dirty { color: var(--attention); font-size: 11px; }
+.window-controls { margin-left: auto; display: flex; gap: 2px; }
+.window-control {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+.window-control:hover { background: var(--canvas-inset); color: var(--fg); }
+.window-control.close:hover { background: var(--danger); color: #fff; }
+
+.window-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 14px;
+  background: var(--canvas-subtle);
+}
+.window-body.is-plain { padding: 0; }
+.window-body iframe { width: 100%; height: 100%; border: 0; display: block; background: var(--canvas); }
+
+.window-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+}
+.window-resize::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--border);
+  border-bottom: 2px solid var(--border);
+}
+.window.is-maximized .window-resize { display: none; }
+
+/* ドラッグ中は中身がポインタを奪わないようにする */
+.desktop.is-interacting .window-body { pointer-events: none; }
+
+/* ── タスクバー ───────────────────────────────────────────── */
+.taskbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--taskbar-height);
+  z-index: var(--z-taskbar);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-top: 1px solid var(--border);
+  background: var(--canvas-overlay);
+}
+
+.start-button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--canvas-subtle);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.start-button:hover, .start-button[aria-expanded="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+.taskbar-apps { display: flex; align-items: center; gap: 6px; overflow-x: auto; flex: 1 1 auto; }
+.taskbar-app {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 190px;
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--canvas-subtle);
+  color: var(--fg-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.taskbar-app:hover { color: var(--fg); }
+.taskbar-app.is-active { color: var(--fg); border-color: var(--border); background: var(--canvas); font-weight: 600; }
+.taskbar-app.is-minimized { opacity: .65; }
+.taskbar-app span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.taskbar-tray { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.tray-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--fg-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.tray-button:hover { background: var(--canvas-inset); color: var(--fg); text-decoration: none; }
+.tray-avatar { width: 20px; height: 20px; border-radius: 50%; }
+.tray-fallback {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+.taskbar-clock { font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--fg-muted); padding: 0 4px; }
+
+/* ── メニュー（スタート / ユーザー） ──────────────────────── */
+.menu-backdrop { position: fixed; inset: 0; z-index: var(--z-menu); background: transparent; }
+
+.start-menu {
+  position: fixed;
+  left: 10px;
+  bottom: calc(var(--taskbar-height) + 8px);
+  z-index: calc(var(--z-menu) + 1);
+  width: min(460px, calc(100vw - 20px));
+  max-height: min(560px, calc(100vh - var(--taskbar-height) - 24px));
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--canvas-overlay);
+  box-shadow: var(--shadow-popover);
+  overflow: hidden;
+}
+.start-search { padding: 10px; border-bottom: 1px solid var(--border); }
+.start-groups { overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 14px; }
+.start-group-label {
+  font-size: 11px;
+  letter-spacing: .06em;
+  color: var(--fg-subtle);
+  padding: 0 4px 6px;
+}
+.start-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+.app-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--fg);
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+}
+.app-tile:hover, .app-tile:focus-visible { background: var(--accent-soft); border-color: var(--accent); }
+.app-tile-icon { font-size: 20px; color: var(--accent); position: relative; }
+.app-tile-badge {
+  position: absolute;
+  top: -6px;
+  right: -12px;
+  min-width: 17px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--danger);
+  color: #fff;
+  font-size: 10.5px;
+  line-height: 17px;
+}
+.start-empty { padding: 24px 12px; text-align: center; color: var(--fg-muted); font-size: 13px; }
+
+.menu {
+  position: fixed;
+  z-index: calc(var(--z-menu) + 1);
+  min-width: 200px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--canvas-overlay);
+  box-shadow: var(--shadow-popover);
+}
+.menu-header { padding: 6px 10px; font-size: 12px; color: var(--fg-subtle); }
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--fg);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.menu-item:hover { background: var(--canvas-inset); text-decoration: none; }
+
+/* ── 狭い画面: ウィンドウ比喩をやめて1画面1アプリにする ───── */
+@media (max-width: 760px) {
+  .window {
+    inset: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    border-radius: 0;
+    border-width: 0;
+  }
+  .window-resize { display: none; }
+  .taskbar-app { max-width: 130px; }
+  .start-menu { left: 0; right: 0; width: auto; border-radius: 0; }
+}

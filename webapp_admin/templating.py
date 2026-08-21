@@ -1,7 +1,10 @@
 import json as _json
 import os
+import re as _re
 import secrets
 from pathlib import Path
+
+from markupsafe import Markup
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
@@ -86,7 +89,22 @@ def _admin_asset_url(filename: str) -> str:
     return f"/static/{filename}?v={version}"
 
 
+_ICON_NAME = _re.compile(r"^[a-z0-9-]+$")
+
+
+def _icon(name: str, css_class: str = "icon") -> Markup:
+    """同梱スプライトを参照するアイコン。webfont は使わない。"""
+    ident = str(name).removeprefix("bi-")
+    if not _ICON_NAME.match(ident):
+        return Markup("")
+    return Markup(
+        f'<svg class="{css_class}" aria-hidden="true" focusable="false">'
+        f'<use href="/static/icons/sprite.svg#{ident}"></use></svg>'
+    )
+
+
 templates.env.globals["admin_asset_url"] = _admin_asset_url
+templates.env.globals["icon"] = _icon
 templates.env.filters["tojson"] = lambda v: _json.dumps(v, ensure_ascii=False)
 
 

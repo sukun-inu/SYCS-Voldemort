@@ -8,12 +8,12 @@
   <link rel="icon" type="image/png"  href="{{ admin_asset_url('favicon.png') }}">
   <link rel="icon" type="image/webp" href="{{ admin_asset_url('admin-icon.webp') }}">
   <link rel="apple-touch-icon"       href="{{ admin_asset_url('favicon.png') }}">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="{{ admin_asset_url('admin.css') }}">
-  <link rel="stylesheet" href="{{ admin_asset_url('guide.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/tokens.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/base.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/components.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/public.css') }}">
 </head>
-<body>
+<body class="public">
 
 <header class="topbar">
   <div class="topbar-inner">
@@ -27,12 +27,12 @@
     </div>
     <div class="topbar-actions">
       {% if invite_url %}
-      <a href="{{ invite_url }}" class="btn btn-sm btn-accent" target="_blank" rel="noopener noreferrer">
-        <i class="bi bi-plus-circle-fill"></i>Bot を招待
+      <a href="{{ invite_url }}" class="btn btn-sm btn-primary" target="_blank" rel="noopener noreferrer">
+        {{ icon('plus-circle-fill') }}Bot を招待
       </a>
       {% endif %}
-      <a href="{{ url_for('auth.login') }}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-gear-fill"></i>管理画面
+      <a href="{{ url_for('auth.login') }}" class="btn btn-sm">
+        {{ icon('gear-fill') }}管理画面
       </a>
     </div>
   </div>
@@ -51,7 +51,7 @@
 
   <!-- 一般コマンド -->
   <div class="doc-section">
-    <h2><i class="bi bi-terminal-fill"></i>誰でも使えるコマンド</h2>
+    <h2>{{ icon('terminal-fill') }}誰でも使えるコマンド</h2>
     <div class="doc-cmd">
       <div class="doc-cmd-entry">
         <div class="doc-cmd-name">/metal_gold [g] &nbsp; /metal_silver [g] &nbsp; /metal_platinum [g]</div>
@@ -78,7 +78,7 @@
 
   <!-- DJAudio-DL -->
   <div class="doc-section">
-    <h2><i class="bi bi-music-note-beamed"></i>DJAudio-DL <span class="badge-soft accent ms-2">自動</span></h2>
+    <h2>{{ icon('music-note-beamed') }}DJAudio-DL <span class="badge-soft accent ms-2">自動</span></h2>
     <p>管理者が設定した<strong>監視チャンネル</strong>に URL を貼るだけで MP3 ダウンロードリンクが送信されます。<strong>出力チャンネル</strong>を別途設定すると、リンクをそちらへ転送することもできます。</p>
     <ol class="doc-steps">
       <li>管理者が設定した<strong>監視チャンネル</strong>に URL を貼り付けます。</li>
@@ -101,7 +101,7 @@
 
   <!-- TTS 読み上げ -->
   <div class="doc-section">
-    <h2><i class="bi bi-soundwave"></i>TTS 読み上げ<span class="badge-soft accent ms-2">自動</span></h2>
+    <h2>{{ icon('soundwave') }}TTS 読み上げ<span class="badge-soft accent ms-2">自動</span></h2>
     <p>管理者が設定した<strong>読み上げチャンネル</strong>にメッセージを投稿すると、指定した<strong>VC で自動読み上げ</strong>されます。VC に誰かが入ると Bot も自動参加し、全員退出で自動退出します。</p>
     <ol class="doc-steps">
       <li>管理者が <strong>Web 管理画面</strong> → TTS 読み上げ で VC チャンネルと読み上げチャンネルを設定し、有効にします。</li>
@@ -136,7 +136,7 @@
       </div>
     </div>
     <div class="info-panel mt-3">
-      <p class="info-panel-title"><i class="bi bi-info-circle"></i>読み上げのルール</p>
+      <p class="info-panel-title">{{ icon('info-circle') }}読み上げのルール</p>
       URL は「URL」、メンションは「メンション」、カスタム絵文字は絵文字名に自動変換されます。
       メッセージが字数制限を超えた場合は「以下省略」と読まれます（上限は管理者が設定）。
     </div>
@@ -144,7 +144,7 @@
 
   <!-- AI 会話 -->
   <div class="doc-section">
-    <h2><i class="bi bi-chat-dots-fill"></i>AI 会話（ヴォルデモート）<span class="badge-soft accent ms-2">自動</span></h2>
+    <h2>{{ icon('chat-dots-fill') }}AI 会話（ヴォルデモート）<span class="badge-soft accent ms-2">自動</span></h2>
     <p>管理者が指定した<strong>応答チャンネル</strong>にメッセージを送るだけで Bot が返信します。応答チャンネルが未設定の場合、すべてのチャンネルで反応します。</p>
     <ul>
       <li>直前のやりとりを踏まえた連続した対話が可能です。</li>
@@ -154,7 +154,7 @@
 
   <!-- 地震アラート -->
   <div class="doc-section">
-    <h2><i class="bi bi-activity"></i>地震アラート<span class="badge-soft accent ms-2">自動</span></h2>
+    <h2>{{ icon('activity') }}地震アラート<span class="badge-soft accent ms-2">自動</span></h2>
     <p>管理者が設定した通知チャンネルに地震情報をリアルタイムで通知します。</p>
     <ul>
       <li><strong>P2PQuake 連携</strong> — WebSocket で日本全国の地震情報をリアルタイム受信します。</li>
@@ -165,7 +165,7 @@
 
   <!-- その他の自動機能 -->
   <div class="doc-section">
-    <h2><i class="bi bi-stars"></i>その他の自動機能</h2>
+    <h2>{{ icon('stars') }}その他の自動機能</h2>
     <ul>
       <li><strong>ウェルカム / グッバイ</strong> — メンバーの参加・退出時に設定したメッセージを自動送信します。</li>
       <li><strong>VC 通知</strong> — ボイスチャンネルへの参加・退出・移動を通知します。退出時は通話時間も表示します。</li>
@@ -177,17 +177,17 @@
 
   <!-- 管理者向け -->
   <div class="doc-section">
-    <h2><i class="bi bi-shield-fill-check"></i>管理者向け設定<span class="badge-soft danger ms-2">要管理者権限</span></h2>
+    <h2>{{ icon('shield-fill-check') }}管理者向け設定<span class="badge-soft danger ms-2">要管理者権限</span></h2>
     <p>上記の自動機能はすべてサーバーの管理者が設定する必要があります。スラッシュコマンド（Discord 上）または <strong>Web 管理画面</strong>から設定できます。</p>
     <div class="info-panel mt-3">
-      <p class="info-panel-title"><i class="bi bi-display"></i>Web 管理画面でできること</p>
+      <p class="info-panel-title">{{ icon('display') }}Web 管理画面でできること</p>
       各機能の送信先チャンネルや通知条件の設定、DJAudio のキャッシュ・クールダウン調整、ニュースフィードのキーワード管理、リアクションロールの絵文字とロールの紐づけ管理、TTS の VC・読み上げチャンネル・声・辞書管理、セキュリティ設定（信頼済みユーザー・バイパスロール）。
     </div>
   </div>
 
   <div class="doc-links">
-    <a href="https://metals.kawasaki-n3t.f5.si/" class="btn btn-outline-primary" target="_blank" rel="noopener noreferrer">
-      <i class="bi bi-graph-up"></i>貴金属価格トラッカー
+    <a href="https://metals.kawasaki-n3t.f5.si/" class="btn" target="_blank" rel="noopener noreferrer">
+      {{ icon('graph-up') }}貴金属価格トラッカー
     </a>
   </div>
 
@@ -198,7 +198,5 @@
   </div>
 
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

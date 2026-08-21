@@ -1,27 +1,27 @@
+import json
 import logging
 import os
-import secrets
-import json
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from webapp_admin.core.config import resolve_session_secret, settings_dir
+
 _LOG_FMT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-_log_dir = Path(os.getenv("SETTINGS_DIR", str(Path(__file__).parent.parent / "data"))) / "logs"
+_log_dir = settings_dir() / "logs"
 _log_dir.mkdir(parents=True, exist_ok=True)
 _fh = RotatingFileHandler(_log_dir / "admin.log", maxBytes=1_000_000, backupCount=3, encoding="utf-8")
 _fh.setFormatter(logging.Formatter(_LOG_FMT))
 logging.getLogger().addHandler(_fh)
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import RedirectResponse
 
-from webapp_admin.apps_registry import APP_PATH_TO_ID
+from webapp_admin.schema.registry import PATH_TO_ID
 from webapp_admin.extensions import limiter
-from webapp_admin.security import is_dev_user
 from webapp_admin.metrics import (
     record_error_response,
     record_exception,
@@ -94,52 +94,23 @@ def _sanitize_session_payload(session: dict) -> None:
         session.update(safe)
 
 
-def _get_or_create_secret_key() -> str:
-    env_secret = os.environ.get("ADMIN_FLASK_SECRET_KEY", "").strip()
-    if env_secret:
-        return env_secret
+def _register_legacy_redirects(app: FastAPI) -> None:
+    from webapp_admin.schema.registry import PANELS
+    from webapp_admin.security import check_guild
 
-    settings_dir = Path(os.getenv("SETTINGS_DIR", str(Path(__file__).parent.parent / "data")))
-    secret_file = settings_dir / ".admin_session_secret"
+    def _make_handler(app_id: str):
+        async def handler(request: Request, _=Depends(check_guild)):
+            return RedirectResponse(f"/admin/overview#{app_id}", status_code=303)
 
-    try:
-        content = secret_file.read_text(encoding="utf-8").strip()
-        if len(content) >= 32:
-            return content
-    except OSError:
-        pass
+        return handler
 
-    new_secret = secrets.token_hex(32)
-    try:
-        settings_dir.mkdir(parents=True, exist_ok=True)
-        fd = os.open(str(secret_file), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(new_secret)
-        logger.info("セッションシークレットをファイルに保存しました: %s", secret_file)
-        return new_secret
-    except FileExistsError:
-        try:
-            content = secret_file.read_text(encoding="utf-8").strip()
-            if len(content) >= 32:
-                return content
-        except OSError:
-            pass
-    except OSError as e:
-        logger.warning(
-            "セッションシークレットの保存に失敗しました (%s)。"
-            "マルチワーカー環境では ADMIN_FLASK_SECRET_KEY を設定してください。",
-            e,
-        )
-
-    logger.warning(
-        "ADMIN_FLASK_SECRET_KEY が未設定でファイル保存も失敗しました。"
-        "一時キーを使用します。再起動またはワーカー切り替えでセッションが失われます。"
-    )
-    return new_secret
+    for panel in PANELS:
+        if panel.path:
+            app.add_api_route(panel.path, _make_handler(panel.id), methods=["GET"], include_in_schema=False)
 
 
 def create_app() -> FastAPI:
-    secret = _get_or_create_secret_key()
+    secret = resolve_session_secret()
 
     app = FastAPI(docs_url=None, redoc_url=None)
     app.state.limiter = limiter
@@ -149,19 +120,21 @@ def create_app() -> FastAPI:
 
     from webapp_admin.views.auth_views import router as auth_router
     from webapp_admin.views.dashboard_views import router as dashboard_router
-    from webapp_admin.views.dev_views import router as dev_router
-    from webapp_admin.views.djaudio_views import router as djaudio_router
-    from webapp_admin.views.settings_views import router as settings_router
-    from webapp_admin.views.tts_views import router as tts_router
+    from webapp_admin.api.apps import router as apps_api_router
+    from webapp_admin.api.dev import router as dev_api_router
+    from webapp_admin.api.users import router as users_api_router
     from services.djaudio_cdn import dlaudio_router
 
     app.include_router(auth_router, prefix="/admin")
     app.include_router(dashboard_router, prefix="/admin")
-    app.include_router(dev_router, prefix="/admin/dev")
-    app.include_router(settings_router, prefix="/admin/settings")
-    app.include_router(djaudio_router, prefix="/admin/settings")
-    app.include_router(tts_router, prefix="/admin/settings")
+    app.include_router(apps_api_router, prefix="/admin/api")
+    app.include_router(users_api_router, prefix="/admin/api")
+    app.include_router(dev_api_router, prefix="/admin/api/dev")
     app.include_router(dlaudio_router, prefix="/dlaudio")
+
+    # 旧ページのURL（/admin/settings/... など）はブックマークやリンクが残っているので、
+    # デスクトップ上の該当ウィンドウを開く形へ寄せる。対応表はパネル定義から作る。
+    _register_legacy_redirects(app)
 
     from webapp_admin.auth import DISCORD_CLIENT_ID, get_bot_guild_count
 
@@ -253,24 +226,6 @@ def create_app() -> FastAPI:
         )
 
     @app.middleware("http")
-    async def desktop_redirect_middleware(request: Request, call_next):
-        # 設定ページ等（apps_registry に登録されたパス）へ直接アクセスされた場合、
-        # 旧来のサイドバー単独表示ではなく必ずデスクトップ+ウィンドウへ集約する。
-        # デスクトップのウィンドウ(<iframe>)内からの遷移は Sec-Fetch-Dest: iframe になるため対象外。
-        # このヘッダ自体が送られてこない（対応していない）クライアントは、埋め込み中かどうか
-        # 判別できないので安全側に倒して従来どおり素通しする（リダイレクトループを避けるため）。
-        if request.method == "GET":
-            app_id = APP_PATH_TO_ID.get(request.url.path)
-            sec_fetch_dest = request.headers.get("sec-fetch-dest", "").lower()
-            if app_id and sec_fetch_dest and sec_fetch_dest != "iframe":
-                # 開発者パネルは通常のログイン/ギルド選択より厳しい認可（DEV_USER_ID一致）が
-                # 追加でかかっている。権限が無いユーザーをここで一律デスクトップへ流してしまうと、
-                # 本来返るべき403/404が握りつぶされてしまうため、その場合だけ素通しする。
-                if app_id != "dev" or is_dev_user(request):
-                    return RedirectResponse(f"/admin/overview?open={app_id}", status_code=303)
-        return await call_next(request)
-
-    @app.middleware("http")
     async def metrics_middleware(request: Request, call_next):
         client_ip = request.headers.get("CF-Connecting-IP") or (
             request.client.host if request.client else "unknown"
@@ -303,21 +258,23 @@ def create_app() -> FastAPI:
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
         response.headers["X-Content-Type-Options"] = "nosniff"
-        # デスクトップUIは設定ページを同一オリジンの<iframe>としてウィンドウ表示するため、
-        # 完全拒否(DENY)ではなく同一オリジンのみ許可(SAMEORIGIN)にする。
-        # 第三者サイトによるクリックジャッキング対策としての効果は維持される。
-        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        # iframe を使わなくなったので、埋め込みは全面的に拒否できる。
+        response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         if secure:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        # CDN からのスクリプト/スタイル読み込みは廃止した（アイコンも同梱スプライト）。
+        # 残る外部は Discord のアバター画像と、Cloudflare が注入する計測スクリプトのみ。
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; "
-            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "script-src 'self' https://static.cloudflareinsights.com; "
+            "style-src 'self'; "
             "img-src 'self' https://cdn.discordapp.com data:; "
-            "font-src 'self' https://cdn.jsdelivr.net; "
-            "connect-src 'self' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; "
-            "frame-ancestors 'self'"
+            "font-src 'self'; "
+            "connect-src 'self' https://static.cloudflareinsights.com; "
+            "base-uri 'none'; "
+            "form-action 'self'; "
+            "frame-ancestors 'none'"
         )
         return response
 

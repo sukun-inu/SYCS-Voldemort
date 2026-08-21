@@ -31,7 +31,7 @@
 - 保持期間は既定10年（`USER_STATE_RETENTION_DAYS=3650`）で、古い履歴は定期削除
 - 価格データDB（`POSTGRES_DB`）とは別DB（既定 `USER_STATE_POSTGRES_DB=user_state_audit`）で管理可能
 - DB不整合時はテーブル再生成を試み、定期突合で同期ズレ（在籍/BAN/Timeout/JSON破損）を自動補正
-- 管理UIの `/admin/users/state` で検索・閲覧可能
+- 管理UIの「ユーザー状態監査」アプリで検索・閲覧可能（旧URL `/admin/users/state` からも開けます）
 
 ### 1.4 ウェルカム / グッバイ
 - 参加/退出時の自動メッセージ
@@ -126,6 +126,10 @@
 - Push 通知（PWA）
 
 ### 1.15 機能と管理導線（早見表）
+
+管理 UI 側の URL は、開くとデスクトップ上の該当ウィンドウが立ち上がります
+（`/admin/overview#tts` のようにハッシュでも同じ画面を直接開けます）。
+
 | 機能 | Discord 側 | 管理 UI 側 |
 |---|---|---|
 | ログ / AI 応答チャンネル | `/log_channel_set` `/log_level_set` `/chat_channel_set` `/chat_channel_clear` | `/admin/settings/logging` |

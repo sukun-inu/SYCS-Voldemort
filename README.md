@@ -52,6 +52,19 @@ python web_main.py     # web tracker
 Docker Compose and the full environment-variable reference are in
 [docs/SETUP.ja.md](docs/SETUP.ja.md).
 
+## Checks during development
+
+```bash
+python -m unittest discover -s tests -t .   # Admin API tests (no DB needed)
+python tools/check_admin_schema.py          # Settings schema vs. services wiring
+python tools/check_admin_ui.py              # Drive the admin desktop in a real browser
+python tools/generate_admin_docs.py         # Regenerate the settings table in docs/ADMIN.ja.md
+```
+
+All of them run against a temporary `SETTINGS_DIR`, so your real `settings.json` is left alone.
+
+---
+
 ## Documentation
 
 | | |

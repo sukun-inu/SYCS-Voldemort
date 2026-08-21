@@ -8,12 +8,12 @@
   <link rel="icon" type="image/png"  href="{{ admin_asset_url('favicon.png') }}">
   <link rel="icon" type="image/webp" href="{{ admin_asset_url('admin-icon.webp') }}">
   <link rel="apple-touch-icon"       href="{{ admin_asset_url('favicon.png') }}">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="{{ admin_asset_url('admin.css') }}">
-  <link rel="stylesheet" href="{{ admin_asset_url('guide.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/tokens.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/base.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/components.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/public.css') }}">
 </head>
-<body>
+<body class="public">
 
 <header class="topbar">
   <div class="topbar-inner">
@@ -26,11 +26,11 @@
       </a>
     </div>
     <div class="topbar-actions">
-      <a href="{{ url_for('guide') }}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-book"></i>使い方ガイド
+      <a href="{{ url_for('guide') }}" class="btn btn-sm">
+        {{ icon('book') }}使い方ガイド
       </a>
-      <a href="{{ url_for('auth.login') }}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-gear-fill"></i>管理画面
+      <a href="{{ url_for('auth.login') }}" class="btn btn-sm">
+        {{ icon('gear-fill') }}管理画面
       </a>
     </div>
   </div>
@@ -45,7 +45,7 @@
   </div>
 
   <div class="doc-section">
-    <h2><i class="bi bi-check-circle-fill"></i>規約への同意</h2>
+    <h2>{{ icon('check-circle-fill') }}規約への同意</h2>
     <p>
       SYCS Voldemort（以下「本 Bot」）をご利用いただくことで、本利用規約に同意したものとみなします。
       同意いただけない場合は、本 Bot のご利用をお控えください。
@@ -53,7 +53,7 @@
   </div>
 
   <div class="doc-section">
-    <h2><i class="bi bi-robot"></i>サービスの概要</h2>
+    <h2>{{ icon('robot') }}サービスの概要</h2>
     <p>本 Bot は Discord 上で以下の機能を提供します。</p>
     <ul>
       <li><strong>情報提供</strong> — 貴金属価格の表示、サーバー情報・ユーザー情報の確認、Google News フィードの自動投稿</li>
@@ -67,7 +67,7 @@
   </div>
 
   <div class="doc-section">
-    <h2><i class="bi bi-person-check-fill"></i>利用条件</h2>
+    <h2>{{ icon('person-check-fill') }}利用条件</h2>
 
     <h3>Discord 利用規約の遵守</h3>
     <p>
@@ -94,7 +94,7 @@
   </div>
 
   <div class="doc-section">
-    <h2><i class="bi bi-slash-circle-fill"></i>禁止事項</h2>
+    <h2>{{ icon('slash-circle-fill') }}禁止事項</h2>
     <ul>
       <li><strong>不正アクセス・改ざん</strong> — 本 Bot のシステムへの不正アクセス、リバースエンジニアリング、設定データの不正操作</li>
       <li><strong>監査データの不正利用</strong> — 本 Bot で取得した監査記録の不正取得、改ざん、第三者への無断公開・販売</li>
@@ -105,7 +105,7 @@
   </div>
 
   <div class="doc-section">
-    <h2><i class="bi bi-exclamation-triangle-fill"></i>免責事項</h2>
+    <h2>{{ icon('exclamation-triangle-fill') }}免責事項</h2>
 
     <h3>サービスの可用性</h3>
     <p>
@@ -129,7 +129,7 @@
   </div>
 
   <div class="doc-section">
-    <h2><i class="bi bi-arrow-clockwise"></i>規約の変更・終了</h2>
+    <h2>{{ icon('arrow-clockwise') }}規約の変更・終了</h2>
     <p>
       本利用規約は予告なく変更される場合があります。変更後に本 Bot を継続して利用した場合、変更後の規約に同意したものとみなします。
       また、運営者は予告なく本サービスを変更・停止・終了する権利を有します。
@@ -137,13 +137,11 @@
   </div>
 
   <div class="doc-links">
-    <a href="{{ url_for('privacy') }}" class="btn btn-outline-secondary">
-      <i class="bi bi-shield-check"></i>プライバシーポリシー
+    <a href="{{ url_for('privacy') }}" class="btn">
+      {{ icon('shield-check') }}プライバシーポリシー
     </a>
   </div>
 
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

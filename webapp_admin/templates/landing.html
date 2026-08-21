@@ -46,12 +46,12 @@
   <link rel="icon" type="image/png"   href="{{ admin_asset_url('favicon.png') }}">
   <link rel="icon" type="image/webp"  href="{{ admin_asset_url('admin-icon.webp') }}">
   <link rel="apple-touch-icon"        href="{{ admin_asset_url('favicon.png') }}">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="{{ admin_asset_url('admin.css') }}">
-  <link rel="stylesheet" href="{{ admin_asset_url('guide.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/tokens.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/base.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/components.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/public.css') }}">
 </head>
-<body>
+<body class="public">
 
 <header class="topbar">
   <div class="topbar-inner">
@@ -64,43 +64,41 @@
       </a>
     </div>
     <nav class="topbar-actions landing-nav-desktop" aria-label="メインナビゲーション">
-      <a href="{{ url_for('guide') }}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-book"></i>使い方ガイド
+      <a href="{{ url_for('guide') }}" class="btn btn-sm">
+        {{ icon('book') }}使い方ガイド
       </a>
       {% if invite_url %}
-      <a href="{{ invite_url }}" class="btn btn-sm btn-accent" target="_blank" rel="noopener noreferrer">
-        <i class="bi bi-plus-circle-fill"></i>招待
+      <a href="{{ invite_url }}" class="btn btn-sm btn-primary" target="_blank" rel="noopener noreferrer">
+        {{ icon('plus-circle-fill') }}招待
       </a>
       {% endif %}
-      <a href="{{ url_for('auth.login') }}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-gear-fill"></i>管理画面
+      <a href="{{ url_for('auth.login') }}" class="btn btn-sm">
+        {{ icon('gear-fill') }}管理画面
       </a>
     </nav>
     <button class="landing-menu-toggle"
             type="button"
             aria-label="メニューを開く"
-            data-bs-toggle="collapse"
-            data-bs-target="#landing-nav-mobile"
             aria-expanded="false"
             aria-controls="landing-nav-mobile">
-      <i class="bi bi-list"></i>
+      {{ icon('list') }}
     </button>
   </div>
 </header>
 
-<div class="collapse" id="landing-nav-mobile">
+<div id="landing-nav-mobile">
   <nav class="landing-mobile-nav" aria-label="モバイルナビゲーション">
     <div class="landing-mobile-nav-inner">
       <a href="{{ url_for('guide') }}" class="landing-mobile-nav-item">
-        <i class="bi bi-book"></i>使い方ガイド
+        {{ icon('book') }}使い方ガイド
       </a>
       {% if invite_url %}
       <a href="{{ invite_url }}" class="landing-mobile-nav-item accent" target="_blank" rel="noopener noreferrer">
-        <i class="bi bi-plus-circle-fill"></i>Bot をサーバーに招待
+        {{ icon('plus-circle-fill') }}Bot をサーバーに招待
       </a>
       {% endif %}
       <a href="{{ url_for('auth.login') }}" class="landing-mobile-nav-item">
-        <i class="bi bi-gear-fill"></i>管理画面にログイン
+        {{ icon('gear-fill') }}管理画面にログイン
       </a>
     </div>
   </nav>
@@ -115,17 +113,17 @@
   <p class="landing-hero-sub">ヴォルデモート卿がそなたのサーバーを支配する。<br>多機能 Discord Bot + Web 管理画面。</p>
   {% if guild_count and guild_count > 0 %}
   <div class="landing-stat">
-    <i class="bi bi-server"></i>{{ guild_count }} サーバーに導入済み
+    {{ icon('server') }}{{ guild_count }} サーバーに導入済み
   </div>
   {% endif %}
   <div class="landing-cta">
     {% if invite_url %}
-    <a href="{{ invite_url }}" class="btn btn-accent btn-lg" target="_blank" rel="noopener noreferrer">
-      <i class="bi bi-plus-circle-fill"></i>Bot をサーバーに招待
+    <a href="{{ invite_url }}" class="btn btn-primary btn-lg" target="_blank" rel="noopener noreferrer">
+      {{ icon('plus-circle-fill') }}Bot をサーバーに招待
     </a>
     {% endif %}
-    <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary btn-lg">
-      <i class="bi bi-gear-fill"></i>管理画面にログイン
+    <a href="{{ url_for('auth.login') }}" class="btn btn-lg">
+      {{ icon('gear-fill') }}管理画面にログイン
     </a>
   </div>
 </div>
@@ -138,49 +136,49 @@
     <div class="row g-3">
       <div class="col-12 col-md-6 col-lg-4">
         <div class="feature-card">
-          <div class="feature-card-icon"><i class="bi bi-graph-up"></i></div>
+          <div class="feature-card-icon">{{ icon('graph-up') }}</div>
           <h3>貴金属価格</h3>
           <p>金・銀・プラチナのリアルタイム価格を照会。グラム数を指定すると合計額も計算します。</p>
         </div>
       </div>
       <div class="col-12 col-md-6 col-lg-4">
         <div class="feature-card">
-          <div class="feature-card-icon"><i class="bi bi-chat-dots-fill"></i></div>
+          <div class="feature-card-icon">{{ icon('chat-dots-fill') }}</div>
           <h3>AI 会話</h3>
           <p>ヴォルデモート卿の人格で問いに答えてやろう。会話の文脈を記憶した連続対話が可能。</p>
         </div>
       </div>
       <div class="col-12 col-md-6 col-lg-4">
         <div class="feature-card">
-          <div class="feature-card-icon"><i class="bi bi-music-note-beamed"></i></div>
+          <div class="feature-card-icon">{{ icon('music-note-beamed') }}</div>
           <h3>DJAudio-DL</h3>
           <p>YouTube・SoundCloud 等の URL を貼るだけで MP3 ダウンロードリンクを自動返信。</p>
         </div>
       </div>
       <div class="col-12 col-md-6 col-lg-4">
         <div class="feature-card">
-          <div class="feature-card-icon"><i class="bi bi-activity"></i></div>
+          <div class="feature-card-icon">{{ icon('activity') }}</div>
           <h3>地震アラート</h3>
           <p>P2PQuake 連携で日本全国の地震情報をリアルタイム通知。EEW・津波予報にも対応。</p>
         </div>
       </div>
       <div class="col-12 col-md-6 col-lg-4">
         <div class="feature-card">
-          <div class="feature-card-icon"><i class="bi bi-bell-fill"></i></div>
+          <div class="feature-card-icon">{{ icon('bell-fill') }}</div>
           <h3>自動通知・管理</h3>
           <p>VC 通知・ウェルカム／グッバイ・スティッキー・リアクションロール・Google News フィード。</p>
         </div>
       </div>
       <div class="col-12 col-md-6 col-lg-4">
         <div class="feature-card">
-          <div class="feature-card-icon"><i class="bi bi-soundwave"></i></div>
+          <div class="feature-card-icon">{{ icon('soundwave') }}</div>
           <h3>TTS 読み上げ</h3>
           <p>テキストチャンネルのメッセージを VC で自動読み上げ。声・速度をユーザーごとに設定でき、読み替え辞書も搭載。</p>
         </div>
       </div>
       <div class="col-12 col-md-6 col-lg-4">
         <div class="feature-card">
-          <div class="feature-card-icon"><i class="bi bi-display"></i></div>
+          <div class="feature-card-icon">{{ icon('display') }}</div>
           <h3>Web 管理画面</h3>
           <p>Discord OAuth でログインするだけ。全機能の設定をブラウザから簡単に管理できます。</p>
         </div>
@@ -220,7 +218,6 @@
     </div>
   </div>
 </section>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ admin_asset_url('js/public.js') }}"></script>
 </body>
 </html>

@@ -1,51 +1,67 @@
-{% extends "base.html" %}
-{% block title %}サーバー選択{% endblock %}
-{% block content %}
-<div class="page-header">
-  <div>
-    <p class="page-kicker">サーバー</p>
-    <h1 class="page-title"><i class="bi bi-diagram-3-fill"></i>管理するサーバーを選択</h1>
-    <p class="page-description">管理者権限があり、Bot が参加しているサーバーを表示しています。</p>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>サーバー選択 - SYCS Voldemort</title>
+  <link rel="icon" type="image/png"  href="{{ admin_asset_url('favicon.png') }}">
+  <link rel="icon" type="image/webp" href="{{ admin_asset_url('admin-icon.webp') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/tokens.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/base.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/components.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/page.css') }}">
+</head>
+<body>
+<main class="page">
+  <div class="page-head">
+    <img class="page-brand" src="{{ admin_asset_url('admin-icon.webp') }}" width="28" height="28" alt="">
+    <h1 class="page-title">管理するサーバーを選択</h1>
   </div>
-</div>
+  <p class="page-desc">管理者権限があり、Bot が参加しているサーバーを表示しています。</p>
 
-{% if guilds %}
-<div class="guild-grid">
-  {% for guild in guilds %}
-  <form method="post" action="{{ url_for('dashboard.select_guild') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <input type="hidden" name="guild_id" value="{{ guild.id }}">
-    <button type="submit" class="guild-card-button">
-      <div class="guild-card">
-        {% if guild.icon %}
-        <img src="https://cdn.discordapp.com/icons/{{ guild.id }}/{{ guild.icon }}.webp?size=128"
-             class="guild-card-icon" width="56" height="56" alt="">
-        {% else %}
-        <div class="guild-icon-placeholder">{{ guild.name[0] }}</div>
-        {% endif %}
-        <div class="min-w-0">
-          <h2 class="guild-card-title">{{ guild.name }}</h2>
-          <div class="guild-card-meta">
-            <i class="bi bi-check-circle-fill"></i>
-            <span>管理可能</span>
-          </div>
-        </div>
-      </div>
-    </button>
-  </form>
-  {% endfor %}
-</div>
-
-{% else %}
-<div class="section-card">
-  <div class="empty-state">
-    <div>
-      <i class="bi bi-exclamation-triangle-fill"></i>
-      <h2 class="h5">管理可能なサーバーが見つかりません</h2>
-      <p class="mb-0">Bot が参加しているサーバーで管理者権限を確認してください。</p>
+  {% if messages %}
+  <div class="stack page-flash">
+    {% for cat, msg in messages %}
+    <div class="toast {{ 'danger' if cat in ('danger', 'error') else 'info' }}" role="status">
+      {{ icon('info-circle-fill') }}<div class="grow">{{ msg }}</div>
     </div>
+    {% endfor %}
   </div>
-</div>
-{% endif %}
+  {% endif %}
 
-{% endblock %}
+  {% if guilds %}
+  <div class="guild-grid">
+    {% for guild in guilds %}
+    <form method="post" action="{{ url_for('dashboard.select_guild') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="guild_id" value="{{ guild.id }}">
+      <button type="submit" class="guild-card">
+        {% if guild.icon %}
+        <img class="guild-avatar" src="https://cdn.discordapp.com/icons/{{ guild.id }}/{{ guild.icon }}.webp?size=128"
+             width="44" height="44" alt="">
+        {% else %}
+        <span class="guild-avatar-fallback">{{ guild.name[0] }}</span>
+        {% endif %}
+        <span class="grow">
+          <span class="guild-name truncate">{{ guild.name }}</span>
+          <span class="list-sub">管理可能</span>
+        </span>
+        {{ icon('chevron-right') }}
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">
+    管理可能なサーバーが見つかりません。Bot が参加しているサーバーで管理者権限を確認してください。
+  </div>
+  {% endif %}
+
+  <p class="page-desc page-footnote">
+    <a href="{{ url_for('auth.logout') }}">別のアカウントでログインする</a>
+  </p>
+</main>
+</body>
+</html>

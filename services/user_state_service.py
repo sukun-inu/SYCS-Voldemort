@@ -421,42 +421,49 @@ def _event_to_payload(row: UserStateEvent) -> dict[str, Any]:
     }
 
 
+def _apply_state_filter(stmt, guild_id: int, query: str | None):
+    """一覧と件数で同じ絞り込みを使うためのヘルパー。"""
+    stmt = stmt.where(UserStateCurrent.guild_id == int(guild_id))
+    q = (query or "").strip()
+    if not q:
+        return stmt
+
+    if q.isdigit():
+        return stmt.where(
+            or_(
+                UserStateCurrent.user_id == int(q),
+                cast(UserStateCurrent.user_id, String).like(f"{q}%"),
+            )
+        )
+
+    needle = f"%{q.lower()}%"
+    return stmt.where(
+        or_(
+            func.lower(UserStateCurrent.username).like(needle),
+            func.lower(UserStateCurrent.display_name).like(needle),
+        )
+    )
+
+
 async def list_recent_user_states(
     guild_id: int,
     *,
     query: str | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
     await ensure_user_state_db()
-    q = (query or "").strip()
     safe_limit = max(1, min(200, int(limit)))
+    safe_offset = max(0, int(offset))
     for attempt in range(2):
         async with SessionLocal() as session:
             try:
-                stmt = select(UserStateCurrent).where(UserStateCurrent.guild_id == int(guild_id))
-                if q:
-                    if q.isdigit():
-                        uid = int(q)
-                        stmt = stmt.where(
-                            or_(
-                                UserStateCurrent.user_id == uid,
-                                cast(UserStateCurrent.user_id, String).like(f"{q}%"),
-                            )
-                        )
-                    else:
-                        needle = f"%{q.lower()}%"
-                        stmt = stmt.where(
-                            or_(
-                                func.lower(UserStateCurrent.username).like(needle),
-                                func.lower(UserStateCurrent.display_name).like(needle),
-                            )
-                        )
-
+                stmt = _apply_state_filter(select(UserStateCurrent), guild_id, query)
                 stmt = stmt.order_by(
                     UserStateCurrent.last_event_at.desc().nullslast(),
                     UserStateCurrent.updated_at.desc().nullslast(),
                     UserStateCurrent.id.desc(),
-                ).limit(safe_limit)
+                ).limit(safe_limit).offset(safe_offset)
 
                 rows = (await session.scalars(stmt)).all()
                 return [_row_to_state_payload(r) for r in rows]
@@ -465,6 +472,21 @@ async def list_recent_user_states(
                     continue
                 logger.exception("[user_state_service] list_recent_user_states failed guild_id=%s", guild_id)
                 return []
+
+
+async def count_user_states(guild_id: int, *, query: str | None = None) -> int:
+    """絞り込み条件に一致する件数。ページ送りの総数表示に使う。"""
+    await ensure_user_state_db()
+    for attempt in range(2):
+        async with SessionLocal() as session:
+            try:
+                stmt = _apply_state_filter(select(func.count(UserStateCurrent.id)), guild_id, query)
+                return int((await session.scalar(stmt)) or 0)
+            except Exception as e:
+                if attempt == 0 and await _try_db_self_heal(context="count_user_states", exc=e):
+                    continue
+                logger.exception("[user_state_service] count_user_states failed guild_id=%s", guild_id)
+                return 0
 
 
 async def get_user_state_detail(

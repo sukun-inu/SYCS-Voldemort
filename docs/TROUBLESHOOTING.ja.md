@@ -44,8 +44,14 @@
 commands/      # スラッシュコマンド定義
 services/      # Bot/Web 共通サービスロジック
 webapp_admin/  # FastAPI 管理 UI
+  schema/      #   設定の宣言（何が設定できるかの単一の情報源）
+  api/         #   JSON API（設定・ユーザー状態監査・開発者パネル）
+  views/       #   HTML を返すのはシェルとギルド選択だけ
+  static/js/   #   デスクトップUI（ウィンドウ管理 / フォーム生成）
 webapp/        # FastAPI Web トラッカー
 migrations/    # DB マイグレーション
+tests/         # 管理UIの API テスト
+tools/         # 検証・生成コマンド（check_admin_*.py / generate_admin_docs.py）
 ```
 
 ---
