@@ -40,11 +40,17 @@ async def _roles(guild_id: int) -> list[dict[str, str]]:
     ]
 
 
+# 声一覧は画面を開くたびに取りに行く。応答が返らない相手だと、その間ずっと
+# パネルが「読み込み中」で止まるため、短めに見切る（取れなければ手入力になる）。
+_VOICES_TIMEOUT = 3.0
+
+
 async def _tts_voices(guild_id: int) -> list[dict[str, str]]:
     # tts_service は discord.py を読み込むため、必要になった時だけ import する。
     from services.tts_service import fetch_voices
 
-    return [{"value": v, "label": v} for v in await fetch_voices()]
+    voices = await asyncio.wait_for(fetch_voices(), timeout=_VOICES_TIMEOUT)
+    return [{"value": v, "label": v} for v in voices]
 
 
 _RESOLVERS: dict[ChoiceSource, Callable[[int], Awaitable[list[dict[str, str]]]]] = {

@@ -155,7 +155,13 @@ export class Desktop {
   updateTaskbar() {
     for (const win of this.windows.values()) {
       if (!win.pill) continue;
-      win.pill.classList.toggle("is-active", this.focused === win && !win.minimized);
+      const active = this.focused === win && !win.minimized;
+      // 狭い画面ではピルの帯が横スクロールする。今使っているウィンドウの
+      // ピルが画面外にいると押せないので、見える位置まで送る。
+      if (active && !win.pill.classList.contains("is-active")) {
+        win.pill.scrollIntoView({ block: "nearest", inline: "nearest" });
+      }
+      win.pill.classList.toggle("is-active", active);
       win.pill.classList.toggle("is-minimized", win.minimized);
       const label = win.pill.querySelector("span");
       label.textContent = win.dirty ? `${win.title} ●` : win.title;

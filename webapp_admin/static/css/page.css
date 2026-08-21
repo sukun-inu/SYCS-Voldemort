@@ -33,6 +33,8 @@ body.aero-page {
 .page-desc a { color: #bfe2ff; }
 .page-flash { margin-bottom: 20px; }
 .page-footnote { margin-top: 28px; }
+/* 指で触れる大きさを確保する */
+.page-footnote a { display: inline-block; padding: 8px 2px; }
 
 /* ── サーバー選択 ─────────────────────────────────────────── */
 .guild-grid {

@@ -190,6 +190,8 @@ body.desktop-body { overflow: hidden; }
   display: flex;
   align-items: center;
   gap: 7px;
+  flex: none;            /* 縮むと「スタート」が縦に折れてしまう */
+  white-space: nowrap;
   padding: 5px 14px;
   border: 1px solid rgba(255, 255, 255, 0.42);
   border-radius: var(--radius-pill);
@@ -208,7 +210,18 @@ body.desktop-body { overflow: hidden; }
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 22px rgba(120, 200, 255, 0.7);
 }
 
-.taskbar-apps { display: flex; align-items: center; gap: 6px; overflow-x: auto; flex: 1 1 auto; }
+/* min-width:0 が無いと flex アイテムが縮まず、overflow-x が効かないまま
+   両隣（スタートボタン・トレイ）を画面外へ押し出す */
+.taskbar-apps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  scrollbar-width: none;
+}
+.taskbar-apps::-webkit-scrollbar { display: none; }
 .taskbar-app {
   display: flex;
   align-items: center;
@@ -234,7 +247,7 @@ body.desktop-body { overflow: hidden; }
 .taskbar-app.is-minimized { opacity: .6; }
 .taskbar-app span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.taskbar-tray { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.taskbar-tray { display: flex; align-items: center; gap: 6px; margin-left: auto; flex: none; }
 .tray-button {
   display: flex;
   align-items: center;
@@ -400,6 +413,12 @@ body.desktop-body { overflow: hidden; }
 
 /* ── 狭い画面: ウィンドウ比喩をやめて1画面1アプリにする ───── */
 @media (max-width: 760px) {
+  /* 画面幅が足りないので、意味の薄いものから畳む */
+  .taskbar-tray .tray-button > .truncate { display: none; }   /* サーバー名 */
+  .taskbar-app { max-width: 128px; }
+  /* 常に最大化されるため、最大化ボタンは押しても何も起きない */
+  .window-control.maximize { display: none; }
+
   .window {
     inset: 0 !important;
     width: auto !important;
@@ -410,10 +429,16 @@ body.desktop-body { overflow: hidden; }
   }
   .window-body { border-radius: 0; border-width: 1px 0 0; }
   .window-resize { display: none; }
-  .taskbar-app { max-width: 130px; }
   .start-menu { left: 0; right: 0; width: auto; border-radius: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .app-tile:hover { transform: none; }
+}
+
+@media (max-width: 430px) {
+  /* さらに狭い場合はスタートの文字を落としてアイコンだけにする */
+  .start-button { padding: 5px 10px; }
+  .start-button > span { display: none; }
+  .taskbar-clock { display: none; }
 }

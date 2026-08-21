@@ -83,6 +83,7 @@ PORT = 5099
 BASE = f"http://127.0.0.1:{PORT}"
 SHOT = str(Path(tempfile.gettempdir()) / "admin-desktop.png")
 SHOT_PUBLIC = str(Path(tempfile.gettempdir()) / "admin-public.png")
+SHOT_NARROW = str(Path(tempfile.gettempdir()) / "admin-narrow.png")
 
 failures = []
 
@@ -374,6 +375,38 @@ def main():
               and anon_page.locator(".icon").count() > 0,
               f'アイコン {anon_page.locator(".icon").count()} 個')
         anon.close()
+        # ── 狭い画面（スマートフォン相当） ──
+        narrow = browser.new_context(viewport={"width": 390, "height": 844})
+        narrow.add_cookies([
+            {"name": "admin_session", "value": session_cookie(), "domain": "127.0.0.1", "path": "/"}
+        ])
+        npage = narrow.new_page()
+        npage.goto(f"{BASE}/admin/overview", wait_until="networkidle")
+        npage.wait_for_selector(".app-tile", timeout=8000)
+        npage.click('.app-tile[data-app-id="logging"]')
+        npage.wait_for_selector(".window .section", timeout=8000)
+        npage.click("#start-button")
+        npage.click('.app-tile[data-app-id="welcome"]')
+        npage.wait_for_timeout(700)
+
+        start_box = npage.locator("#start-button").bounding_box()
+        check("狭い画面でスタートボタンが折れない", start_box["height"] < 40,
+              f'高さ {int(start_box["height"])}px')
+
+        bar = npage.locator(".taskbar").bounding_box()
+        tray = npage.locator(".taskbar-tray").bounding_box()
+        check("トレイが画面内に収まる", tray["x"] + tray["width"] <= bar["width"] + 2,
+              f'右端 {int(tray["x"] + tray["width"])} / 画面 {int(bar["width"])}')
+
+        check("常に最大化される画面では最大化ボタンを出さない",
+              npage.locator(".window-control.maximize").first.is_hidden())
+
+        win_box = npage.locator(".window").first.bounding_box()
+        check("窓が画面いっぱいに開く", win_box["width"] >= 388, f'{int(win_box["width"])}px')
+
+        npage.screenshot(path=str(SHOT_NARROW))
+        narrow.close()
+
         # この検証環境に由来するものは除外する:
         #   422 = 検証エラー表示のテストで意図的に出したもの
         #   500 = ユーザー状態監査ページが Postgres を必要とするため（埋め込み経路の確認が目的）
@@ -385,7 +418,7 @@ def main():
         browser.close()
 
     print()
-    print(f"スクリーンショット: {SHOT} / {SHOT_PUBLIC}")
+    print(f"スクリーンショット: {SHOT} / {SHOT_PUBLIC} / {SHOT_NARROW}")
     print("RESULT:", "all passed" if not failures else f"{len(failures)} 件失敗")
     return 1 if failures else 0
 
