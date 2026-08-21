@@ -210,6 +210,7 @@ def forecast_for_metal(
     fx_returns_by_date: dict[str, float] | None = None,
     recent_mae_pct: float | None = None,
     recent_coverage: float | None = None,
+    tilt_effect: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """1金属ぶんの予測レンジを組み立てる。履歴が足りなければ None。"""
     dated_series = parse_price_history(history_items)
@@ -398,6 +399,21 @@ def forecast_for_metal(
             "detail": f"まだ無し(信頼度の上限を {FORECAST_CONFIDENCE_CAP_WITHOUT_ACCURACY:.0%} に制限)",
         })
 
+    if tilt_effect:
+        improvement = safe_float(tilt_effect.get("improvement_pct"))
+        samples = int(safe_float(tilt_effect.get("samples")) or 0)
+        if improvement is not None and samples:
+            verdict = "改善" if improvement > 0 else ("悪化" if improvement < 0 else "変化なし")
+            breakdown.append({
+                "label": "シグナルの実績(何もしない場合との比較)",
+                "value_pct_per_day": None,
+                "role": "reference",
+                "detail": (
+                    f"直近{samples}件で誤差 {safe_float(tilt_effect.get('baseline_mae_pct')):.2f}% → "
+                    f"{safe_float(tilt_effect.get('model_mae_pct')):.2f}%({improvement:+.1f}% {verdict})"
+                ),
+            })
+
     if llm_rationale:
         breakdown.append({
             "label": "AI判定所見",
@@ -424,6 +440,7 @@ def forecast_for_metal(
         "interval_method": interval_method,
         "interval_samples": interval_samples,
         "interval_width_multiplier": round(interval_multiplier, 4),
+        "tilt_effect": tilt_effect or None,
         "confidence": round(confidence, 3),
         "implied_daily_return_pct": round(tilt * 100, 4),
         "model_variant": MODEL_VARIANT,

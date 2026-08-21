@@ -26,7 +26,7 @@ from services.url_safety import URLSafetyError, validate_public_http_url
 from .cache import TTLCache
 from .asset_version import render_index_html, render_service_worker
 from .db import SessionLocal, close_db, engine, init_db
-from .forecast_accuracy_service import reconcile_forecast_accuracy
+from .forecast_accuracy_service import load_recent_forecast_error, reconcile_forecast_accuracy
 from .forecast_service import load_stored_weekly_forecast, refresh_weekly_forecast_cache
 from .models import NotificationDispatch, PushSubscription
 from .push_service import (
@@ -533,6 +533,18 @@ async def reconcile_forecast_accuracy_job() -> None:
                     stats.get("matched", 0),
                     stats.get("unmatched", 0),
                 )
+                # 為替・ニュース・AI判定による傾きが、何もしない場合より良い結果を
+                # 出せているかをログに残す。これが常にマイナスなら傾きは外すべき。
+                accuracy = await load_recent_forecast_error(session)
+                for metal_key, effect in (accuracy.get("tilt_effect") or {}).items():
+                    logger.info(
+                        "シグナル有効性 metal=%s 予測MAE=%.3f%% 何もしない場合=%.3f%% 改善=%+.1f%% (n=%s)",
+                        metal_key,
+                        effect.get("model_mae_pct", 0.0),
+                        effect.get("baseline_mae_pct", 0.0),
+                        effect.get("improvement_pct", 0.0),
+                        effect.get("samples", 0),
+                    )
                 return
             except Exception as e:
                 await session.rollback()

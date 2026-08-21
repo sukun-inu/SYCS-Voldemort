@@ -29,6 +29,9 @@ async def record_forecast_snapshot(session: AsyncSession, payload: dict[str, Any
         if not isinstance(item, dict):
             continue
         model_variant = str(item.get("model_variant", "unknown"))
+        # 傾きを掛けない予測 = 予測時点の現在価格。tiltが有効かを後で比較するため一緒に残す。
+        baseline_decimal = as_decimal(safe_float(item.get("start_price_per_gram")), PRICE_SCALE)
+        tilt_decimal = as_decimal(safe_float(item.get("implied_daily_return_pct")), PCT_SCALE)
         daily = item.get("daily", []) if isinstance(item.get("daily"), list) else []
         for offset, daily_item in enumerate(daily, start=1):
             if not isinstance(daily_item, dict):
@@ -53,6 +56,8 @@ async def record_forecast_snapshot(session: AsyncSession, payload: dict[str, Any
                     predicted_price_per_gram=predicted_decimal,
                     lower_price_per_gram=lower_decimal,
                     upper_price_per_gram=upper_decimal,
+                    baseline_price_per_gram=baseline_decimal,
+                    tilt_pct_per_day=tilt_decimal,
                     model_variant=model_variant,
                 )
                 .on_conflict_do_update(
@@ -62,6 +67,8 @@ async def record_forecast_snapshot(session: AsyncSession, payload: dict[str, Any
                         "predicted_price_per_gram": predicted_decimal,
                         "lower_price_per_gram": lower_decimal,
                         "upper_price_per_gram": upper_decimal,
+                        "baseline_price_per_gram": baseline_decimal,
+                        "tilt_pct_per_day": tilt_decimal,
                         "model_variant": model_variant,
                     },
                 )
@@ -114,6 +121,11 @@ async def reconcile_forecast_accuracy(session: AsyncSession, *, max_rows: int = 
         actual_f = safe_float(actual)
         if predicted is not None and actual_f:
             row.error_pct = as_decimal(((predicted - actual_f) / actual_f) * 100, PCT_SCALE)
+        # 「傾きを掛けない予測」の誤差。これと error_pct を比べれば、為替・ニュース・
+        # AI判定による傾きが実際に役立っているかが分かる。
+        baseline = safe_float(row.baseline_price_per_gram)
+        if baseline is not None and actual_f:
+            row.baseline_error_pct = as_decimal(((baseline - actual_f) / actual_f) * 100, PCT_SCALE)
         # 実勢価格が予測区間に収まったか(区間予測の品質指標)。区間が無い旧行はNoneのまま。
         lower = safe_float(row.lower_price_per_gram)
         upper = safe_float(row.upper_price_per_gram)
@@ -145,7 +157,26 @@ async def load_recent_forecast_error(session: AsyncSession, *, lookback_days: in
         ForecastAccuracyLog.forecast_date <= today,
     )
 
+    # 予測とベースライン(傾き無し)を同じ行集合で比べる。片方だけの平均を取ると
+    # 対象行がずれて比較にならないため、両方が揃っている行だけを対象にする。
     mae_stmt = (
+        select(
+            ForecastAccuracyLog.metal_key,
+            func.avg(func.abs(ForecastAccuracyLog.error_pct)),
+            func.avg(func.abs(ForecastAccuracyLog.baseline_error_pct)),
+            func.count(),
+        )
+        .where(
+            *window,
+            ForecastAccuracyLog.error_pct.is_not(None),
+            ForecastAccuracyLog.baseline_error_pct.is_not(None),
+        )
+        .group_by(ForecastAccuracyLog.metal_key)
+    )
+    mae_rows = (await session.execute(mae_stmt)).all()
+
+    # ベースラインが未記録(0005以前の行)の場合でも、予測側のMAEだけは出せるようにする。
+    legacy_stmt = (
         select(
             ForecastAccuracyLog.metal_key,
             func.avg(func.abs(ForecastAccuracyLog.error_pct)),
@@ -153,7 +184,7 @@ async def load_recent_forecast_error(session: AsyncSession, *, lookback_days: in
         .where(*window, ForecastAccuracyLog.error_pct.is_not(None))
         .group_by(ForecastAccuracyLog.metal_key)
     )
-    mae_rows = (await session.execute(mae_stmt)).all()
+    legacy_rows = (await session.execute(legacy_stmt)).all()
 
     coverage_stmt = (
         select(
@@ -166,9 +197,27 @@ async def load_recent_forecast_error(session: AsyncSession, *, lookback_days: in
     )
     coverage_rows = (await session.execute(coverage_stmt)).all()
 
+    mean_abs_error_pct = {metal_key: float(mae) for metal_key, mae in legacy_rows if mae is not None}
+    baseline_mean_abs_error_pct = {
+        metal_key: float(base) for metal_key, _, base, _ in mae_rows if base is not None
+    }
+    # 傾きがベースラインをどれだけ改善したか(プラスなら改善、マイナスなら悪化)。
+    tilt_improvement_pct = {}
+    for metal_key, mae, base, count in mae_rows:
+        if mae is None or base is None or not base or not count:
+            continue
+        tilt_improvement_pct[metal_key] = {
+            "model_mae_pct": float(mae),
+            "baseline_mae_pct": float(base),
+            "improvement_pct": (1.0 - float(mae) / float(base)) * 100.0,
+            "samples": int(count),
+        }
+
     return {
         "lookback_days": lookback_days,
-        "mean_abs_error_pct": {metal_key: float(mae) for metal_key, mae in mae_rows if mae is not None},
+        "mean_abs_error_pct": mean_abs_error_pct,
+        "baseline_mean_abs_error_pct": baseline_mean_abs_error_pct,
+        "tilt_effect": tilt_improvement_pct,
         "coverage": {
             metal_key: float(hits) / float(total)
             for metal_key, total, hits in coverage_rows
