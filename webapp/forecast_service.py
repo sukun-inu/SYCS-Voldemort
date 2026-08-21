@@ -43,6 +43,7 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
     recent_accuracy = await load_recent_forecast_error(session)
     mae_by_metal = recent_accuracy.get("mean_abs_error_pct", {})
     coverage_by_metal = recent_accuracy.get("coverage", {})
+    tilt_effect_by_metal = recent_accuracy.get("tilt_effect", {})
 
     timeout = aiohttp.ClientTimeout(
         total=max(FORECAST_LLM_TIMEOUT_SECONDS + 10, 30),
@@ -92,6 +93,7 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
             # forecast_for_metal側で信頼度に上限を掛ける。
             recent_mae_pct=mae_by_metal.get(metal_key),
             recent_coverage=coverage_by_metal.get(metal_key),
+            tilt_effect=tilt_effect_by_metal.get(metal_key),
         )
         if item is not None:
             forecast[metal_key] = item
@@ -149,6 +151,8 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
                 "available": bool(mae_by_metal or coverage_by_metal),
                 "lookback_days": int(recent_accuracy.get("lookback_days", 14)),
                 "mean_abs_error_pct": mae_by_metal,
+                "baseline_mean_abs_error_pct": recent_accuracy.get("baseline_mean_abs_error_pct", {}),
+                "tilt_effect": tilt_effect_by_metal,
                 "coverage": coverage_by_metal,
             },
         },

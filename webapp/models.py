@@ -166,8 +166,15 @@ class ForecastAccuracyLog(Base):
     # 区間予測にとって被覆率は最も本質的な品質指標(名目80%なら実測も80%であるべき)。
     lower_price_per_gram: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     upper_price_per_gram: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    # 予測時点の現在価格(=傾きを掛けない「何もしない」予測)と、そのときの傾き。
+    # 為替・ニュース・AI判定による傾きが本当に役に立っているかは一度も検証されておらず、
+    # 過去の履歴を再現できないため後追いでも確かめられない。そこで予測のたびに
+    # ベースラインを一緒に記録し、答え合わせ時に両者の誤差を比較できるようにする。
+    baseline_price_per_gram: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    tilt_pct_per_day: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
     actual_price_per_gram: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     error_pct: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
+    baseline_error_pct: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
     within_interval: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
