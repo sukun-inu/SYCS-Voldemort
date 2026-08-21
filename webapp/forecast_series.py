@@ -17,18 +17,69 @@ from typing import Any, Sequence
 # MAD(中央絶対偏差)から標準偏差へ換算する定数。正規分布を仮定した標準的な係数。
 MAD_TO_SIGMA = 1.4826
 
-# 予測区間の幅にかける補正係数。
+# --- 予測区間の幅にかける補正係数 -------------------------------------------------
 #
-# 重複ありのhorizonリターン(例: 7日リターンを1日ずらしで集めたもの)は互いに強く
-# 自己相関しており、見かけの本数ほど情報量が無い。そのため標本分位点は裾を過小評価し、
-# 補正なしでは名目80%の区間の実測被覆率が66.7%にとどまった。
+# 重複ありのhorizonリターン(7日リターンを1日ずらしで集めたもの)は互いに強く自己相関
+# しており、見かけの本数ほど情報量が無い。そのため標本分位点は裾を過小評価し、補正なし
+# では名目80%の区間の実測被覆率が66.7%にとどまった。本番実データ102点で較正した結果、
+# サンプルが少ない今の局面では 1.35 が必要だった。
 #
-# 本番の実データ102点でウォークフォワード較正した結果、1.3で78.4%・1.4で81.4%となり、
-# その中間の1.35を既定値とした。較正と評価に同じ期間を使っている点は割り引いて見る
-# 必要があるため、tools/backtest_forecast.py で継続的に被覆率を確認すること。
+# ただしこの過小評価はサンプルが増えるほど解消する。合成データ(独立系列75本)で
+# サンプル数ごとの適正係数を測ると、7日リターンが150本を超えたあたりで補正不要
+# (m≈1.0)になり、1.35のまま放置すると被覆率が名目80%に対して90%まで広がってしまう。
+# 区間が広すぎると「だいたい何でも入る」ので実用価値が落ちる。
+#
+# そこで、
+#   (1) サンプル数に応じて 1.35 → 1.10 へ逓減させ、
+#   (2) さらに実測被覆率が得られたら、そのズレを使って自己補正する
+# という二段構えにする。(2) があるので、合成データで求めた (1) のカーブが多少ズレて
+# いても、運用しながら正しい幅へ収束する。実測被覆率は forecast_accuracy_log の
+# within_interval から供給される。
 FORECAST_INTERVAL_WIDTH_MULTIPLIER = max(
     0.5, float(os.getenv("FORECAST_INTERVAL_WIDTH_MULTIPLIER", "1.35"))
 )
+# 逓減の下限。合成データでは1.0まで下がってよいが、実データの裾は合成より重かったため、
+# 下げすぎて被覆不足になる方を避ける。
+FORECAST_INTERVAL_WIDTH_MULTIPLIER_MIN = max(
+    0.5, float(os.getenv("FORECAST_INTERVAL_WIDTH_MULTIPLIER_MIN", "1.10"))
+)
+# 逓減の開始・終了サンプル数(重複あり7日リターンの本数)。
+INTERVAL_MULTIPLIER_SMALL_N = 43    # 本番実データで1.35を較正したときの本数
+INTERVAL_MULTIPLIER_LARGE_N = 150   # 合成データで補正不要になった本数
+
+# 実測被覆率による自己補正の強さと可動範囲。被覆率が名目より高ければ幅を縮め、
+# 低ければ広げる。1回のリフレッシュで大きく動かさず、少しずつ収束させる。
+INTERVAL_COVERAGE_ADJUST_GAIN = 0.5
+INTERVAL_COVERAGE_ADJUST_BOUNDS = (0.85, 1.20)
+
+
+def interval_width_multiplier(
+    sample_count: int,
+    *,
+    measured_coverage: float | None = None,
+    nominal_prob: float = 0.8,
+) -> float:
+    """区間幅に掛ける補正係数を求める。
+
+    sample_count はhorizonリターンの本数。実測被覆率が渡された場合は、名目との
+    ズレに応じて係数を上下させる(被覆率が高すぎる=幅が広すぎるなら縮める)。
+    """
+    small, large = INTERVAL_MULTIPLIER_SMALL_N, INTERVAL_MULTIPLIER_LARGE_N
+    high, low = FORECAST_INTERVAL_WIDTH_MULTIPLIER, FORECAST_INTERVAL_WIDTH_MULTIPLIER_MIN
+    if sample_count <= small:
+        base = high
+    elif sample_count >= large:
+        base = low
+    else:
+        ratio = (sample_count - small) / (large - small)
+        base = high + (low - high) * ratio
+
+    if measured_coverage is None or not math.isfinite(measured_coverage):
+        return base
+
+    factor = 1.0 - INTERVAL_COVERAGE_ADJUST_GAIN * (measured_coverage - nominal_prob)
+    factor = min(max(factor, INTERVAL_COVERAGE_ADJUST_BOUNDS[0]), INTERVAL_COVERAGE_ADJUST_BOUNDS[1])
+    return base * factor
 
 # 経験分位点を使うために最低限必要な、重複ありhorizonリターンの本数。
 MIN_QUANTILE_SAMPLES = 20
@@ -134,10 +185,11 @@ def horizon_interval(
     *,
     horizon_days: int,
     interval_prob: float,
-) -> tuple[float, float, str, int]:
+    measured_coverage: float | None = None,
+) -> tuple[float, float, str, int, float]:
     """horizon日先の対数リターンの下限・上限を返す。
 
-    戻り値は (下限, 上限, 推定方法, サンプル数)。
+    戻り値は (下限, 上限, 推定方法, サンプル数, 使用した補正係数)。
 
     実測では正規分布を仮定した区間は過小だった(名目80%で実測被覆61.8%)ため、
     十分なサンプルがあるときは経験分位点を使う。足りないときだけ
@@ -150,8 +202,10 @@ def horizon_interval(
     非対称性(下方向に速く動きやすい等)は平均を除いても残るため保持される。
     """
     tail = max(0.0, min(0.5, (1.0 - interval_prob) / 2.0))
-    multiplier = FORECAST_INTERVAL_WIDTH_MULTIPLIER
     raw_samples = horizon_log_returns(series, horizon_days)
+    multiplier = interval_width_multiplier(
+        len(raw_samples), measured_coverage=measured_coverage, nominal_prob=interval_prob
+    )
     if len(raw_samples) >= MIN_QUANTILE_SAMPLES:
         mean = statistics.fmean(raw_samples)
         samples = sorted(value - mean for value in raw_samples)
@@ -160,14 +214,14 @@ def horizon_interval(
         # 値動きが乏しい期間では分位点が潰れて幅0の区間になりうる。幅0の区間は
         # 「必ず外れる」ため意味を成さないので、その場合は正規近似へ回す。
         if (upper - lower) > DEGENERATE_INTERVAL_EPSILON:
-            return lower, upper, "empirical", len(samples)
+            return lower, upper, "empirical", len(samples), multiplier
 
     sigma = robust_daily_sigma(returns)
     z = _normal_quantile(1.0 - tail)
     half_width = z * sigma * math.sqrt(horizon_days) * multiplier
     # σ自体がほぼ0(価格が動いていない)場合も、最低限の幅は確保しておく。
     half_width = max(half_width, MIN_INTERVAL_HALF_WIDTH)
-    return -half_width, half_width, "normal_approx", len(raw_samples)
+    return -half_width, half_width, "normal_approx", len(raw_samples), multiplier
 
 
 def _normal_quantile(prob: float) -> float:
