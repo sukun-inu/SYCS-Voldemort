@@ -245,10 +245,6 @@
   gap: 8px;
   max-width: min(360px, calc(100vw - 32px));
 }
-/* 中身が無いときは透明にする。display:none にすると大きさが取れず、
-   ガラス(WebGL)側が器を初期化できないため。 */
-.toast-stack { transition: opacity .2s ease; }
-.toast-stack:not(.has-toasts) { opacity: 0; pointer-events: none; }
 .toast {
   display: flex;
   align-items: flex-start;

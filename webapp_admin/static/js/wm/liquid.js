@@ -31,24 +31,6 @@ const WINDOW_GLASS = {
   shadowOffsetY: 16,
 };
 
-/** 通知の器。小さく浮くので、角丸を強め・屈折も強めにする。 */
-const TOAST_GLASS = {
-  blurAmount: 0.5,
-  refraction: 0.72,
-  chromAberration: 0.045,
-  edgeHighlight: 0.6,
-  specular: 0.5,
-  fresnel: 1,
-  cornerRadius: 16,
-  zRadius: 16,
-  saturation: 0.3,
-  tintStrength: 0.3,
-  brightness: 0.1,
-  shadowOpacity: 0.4,
-  shadowSpread: 26,
-  shadowOffsetY: 14,
-};
-
 const REBUILD_DELAY = 120;
 
 export class LiquidSurfaces {
@@ -58,13 +40,6 @@ export class LiquidSurfaces {
     this.instance = null;
     this.timer = 0;
     this.available = supportsWebGL();
-
-    // 通知は器ごとガラスにする。中身が入れ替わっても要素は変わらないので
-    // 張り直しは不要で、描き直しの合図(markChanged)だけ送ればよい。
-    this.root.addEventListener("toast:changed", () => this.invalidate());
-
-    // 通知の器は常設なので、ウィンドウが1枚も無くてもガラスにしておく
-    this.schedule();
   }
 
   /** ガラスを張り直す。ウィンドウが増減したら呼ぶ（まとめて1回になる）。 */
@@ -80,7 +55,7 @@ export class LiquidSurfaces {
   }
 
   async #rebuild() {
-    const targets = [...this.root.querySelectorAll(":scope > .window, :scope > .toast-stack")];
+    const targets = [...this.root.querySelectorAll(":scope > .window")];
 
     this.instance?.destroy();
     this.instance = null;
@@ -91,10 +66,6 @@ export class LiquidSurfaces {
     }
 
     try {
-      // 器ごとに質感が違うので、個別設定は data-config で渡す（ライブラリの作法）
-      const stack = this.root.querySelector(":scope > .toast-stack");
-      if (stack) stack.dataset.config = JSON.stringify(TOAST_GLASS);
-
       this.instance = await LiquidGlass.init({
         root: this.root,
         glassElements: targets,
