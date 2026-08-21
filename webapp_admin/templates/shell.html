@@ -22,7 +22,11 @@
     <p>左下の <strong>スタート</strong> からアプリを開いてください。</p>
     <p class="small">ウィンドウはタイトルバーで移動、右下の隅でリサイズできます。</p>
   </div>
-  <div id="window-layer"></div>
+  {# LiquidGlass はルート自身の背景を捕捉しないため、壁紙を実体の要素として
+     ルート直下に置く。ウィンドウ(ガラス)はこの隣に追加される。 #}
+  <div id="window-layer">
+    <div class="desktop-scene" aria-hidden="true"></div>
+  </div>
 </div>
 
 <footer class="taskbar" data-specular>

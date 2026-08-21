@@ -4,6 +4,7 @@
 
 import { el, icon, clear } from "../lib/dom.js";
 import { AppWindow } from "./window.js";
+import { LiquidSurfaces } from "./liquid.js";
 import { mountPanel } from "../forms/panel.js";
 
 const LAYOUT_KEY = "voldemort.desktop.layout.v1";
@@ -27,6 +28,9 @@ export class Desktop {
     for (const group of groups) {
       for (const app of group.apps) this.apps.set(app.id, app);
     }
+
+    // WebGL のガラス。使えない環境では CSS のガラスがそのまま残る。
+    this.liquid = new LiquidSurfaces({ root: this.layer, desktop: this.root });
 
     this.#buildStartMenu();
     this.#wireStartMenu();
@@ -65,6 +69,7 @@ export class Desktop {
     this.focus(win);
     this.closeStartMenu();
     this.root.classList.add("has-windows");
+    this.liquid.schedule();
     this.#syncHash();
     this.persist();
 
@@ -123,6 +128,7 @@ export class Desktop {
     win.pill?.remove();
     if (this.focused === win) this.focusNext(win);
     this.root.classList.toggle("has-windows", this.windows.size > 0);
+    this.liquid.schedule();
     this.updateTaskbar();
     this.persist();
   }
