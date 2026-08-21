@@ -1,0 +1,529 @@
+"""管理UIの API テスト。
+
+    python -m unittest discover -s tests -t .
+
+DB を必要とするユーザー状態監査は services 層を差し替えて検証する
+（Postgres が無い環境でも API の契約を確認できるようにするため）。
+標準ライブラリの unittest だけで動く。pytest からも実行できる。
+"""
+
+import base64
+import json
+import os
+import sys
+import tempfile
+import unittest
+from datetime import datetime, timezone
+from pathlib import Path
+from unittest.mock import patch
+
+# services/* はモジュール読み込み時に SETTINGS_DIR を解決するため、
+# プロジェクトの import より前に一時ディレクトリへ差し替える。
+os.environ["SETTINGS_DIR"] = tempfile.mkdtemp(prefix="admin-api-test-")
+os.environ["ADMIN_FLASK_SECRET_KEY"] = "x" * 64
+os.environ["TTS_BASE_URL"] = "http://127.0.0.1:9"
+os.environ["DEV_USER_ID"] = "4242"
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import itsdangerous  # noqa: E402
+from starlette.testclient import TestClient  # noqa: E402
+
+from webapp_admin.app import app  # noqa: E402
+
+SECRET = "x" * 64
+CSRF = "t" * 64
+GUILD_ID = 999
+CSRF_HEADER = {"X-CSRFToken": CSRF}
+
+
+def make_client(user_id: str = "1", with_guild: bool = True) -> TestClient:
+    session = {
+        "user": {"id": user_id, "username": "tester", "global_name": "Tester", "avatar": None},
+        "admin_guilds": [{"id": str(GUILD_ID), "name": "Test Guild", "icon": None}],
+        "_csrf_token": CSRF,
+    }
+    if with_guild:
+        session.update({"guild_id": GUILD_ID, "guild_name": "Test Guild", "guild_icon": None})
+
+    client = TestClient(app)
+    signed = itsdangerous.TimestampSigner(SECRET).sign(base64.b64encode(json.dumps(session).encode()))
+    client.cookies.set("admin_session", signed.decode())
+    return client
+
+
+class AuthTests(unittest.TestCase):
+    def test_anonymous_is_redirected_to_login(self):
+        response = TestClient(app).get("/admin/api/apps", follow_redirects=False)
+        self.assertEqual(response.status_code, 303)
+        self.assertIn("/admin/login", response.headers["location"])
+
+    def test_logged_in_without_guild_is_redirected_to_guild_select(self):
+        client = make_client(with_guild=False)
+        response = client.get("/admin/api/apps", follow_redirects=False)
+        self.assertEqual(response.status_code, 303)
+        self.assertIn("/admin/guilds", response.headers["location"])
+
+    def test_shell_is_served_for_overview(self):
+        response = make_client().get("/admin/overview")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="desktop"', response.text)
+        self.assertNotIn("bootstrap.min.css", response.text)
+
+    def test_old_user_state_url_redirects_to_desktop(self):
+        response = make_client().get("/admin/users/state", follow_redirects=False)
+        self.assertEqual(response.status_code, 303)
+        self.assertIn("#user-state", response.headers["location"])
+
+
+class AppListTests(unittest.TestCase):
+    def test_tiles_are_grouped_in_declared_order(self):
+        payload = make_client().get("/admin/api/apps").json()
+        labels = [group["label"] for group in payload["groups"]]
+        self.assertEqual(
+            labels,
+            ["概要", "基本設定", "自動通知", "チャンネル機能", "メディア", "セキュリティ"],
+        )
+
+    def test_developer_panel_is_hidden_from_normal_users(self):
+        ids = [
+            app_["id"]
+            for group in make_client().get("/admin/api/apps").json()["groups"]
+            for app_ in group["apps"]
+        ]
+        self.assertNotIn("dev", ids)
+        self.assertEqual(make_client().get("/admin/api/apps/dev").status_code, 404)
+
+    def test_developer_panel_is_visible_to_developer(self):
+        ids = [
+            app_["id"]
+            for group in make_client(user_id="4242").get("/admin/api/apps").json()["groups"]
+            for app_ in group["apps"]
+        ]
+        self.assertIn("dev", ids)
+
+
+class PanelSchemaTests(unittest.TestCase):
+    def setUp(self):
+        self.client = make_client()
+
+    def test_schema_contains_fields_values_and_choices(self):
+        payload = self.client.get("/admin/api/apps/logging").json()
+        self.assertEqual(payload["kind"], "schema")
+        self.assertEqual(payload["layout"], "stack")
+        self.assertEqual(
+            set(payload["values"]),
+            {"log_channel_id", "log_level", "chatgpt_channel_id"},
+        )
+        self.assertIn("channels", payload["choices"])
+
+    def test_panel_with_many_sections_uses_tabs(self):
+        self.assertEqual(self.client.get("/admin/api/apps/tts").json()["layout"], "tabs")
+
+    def test_custom_panel_declares_its_client(self):
+        payload = self.client.get("/admin/api/apps/user-state").json()
+        self.assertEqual(payload["kind"], "custom")
+        self.assertEqual(payload["client"], "user_state")
+
+    def test_unknown_panel_is_404(self):
+        self.assertEqual(self.client.get("/admin/api/apps/nope").status_code, 404)
+
+
+class SaveTests(unittest.TestCase):
+    def setUp(self):
+        self.client = make_client()
+
+    def put(self, app_id, values, headers=CSRF_HEADER):
+        return self.client.put(f"/admin/api/apps/{app_id}", json={"values": values}, headers=headers)
+
+    def test_saves_only_the_given_fields(self):
+        response = self.put("logging", {"log_level": "DEBUG"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["saved"], ["log_level"])
+        self.assertEqual(response.json()["values"]["log_level"], "DEBUG")
+
+    def test_value_survives_a_reread(self):
+        self.put("djaudio", {"cooldown": 45})
+        payload = self.client.get("/admin/api/apps/djaudio").json()
+        self.assertEqual(payload["values"]["cooldown"], 45)
+
+    def test_null_clears_an_optional_field(self):
+        self.put("logging", {"log_channel_id": "123456789012345678"})
+        response = self.put("logging", {"log_channel_id": None})
+        self.assertIsNone(response.json()["values"]["log_channel_id"])
+
+    def test_missing_csrf_token_is_rejected(self):
+        response = self.put("logging", {"log_level": "INFO"}, headers={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_choice_outside_the_schema_is_rejected(self):
+        response = self.put("logging", {"log_level": "LOUD"})
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["errors"]["log_level"], "選べない値です。")
+
+    def test_number_out_of_range_explains_the_limit(self):
+        response = self.put("djaudio", {"cooldown": 99999})
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("3600 以下", response.json()["errors"]["cooldown"])
+
+    def test_text_over_the_limit_is_rejected(self):
+        response = self.put("welcome", {"welcome_message": "あ" * 1001})
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("1000 文字以内", response.json()["errors"]["welcome_message"])
+
+    def test_non_numeric_id_is_rejected(self):
+        response = self.put("logging", {"log_channel_id": "abc"})
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("ID", response.json()["errors"]["log_channel_id"])
+
+    def test_unknown_field_is_rejected(self):
+        response = self.put("logging", {"nope": 1})
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("nope", response.json()["errors"])
+
+    def test_custom_panel_cannot_be_saved(self):
+        self.assertEqual(self.put("user-state", {"anything": 1}).status_code, 404)
+
+    def test_valid_fields_are_kept_when_another_field_fails(self):
+        response = self.put("djaudio", {"cooldown": 60, "max_urls": 999})
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["saved"], ["cooldown"])
+        self.assertIn("max_urls", response.json()["errors"])
+        self.assertEqual(response.json()["values"]["cooldown"], 60)
+
+
+class CollectionTests(unittest.TestCase):
+    def setUp(self):
+        self.client = make_client()
+        self.url = "/admin/api/apps/news-feeds/collections/feeds"
+        for item in self.client.get("/admin/api/apps/news-feeds").json()["collections"]["feeds"]:
+            self.client.delete(f"{self.url}/{item['id']}", headers=CSRF_HEADER)
+
+    def add(self, **values):
+        payload = {"channel_id": "123456789012345678", "query": "AI", "interval": 30}
+        payload.update(values)
+        return self.client.post(self.url, json={"values": payload}, headers=CSRF_HEADER)
+
+    def test_add_returns_the_refreshed_list(self):
+        response = self.add()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["items"]), 1)
+        self.assertEqual(response.json()["items"][0]["query"], "AI")
+
+    def test_update_changes_the_item(self):
+        item_id = self.add().json()["items"][0]["id"]
+        response = self.client.put(
+            f"{self.url}/{item_id}",
+            json={"values": {"channel_id": "123456789012345678", "query": "AI 最新", "interval": 60}},
+            headers=CSRF_HEADER,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"][0]["query"], "AI 最新")
+
+    def test_delete_removes_the_item(self):
+        item_id = self.add().json()["items"][0]["id"]
+        response = self.client.delete(f"{self.url}/{item_id}", headers=CSRF_HEADER)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"], [])
+
+    def test_required_field_is_reported(self):
+        response = self.client.post(
+            self.url,
+            json={"values": {"channel_id": "123456789012345678", "interval": 30}},
+            headers=CSRF_HEADER,
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("query", response.json()["errors"])
+
+    def test_max_items_is_enforced(self):
+        for index in range(10):
+            self.assertEqual(self.add(query=f"q{index}").status_code, 200)
+        response = self.add(query="overflow")
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("10 件まで", response.json()["errors"]["__all__"])
+
+    def test_read_only_collection_rejects_add(self):
+        response = self.client.post(
+            "/admin/api/apps/tts/collections/user_settings", json={"values": {}}, headers=CSRF_HEADER
+        )
+        self.assertEqual(response.status_code, 405)
+
+    def test_unknown_collection_is_404(self):
+        response = self.client.post(
+            "/admin/api/apps/news-feeds/collections/nope", json={"values": {}}, headers=CSRF_HEADER
+        )
+        self.assertEqual(response.status_code, 404)
+
+
+SAMPLE_STATE = {
+    "guild_id": GUILD_ID,
+    "user_id": 555,
+    "username": "member",
+    "display_name": "メンバー",
+    "avatar_url": None,
+    "status": "banned",
+    "is_in_guild": False,
+    "is_banned": True,
+    "is_timed_out": False,
+    "timed_out_until": None,
+    "roles": [{"id": 1, "name": "常連"}, {"id": 2, "name": "VIP"}],
+    "abilities": {"administrator": False, "trusted_user": True},
+    "last_event_type": "member_ban",
+    "last_event_at": datetime(2026, 8, 21, 3, 30, 0, tzinfo=timezone.utc),
+    "first_seen_at": None,
+    "last_joined_at": None,
+    "last_left_at": None,
+    "updated_at": None,
+}
+
+SAMPLE_EVENT = {
+    "id": 7,
+    "event_type": "sync_member_on_ready",
+    "status_after": "active",
+    "actor_user_id": None,
+    "actor_name": "管理者",
+    "reason": "定期同期",
+    "event_at": datetime(2026, 8, 21, 0, 0, 0, tzinfo=timezone.utc),
+    "payload": {"source": "on_ready"},
+}
+
+
+class UserStateApiTests(unittest.TestCase):
+    """DB を差し替えて、API の契約（絞り込み・ページ送り・ラベル化）を確認する。"""
+
+    def setUp(self):
+        self.client = make_client()
+        self.calls = {}
+
+    def _patched_list(self, rows, total):
+        async def fake_list(guild_id, *, query=None, limit=50, offset=0):
+            self.calls["list"] = {"guild_id": guild_id, "query": query, "limit": limit, "offset": offset}
+            return rows
+
+        async def fake_count(guild_id, *, query=None):
+            self.calls["count"] = {"guild_id": guild_id, "query": query}
+            return total
+
+        return (
+            patch("webapp_admin.api.users.list_recent_user_states", fake_list),
+            patch("webapp_admin.api.users.count_user_states", fake_count),
+        )
+
+    def test_list_labels_status_and_event(self):
+        list_patch, count_patch = self._patched_list([SAMPLE_STATE], 1)
+        with list_patch, count_patch:
+            payload = self.client.get("/admin/api/users/state").json()
+
+        row = payload["rows"][0]
+        self.assertEqual(row["user_id"], "555")
+        self.assertEqual(row["status_label"], "BAN中")
+        self.assertEqual(row["status_tone"], "danger")
+        self.assertEqual(row["last_event_label"], "BAN")
+        self.assertEqual(row["roles"], ["常連", "VIP"])
+        self.assertEqual(row["abilities"], ["信頼済みユーザー"])
+        self.assertEqual(row["last_event_at"], "2026/08/21 12:30:00")  # JST へ変換される
+
+    def test_list_passes_search_and_paging_to_the_service(self):
+        list_patch, count_patch = self._patched_list([], 120)
+        with list_patch, count_patch:
+            payload = self.client.get("/admin/api/users/state?q=%20abc%20&limit=25&offset=50").json()
+
+        self.assertEqual(self.calls["list"], {"guild_id": GUILD_ID, "query": "abc", "limit": 25, "offset": 50})
+        self.assertEqual(self.calls["count"]["query"], "abc")
+        self.assertEqual(payload["total"], 120)
+        self.assertFalse(payload["has_more"])  # 50 + 0 件 < 120 でも行が無ければ次は無い扱い
+
+    def test_has_more_is_true_while_rows_remain(self):
+        list_patch, count_patch = self._patched_list([SAMPLE_STATE] * 25, 120)
+        with list_patch, count_patch:
+            payload = self.client.get("/admin/api/users/state?limit=25&offset=0").json()
+        self.assertTrue(payload["has_more"])
+
+    def test_limit_is_bounded(self):
+        response = self.client.get("/admin/api/users/state?limit=9999")
+        self.assertEqual(response.status_code, 422)
+
+    def test_detail_returns_current_and_events(self):
+        async def fake_detail(guild_id, user_id, *, event_limit=200):
+            self.calls["detail"] = {"guild_id": guild_id, "user_id": user_id, "event_limit": event_limit}
+            return {"current": SAMPLE_STATE, "events": [SAMPLE_EVENT]}
+
+        with patch("webapp_admin.api.users.get_user_state_detail", fake_detail):
+            payload = self.client.get("/admin/api/users/state/555?event_limit=10").json()
+
+        self.assertEqual(self.calls["detail"], {"guild_id": GUILD_ID, "user_id": 555, "event_limit": 10})
+        self.assertTrue(payload["found"])
+        self.assertEqual(payload["current"]["status_label"], "BAN中")
+        # 可変の接頭辞を持つ同期イベントもラベル化される
+        self.assertEqual(payload["events"][0]["event_label"], "メンバー状態を同期（起動時）")
+        self.assertEqual(payload["events"][0]["event_at"], "2026/08/21 09:00:00")
+
+    def test_detail_of_unknown_user_is_404(self):
+        async def fake_detail(guild_id, user_id, *, event_limit=200):
+            return None
+
+        with patch("webapp_admin.api.users.get_user_state_detail", fake_detail):
+            response = self.client.get("/admin/api/users/state/1")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(response.json()["found"])
+
+    def test_requires_a_selected_guild(self):
+        client = make_client(with_guild=False)
+        response = client.get("/admin/api/users/state", follow_redirects=False)
+        self.assertEqual(response.status_code, 303)
+
+
+class DevApiTests(unittest.TestCase):
+    """開発者パネルの API。DEV_USER_ID と一致するユーザーだけが使える。"""
+
+    def setUp(self):
+        self.dev = make_client(user_id="4242")
+        self.normal = make_client(user_id="1")
+
+    def test_non_developer_is_forbidden(self):
+        self.assertEqual(self.normal.get("/admin/api/dev/overview").status_code, 403)
+
+    def test_overview_reports_the_environment(self):
+        payload = self.dev.get("/admin/api/dev/overview").json()
+        self.assertIn("bot_user", payload)
+        self.assertIn("tasks", payload)
+        self.assertIn("news_feeds", payload["tasks"])
+        self.assertIsInstance(payload["env_rows"], list)
+        self.assertTrue(any(row["key"] == "DISCORD_BOT_TOKEN" for row in payload["env_rows"]))
+
+    def test_secret_env_values_are_masked(self):
+        payload = self.dev.get("/admin/api/dev/overview").json()
+        secret_row = next(row for row in payload["env_rows"] if row["key"] == "ADMIN_FLASK_SECRET_KEY")
+        self.assertTrue(secret_row["secret"])
+        self.assertNotIn("x" * 10, secret_row["value"] or "")
+
+    def test_task_signal_is_queued(self):
+        response = self.dev.post("/admin/api/dev/signal/news_feeds", json={}, headers=CSRF_HEADER)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("news_feeds", response.json()["pending_signals"])
+
+    def test_unknown_task_is_404(self):
+        response = self.dev.post("/admin/api/dev/signal/nope", json={}, headers=CSRF_HEADER)
+        self.assertEqual(response.status_code, 404)
+
+    def test_signal_requires_csrf(self):
+        self.assertEqual(self.dev.post("/admin/api/dev/signal/sticky", json={}).status_code, 403)
+
+    def test_notify_test_requires_a_numeric_guild_id(self):
+        ok = self.dev.post("/admin/api/dev/test-notify/welcome",
+                           json={"guild_id": "123456789012345678"}, headers=CSRF_HEADER)
+        self.assertEqual(ok.status_code, 200)
+        bad = self.dev.post("/admin/api/dev/test-notify/welcome",
+                            json={"guild_id": "abc"}, headers=CSRF_HEADER)
+        self.assertEqual(bad.status_code, 400)
+
+    def test_earthquake_replay_validates_the_payload(self):
+        bad = self.dev.post("/admin/api/dev/earthquake-replay",
+                            json={"event_json": "{}"}, headers=CSRF_HEADER)
+        self.assertEqual(bad.status_code, 400)
+
+        event = json.dumps({"earthquake": {"hypocenter": {"name": "テスト沖"}}})
+        ok = self.dev.post("/admin/api/dev/earthquake-replay",
+                           json={"event_json": event}, headers=CSRF_HEADER)
+        self.assertEqual(ok.status_code, 200)
+        self.assertIn("eq_replay", ok.json()["pending_signals"])
+
+    def test_lookup_endpoints_reject_non_numeric_ids(self):
+        self.assertEqual(self.dev.get("/admin/api/dev/user?user_id=abc").status_code, 400)
+        self.assertEqual(self.dev.get("/admin/api/dev/channels?guild_id=abc").status_code, 400)
+
+    def test_logs_are_returned_as_lines(self):
+        payload = self.dev.get("/admin/api/dev/logs?source=admin&lines=10").json()
+        self.assertEqual(payload["source"], "admin")
+        self.assertIsInstance(payload["lines"], list)
+
+    def test_unknown_log_source_is_rejected(self):
+        self.assertEqual(self.dev.get("/admin/api/dev/logs?source=secret").status_code, 422)
+
+    def test_guild_settings_roundtrip(self):
+        # 設定APIで書き込んでから、開発者パネル側で読めることを見る
+        self.dev.put("/admin/api/apps/logging", json={"values": {"log_level": "ERROR"}}, headers=CSRF_HEADER)
+        payload = self.dev.get(f"/admin/api/dev/settings/{GUILD_ID}").json()
+        self.assertEqual(payload["guild_id"], str(GUILD_ID))
+        # settings.json 上のキーは log_level（管理UIのフィールド名とは別物）
+        self.assertEqual(payload["settings"]["log_level"], "ERROR")
+
+    def test_unknown_guild_settings_is_404(self):
+        self.assertEqual(self.dev.get("/admin/api/dev/settings/1").status_code, 404)
+
+    def test_import_replaces_settings(self):
+        response = self.dev.post(
+            f"/admin/api/dev/settings/{GUILD_ID}/import",
+            json={"settings": {"log_level": "DEBUG", "log_channel_id": None}},
+            headers=CSRF_HEADER,
+        )
+        self.assertEqual(response.status_code, 200)
+        after = self.dev.get("/admin/api/apps/logging").json()
+        self.assertEqual(after["values"]["log_level"], "DEBUG")
+
+    def test_import_rejects_a_non_object(self):
+        response = self.dev.post(
+            f"/admin/api/dev/settings/{GUILD_ID}/import",
+            json={"settings": ["not", "an", "object"]},
+            headers=CSRF_HEADER,
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_import_rejects_oversized_payloads(self):
+        response = self.dev.post(
+            f"/admin/api/dev/settings/{GUILD_ID}/import",
+            json={"settings": {"blob": "あ" * 200000}},
+            headers=CSRF_HEADER,
+        )
+        self.assertEqual(response.status_code, 413)
+
+    def test_cache_delete_rejects_a_bad_token(self):
+        response = self.dev.delete("/admin/api/dev/cache/..%2Fetc", headers=CSRF_HEADER)
+        self.assertIn(response.status_code, (400, 404))
+
+
+class LegacyUrlTests(unittest.TestCase):
+    """旧ページのURLはデスクトップの該当ウィンドウへ寄せる。"""
+
+    def test_settings_url_redirects_to_the_matching_window(self):
+        response = make_client().get("/admin/settings/tts", follow_redirects=False)
+        self.assertEqual(response.status_code, 303)
+        self.assertTrue(response.headers["location"].endswith("#tts"))
+
+    def test_user_state_url_redirects(self):
+        response = make_client().get("/admin/users/state", follow_redirects=False)
+        self.assertEqual(response.status_code, 303)
+        self.assertTrue(response.headers["location"].endswith("#user-state"))
+
+    def test_legacy_settings_pages_are_gone(self):
+        # POST を受け付けていた旧エンドポイントは残っていない
+        response = make_client().post(
+            "/admin/settings/logging", data={"csrf_token": CSRF, "action": "set_log"}
+        )
+        self.assertEqual(response.status_code, 405)
+
+
+class DocsTests(unittest.TestCase):
+    """ドキュメントの設定表がスキーマと一致していること。"""
+
+    def test_settings_table_is_up_to_date(self):
+        import subprocess
+
+        result = subprocess.run(
+            [sys.executable, "tools/generate_admin_docs.py", "--check"],
+            cwd=str(Path(__file__).resolve().parent.parent),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        self.assertEqual(
+            result.returncode, 0,
+            "docs/ADMIN.ja.md が古くなっています。python tools/generate_admin_docs.py を実行してください。"
+            + (result.stdout or "") + (result.stderr or ""),
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
