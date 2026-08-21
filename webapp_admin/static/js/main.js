@@ -3,7 +3,7 @@
 
 import * as api from "./lib/api.js";
 import { el } from "./lib/dom.js";
-import { toast } from "./lib/toast.js";
+import { ensureToastStack, toast } from "./lib/toast.js";
 import { Desktop } from "./wm/desktop.js";
 import { attachSpecular } from "./wm/specular.js";
 
@@ -33,6 +33,9 @@ async function boot() {
     );
     return;
   }
+
+  // ガラスに含めるため、ウィンドウより先に通知の器を置いておく
+  ensureToastStack();
 
   const desktop = new Desktop({ groups });
   attachSpecular();

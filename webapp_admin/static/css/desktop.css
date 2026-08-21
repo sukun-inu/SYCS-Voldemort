@@ -462,3 +462,24 @@ body.desktop-body { overflow: hidden; }
   .desktop.is-liquid .window-title { text-shadow: 0 1px 3px rgba(0, 20, 45, 0.75); }
   .desktop.is-liquid .window-control:hover { background: rgba(255, 255, 255, 0.22); }
 }
+
+/* ── 通知: 器そのものが液体ガラスの板になる ─────────────────
+   個々のトーストは面を持たず、ガラスの上に文字だけが載る。 */
+.desktop.is-liquid .toast-stack {
+  isolation: isolate;
+  padding: 6px;
+  border-radius: 16px;
+  gap: 2px;
+}
+.desktop.is-liquid .toast {
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: #eaf3ff;
+}
+.desktop.is-liquid .toast + .toast { border-top: 1px solid rgba(234, 243, 255, 0.18); }
+.desktop.is-liquid .toast.success { color: #d8ffe6; }
+.desktop.is-liquid .toast.danger { color: #ffd9d6; }
+.desktop.is-liquid .toast .btn-quiet { color: rgba(234, 243, 255, 0.7); }
+.desktop.is-liquid .toast .btn-quiet:hover { background: rgba(255, 255, 255, 0.18); color: #fff; }
+.toast-stack > canvas { position: absolute; pointer-events: none; }
