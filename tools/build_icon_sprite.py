@@ -21,11 +21,15 @@ VERSION = "1.13.1"
 SOURCE = f"https://cdn.jsdelivr.net/npm/bootstrap-icons@{VERSION}/bootstrap-icons.svg"
 
 ROOT = Path(__file__).resolve().parent.parent
+# パネル定義(schema/panels/*.py)もアイコンを指定するので探索対象に含める。
+# ここを漏らすと、スタートメニューのタイルだけ無言で空になる。
 SEARCH_DIRS = [
     ROOT / "webapp_admin" / "templates",
     ROOT / "webapp_admin" / "static" / "js",
     ROOT / "webapp_admin" / "static" / "css",
+    ROOT / "webapp_admin" / "schema",
 ]
+SEARCH_SUFFIXES = {".html", ".js", ".css", ".py"}
 OUTPUT = ROOT / "webapp_admin" / "static" / "icons" / "sprite.svg"
 
 _ICON_REF = re.compile(r"\bbi-([a-z0-9-]+)")
@@ -33,17 +37,19 @@ _SYMBOL = re.compile(r'<symbol[^>]*id="([^"]+)"[^>]*>.*?</symbol>', re.S)
 
 
 def used_icon_names() -> list[str]:
+    """テンプレート・JS・CSS・パネル定義から参照されているアイコン名を集める。"""
     names: set[str] = set()
     for directory in SEARCH_DIRS:
         for path in directory.rglob("*"):
-            if path.is_file() and path.suffix in {".html", ".js", ".css"}:
-                names.update(_ICON_REF.findall(path.read_text(encoding="utf-8")))
-    # icon('house-fill') のように接頭辞なしで書かれている呼び出しも拾う
-    for directory in SEARCH_DIRS:
-        for path in directory.rglob("*"):
-            if path.is_file() and path.suffix in {".html", ".js"}:
-                text = path.read_text(encoding="utf-8")
-                names.update(re.findall(r"icon\(\s*['\"]([a-z0-9-]+)['\"]", text))
+            if not path.is_file() or path.suffix not in SEARCH_SUFFIXES:
+                continue
+            text = path.read_text(encoding="utf-8")
+            names.update(_ICON_REF.findall(text))
+            # icon('house-fill') のように接頭辞なしで書かれている呼び出しも拾う
+            names.update(
+                name.removeprefix("bi-")
+                for name in re.findall(r"""icon\(\s*['"]([a-z0-9-]+)['"]""", text)
+            )
     return sorted(names)
 
 

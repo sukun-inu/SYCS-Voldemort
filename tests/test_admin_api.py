@@ -504,6 +504,44 @@ class LegacyUrlTests(unittest.TestCase):
         self.assertEqual(response.status_code, 405)
 
 
+class IconTests(unittest.TestCase):
+    """参照しているアイコンがスプライトに入っていること。
+
+    抜けていても例外は出ず、アイコンが無言で消えるだけなので機械的に確かめる。
+    """
+
+    def setUp(self):
+        import re
+
+        sprite = (
+            Path(__file__).resolve().parent.parent
+            / "webapp_admin" / "static" / "icons" / "sprite.svg"
+        ).read_text(encoding="utf-8")
+        self.available = set(re.findall(r'<symbol[^>]*id="([^"]+)"', sprite))
+
+    def test_panel_icons_exist(self):
+        from webapp_admin.schema.registry import PANELS
+
+        missing = [
+            panel.id for panel in PANELS
+            if panel.icon.removeprefix("bi-") not in self.available
+        ]
+        self.assertEqual(missing, [], f"スプライトに無いアイコンを指すパネル: {missing}")
+
+    def test_referenced_icons_exist(self):
+        import sys as _sys
+
+        _sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+        from build_icon_sprite import used_icon_names
+
+        missing = sorted(set(used_icon_names()) - self.available)
+        self.assertEqual(
+            missing, [],
+            f"参照しているのにスプライトに無いアイコン: {missing}"
+            " — python tools/build_icon_sprite.py を実行してください。",
+        )
+
+
 class DocsTests(unittest.TestCase):
     """ドキュメントの設定表がスキーマと一致していること。"""
 
