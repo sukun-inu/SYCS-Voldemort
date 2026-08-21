@@ -256,6 +256,21 @@ def main():
               resized["width"] - moved["width"] > 80 and resized["height"] - moved["height"] > 60,
               f'{int(moved["width"])}x{int(moved["height"])} -> {int(resized["width"])}x{int(resized["height"])}')
 
+        # ── 最大化ボタンは押したあとも「戻す」として見えていること ──
+        # アイコンの差し替え先がスプライトに無いと、ボタンが無言で空になる
+        maximize = page.locator('.window[data-app-id="logging"] .window-control.maximize')
+        maximize.click()
+        page.wait_for_timeout(300)
+        box = maximize.locator(".icon").bounding_box()
+        check("最大化してもボタンのアイコンが残る",
+              maximize.is_visible() and box and box["width"] > 4,
+              f'{int(box["width"]) if box else 0}px / {maximize.get_attribute("title")}')
+        maximize.click()
+        page.wait_for_timeout(300)
+        box = maximize.locator(".icon").bounding_box()
+        check("元に戻したあともアイコンが残る", box and box["width"] > 4,
+              f'{int(box["width"]) if box else 0}px / {maximize.get_attribute("title")}')
+
         # ── ウィンドウ操作 ──
         check("ウィンドウが3枚開いている", page.locator(".window").count() == 3)
         page.locator('.window[data-app-id="tts"] .window-control').first.click()  # 最小化

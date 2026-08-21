@@ -52,7 +52,7 @@ export class AppWindow {
                          onclick: (e) => { e.stopPropagation(); this.minimize(); } }, icon("bi-dash-lg")),
           el("button", { class: "window-control maximize", type: "button", title: "最大化 / 元に戻す",
                          "aria-label": "最大化", onclick: (e) => { e.stopPropagation(); this.toggleMaximize(); } },
-             icon("bi-square")),
+             icon("bi-fullscreen")),
           el("button", { class: "window-control close", type: "button", title: "閉じる", "aria-label": "閉じる",
                          onclick: (e) => { e.stopPropagation(); this.close(); } }, icon("bi-x-lg"))
         )
@@ -146,9 +146,14 @@ export class AppWindow {
     document.addEventListener("pointerup", onUp);
   }
 
+  /** 最大化/復帰の切り替えを、対のアイコンで示す。
+      名前は "bi-" 付きで渡すこと（tools/build_icon_sprite.py がこの書式で
+      参照を集めるため、接頭辞が無いとスプライトに含まれず無言で消える）。 */
   #setMaximizeIcon(name) {
     const button = this.el.querySelector(".maximize");
     button.replaceChildren(icon(name));
+    button.title = name === "bi-fullscreen-exit" ? "元のサイズに戻す" : "最大化";
+    button.setAttribute("aria-label", button.title);
   }
 
   focus() {
@@ -193,7 +198,7 @@ export class AppWindow {
     }
     this.maximized = true;
     this.el.classList.add("is-maximized");
-    this.#setMaximizeIcon("copy");
+    this.#setMaximizeIcon("bi-fullscreen-exit");
     if (!silent) this.focus();
     this.manager.persist();
   }
@@ -201,7 +206,7 @@ export class AppWindow {
   unmaximize() {
     this.maximized = false;
     this.el.classList.remove("is-maximized");
-    this.#setMaximizeIcon("square");
+    this.#setMaximizeIcon("bi-fullscreen");
     if (this.prevRect) Object.assign(this.el.style, this.prevRect);
     this.focus();
     this.manager.persist();

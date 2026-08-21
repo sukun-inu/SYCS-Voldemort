@@ -220,6 +220,10 @@ body.desktop-body { overflow: hidden; }
   flex: 1 1 auto;
   min-width: 0;
   scrollbar-width: none;
+  /* overflow-x を付けると上下も切り取られ、ピルの光が枠で断ち切られる。
+     内側に余白を作って光の逃げ場を確保し、負のマージンで見た目の位置は保つ。 */
+  padding: 9px 6px;
+  margin: -9px -6px;
 }
 .taskbar-apps::-webkit-scrollbar { display: none; }
 .taskbar-app {
@@ -248,6 +252,12 @@ body.desktop-body { overflow: hidden; }
 .taskbar-app span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .taskbar-tray { display: flex; align-items: center; gap: 6px; margin-left: auto; flex: none; }
+
+/* 帯の中で光が断ち切られると板に見える。上へ少しだけ溢れさせる */
+.taskbar[data-specular]::after {
+  inset: -26px 0 0 0;
+  border-radius: 0;
+}
 .tray-button {
   display: flex;
   align-items: center;
