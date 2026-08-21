@@ -116,7 +116,49 @@ body.aero-page {
 .error-actions { display: flex; gap: 8px; justify-content: center; margin-top: 26px; }
 
 /* ── ログイン ─────────────────────────────────────────────── */
-.auth-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.auth-page { min-height: 100vh; }
+.aero-root { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; }
+/* 壁紙の実体（body の background と同じ絵を、捕捉できる要素として置く） */
+.aero-page .desktop-scene {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(1100px 620px at 12% -12%, rgba(126, 208, 255, 0.55), transparent 62%),
+    radial-gradient(900px 560px at 88% 4%, rgba(72, 236, 208, 0.30), transparent 60%),
+    radial-gradient(1200px 900px at 52% 118%, rgba(24, 70, 150, 0.72), transparent 64%),
+    linear-gradient(163deg, #0c2f66 0%, #06203f 46%, #04122a 100%);
+}
+/* WebGL のガラスが乗ったらCSS側のガラスは畳む */
+.aero-page.is-liquid .login-card {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+.aero-page.is-liquid .login-card::before { opacity: 0; }
+
+/* ガラスは壁紙の濃紺を拾うので、載る文字は明るい側に切り替える
+   （OSのライト/ダークに関係なく、面の色が濃くなるため） */
+.aero-page.is-liquid .login-card { color: #eaf3ff; }
+.aero-page.is-liquid .login-title { color: #ffffff; text-shadow: 0 1px 12px rgba(0, 20, 50, 0.5); }
+.aero-page.is-liquid .login-subtitle,
+.aero-page.is-liquid .login-note,
+.aero-page.is-liquid .login-legal { color: rgba(226, 240, 255, 0.78); }
+.aero-page.is-liquid .login-legal a { color: #bfe2ff; }
+.aero-page.is-liquid .login-legal-sep { color: rgba(226, 240, 255, 0.35); }
+.aero-page.is-liquid .btn:not(.btn-discord) {
+  background-color: rgba(255, 255, 255, 0.86);
+  color: #16233a;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+/* シェーダ出力の canvas は z-index:-1 で挿入される。カード自身がスタッキング
+   コンテキストを作らないと、ページ背景より奥に落ちて見えなくなる。 */
+.aero-page .login-card,
+.aero-page .error-card,
+.aero-page .guild-card { isolation: isolate; }
+.login-card > canvas { position: absolute; pointer-events: none; }
 .login-card {
   width: min(430px, 100%);
   padding: 40px 34px;
