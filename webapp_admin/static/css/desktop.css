@@ -83,7 +83,11 @@ body.desktop-body { overflow: hidden; }
   gap: 8px;
   /* 横方向のガラス枠を打ち消して上端いっぱいに広げ、角をウィンドウと揃える */
   margin: 0 -7px;
-  padding: 0 11px 0 17px;
+  /* 左は本文の1行目の頭と揃える。ウィンドウ左端から本文の文字までは
+     枠1 + ガラス余白7 + 本文の枠1 + 本文の余白14 = 23px。この帯は
+     負のマージンで枠の内側（1px）から始まるので 23 - 1 = 22px。
+     右は ✕ の字面が本文の右端に来るよう、ボタンの余白ぶん(9px)を引く。 */
+  padding: 0 13px 0 22px;
   height: var(--titlebar-height);
   flex: none;
   background: var(--gloss);
@@ -92,7 +96,13 @@ body.desktop-body { overflow: hidden; }
   user-select: none;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
 }
-.window.is-maximized .window-titlebar { cursor: default; border-radius: 0; margin: 0; }
+/* 最大化するとガラスの枠と余白が無くなるので、本文の頭も 14px に寄る */
+.window.is-maximized .window-titlebar {
+  cursor: default;
+  border-radius: 0;
+  margin: 0;
+  padding: 0 5px 0 14px;
+}
 
 /* 暗い面では白い文字影が滲むので外す */
 @media (prefers-color-scheme: dark) {
@@ -100,8 +110,17 @@ body.desktop-body { overflow: hidden; }
   .window-body { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
 }
 .window-icon { color: var(--fg-muted); font-size: 13px; }
-.window-title { font-size: 13px; font-weight: 600; }
-.window-dirty { color: var(--attention); font-size: 11px; }
+.window-title { font-size: 13px; font-weight: 600; line-height: 20px; }
+/* ● の字面は書体ごとに上下するので、丸は自分で描いて中心を確定させる */
+.window-dirty {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  font-size: 0;
+  color: var(--attention);
+  background: currentColor;
+}
 .window-controls { margin-left: auto; display: flex; gap: 2px; }
 .window-control {
   display: grid;
@@ -177,7 +196,10 @@ body.desktop-body { overflow: hidden; }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 10px;
+  /* 上端の 1px の枠は内容の入る領域を 1px 下げる。同じ 1px を下に足して
+     戻さないと、中身は帯の中心より 0.5px 下に置かれる（上下の余白が
+     6px と 4px に割れて、ピルが下寄りに見えていた）。 */
+  padding: 0 10px 1px;
   color: var(--taskbar-ink);
   background: linear-gradient(180deg, rgba(28, 52, 88, 0.72) 0%, rgba(10, 22, 44, 0.86) 100%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
@@ -186,6 +208,8 @@ body.desktop-body { overflow: hidden; }
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 -3px 16px rgba(0, 12, 30, 0.45);
 }
 
+/* 帯の中のピルはすべて行の高さを 20px で揃える。1.7 のままだと 34.09px /
+   33.25px / 31.25px と半端になり、上下の余白が 1px ずれて見える。 */
 .start-button {
   display: flex;
   align-items: center;
@@ -193,17 +217,23 @@ body.desktop-body { overflow: hidden; }
   flex: none;            /* 縮むと「スタート」が縦に折れてしまう */
   white-space: nowrap;
   padding: 5px 14px;
+  /* 文字を落としてアイコンだけになる幅（430px 未満）でも、
+     開いている窓のピルと高さを揃える */
+  min-height: 32px;
   border: 1px solid rgba(255, 255, 255, 0.42);
   border-radius: var(--radius-pill);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.06));
   color: #fff;
   font-size: 13px;
+  line-height: 20px;     /* 20 + 5+5 + 1+1 = 32px */
   font-weight: 600;
   text-shadow: 0 1px 2px rgba(0, 16, 40, 0.6);
   cursor: pointer;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 0 14px rgba(90, 180, 255, 0.35);
   transition: box-shadow .15s ease, background-color .15s ease;
 }
+/* 帯の中で唯一の直角だと異物に見えるので、他のアイコンと同じく角を丸める */
+.start-button img { border-radius: 5px; }
 .start-button:hover,
 .start-button[aria-expanded="true"] {
   background: linear-gradient(180deg, rgba(150, 215, 255, 0.55), rgba(60, 140, 230, 0.35));
@@ -237,6 +267,7 @@ body.desktop-body { overflow: hidden; }
   background: rgba(255, 255, 255, 0.08);
   color: var(--taskbar-ink-muted);
   font-size: 12.5px;
+  line-height: 20px;     /* 20 + 5+5 + 1+1 = 32px（スタートと同じ高さ） */
   cursor: pointer;
   transition: background-color .12s ease, box-shadow .12s ease, color .12s ease;
 }
@@ -268,6 +299,7 @@ body.desktop-body { overflow: hidden; }
   background: none;
   color: var(--taskbar-ink-muted);
   font-size: 12.5px;
+  line-height: 20px;     /* 20 + 4+4 + 1+1 = 30px */
   cursor: pointer;
 }
 .tray-button:hover {
@@ -291,6 +323,7 @@ body.desktop-body { overflow: hidden; }
 .taskbar-clock {
   font-variant-numeric: tabular-nums;
   font-size: 12.5px;
+  line-height: 20px;
   color: var(--taskbar-ink);
   padding: 0 6px;
   text-shadow: 0 1px 2px rgba(0, 16, 40, 0.5);

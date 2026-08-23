@@ -123,6 +123,9 @@ body.public .btn {
   color: var(--ink);
   font-size: 14px;
   font-weight: 500;
+  /* 行の高さを整数で決める。1.7 のままだと 23.8 + 余白16 + 枠2 = 41.8px となり、
+     min-height:38px は効かないうえ、上下の枠が半端な位置に来て太さが揃わない。 */
+  line-height: 20px;
   min-height: 38px;
   padding: 8px 16px;
   letter-spacing: -0.01em;
@@ -135,7 +138,7 @@ body.public .btn-primary {
   color: var(--invert-ink);
 }
 body.public .btn-primary:hover:not(:disabled) { opacity: .85; background: var(--invert-bg); }
-body.public .btn-lg { min-height: 46px; padding: 12px 22px; font-size: 15px; }
+body.public .btn-lg { min-height: 46px; padding: 12px 22px; font-size: 15px; line-height: 20px; }
 
 /* ── 上部バー ─────────────────────────────────────────────── */
 .topbar {
@@ -159,7 +162,10 @@ body.public .btn-lg { min-height: 46px; padding: 12px 22px; font-size: 15px; }
 
 .brand-link { display: flex; align-items: center; gap: 10px; color: var(--ink); }
 .brand-link:hover { text-decoration: none; }
-.brand-mark-image { border-radius: 7px; }
+/* 画像はブロックにする。インラインのままだと入れ物の <span> に文字の下端ぶん
+   （14px × 1.7 の行boxの descent ≒ 7.8px）が余り、その半分だけマークが
+   文字より上へずれる。 */
+.brand-mark-image { display: block; border-radius: 7px; }
 .brand-name { font-weight: 600; font-size: 15px; letter-spacing: -0.02em; }
 
 .landing-menu-toggle {
@@ -233,7 +239,12 @@ body.public .btn-lg { min-height: 46px; padding: 12px 22px; font-size: 15px; }
 }
 .landing-hero > * { position: relative; }
 
-.landing-hero-logo img { border-radius: 22px; box-shadow: 0 12px 40px rgba(0, 0, 0, .28); }
+.landing-hero-logo img {
+  display: block;              /* 下に行boxの隙間を作らない（見出しとの間隔が狂う） */
+  margin: 0 auto;
+  border-radius: 22px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .28);
+}
 .landing-hero h1 {
   font-size: clamp(40px, 7.2vw, 76px);
   font-weight: 600;
@@ -273,7 +284,8 @@ body.public .btn-lg { min-height: 46px; padding: 12px 22px; font-size: 15px; }
   margin-bottom: 12px;
 }
 
-/* 見出しのアイコンは主役ではない。小さく、文字より薄く。 */
+/* 見出しのアイコンは主役ではない。小さく、文字より薄く。
+   （読み物ページの見出しは flex で組むので、下の .doc-section 側で上書きする） */
 body.public h2 .icon,
 body.public h3 .icon {
   width: 0.72em;
@@ -323,14 +335,15 @@ body.public h3 { text-wrap: balance; }
 .step-list strong { color: var(--ink); font-weight: 500; }
 .step-list > li + li { margin-top: 12px; }
 
-/* ランディングでは1手順ずつ罫線で区切る */
+/* ランディングでは1手順ずつ罫線で区切る。
+   罫線が全幅で引かれるので、番号と文章は本文と同じ左端（0）から始める。 */
 .landing-steps { margin-top: 28px; border-top: 1px solid var(--hair); }
 .landing-steps li {
-  padding: 22px 4px 22px 38px;
+  padding: 22px 0 22px 34px;
   border-bottom: 1px solid var(--hair);
   line-height: 1.8;
 }
-.landing-steps li::before { left: 4px; top: 22px; }
+.landing-steps li::before { left: 0; top: 22px; }
 .landing-steps > li + li { margin-top: 0; }
 
 .landing-footer { border-top: 1px solid var(--hair); }
@@ -412,7 +425,9 @@ body.public h3 { text-wrap: balance; }
 .doc-wrap { max-width: 780px; margin: 0 auto; padding: 0 24px 64px; }
 .doc-hero { text-align: center; padding: 84px 0 48px; }
 .doc-hero-logo { margin-bottom: 22px; }
-.doc-hero-logo img { border-radius: 18px; display: inline-block; }
+/* インラインのままだと画像の下に行boxの descent ぶんの隙間が残り、
+   下の余白が 22px ではなく 32px 前後になる（見出しとの間だけ広く見える）。 */
+.doc-hero-logo img { display: block; margin: 0 auto; border-radius: 18px; }
 .doc-hero h1 {
   font-size: clamp(30px, 5vw, 48px);
   font-weight: 600;
@@ -433,7 +448,10 @@ body.public h3 { text-wrap: balance; }
   flex-wrap: wrap;
   gap: 6px 10px;
 }
-.doc-section h2 .icon { margin-right: 0; width: 17px; height: 17px; }
+/* body.public h2 .icon（詳細度 0-2-2）に負けないよう body.public から書く。
+   前は .doc-section h2 .icon（0-2-1）で、幅も右余白も上書きできておらず、
+   0.72em のアイコンが flex の隙間 10px + margin 11px＝21px も離れていた。 */
+body.public .doc-section h2 .icon { margin-right: 0; width: 17px; height: 17px; }
 .doc-section h3 { font-size: 16px; font-weight: 600; margin: 26px 0 10px; letter-spacing: -0.02em; }
 .doc-section p { color: var(--ink-2); font-size: 15px; line-height: 1.9; margin-bottom: 14px; }
 .doc-section ul { list-style: none; padding: 0; color: var(--ink-2); font-size: 15px; line-height: 1.9; }
@@ -442,7 +460,7 @@ body.public h3 { text-wrap: balance; }
 .doc-section ul > li::before {
   content: "";
   position: absolute;
-  left: 2px;
+  left: 0;
   top: 13px;
   width: 5px;
   height: 1px;
@@ -459,18 +477,20 @@ body.public h3 { text-wrap: balance; }
 }
 
 .doc-cmd { display: flex; flex-direction: column; margin-top: 18px; border-top: 1px solid var(--hair); }
+/* 横の余白は 0。4px 入れると、罫線は全幅なのに中身だけ右へ寄って、
+   見出し・本文・箇条書きと左端が揃わなくなる。 */
 .doc-cmd-entry {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 14px;
-  padding: 16px 4px;
+  padding: 16px 0;
   border-bottom: 1px solid var(--hair);
 }
 .doc-cmd-name { font-family: var(--font-mono); font-size: 13.5px; color: var(--ink); font-weight: 500; }
 .doc-cmd-desc { color: var(--ink-2); font-size: 14px; flex: 1 1 320px; }
 /* 直後にセクションの罫線が来るので、リスト末尾の線は引かない（二重線に見える） */
-.doc-cmd-entry:last-child { border-bottom: none; padding-bottom: 4px; }
+.doc-cmd-entry:last-child { border-bottom: none; padding-bottom: 0; }
 
 /* チップ。components.css の .chip は管理画面の配色なので、公開ページ側で塗り直す */
 body.public .chip {
@@ -500,17 +520,23 @@ body.public .chip::before {
 body.public .chip.accent { color: var(--tone-accent); border-color: var(--tone-accent-edge); }
 body.public .chip.success { color: var(--tone-success); border-color: var(--tone-success-edge); }
 body.public .chip.danger { color: var(--tone-danger); border-color: var(--tone-danger-edge); }
-/* 見出しの中のチップは、見出しに引きずられて太らないように */
+/* 見出しの中のチップは、見出しに引きずられて太らないように。
+   見出しは flex で組んであり縦位置は align-items が合わせるので、
+   ここで 1px 下げると逆に文字の中心から外れる。 */
 body.public h2 .chip,
-body.public h3 .chip { font-size: 12px; position: relative; top: 1px; }
+body.public h3 .chip { font-size: 12px; }
 
 .doc-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
 .doc-links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 26px; font-size: 14px; }
+/* 罫線を持つのはこの帯なので、上の余白もここで取る。
+   0 のままだと直前のボタンの下端に線が接して、ボタンが線の上に載って見える。
+   セクションの区切り（padding 44px + 罫線）と同じ間合いに揃える。 */
 .doc-legal {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   justify-content: center;
+  margin-top: 44px;
   padding: 32px 24px 0;
   border-top: 1px solid var(--hair);
   color: var(--ink-3);
