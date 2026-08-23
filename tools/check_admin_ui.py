@@ -25,6 +25,7 @@ os.environ["SETTINGS_DIR"] = tempfile.mkdtemp(prefix="shell-check-")
 os.environ["ADMIN_FLASK_SECRET_KEY"] = "x" * 64
 os.environ["TTS_BASE_URL"] = "http://127.0.0.1:9"
 os.environ["DEV_USER_ID"] = "1"  # 開発者パネルも検証対象にする
+os.environ.setdefault("DISCORD_CLIENT_ID", "0" * 18)  # 公開ページに招待ボタンを出す
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -210,6 +211,39 @@ def main():
               page.locator(feed_window + '.field[data-key="channel_id"] .field-error').inner_text())
         check("エラー時は一覧が増えない", page.locator(feed_window + ".list-row").count() == 1)
 
+        # ── 一覧の更新と上限 ──
+        # 更新なのに「追加しました」と出ていた（resetForm が編集状態を消してから判定していた）
+        page.click(feed_window + '.list-row .btn:not(.btn-danger)')  # 編集
+        page.wait_for_timeout(100)
+        check("編集を押すとボタンが更新に変わる",
+              "更新" in page.locator(feed_window + ".btn-primary").inner_text(),
+              page.locator(feed_window + ".btn-primary").inner_text())
+        page.fill(feed_window + '.field[data-key="query"] input', "生成AI（更新後）")
+        page.click(feed_window + ".btn-primary")
+        page.wait_for_function(
+            """() => document.querySelector('.window[data-app-id="news-feeds"] .list-row')
+                     ?.textContent.includes('更新後')""", timeout=5000)
+        check("更新すると更新したと伝える", "更新しました" in page.locator(".toast").last.inner_text(),
+              " ".join(page.locator(".toast").last.inner_text().split()))
+
+        limit = page.evaluate("""async () => {
+          const r = await fetch('/admin/api/apps/news-feeds', { headers: { Accept: 'application/json' } });
+          const j = await r.json();
+          return j.sections.flatMap(s => s.collections)[0].max_items;
+        }""")
+        for i in range(2, limit + 1):
+            page.fill(feed_window + '.field[data-key="channel_id"] input', f"12345678901234567{i % 10}")
+            page.fill(feed_window + '.field[data-key="query"] input', f"埋め{i}")
+            page.click(feed_window + ".btn-primary")
+            # 追加は往復するので、件数が増えるのを待つ（時間で待つと取りこぼす）
+            page.wait_for_function(
+                """n => document.querySelectorAll('.window[data-app-id="news-feeds"] .list-row').length === n""",
+                arg=i, timeout=5000)
+        check("上限まで登録すると追加ボタンが押せなくなる",
+              page.locator(feed_window + ".list-row").count() == limit
+              and page.locator(feed_window + ".btn-primary").is_disabled(),
+              f'{page.locator(feed_window + ".list-row").count()} / {limit} 件')
+
         # ── タブ表示のパネル ──
         page.click("#start-button")
         page.click('.app-tile[data-app-id="tts"]')
@@ -274,7 +308,8 @@ def main():
         # ── ウィンドウ操作 ──
         check("ウィンドウが3枚開いている", page.locator(".window").count() == 3)
         page.locator('.window[data-app-id="tts"] .window-control').first.click()  # 最小化
-        page.wait_for_timeout(100)
+        # 最小化はタスクバーへ吸い込む動きのぶん遅れて確定する。時間ではなく状態を待つ
+        page.wait_for_selector(".taskbar-app.is-minimized", timeout=3000)
         check("最小化するとタスクバーが薄くなる",
               page.locator('.taskbar-app.is-minimized').count() == 1)
         page.locator(".taskbar-app.is-minimized").click()
@@ -310,6 +345,11 @@ def main():
         check("iframe ではない", page.locator(us + "iframe").count() == 0)
         check("状態がラベル化されている", "在籍" in page.locator(us + ".list-row .chip").first.inner_text(),
               page.locator(us + ".list-row .chip").first.inner_text())
+        # 状態ごとの色をサーバが返しているのに、クライアントが青と赤に潰していた
+        tones = page.evaluate(f"""() => [...document.querySelectorAll('{us.strip()} .list-row .chip')]
+          .map(c => c.className.replace('chip', '').trim())""")
+        check("状態の色が状態ごとに分かれている", "success" in tones,
+              " / ".join(tones) or "色なし")
 
         page.fill(us + 'input[type="search"]', "花子")
         page.keyboard.press("Enter")
@@ -345,6 +385,39 @@ def main():
         # ── 配置の保存 ──
         stored = page.evaluate("() => window.localStorage.getItem('voldemort.desktop.layout.v1')")
         check("ウィンドウ配置が保存されている", stored and "news-feeds" in stored, (stored or "")[:80])
+
+        # 最小化中は実測できない（display:none で 0×0）。そのまま保存すると、
+        # 次に開いたときに前回の位置と大きさが失われる。
+        # いちばん手前の窓（開発者パネル）を最小化して、保存された配置を見る
+        page.locator('.window[data-app-id="dev"] .window-control').first.click()
+        page.wait_for_selector('.taskbar-app.is-minimized', timeout=3000)
+        saved = page.evaluate("""() => {
+          const layout = JSON.parse(window.localStorage.getItem('voldemort.desktop.layout.v1'));
+          return layout.windows.find(w => w.appId === 'dev') || null;
+        }""")
+        check("最小化中でも元の大きさを保存する",
+              bool(saved) and saved["minimized"] and saved["w"] >= 320 and saved["h"] >= 200,
+              f'{saved["w"]}x{saved["h"]} at {saved["x"]},{saved["y"]}' if saved else "保存なし")
+        page.locator(".taskbar-app.is-minimized").click()  # 元に戻す
+        page.wait_for_timeout(300)
+
+        # ── 選択肢を持たない項目に「取得できませんでした」と出さない ──
+        # メッセージID(snowflake) は元から一覧を引かない。壊れていないのに壊れて見えていた。
+        page.click("#start-button")
+        page.click('.app-tile[data-app-id="reaction-roles"]')
+        page.wait_for_selector('.window[data-app-id="reaction-roles"] .field', timeout=8000)
+        notes = page.evaluate("""() => {
+          const out = {};
+          for (const field of document.querySelectorAll('.window[data-app-id="reaction-roles"] .field')) {
+            const key = field.dataset.key || '';
+            out[key] = [...field.querySelectorAll('.field-help')]
+              .some(p => p.textContent.includes('取得できませんでした'));
+          }
+          return out;
+        }""")
+        check("一覧を引かない項目に取得失敗の断りを出さない",
+              notes.get("message_id") is False and notes.get("role_id") is True,
+              json.dumps(notes, ensure_ascii=False))
 
         # ── アイコンが実際に描かれているか（スプライト参照の確認） ──
         icon_count = page.locator(".icon").count()
@@ -399,17 +472,36 @@ def main():
             if path_ == "/":
                 page.screenshot(path=SHOT_PUBLIC, full_page=False)
 
-                # 機能カードの枠が最後まで埋まっていること。
-                # 埋まらないセルが残ると、中身のない箱だけが罫線で描かれる。
-                tail = page.evaluate("""() => {
+                # 機能カードの枠。罫線は 1px の隙間から下地を覗かせて引くので、
+                #   - セルが埋まっていないと、そこだけ罫線色の塊が出る
+                #   - 隙間が無いと、罫線そのものが1本も見えない（実際にそうなっていた）
+                # の両方を実測で見る。
+                grid = page.evaluate("""() => {
                   const grid = document.querySelector('.feature-grid');
-                  const last = grid.lastElementChild;
-                  const g = grid.getBoundingClientRect(), l = last.getBoundingClientRect();
-                  const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').length;
-                  return { gap: Math.round(g.right - l.right), cols };
+                  const cs = getComputedStyle(grid);
+                  const g = grid.getBoundingClientRect();
+                  const inner = (g.width - parseFloat(cs.borderLeftWidth) - parseFloat(cs.borderRightWidth))
+                              * (g.height - parseFloat(cs.borderTopWidth) - parseFloat(cs.borderBottomWidth));
+                  const cards = [...grid.children].map(c => c.getBoundingClientRect());
+                  const covered = cards.reduce((sum, r) => sum + r.width * r.height, 0);
+                  let seams = 0;
+                  for (const a of cards) for (const b of cards) {
+                    if (a === b) continue;
+                    const dx = b.left - a.right, dy = b.top - a.bottom;
+                    if (dx >= 0.9 && dx <= 1.6) seams++;
+                    if (dy >= 0.9 && dy <= 1.6) seams++;
+                  }
+                  return {
+                    cols: cs.gridTemplateColumns.split(' ').length,
+                    coverage: covered / inner,
+                    seams,
+                    ruled: cs.backgroundColor !== getComputedStyle(grid.firstElementChild).backgroundColor,
+                  };
                 }""")
-                check("機能カードの枠に空きセルが残らない", tail["gap"] <= 2,
-                      f'{tail["cols"]} 列 / 右端の差 {tail["gap"]}px')
+                check("機能カードの枠に空きセルが残らない", grid["coverage"] > 0.985,
+                      f'{grid["cols"]} 列 / 埋まり {grid["coverage"] * 100:.1f}%')
+                check("機能カードの間に罫線が見える", grid["seams"] > 0 and grid["ruled"],
+                      f'継ぎ目 {grid["seams"]} 箇所 / 下地の塗り分け {grid["ruled"]}')
 
             if path_ in ("/", "/guide"):
                 # 手順リスト。li を flex にすると、地の文と <strong> が
@@ -441,6 +533,49 @@ def main():
               and anon_page.locator(".icon").count() > 0,
               f'アイコン {anon_page.locator(".icon").count()} 個')
         anon.close()
+        # ── 動き ──
+        # 動きを抑える設定のときに止まるかどうかは、CSS と JS の両方で担保している。
+        # 片方だけ直しても気付けないので、実際に開いて測る。
+        motion = browser.new_context(viewport={"width": 1360, "height": 860})
+        motion.add_cookies([
+            {"name": "admin_session", "value": session_cookie(), "domain": "127.0.0.1", "path": "/"}
+        ])
+        mpage = motion.new_page()
+        mpage.goto(f"{BASE}/admin/overview", wait_until="networkidle")
+        mpage.wait_for_selector(".app-tile", timeout=8000)
+        mpage.click('.app-tile[data-app-id="logging"]')
+        mpage.wait_for_selector(".window", timeout=8000)
+        moving = mpage.evaluate("""() => {
+          const s = getComputedStyle(document.querySelector('.window'));
+          const bar = getComputedStyle(document.querySelector('.taskbar'));
+          return { window: s.animationName, duration: s.animationDuration, taskbar: bar.animationName };
+        }""")
+        check("ウィンドウとタスクバーに動きが付いている",
+              moving["window"] == "window-open" and moving["taskbar"] == "taskbar-rise"
+              and moving["duration"] not in ("0s", "0.001ms"),
+              f'{moving["window"]} {moving["duration"]} / {moving["taskbar"]}')
+        motion.close()
+
+        calm = browser.new_context(viewport={"width": 1360, "height": 860}, reduced_motion="reduce")
+        calm.add_cookies([
+            {"name": "admin_session", "value": session_cookie(), "domain": "127.0.0.1", "path": "/"}
+        ])
+        cpage = calm.new_page()
+        cpage.goto(f"{BASE}/admin/overview", wait_until="networkidle")
+        cpage.wait_for_selector(".app-tile", timeout=8000)
+        cpage.click('.app-tile[data-app-id="logging"]')
+        cpage.wait_for_selector(".window", timeout=8000)
+        duration = cpage.evaluate("""() => {
+          const value = getComputedStyle(document.querySelector('.window')).animationDuration;
+          return parseFloat(value) * (value.endsWith('ms') ? 0.001 : 1);
+        }""")
+        check("動きを抑える設定では動かさない（CSS）", duration < 0.01, f"{duration}s")
+        cpage.locator(".window-control").first.click()  # 最小化
+        # play() が降りていれば、待たずに最小化が確定する
+        cpage.wait_for_selector(".taskbar-app.is-minimized", timeout=400)
+        check("動きを抑える設定では待たされない（JS）", True)
+        calm.close()
+
         # ── 狭い画面（スマートフォン相当） ──
         narrow = browser.new_context(viewport={"width": 390, "height": 844})
         narrow.add_cookies([
@@ -471,6 +606,37 @@ def main():
         check("窓が画面いっぱいに開く", win_box["width"] >= 388, f'{int(win_box["width"])}px')
 
         npage.screenshot(path=str(SHOT_NARROW))
+
+        # ── 狭い画面の公開ページ ──
+        # ランディングはハンバーガーに畳むが、ガイド・規約・ポリシーはボタンが
+        # 出たまま。横に詰めると文字が縦に折れて読めなくなる（実際にそうなっていた）。
+        for path_ in ("/", "/guide", "/terms", "/privacy"):
+            npage.goto(f"{BASE}{path_}", wait_until="networkidle")
+            bar = npage.evaluate("""() => {
+              const visible = el => el && el.getClientRects().length > 0;
+              const brand = document.querySelector('.brand-name');
+              const btns = [...document.querySelectorAll('.topbar-actions .btn')].filter(visible);
+              return {
+                brand: Math.round(brand.getBoundingClientRect().height),
+                btns: btns.map(b => Math.round(b.getBoundingClientRect().height)),
+                overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+              };
+            }""")
+            check(f"狭い画面の上部バーが折れない {path_}",
+                  bar["brand"] <= 30 and all(h <= 44 for h in bar["btns"]) and not bar["overflow"],
+                  f'ブランド {bar["brand"]}px / ボタン {bar["btns"]}')
+
+        # 開いたモバイルナビが、画面を広げたあとも残らないこと
+        npage.goto(f"{BASE}/", wait_until="networkidle")
+        npage.click(".landing-menu-toggle")
+        npage.wait_for_timeout(150)
+        opened = npage.locator(".landing-mobile-nav").is_visible()
+        npage.set_viewport_size({"width": 1200, "height": 844})
+        npage.wait_for_timeout(200)
+        check("モバイルナビは狭い画面でだけ開く",
+              opened and not npage.locator(".landing-mobile-nav").is_visible(),
+              f'狭い画面で開く {opened}')
+
         narrow.close()
 
         # この検証環境に由来するものは除外する:

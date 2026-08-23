@@ -591,6 +591,43 @@ class IconTests(unittest.TestCase):
         )
 
 
+class MetricToneTests(unittest.TestCase):
+    """メーターの色が値に連動していること。
+
+    以前は指標ごとに色を固定していたため、CPU が 99% でも 5% でも同じ見た目で、
+    SLA は 100% でも警告色だった。色が状態を表していないと、見る意味がなくなる。
+    """
+
+    def test_load_tone_follows_alert_threshold(self):
+        from webapp_admin.metrics import load_tone
+
+        self.assertEqual(load_tone(5, 90), "success")
+        self.assertEqual(load_tone(71, 90), "success")
+        self.assertEqual(load_tone(72, 90), "warning")   # しきい値の8割
+        self.assertEqual(load_tone(90, 90), "danger")    # アラートを記録する値
+        self.assertEqual(load_tone(100, 90), "danger")
+
+    def test_sla_tone(self):
+        from webapp_admin.metrics import sla_tone
+
+        self.assertEqual(sla_tone(100), "success")
+        self.assertEqual(sla_tone(99.9), "success")
+        self.assertEqual(sla_tone(99.0), "warning")
+        self.assertEqual(sla_tone(98.9), "danger")
+
+    def test_metric_tones_are_defined_in_css(self):
+        """クライアントは tone をそのまま class にする。CSS に無い色は無言で消える。"""
+        import re
+
+        from webapp_admin.metrics import load_tone, sla_tone
+
+        css = (Path(__file__).resolve().parent.parent / "webapp_admin" / "static" / "css"
+               / "components.css").read_text(encoding="utf-8")
+        defined = set(re.findall(r"\.metric\.tone-([\w-]+)", css))
+        used = {load_tone(v, 90) for v in (0, 80, 95)} | {sla_tone(v) for v in (100, 99.5, 0)}
+        self.assertEqual(used - defined, set(), f"CSS に無い tone: {used - defined}")
+
+
 class StylesheetTests(unittest.TestCase):
     """テンプレートの class が、どこかの CSS で定義されていること。
 

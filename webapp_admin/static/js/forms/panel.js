@@ -70,6 +70,11 @@ function renderPanel(win, schema) {
 
   clear(win.body).append(container);
 
+  // 値を読めなかった項目（services 側の失敗）は、既定値に見えてしまうので明示する
+  for (const [key, message] of Object.entries(schema.errors || {})) {
+    widgets.get(key)?.setError(`現在の値を読み取れませんでした（${message}）`);
+  }
+
   function changedKeys() {
     return [...widgets.keys()].filter((key) => !same(widgets.get(key).get(), baseline[key]));
   }
@@ -236,7 +241,14 @@ function renderCollection(collection, schema) {
       : `${items.length} 件`;
 
     if (!items.length) {
-      listEl.append(el("div", { class: "empty", text: `${collection.item_label}はまだありません。` }));
+      // 読み取りに失敗したときの空欄は「まだ無い」と区別が付かない
+      const failure = schema.errors?.[collection.key];
+      listEl.append(el("div", {
+        class: "empty",
+        text: failure
+          ? `一覧を読み取れませんでした（${failure}）`
+          : `${collection.item_label}はまだありません。`,
+      }));
     } else {
       const rows = items.map((item) => {
         const [first, ...rest] = collection.fields;
@@ -280,15 +292,17 @@ function renderCollection(collection, schema) {
       values[widget.field.key] = widget.get();
     }
 
+    // resetForm() が editingId を消すので、どちらの操作だったかを先に控える
+    const wasEditing = editingId !== null;
     submitButton.disabled = true;
     try {
-      const result = editingId === null
-        ? await api.post(url, { values })
-        : await api.put(`${url}/${encodeURIComponent(editingId)}`, { values });
+      const result = wasEditing
+        ? await api.put(`${url}/${encodeURIComponent(editingId)}`, { values })
+        : await api.post(url, { values });
       items = result.items || [];
       resetForm();
       renderRows();
-      toast(editingId === null ? "追加しました" : "更新しました", "success");
+      toast(wasEditing ? "更新しました" : "追加しました", "success");
     } catch (error) {
       if (error.status === 422) {
         const errors = error.fieldErrors;
@@ -301,7 +315,8 @@ function renderCollection(collection, schema) {
         toast(`保存に失敗しました（${error.message}）`, "danger");
       }
     } finally {
-      submitButton.disabled = false;
+      // 押せるかどうかは件数で決まる。ここで一律に戻すと、満杯でも押せてしまう
+      renderRows();
     }
   }
 

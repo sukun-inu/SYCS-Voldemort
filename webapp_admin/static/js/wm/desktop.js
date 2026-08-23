@@ -3,12 +3,16 @@
    中身の描画は forms/panel.js に委ねる。 */
 
 import { el, icon, clear } from "../lib/dom.js";
+import { DUR, EASE_IN, play, stopAnimations } from "../lib/motion.js";
 import { AppWindow } from "./window.js";
 import { mountPanel } from "../forms/panel.js";
 
 const LAYOUT_KEY = "voldemort.desktop.layout.v1";
 
 export class Desktop {
+  /** 閉じる動きの世代。開き直されたときに、古い動きの後始末で隠さないための番号。 */
+  static #menuTicket = 0;
+
   constructor({ groups }) {
     this.groups = groups;
     this.windows = new Map();
@@ -106,7 +110,10 @@ export class Desktop {
   }
 
   focusNext(exclude = null) {
-    const candidates = [...this.windows.values()].filter((w) => !w.minimized && w !== exclude);
+    // 開いた順ではなく重なり順で選ぶ。閉じた直後は、いちばん手前の窓が前に出る。
+    const candidates = [...this.windows.values()]
+      .filter((w) => !w.minimized && w !== exclude)
+      .sort((a, b) => Number(a.el.style.zIndex || 0) - Number(b.el.style.zIndex || 0));
     if (candidates.length) this.focus(candidates[candidates.length - 1]);
     else {
       this.focused = null;
@@ -120,7 +127,12 @@ export class Desktop {
 
   afterClose(win) {
     this.windows.delete(win.appId);
-    win.pill?.remove();
+    const pill = win.pill;
+    if (pill) {
+      pill.style.pointerEvents = "none";
+      play(pill, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.85)" }],
+           { duration: DUR.fast, easing: EASE_IN }).then(() => pill.remove());
+    }
     if (this.focused === win) this.focusNext(win);
     this.root.classList.toggle("has-windows", this.windows.size > 0);
     this.updateTaskbar();
@@ -172,6 +184,7 @@ export class Desktop {
 
   #buildStartMenu() {
     clear(this.startGroups);
+    let index = 0;
     for (const group of this.groups) {
       this.startGroups.append(
         el(
@@ -181,8 +194,8 @@ export class Desktop {
           el(
             "div",
             { class: "start-tiles" },
-            group.apps.map((app) =>
-              el(
+            group.apps.map((app) => {
+              const tile = el(
                 "button",
                 {
                   class: "app-tile",
@@ -197,8 +210,11 @@ export class Desktop {
                   app.badge ? el("span", { class: "app-tile-badge", text: String(app.badge) }) : null
                 ),
                 el("span", { text: app.title })
-              )
-            )
+              );
+              // 開くときに左上から順に立ち上がる（motion.css がこの値を遅延に使う）
+              tile.style.setProperty("--i", String(index++));
+              return tile;
+            })
           )
         )
       );
@@ -209,16 +225,46 @@ export class Desktop {
 
   #wireStartMenu() {
     this.startButton.addEventListener("click", () => {
-      this.startMenu.hidden ? this.openStartMenu() : this.closeStartMenu();
+      this.#isOpen(this.startMenu) ? this.closeStartMenu() : this.openStartMenu();
     });
     this.startSearch.addEventListener("input", () => this.#filterStartMenu(this.startSearch.value));
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") this.closeStartMenu();
+      // 開いているものを閉じる。スタートだけでなくユーザーメニューも対象にする
+      if (event.key !== "Escape") return;
+      this.closeStartMenu();
+      this.closeUserMenu();
+    });
+  }
+
+  /** 閉じる動きの最中は「開いている」とは数えない（押し直しで開き直せるように）。 */
+  #isOpen(node) {
+    return !node.hidden && !node.classList.contains("is-closing");
+  }
+
+  #showMenu(node) {
+    stopAnimations(node);
+    node.classList.remove("is-closing");
+    node.dataset.closing = "";
+    node.hidden = false;
+  }
+
+  /** 消える動きを見せてから hidden にする。途中で開き直されたら隠さない。 */
+  #hideMenu(node) {
+    if (node.hidden || node.classList.contains("is-closing")) return;
+    const token = String(++Desktop.#menuTicket);
+    node.dataset.closing = token;
+    node.classList.add("is-closing");
+    play(node, [{ opacity: 1, transform: "none" },
+                { opacity: 0, transform: "translateY(8px) scale(.98)" }],
+         { duration: DUR.fast, easing: EASE_IN }).then(() => {
+      if (node.dataset.closing !== token) return;
+      node.hidden = true;
+      node.classList.remove("is-closing");
     });
   }
 
   openStartMenu() {
-    this.startMenu.hidden = false;
+    this.#showMenu(this.startMenu);
     this.startButton.setAttribute("aria-expanded", "true");
     this.startSearch.value = "";
     this.#filterStartMenu("");
@@ -227,7 +273,7 @@ export class Desktop {
   }
 
   closeStartMenu() {
-    this.startMenu.hidden = true;
+    this.#hideMenu(this.startMenu);
     this.startButton.setAttribute("aria-expanded", "false");
     this.#closeBackdrop();
   }
@@ -254,23 +300,27 @@ export class Desktop {
     const button = document.getElementById("user-button");
     const menu = document.getElementById("user-menu");
     if (!button || !menu) return;
+    this.userButton = button;
+    this.userMenu = menu;
     button.addEventListener("click", () => {
-      if (menu.hidden) {
-        const rect = button.getBoundingClientRect();
-        menu.style.right = `${Math.max(8, window.innerWidth - rect.right)}px`;
-        menu.style.bottom = `${window.innerHeight - rect.top + 8}px`;
-        menu.hidden = false;
-        button.setAttribute("aria-expanded", "true");
-        this.#openBackdrop(() => {
-          menu.hidden = true;
-          button.setAttribute("aria-expanded", "false");
-        });
-      } else {
-        menu.hidden = true;
-        button.setAttribute("aria-expanded", "false");
-        this.#closeBackdrop();
+      if (this.#isOpen(menu)) {
+        this.closeUserMenu();
+        return;
       }
+      const rect = button.getBoundingClientRect();
+      menu.style.right = `${Math.max(8, window.innerWidth - rect.right)}px`;
+      menu.style.bottom = `${window.innerHeight - rect.top + 8}px`;
+      this.#showMenu(menu);
+      button.setAttribute("aria-expanded", "true");
+      this.#openBackdrop(() => this.closeUserMenu());
     });
+  }
+
+  closeUserMenu() {
+    if (!this.userMenu) return;
+    this.#hideMenu(this.userMenu);
+    this.userButton?.setAttribute("aria-expanded", "false");
+    this.#closeBackdrop();
   }
 
   #openBackdrop(onClose) {
@@ -290,10 +340,13 @@ export class Desktop {
     const clock = document.getElementById("taskbar-clock");
     if (!clock) return;
     const tick = () => {
-      clock.textContent = new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+      const now = new Date();
+      clock.textContent = now.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+      // 分が変わった瞬間に合わせて次を予約する（一定間隔だと最大その分だけ遅れて見える）
+      const delay = 60000 - (now.getSeconds() * 1000 + now.getMilliseconds());
+      window.setTimeout(tick, Math.max(1000, delay));
     };
     tick();
-    window.setInterval(tick, 10000);
   }
 
   #wireResize() {

@@ -439,6 +439,8 @@ body.desktop-body { overflow: hidden; }
   }
   .window-body { border-radius: 0; border-width: 1px 0 0; }
   .window-resize { display: none; }
+  /* この画面には移動もリサイズも無い。無い操作を案内しない */
+  .desktop-hint .small { display: none; }
   .start-menu { left: 0; right: 0; width: auto; border-radius: 0; }
 }
 

@@ -195,6 +195,8 @@
 }
 .chip.accent { color: var(--accent); border-color: transparent; background: var(--accent-soft); }
 .chip.danger { color: var(--danger); border-color: transparent; background: var(--danger-soft); }
+.chip.success { color: var(--success); border-color: transparent; background: var(--success-soft); }
+.chip.warning { color: var(--attention); border-color: transparent; background: var(--attention-soft); }
 
 /* ── 保存バー ─────────────────────────────────────────────── */
 .savebar {
@@ -289,7 +291,9 @@
 .meter-fill { display: block; height: 100%; background: var(--accent); transition: width .3s ease; }
 .metric.tone-success .meter-fill { background: var(--success); }
 .metric.tone-warning .meter-fill { background: var(--attention); }
+.metric.tone-danger .meter-fill { background: var(--danger); }
 .metric.tone-info .meter-fill { background: var(--accent); }
+.metric.tone-danger .metric-value { color: var(--danger); }
 
 .list-row.severity-critical { border-left: 3px solid var(--danger); }
 .list-row.severity-warning { border-left: 3px solid var(--attention); }
