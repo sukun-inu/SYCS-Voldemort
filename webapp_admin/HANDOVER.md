@@ -47,8 +47,9 @@
 | `api/users.py` | ユーザー状態監査（検索・ページングはサーバ側） |
 | `api/dev.py` | 開発者パネル（`DEV_USER_ID` 一致者のみ） |
 | `views/` | シェルとギルド選択の HTML だけ |
-| `static/css/` | tokens / base / components / desktop / page / public |
+| `static/css/` | tokens / base / components / desktop / motion / page / public |
 | `static/js/wm/` | ウィンドウマネージャ |
+| `static/js/lib/motion.js` | 位置を測ってから動かすアニメーション（最小化・最大化・開閉） |
 | `static/js/forms/` | スキーマ → DOM のレンダラと明示保存 |
 | `static/js/apps/` | 専用画面（monitor / user_state / dev） |
 
@@ -90,6 +91,12 @@ Field(
   スタイルは CSS クラスに、イベントは `addEventListener` に書く。
 - アイコンは同梱スプライト（`static/icons/sprite.svg`）を `<use>` で参照する。
   JS からは `lib/dom.js` の `icon()`、テンプレートからは `{{ icon('name') }}`。
+- **動きは transform と opacity だけ**。長さとイージングは `tokens.css` の `--dur-*` /
+  `--ease-*` に揃え、CSS で書けるものは `motion.css`、終点の座標を測る必要があるものだけ
+  `lib/motion.js` の `play()` に置く。`prefers-reduced-motion: reduce` では
+  base.css が CSS を潰し、`play()` は待たずに解決する（**両方直さないと片方だけ動く**）。
+- **色は状態を表す**。固定色のバッジやメーターを置かない（例: 監視のメーターは
+  `metrics.py` の `load_tone()` がしきい値と同じ物差しで色を決める）。
 
 ## 6. 確認コマンド
 

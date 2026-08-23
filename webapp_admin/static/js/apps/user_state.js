@@ -107,7 +107,7 @@ export function mount(win) {
               el("div", { class: "truncate", text: row.display_name || row.username || `ID: ${row.user_id}` }),
               el("div", { class: "list-sub truncate mono", text: row.user_id })
             ),
-            el("span", { class: `chip ${row.status_tone === "danger" ? "danger" : "accent"}`, text: row.status_label }),
+            el("span", { class: `chip ${row.status_tone}`, text: row.status_label }),
             el("div", { class: "list-sub nowrap" },
                el("div", { text: row.last_event_label }),
                el("div", { text: row.last_event_at })),
@@ -133,7 +133,7 @@ export function mount(win) {
       countChip.textContent = `${total} 人`;
       const from = total === 0 ? 0 : offset + 1;
       const to = offset + (payload.rows || []).length;
-      pageLabel.textContent = `${from}–${to} / ${total} 件`;
+      pageLabel.textContent = `${from}–${to} / ${total} 人`;
       prevButton.disabled = offset === 0;
       nextButton.disabled = !payload.has_more;
     } catch (error) {
@@ -162,8 +162,7 @@ export function mount(win) {
         detailEl.append(
           el("div", { class: "row" },
              el("strong", { class: "grow", text: current.display_name || current.username || `ID: ${userId}` }),
-             el("span", { class: `chip ${current.status_tone === "danger" ? "danger" : "accent"}`,
-                          text: current.status_label })),
+             el("span", { class: `chip ${current.status_tone}`, text: current.status_label })),
           definition("ユーザーID", current.user_id),
           definition("初回記録", current.first_seen_at),
           definition("最終参加", current.last_joined_at),

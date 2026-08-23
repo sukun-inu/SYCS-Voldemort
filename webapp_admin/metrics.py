@@ -71,12 +71,34 @@ def start_background_monitor(logger: Any | None = None) -> None:
     thread.start()
 
 
+def load_tone(percent: float, alert_at: float) -> str:
+    """メーターの色。しきい値（アラートを記録する値）と同じ物差しで決める。
+
+    色を固定にしていると、90% でも 5% でも同じ見た目になり、
+    「色が付いている＝何かある」という読み方ができなくなる。
+    """
+    if percent >= alert_at:
+        return "danger"
+    if percent >= alert_at * 0.8:
+        return "warning"
+    return "success"
+
+
+def sla_tone(percent: float) -> str:
+    if percent >= 99.9:
+        return "success"
+    if percent >= 99.0:
+        return "warning"
+    return "danger"
+
+
 def collect_host_metrics() -> dict:
     now = time.time()
     cpu_percent = psutil.cpu_percent(interval=0.1)
     memory = psutil.virtual_memory()
     tps = _request_tps(now)
     tps_target = max(_env_float("ADMIN_TPS_TARGET", 50.0), 0.01)
+    tps_percent = _clamp_percent((tps / tps_target) * 100)
     boot_time = psutil.boot_time()
     sla_percent = _month_to_date_sla_percent(now)
 
@@ -88,28 +110,30 @@ def collect_host_metrics() -> dict:
                 "percent": _clamp_percent(cpu_percent),
                 "display": f"{cpu_percent:.1f}%",
                 "detail": f"論理コア {psutil.cpu_count(logical=True) or 1}",
-                "tone": "accent",
+                "tone": load_tone(cpu_percent, _env_float("ADMIN_CPU_ALERT_PERCENT", 90.0)),
             },
             "memory": {
                 "label": "Memory",
                 "percent": _clamp_percent(memory.percent),
                 "display": f"{memory.percent:.1f}%",
                 "detail": f"{_format_bytes(memory.used)} / {_format_bytes(memory.total)}",
-                "tone": "success",
+                "tone": load_tone(memory.percent, _env_float("ADMIN_MEMORY_ALERT_PERCENT", 90.0)),
             },
             "tps": {
                 "label": "TPS",
-                "percent": _clamp_percent((tps / tps_target) * 100),
-                "display": f"{_clamp_percent((tps / tps_target) * 100):.1f}%",
-                "detail": f"{tps:.2f} req/s / 目標 {tps_target:g}",
-                "tone": "info",
+                "percent": tps_percent,
+                # 目盛りは目標に対する割合、数字は実測値。"0.4%" とだけ出ていると
+                # 秒間リクエスト数が 0.4 なのか、目標の 0.4% なのか読めない。
+                "display": f"{tps:.2f} req/s",
+                "detail": f"目標 {tps_target:g} req/s の {tps_percent:.0f}%",
+                "tone": load_tone(tps_percent, _env_float("ADMIN_TPS_ALERT_PERCENT", 100.0)),
             },
             "sla": {
                 "label": "SLA",
                 "percent": _clamp_percent(sla_percent),
                 "display": f"{sla_percent:.2f}%",
                 "detail": f"記録済み停止 {_format_duration(_downtime_seconds_month_to_date(now))}",
-                "tone": "warning",
+                "tone": sla_tone(sla_percent),
             },
         },
         "runtime": {
@@ -240,7 +264,8 @@ def _record_threshold_alerts(metrics: dict[str, Any]) -> None:
             kind="resource_alert",
             severity="warning",
             title=f"{metric.get('label', key)} 使用率アラート",
-            message=f"{metric.get('display', f'{percent:.1f}%')} がしきい値 {threshold:g}% を超えました。",
+            # display は指標ごとに単位が違う（TPS は req/s）。しきい値は割合なので割合で書く
+            message=f"{percent:.1f}% がしきい値 {threshold:g}% を超えました。",
             metadata={"metric": key, "percent": percent, "threshold": threshold, "detail": metric.get("detail")},
         )
 

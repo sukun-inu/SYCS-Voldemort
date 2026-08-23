@@ -36,6 +36,10 @@ export function createWidget(field, value, choices) {
   // （空のドロップダウンだけを出すと、設定する手段が無くなってしまう）
   const isFreeTextFallback =
     isSelectLike && options.length === 0 && (field.free_text || ID_WIDGETS.has(field.widget));
+  // そもそも選択肢を持たない項目（メッセージIDなどの snowflake）に
+  // 「一覧を取得できませんでした」と出すと、壊れていないのに壊れて見える。
+  const expectsChoices = Boolean(field.choice_source) || Array.isArray(field.choices);
+  let noteEl = null;
 
   if (field.widget === "bool") {
     control = el("input", { type: "checkbox", id, oninput: notify });
@@ -72,8 +76,8 @@ export function createWidget(field, value, choices) {
       control.append(el("option", { value: String(value), text: `${value}（一覧にありません）` }));
     }
     wrapper.append(el("label", { class: "field-label", for: id, text: field.label }), control);
-    if (options.length === 0) {
-      wrapper.append(el("p", { class: "field-help", text: "選択肢を取得できませんでした。" }));
+    if (options.length === 0 && expectsChoices) {
+      noteEl = el("p", { class: "field-help", text: "選択肢を取得できませんでした。" });
     }
     read = () => (control.value === "" ? null : control.value);
     write = (v) => { control.value = v === null || v === undefined ? "" : String(v); };
@@ -99,21 +103,21 @@ export function createWidget(field, value, choices) {
       control.setAttribute("placeholder", "18桁前後の数字ID");
     }
     wrapper.append(el("label", { class: "field-label", for: id, text: field.label }), control);
-    if (isFreeTextFallback) {
-      wrapper.append(
-        el("p", {
-          class: "field-help",
-          text: ID_WIDGETS.has(field.widget)
-            ? "一覧を取得できませんでした。ID を直接入力できます。"
-            : "一覧を取得できませんでした。値を直接入力できます。",
-        })
-      );
+    if (isFreeTextFallback && expectsChoices) {
+      noteEl = el("p", {
+        class: "field-help",
+        text: ID_WIDGETS.has(field.widget)
+          ? "一覧を取得できませんでした。ID を直接入力できます。"
+          : "一覧を取得できませんでした。値を直接入力できます。",
+      });
     }
     read = () => (control.value.trim() === "" ? null : control.value.trim());
     write = (v) => { control.value = v === null || v === undefined ? "" : String(v); };
   }
 
+  // 項目そのものの説明が先。取得できなかったという断り書きはその後ろに置く。
   if (helpEl) wrapper.append(helpEl);
+  if (noteEl) wrapper.append(noteEl);
   wrapper.append(errorEl);
   write(value);
 
