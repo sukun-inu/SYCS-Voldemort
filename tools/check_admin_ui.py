@@ -299,11 +299,43 @@ def main():
         check("最大化してもボタンのアイコンが残る",
               maximize.is_visible() and box and box["width"] > 4,
               f'{int(box["width"]) if box else 0}px / {maximize.get_attribute("title")}')
+        # タイトルの頭と本文の1行目の頭は同じ位置から始める。ガラスの枠(1) と
+        # 余白(7)、本文の枠(1) と余白(14) を足した 23px が基準で、最大化して
+        # 枠が消えれば 14px になる。どちらの状態でも合っているか実測で見る。
+        title_align = """() => {
+          const win = document.querySelector('.window[data-app-id="logging"]');
+          const body = win.querySelector('.window-body');
+          const b = body.getBoundingClientRect(), s = getComputedStyle(body);
+          const round = v => Math.round(v * 10) / 10;
+          return {
+            left: round(win.querySelector('.window-icon').getBoundingClientRect().left
+                        - (b.left + parseFloat(s.borderLeftWidth) + parseFloat(s.paddingLeft))),
+            right: round(win.querySelector('.window-control.close .icon').getBoundingClientRect().right
+                         - (b.right - parseFloat(s.borderRightWidth) - parseFloat(s.paddingRight))),
+          };
+        }"""
+        # 最大化・復元は FLIP（拡大縮小）で動く。動いている間は実寸が歪むので待つ
+        settled = """() => {
+          const win = document.querySelector('.window[data-app-id="logging"]');
+          return !!win && win.getAnimations().length === 0;
+        }"""
+        page.wait_for_function(settled, timeout=3000)
+        big = page.evaluate(title_align)
+        check("最大化でもタイトルと本文の左右が揃う",
+              abs(big["left"]) <= 1 and abs(big["right"]) <= 1.5,
+              f'左 {big["left"]}px / 右 {big["right"]}px')
+
         maximize.click()
         page.wait_for_timeout(300)
         box = maximize.locator(".icon").bounding_box()
         check("元に戻したあともアイコンが残る", box and box["width"] > 4,
               f'{int(box["width"]) if box else 0}px / {maximize.get_attribute("title")}')
+
+        page.wait_for_function(settled, timeout=3000)
+        normal = page.evaluate(title_align)
+        check("タイトルと本文の左右が揃う",
+              abs(normal["left"]) <= 1 and abs(normal["right"]) <= 1.5,
+              f'左 {normal["left"]}px / 右 {normal["right"]}px')
 
         # ── ウィンドウ操作 ──
         check("ウィンドウが3枚開いている", page.locator(".window").count() == 3)
@@ -419,6 +451,25 @@ def main():
               notes.get("message_id") is False and notes.get("role_id") is True,
               json.dumps(notes, ensure_ascii=False))
 
+        # ── タスクバーの中身が帯の中心に来るか ──
+        # 上端の 1px の枠は内容の領域を 1px 下げる。行の高さが 1.7 のままだと
+        # ピルの高さも 34.09px のような半端な値になり、上下の余白が 1px 割れる。
+        pills = page.evaluate("""() => {
+          const bar = document.querySelector('.taskbar').getBoundingClientRect();
+          const mid = r => (r.top + r.bottom) / 2;
+          const out = {};
+          for (const sel of ['.start-button', '.taskbar-app', '.tray-button']) {
+            const el = document.querySelector(sel);
+            if (!el) continue;
+            const r = el.getBoundingClientRect();
+            out[sel] = { d: Math.round((mid(r) - mid(bar)) * 100) / 100, h: r.height };
+          }
+          return out;
+        }""")
+        check("タスクバーのピルが帯の中心に整数の高さで並ぶ",
+              bool(pills) and all(abs(v["d"]) <= 0.5 and v["h"] % 1 == 0 for v in pills.values()),
+              " / ".join(f'{k} {v["h"]:g}px {v["d"]:+g}' for k, v in pills.items()))
+
         # ── アイコンが実際に描かれているか（スプライト参照の確認） ──
         icon_count = page.locator(".icon").count()
         box = page.locator(".icon").first.bounding_box()
@@ -451,16 +502,33 @@ def main():
           const node = m.toast('設定を保存しました', 'success', { duration: 0 });
           const s = getComputedStyle(node);
           const alpha = (s.backgroundColor.match(/[\\d.]+/g) || [])[3];
+          // 中身は1行目の中心に置く。閉じるボタンが箱の高さを決めてしまうと、
+          // 1行の通知でも文章が上へ寄る（上 13px / 下 19px に割れていた）。
+          const mid = r => (r.top + r.bottom) / 2;
+          const box = node.getBoundingClientRect();
+          const text = document.createRange();
+          text.selectNodeContents(node.querySelector('.grow'));
+          const line = text.getBoundingClientRect();
+          const round = v => Math.round(v * 100) / 100;
           return {
             glass: s.backdropFilter !== 'none' || s.webkitBackdropFilter !== 'none',
             alpha: alpha === undefined ? 1 : Number(alpha),
             lens: node.classList.contains('lens'),
             width: Math.round(node.getBoundingClientRect().width),
+            icon: round(mid(node.querySelector(':scope > .icon').getBoundingClientRect()) - mid(line)),
+            close: round(mid(node.querySelector('.toast-close').getBoundingClientRect()) - mid(line)),
+            above: round(line.top - box.top),
+            below: round(box.bottom - line.bottom),
           };
         }""")
         check("通知がガラス（背後が透ける）",
               toast["glass"] and toast["alpha"] < 0.9 and toast["lens"],
               f'不透明度 {toast["alpha"]:.2f} / 幅 {toast["width"]}px')
+        check("通知の中身が1行目の中心に並ぶ",
+              abs(toast["icon"]) <= 1 and abs(toast["close"]) <= 1
+              and abs(toast["above"] - toast["below"]) <= 1,
+              f'アイコン {toast["icon"]:+g} / 閉じる {toast["close"]:+g} / '
+              f'上下 {toast["above"]:g}:{toast["below"]:g}')
 
         # ── 公開ページ（新CSSへ移行済み） ──
         for path_, needle in [("/", ".landing-hero"), ("/guide", ".doc-wrap"),
@@ -469,6 +537,21 @@ def main():
             visible = page.locator(needle).first.is_visible()
             icons = page.locator(".icon").count()
             check(f"公開ページ {path_}", visible and icons > 0, f'アイコン {icons} 個')
+
+            # ブランドのマークと文字は中心を揃える。<img> をインラインのまま
+            # <span> に入れると、行boxの descent ぶん（14px × 1.7 で約 7.8px）
+            # 入れ物だけ背が高くなり、マークが文字より約 4px 上へずれる。
+            brand = page.evaluate("""() => {
+              const link = document.querySelector('.brand-link');
+              const img = link.querySelector('.brand-mark-image').getBoundingClientRect();
+              const r = document.createRange();
+              r.selectNodeContents(link.querySelector('.brand-name'));
+              const t = r.getBoundingClientRect();
+              const mid = b => (b.top + b.bottom) / 2;
+              return Math.round((mid(img) - mid(t)) * 100) / 100;
+            }""")
+            check(f"ブランドのマークと文字の中心が揃う {path_}", abs(brand) <= 1, f'{brand:+g}px')
+
             if path_ == "/":
                 page.screenshot(path=SHOT_PUBLIC, full_page=False)
 
@@ -502,6 +585,42 @@ def main():
                       f'{grid["cols"]} 列 / 埋まり {grid["coverage"] * 100:.1f}%')
                 check("機能カードの間に罫線が見える", grid["seams"] > 0 and grid["ruled"],
                       f'継ぎ目 {grid["seams"]} 箇所 / 下地の塗り分け {grid["ruled"]}')
+
+            if path_ == "/guide":
+                # 読み物ページは1本の柱で組む。見出し・本文・コマンド一覧・
+                # 箇条書き・ボタンの左端がすべて同じ位置から始まること。
+                # （コマンド一覧だけ 4px 内側に入り、罫線だけ全幅で伸びていた）
+                doc = page.evaluate("""() => {
+                  const wrap = document.querySelector('.doc-wrap');
+                  const L = wrap.getBoundingClientRect().left
+                          + parseFloat(getComputedStyle(wrap).paddingLeft);
+                  const left = sel => {
+                    const el = document.querySelector(sel);
+                    return el ? Math.round((el.getBoundingClientRect().left - L) * 10) / 10 : null;
+                  };
+                  const links = document.querySelector('.doc-links').getBoundingClientRect();
+                  const legal = document.querySelector('.doc-legal').getBoundingClientRect();
+                  const icon = document.querySelector('.doc-section h2 .icon').getBoundingClientRect();
+                  return {
+                    cols: {
+                      'セクション': left('.doc-section'),
+                      '見出し': left('.doc-section h2 .icon'),
+                      'コマンド': left('.doc-cmd-name'),
+                      '箇条書き': left('.doc-section ul > li'),
+                      'ボタン': left('.doc-links .btn'),
+                    },
+                    gap: Math.round((legal.top - links.bottom) * 10) / 10,
+                    iconWidth: Math.round(icon.width * 10) / 10,
+                  };
+                }""")
+                check("読み物ページの左端が1本に揃う",
+                      set(doc["cols"].values()) == {0},
+                      " / ".join(f"{k} {v}" for k, v in doc["cols"].items()))
+                # 罫線を持つ帯に上の余白が無いと、直前のボタンの下端に線が接する
+                check("末尾の罫線がボタンに接しない", doc["gap"] >= 24, f'{doc["gap"]:g}px')
+                # .doc-section h2 .icon は body.public h2 .icon に負けやすい
+                check("見出しのアイコンが指定どおりの大きさ", doc["iconWidth"] == 17,
+                      f'{doc["iconWidth"]:g}px')
 
             if path_ in ("/", "/guide"):
                 # 手順リスト。li を flex にすると、地の文と <strong> が

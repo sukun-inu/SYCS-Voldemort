@@ -53,18 +53,22 @@
 .desktop.has-windows .desktop-hint { display: none; }
 
 /* ── ボタン ───────────────────────────────────────────────── */
+/* 高さは「行の高さ + 上下の余白 + 枠」で決まる。行の高さを整数で置き、
+   min-height と一致させる（body の 1.7 のままだと 34.1px になり、半端な
+   位置に枠が来て太さが揃わないうえ min-height が意味を持たない）。 */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   padding: 5px 12px;
-  min-height: 30px;
+  min-height: 30px;              /* 18 + 5+5 + 1+1 */
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--canvas-subtle);
   color: var(--fg);
   font-size: 13px;
+  line-height: 18px;
   font-weight: 500;
   cursor: pointer;
   transition: background-color .12s ease, border-color .12s ease, color .12s ease;
@@ -85,7 +89,7 @@
 .btn-quiet { background: transparent; border-color: transparent; color: var(--fg-muted); }
 .btn-quiet:hover:not(:disabled) { background: var(--canvas-inset); color: var(--fg); }
 
-.btn-sm { min-height: 26px; padding: 2px 8px; font-size: 12px; }
+.btn-sm { min-height: 26px; padding: 2px 8px; font-size: 12px; line-height: 20px; }
 .btn-icon { padding: 4px 7px; min-height: 28px; }
 
 /* ── フォーム ─────────────────────────────────────────────── */
@@ -101,13 +105,14 @@
 .textarea {
   width: 100%;
   padding: 5px 10px;
-  min-height: 32px;
+  min-height: 32px;              /* 20 + 5+5 + 1+1 */
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--canvas);
   color: var(--fg);
   font: inherit;
   font-size: 13.5px;
+  line-height: 20px;
 }
 .textarea { min-height: 92px; resize: vertical; line-height: 1.7; }
 .input:focus, .select:focus, .textarea:focus {
@@ -249,12 +254,16 @@
 }
 /* 通知もガラス。下の壁紙やウィンドウが透けるが、
    文字が乗る面だけは彩度と明度を持ち上げて読めるようにしておく。 */
+/* 縦の位置は「1行目」を基準に組む。文章が2行以上になってもアイコンと
+   閉じるボタンは1行目に留めたいので align-items は flex-start のまま、
+   1行目の高さ（22px）の中でそれぞれを中央に置く。
+   左枠だけ 3px 太いぶん、左の余白を 2px 削って内側の余白を左右で揃える。 */
 .toast {
   position: relative;
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 11px 13px;
+  padding: 11px 13px 11px 11px;
   border: 1px solid var(--glass-edge);
   border-left: 3px solid var(--border);
   border-radius: var(--radius-lg);
@@ -263,6 +272,7 @@
   backdrop-filter: var(--toast-blur);
   box-shadow: var(--shadow-popover), inset 0 1px 0 var(--glass-highlight);
   font-size: 13px;
+  line-height: 22px;
   animation: toast-in .18s ease-out;
 }
 /* backdrop-filter が使えない環境では透かさない（読めなくなるため） */
@@ -273,12 +283,32 @@
 .toast.success { border-left-color: var(--success); }
 .toast.danger { border-left-color: var(--danger); }
 .toast.info { border-left-color: var(--accent); }
-.toast > .icon { position: relative; z-index: 1; margin-top: 1px; flex: none; }
+/* 14px のアイコンを 22px の1行目の中央へ: (22 - 14) / 2 = 4px */
+.toast > .icon {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  margin-top: 4px;
+  flex: none;
+}
 .toast.success > .icon { color: var(--success); }
 .toast.danger > .icon { color: var(--danger); }
 .toast.info > .icon { color: var(--accent); }
-/* ガラスの上では薄い灰色が沈むので、地の文字色を使って少しだけ落とす */
-.toast-close { margin-left: auto; position: relative; z-index: 1; color: var(--fg); opacity: .55; }
+/* ガラスの上では薄い灰色が沈むので、地の文字色を使って少しだけ落とす。
+   大きさは1行目（22px）に収める。btn-sm の min-height:26px のままだと、
+   1行の通知でもこのボタンが箱の高さを決めてしまい、文章が上へ寄る。 */
+.toast-close {
+  margin-left: auto;
+  position: relative;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  color: var(--fg);
+  opacity: .55;
+}
 .toast-close:hover { opacity: 1; background: var(--glass-highlight); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
 
