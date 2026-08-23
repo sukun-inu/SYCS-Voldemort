@@ -86,23 +86,21 @@
   </div>
 </header>
 
-<div id="landing-nav-mobile">
-  <nav class="landing-mobile-nav" aria-label="モバイルナビゲーション">
-    <div class="landing-mobile-nav-inner">
-      <a href="{{ url_for('guide') }}" class="landing-mobile-nav-item">
-        {{ icon('book') }}使い方ガイド
-      </a>
-      {% if invite_url %}
-      <a href="{{ invite_url }}" class="landing-mobile-nav-item accent" target="_blank" rel="noopener noreferrer">
-        {{ icon('plus-circle-fill') }}Bot をサーバーに招待
-      </a>
-      {% endif %}
-      <a href="{{ url_for('auth.login') }}" class="landing-mobile-nav-item">
-        {{ icon('gear-fill') }}管理画面にログイン
-      </a>
-    </div>
-  </nav>
-</div>
+<nav id="landing-nav-mobile" class="landing-mobile-nav" aria-label="モバイルナビゲーション">
+  <div class="landing-mobile-nav-inner">
+    <a href="{{ url_for('guide') }}" class="landing-mobile-nav-item">
+      {{ icon('book') }}使い方ガイド
+    </a>
+    {% if invite_url %}
+    <a href="{{ invite_url }}" class="landing-mobile-nav-item accent" target="_blank" rel="noopener noreferrer">
+      {{ icon('plus-circle-fill') }}Bot をサーバーに招待
+    </a>
+    {% endif %}
+    <a href="{{ url_for('auth.login') }}" class="landing-mobile-nav-item">
+      {{ icon('gear-fill') }}管理画面にログイン
+    </a>
+  </div>
+</nav>
 
 <!-- Hero -->
 <div class="landing-hero">
