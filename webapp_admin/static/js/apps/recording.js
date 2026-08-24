@@ -4,6 +4,7 @@
    反映には数十秒かかるので、状況は定期的に取り直す。 */
 
 import * as api from "../lib/api.js";
+import { createMixer } from "./mixer.js";
 import { el, icon, clear, loading } from "../lib/dom.js";
 import { toast } from "../lib/toast.js";
 
@@ -225,6 +226,10 @@ export async function mount(win) {
               el("div", { class: "grow list-main" },
                  el("div", { class: "truncate", text: r.title }),
                  el("div", { class: "list-sub", text: `${r.size_mb} MB / 残り約${r.remaining_hours}時間` })),
+              el("button", {
+                class: "btn btn-sm", type: "button",
+                onclick: () => openMixer(r),
+              }, icon("bi-sliders"), "ミキサー"),
               el("a", { class: "btn btn-sm", href: r.url, target: "_blank", rel: "noopener" },
                  icon("bi-download"), "ダウンロード"))))
     );
@@ -242,6 +247,41 @@ export async function mount(win) {
     if (announceManualMode) announceManual.value = announceId;
     else announceSelect.value = announceId;
     excludedInput.value = (settings.excluded_user_ids || []).join(", ");
+  }
+
+  // ── ミキサー表示 ───────────────────────────────────────
+  // ウィンドウはアプリIDで一意なので録音ごとに窓を開けない。パネルの中身を
+  // 差し替えて開き、「戻る」で一覧へ帰る。開いているあいだは定期更新を止める
+  // （5秒ごとの再描画で画面ごと消えてしまうため）。
+  let mixerHandle = null;
+  const rootView = el("div", { class: "stack" });
+
+  async function openMixer(recording) {
+    if (timer) { window.clearInterval(timer); timer = null; }
+    const stage = el("div", { class: "stack" });
+    clear(win.body).append(
+      el("div", { class: "stack" },
+         el("div", { class: "row" },
+            el("button", {
+              class: "btn btn-sm", type: "button", onclick: () => closeMixer(),
+            }, icon("bi-arrow-left"), "録音一覧へ戻る"),
+            el("span", { class: "list-sub grow truncate", text: recording.title })),
+         stage)
+    );
+    try {
+      mixerHandle = await createMixer(stage, { manifestUrl: `${recording.url}/mixer` });
+    } catch (error) {
+      clear(stage).append(
+        el("div", { class: "empty", text: `ミキサーを開けませんでした（${error.message}）` })
+      );
+    }
+  }
+
+  function closeMixer() {
+    if (mixerHandle) { mixerHandle.destroy(); mixerHandle = null; }
+    clear(win.body).append(rootView);
+    refresh();
+    if (!timer) timer = window.setInterval(refresh, POLL_INTERVAL);
   }
 
   let timer = null;
@@ -297,10 +337,8 @@ export async function mount(win) {
     input.addEventListener("change", () => { settingsTouched = true; });
   }
 
-  clear(win.body).append(
-    el(
-      "div",
-      { class: "stack" },
+  // 一覧の画面は使い回す（ミキサーから戻ってきたときに組み立て直さない）
+  rootView.append(
       section("録音の状況", statusBox),
       section("保存されている録音", listBox),
       section(
@@ -321,11 +359,14 @@ export async function mount(win) {
               "本人の希望で録音対象から外す場合に指定します。Discord 側で /record exclude を使ってもらっても構いません。"),
         el("div", { class: "row" }, el("span", { class: "grow" }), saveButton)
       )
-    )
   );
+  clear(win.body).append(rootView);
 
   await refresh();
   timer = window.setInterval(refresh, POLL_INTERVAL);
-  // ウィンドウを閉じたら取得を止める（閉じたのに裏で叩き続けないように）
-  win.addCleanup(() => window.clearInterval(timer));
+  // ウィンドウを閉じたら取得と再生を止める（閉じたのに裏で動き続けないように）
+  win.addCleanup(() => {
+    window.clearInterval(timer);
+    if (mixerHandle) mixerHandle.destroy();
+  });
 }

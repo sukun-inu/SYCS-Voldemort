@@ -24,6 +24,8 @@ os.environ["SETTINGS_DIR"] = tempfile.mkdtemp(prefix="admin-api-test-")
 os.environ["ADMIN_FLASK_SECRET_KEY"] = "x" * 64
 os.environ["TTS_BASE_URL"] = "http://127.0.0.1:9"
 os.environ["DEV_USER_ID"] = "4242"
+# 配信キャッシュは SETTINGS_DIR 配下ではないので、別途隔離する。
+os.environ["DJAUDIO_CACHE_DIR"] = tempfile.mkdtemp(prefix="admin-api-cache-")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -844,6 +846,89 @@ class DocsTests(unittest.TestCase):
             result.returncode, 0,
             "docs/ADMIN.ja.md が古くなっています。python tools/generate_admin_docs.py を実行してください。"
             + (result.stdout or "") + (result.stderr or ""),
+        )
+
+
+class RecordingMixerApiTests(unittest.TestCase):
+    """ミキサーが使う配信API。ZIP を展開せずに1トラックずつ読ませる。"""
+
+    @classmethod
+    def setUpClass(cls):
+        import math
+        import struct
+        import time as _time
+        from unittest.mock import Mock
+
+        import services.recording_service as recording
+
+        def tone(seconds, freq=440.0):
+            out = bytearray()
+            for i in range(int(recording.SAMPLE_RATE * seconds)):
+                v = int(12000 * math.sin(2 * math.pi * freq * i / recording.SAMPLE_RATE))
+                out += struct.pack("<hh", v, v)
+            return bytes(out)
+
+        session = recording.RecordingSession(
+            guild_id=GUILD_ID, channel_id=555, channel_name="雑談VC",
+            started_by_id=1, started_by_name="すずき",
+            started_at=_time.monotonic(), max_seconds=0, retention_days=7,
+        )
+        session.feed(Mock(id=1, display_name="すずき"), tone(0.4))
+        session.feed(Mock(id=2, display_name="たなか"), tone(0.4, 660))
+        cls.result = recording._finalize(session, 2.0, "テスト")
+        cls.token = cls.result["token"]
+
+    def setUp(self):
+        self.client = TestClient(app)
+
+    def _mixer_url(self, guild_id=GUILD_ID, token=None):
+        return f"/dlaudio/files/{guild_id}/{token or self.token}/mixer"
+
+    def test_manifest_describes_every_track(self):
+        response = self.client.get(self._mixer_url())
+        self.assertEqual(response.status_code, 200)
+        manifest = response.json()
+        self.assertAlmostEqual(manifest["duration_seconds"], 2.0, delta=0.1)
+        self.assertEqual(len(manifest["stems"]), 2)
+        self.assertEqual({s["name"] for s in manifest["stems"]}, {"すずき", "たなか"})
+        self.assertTrue(all(s["peaks"] for s in manifest["stems"]))
+        self.assertTrue(all("/stem/" in s["url"] for s in manifest["stems"]))
+
+    def test_stem_is_served_as_seekable_audio(self):
+        url = self.client.get(self._mixer_url()).json()["stems"][0]["url"]
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "audio/mpeg")
+        # Range を宣言しないと、ブラウザは頭出しのたびに全部落とし直す。
+        self.assertEqual(response.headers.get("accept-ranges"), "bytes")
+        self.assertGreater(len(response.content), 0)
+
+    def test_range_requests_return_exactly_the_asked_bytes(self):
+        url = self.client.get(self._mixer_url()).json()["stems"][0]["url"]
+        whole = self.client.get(url).content
+
+        partial = self.client.get(url, headers={"Range": "bytes=100-199"})
+        self.assertEqual(partial.status_code, 206)
+        self.assertEqual(partial.content, whole[100:200])
+        self.assertEqual(partial.headers.get("content-range"),
+                         f"bytes 100-199/{len(whole)}")
+
+        suffix = self.client.get(url, headers={"Range": "bytes=-50"})
+        self.assertEqual(suffix.status_code, 206)
+        self.assertEqual(suffix.content, whole[-50:])
+
+        beyond = self.client.get(url, headers={"Range": f"bytes={len(whole) + 10}-"})
+        self.assertEqual(beyond.status_code, 416)
+
+    def test_other_guilds_cannot_read_the_recording(self):
+        self.assertEqual(self.client.get(self._mixer_url(guild_id=111)).status_code, 403)
+
+    def test_unknown_or_broken_links_do_not_leak(self):
+        self.assertEqual(self.client.get(self._mixer_url(token="a" * 32)).status_code, 410)
+        self.assertEqual(self.client.get(self._mixer_url(token="xx")).status_code, 404)
+        self.assertEqual(
+            self.client.get(f"/dlaudio/files/{GUILD_ID}/{self.token}/stem/99").status_code,
+            404,
         )
 
 

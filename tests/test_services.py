@@ -26,6 +26,9 @@ from unittest.mock import Mock, patch
 # services/* は読み込み時に SETTINGS_DIR を解決するため、import より前に差し替える。
 os.environ.setdefault("SETTINGS_DIR", tempfile.mkdtemp(prefix="services-test-"))
 os.environ.setdefault("TTS_BASE_URL", "http://127.0.0.1:9")
+# 配信キャッシュは SETTINGS_DIR とは別の設定なので、明示的に隔離する。
+# 忘れるとテストの録音がリポジトリの data/djaudio_cache に溜まり続ける。
+os.environ.setdefault("DJAUDIO_CACHE_DIR", tempfile.mkdtemp(prefix="services-cache-"))
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -765,6 +768,67 @@ class RecordingTests(unittest.TestCase):
         self.assertEqual(len([n for n in names if n.endswith(".mp3")]), 2)
         self.assertIn("info.txt", names)
         self.assertEqual({t["名前"] for t in info["トラック"]}, {"すずき", "たなか"})
+
+    def test_peaks_follow_the_speech_on_the_timeline(self):
+        """波形が「いつ喋ったか」を表すこと。
+
+        ミキサーは無音を詰めずに時間軸へ揃えて描く。波形が発話位置とずれると、
+        誰がいつ喋ったかを目で追えなくなり、時系列表示の意味が無くなる。
+        """
+        started = time.monotonic()
+        track = self.rec._TrackWriter(1, "A", self.work / "a.mp3", started)
+        track.write(self._tone(1.0), 0.0)   # 0〜1秒だけ発話
+        track.pad_until(4.0)                # 残りは無音で埋まる
+
+        series = track.peak_series()
+        bucket = self.rec.PEAK_BUCKET_SECONDS
+        self.assertAlmostEqual(len(series) * bucket, 4.0, delta=bucket)
+        voiced = series[:int(1.0 / bucket)]
+        silent = series[int(1.5 / bucket):]
+        self.assertTrue(all(v > 0.2 for v in voiced), series[:6])
+        self.assertTrue(all(v == 0 for v in silent), series)
+        track.close(4.0)
+
+    def test_peak_series_is_capped_so_long_recordings_stay_drawable(self):
+        """6時間ぶんの目盛りをそのまま送ると数万点になる。間引くこと。"""
+        track = self.rec._TrackWriter(1, "A", self.work / "a.mp3", time.monotonic())
+        track.peaks = [32767] * 20000
+        series = track.peak_series()
+        self.assertLessEqual(len(series), self.rec.PEAK_MAX_POINTS)
+        self.assertTrue(all(v == 1.0 for v in series))   # 間引いても山は残る
+        track.close(0.0)
+
+    def test_manifest_lines_the_tracks_up_for_the_mixer(self):
+        session = self._session()
+        for user_id, name in ((1, "すずき"), (2, "たなか")):
+            session.feed(Mock(id=user_id, display_name=name), self._tone(0.3))
+        result = self.rec._finalize(session, 2.0, "テスト")
+
+        from services.djaudio_cache import get_meta, payload_path
+        meta = get_meta(result["token"])
+        with zipfile.ZipFile(payload_path(result["token"], meta)) as archive:
+            manifest = json.loads(archive.read(self.rec.MANIFEST_NAME).decode("utf-8"))
+
+        self.assertAlmostEqual(manifest["duration_seconds"], 2.0, delta=0.1)
+        self.assertEqual(manifest["bucket_seconds"], self.rec.PEAK_BUCKET_SECONDS)
+        self.assertEqual([s["index"] for s in manifest["stems"]], [0, 1])
+        self.assertEqual({s["name"] for s in manifest["stems"]}, {"すずき", "たなか"})
+        self.assertTrue(all(s["peaks"] for s in manifest["stems"]))
+        self.assertTrue(all(s["size_bytes"] > 0 for s in manifest["stems"]))
+
+    def test_mp3_go_in_uncompressed_so_the_mixer_can_seek(self):
+        """ZIP を展開せずに Range で読むため、mp3 は無圧縮で入れる。"""
+        session = self._session()
+        session.feed(Mock(id=1, display_name="すずき"), self._tone(0.3))
+        result = self.rec._finalize(session, 1.0, "テスト")
+
+        from services.djaudio_cache import get_meta, payload_path
+        meta = get_meta(result["token"])
+        with zipfile.ZipFile(payload_path(result["token"], meta)) as archive:
+            stored = {i.filename: i.compress_type for i in archive.infolist()}
+        mp3 = {n: t for n, t in stored.items() if n.endswith(".mp3")}
+        self.assertTrue(mp3)
+        self.assertTrue(all(t == zipfile.ZIP_STORED for t in mp3.values()), mp3)
 
     def test_retention_days_control_the_link_lifetime(self):
         session = self._session(retention_days=3)
