@@ -17,6 +17,11 @@ _REQUEST_HISTORY_SECONDS = 60
 _TPS_WINDOW_SECONDS = 15
 _FILE_LOCK = threading.Lock()
 _MONITOR_LOCK = threading.Lock()
+
+# インシデント記録の保持上限。全文を読んで末尾から取り出す作りなので、
+# 際限なく増えると読み出しがそのぶん重くなる。
+_INCIDENT_MAX_LINES = 2000
+_INCIDENT_TRIM_BYTES = 512 * 1024  # ここを超えたときだけ行数を数えに行く
 _MONITOR_STARTED = False
 _LAST_ALERT_AT: dict[str, float] = {}
 
@@ -398,6 +403,28 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
     with _FILE_LOCK:
         with path.open("a", encoding="utf-8") as file:
             file.write(line + "\n")
+        _trim_jsonl(path)
+
+
+def _trim_jsonl(path: Path) -> None:
+    """行数の上限を超えたら古い行から捨てる。
+
+    admin.log は RotatingFileHandler で回しているのに、こちらは追記のみで
+    上限が無かった。読み出しはファイル全文をメモリに載せるので、放っておくと
+    増え続けたぶんだけ遅く・重くなる。呼び出し元が _FILE_LOCK を持っている前提。
+    """
+    try:
+        if path.stat().st_size <= _INCIDENT_TRIM_BYTES:
+            return
+        lines = path.read_text(encoding="utf-8").splitlines()
+        if len(lines) <= _INCIDENT_MAX_LINES:
+            return
+        kept = lines[-_INCIDENT_MAX_LINES:]
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text("\n".join(kept) + "\n", encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        pass
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
