@@ -335,10 +335,6 @@ def is_recording(guild_id: int) -> bool:
     return guild_id in _sessions
 
 
-def active_sessions() -> list[dict]:
-    return [s.status() for s in _sessions.values()]
-
-
 async def start_recording(
     bot,
     guild: discord.Guild,

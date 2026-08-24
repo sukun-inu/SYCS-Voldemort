@@ -1714,6 +1714,74 @@ class RecordingPrivilegeTests(unittest.TestCase):
                 body = body[:body.index("@group.command") if "@group.command" in body else len(body)]
                 self.assertIn("_ensure_admin(interaction)", body)
 
+
+class TTLCacheTests(unittest.TestCase):
+    """期限つきキャッシュ。放置しても膨らまないこと。
+
+    読み出し時に期限を見るだけで追い出しをしないキャッシュが各所にあり、鍵の空間が
+    広いもの（地震のイベント単位・記事単位・利用者単位）は動かし続けるほど増えていた。
+    """
+
+    def setUp(self):
+        from services.ttl_cache import TTLCache
+        self.TTLCache = TTLCache
+
+    def test_entries_expire_on_read(self):
+        cache = self.TTLCache(ttl=0.05, max_entries=10)
+        cache.set("a", 1)
+        self.assertEqual(cache.get("a"), 1)
+        time.sleep(0.08)
+        self.assertIsNone(cache.get("a"))
+        self.assertEqual(len(cache), 0)
+
+    def test_count_stays_under_the_limit(self):
+        cache = self.TTLCache(ttl=60, max_entries=3)
+        for i in range(50):
+            cache.set(i, i)
+        self.assertEqual(len(cache), 3)
+
+    def test_recently_used_entries_survive(self):
+        cache = self.TTLCache(ttl=60, max_entries=3)
+        for i in range(3):
+            cache.set(i, i)
+        cache.get(0)             # 0 を使う
+        cache.set(99, 99)        # あふれさせる
+        self.assertIsNotNone(cache.get(0))
+        self.assertIsNone(cache.get(1))   # 一番使われていないものが落ちる
+
+    def test_pop_and_clear(self):
+        cache = self.TTLCache(ttl=60, max_entries=10)
+        cache.set("a", 1)
+        self.assertEqual(cache.pop("a"), 1)
+        self.assertIsNone(cache.pop("a"))
+        cache.set("b", 2)
+        cache.clear()
+        self.assertEqual(len(cache), 0)
+
+    def test_invalid_configuration_is_rejected(self):
+        with self.assertRaises(ValueError):
+            self.TTLCache(ttl=0, max_entries=10)
+        with self.assertRaises(ValueError):
+            self.TTLCache(ttl=60, max_entries=0)
+
+    def test_leaky_caches_were_converted(self):
+        """鍵の空間が広いキャッシュが上限つきになっていること。"""
+        import services.djaudio_service as djaudio
+        import services.earthquake_service as earthquake
+        import services.news_service as news
+        import webapp_admin.auth as auth
+
+        for owner, name in (
+            (earthquake, "_jma_detail_url_cache"),
+            (news, "_summary_cache"),
+            (djaudio, "_user_cooldown"),
+            (auth, "_user_info_cache"),
+        ):
+            with self.subTest(cache=name):
+                cache = getattr(owner, name)
+                self.assertIsInstance(cache, self.TTLCache)
+                self.assertGreater(cache.max_entries, 0)
+
 if __name__ == "__main__":
     logging.disable(logging.CRITICAL)
     unittest.main()

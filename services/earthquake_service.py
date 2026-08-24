@@ -20,6 +20,7 @@ except ImportError:
     _PIL = False
 
 from config import BOT_ICON_URL, JST as _JST, SCALE_LABELS as _SCALE_DISPLAY
+from services.ttl_cache import TTLCache
 from services.settings_store import (
     get_all_guild_ids,
     get_earthquake_notify_types,
@@ -690,7 +691,10 @@ _JMA_LIST_TTL_SEC = 30.0
 _JMA_DETAIL_CACHE_TTL_SEC = 3600.0
 
 _jma_list_cache: tuple[list[dict], float] | None = None
-_jma_detail_url_cache: dict[str, tuple[str, float]] = {}
+# 地震1件ごとに鍵が増えるので、件数にも上限を置く（従来は追い出しが無かった）
+_jma_detail_url_cache: TTLCache[str, str] = TTLCache(
+    ttl=_JMA_DETAIL_CACHE_TTL_SEC, max_entries=500,
+)
 _jma_list_lock = asyncio.Lock()
 
 
@@ -876,10 +880,9 @@ async def _get_jma_list() -> list[dict]:
 
 async def _resolve_jma_detail_url(event: dict, max_scale: int) -> str:
     key = _cache_key_for_event(event, max_scale)
-    now = time.time()
     cached = _jma_detail_url_cache.get(key)
-    if cached and now - cached[1] < _JMA_DETAIL_CACHE_TTL_SEC:
-        return cached[0]
+    if cached is not None:
+        return cached
 
     eq = event.get("earthquake", {})
     hypo = eq.get("hypocenter", {})
@@ -904,7 +907,7 @@ async def _resolve_jma_detail_url(event: dict, max_scale: int) -> str:
     if best_score < 10:
         best_url = _JMA_QUAKE_FALLBACK_URL
 
-    _jma_detail_url_cache[key] = (best_url, now)
+    _jma_detail_url_cache.set(key, best_url)
     return best_url
 
 
