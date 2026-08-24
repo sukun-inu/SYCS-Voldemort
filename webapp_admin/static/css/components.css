@@ -371,3 +371,78 @@
 .log-follow { align-items: center; flex: none; white-space: nowrap; }
 .log-follow input { margin: 0; }
 .log-status { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ── 録音ミキサー ─────────────────────────────────────────
+   トラックを縦に積み、右側の波形を同じ時間軸で並べる。
+   左の見出し幅を固定して、目盛りと波形の左端が揃うようにしている。 */
+.mixer { --mixer-head: 200px; }
+
+.mixer-transport { align-items: center; gap: 8px; }
+.mixer-clock { font-variant-numeric: tabular-nums; opacity: .85; }
+
+.mixer-timeline { display: flex; align-items: stretch; }
+.mixer-timeline-head { flex: 0 0 var(--mixer-head); }
+.mixer-timeline-body { position: relative; flex: 1 1 auto; min-width: 0; }
+
+.mixer-ruler {
+  position: relative;
+  height: 18px;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,.12));
+}
+.mixer-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 11px;
+  opacity: .6;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.mixer-tick:first-child { transform: none; }
+
+/* 再生位置。レーン全体に重ねたいので、下方向へ伸ばす */
+.mixer-scrub { position: relative; height: 10px; cursor: pointer; }
+.mixer-playhead {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 10px;
+  background: var(--danger, #ff5b52);
+  pointer-events: none;
+}
+
+.mixer-lanes { display: flex; flex-direction: column; gap: 6px; }
+
+.mixer-lane {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  background: rgba(255, 255, 255, .03);
+  border: 1px solid var(--border, rgba(255,255,255,.10));
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mixer-lane-head {
+  flex: 0 0 calc(var(--mixer-head) - 8px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 8px;
+  min-width: 0;
+}
+.mixer-lane-name { font-size: 13px; font-weight: 500; }
+.mixer-lane-sub { font-size: 11px; opacity: .6; }
+.mixer-lane-controls { display: flex; align-items: center; gap: 4px; }
+.mixer-lane-controls .btn { padding: 0 6px; min-width: 26px; line-height: 20px; }
+
+.mixer-volume { flex: 1 1 auto; min-width: 40px; accent-color: var(--accent, #4fa9ff); }
+
+.mixer-lane-wave { flex: 1 1 auto; min-width: 0; }
+.mixer-wave { display: block; width: 100%; height: 56px; }
+
+@media (max-width: 720px) {
+  .mixer { --mixer-head: 140px; }
+  .mixer-lane-sub { display: none; }
+}

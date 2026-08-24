@@ -832,7 +832,11 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for track in session.tracks.values():
             if track.out_path.exists() and track.out_path.stat().st_size > 0:
-                archive.write(track.out_path, arcname=track.out_path.name)
+                # mp3 は既に圧縮済みなので縮まない。無圧縮で入れておくと、
+                # ZIP の中の1本を「その位置から何バイト」で直接読めるようになり、
+                # ミキサーの頭出し（Range リクエスト）が素直に通る。
+                archive.write(track.out_path, arcname=track.out_path.name,
+                              compress_type=zipfile.ZIP_STORED)
         archive.writestr(MANIFEST_NAME, json.dumps(manifest, ensure_ascii=False))
         archive.writestr("info.json", json.dumps(info, ensure_ascii=False, indent=2))
         archive.writestr(
