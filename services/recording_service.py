@@ -149,21 +149,58 @@ def _make_sink_class():
     from discord.ext import voice_recv
 
     class _RecordingSink(voice_recv.AudioSink):
+        """Opus のまま受け取り、自前でデコードする。
+
+        wants_opus() を False にするとライブラリ側がデコードするが、そこで
+        1つでも壊れたパケットに当たると OpusError が上がり、受信スレッドごと
+        落ちて stop_listening() まで呼ばれる（router.py の run/finally）。
+        つまり壊れたパケット1個で録音が黙って止まる。
+
+        こちらでデコードすれば、そのパケットを捨てて先へ進める。取りこぼしは
+        無音として扱われるが、トラックの位置合わせは経過時間を基準にしている
+        ので、ずれではなく短い欠落になるだけで済む。
+        """
+
         def __init__(self, session: "RecordingSession"):
             super().__init__()
             self.session = session
+            self._decoders: dict[int, "discord.opus.Decoder"] = {}
 
         def wants_opus(self) -> bool:
-            return False  # デコード済み PCM をもらう
+            return True
+
+        def _decoder_for(self, user_id: int):
+            decoder = self._decoders.get(user_id)
+            if decoder is None:
+                from discord.opus import Decoder
+                decoder = Decoder()
+                self._decoders[user_id] = decoder
+            return decoder
 
         def write(self, user, data) -> None:
             # voice_recv の受信スレッドから呼ばれる。ここでイベントループには触らない。
             if user is None:
                 return
-            self.session.feed(user, data.pcm)
+            encoded = data.opus
+            if not encoded:
+                return
+
+            user_id = int(getattr(user, "id", 0) or 0)
+            if not user_id or user_id in self.session.excluded_user_ids:
+                return
+
+            try:
+                pcm = self._decoder_for(user_id).decode(encoded, fec=False)
+            except Exception:
+                # 壊れたパケットは捨てて続ける。毎回ログを出すと洪水になるので
+                # 数だけ数え、停止時にまとめて残す。
+                self.session.dropped_packets += 1
+                return
+
+            self.session.feed(user, pcm)
 
         def cleanup(self) -> None:
-            pass
+            self._decoders.clear()
 
     return _RecordingSink
 
@@ -184,6 +221,7 @@ class RecordingSession:
     workdir: Path = field(default_factory=lambda: Path(tempfile.mkdtemp(prefix="rec-")))
     tracks: dict[int, _TrackWriter] = field(default_factory=dict)
     stopping: bool = False
+    dropped_packets: int = 0     # デコードできず捨てたパケット数
     announce_message: discord.Message | None = None
     _guard_task: asyncio.Task | None = None
 
@@ -245,6 +283,7 @@ class RecordingSession:
                 for t in self.tracks.values()
             ],
             "output_bytes": self.output_bytes,
+            "dropped_packets": self.dropped_packets,
             "excluded": sorted(self.excluded_user_ids),
         }
 
@@ -391,6 +430,25 @@ async def _announce_start(
     return None
 
 
+def _is_receiving(guild_id: int) -> bool:
+    """まだ音声を受信できている状態か。
+
+    voice_recv は受信スレッドで例外が起きると stop_listening() を呼んで
+    黙って受信をやめる（デコードできないパケット1つでも起きうる）。
+    接続そのものは生きているので、listening かどうかで見分ける。
+    """
+    client = voice_session.get(guild_id)
+    if client is None:
+        return False
+    is_listening = getattr(client, "is_listening", None)
+    if is_listening is None:
+        return True          # 判断できないなら止めない
+    try:
+        return bool(is_listening())
+    except Exception:
+        return True
+
+
 def _vc_is_empty(bot, session: "RecordingSession") -> bool:
     """録音中の VC から人間が居なくなったか。判断できないときは False。"""
     guild = bot.get_guild(session.guild_id)
@@ -425,6 +483,17 @@ async def _guard(bot, guild_id: int) -> None:
                 interval = min(_GUARD_INTERVAL_SEC, max(1.0, remaining))
             else:
                 interval = _GUARD_INTERVAL_SEC
+
+            # 受信スレッドが落ちていないか。voice_recv は内部でエラーが起きると
+            # stop_listening() を呼んで受信をやめるが、こちらのセッションは
+            # 「録音中」のまま残る。放っておくと、途中で切れた録音が最後まで
+            # 録れたように見えてしまうので、気づいた時点で書き出す。
+            if not _is_receiving(guild_id):
+                logger.warning(
+                    "[recording] guild=%s 音声の受信が止まっていたので書き出します", guild_id,
+                )
+                await stop_recording(bot, guild_id, reason="音声の受信が止まりました")
+                return
 
             # 開始直後は参加者のキャッシュが揃っていないことがあるので少し待つ
             if session.elapsed > _EMPTY_GRACE_SEC and _vc_is_empty(bot, session):
@@ -474,8 +543,9 @@ async def stop_recording(bot, guild_id: int, *, reason: str = "") -> dict:
         raise RecordingError(f"録音の書き出しに失敗しました（{e}）。") from e
 
     logger.info(
-        "[recording] guild=%s 停止（%s / %d トラック / %.1f 分）",
+        "[recording] guild=%s 停止（%s / %d トラック / %.1f 分 / 取りこぼし %d パケット）",
         guild_id, result["token"], result["track_count"], total_elapsed / 60,
+        session.dropped_packets,
     )
     return result
 
@@ -495,6 +565,7 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
         "書き出し日時": started_jst.strftime("%Y-%m-%d %H:%M:%S %Z"),
         "長さ": f"{int(total_elapsed // 60)}分{int(total_elapsed % 60)}秒",
         "停止理由": reason or "手動停止",
+        "取りこぼしたパケット": session.dropped_packets,
         "トラック": [
             {"ファイル": t.out_path.name, "名前": t.display_name,
              "発話時間(秒)": round(t.voiced_seconds, 1)}
@@ -545,6 +616,7 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
         "channel_id": session.channel_id,
         "channel_name": session.channel_name,
         "reason": reason or "手動停止",
+        "dropped_packets": session.dropped_packets,
         "speakers": [t.display_name for t in session.tracks.values()],
     }
 
@@ -566,6 +638,14 @@ def build_result_embed(guild_id: int, result: dict) -> discord.Embed:
     embed.add_field(name="保存期間", value=f"{result['retention_days']} 日", inline=True)
     if result["speakers"]:
         embed.add_field(name="参加者", value="、".join(result["speakers"][:20]), inline=False)
+    # 取りこぼしがあったなら黙っていない。音が欠けている可能性を伝える。
+    dropped = result.get("dropped_packets", 0)
+    if dropped:
+        embed.add_field(
+            name="⚠️ 取りこぼし",
+            value=f"{dropped} パケットを復元できませんでした（その分だけ音が欠けています）。",
+            inline=False,
+        )
     url = download_url(guild_id, result["token"])
     embed.add_field(name="ダウンロード", value=f"[ZIP をダウンロード]({url})\n`{url}`", inline=False)
     embed.set_footer(text=f"停止理由: {result['reason']}")
