@@ -41,6 +41,31 @@ except ImportError:  # 検証環境にブラウザが無い場合はスキップ
 from webapp_admin.app import app  # noqa: E402
 from services.logging_service import get_log_settings  # noqa: E402
 import webapp_admin.api.users as users_api  # noqa: E402
+import webapp_admin.auth as admin_auth  # noqa: E402
+from services import settings_store as settings_store  # noqa: E402
+
+# チャンネル一覧は Discord を叩くので差し替える。既定は「取れなかった」状態に
+# しておく（手入力へ落ちることを確かめる既存の検証がこれに依存している）。
+_STUB_CHANNELS: list[dict] = []
+
+
+async def _stub_guild_channels(guild_id):
+    return list(_STUB_CHANNELS)
+
+
+admin_auth._fetch_guild_channels = _stub_guild_channels
+
+
+def _serve_channels(channels):
+    """この先の画面にだけチャンネル一覧を出す。キャッシュも捨てる。"""
+    _STUB_CHANNELS[:] = channels
+    admin_auth._guild_channels_cache.clear()
+    admin_auth._guild_channels_cooldown.clear()
+
+# 一覧に出てこないチャンネルを指定した状態を作っておく（消えた／Bot から
+# 見えない／種類が違う、を模す）。プルダウンが空欄になって設定が消えないこと。
+_ORPHAN_CHANNEL = "1541471185798307800"
+GUILD_ID = 999
 
 # ユーザー状態監査は Postgres を使う。ここでは画面の確認が目的なので、
 # services 層をサンプルデータに差し替えて描画だけを見る。
@@ -259,6 +284,49 @@ def main():
         check("タブを切り替えられる", "デフォルト声設定" in tabs.nth(3).inner_text(), tabs.nth(3).inner_text())
         check("TTS API 不通なら声欄が手入力になる",
               page.locator('.window[data-app-id="tts"] .field[data-key="default_voice"] input').count() == 1)
+
+        # ── VC録音のパネル ──
+        _serve_channels([
+            {"id": "111", "name": "general", "type": 0},
+            {"id": "333", "name": "雑談VC", "type": 2},
+        ])
+        settings_store.set_recording_settings(GUILD_ID, {
+            "enabled": True, "auto_start": True, "max_minutes": 0, "retention_days": 30,
+            "announce_channel_id": int(_ORPHAN_CHANNEL), "vc_channel_id": None,
+        })
+        page.click("#start-button")
+        page.click('.app-tile[data-app-id="recording"]')
+        page.wait_for_selector('.window[data-app-id="recording"]', timeout=8000)
+        page.wait_for_timeout(1500)
+        rec_window = '.window[data-app-id="recording"] '
+        rec_body = page.locator('.window[data-app-id="recording"]').inner_text()
+
+        check("録音が無いときにミキサーの入口が説明される",
+              "録音を停止すると" in rec_body and "ミキサー" in rec_body)
+
+        # select.value に一覧へ無い値を入れても、ブラウザは黙って無視して空欄にする。
+        # そのまま保存すると設定が消える（実際に起きた）。
+        picked = page.evaluate(
+            """() => Array.from(
+                 document.querySelectorAll('.window[data-app-id="recording"] select'))
+                 .filter((s) => !s.hidden)
+                 .map((s) => ({ value: s.value,
+                                text: s.selectedOptions[0] ? s.selectedOptions[0].textContent : "" }))""")
+        orphan = next((x for x in picked if x["value"] == _ORPHAN_CHANNEL), None)
+        check("一覧に無いチャンネルでもプルダウンが空にならない", orphan is not None,
+              str([x["value"] for x in picked]))
+        check("一覧に無いと分かる表示になっている",
+              bool(orphan) and "一覧にありません" in orphan["text"],
+              orphan["text"] if orphan else "")
+
+        page.locator(rec_window + 'button:has-text("設定を保存")').click()
+        page.wait_for_timeout(1200)
+        saved = settings_store.get_recording_settings(GUILD_ID)["announce_channel_id"]
+        check("そのまま保存しても設定が消えない", str(saved) == _ORPHAN_CHANNEL, f"保存後={saved}")
+
+        # このあとのウィンドウ操作は開いている枚数を数えるので、閉じておく。
+        page.locator('.window[data-app-id="recording"] .window-control').last.click()
+        page.wait_for_timeout(400)
 
         # ── ウィンドウの移動とリサイズ ──
         # ここが壊れても画面は正常に見えるため、必ず実際に動かして確かめる

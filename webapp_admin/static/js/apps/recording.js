@@ -5,6 +5,7 @@
 
 import * as api from "../lib/api.js";
 import { createMixer } from "./mixer.js";
+import { fillSelect, selectValue } from "../lib/choices.js";
 import { el, icon, clear, loading } from "../lib/dom.js";
 import { toast } from "../lib/toast.js";
 
@@ -112,14 +113,9 @@ export async function mount(win) {
     manual.hidden = true;
     select.hidden = false;
     note.textContent = "";
-    // DOM の append は配列を平坦化しない（dom.js の el() 経由とは別物）。展開して渡す。
-    clear(select).append(
-      el("option", { value: "", text: placeholder }),
-      ...list.map((c) => el("option", { value: c.value, text: c.label }))
-    );
     // 触っていない欄には既定を入れておく（毎回選び直させないため）
     const wanted = keep || (preselect ? String(preselect) : "");
-    if (wanted && list.some((c) => c.value === wanted)) select.value = wanted;
+    fillSelect(select, list, { placeholder, value: wanted });
     return false;
   }
   const excludedInput = el("input", {
@@ -243,18 +239,34 @@ export async function mount(win) {
     );
   }
 
+  // 設定されている ID が一覧に無いとき（チャンネルが消えた・Bot から見えない・
+  // 種類が違う）。値は保持したまま、その旨を出す。
+  const UNKNOWN_CHANNEL_NOTE =
+    "設定されているチャンネルが一覧にありません。削除されたか、Bot から見えない可能性があります。"
+    + "そのままにすれば設定は変わりません。";
+  let missingAutoVc = false;
+  let missingAnnounce = false;
+
   function renderSettings(settings) {
     enabledInput.checked = Boolean(settings.enabled);
     autoStartInput.checked = Boolean(settings.auto_start);
     const autoVcId = settings.vc_channel_id ? String(settings.vc_channel_id) : "";
     if (autoVcManualMode) autoVcManual.value = autoVcId;
-    else autoVcSelect.value = autoVcId;
+    else missingAutoVc = selectValue(autoVcSelect, autoVcId);
     maxMinutesInput.value = settings.max_minutes;
     retentionInput.value = settings.retention_days;
     const announceId = settings.announce_channel_id ? String(settings.announce_channel_id) : "";
     if (announceManualMode) announceManual.value = announceId;
-    else announceSelect.value = announceId;
+    else missingAnnounce = selectValue(announceSelect, announceId);
     excludedInput.value = (settings.excluded_user_ids || []).join(", ");
+
+    // 一覧に出てこない ID を選んでいる（消えた／権限が無い／種類が違う）ときは、
+    // なぜ見慣れない表示になっているのかを書く。黙って直っているように見せない。
+    const orphan = [missingAutoVc && "録音するVC", missingAnnounce && "通知チャンネル"]
+      .filter(Boolean).join("・");
+    autoVcNote.textContent = missingAutoVc ? UNKNOWN_CHANNEL_NOTE : "";
+    announceNote.textContent = missingAnnounce ? UNKNOWN_CHANNEL_NOTE : "";
+    if (orphan) console.warn(`[recording] 一覧に無いチャンネルが設定されています: ${orphan}`);
   }
 
   // ── ミキサー表示 ───────────────────────────────────────
