@@ -61,9 +61,11 @@ def register_recording_commands(bot: Bot) -> None:
             await interaction.followup.send(str(e), ephemeral=True)
             return
 
+        stops = ("VC から全員が退出したときに止まる。"
+                 if session.is_unlimited
+                 else f"{session.max_seconds // 60} 分で自動的に止まる。")
         await interaction.followup.send(
-            f"🔴 **{target.name}** の録音を始めた。"
-            f"{session.max_seconds // 60} 分で自動的に止まる。"
+            f"🔴 **{target.name}** の録音を始めた。{stops}"
             "止めるときは `/record stop` を使え。",
             ephemeral=True,
         )
@@ -100,11 +102,14 @@ def register_recording_commands(bot: Bot) -> None:
             color=discord.Color.red(),
         )
         embed.add_field(name="開始した人", value=status["started_by"], inline=True)
-        embed.add_field(
-            name="自動停止まで",
-            value=_duration(max(0, status["max_seconds"] - status["elapsed_seconds"])),
-            inline=True,
-        )
+        if status.get("unlimited"):
+            embed.add_field(name="停止条件", value="全員が退出したとき", inline=True)
+        else:
+            embed.add_field(
+                name="自動停止まで",
+                value=_duration(max(0, status["max_seconds"] - status["elapsed_seconds"])),
+                inline=True,
+            )
         if status["speakers"]:
             embed.add_field(
                 name="録音中の参加者",

@@ -49,6 +49,11 @@ _SILENCE_CHUNK = b"\x00" * (BYTES_PER_SECOND // 10)  # 100ms
 
 _MAX_PAD_SECONDS = 3600 * 8  # これを超える穴埋めは異常値として切り捨てる
 
+# max_minutes に 0 を指定すると「時間では止めない」。VC が無人になるまで録り続ける。
+UNLIMITED = 0
+_GUARD_INTERVAL_SEC = 15.0
+_EMPTY_GRACE_SEC = 20.0   # 開始直後は参加者のキャッシュが揃っていないことがある
+
 # guild_id -> RecordingSession
 _sessions: dict[int, "RecordingSession"] = {}
 
@@ -187,6 +192,11 @@ class RecordingSession:
         return time.monotonic() - self.started_at
 
     @property
+    def is_unlimited(self) -> bool:
+        """時間では止めない設定か（VC が無人になるまで録り続ける）。"""
+        return self.max_seconds <= 0
+
+    @property
     def output_bytes(self) -> int:
         total = 0
         for track in self.tracks.values():
@@ -228,6 +238,7 @@ class RecordingSession:
             "started_at": self.started_at,
             "elapsed_seconds": int(self.elapsed),
             "max_seconds": self.max_seconds,
+            "unlimited": self.is_unlimited,
             "speakers": [
                 {"user_id": t.user_id, "name": t.display_name,
                  "voiced_seconds": round(t.voiced_seconds, 1)}
@@ -323,7 +334,7 @@ async def start_recording(
         started_by_id=int(getattr(started_by, "id", 0) or 0),
         started_by_name=str(getattr(started_by, "display_name", None) or started_by),
         started_at=time.monotonic(),
-        max_seconds=int(settings.get("max_minutes", 360)) * 60,
+        max_seconds=max(0, int(settings.get("max_minutes", 360))) * 60,
         retention_days=int(settings.get("retention_days", 7)),
         excluded_user_ids={int(u) for u in settings.get("excluded_user_ids", [])},
     )
@@ -363,7 +374,11 @@ async def _announce_start(
         color=discord.Color.red(),
     )
     embed.add_field(name="開始した人", value=session.started_by_name, inline=True)
-    embed.add_field(name="自動停止", value=f"{session.max_seconds // 60} 分後", inline=True)
+    embed.add_field(
+        name="自動停止",
+        value="全員が退出したとき" if session.is_unlimited else f"{session.max_seconds // 60} 分後",
+        inline=True,
+    )
     embed.set_footer(text="停止すると、ダウンロード用のリンクが投稿されます。")
 
     targets = [t for t in (announce_to, channel) if t is not None]
@@ -376,20 +391,49 @@ async def _announce_start(
     return None
 
 
+def _vc_is_empty(bot, session: "RecordingSession") -> bool:
+    """録音中の VC から人間が居なくなったか。判断できないときは False。"""
+    guild = bot.get_guild(session.guild_id)
+    if guild is None:
+        return False
+    channel = guild.get_channel(session.channel_id)
+    members = getattr(channel, "members", None)
+    if members is None:
+        return False
+    return not any(m for m in members if not m.bot)
+
+
 async def _guard(bot, guild_id: int) -> None:
-    """上限時間に達したら自動で停止する。"""
+    """上限時間に達したら自動で停止する。あわせて VC の無人化も見張る。
+
+    無人化は on_voice_state_update でも拾っているが、イベントを取り逃す
+    （bot の再接続中に全員が抜けた等）と誰も止める人がいなくなる。上限時間なし
+    で録っているときはそれが「無音を録り続ける」ではなく「永久に止まらない」に
+    なるため、ここでも定期的に確かめる。
+    """
     session = _sessions.get(guild_id)
     if session is None:
         return
     try:
         while guild_id in _sessions and not session.stopping:
-            remaining = session.max_seconds - session.elapsed
-            if remaining <= 0:
-                logger.info("[recording] guild=%s 上限時間に達したので停止します", guild_id)
-                await stop_recording(bot, guild_id, reason="上限時間に達しました")
+            if not session.is_unlimited:
+                remaining = session.max_seconds - session.elapsed
+                if remaining <= 0:
+                    logger.info("[recording] guild=%s 上限時間に達したので停止します", guild_id)
+                    await stop_recording(bot, guild_id, reason="上限時間に達しました")
+                    return
+                interval = min(_GUARD_INTERVAL_SEC, max(1.0, remaining))
+            else:
+                interval = _GUARD_INTERVAL_SEC
+
+            # 開始直後は参加者のキャッシュが揃っていないことがあるので少し待つ
+            if session.elapsed > _EMPTY_GRACE_SEC and _vc_is_empty(bot, session):
+                logger.info("[recording] guild=%s VC が無人になったので停止します", guild_id)
+                await stop_recording(bot, guild_id, reason="VC が空になりました")
                 return
+
             _write_state()
-            await asyncio.sleep(min(15.0, max(1.0, remaining)))
+            await asyncio.sleep(interval)
     except asyncio.CancelledError:
         raise
     except Exception as e:

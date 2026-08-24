@@ -889,6 +889,68 @@ class DurationWidgetTests(unittest.TestCase):
             with self.subTest(unit=label):
                 self.assertIn(f'["{label}", {factor}]', text)
 
+
+class UnlimitedRecordingTests(unittest.TestCase):
+    """max_minutes=0 は「時間では止めない」。VC が無人になるまで録り続ける。"""
+
+    def setUp(self):
+        import services.recording_service as recording
+        self.rec = recording
+
+    def _session(self, max_seconds):
+        return self.rec.RecordingSession(
+            guild_id=999, channel_id=555, channel_name="雑談VC",
+            started_by_id=1, started_by_name="すずき",
+            started_at=time.monotonic(), max_seconds=max_seconds, retention_days=7,
+        )
+
+    def test_zero_means_unlimited(self):
+        self.assertTrue(self._session(0).is_unlimited)
+        self.assertTrue(self._session(self.rec.UNLIMITED).is_unlimited)
+
+    def test_a_real_limit_is_not_unlimited(self):
+        self.assertFalse(self._session(3600).is_unlimited)
+
+    def test_status_carries_the_flag_to_the_admin_screen(self):
+        """管理画面は別プロセスなので、状態ファイル越しに伝わる必要がある。"""
+        self.assertTrue(self._session(0).status()["unlimited"])
+        self.assertFalse(self._session(3600).status()["unlimited"])
+
+    def test_negative_settings_do_not_become_a_huge_limit(self):
+        """設定が壊れていても「負の上限」で即停止したりしないこと。"""
+        self.assertTrue(self._session(-60).is_unlimited)
+
+    def test_empty_vc_is_detected(self):
+        """無人判定。bot だけ残っている状態を「無人」とみなす。"""
+        session = self._session(0)
+        human = Mock()
+        human.bot = False
+        robot = Mock()
+        robot.bot = True
+
+        for members, expected in ((None, False), ([], True), ([robot], True),
+                                  ([human], False), ([human, robot], False)):
+            with self.subTest(members=members):
+                channel = Mock()
+                channel.members = members
+                guild = Mock()
+                guild.get_channel.return_value = channel
+                bot = Mock()
+                bot.get_guild.return_value = guild
+                self.assertIs(self.rec._vc_is_empty(bot, session), expected)
+
+    def test_unknown_guild_is_not_treated_as_empty(self):
+        """判断できないときに止めてしまうと、録音が勝手に切れる。"""
+        bot = Mock()
+        bot.get_guild.return_value = None
+        self.assertFalse(self.rec._vc_is_empty(bot, self._session(0)))
+
+
+class RecordingSettingsRangeTests(unittest.TestCase):
+    def test_zero_is_accepted_and_kept(self):
+        store.set_recording_settings(4246, {"max_minutes": 0})
+        self.assertEqual(store.get_recording_settings(4246)["max_minutes"], 0)
+
 if __name__ == "__main__":
     logging.disable(logging.CRITICAL)
     unittest.main()

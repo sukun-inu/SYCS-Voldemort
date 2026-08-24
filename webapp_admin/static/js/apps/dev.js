@@ -62,6 +62,94 @@ function rows(items, render, emptyText) {
   return el("div", { class: "list" }, items.map(render));
 }
 
+/** ギルドを選ぶと中身が入れ替わるチャンネル選択欄。
+ *
+ *  ID を手で打たせないための部品。ただし一覧を取れないとき
+ *  （Bot トークン未設定・Discord 側の不調）に空のドロップダウンだけを出すと
+ *  設定する手段が無くなるので、その場合は ID の手入力へ切り替える。
+ *  設定パネル側 (forms/widgets.js) と同じ考え方。
+ *
+ *  @returns {{el: HTMLElement, value: () => string, reload: Function,
+ *             setDisabled: Function, clear: Function}}
+ */
+function channelPicker(guildSelect, { voice = false, placeholder = "チャンネルを選択", allGuildsValue = null } = {}) {
+  const select = el("select", { class: "select" });
+  const manual = input({ placeholder: "チャンネルID", inputmode: "numeric" });
+  const note = el("p", { class: "field-help" });
+  const box = el("div", { class: "stack" }, select, manual, note);
+
+  let manualMode = false;
+  let forcedDisabled = false;
+
+  const showSelect = () => { manualMode = false; manual.hidden = true; select.hidden = false; };
+  const showManual = (reason) => {
+    manualMode = true;
+    manual.hidden = false;
+    select.hidden = true;
+    note.textContent = reason;
+  };
+  const placeholderOnly = (text) => {
+    clear(select).append(el("option", { value: "", text }));
+  };
+
+  const guildOf = () => {
+    const value = guildSelect.value;
+    if (!value || (allGuildsValue && value === allGuildsValue)) return "";
+    return value;
+  };
+
+  async function reload() {
+    note.textContent = "";
+    const guildId = guildOf();
+    if (!guildId) {
+      showSelect();
+      placeholderOnly("先にギルドを選択");
+      select.disabled = true;
+      return;
+    }
+    showSelect();
+    placeholderOnly("読み込み中…");
+    select.disabled = true;
+    try {
+      const result = await api.get(`${BASE}/channels?guild_id=${encodeURIComponent(guildId)}`);
+      const list = (voice ? result.voice_channels : result.channels) || [];
+      if (!list.length) {
+        showManual(voice
+          ? "ボイスチャンネルが見つかりませんでした。ID を直接入力できます。"
+          : "テキストチャンネルが見つかりませんでした。ID を直接入力できます。");
+        return;
+      }
+      placeholderOnly(placeholder);
+      // DOM の append は配列を平坦化しない（dom.js の el() 経由とは別物）。展開して渡す。
+      select.append(...list.map((c) =>
+        el("option", { value: c.id, text: voice ? c.name : `# ${c.name}` })));
+      select.disabled = forcedDisabled;
+    } catch (error) {
+      showManual(`一覧を取得できませんでした（${error.message}）。ID を直接入力できます。`);
+    }
+  }
+
+  guildSelect.addEventListener("change", reload);
+  placeholderOnly("先にギルドを選択");
+  select.disabled = true;
+  manual.hidden = true;
+
+  return {
+    el: box,
+    value: () => (manualMode ? manual.value.trim() : select.value),
+    reload,
+    setDisabled(disabled) {
+      forcedDisabled = disabled;
+      select.disabled = disabled || !guildOf();
+      manual.disabled = disabled;
+    },
+    clear() {
+      select.value = "";
+      manual.value = "";
+    },
+  };
+}
+
 /* ── 本体 ───────────────────────────────────────────────── */
 
 export async function mount(win) {
@@ -107,64 +195,36 @@ export async function mount(win) {
 /* ── 送信 ───────────────────────────────────────────────── */
 
 function sendTab(data, guildOptions) {
-  const channelId = input({ placeholder: "チャンネルID", inputmode: "numeric" });
+  // 送信先はこのタブ共通のギルドから選ぶ。以前は ID を手打ちさせ、別枠の
+  // 「チャンネルIDを調べる」でコピーする作りだったが、選ばせれば済む話だった。
+  const guildSelect = el("select", { class: "select" },
+                         el("option", { value: "", text: "ギルドを選択" }),
+                         guildOptions.map((o) => o.cloneNode(true)));
+
+  const messageChannel = channelPicker(guildSelect, { placeholder: "送信先チャンネルを選択" });
   const content = el("textarea", { class: "textarea", placeholder: "送信するメッセージ" });
 
   const messageUrl = input({ placeholder: "https://discord.com/channels/…" });
-  const targetChannel = input({ placeholder: "転送先チャンネルID", inputmode: "numeric" });
+  const targetChannel = channelPicker(guildSelect, { placeholder: "転送先チャンネルを選択" });
 
   const newsQuery = input({ placeholder: "検索クエリ（例: 生成AI）" });
-  const newsChannel = input({ placeholder: "チャンネルID", inputmode: "numeric" });
-
-  // チャンネルID検索: ギルドを選ぶと一覧を引いて、クリックで各入力欄へ入れる
-  const guildSelect = el("select", { class: "select" },
-                         el("option", { value: "", text: "ギルドを選択" }), guildOptions.map((o) => o.cloneNode(true)));
-  const channelList = el("div", { class: "stack" });
-
-  guildSelect.addEventListener("change", async () => {
-    if (!guildSelect.value) return clear(channelList);
-    clear(channelList).append(loading("チャンネルを取得中…"));
-    try {
-      const result = await api.get(`${BASE}/channels?guild_id=${guildSelect.value}`);
-      clear(channelList).append(
-        rows(
-          result.channels,
-          (channel) =>
-            el(
-              "div",
-              { class: "list-row" },
-              el("span", { class: "grow truncate", text: `# ${channel.name}` }),
-              el("span", { class: "list-sub mono", text: channel.id }),
-              el("button", {
-                class: "btn btn-sm", type: "button",
-                onclick: () => {
-                  channelId.value = channel.id;
-                  newsChannel.value = channel.id;
-                  targetChannel.value = channel.id;
-                  toast(`#${channel.name} のIDを入力しました`, "success", { duration: 2000 });
-                },
-              }, "使う")
-            ),
-          "テキストチャンネルが見つかりません。"
-        )
-      );
-    } catch (error) {
-      clear(channelList).append(el("div", { class: "empty", text: `取得できませんでした（${error.message}）` }));
-    }
-  });
+  const newsChannel = channelPicker(guildSelect, { placeholder: "送信先チャンネルを選択" });
 
   return el(
     "div",
     { class: "stack" },
-    panel("チャンネルIDを調べる", field("ギルド", guildSelect), channelList),
+    panel(
+      "送信先ギルド",
+      field("ギルド", guildSelect, "選ぶと、このタブのチャンネル一覧が入れ替わります。")
+    ),
     panel(
       "メッセージ送信",
-      field("チャンネルID", channelId),
+      field("チャンネル", messageChannel.el),
       field("内容", content),
       el("div", { class: "row" }, el("span", { class: "grow" }),
          actionButton("送信", "bi-send", async () => {
            const result = await api.post(`${BASE}/send-message`, {
-             channel_id: channelId.value, content: content.value,
+             channel_id: messageChannel.value(), content: content.value,
            });
            content.value = "";
            return result;
@@ -173,20 +233,20 @@ function sendTab(data, guildOptions) {
     panel(
       "メッセージ転送",
       field("元メッセージURL", messageUrl),
-      field("転送先チャンネルID", targetChannel),
+      field("転送先チャンネル", targetChannel.el),
       el("div", { class: "row" }, el("span", { class: "grow" }),
          actionButton("転送", "bi-arrow-right", () =>
            api.post(`${BASE}/forward-message`, {
-             message_url: messageUrl.value, target_channel_id: targetChannel.value,
+             message_url: messageUrl.value, target_channel_id: targetChannel.value(),
            })))
     ),
     panel(
       "ニュース送信テスト",
       field("検索クエリ", newsQuery),
-      field("チャンネルID", newsChannel),
+      field("チャンネル", newsChannel.el),
       el("div", { class: "row" }, el("span", { class: "grow" }),
          actionButton("取得して送信", "bi-newspaper", () =>
-           api.post(`${BASE}/news-send`, { query: newsQuery.value, channel_id: newsChannel.value })))
+           api.post(`${BASE}/news-send`, { query: newsQuery.value, channel_id: newsChannel.value() })))
     )
   );
 }
@@ -215,11 +275,15 @@ function earthquakeTab(guildOptions) {
   // ギルドでも中身を確認できるようにする DEV 専用の抜け道。
   // 全サーバー送信を選んでいる間は「どのギルドのチャンネルか」が定まらない
   // ため使えない（disabled にして無効な組み合わせを作れなくする）。
-  const channelIdInput = input({ placeholder: "未入力なら地震アラート設定のチャンネルへ", inputmode: "numeric" });
-  channelIdInput.disabled = true;
+  const channelPick = channelPicker(guildSelect, {
+    placeholder: "未選択なら地震アラート設定のチャンネルへ",
+    allGuildsValue: _ALL_GUILDS,
+  });
+  channelPick.setDisabled(true);
   guildSelect.addEventListener("change", () => {
-    channelIdInput.disabled = !guildSelect.value || guildSelect.value === _ALL_GUILDS;
-    if (channelIdInput.disabled) channelIdInput.value = "";
+    const off = !guildSelect.value || guildSelect.value === _ALL_GUILDS;
+    channelPick.setDisabled(off);
+    if (off) channelPick.clear();
   });
 
   const loadButton = actionButton("直近の地震を取得", "bi-arrow-clockwise", async () => {
@@ -251,7 +315,7 @@ function earthquakeTab(guildOptions) {
     "リプレイをキューに追加", "bi-broadcast-pin",
     () => {
       const guildId = guildSelect.value === _ALL_GUILDS ? "" : guildSelect.value;
-      const channelId = channelIdInput.disabled ? "" : channelIdInput.value.trim();
+      const channelId = guildId ? channelPick.value() : "";
       return api.post(`${BASE}/earthquake-replay`, { event_json: eventJson.value, guild_id: guildId, channel_id: channelId });
     },
     {
@@ -259,7 +323,7 @@ function earthquakeTab(guildOptions) {
       confirm: () => {
         if (guildSelect.value === _ALL_GUILDS) return "この地震速報を全サーバーへ実際に通知しますか？";
         const guildLabel = guildSelect.selectedOptions[0]?.textContent || guildSelect.value;
-        const channelId = channelIdInput.disabled ? "" : channelIdInput.value.trim();
+        const channelId = channelPick.value();
         return channelId
           ? `この地震速報を「${guildLabel}」のチャンネル ${channelId} へ直接送りますか？`
               + "（地震アラート設定のチャンネル・閾値・通知タイプは無視します）"
@@ -279,8 +343,8 @@ function earthquakeTab(guildOptions) {
       "リプレイ実行",
       field("送信先", guildSelect, "テスト用の通知を実際に送るギルドを選びます。"),
       field(
-        "送信先チャンネルID（DEV専用・省略可）", channelIdInput,
-        "指定すると、そのギルドの「地震アラート」設定（チャンネル・最小震度・通知タイプ）を無視して" +
+        "送信先チャンネル（DEV専用・省略可）", channelPick.el,
+        "選ぶと、そのギルドの「地震アラート」設定（チャンネル・最小震度・通知タイプ）を無視して" +
         "このチャンネルへ直接送ります。本番用の設定を作っていないギルドでも見た目を確認できます。"
       ),
       field("イベントJSON", eventJson, "earthquake / hypocenter キーを含む P2PQuake 形式の JSON。"),
@@ -461,15 +525,16 @@ function notifyTab(guildOptions) {
   // 一切見ずに直接そこへ送る。設定していないギルドでもテストできるように
   // する DEV 専用の抜け道（地震リプレイと同じ考え方）。ギルド未選択の間は
   // 「どのギルドのチャンネルか」が定まらないため使えない。
-  const channelIdInput = input({ placeholder: "未入力なら設定済みチャンネルへ", inputmode: "numeric" });
-  channelIdInput.disabled = true;
+  const channelPick = channelPicker(guildSelect, { placeholder: "未選択なら設定済みチャンネルへ" });
+  channelPick.setDisabled(true);
   guildSelect.addEventListener("change", () => {
-    channelIdInput.disabled = !guildSelect.value;
-    if (channelIdInput.disabled) channelIdInput.value = "";
+    const off = !guildSelect.value;
+    channelPick.setDisabled(off);
+    if (off) channelPick.clear();
   });
 
   const send = (kind) => () => {
-    const channelId = channelIdInput.disabled ? "" : channelIdInput.value.trim();
+    const channelId = guildSelect.value ? channelPick.value() : "";
     return api.post(`${BASE}/test-notify/${kind}`, { guild_id: guildSelect.value, channel_id: channelId });
   };
 
@@ -491,7 +556,7 @@ function notifyTab(guildOptions) {
     panel(
       "通知テスト",
       field("対象ギルド", guildSelect, "設定済みのチャンネルへテスト通知を送ります。"),
-      field("送信先チャンネルID（DEV専用・省略可）", channelIdInput,
+      field("送信先チャンネル（DEV専用・省略可）", channelPick.el,
             "指定すると、その機能のチャンネル設定を無視してこのチャンネルへ直接送ります。"),
       el("div", { class: "row wrap" },
          kinds.map(([kind, label, iconName]) => actionButton(label, iconName, send(kind)))),
