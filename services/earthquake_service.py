@@ -177,10 +177,17 @@ def _max_scale(event: dict) -> int:
     points = event.get("points", [])
     if points:
         return max((p.get("scale", -1) for p in points), default=-1)
+    # EEW予報 (556) は points ではなく areas に地域ごとの予想震度レンジ
+    # (scaleFrom/scaleTo) が入る。以前は intensity.forecastMaxInt.to を
+    # 見ていたが、実際のペイロードにその形は現れず（P2PQuake の実データで
+    # 確認済み）、556 の予想最大震度が常に「不明」になっていた。
+    areas = event.get("areas", [])
+    if areas:
+        return max((a.get("scaleTo", a.get("scaleFrom", -1)) for a in areas), default=-1)
     eq_scale = event.get("earthquake", {}).get("maxScale", -1)
     if eq_scale >= 0:
         return eq_scale
-    # EEW予報 (556): intensity.forecastMaxInt.to を使用
+    # 保険: 上記のどれにも当てはまらない別形式のペイロード用
     to_str = event.get("intensity", {}).get("forecastMaxInt", {}).get("to", "")
     return _FORECAST_INT_TO_SCALE.get(to_str, -1)
 
@@ -511,14 +518,35 @@ def _build_embed(event: dict, max_scale: int, has_badge: bool = False) -> discor
 
 
 def _build_eew_embed(event: dict) -> discord.Embed:
-    """P2PQuake code 554 (警報) / 556 (予報) EEW データから Discord Embed を生成。"""
-    code        = event.get("code", 554)
+    """556 (EEW予報, 震源・規模あり) / 554 (EEWDetection, チャイム検出のみ) から Embed を生成。
+
+    P2PQuake の実データで確認したところ、554 は
+    {"code": 554, "id": ..., "time": ..., "type": "Full"} という形で
+    earthquake オブジェクトを一切持たない（気象庁のチャイムが鳴ったことを
+    検出しただけの通知）。以前はここで 556 と同じ地震情報が来る前提で
+    組んでいたため、震源・規模・震度がすべて「不明」の埋まった Embed に
+    なっていた。震源データが無いときは、無い情報を埋めずに検出だけを伝える。
+    """
+    code = event.get("code", 554)
     is_forecast = code == 556
-    title_base  = "⚠️ 緊急地震速報（予報）" if is_forecast else "🚨 緊急地震速報（警報）"
 
     eq   = event.get("earthquake", {})
     hypo = eq.get("hypocenter", {})
+    has_quake_data = bool(hypo.get("name"))
 
+    # 続報番号は、公式の実データでは serialNo ではなく issue.serial に入る。
+    serial = str((event.get("issue") or {}).get("serial") or "1")
+
+    if not has_quake_data:
+        embed = discord.Embed(
+            title="🚨 緊急地震速報を検出しました",
+            description="緊急地震速報の受信を検出しました。震源・規模の詳細は、後続の情報でご確認ください。",
+            color=discord.Color.orange(),
+        )
+        embed.set_footer(text="気象庁 緊急地震速報", icon_url=BOT_ICON_URL)
+        return embed
+
+    title_base = "⚠️ 緊急地震速報（予報）" if is_forecast else "🚨 緊急地震速報（警報）"
     name       = hypo.get("name") or "不明"
     # 556 は originTime、554 は time を使用
     time_raw   = eq.get("originTime") or eq.get("time", "")
@@ -528,12 +556,8 @@ def _build_eew_embed(event: dict) -> discord.Embed:
     scale_disp = _SCALE_DISPLAY.get(max_scale, "不明") if max_scale > 0 else "不明"
     color      = _SCALE_COLORS.get(max_scale, discord.Color.orange())
 
-    serial   = str(event.get("serialNo", "1"))
-    is_final = event.get("isFinal", False)
-    status   = "（最終報）" if is_final else f"（第{serial}報）"
-
     embed = discord.Embed(
-        title=f"{title_base} {status}",
+        title=f"{title_base}（第{serial}報）",
         description="\n".join([
             f"{time_label}、",
             f"**{name}** 付近を震源とする地震が発生しました。",
@@ -961,11 +985,14 @@ async def _notify_eew_guilds(bot: Bot, event: dict, notify_type: str) -> None:
     max_scale  = _max_scale(event)
     detail_url = await _resolve_jma_detail_url(event, max_scale)
 
+    # 554 (EEWDetection) は震度が分からない（max_scale == -1）。
+    # 分からない震度を「-1」のバッジ画像にして貼るのは避ける。
     badge_buf: io.BytesIO | None = None
-    try:
-        badge_buf = _generate_badge(max_scale)
-    except Exception:
-        pass
+    if max_scale >= 0:
+        try:
+            badge_buf = _generate_badge(max_scale)
+        except Exception:
+            pass
 
     embed = _build_eew_embed(event)
     if badge_buf:
@@ -979,6 +1006,8 @@ async def _notify_eew_guilds(bot: Bot, event: dict, notify_type: str) -> None:
         ch_id = s.get("channel_id")
         if not ch_id:
             continue
+        # 震度が分からない（554 の検出通知）ときは、閾値で弾かず必ず届ける。
+        # EEW は安全に倒すほうが良いという判断。
         if max_scale >= 0 and max_scale < int(s.get("min_scale", 30)):
             continue
         if not get_earthquake_notify_types(guild_id).get(notify_type, True):
@@ -1019,7 +1048,10 @@ def _spawn(coro) -> asyncio.Task:
 
 
 async def run_earthquake_ws(bot: Bot) -> None:
-    """P2PQuake WS 1本で地震情報 (551)・津波情報 (552)・EEW警報 (554)・EEW予報 (556) を受信する。
+    """P2PQuake WS 1本で地震情報 (551)・津波情報 (552)・EEW検出 (554)・EEW予報 (556) を受信する。
+
+    554 (EEWDetection) は震源データを持たない「チャイムが鳴ったことの検出」のみの
+    通知で、実際の震源・規模・震度は 556 (EEW予報) 側にしか入っていない。
 
     通知処理はすべて asyncio.create_task() でバックグラウンド起動するため、
     WS 受信ループはタイル取得や Discord API 送信をブロックせず常に即応する。
@@ -1050,13 +1082,19 @@ async def run_earthquake_ws(bot: Bot) -> None:
 
                             elif code in (554, 556) and not data.get("cancelled"):
                                 notify_type = "eew_forecast" if code == 556 else "eew_warning"
-                                eq      = data.get("earthquake", {})
-                                eq_time = eq.get("originTime") or eq.get("time", "")
-                                serial   = str(data.get("serialNo", "1"))
-                                is_final = data.get("isFinal", False)
-                                key = f"{code}:{eq_time}:{'F' if is_final else serial}"
-                                if key not in _eew_seen and (serial == "1" or is_final):
-                                    _eew_seen.add(key)
+                                # P2PQuake は同じ情報を複数回配信することがあるため、
+                                # 公式が推奨するとおり id で重複だけを弾く
+                                # （https://www.p2pquake.net/develop/json_api_v2/ ）。
+                                # 以前はここを自前の eq_time + serialNo + isFinal の
+                                # 合成キーで組んでいたが、実際のペイロードには
+                                # serialNo・isFinal はトップレベルに存在せず
+                                # （556 の続報番号は issue.serial、554 には
+                                # earthquake すら無い）常に既定値へ落ちてキーが固定化し、
+                                # 起動後の最初の1件を送った後は同じ震度階級の通知が
+                                # 二度と送られない不具合になっていた。
+                                event_id = data.get("id")
+                                if event_id and event_id not in _eew_seen:
+                                    _eew_seen.add(event_id)
                                     if len(_eew_seen) > 200:
                                         _eew_seen.clear()
                                     # EEW は最優先でバックグラウンド起動
