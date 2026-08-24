@@ -51,6 +51,11 @@ _MAX_PAD_SECONDS = 3600 * 8  # これを超える穴埋めは異常値として�
 
 # max_minutes に 0 を指定すると「時間では止めない」。VC が無人になるまで録り続ける。
 UNLIMITED = 0
+# 設定の許容範囲。管理画面・スラッシュコマンドの両方がここを見る
+# （片方だけ古いと、入れられた値が黙って弾かれたり丸められたりする）。
+MAX_MINUTES_LIMIT = 720          # 12時間
+RETENTION_DAYS_MIN = 1
+RETENTION_DAYS_MAX = 30
 _GUARD_INTERVAL_SEC = 15.0
 _EMPTY_GRACE_SEC = 20.0   # 開始直後は参加者のキャッシュが揃っていないことがある
 

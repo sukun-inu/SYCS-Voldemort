@@ -187,10 +187,12 @@ async def recording_settings(request: Request, _=Depends(check_guild), _csrf=Dep
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail="上限時間は分（数字）で指定してください。")
         # 0 は「時間では止めない」。VC が無人になるまで録り続ける。
-        if not (0 <= minutes <= 720):
+        from services.recording_service import MAX_MINUTES_LIMIT
+
+        if not (0 <= minutes <= MAX_MINUTES_LIMIT):
             raise HTTPException(
                 status_code=400,
-                detail="上限時間は 0〜720 分で指定してください（0 で無制限）。",
+                detail=f"上限時間は 0〜{MAX_MINUTES_LIMIT} 分で指定してください（0 で無制限）。",
             )
         patch["max_minutes"] = minutes
 
@@ -199,8 +201,13 @@ async def recording_settings(request: Request, _=Depends(check_guild), _csrf=Dep
             days = int(body["retention_days"])
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail="保存期間は日数（数字）で指定してください。")
-        if not (1 <= days <= 30):
-            raise HTTPException(status_code=400, detail="保存期間は 1〜30 日で指定してください。")
+        from services.recording_service import RETENTION_DAYS_MAX, RETENTION_DAYS_MIN
+
+        if not (RETENTION_DAYS_MIN <= days <= RETENTION_DAYS_MAX):
+            raise HTTPException(
+                status_code=400,
+                detail=f"保存期間は {RETENTION_DAYS_MIN}〜{RETENTION_DAYS_MAX} 日で指定してください。",
+            )
         patch["retention_days"] = days
 
     if "announce_channel_id" in body:
