@@ -483,7 +483,6 @@ def _build_embed(event: dict, max_scale: int, has_badge: bool = False) -> discor
 
     time_label, _  = _format_time(eq.get("time", ""))
     _, issue_dt    = _format_time(issue.get("time", ""))
-    scale_disp     = _SCALE_DISPLAY.get(max_scale, f"不明({max_scale})")
     tsunami_text   = _TSUNAMI_TEXT.get(eq.get("domesticTsunami", "None"), "津波情報は不明です。")
     footer_label   = _ISSUE_LABELS.get(issue.get("type", ""), "気象庁")
     color          = _SCALE_COLORS.get(max_scale, discord.Color.red())
@@ -493,13 +492,20 @@ def _build_embed(event: dict, max_scale: int, has_badge: bool = False) -> discor
     depth_str = _parse_depth(hypo.get("depth"))
 
     emoji = _SCALE_TITLE_EMOJI.get(max_scale, "⚪")
+    # 分からない情報は「不明」と書くのではなく行ごと出さない
+    # （震源・規模・深さのフィールドは元からそうしていた。日時・震度も揃える）。
+    lines = []
+    if time_label != "不明":
+        lines.append(f"{time_label}、")
+    if max_scale in _SCALE_DISPLAY:
+        lines.append(f"最大震度 {_SCALE_DISPLAY[max_scale]} の地震がありました。")
+    else:
+        lines.append("地震がありました。")
+    lines.append(tsunami_text)
+
     embed = discord.Embed(
         title=f"{emoji} 地震情報",
-        description="\n".join([
-            f"{time_label}、",
-            f"最大震度 {scale_disp} の地震がありました。",
-            tsunami_text,
-        ]),
+        description="\n".join(lines),
         color=color,
         timestamp=issue_dt,
     )
@@ -569,22 +575,27 @@ def _build_eew_embed(event: dict) -> discord.Embed:
         return embed
 
     title_base = "⚠️ 緊急地震速報（予報）" if is_forecast else "🚨 緊急地震速報（警報）"
+    # has_quake_data の時点判定により、ここでは name は必ず実在の文字列。
     name       = hypo.get("name") or "不明"
     # 556 は originTime、554 は time を使用
     time_raw   = eq.get("originTime") or eq.get("time", "")
     time_label, ts = _format_time(time_raw)
     mag_str, _ = _parse_magnitude(hypo.get("magnitude"))
     max_scale  = _max_scale(event)
-    scale_disp = _SCALE_DISPLAY.get(max_scale, "不明") if max_scale > 0 else "不明"
     color      = _SCALE_COLORS.get(max_scale, discord.Color.orange())
+
+    # 震源はあっても震度だけ分からない（areas が空 等）ことがあるので、
+    # その行だけ出さない。「不明」と書くより、無いなら黙って省く。
+    lines = []
+    if time_label != "不明":
+        lines.append(f"{time_label}、")
+    lines.append(f"**{name}** 付近を震源とする地震が発生しました。")
+    if max_scale in _SCALE_DISPLAY:
+        lines.append(f"予想最大震度 **{_SCALE_DISPLAY[max_scale]}**")
 
     embed = discord.Embed(
         title=f"{title_base}（第{serial}報）",
-        description="\n".join([
-            f"{time_label}、",
-            f"**{name}** 付近を震源とする地震が発生しました。",
-            f"予想最大震度 **{scale_disp}**",
-        ]),
+        description="\n".join(lines),
         color=color,
         timestamp=ts,
     )
@@ -668,7 +679,10 @@ class _EqView(discord.ui.View):
 # ── JMA URL ヘルパー ──────────────────────────────────────
 
 _JMA_QUAKE_LIST_URL = "https://www.jma.go.jp/bosai/quake/data/list.json"
-_JMA_QUAKE_DETAIL_BASE = "https://www.jma.go.jp/bosai/quake/data/"
+# 気象庁の統合地図ページ。?contents=earthquake_map&id=<eid> を付けると、
+# その地震の震源にセンタリングされた状態で開く（実データの eid で、
+# 別々の地震を指定して座標が正しく切り替わることを確認済み）。
+_JMA_QUAKE_DETAIL_BASE = "https://www.jma.go.jp/bosai/map.html"
 _JMA_QUAKE_FALLBACK_URL = "https://www.jma.go.jp/bosai/map.html#contents=earthquake_map"
 _JMA_LIST_TTL_SEC = 30.0
 _JMA_DETAIL_CACHE_TTL_SEC = 3600.0
@@ -756,16 +770,18 @@ def _item_area_name(item: dict) -> str:
 
 
 def _item_detail_url(item: dict) -> str | None:
-    for key in ("json", "detail", "url", "link", "uri"):
-        value = item.get(key)
-        if not isinstance(value, str):
-            continue
-        val = value.strip()
-        if not val:
-            continue
-        if val.startswith(("http://", "https://")):
-            return val
-        return f"{_JMA_QUAKE_DETAIL_BASE}{val.lstrip('/')}"
+    """list.json の1件から、人が読める気象庁のページへのリンクを作る。
+
+    実データで list.json の各要素を確認したところ、"detail"/"url"/"link"/"uri"
+    というキーは存在しない。あるのは "json"（生の JSON データファイル名、例
+    "20260824125723_20260824125441_VXSE5k_1.json"）と "eid"（イベントID）。
+    以前は存在しないキーの前に "json" を探していたため、常にそこへマッチし、
+    リンク先が JSON ファイルそのもの（ブラウザで開くとパーサーの値がそのまま
+    出るだけのページ）になっていた。eid から統合地図ページを組み立てる。
+    """
+    eid = item.get("eid")
+    if isinstance(eid, str) and eid.strip():
+        return f"{_JMA_QUAKE_DETAIL_BASE}?contents=earthquake_map&id={eid.strip()}"
     return None
 
 
