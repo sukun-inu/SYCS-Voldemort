@@ -102,6 +102,9 @@ async def tts_vc(
 
 @tts_group.command(name="status", description="TTS設定の現在状況を表示する")
 async def tts_status(interaction: discord.Interaction) -> None:
+    # /tts の他のコマンドと同じく管理者向け（ドキュメントにもそう書いてある）。
+    if not await ensure_admin(interaction):
+        return
     assert interaction.guild
     guild = interaction.guild
     settings = get_tts_settings(guild.id)

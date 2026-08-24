@@ -94,6 +94,11 @@ def register_recording_commands(bot: Bot) -> None:
 
     @group.command(name="status", description="録音の状況を表示します")
     async def record_status(interaction: discord.Interaction):
+        # 誰が録音されていて、どれだけ喋ったかを出す。個人に紐づく情報なので、
+        # ドキュメントどおり管理者に限る（自分が対象かどうかは開始時の通知と
+        # /record exclude で分かる）。
+        if not await _ensure_admin(interaction):
+            return
         session = recording.get_session(interaction.guild_id)
         if session is None:
             await send_ephemeral(interaction, "今は録音しておらぬ。")

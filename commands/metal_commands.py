@@ -1,17 +1,29 @@
 import asyncio
+import logging
 
 import discord
 from discord import app_commands
 
 from config import METAL_COMMANDS, MetalSpec
-from commands.interaction_utils import metals_site_view
+from commands.interaction_utils import metals_site_view, send_interaction
 from services.discord_utils import create_embed
 from services.logging_service import log_action
 from services.metal_service import MetalPriceError, calculate_metal_value
 
+logger = logging.getLogger(__name__)
+
 
 def _format_prices(prices: dict[str, int]) -> str:
     return "\n".join([f"{k}: {format(v, ',')}円" for k, v in prices.items()])
+
+
+async def _defer(interaction: discord.Interaction) -> None:
+    """まだ何も返していなければ「考え中」にしておく。"""
+    if not interaction.response.is_done():
+        try:
+            await interaction.response.defer()
+        except discord.HTTPException as e:
+            logger.warning("defer に失敗: %s", e)
 
 
 async def _respond_error(interaction: discord.Interaction, message: str) -> None:
@@ -31,6 +43,9 @@ async def _handle_single_metal(interaction: discord.Interaction, grams: float, s
         await _respond_error(interaction, "グラム数は正の値で指定せよ。")
         return
 
+    # 価格は外部APIから取る。Discord は最初の応答まで3秒しか待たないので、
+    # 取りに行く前に defer しておく（これで15分まで伸びる）。
+    await _defer(interaction)
     try:
         price_map = await calculate_metal_value(grams, spec.code, spec.purity)
         text = _format_prices(price_map)
@@ -41,7 +56,8 @@ async def _handle_single_metal(interaction: discord.Interaction, grams: float, s
             spec.color,
             footer_text="Powered by MetalpriceAPI Free",
         )
-        await interaction.response.send_message(embed=embed, view=metals_site_view())
+        await send_interaction(interaction, embed=embed, view=metals_site_view(),
+                               ephemeral=False)
     except (ValueError, MetalPriceError) as e:
         if interaction.guild is not None:
             await log_action(
@@ -62,6 +78,9 @@ def register_metal_commands(bot: discord.Client) -> None:
         @bot.tree.command(name=f"metal_{spec.key}", description=f"{spec.display_name}の現在価格を表示します")
         @app_commands.describe(g="計算するグラム数を入力してください")
         async def _cmd(interaction: discord.Interaction, g: float):
+            # 監査ログの送信も Discord への往復で、失敗すれば待たされる。
+            # 3秒の持ち時間を使い切らないよう、先に defer しておく。
+            await _defer(interaction)
             if interaction.guild is not None:
                 await log_action(
                     interaction.client,
@@ -88,6 +107,8 @@ def register_metal_commands(bot: discord.Client) -> None:
             await _respond_error(interaction, "グラム数は正の値で指定せよ。")
             return
 
+        # 3種類ぶん外部APIを叩く。単体より遅くなるので必ず defer してから。
+        await _defer(interaction)
         try:
             specs = list(METAL_COMMANDS.values())
             results = await asyncio.gather(
@@ -107,7 +128,8 @@ def register_metal_commands(bot: discord.Client) -> None:
                 discord.Color.gold(),
                 footer_text="Powered by MetalpriceAPI Free",
             )
-            await interaction.response.send_message(embed=embed, view=metals_site_view())
+            await send_interaction(interaction, embed=embed, view=metals_site_view(),
+                                   ephemeral=False)
 
             if interaction.guild is not None:
                 await log_action(
