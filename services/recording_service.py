@@ -399,20 +399,20 @@ async def start_recording(
     return session
 
 
-def auto_start_channel_id(guild_id: int) -> int | None:
-    """自動録音の対象VC。設定していなければ TTS の対象VCに従う。
+def preferred_vc_channel_id(guild_id: int) -> int | None:
+    """このギルドで「録るのが自然な VC」。
 
-    読み上げと録音は同じ音声接続を共有するので、既定では同じ VC を見る
-    （「両方オンなら両方使う」という状態を、設定を2箇所書かずに作れるように）。
-    録音だけ別の VC を狙いたいときは vc_channel_id を明示する。
+    設定していなければ読み上げの対象VCに従う。読み上げと録音は同じ音声接続を
+    共有するので、既定では同じ VC を見る（「両方オンなら両方使う」という状態を、
+    設定を2箇所書かずに作れるように）。録音だけ別の VC を狙いたいときだけ
+    vc_channel_id を明示する。
+
+    自動録音のスイッチとは無関係に返す。手動で始めるときの初期値としても使う
+    （毎回ゼロから選び直させないため）。
     """
     from services.settings_store import get_recording_settings
 
-    settings = get_recording_settings(guild_id)
-    if not settings.get("enabled", True) or not settings.get("auto_start"):
-        return None
-
-    explicit = settings.get("vc_channel_id")
+    explicit = get_recording_settings(guild_id).get("vc_channel_id")
     if explicit:
         try:
             return int(explicit)
@@ -429,6 +429,16 @@ def auto_start_channel_id(guild_id: int) -> int | None:
     except Exception as e:
         logger.debug("[recording] TTS の対象VCを読めませんでした guild=%s: %s", guild_id, e)
         return None
+
+
+def auto_start_channel_id(guild_id: int) -> int | None:
+    """自動録音の対象VC。スイッチが両方オンのときだけ返す。"""
+    from services.settings_store import get_recording_settings
+
+    settings = get_recording_settings(guild_id)
+    if not settings.get("enabled", True) or not settings.get("auto_start"):
+        return None
+    return preferred_vc_channel_id(guild_id)
 
 
 async def maybe_auto_start(bot, member, channel) -> None:

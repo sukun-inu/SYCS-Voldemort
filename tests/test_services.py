@@ -1262,6 +1262,32 @@ class AutoRecordingTests(unittest.TestCase):
         store.set_recording_settings(self.GUILD, {"auto_start": True})
         self.assertIsNone(self._target(tts_vc=None))
 
+
+    def test_preferred_vc_ignores_the_auto_switch(self):
+        """手動で始めるときの初期値。自動録音のオン/オフとは無関係に返す。
+
+        以前は「録音するVC」の欄が常に空で、毎回選び直す必要があった。
+        """
+        store.set_recording_settings(self.GUILD, {
+            "auto_start": False, "vc_channel_id": self.REC_VC,
+        })
+        with patch("services.tts_service.get_effective_vc_watch",
+                   lambda gid, settings: (self.TTS_VC, [])),              patch("services.tts_store.get_tts_settings", lambda g: {}):
+            self.assertEqual(self.rec.preferred_vc_channel_id(self.GUILD), self.REC_VC)
+            self.assertIsNone(self.rec.auto_start_channel_id(self.GUILD))
+
+    def test_preferred_vc_falls_back_to_the_tts_channel(self):
+        store.set_recording_settings(self.GUILD, {"vc_channel_id": None})
+        with patch("services.tts_service.get_effective_vc_watch",
+                   lambda gid, settings: (self.TTS_VC, [])),              patch("services.tts_store.get_tts_settings", lambda g: {}):
+            self.assertEqual(self.rec.preferred_vc_channel_id(self.GUILD), self.TTS_VC)
+
+    def test_preferred_vc_is_none_when_nothing_is_configured(self):
+        store.set_recording_settings(self.GUILD, {"vc_channel_id": None})
+        with patch("services.tts_service.get_effective_vc_watch",
+                   lambda gid, settings: (None, [])),              patch("services.tts_store.get_tts_settings", lambda g: {}):
+            self.assertIsNone(self.rec.preferred_vc_channel_id(self.GUILD))
+
     # ── 入室したときの挙動 ──────────────────────────────────
 
     def _member(self, *, is_bot=False):

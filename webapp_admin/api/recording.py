@@ -102,7 +102,7 @@ async def recording_overview(
     画面は状況を数秒おきに取り直すが、チャンネル一覧はそう変わらない。
     毎回付けると Discord への問い合わせが積み上がるため、必要なときだけ載せる。
     """
-    from services.recording_service import read_state
+    from services.recording_service import preferred_vc_channel_id, read_state
     from services.settings_store import get_recording_settings
     from webapp_admin.schema import choices as choice_resolver
     from webapp_admin.schema.types import ChoiceSource
@@ -116,6 +116,9 @@ async def recording_overview(
         "session": session,
         "state_updated_at": state.get("updated_at", 0),
         "recordings": _recordings(guild_id),
+        # 手動で始めるときの初期値。毎回ゼロから選び直させないため、
+        # 設定済みの対象VC（無ければ読み上げの対象VC）を渡す。
+        "default_vc_channel_id": preferred_vc_channel_id(guild_id),
     }
 
     if include_channels:
