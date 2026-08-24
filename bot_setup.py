@@ -416,6 +416,43 @@ def setup_events(bot: Bot) -> None:
                     # ここでは「シグナル完了」ログだけでは何が起きたか分からない、
                     # という状態を無くすために件数を残す。
                     logger.info("[DEV] eq_replay: %d 件へ送信", sent)
+                elif task_name in ("recording_start", "recording_stop"):
+                    # 管理画面は別プロセスなので、録音の開始・停止はここで受ける。
+                    from services import recording_service as recording
+                    payload = json.loads(sig_content)
+                    guild_id = int(payload.get("guild_id", 0))
+                    guild = bot.get_guild(guild_id)
+                    if guild is None:
+                        logger.warning(
+                            "[DEV] %s: guild_id=%s が見つかりません"
+                            "（bot が未参加、またはキャッシュ未反映）", task_name, guild_id,
+                        )
+                    elif task_name == "recording_start":
+                        channel = guild.get_channel(int(payload.get("channel_id", 0)))
+                        if not isinstance(channel, discord.VoiceChannel):
+                            logger.warning(
+                                "[DEV] recording_start: channel_id=%s が見つからないか VC ではありません",
+                                payload.get("channel_id"),
+                            )
+                        else:
+                            starter = guild.me or bot.user
+                            try:
+                                await recording.start_recording(
+                                    bot, guild, channel, started_by=starter,
+                                )
+                                logger.info("[DEV] recording_start: guild=%s ch=%s", guild_id, channel.id)
+                            except recording.RecordingError as e:
+                                logger.warning("[DEV] recording_start 失敗 guild=%s: %s", guild_id, e)
+                    else:
+                        try:
+                            result = await recording.stop_recording(bot, guild_id, reason="管理画面から停止")
+                            embed = recording.build_result_embed(guild_id, result)
+                            channel = guild.get_channel(result["channel_id"])
+                            if isinstance(channel, discord.abc.Messageable):
+                                await channel.send(embed=embed)
+                            logger.info("[DEV] recording_stop: guild=%s token=%s", guild_id, result["token"])
+                        except recording.RecordingError as e:
+                            logger.warning("[DEV] recording_stop 失敗 guild=%s: %s", guild_id, e)
                 elif task_name.startswith("test_"):
                     # 通知テストの中身は services/dev_test_notify.py が持つ。
                     # 「本番と同じ関数を使う」「channel_id 指定なら本番の
@@ -588,6 +625,32 @@ def setup_events(bot: Bot) -> None:
     # --------------------------
     # VC 参加・退出・移動 + セキュリティ + VC通知チャンネル
     # --------------------------
+    async def _stop_recording_if_vc_empty(guild: discord.Guild, channel) -> None:
+        """録音中のVCから人間が居なくなったら、そこで区切って書き出す。
+
+        放っておくと上限（既定6時間）まで無音を録り続けることになる。
+        """
+        from services import recording_service as recording
+
+        session = recording.get_session(guild.id)
+        if session is None or channel is None or channel.id != session.channel_id:
+            return
+        if any(m for m in channel.members if not m.bot):
+            return
+
+        result = await recording.stop_recording(bot, guild.id, reason="VC が空になりました")
+        embed = recording.build_result_embed(guild.id, result)
+        for target in (session.announce_message.channel if session.announce_message else None, channel):
+            if target is None:
+                continue
+            try:
+                await target.send(embed=embed)
+                return
+            except Exception as e:
+                logger.debug("[BOT_SETUP] 録音結果を送れませんでした: %s", e)
+        logger.warning("[BOT_SETUP] guild=%s 録音結果の通知先がありませんでした（token=%s）",
+                       guild.id, result["token"])
+
     def _tts_vc_became_empty(guild_id: int, channel) -> bool:
         """監視中の VC から人間が居なくなったか。
 
@@ -847,6 +910,10 @@ def setup_events(bot: Bot) -> None:
                         await _tts_auto_join(member.guild, int(_tts_vc_id))
         except Exception as e:
             logger.exception("[BOT_SETUP] TTS auto_join error: %s", e)
+
+        # 録音中のVCが空になったら、無音を録り続けないよう自動で止めて書き出す。
+        # TTS の切断より先に処理する（切断されると録音が途中で終わるため）。
+        await _safe(_stop_recording_if_vc_empty(member.guild, before_ch), "録音の自動停止")
 
         # TTS 自動退出: VCに人間が誰もいなくなったらBotも退出（temp override も解除）。
         # 退出だけでなく移動も対象になるのがここ。判定そのものは冒頭と共通。

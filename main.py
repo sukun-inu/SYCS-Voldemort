@@ -33,7 +33,13 @@ async def main():
     async with bot:
         if not DISCORD_BOT_TOKEN:
             raise RuntimeError("DISCORD_BOT_TOKEN が設定されていません。環境変数または .env を確認してください。")
-        await bot.start(DISCORD_BOT_TOKEN)
+        try:
+            await bot.start(DISCORD_BOT_TOKEN)
+        finally:
+            # 録音中に落ちると、そこまで録った分がまるごと消える。
+            # 終了時は必ず書き出してからにする。
+            from services.recording_service import stop_all
+            await stop_all(bot, reason="bot 停止")
 
 
 if __name__ == "__main__":

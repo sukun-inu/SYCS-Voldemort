@@ -139,7 +139,11 @@ def main():
         check("スタートメニューが自動で開く", page.locator("#start-menu").is_visible())
 
         tiles = page.locator(".app-tile")
-        check("タイルが14枚（開発者パネル・SQL エディタ込み）", tiles.count() == 14, str(tiles.count()))
+        # 枚数はパネル定義から数える（パネルを増やすたびにここを直すのは無駄なので）
+        from webapp_admin.schema.registry import visible_panels
+        expected_tiles = len(visible_panels(is_dev=True))
+        check(f"タイルが{expected_tiles}枚（開発者パネル・SQL エディタ込み）",
+              tiles.count() == expected_tiles, str(tiles.count()))
 
         # ── 検索 ──
         page.fill("#start-search", "ログ")

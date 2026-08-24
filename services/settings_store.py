@@ -837,3 +837,35 @@ def get_djaudio_runtime_settings(guild_id: int) -> DJAudioRuntimeSettings:
         max_urls=get_djaudio_max_urls(guild_id),
         output_channel_id=get_djaudio_output_channel(guild_id),
     )
+
+
+# ──────────────────────────────────────────────
+# VC録音
+# ──────────────────────────────────────────────
+
+_RECORDING_DEFAULTS: dict[str, Any] = {
+    "enabled": True,
+    "max_minutes": 360,        # 6時間で自動停止
+    "retention_days": 7,       # ダウンロードリンクの有効期間
+    "announce_channel_id": None,  # 開始・完了の通知先（未設定ならVCのチャット欄）
+    "excluded_user_ids": [],   # 録音しないユーザー（本人希望の除外）
+}
+
+
+def get_recording_settings(guild_id: int) -> dict[str, Any]:
+    stored = get_guild_settings(guild_id).get("recording", {})
+    if not isinstance(stored, dict):
+        stored = {}
+    settings = dict(_RECORDING_DEFAULTS)
+    settings.update(stored)
+    settings["excluded_user_ids"] = _parse_id_list(settings.get("excluded_user_ids"))
+    return settings
+
+
+def set_recording_settings(guild_id: int, patch: dict[str, Any]) -> None:
+    allowed = {k: v for k, v in patch.items() if k in _RECORDING_DEFAULTS}
+    _update_nested(guild_id, "recording", allowed)
+
+
+def set_recording_excluded_users(guild_id: int, user_ids: list[int]) -> None:
+    _update_nested(guild_id, "recording", {"excluded_user_ids": [int(u) for u in user_ids]})
