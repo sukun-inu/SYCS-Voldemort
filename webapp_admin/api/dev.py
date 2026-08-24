@@ -503,8 +503,15 @@ async def earthquake_replay(request: Request, _=Depends(check_dev), _csrf=Depend
     except (ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=400, detail=f"無効な地震イベントJSONです: {exc}")
 
-    _write_signal("eq_replay", event_json)
-    return _ok("地震速報をリプレイキューに追加しました。数十秒以内に通知が送信されます。",
+    # ギルド未指定＝全サーバーへ送信。テスト用のリプレイが本番の全サーバーへ
+    # 誤爆すると混乱を招くため、画面側は既定でギルドを選ばせ、全サーバー送信は
+    # 明示的に選んだときだけ通す（guild_id を送らない）。
+    raw_guild_id = str(body.get("guild_id") or "").strip()
+    guild_id = int(_require_id(raw_guild_id, "ギルドID")) if raw_guild_id else None
+
+    _write_signal("eq_replay", {"event": data, "guild_id": guild_id})
+    target = f"ギルド {guild_id}" if guild_id else "全サーバー"
+    return _ok(f"地震速報をリプレイキューに追加しました（送信先: {target}）。数十秒以内に通知が送信されます。",
                pending_signals=_pending_signals())
 
 

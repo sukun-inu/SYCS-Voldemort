@@ -908,7 +908,11 @@ async def _resolve_jma_detail_url(event: dict, max_scale: int) -> str:
 
 # ── 通知送信（確定地震情報 551） ──────────────────────────
 
-async def _notify_all_guilds(bot: Bot, event: dict) -> None:
+async def _notify_all_guilds(bot: Bot, event: dict, *, only_guild_id: int | None = None) -> None:
+    """通知する。only_guild_id を渡すと、そのギルドだけに絞る
+    （開発者パネルのリプレイが全サーバーへ誤爆しないようにするため）。
+    絞り込んだ場合も、そのギルドの min_scale・通知タイプ・チャンネル設定は
+    そのまま適用する（本番で実際に届く内容をそのまま確認できるように）。"""
     max_scale = _max_scale(event)
     points    = event.get("points", [])
 
@@ -942,8 +946,10 @@ async def _notify_all_guilds(bot: Bot, event: dict) -> None:
 
     view = _EqView(detail_url)
 
+    guild_ids = [only_guild_id] if only_guild_id is not None else get_all_guild_ids()
+
     targets: list[tuple[int, discord.TextChannel]] = []
-    for guild_id in get_all_guild_ids():
+    for guild_id in guild_ids:
         # 1ギルドの設定不正（例: min_scale が壊れた値）で、他の全ギルドへの
         # 通知まで巻き添えで止まらないようにする（ループ全体を落とさない）。
         try:
