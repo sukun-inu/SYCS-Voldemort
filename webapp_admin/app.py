@@ -248,6 +248,10 @@ def create_app() -> FastAPI:
                 record_request()
                 record_error_response(response.status_code, snap)
         except Exception as exc:
+            # ここに来るのは HTTPException / RateLimitExceeded / ExceptionGroup の
+            # どれにも拾われなかった、想定していない例外（実装バグ）。それらは
+            # 内側の ExceptionMiddleware で先に Response へ変換されるため、
+            # ここへは来ない ＝ 監視・ログはこれまでどおり動く。
             record_exception(exc, snap)
             root = _unwrap_exception_group(exc) if isinstance(exc, BaseExceptionGroup) else exc
             logger.exception(
@@ -257,7 +261,14 @@ def create_app() -> FastAPI:
                 type(root).__name__,
                 root,
             )
-            raise
+            # raise すると Starlette の既定ハンドラがプレーンテキスト（デバッグ
+            # 時は HTML）を返し、fetch する側は本文を読めず「HTTP 500」としか
+            # 言えなくなる（実例: relkind が asyncpg で bytes として返り、
+            # JSONResponse の json.dumps がそのまま TypeError で落ちていた）。
+            message = "サーバーエラーが発生しました。"
+            if _is_api(request):
+                return JSONResponse({"detail": message}, status_code=500)
+            return render(request, "error.html", status_code=500, code=500, message=message)
         return response
 
     @app.middleware("http")
