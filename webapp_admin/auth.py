@@ -166,54 +166,100 @@ async def get_admin_guilds(access_token: str) -> list[dict]:
     return result
 
 
+# チャンネル一覧のキャッシュ。
+#
+# テキストとボイスは同じ /guilds/{id}/channels から取れるのに、以前は種類ごとに
+# 別々のリクエストを投げていた。そのうえキャッシュが無かったため、5秒ごとに
+# 更新する画面（VC録音パネル）を開いているだけで毎5秒2本の呼び出しが飛び、
+# Discord から 429 を返され続けた。1回だけ取って共有し、短時間は使い回す。
+_guild_channels_cache: dict[int, tuple[list[dict], float]] = {}
+_guild_channels_locks: dict[int, asyncio.Lock] = {}
+# 429 を食らったギルドは、この時刻まで取りに行かない
+_guild_channels_cooldown: dict[int, float] = {}
+_GUILD_CHANNELS_TTL = 60.0
+_GUILD_CHANNELS_COOLDOWN_DEFAULT = 30.0
+_GUILD_CHANNELS_COOLDOWN_MAX = 300.0
+
+
+def _retry_after(resp) -> float:
+    try:
+        return max(0.0, float(resp.headers.get("Retry-After", "")))
+    except (TypeError, ValueError):
+        return _GUILD_CHANNELS_COOLDOWN_DEFAULT
+
+
+async def _fetch_guild_channels(guild_id: int) -> list[dict]:
+    """そのギルドの全チャンネルを1回だけ取り、TTL のあいだ使い回す。
+
+    取得に失敗しても、古い内容が残っていればそれを返す。空を返すと画面の
+    ドロップダウンが消えて設定できなくなるので、鮮度より「出せること」を優先する。
+    """
+    now = time.time()
+    cached = _guild_channels_cache.get(guild_id)
+    if cached and now - cached[1] < _GUILD_CHANNELS_TTL:
+        return cached[0]
+
+    lock = _guild_channels_locks.setdefault(guild_id, asyncio.Lock())
+    async with lock:
+        # 待っているあいだに他の呼び出しが取ってきているかもしれない
+        now = time.time()
+        cached = _guild_channels_cache.get(guild_id)
+        if cached and now - cached[1] < _GUILD_CHANNELS_TTL:
+            return cached[0]
+
+        # 429 直後は叩かない（叩くほど解除が遠のく）
+        until = _guild_channels_cooldown.get(guild_id, 0.0)
+        if now < until:
+            return cached[0] if cached else []
+
+        try:
+            async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
+                async with session.get(
+                    f"{_API}/guilds/{guild_id}/channels",
+                    headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+                ) as resp:
+                    if resp.status == 429:
+                        wait = min(_retry_after(resp), _GUILD_CHANNELS_COOLDOWN_MAX)
+                        _guild_channels_cooldown[guild_id] = time.time() + wait
+                        logger.warning(
+                            "チャンネル一覧がレート制限されました guild_id=%s: %.0f秒待ちます",
+                            guild_id, wait,
+                        )
+                        return cached[0] if cached else []
+                    resp.raise_for_status()
+                    data = await resp.json()
+        except Exception as exc:
+            # 黙って空を返すと、画面には「一覧を取得できませんでした」とだけ出て
+            # 原因が追えない。理由を必ずログへ残す。
+            from webapp_admin.api.dev import describe_exception
+
+            logger.warning(
+                "チャンネル一覧の取得に失敗 guild_id=%s: %s", guild_id,
+                describe_exception(exc, timeout=_TIMEOUT.total),
+            )
+            return cached[0] if cached else []
+
+        channels = data if isinstance(data, list) else []
+        _guild_channels_cache[guild_id] = (channels, time.time())
+        _guild_channels_cooldown.pop(guild_id, None)
+        return channels
+
+
+def _of_type(channels: list[dict], channel_type: int) -> list[dict]:
+    return sorted(
+        [c for c in channels if c.get("type") == channel_type],
+        key=lambda c: c.get("position", 0),
+    )
+
+
 async def get_guild_channels(guild_id: int) -> list[dict]:
     """テキストチャンネル (type=0) のみ返す。"""
-    try:
-        async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
-            async with session.get(
-                f"{_API}/guilds/{guild_id}/channels",
-                headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
-            ) as resp:
-                resp.raise_for_status()
-                return sorted(
-                    [c for c in await resp.json() if c.get("type") == 0],
-                    key=lambda c: c.get("position", 0),
-                )
-    except Exception as exc:
-        # 黙って空を返すと、画面には「一覧を取得できませんでした」とだけ出て
-        # 原因が追えない。理由を必ずログへ残す。
-        from webapp_admin.api.dev import describe_exception
-
-        logger.warning(
-            "チャンネル一覧の取得に失敗 guild_id=%s: %s", guild_id,
-            describe_exception(exc, timeout=_TIMEOUT.total),
-        )
-        return []
+    return _of_type(await _fetch_guild_channels(guild_id), 0)
 
 
 async def get_guild_voice_channels(guild_id: int) -> list[dict]:
     """ボイスチャンネル (type=2) のみ返す。"""
-    try:
-        async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
-            async with session.get(
-                f"{_API}/guilds/{guild_id}/channels",
-                headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
-            ) as resp:
-                resp.raise_for_status()
-                return sorted(
-                    [c for c in await resp.json() if c.get("type") == 2],
-                    key=lambda c: c.get("position", 0),
-                )
-    except Exception as exc:
-        # 黙って空を返すと、画面には「一覧を取得できませんでした」とだけ出て
-        # 原因が追えない。理由を必ずログへ残す。
-        from webapp_admin.api.dev import describe_exception
-
-        logger.warning(
-            "ボイスチャンネル一覧の取得に失敗 guild_id=%s: %s", guild_id,
-            describe_exception(exc, timeout=_TIMEOUT.total),
-        )
-        return []
+    return _of_type(await _fetch_guild_channels(guild_id), 2)
 
 
 _user_info_cache: dict[int, tuple[Optional[dict], float]] = {}

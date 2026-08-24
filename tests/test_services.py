@@ -951,6 +951,121 @@ class RecordingSettingsRangeTests(unittest.TestCase):
         store.set_recording_settings(4246, {"max_minutes": 0})
         self.assertEqual(store.get_recording_settings(4246)["max_minutes"], 0)
 
+
+class _FakeResponse:
+    def __init__(self, status=200, retry_after=None, payload=None):
+        self.status = status
+        self.headers = {"Retry-After": retry_after} if retry_after else {}
+        self._payload = payload if payload is not None else [
+            {"id": "1", "name": "general", "type": 0, "position": 0},
+            {"id": "2", "name": "雑談VC", "type": 2, "position": 1},
+        ]
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+    def raise_for_status(self):
+        if self.status >= 400:
+            raise RuntimeError(f"HTTP {self.status}")
+
+    async def json(self):
+        return self._payload
+
+
+class GuildChannelCacheTests(unittest.TestCase):
+    """チャンネル一覧の取得。Discord のレート制限に当たらないこと。
+
+    以前はテキストとボイスで別々に同じエンドポイントを叩き、キャッシュも
+    無かったため、5秒おきに更新する画面を開いているだけで 429 を返され続けた。
+    """
+
+    def setUp(self):
+        import webapp_admin.auth as auth
+        self.auth = auth
+        auth._guild_channels_cache.clear()
+        auth._guild_channels_cooldown.clear()
+        auth._guild_channels_locks.clear()
+        self.calls = []
+
+    def _patch_session(self, **response_kwargs):
+        calls = self.calls
+
+        class Session:
+            def __init__(self, *a, **k):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            def get(self, url, **kwargs):
+                calls.append(url)
+                return _FakeResponse(**response_kwargs)
+
+        return patch.object(
+            self.auth.aiohttp, "ClientSession", Session, create=False,
+        )
+
+    def test_text_and_voice_share_one_request(self):
+        """同じエンドポイントから両方取れるのに2回叩いていた。"""
+        with self._patch_session():
+            text = asyncio.run(self.auth.get_guild_channels(1))
+            voice = asyncio.run(self.auth.get_guild_voice_channels(1))
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual([c["name"] for c in text], ["general"])
+        self.assertEqual([c["name"] for c in voice], ["雑談VC"])
+
+    def test_repeated_polling_hits_discord_once(self):
+        with self._patch_session():
+            for _ in range(12):
+                asyncio.run(self.auth.get_guild_channels(1))
+                asyncio.run(self.auth.get_guild_voice_channels(1))
+        self.assertEqual(len(self.calls), 1)
+
+    def test_concurrent_callers_do_not_duplicate_the_fetch(self):
+        async def race():
+            return await asyncio.gather(*(self.auth.get_guild_channels(1) for _ in range(10)))
+
+        with self._patch_session():
+            asyncio.run(race())
+        self.assertEqual(len(self.calls), 1)
+
+    def test_rate_limit_starts_a_cooldown(self):
+        """429 のあとも叩き続けると、解除がさらに遠のく。"""
+        with self._patch_session(status=429, retry_after="5"):
+            asyncio.run(self.auth.get_guild_channels(1))
+            first = len(self.calls)
+            for _ in range(10):
+                asyncio.run(self.auth.get_guild_channels(1))
+        self.assertEqual(first, 1)
+        self.assertEqual(len(self.calls), 1)
+
+    def test_stale_list_is_served_when_the_refresh_fails(self):
+        """空を返すとドロップダウンが消えて設定できなくなる。"""
+        with self._patch_session():
+            good = asyncio.run(self.auth.get_guild_channels(1))
+        # TTL を切らして、次の取得を 429 にする
+        channels, _ = self.auth._guild_channels_cache[1]
+        self.auth._guild_channels_cache[1] = (channels, 0.0)
+        with self._patch_session(status=429, retry_after="5"):
+            stale = asyncio.run(self.auth.get_guild_channels(1))
+        self.assertEqual(stale, good)
+
+    def test_no_cache_and_a_failure_gives_an_empty_list(self):
+        with self._patch_session(status=500):
+            self.assertEqual(asyncio.run(self.auth.get_guild_channels(1)), [])
+
+    def test_cooldown_is_cleared_after_a_success(self):
+        self.auth._guild_channels_cooldown[1] = 0.0   # 期限切れのクールダウン
+        with self._patch_session():
+            asyncio.run(self.auth.get_guild_channels(1))
+        self.assertNotIn(1, self.auth._guild_channels_cooldown)
+
 if __name__ == "__main__":
     logging.disable(logging.CRITICAL)
     unittest.main()
