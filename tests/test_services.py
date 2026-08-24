@@ -990,6 +990,10 @@ class GuildChannelCacheTests(unittest.TestCase):
         auth._guild_channels_locks.clear()
         self.calls = []
 
+    def _quiet(self):
+        """意図して失敗させる試験なので、その警告は出さない。"""
+        return patch.object(self.auth.logger, "warning")
+
     def _patch_session(self, **response_kwargs):
         calls = self.calls
 
@@ -1037,7 +1041,7 @@ class GuildChannelCacheTests(unittest.TestCase):
 
     def test_rate_limit_starts_a_cooldown(self):
         """429 のあとも叩き続けると、解除がさらに遠のく。"""
-        with self._patch_session(status=429, retry_after="5"):
+        with self._quiet(), self._patch_session(status=429, retry_after="5"):
             asyncio.run(self.auth.get_guild_channels(1))
             first = len(self.calls)
             for _ in range(10):
@@ -1052,12 +1056,12 @@ class GuildChannelCacheTests(unittest.TestCase):
         # TTL を切らして、次の取得を 429 にする
         channels, _ = self.auth._guild_channels_cache[1]
         self.auth._guild_channels_cache[1] = (channels, 0.0)
-        with self._patch_session(status=429, retry_after="5"):
+        with self._quiet(), self._patch_session(status=429, retry_after="5"):
             stale = asyncio.run(self.auth.get_guild_channels(1))
         self.assertEqual(stale, good)
 
     def test_no_cache_and_a_failure_gives_an_empty_list(self):
-        with self._patch_session(status=500):
+        with self._quiet(), self._patch_session(status=500):
             self.assertEqual(asyncio.run(self.auth.get_guild_channels(1)), [])
 
     def test_cooldown_is_cleared_after_a_success(self):
@@ -1065,6 +1069,147 @@ class GuildChannelCacheTests(unittest.TestCase):
         with self._patch_session():
             asyncio.run(self.auth.get_guild_channels(1))
         self.assertNotIn(1, self.auth._guild_channels_cooldown)
+
+
+class OpusResilienceTests(unittest.TestCase):
+    """壊れた Opus パケットで録音が止まらないこと。
+
+    voice_recv にデコードさせると、1つでも壊れたパケットに当たった時点で
+    受信スレッドが OpusError で落ち、stop_listening() まで呼ばれる
+    （router.py の run/finally）。つまり録音が黙って止まる。
+    こちらでデコードして、そのパケットだけ捨てる。
+    """
+
+    CORRUPT = b"\xff" * 40   # opus_decode が corrupted stream を返す並び
+
+    def setUp(self):
+        import discord.opus as opus
+        import services.recording_service as recording
+        # discord.py の opus は遅延読み込み。生成を試みるまで is_loaded() は False。
+        if not opus.is_loaded():
+            try:
+                opus._load_default()
+            except Exception:
+                pass
+        if not opus.is_loaded():
+            self.skipTest("libopus が読み込めない環境です")
+        self.opus = opus
+        self.rec = recording
+        self.session = recording.RecordingSession(
+            guild_id=999, channel_id=555, channel_name="雑談VC",
+            started_by_id=1, started_by_name="すずき",
+            started_at=time.monotonic(), max_seconds=0, retention_days=7,
+        )
+        self.sink = recording._make_sink_class()(self.session)
+        self.user = Mock(id=1, display_name="すずき")
+
+    def _frame(self, freq=440.0):
+        import math
+        import struct
+        pcm = bytearray()
+        for i in range(960):   # 20ms
+            v = int(12000 * math.sin(2 * math.pi * freq * i / self.rec.SAMPLE_RATE))
+            pcm += struct.pack("<hh", v, v)
+        return self.opus.Encoder().encode(bytes(pcm), 960)
+
+    def _packet(self, payload):
+        return Mock(opus=payload)
+
+    def test_library_is_not_asked_to_decode(self):
+        """wants_opus() が False だと、壊れたパケットで受信スレッドごと落ちる。"""
+        self.assertTrue(self.sink.wants_opus())
+
+    def test_corrupt_payload_really_raises(self):
+        """前提の確認。これが例外にならないなら、このテストは意味を持たない。"""
+        with self.assertRaises(Exception):
+            self.opus.Decoder().decode(self.CORRUPT, fec=False)
+
+    def test_corrupt_packet_is_skipped_not_raised(self):
+        self.sink.write(self.user, self._packet(self._frame()))
+        self.sink.write(self.user, self._packet(self.CORRUPT))   # 例外が出たら失敗
+        self.assertEqual(self.session.dropped_packets, 1)
+
+    def test_recording_continues_after_a_corrupt_packet(self):
+        self.sink.write(self.user, self._packet(self._frame()))
+        self.sink.write(self.user, self._packet(self.CORRUPT))
+        before = self.session.tracks[1].voiced_bytes
+        self.sink.write(self.user, self._packet(self._frame()))
+        self.assertGreater(self.session.tracks[1].voiced_bytes, before)
+
+    def test_a_flood_of_corrupt_packets_is_survivable(self):
+        self.sink.write(self.user, self._packet(self._frame()))
+        for _ in range(200):
+            self.sink.write(self.user, self._packet(self.CORRUPT))
+        self.assertEqual(self.session.dropped_packets, 200)
+        self.assertIn(1, self.session.tracks)
+
+    def test_excluded_users_are_not_decoded(self):
+        self.session.excluded_user_ids = {1}
+        self.sink.write(self.user, self._packet(self._frame()))
+        self.assertEqual(self.session.tracks, {})
+
+    def test_empty_payload_is_ignored(self):
+        self.sink.write(self.user, self._packet(b""))
+        self.sink.write(self.user, self._packet(None))
+        self.assertEqual(self.session.dropped_packets, 0)
+        self.assertEqual(self.session.tracks, {})
+
+    def test_dropped_count_reaches_the_result(self):
+        self.sink.write(self.user, self._packet(self._frame()))
+        self.sink.write(self.user, self._packet(self.CORRUPT))
+        result = self.rec._finalize(self.session, 1.0, "テスト")
+        self.assertEqual(result["dropped_packets"], 1)
+
+    def test_result_embed_warns_only_when_something_was_lost(self):
+        base = {
+            "token": "t" * 32, "title": "x", "track_count": 1, "duration_seconds": 60,
+            "size_bytes": 1024, "retention_days": 7, "channel_id": 1,
+            "channel_name": "雑談VC", "reason": "手動停止", "speakers": ["A"],
+        }
+        quiet = self.rec.build_result_embed(1, {**base, "dropped_packets": 0})
+        noisy = self.rec.build_result_embed(1, {**base, "dropped_packets": 42})
+        self.assertFalse(any("取りこぼし" in f.name for f in quiet.fields))
+        self.assertTrue(any("取りこぼし" in f.name for f in noisy.fields))
+
+
+class ReceiverHealthTests(unittest.TestCase):
+    """受信が止まったことに気づけること。
+
+    voice_recv は内部エラーで stop_listening() を呼ぶが、こちらのセッションは
+    「録音中」のまま残る。放っておくと、途中で切れた録音が最後まで録れたように
+    見えてしまう。
+    """
+
+    def setUp(self):
+        import services.recording_service as recording
+        from services import voice_session
+        self.rec = recording
+        self.vs = voice_session
+        self.vs._clients.clear()
+
+    def tearDown(self):
+        self.vs._clients.clear()
+
+    def test_listening_client_is_healthy(self):
+        client = Mock()
+        client.is_listening = Mock(return_value=True)
+        self.vs._clients[1] = client
+        self.assertTrue(self.rec._is_receiving(1))
+
+    def test_stopped_listening_is_detected(self):
+        client = Mock()
+        client.is_listening = Mock(return_value=False)
+        self.vs._clients[1] = client
+        self.assertFalse(self.rec._is_receiving(1))
+
+    def test_missing_connection_is_not_receiving(self):
+        self.assertFalse(self.rec._is_receiving(1))
+
+    def test_client_without_the_method_is_left_alone(self):
+        """判断できないものを「止まっている」と決めつけて録音を切らないこと。"""
+        client = Mock(spec=discord.VoiceClient)   # is_listening を持たない
+        self.vs._clients[1] = client
+        self.assertTrue(self.rec._is_receiving(1))
 
 if __name__ == "__main__":
     logging.disable(logging.CRITICAL)
