@@ -1490,6 +1490,70 @@ class ReleaseAfterRecordingTests(unittest.TestCase):
         self.assertFalse(
             self._release(tts_enabled=False, tts_vc=self.VC, holds=("something",)))
 
+
+class RecordingLimitConstantsTests(unittest.TestCase):
+    """設定の許容範囲が、管理画面とスラッシュコマンドで食い違わないこと。
+
+    片方だけ古いと、入れられた値が黙って弾かれたり丸められたりする
+    （キャッシュ保持時間で実際に起きた種類の不具合）。
+    """
+
+    def setUp(self):
+        import services.recording_service as recording
+        self.rec = recording
+
+    def test_api_uses_the_shared_constants(self):
+        import inspect
+        import webapp_admin.api.recording as api
+        source = inspect.getsource(api)
+        self.assertIn("MAX_MINUTES_LIMIT", source)
+        self.assertIn("RETENTION_DAYS_MAX", source)
+
+    def test_commands_use_the_shared_constants(self):
+        import inspect
+        import commands.recording_commands as cmds
+        source = inspect.getsource(cmds)
+        self.assertIn("MAX_MINUTES_LIMIT", source)
+        self.assertIn("RETENTION_DAYS_MAX", source)
+
+    def test_unlimited_is_inside_the_accepted_range(self):
+        self.assertEqual(self.rec.UNLIMITED, 0)
+        self.assertGreater(self.rec.MAX_MINUTES_LIMIT, 0)
+        self.assertLessEqual(self.rec.RETENTION_DAYS_MIN, self.rec.RETENTION_DAYS_MAX)
+
+    def test_defaults_sit_inside_the_limits(self):
+        defaults = store.get_recording_settings(9910)
+        self.assertLessEqual(defaults["max_minutes"], self.rec.MAX_MINUTES_LIMIT)
+        self.assertGreaterEqual(defaults["retention_days"], self.rec.RETENTION_DAYS_MIN)
+        self.assertLessEqual(defaults["retention_days"], self.rec.RETENTION_DAYS_MAX)
+
+
+class PublicDocumentTests(unittest.TestCase):
+    """録音は個人情報を扱うので、公開ページの記載を消さないよう固定する。"""
+
+    def _read(self, name):
+        root = Path(__file__).resolve().parent.parent
+        return (root / "webapp_admin" / "templates" / name).read_text(encoding="utf-8")
+
+    def test_privacy_states_the_government_only_limitation(self):
+        text = self._read("privacy.html")
+        self.assertIn("政府機関への提供が必要な場合を除き", text)
+        self.assertIn("個人情報保護法", text)
+
+    def test_privacy_explains_notice_and_opt_out(self):
+        text = self._read("privacy.html")
+        self.assertIn("/record exclude", text)
+        self.assertIn("無効にすることはできません", text)
+
+    def test_privacy_states_the_recording_retention(self):
+        text = self._read("privacy.html")
+        self.assertIn("既定7日、最長30日", text)
+
+    def test_terms_put_lawful_use_on_the_operator(self):
+        text = self._read("terms.html")
+        self.assertIn("適用される法令に則って", text)
+        self.assertIn("個人情報保護法", text)
+
 if __name__ == "__main__":
     logging.disable(logging.CRITICAL)
     unittest.main()

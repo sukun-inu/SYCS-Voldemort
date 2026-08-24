@@ -21,6 +21,7 @@ English: [README.md](README.md)
 - Google ニュースの配信、地震アラート（P2PQuake）
 - 音楽のダウンロード再生（DJAudio-DL）
 - テキスト読み上げ（声設定・辞書つき）
+- VC録音（参加者ごとの別トラック・読み上げと併用可）
 - 不審な動きの検知
 - 管理画面（FastAPI）と、貴金属価格の Web トラッカー
 

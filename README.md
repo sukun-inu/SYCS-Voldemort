@@ -21,6 +21,7 @@ admin panel**. Which features are reachable from which is tabulated in
 - Google News delivery and earthquake alerts (P2PQuake)
 - Music download and playback (DJAudio-DL)
 - Text-to-speech, with per-user voice settings and a pronunciation dictionary
+- Voice-channel recording, one track per speaker, usable alongside text-to-speech
 - Detection of suspicious activity
 - An admin panel (FastAPI) and a web tracker for metal prices
 
