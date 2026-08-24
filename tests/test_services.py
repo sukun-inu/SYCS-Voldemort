@@ -1554,6 +1554,102 @@ class PublicDocumentTests(unittest.TestCase):
         self.assertIn("適用される法令に則って", text)
         self.assertIn("個人情報保護法", text)
 
+
+class AnnounceChannelTests(unittest.TestCase):
+    """通知チャンネルの設定が実際に効くこと。
+
+    以前は保存も表示もされていたのに、通知を送る側が一度も読んでいなかった
+    （設定しても何も起きない、書くだけの設定になっていた）。
+    """
+
+    GUILD = 7700
+    NOTICE = 700
+
+    def setUp(self):
+        import services.recording_service as recording
+        self.rec = recording
+        self.sent = []
+        store.set_recording_settings(self.GUILD, {"announce_channel_id": None})
+
+    def _messageable(self, channel_id, label):
+        channel = Mock(spec=discord.TextChannel)
+        channel.id = channel_id
+        channel.name = label
+
+        async def send(**kwargs):
+            self.sent.append(label)
+            return Mock()
+
+        channel.send = send
+        return channel
+
+    def _guild(self, *, notice_exists=True):
+        notice = self._messageable(self.NOTICE, "通知ch")
+        guild = Mock()
+        guild.id = self.GUILD
+        guild.get_channel = lambda i: notice if (notice_exists and int(i) == self.NOTICE) else None
+        return guild
+
+    def _voice(self, guild):
+        voice = Mock(spec=discord.VoiceChannel)
+        voice.id = 800
+        voice.name = "雑談VC"
+        voice.guild = guild
+
+        async def send(**kwargs):
+            self.sent.append("VCチャット")
+            return Mock()
+
+        voice.send = send
+        return voice
+
+    def _session(self):
+        return self.rec.RecordingSession(
+            guild_id=self.GUILD, channel_id=800, channel_name="雑談VC",
+            started_by_id=1, started_by_name="すずき",
+            started_at=0.0, max_seconds=0, retention_days=7,
+        )
+
+    def _announce(self, *, configured, announce_to, notice_exists=True):
+        store.set_recording_settings(
+            self.GUILD, {"announce_channel_id": configured})
+        guild = self._guild(notice_exists=notice_exists)
+        asyncio.run(self.rec._announce_start(
+            self._voice(guild), self._session(), announce_to))
+        return self.sent
+
+    def test_configured_channel_wins(self):
+        command_channel = self._messageable(900, "コマンド実行ch")
+        self.assertEqual(
+            self._announce(configured=self.NOTICE, announce_to=command_channel),
+            ["通知ch"])
+
+    def test_falls_back_to_the_command_channel(self):
+        command_channel = self._messageable(900, "コマンド実行ch")
+        self.assertEqual(
+            self._announce(configured=None, announce_to=command_channel),
+            ["コマンド実行ch"])
+
+    def test_falls_back_to_the_voice_chat(self):
+        self.assertEqual(self._announce(configured=None, announce_to=None), ["VCチャット"])
+
+    def test_a_missing_configured_channel_does_not_swallow_the_notice(self):
+        """設定先が消えていても、黙って告知しないのは避ける。"""
+        command_channel = self._messageable(900, "コマンド実行ch")
+        with self.assertLogs(self.rec.logger, level="WARNING"):
+            sent = self._announce(configured=999, announce_to=command_channel,
+                                  notice_exists=False)
+        self.assertEqual(sent, ["コマンド実行ch"])
+
+    def test_resolver_returns_the_fallback_without_a_setting(self):
+        fallback = self._messageable(123, "代替")
+        self.assertIs(
+            self.rec.resolve_announce_channel(self._guild(), fallback=fallback),
+            fallback)
+
+    def test_resolver_handles_a_missing_guild(self):
+        self.assertIsNone(self.rec.resolve_announce_channel(None))
+
 if __name__ == "__main__":
     logging.disable(logging.CRITICAL)
     unittest.main()
