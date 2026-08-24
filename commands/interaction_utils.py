@@ -34,13 +34,21 @@ async def send_interaction(
     *,
     content: str | None = None,
     embed: discord.Embed | None = None,
+    view: discord.ui.View | None = None,
     ephemeral: bool = True,
 ) -> None:
+    """初回応答でも defer 済みでも、同じ呼び方で送れるようにする。
+
+    defer() を挟んだあとに response.send_message() を呼ぶと失敗する。
+    どちらの経路も通るように、ここで吸収する。
+    """
     kwargs: dict[str, object] = {"ephemeral": ephemeral}
     if content is not None:
         kwargs["content"] = content
     if embed is not None:
         kwargs["embed"] = embed
+    if view is not None:
+        kwargs["view"] = view
 
     if interaction.response.is_done():
         await interaction.followup.send(**kwargs)
