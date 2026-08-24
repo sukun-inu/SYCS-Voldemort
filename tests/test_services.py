@@ -1886,6 +1886,131 @@ class SecurityFailSafeTests(unittest.TestCase):
                         source.index("await message.delete()"))
         self.assertIn("要確認", source)
 
+
+class TrackCloseTests(unittest.TestCase):
+    """書き出しの終了処理。本番（Linux）でだけ落ちていた経路。
+
+    close() が stdin を先に閉じてから communicate() を呼んでいたため、POSIX の
+    communicate() 内の stdin.flush() が ValueError（flush of closed file）になり、
+    録音が保存されず失われていた。Windows の communicate() は閉じ済み stdin を
+    許容するので、こちらで動かしても再現しない。
+    """
+
+    def setUp(self):
+        import services.recording_service as recording
+        self.rec = recording
+        self.work = Path(tempfile.mkdtemp(prefix="closetest-"))
+
+    def _tone(self, seconds=0.2):
+        import math
+        import struct
+        out = bytearray()
+        for i in range(int(self.rec.SAMPLE_RATE * seconds)):
+            v = int(12000 * math.sin(2 * math.pi * 440 * i / self.rec.SAMPLE_RATE))
+            out += struct.pack("<hh", v, v)
+        return bytes(out)
+
+    def test_stdin_is_not_closed_before_communicate(self):
+        """POSIX ではここが閉じていると communicate() の flush が落ちる。"""
+        track = self.rec._TrackWriter(1, "A", self.work / "a.mp3", time.monotonic())
+        track.write(self._tone(), 0.0)
+
+        seen = {}
+        original = track._process.communicate
+
+        def spy(*args, **kwargs):
+            stdin = track._process.stdin
+            seen["ok"] = stdin is None or not stdin.closed
+            return original(*args, **kwargs)
+
+        track._process.communicate = spy
+        track.close(0.5)
+        self.assertTrue(seen.get("ok"), "communicate() の時点で stdin が閉じている")
+
+    def test_close_does_not_call_stdin_close(self):
+        import inspect
+        source = inspect.getsource(self.rec._TrackWriter.close)
+        self.assertNotIn("stdin.close()", source)
+
+    def test_an_already_closed_pipe_does_not_raise(self):
+        """書き込み失敗などで既に閉じていても、停止処理を巻き添えにしない。"""
+        track = self.rec._TrackWriter(2, "B", self.work / "b.mp3", time.monotonic())
+        track.write(self._tone(), 0.0)
+        track._process.stdin.close()
+
+        with patch.object(self.rec.logger, "warning"):
+            track.close(0.5)          # 例外が出たら失敗
+        self.assertTrue(track.failed)
+
+    def test_writing_to_a_closed_pipe_is_caught(self):
+        """閉じたパイプへの書き込みは ValueError で来る（OSError ではない）。"""
+        track = self.rec._TrackWriter(3, "C", self.work / "c.mp3", time.monotonic())
+        track._process.stdin.close()
+
+        with patch.object(self.rec.logger, "warning"):
+            track.write(self._tone(), 0.0)   # 例外が出たら失敗
+        self.assertTrue(track.failed)
+        track.close(0.5)
+
+    def test_output_is_still_produced_normally(self):
+        track = self.rec._TrackWriter(4, "D", self.work / "d.mp3", time.monotonic())
+        track.write(self._tone(0.3), 0.0)
+        track.close(1.0)
+        out = self.work / "d.mp3"
+        self.assertTrue(out.exists())
+        self.assertGreater(out.stat().st_size, 0)
+
+
+class WaveformTests(unittest.TestCase):
+    """波形データ。録音しながら拾う（書き出し後に読み直さない）。"""
+
+    def setUp(self):
+        import services.recording_service as recording
+        self.rec = recording
+        self.work = Path(tempfile.mkdtemp(prefix="peaktest-"))
+
+    def _tone(self, seconds, amplitude=12000):
+        import math
+        import struct
+        out = bytearray()
+        for i in range(int(self.rec.SAMPLE_RATE * seconds)):
+            v = int(amplitude * math.sin(2 * math.pi * 440 * i / self.rec.SAMPLE_RATE))
+            out += struct.pack("<hh", v, v)
+        return bytes(out)
+
+    def test_peaks_follow_the_timeline(self):
+        track = self.rec._TrackWriter(1, "A", self.work / "a.mp3", time.monotonic())
+        track.write(self._tone(0.5), 0.0)                  # 0.0〜0.5 に音
+        track.write(self._tone(0.5, 30000), 2.0)           # 2.0〜2.5 に大きい音
+        track.close(4.0)
+
+        peaks = track.peak_series()
+        self.assertEqual(len(peaks), int(4.0 / self.rec.PEAK_BUCKET_SECONDS))
+        self.assertGreater(peaks[0], 0.2)          # 冒頭は鳴っている
+        self.assertEqual(peaks[4], 0.0)            # 1.0秒地点は無音
+        self.assertGreater(peaks[8], peaks[0])     # 2.0秒地点のほうが大きい
+
+    def test_silence_only_track_is_flat(self):
+        track = self.rec._TrackWriter(2, "B", self.work / "b.mp3", time.monotonic())
+        track.close(2.0)
+        self.assertTrue(all(v == 0.0 for v in track.peak_series()))
+
+    def test_long_recordings_are_downsampled(self):
+        track = self.rec._TrackWriter(3, "C", self.work / "c.mp3", time.monotonic())
+        track.peaks = [1000] * 90_000            # 6時間ぶん相当
+        series = track.peak_series()
+        self.assertLessEqual(len(series), self.rec.PEAK_MAX_POINTS)
+        self.assertTrue(all(0.0 <= v <= 1.0 for v in series))
+        track._process.stdin.close()
+        track._process.stdin = None
+        track._process.kill()
+
+    def test_values_are_normalised(self):
+        self.assertEqual(self.rec._peak_of(b""), 0)
+        loud = self.rec._peak_of(self._tone(0.05, 32000))
+        quiet = self.rec._peak_of(self._tone(0.05, 1000))
+        self.assertGreater(loud, quiet)
+
 if __name__ == "__main__":
     logging.disable(logging.CRITICAL)
     unittest.main()
