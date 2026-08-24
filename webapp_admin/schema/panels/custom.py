@@ -58,3 +58,15 @@ SQL = Panel(
     # apps/sql.js が読んで描く（既存ページは持たない）。
     client="sql",
 )
+
+RECORDING = Panel(
+    id="recording",
+    title="VC録音",
+    icon="bi-record-circle",
+    group="メディア",
+    window=(860, 700),
+    custom=True,
+    # 開始・停止は Bot 側でしか行えないため、状況表示と操作は
+    # /admin/api/recording を apps/recording.js が読んで描く。
+    client="recording",
+)

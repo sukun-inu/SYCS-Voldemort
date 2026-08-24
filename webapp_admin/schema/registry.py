@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from webapp_admin.schema.panels.custom import DEV, MONITORING, SQL, USER_STATE
+from webapp_admin.schema.panels.custom import DEV, MONITORING, RECORDING, SQL, USER_STATE
 from webapp_admin.schema.panels.djaudio import PANEL as DJAUDIO
 from webapp_admin.schema.panels.earthquake import PANEL as EARTHQUAKE
 from webapp_admin.schema.panels.logging import PANEL as LOGGING
@@ -34,6 +34,7 @@ PANELS: tuple[Panel, ...] = (
     REACTION_ROLES,
     DJAUDIO,
     TTS,
+    RECORDING,
     SECURITY,
     DEV,
     SQL,

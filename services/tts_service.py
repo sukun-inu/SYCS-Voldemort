@@ -8,6 +8,7 @@ import discord
 from discord.ext.commands import Bot
 
 from config import TTS_BASE_URL
+from services import voice_session
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +25,7 @@ _RECONNECT_DELAY_SEC = 2.0  # 再接続間隔（秒）
 # ギルドごとの状態
 _queues: dict[int, asyncio.Queue] = {}
 _tasks: dict[int, asyncio.Task] = {}
-_voice_clients: dict[int, discord.VoiceClient] = {}
 _temp_overrides: dict[int, dict] = {}  # guild_id -> {"vc_channel_id": int}
-_connect_locks: dict[int, asyncio.Lock] = {}  # 接続操作の guild ごとロック
 
 
 def get_effective_vc_watch(guild_id: int, settings: dict) -> tuple[int | None, list[int]]:
@@ -84,65 +83,13 @@ async def _synthesize(text: str, voice: str, rate: int) -> Optional[str]:
 async def _connect_or_move(
     guild: discord.Guild, vc_channel_id: int
 ) -> discord.VoiceClient | None:
-    """VCに接続。既に別チャンネルに接続中なら移動。per-guild ロックで並行接続競合を防ぐ。"""
-    lock = _connect_locks.setdefault(guild.id, asyncio.Lock())
-    async with lock:
-        existing = _voice_clients.get(guild.id)
-        if existing and existing.is_connected():
-            if existing.channel.id == vc_channel_id:
-                return existing
-            try:
-                ch = guild.get_channel(vc_channel_id)
-                await existing.move_to(ch)
-                return existing
-            except Exception as e:
-                logger.warning("[TTS] move_to failed: %s", e)
-                try:
-                    await existing.disconnect(force=True)
-                except Exception:
-                    pass
-                _voice_clients.pop(guild.id, None)
-        elif existing and not existing.is_connected():
-            # ハンドシェイク切断などで接続が失われた古いVCを破棄してから再接続
-            logger.info("[TTS] stale voice client, cleaning up before reconnect guild=%s", guild.id)
-            try:
-                await existing.disconnect(force=True)
-            except Exception:
-                pass
-            _voice_clients.pop(guild.id, None)
+    """VCに接続。既に別チャンネルに接続中なら移動。
 
-        ch = guild.get_channel(vc_channel_id)
-        if not isinstance(ch, discord.VoiceChannel):
-            logger.warning("[TTS] vc_channel_id=%s not found or not VC", vc_channel_id)
-            return None
-
-        # discord.py 内部にすでに接続済みの VoiceClient があれば再利用
-        guild_vc = guild.voice_client
-        if guild_vc is not None and guild_vc.is_connected():
-            if guild_vc.channel.id == vc_channel_id:
-                _voice_clients[guild.id] = guild_vc
-                return guild_vc
-            try:
-                await guild_vc.disconnect(force=True)
-            except Exception:
-                pass
-
-        try:
-            vc = await ch.connect()
-            _voice_clients[guild.id] = vc
-            return vc
-        except discord.ClientException as e:
-            if "Already connected" in str(e):
-                # ロック外から割り込んだ別接続を拾い直す
-                guild_vc = guild.voice_client
-                if guild_vc and guild_vc.is_connected():
-                    _voice_clients[guild.id] = guild_vc
-                    return guild_vc
-            logger.exception("[TTS] connect error: %s", e)
-            return None
-        except Exception as e:
-            logger.exception("[TTS] connect error: %s", e)
-            return None
+    接続そのものの管理は services/voice_session.py に持たせている。読み上げと
+    録音は bot の仕様上ひとつの接続を共有するしかなく、片方が勝手に繋ぎ直したり
+    切ったりすると、もう片方が巻き添えで落ちるため。
+    """
+    return await voice_session.acquire(guild, vc_channel_id, purpose="tts")
 
 
 async def _player_loop(bot: Bot, guild_id: int) -> None:
@@ -152,9 +99,8 @@ async def _player_loop(bot: Bot, guild_id: int) -> None:
             item = await asyncio.wait_for(queue.get(), timeout=_IDLE_TIMEOUT_SEC)
         except asyncio.TimeoutError:
             _temp_overrides.pop(guild_id, None)
-            vc = _voice_clients.pop(guild_id, None)
-            if vc and vc.is_connected():
-                await vc.disconnect()
+            # 録音中などで占有されていれば切断は見送られる
+            await voice_session.release(guild_id)
             _tasks.pop(guild_id, None)
             return
         except asyncio.CancelledError:
@@ -311,17 +257,12 @@ async def auto_join(guild: discord.Guild, vc_channel_id: int) -> None:
 async def disconnect(guild_id: int) -> None:
     """指定ギルドのVCから退出し、キューをクリアする。temp override も解除する。"""
     _temp_overrides.pop(guild_id, None)
-    _connect_locks.pop(guild_id, None)
     task = _tasks.pop(guild_id, None)
     if task and not task.done():
         task.cancel()
 
-    vc = _voice_clients.pop(guild_id, None)
-    if vc:
-        try:
-            await vc.disconnect(force=True)
-        except Exception:
-            pass
+    # 録音中は接続を切らない（録音側が止めるまで掴んだままにする）。
+    await voice_session.release(guild_id)
 
     queue = _queues.pop(guild_id, None)
     if queue:

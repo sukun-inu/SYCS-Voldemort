@@ -33,13 +33,50 @@ def _sanitize_filename(value: str, fallback: str = "file") -> str:
     return safe
 
 
-def register_file(mp3_path: Path, source_url: str, title: str, guild_id: int, ttl: int | None = None) -> str:
-    """MP3 をキャッシュに登録してトークンを返す。ttl 省略時はグローバル設定値を使用。"""
+# 配信できる拡張子。録音は ZIP でまとめて渡すため mp3 以外も置けるようにしている。
+_CONTENT_TYPES = {
+    ".mp3": "audio/mpeg",
+    ".zip": "application/zip",
+    ".ogg": "audio/ogg",
+    ".wav": "audio/wav",
+}
+
+
+def content_type_for(extension: str) -> str:
+    return _CONTENT_TYPES.get(extension.lower(), "application/octet-stream")
+
+
+def payload_path(token: str, meta: dict | None = None) -> Path | None:
+    """トークンの実ファイル。メタに拡張子が無い旧エントリは .mp3 として扱う。"""
+    extension = str((meta or {}).get("extension") or ".mp3")
+    if extension not in _CONTENT_TYPES:
+        return None
+    path = DJAUDIO_CACHE_DIR / f"{token}{extension}"
+    return path if path.exists() else None
+
+
+def register_file(
+    mp3_path: Path,
+    source_url: str,
+    title: str,
+    guild_id: int,
+    ttl: int | None = None,
+    *,
+    kind: str = "djaudio",
+) -> str:
+    """ファイルをキャッシュに登録してトークンを返す。ttl 省略時はグローバル設定値を使用。
+
+    拡張子は元のファイルのものを引き継ぐ（録音の ZIP など mp3 以外も扱う）。
+    引数名が mp3_path なのは既存の呼び出しとの互換のため。
+    """
     token     = uuid.uuid4().hex
-    dest_mp3  = DJAUDIO_CACHE_DIR / f"{token}.mp3"
+    extension = mp3_path.suffix.lower() or ".mp3"
+    if extension not in _CONTENT_TYPES:
+        raise ValueError(f"配信できない拡張子です: {extension}")
+    dest      = DJAUDIO_CACHE_DIR / f"{token}{extension}"
     meta_path = DJAUDIO_CACHE_DIR / f"{token}.json"
 
-    shutil.move(str(mp3_path), dest_mp3)
+    shutil.move(str(mp3_path), dest)
 
     effective_ttl = ttl if ttl is not None else DJAUDIO_CACHE_TTL
     safe_title = _sanitize_filename(title, fallback=token)
@@ -49,7 +86,10 @@ def register_file(mp3_path: Path, source_url: str, title: str, guild_id: int, tt
         "guild_id":   str(guild_id),
         "title":      title,
         "source_url": source_url,
-        "filename":   f"{safe_title}.mp3",
+        "filename":   f"{safe_title}{extension}",
+        "extension":  extension,
+        "kind":       kind,
+        "size_bytes": dest.stat().st_size,
         "expires_at": expires_at,
     }
     with meta_path.open("w", encoding="utf-8") as f:
@@ -76,15 +116,17 @@ def update_discord_message(token: str, channel_id: int, message_id: int) -> None
 def get_meta(token: str) -> dict | None:
     """メタデータを返す。存在しない or 期限切れなら None。"""
     meta_path = DJAUDIO_CACHE_DIR / f"{token}.json"
-    mp3_path  = DJAUDIO_CACHE_DIR / f"{token}.mp3"
 
-    if not meta_path.exists() or not mp3_path.exists():
+    if not meta_path.exists():
         return None
 
     try:
         with meta_path.open("r", encoding="utf-8") as f:
             meta = json.load(f)
     except json.JSONDecodeError:
+        return None
+
+    if payload_path(token, meta) is None:
         return None
 
     if datetime.now(timezone.utc).timestamp() > meta.get("expires_at", 0):
@@ -95,7 +137,7 @@ def get_meta(token: str) -> dict | None:
 
 
 def _delete_entry(token: str) -> None:
-    for suffix in (".mp3", ".json"):
+    for suffix in (*_CONTENT_TYPES, ".json"):
         p = DJAUDIO_CACHE_DIR / f"{token}{suffix}"
         try:
             p.unlink(missing_ok=True)

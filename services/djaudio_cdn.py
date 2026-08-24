@@ -14,7 +14,7 @@ from starlette.responses import FileResponse, JSONResponse
 from datetime import datetime, timezone
 
 from config import DJAUDIO_CACHE_DIR
-from services.djaudio_cache import get_meta
+from services.djaudio_cache import content_type_for, get_meta, payload_path
 
 logger = logging.getLogger(__name__)
 
@@ -52,17 +52,19 @@ async def serve_file(guild_id: str, token: str):
         logger.warning("guild_id 不一致: URL=%s meta=%s token=%s", guild_id, meta.get("guild_id"), token)
         raise HTTPException(status_code=403, detail=_LINK_WRONG_GUILD)
 
-    mp3_path = DJAUDIO_CACHE_DIR / f"{token}.mp3"
-    if not mp3_path.exists():
+    # 録音は ZIP でまとめて渡すため、拡張子はメタから決める（旧エントリは .mp3）。
+    extension = str(meta.get("extension") or ".mp3")
+    path = payload_path(token, meta)
+    if path is None:
         raise HTTPException(status_code=410, detail=_LINK_EXPIRED)
 
-    raw_name = meta.get("filename", f"{token}.mp3")
-    safe_name = "".join(c for c in raw_name if c.isalnum() or c in " ._-").strip() or f"{token}.mp3"
-    if not safe_name.endswith(".mp3"):
-        safe_name += ".mp3"
+    raw_name = meta.get("filename", f"{token}{extension}")
+    safe_name = "".join(c for c in raw_name if c.isalnum() or c in " ._-").strip() or f"{token}{extension}"
+    if not safe_name.endswith(extension):
+        safe_name += extension
 
     logger.info("配信: guild=%s token=%s → %s", guild_id, token, safe_name)
-    return FileResponse(str(mp3_path), media_type="audio/mpeg", filename=safe_name)
+    return FileResponse(str(path), media_type=content_type_for(extension), filename=safe_name)
 
 
 @dlaudio_router.get("/info/{guild_id}/{token}")

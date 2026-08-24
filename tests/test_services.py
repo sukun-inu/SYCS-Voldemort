@@ -11,11 +11,14 @@ Discord とネットワークには一切触らない。discord.py の型は Moc
 """
 
 import asyncio
+import json
 import logging
 import os
 import sys
 import tempfile
+import time
 import unittest
+import zipfile
 from collections import deque
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -584,6 +587,241 @@ class NewsFaviconTests(unittest.TestCase):
         self.assertIsNone(_favicon_url(""))
         self.assertIsNone(_favicon_url("not a url"))
 
+
+
+class VoiceSessionTests(unittest.TestCase):
+    """読み上げと録音がひとつの接続を共有するための層。"""
+
+    def setUp(self):
+        from services import voice_session
+        self.vs = voice_session
+        self.vs._clients.clear()
+        self.vs._holds.clear()
+        self.vs._locks.clear()
+
+    def test_hold_prevents_release(self):
+        """録音中に読み上げ側の「VCが空になったら切る」で落とされないこと。"""
+        client = Mock(spec=discord.VoiceClient)
+        self.vs._clients[1] = client
+        self.vs.hold(1, "recording")
+
+        self.assertFalse(asyncio.run(self.vs.release(1)))
+        client.disconnect.assert_not_called()
+        self.assertIn(1, self.vs._clients)
+
+    def test_release_works_once_the_hold_is_gone(self):
+        client = Mock(spec=discord.VoiceClient)
+        client.disconnect = Mock(return_value=asyncio.sleep(0))
+        self.vs._clients[1] = client
+        self.vs.hold(1, "recording")
+        self.vs.unhold(1, "recording")
+
+        self.assertTrue(asyncio.run(self.vs.release(1)))
+        self.assertNotIn(1, self.vs._clients)
+
+    def test_force_release_ignores_the_hold(self):
+        client = Mock(spec=discord.VoiceClient)
+        client.disconnect = Mock(return_value=asyncio.sleep(0))
+        self.vs._clients[1] = client
+        self.vs.hold(1, "recording")
+
+        self.assertTrue(asyncio.run(self.vs.release(1, force=True)))
+        self.assertFalse(self.vs.is_held(1))
+
+    def test_multiple_holders_each_have_to_let_go(self):
+        self.vs.hold(1, "recording")
+        self.vs.hold(1, "something-else")
+        self.vs.unhold(1, "recording")
+        self.assertTrue(self.vs.is_held(1))
+        self.vs.unhold(1, "something-else")
+        self.assertFalse(self.vs.is_held(1))
+
+    def test_held_connection_is_not_moved_to_another_channel(self):
+        """録音中に読み上げの都合で別VCへ連れ出されると録音が途切れる。"""
+        client = Mock(spec=discord.VoiceClient)
+        client.is_connected.return_value = True
+        client.channel = Mock(id=10)
+        client.move_to = Mock()
+        self.vs._clients[1] = client
+        self.vs.hold(1, "recording")
+
+        guild = Mock()
+        guild.id = 1
+        got = asyncio.run(self.vs.acquire(guild, 99, purpose="tts"))
+
+        self.assertIs(got, client)
+        client.move_to.assert_not_called()
+
+    def test_unheld_connection_moves_normally(self):
+        client = Mock(spec=discord.VoiceClient)
+        client.is_connected.return_value = True
+        client.channel = Mock(id=10)
+        client.move_to = Mock(return_value=asyncio.sleep(0))
+        self.vs._clients[1] = client
+
+        target = Mock(spec=discord.VoiceChannel)
+        guild = Mock()
+        guild.id = 1
+        guild.get_channel.return_value = target
+
+        got = asyncio.run(self.vs.acquire(guild, 99, purpose="tts"))
+        self.assertIs(got, client)
+        client.move_to.assert_called_once()
+
+
+class RecordingTests(unittest.TestCase):
+    """録音のトラック生成。ffmpeg を実際に動かして中身を確かめる。"""
+
+    def setUp(self):
+        import services.recording_service as recording
+        self.rec = recording
+        self.work = Path(tempfile.mkdtemp(prefix="rectest-"))
+
+    def _tone(self, seconds: float, freq: float = 440.0) -> bytes:
+        import math
+        import struct
+        out = bytearray()
+        for i in range(int(self.rec.SAMPLE_RATE * seconds)):
+            v = int(12000 * math.sin(2 * math.pi * freq * i / self.rec.SAMPLE_RATE))
+            out += struct.pack("<hh", v, v)
+        return bytes(out)
+
+    def _duration(self, path: Path) -> float:
+        """mp3 の長さを ffmpeg でデコードして測る。"""
+        import re
+        import subprocess
+        from config import DJAUDIO_FFMPEG_PATH
+        out = subprocess.run(
+            [DJAUDIO_FFMPEG_PATH, "-i", str(path), "-f", "null", "-"],
+            capture_output=True, text=True, timeout=60,
+        )
+        match = re.search(r"time=(\d+):(\d+):(\d+\.\d+)", out.stderr)
+        if not match:
+            return -1.0
+        return int(match.group(1)) * 3600 + int(match.group(2)) * 60 + float(match.group(3))
+
+    def test_tracks_are_padded_onto_one_timeline(self):
+        """喋った時刻が違っても、全トラックが同じ長さ・同じ時間軸に揃うこと。
+
+        受信できるのは発話中のパケットだけなので、素直に繋ぐと無音が詰まって
+        トラック同士がずれる。ずれると重ねて編集できず、マルチトラックの意味が無い。
+        """
+        started = time.monotonic()
+        early = self.rec._TrackWriter(1, "A", self.work / "01-A.mp3", started)
+        late = self.rec._TrackWriter(2, "B", self.work / "02-B.mp3", started)
+
+        early.write(self._tone(0.5), 0.0)   # A は冒頭で発話
+        late.write(self._tone(0.5), 3.0)    # B は3秒後に発話
+        early.close(5.0)
+        late.close(5.0)
+
+        a = self._duration(self.work / "01-A.mp3")
+        b = self._duration(self.work / "02-B.mp3")
+        self.assertAlmostEqual(a, 5.0, delta=0.3)
+        self.assertAlmostEqual(b, 5.0, delta=0.3)
+        self.assertAlmostEqual(a, b, delta=0.3)
+
+    def test_voiced_time_excludes_the_padding(self):
+        started = time.monotonic()
+        track = self.rec._TrackWriter(1, "A", self.work / "a.mp3", started)
+        track.write(self._tone(1.0), 0.0)
+        track.write(self._tone(1.0), 4.0)
+        track.close(6.0)
+        self.assertAlmostEqual(track.voiced_seconds, 2.0, delta=0.05)
+
+    def _session(self, **kwargs):
+        defaults = dict(
+            guild_id=999, channel_id=555, channel_name="雑談",
+            started_by_id=1, started_by_name="すずき",
+            started_at=time.monotonic(), max_seconds=3600, retention_days=7,
+        )
+        defaults.update(kwargs)
+        return self.rec.RecordingSession(**defaults)
+
+    def test_excluded_users_get_no_track(self):
+        session = self._session(excluded_user_ids={3})
+        session.feed(Mock(id=1, display_name="すずき"), self._tone(0.2))
+        session.feed(Mock(id=3, display_name="除外された人"), self._tone(0.2))
+        self.assertEqual(sorted(session.tracks), [1])
+        self.rec._finalize(session, 1.0, "テスト")
+
+    def test_finalize_builds_a_zip_with_one_track_per_speaker(self):
+        session = self._session()
+        for user_id, name in ((1, "すずき"), (2, "たなか")):
+            session.feed(Mock(id=user_id, display_name=name), self._tone(0.2))
+
+        result = self.rec._finalize(session, 2.0, "テスト停止")
+        self.assertEqual(result["track_count"], 2)
+
+        from services.djaudio_cache import get_meta, payload_path
+        meta = get_meta(result["token"])
+        self.assertEqual(meta["kind"], "recording")
+        self.assertEqual(meta["extension"], ".zip")
+
+        with zipfile.ZipFile(payload_path(result["token"], meta)) as archive:
+            names = archive.namelist()
+            info = json.loads(archive.read("info.json").decode("utf-8"))
+        self.assertEqual(len([n for n in names if n.endswith(".mp3")]), 2)
+        self.assertIn("info.txt", names)
+        self.assertEqual({t["名前"] for t in info["トラック"]}, {"すずき", "たなか"})
+
+    def test_retention_days_control_the_link_lifetime(self):
+        session = self._session(retention_days=3)
+        session.feed(Mock(id=1, display_name="すずき"), self._tone(0.2))
+        result = self.rec._finalize(session, 1.0, "テスト")
+
+        from services.djaudio_cache import get_meta
+        remaining = get_meta(result["token"])["expires_at"] - time.time()
+        self.assertAlmostEqual(remaining, 3 * 24 * 3600, delta=60)
+
+    def test_workdir_is_cleaned_up(self):
+        session = self._session()
+        session.feed(Mock(id=1, display_name="すずき"), self._tone(0.2))
+        workdir = session.workdir
+        self.rec._finalize(session, 1.0, "テスト")
+        self.assertFalse(workdir.exists())
+
+    def test_state_file_lets_the_admin_process_see_the_session(self):
+        """管理画面は別プロセスなので、状態はファイル越しにしか見えない。"""
+        session = self._session()
+        self.rec._sessions[999] = session
+        try:
+            self.rec._write_state()
+            state = self.rec.read_state()
+        finally:
+            self.rec._sessions.pop(999, None)
+        self.assertIn("999", state["sessions"])
+        self.assertEqual(state["sessions"]["999"]["channel_name"], "雑談")
+
+    def test_start_refuses_without_the_receive_extension(self):
+        """受信拡張が無い環境では、黙って失敗せず理由を返すこと。"""
+        from services import voice_session
+        guild = Mock()
+        guild.id = 999
+        with patch.object(voice_session, "RECEIVE_AVAILABLE", False):
+            with self.assertRaises(self.rec.RecordingError) as caught:
+                asyncio.run(self.rec.start_recording(
+                    Mock(), guild, Mock(spec=discord.VoiceChannel), started_by=Mock(),
+                ))
+        self.assertIn("受信", str(caught.exception))
+
+
+class RecordingSettingsTests(unittest.TestCase):
+    def test_defaults_match_the_agreed_limits(self):
+        settings = store.get_recording_settings(4243)
+        self.assertEqual(settings["max_minutes"], 360)   # 6時間
+        self.assertEqual(settings["retention_days"], 7)
+        self.assertEqual(settings["excluded_user_ids"], [])
+
+    def test_unknown_keys_are_dropped(self):
+        store.set_recording_settings(4243, {"max_minutes": 60, "nope": "x"})
+        settings = store.get_recording_settings(4243)
+        self.assertEqual(settings["max_minutes"], 60)
+        self.assertNotIn("nope", settings)
+
+    def test_excluded_users_survive_a_reread(self):
+        store.set_recording_excluded_users(4243, [111, 222])
+        self.assertEqual(store.get_recording_settings(4243)["excluded_user_ids"], [111, 222])
 
 if __name__ == "__main__":
     logging.disable(logging.CRITICAL)
