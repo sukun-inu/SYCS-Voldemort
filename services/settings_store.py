@@ -852,6 +852,11 @@ def get_djaudio_runtime_settings(guild_id: int) -> DJAudioRuntimeSettings:
 
 _RECORDING_DEFAULTS: dict[str, Any] = {
     "enabled": True,
+    # 誰かが VC に入ったら自動で録り始めるか。既定は False。
+    # 勝手に録られていた、という状態を既定にしない（開始時の告知は別途必ず出る）。
+    "auto_start": False,
+    # 自動録音の対象VC。未設定なら TTS の対象VCに従う（同じ接続を共有するため）。
+    "vc_channel_id": None,
     "max_minutes": 360,        # 6時間で自動停止。0 なら時間では止めない
     "retention_days": 7,       # ダウンロードリンクの有効期間
     "announce_channel_id": None,  # 開始・完了の通知先（未設定ならVCのチャット欄）

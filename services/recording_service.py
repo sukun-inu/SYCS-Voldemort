@@ -399,6 +399,61 @@ async def start_recording(
     return session
 
 
+def auto_start_channel_id(guild_id: int) -> int | None:
+    """自動録音の対象VC。設定していなければ TTS の対象VCに従う。
+
+    読み上げと録音は同じ音声接続を共有するので、既定では同じ VC を見る
+    （「両方オンなら両方使う」という状態を、設定を2箇所書かずに作れるように）。
+    録音だけ別の VC を狙いたいときは vc_channel_id を明示する。
+    """
+    from services.settings_store import get_recording_settings
+
+    settings = get_recording_settings(guild_id)
+    if not settings.get("enabled", True) or not settings.get("auto_start"):
+        return None
+
+    explicit = settings.get("vc_channel_id")
+    if explicit:
+        try:
+            return int(explicit)
+        except (TypeError, ValueError):
+            return None
+
+    # TTS 側の対象VCに合わせる。TTS が無効でも「どのVCか」の設定は読める。
+    try:
+        from services.tts_service import get_effective_vc_watch
+        from services.tts_store import get_tts_settings
+
+        watched, _ = get_effective_vc_watch(guild_id, get_tts_settings(guild_id))
+        return int(watched) if watched else None
+    except Exception as e:
+        logger.debug("[recording] TTS の対象VCを読めませんでした guild=%s: %s", guild_id, e)
+        return None
+
+
+async def maybe_auto_start(bot, member, channel) -> None:
+    """人が VC に入ったときに、自動録音の条件が揃っていれば録り始める。
+
+    条件が揃わない場合は静かに何もしない（入室のたびに警告を出さない）。
+    """
+    guild = getattr(member, "guild", None)
+    if guild is None or getattr(member, "bot", False) or channel is None:
+        return
+    if guild.id in _sessions:
+        return                       # すでに録音中
+    if not voice_session.RECEIVE_AVAILABLE:
+        return
+    if auto_start_channel_id(guild.id) != channel.id:
+        return
+
+    try:
+        await start_recording(bot, guild, channel, started_by=guild.me or bot.user)
+        logger.info("[recording] guild=%s ch=%s 自動録音を開始しました", guild.id, channel.id)
+    except RecordingError as e:
+        # 自動で走る経路なので、失敗しても入室そのものは妨げない。
+        logger.warning("[recording] guild=%s 自動録音を開始できませんでした: %s", guild.id, e)
+
+
 async def _announce_start(
     channel: discord.VoiceChannel,
     session: RecordingSession,

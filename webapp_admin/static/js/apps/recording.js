@@ -74,6 +74,17 @@ export async function mount(win) {
     (channelManualMode ? channelManual.value.trim() : channelSelect.value);
 
   const enabledInput = el("input", { class: "input", type: "checkbox" });
+  const autoStartInput = el("input", { class: "input", type: "checkbox" });
+  // 自動録音の対象VC。未選択なら読み上げと同じVCに従う。
+  const autoVcSelect = el("select", { class: "select" });
+  const autoVcManual = el("input", {
+    class: "input", type: "text", placeholder: "VCのチャンネルID", inputmode: "numeric",
+  });
+  const autoVcNote = el("p", { class: "field-help" });
+  const autoVcBox = el("div", { class: "stack" }, autoVcSelect, autoVcManual, autoVcNote);
+  let autoVcManualMode = false;
+  const autoVcValue = () =>
+    (autoVcManualMode ? autoVcManual.value.trim() : autoVcSelect.value);
   const maxMinutesInput = el("input", { class: "input", type: "number", min: "0", max: "720" });
   const retentionInput = el("input", { class: "input", type: "number", min: "1", max: "30" });
   const announceSelect = el("select", { class: "select" });
@@ -138,6 +149,8 @@ export async function mount(win) {
       .split(",").map((v) => v.trim()).filter(Boolean);
     return api.put(`${BASE}/settings`, {
       enabled: enabledInput.checked,
+      auto_start: autoStartInput.checked,
+      vc_channel_id: autoVcValue(),
       max_minutes: Number(maxMinutesInput.value),
       retention_days: Number(retentionInput.value),
       announce_channel_id: announceValue(),
@@ -215,6 +228,10 @@ export async function mount(win) {
 
   function renderSettings(settings) {
     enabledInput.checked = Boolean(settings.enabled);
+    autoStartInput.checked = Boolean(settings.auto_start);
+    const autoVcId = settings.vc_channel_id ? String(settings.vc_channel_id) : "";
+    if (autoVcManualMode) autoVcManual.value = autoVcId;
+    else autoVcSelect.value = autoVcId;
     maxMinutesInput.value = settings.max_minutes;
     retentionInput.value = settings.retention_days;
     const announceId = settings.announce_channel_id ? String(settings.announce_channel_id) : "";
@@ -256,6 +273,11 @@ export async function mount(win) {
           voice: false, placeholder: "VCのチャット欄へ送る（既定）",
           emptyNote: "チャンネルの一覧を取得できませんでした。ID を直接入力できます。",
         });
+    autoVcManualMode = fillChannels(autoVcSelect, autoVcManual, autoVcNote,
+        payload.voice_channels, {
+          voice: true, placeholder: "読み上げと同じVC（既定）",
+          emptyNote: "ボイスチャンネルの一覧を取得できませんでした。ID を直接入力できます。",
+        });
     // 取れなかったときは次の更新でもう一度試す
     haveChannels = Boolean((payload.voice_channels || []).length
                            || (payload.channels || []).length);
@@ -263,7 +285,8 @@ export async function mount(win) {
 
   // 設定を触っている最中に定期更新で上書きしない
   let settingsTouched = false;
-  for (const input of [enabledInput, maxMinutesInput, retentionInput,
+  for (const input of [enabledInput, autoStartInput, autoVcSelect, autoVcManual,
+                       maxMinutesInput, retentionInput,
                        announceSelect, announceManual, excludedInput]) {
     input.addEventListener("input", () => { settingsTouched = true; });
     input.addEventListener("change", () => { settingsTouched = true; });
@@ -277,7 +300,13 @@ export async function mount(win) {
       section("保存されている録音", listBox),
       section(
         "設定",
-        field("録音機能を有効にする", enabledInput),
+        field("録音を有効にする", enabledInput,
+              "オフにすると、自動録音も手動の開始もできません。"),
+        field("自動で録音する", autoStartInput,
+              "オンにすると、対象VCに人が入った時点で録音を始めます。"
+              + "読み上げとは独立したスイッチで、両方オンなら同じ接続で両方動きます。"),
+        field("自動録音の対象VC（省略可）", autoVcBox,
+              "未選択なら読み上げ（TTS）の対象VCに従います。録音だけ別のVCを狙うときに指定します。"),
         field("自動停止までの時間（分）", maxMinutesInput,
               "0〜720 分。0 にすると時間では止めず、VC から全員が退出するまで録り続けます。既定は 360 分（6時間）。"),
         field("保存期間（日）", retentionInput, "1〜30 日。過ぎるとダウンロードリンクが失効します。"),
