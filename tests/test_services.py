@@ -36,6 +36,7 @@ from services import settings_store as store  # noqa: E402
 from services.news_service import _favicon_url  # noqa: E402
 from services.url_safety import URLSafetyError, validate_public_http_url  # noqa: E402
 from services.welcome_service import DEFAULT_GOODBYE, DEFAULT_WELCOME, render_template  # noqa: E402
+from webapp_admin.schema.validation import InvalidValue, validate_field  # noqa: E402
 
 
 def text_channel(channel_id: int = 555):
@@ -822,6 +823,71 @@ class RecordingSettingsTests(unittest.TestCase):
     def test_excluded_users_survive_a_reread(self):
         store.set_recording_excluded_users(4243, [111, 222])
         self.assertEqual(store.get_recording_settings(4243)["excluded_user_ids"], [111, 222])
+
+
+class DurationWidgetTests(unittest.TestCase):
+    """期間の入力。保存は秒のまま、入力と表示だけ単位を付ける。"""
+
+    def setUp(self):
+        from webapp_admin.schema import duration
+        from webapp_admin.schema.registry import PANEL_BY_ID
+        self.duration = duration
+        self.field = PANEL_BY_ID["djaudio"].field("cache_ttl")
+
+    def test_largest_whole_unit_is_used(self):
+        cases = {60: "1分", 600: "10分", 3600: "1時間",
+                 86400: "1日", 2592000: "30日", 90: "90秒", 5400: "90分"}
+        for seconds, expected in cases.items():
+            with self.subTest(seconds=seconds):
+                self.assertEqual(self.duration.humanize(seconds), expected)
+
+    def test_cache_ttl_accepts_thirty_days(self):
+        """30日まで指定できること。以前は 86400 秒（1日）で頭打ちだった。"""
+        self.assertEqual(self.field.widget.value, "duration")
+        self.assertEqual(self.field.max, 30 * 86400)
+        self.assertEqual(validate_field(self.field, 30 * 86400, {}), 2592000)
+
+    def test_over_the_limit_is_reported_in_days_not_seconds(self):
+        """「2592000 以下」では何日なのか読み取れない。"""
+        with self.assertRaises(InvalidValue) as caught:
+            validate_field(self.field, 30 * 86400 + 1, {})
+        self.assertIn("30日", str(caught.exception))
+        self.assertNotIn("2592000", str(caught.exception))
+
+    def test_below_the_minimum_is_reported_in_minutes(self):
+        with self.assertRaises(InvalidValue) as caught:
+            validate_field(self.field, 59, {})
+        self.assertIn("1分", str(caught.exception))
+
+    def test_non_numeric_is_rejected(self):
+        with self.assertRaises(InvalidValue):
+            validate_field(self.field, "しばらく", {})
+
+    def test_store_and_schema_share_the_same_ceiling(self):
+        """片方だけ古いと、画面で入れた値が黙って丸められる。"""
+        self.assertEqual(store._CACHE_TTL_MAX, self.field.max)
+        self.assertEqual(store._CACHE_TTL_MIN, self.field.min)
+
+    def test_thirty_days_survives_a_save_and_reread(self):
+        store.set_djaudio_settings(4244, {"cache_ttl": 30 * 86400})
+        self.assertEqual(store.get_djaudio_cache_ttl(4244), 2592000)
+
+    def test_values_beyond_the_ceiling_are_clamped(self):
+        store.set_djaudio_settings(4244, {"cache_ttl": 99_999_999})
+        self.assertEqual(store.get_djaudio_cache_ttl(4244), 30 * 86400)
+
+    def test_existing_second_values_still_load(self):
+        """保存形式は秒のままなので、以前の設定がそのまま読めること。"""
+        store.set_djaudio_settings(4245, {"cache_ttl": 600})
+        self.assertEqual(store.get_djaudio_cache_ttl(4245), 600)
+
+    def test_client_and_server_split_durations_the_same_way(self):
+        """widgets.js の単位表と webapp_admin/schema/duration.py がずれていないこと。"""
+        js = Path(__file__).resolve().parent.parent / "webapp_admin/static/js/forms/widgets.js"
+        text = js.read_text(encoding="utf-8")
+        for label, factor in self.duration.UNITS:
+            with self.subTest(unit=label):
+                self.assertIn(f'["{label}", {factor}]', text)
 
 if __name__ == "__main__":
     logging.disable(logging.CRITICAL)

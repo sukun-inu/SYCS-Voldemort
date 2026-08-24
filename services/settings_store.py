@@ -734,13 +734,20 @@ def get_djaudio_settings(guild_id: int) -> dict[str, Any]:
     return result
 
 
+# キャッシュ保持時間の許容範囲（秒）。画面側のスキーマと必ず揃えること
+# （webapp_admin/schema/panels/djaudio.py）。ここだけ古いと、画面で入れられた
+# 値が黙って丸められる。
+_CACHE_TTL_MIN = 60
+_CACHE_TTL_MAX = 30 * 24 * 3600   # 30日
+
+
 def set_djaudio_settings(guild_id: int, patch: dict[str, Any]) -> None:
     """DJAudio の詳細設定を更新。"""
     normalized: dict[str, int] = {}
     if "cache_ttl" in patch:
         value = _read_int(patch.get("cache_ttl"))
         if value is not None:
-            normalized["cache_ttl"] = max(60, min(86400, value))
+            normalized["cache_ttl"] = max(_CACHE_TTL_MIN, min(_CACHE_TTL_MAX, value))
     if "cooldown" in patch:
         value = _read_int(patch.get("cooldown"))
         if value is not None:

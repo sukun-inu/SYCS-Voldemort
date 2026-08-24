@@ -21,6 +21,7 @@ os.environ.setdefault("SETTINGS_DIR", tempfile.mkdtemp(prefix="admin-docs-"))
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from webapp_admin.schema.duration import humanize  # noqa: E402
 from webapp_admin.schema.registry import PANELS  # noqa: E402
 from webapp_admin.schema.types import Collection, Field, Panel, Widget  # noqa: E402
 
@@ -39,12 +40,19 @@ WIDGET_LABELS: dict[Widget, str] = {
     Widget.ROLE: "ロール",
     Widget.CHECKLIST: "複数選択",
     Widget.SNOWFLAKE: "Discord ID",
+    Widget.DURATION: "期間",
 }
 
 
 def _constraint(field: Field) -> str:
     parts: list[str] = []
-    if field.widget is Widget.INT:
+    if field.widget is Widget.DURATION:
+        # 秒のまま「60〜2592000」と載せても何日なのか読み取れない
+        if field.min is not None and field.max is not None:
+            parts.append(f"{humanize(field.min)}〜{humanize(field.max)}")
+        if field.default is not None:
+            parts.append(f"既定 {humanize(field.default)}")
+    elif field.widget is Widget.INT:
         if field.min is not None and field.max is not None:
             parts.append(f"{field.min}〜{field.max}")
         if field.default is not None:

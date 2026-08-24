@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from webapp_admin.schema.duration import humanize
 from webapp_admin.schema.types import Collection, Field, Panel, Widget
 from webapp_admin.security import MAX_STR_LEN, sanitize
 
@@ -55,6 +56,24 @@ def _validate_int(field: Field, raw: Any) -> int:
         raise InvalidValue(f"{field.min} 以上で入力してください。")
     if field.max is not None and value > field.max:
         raise InvalidValue(f"{field.max} 以下で入力してください。")
+    return value
+
+
+def _validate_duration(field: Field, raw: Any) -> int:
+    """期間（秒）。範囲は秒で持つが、伝える文言は単位付きにする。
+
+    「2592000 以下で入力してください」では何日なのか分からないため。
+    """
+    if raw in (None, "") and field.default is not None:
+        return int(field.default)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise InvalidValue("期間を入力してください。")
+    if field.min is not None and value < field.min:
+        raise InvalidValue(f"{humanize(field.min)} 以上で入力してください。")
+    if field.max is not None and value > field.max:
+        raise InvalidValue(f"{humanize(field.max)} 以下で入力してください。")
     return value
 
 
@@ -117,6 +136,8 @@ def validate_field(field: Field, raw: Any, choices: dict[str, list[dict[str, str
         return field.coerce(raw)
     if field.widget is Widget.INT:
         return _validate_int(field, raw)
+    if field.widget is Widget.DURATION:
+        return _validate_duration(field, raw)
     if field.widget is Widget.SELECT:
         return _validate_select(field, raw, choices)
     if field.widget is Widget.CHECKLIST:
