@@ -599,8 +599,16 @@ def set_earthquake_last_event_id(guild_id: int, event_id: str) -> None:
 # 地震通知タイプ
 # ──────────────────────────────────────────────
 
-_NOTIFY_TYPE_KEYS: frozenset[str] = frozenset(
-    {"eew_forecast", "eew_warning", "tsunami", "quake_info", "bot_news"}
+
+# frozenset ではなく tuple にする。frozenset は文字列ハッシュのランダム化
+# （PYTHONHASHSEED、既定で毎プロセス起動ごとに変わる）のせいで反復順序が
+# 実行のたびに変わり、下の get_earthquake_notify_types() が返す dict の
+# キー順序（＝ JSON 配列にしたときの並び）もそのたびに変わってしまう。
+# 管理画面側はチェックボックスを常に固定順で読むため、中身が同じでも
+# 並びが違うだけで「変更あり」と誤検知し続け、保存しても保存しても
+# 未保存のまま、という不具合になっていた。
+_NOTIFY_TYPE_KEYS: tuple[str, ...] = (
+    "eew_forecast", "eew_warning", "tsunami", "quake_info", "bot_news",
 )
 
 

@@ -9,7 +9,19 @@ import { toast } from "../lib/toast.js";
 import { createTabs } from "../lib/tabs.js";
 import { createWidget } from "./widgets.js";
 
-const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+/* checklist（複数選択）は「どれが選ばれているか」という集合であって、並び順に
+   意味は無い。並び順まで比べると、サーバー側の順序がたまたま変われば
+   （例: dict の元が frozenset で、文字列ハッシュのランダム化により反復順序が
+   起動のたびに変わる）、中身が同じでも「変更あり」と誤検知し続け、保存しても
+   ずっと未保存のまま、という不具合になる。配列同士は集合として比べる。 */
+function same(a, b) {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    const bSet = new Set(b);
+    return a.every((v) => bSet.has(v));
+  }
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
 
 export async function mountPanel(win, app) {
   win.body.replaceChildren(loading());
