@@ -493,6 +493,35 @@ async def maybe_auto_start(bot, member, channel) -> None:
     )
 
 
+def resolve_announce_channel(guild, *, fallback=None):
+    """録音の通知先。設定してあればそこ、無ければ渡された代替先。
+
+    「通知チャンネル」の設定は保存も表示もされていたのに、通知を送る側が
+    一度も読んでいなかった（設定しても何も起きない状態だった）。開始告知と
+    完了通知の両方がここを通る。
+    """
+    if guild is None:
+        return fallback
+    try:
+        from services.settings_store import get_recording_settings
+
+        channel_id = get_recording_settings(guild.id).get("announce_channel_id")
+    except Exception as e:
+        logger.debug("[recording] 通知先の設定を読めませんでした guild=%s: %s", guild.id, e)
+        return fallback
+    if not channel_id:
+        return fallback
+
+    channel = guild.get_channel(int(channel_id))
+    if channel is None or not isinstance(channel, discord.abc.Messageable):
+        logger.warning(
+            "[recording] guild=%s 通知チャンネル（%s）が見つからないか送信できません。"
+            "既定の送信先を使います", guild.id, channel_id,
+        )
+        return fallback
+    return channel
+
+
 async def _announce_start(
     channel: discord.VoiceChannel,
     session: RecordingSession,
@@ -514,7 +543,9 @@ async def _announce_start(
     )
     embed.set_footer(text="停止すると、ダウンロード用のリンクが投稿されます。")
 
-    targets = [t for t in (announce_to, channel) if t is not None]
+    # 設定した通知先が最優先。次にコマンドを打った場所、最後に VC のチャット欄。
+    configured = resolve_announce_channel(getattr(channel, "guild", None))
+    targets = [t for t in (configured, announce_to, channel) if t is not None]
     for target in targets:
         try:
             return await target.send(embed=embed)

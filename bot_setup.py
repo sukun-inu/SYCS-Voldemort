@@ -447,9 +447,16 @@ def setup_events(bot: Bot) -> None:
                         try:
                             result = await recording.stop_recording(bot, guild_id, reason="管理画面から停止")
                             embed = recording.build_result_embed(guild_id, result)
-                            channel = guild.get_channel(result["channel_id"])
-                            if isinstance(channel, discord.abc.Messageable):
-                                await channel.send(embed=embed)
+                            target = recording.resolve_announce_channel(
+                                guild, fallback=guild.get_channel(result["channel_id"]),
+                            )
+                            if isinstance(target, discord.abc.Messageable):
+                                await target.send(embed=embed)
+                            else:
+                                logger.warning(
+                                    "[DEV] recording_stop: guild=%s 結果の送信先がありません（token=%s）",
+                                    guild_id, result["token"],
+                                )
                             logger.info("[DEV] recording_stop: guild=%s token=%s", guild_id, result["token"])
                         except recording.RecordingError as e:
                             logger.warning("[DEV] recording_stop 失敗 guild=%s: %s", guild_id, e)
@@ -640,7 +647,10 @@ def setup_events(bot: Bot) -> None:
 
         result = await recording.stop_recording(bot, guild.id, reason="VC が空になりました")
         embed = recording.build_result_embed(guild.id, result)
-        for target in (session.announce_message.channel if session.announce_message else None, channel):
+        # 設定した通知先 → 開始告知を出した場所 → VC のチャット欄 の順に試す
+        configured = recording.resolve_announce_channel(guild)
+        announced = session.announce_message.channel if session.announce_message else None
+        for target in (configured, announced, channel):
             if target is None:
                 continue
             try:
