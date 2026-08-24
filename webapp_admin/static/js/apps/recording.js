@@ -98,11 +98,13 @@ export async function mount(win) {
     (announceManualMode ? announceManual.value.trim() : announceSelect.value);
 
   /** 一覧が取れたらプルダウン、取れなければ ID の手入力にする。 */
-  function fillChannels(select, manual, note, list, { voice, placeholder, emptyNote }) {
+  function fillChannels(select, manual, note, list, { voice, placeholder, emptyNote, preselect }) {
     if (!list || !list.length) {
       manual.hidden = false;
       select.hidden = true;
       note.textContent = emptyNote;
+      // 一覧が無くても、既定が分かっているなら入れておく
+      if (preselect && !manual.value) manual.value = String(preselect);
       return true;   // 手入力モード
     }
     const keep = select.value;
@@ -114,7 +116,9 @@ export async function mount(win) {
       el("option", { value: "", text: placeholder }),
       ...list.map((c) => el("option", { value: c.value, text: c.label }))
     );
-    if (keep && list.some((c) => c.value === keep)) select.value = keep;
+    // 触っていない欄には既定を入れておく（毎回選び直させないため）
+    const wanted = keep || (preselect ? String(preselect) : "");
+    if (wanted && list.some((c) => c.value === wanted)) select.value = wanted;
     return false;
   }
   const excludedInput = el("input", {
@@ -265,6 +269,7 @@ export async function mount(win) {
   function applyChannels(payload) {
     channelManualMode = fillChannels(channelSelect, channelManual, channelNote,
         payload.voice_channels, {
+          preselect: payload.default_vc_channel_id,
           voice: true, placeholder: "録音するVCを選択",
           emptyNote: "ボイスチャンネルの一覧を取得できませんでした。ID を直接入力できます。",
         });
