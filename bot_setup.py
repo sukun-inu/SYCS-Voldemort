@@ -375,16 +375,21 @@ def setup_events(bot: Bot) -> None:
                 elif task_name == "eq_replay":
                     from services.earthquake_service import _notify_all_guilds
                     payload = json.loads(sig_content)
-                    # 新形式は {"event": ..., "guild_id": ...|None}。ロールアウト中に
-                    # 旧形式（イベント本体を直接書いた文字列）が来ても動くよう、
-                    # "event" キーが無ければ payload 全体をイベントとして扱う。
+                    # 新形式は {"event": ..., "guild_id": ...|None, "channel_id": ...|None}。
+                    # ロールアウト中に旧形式（イベント本体を直接書いた文字列）が
+                    # 来ても動くよう、"event" キーが無ければ payload 全体を
+                    # イベントとして扱う（channel_id は旧形式には無い＝None）。
                     if isinstance(payload, dict) and "event" in payload:
                         event = payload.get("event") or {}
                         only_guild_id = payload.get("guild_id")
+                        override_channel_id = payload.get("channel_id")
                     else:
                         event = payload
                         only_guild_id = None
-                    sent = await _notify_all_guilds(bot, event, only_guild_id=only_guild_id)
+                        override_channel_id = None
+                    sent = await _notify_all_guilds(
+                        bot, event, only_guild_id=only_guild_id, override_channel_id=override_channel_id,
+                    )
                     # 0 件のときの理由は _notify_all_guilds 側が warning ログを出す。
                     # ここでは「シグナル完了」ログだけでは何が起きたか分からない、
                     # という状態を無くすために件数を残す。

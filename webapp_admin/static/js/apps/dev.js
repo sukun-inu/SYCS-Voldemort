@@ -210,6 +210,18 @@ function earthquakeTab(guildOptions) {
     el("option", { value: _ALL_GUILDS, text: "⚠️ 全サーバーへ送信（本番相当・注意）" })
   );
 
+  // 指定ギルドの「地震アラート」設定（チャンネル・最小震度・通知タイプ）を
+  // 一切見ずに、このチャンネルへ直接送る。本番用の設定を作っていない
+  // ギルドでも中身を確認できるようにする DEV 専用の抜け道。
+  // 全サーバー送信を選んでいる間は「どのギルドのチャンネルか」が定まらない
+  // ため使えない（disabled にして無効な組み合わせを作れなくする）。
+  const channelIdInput = input({ placeholder: "未入力なら地震アラート設定のチャンネルへ", inputmode: "numeric" });
+  channelIdInput.disabled = true;
+  guildSelect.addEventListener("change", () => {
+    channelIdInput.disabled = !guildSelect.value || guildSelect.value === _ALL_GUILDS;
+    if (channelIdInput.disabled) channelIdInput.value = "";
+  });
+
   const loadButton = actionButton("直近の地震を取得", "bi-arrow-clockwise", async () => {
     clear(historyList).append(loading());
     const result = await api.get(`${BASE}/earthquakes`);
@@ -239,14 +251,20 @@ function earthquakeTab(guildOptions) {
     "リプレイをキューに追加", "bi-broadcast-pin",
     () => {
       const guildId = guildSelect.value === _ALL_GUILDS ? "" : guildSelect.value;
-      return api.post(`${BASE}/earthquake-replay`, { event_json: eventJson.value, guild_id: guildId });
+      const channelId = channelIdInput.disabled ? "" : channelIdInput.value.trim();
+      return api.post(`${BASE}/earthquake-replay`, { event_json: eventJson.value, guild_id: guildId, channel_id: channelId });
     },
     {
       variant: "btn-primary",
-      confirm: () =>
-        guildSelect.value === _ALL_GUILDS
-          ? "この地震速報を全サーバーへ実際に通知しますか？"
-          : `この地震速報を「${guildSelect.selectedOptions[0]?.textContent || guildSelect.value}」へ実際に通知しますか？`,
+      confirm: () => {
+        if (guildSelect.value === _ALL_GUILDS) return "この地震速報を全サーバーへ実際に通知しますか？";
+        const guildLabel = guildSelect.selectedOptions[0]?.textContent || guildSelect.value;
+        const channelId = channelIdInput.disabled ? "" : channelIdInput.value.trim();
+        return channelId
+          ? `この地震速報を「${guildLabel}」のチャンネル ${channelId} へ直接送りますか？`
+              + "（地震アラート設定のチャンネル・閾値・通知タイプは無視します）"
+          : `この地震速報を「${guildLabel}」へ実際に通知しますか？`;
+      },
     }
   );
   // 送信先を選ぶまでは押せない（全サーバーへの誤爆をここでも防ぐ）。
@@ -260,6 +278,11 @@ function earthquakeTab(guildOptions) {
     panel(
       "リプレイ実行",
       field("送信先", guildSelect, "テスト用の通知を実際に送るギルドを選びます。"),
+      field(
+        "送信先チャンネルID（DEV専用・省略可）", channelIdInput,
+        "指定すると、そのギルドの「地震アラート」設定（チャンネル・最小震度・通知タイプ）を無視して" +
+        "このチャンネルへ直接送ります。本番用の設定を作っていないギルドでも見た目を確認できます。"
+      ),
       field("イベントJSON", eventJson, "earthquake / hypocenter キーを含む P2PQuake 形式の JSON。"),
       el("div", { class: "row" }, el("span", { class: "grow" }), replayButton)
     )
