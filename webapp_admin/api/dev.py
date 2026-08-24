@@ -549,9 +549,14 @@ async def earthquake_replay(request: Request, _=Depends(check_dev), _csrf=Depend
 @limiter.limit("30/minute")
 async def channels(request: Request, guild_id: str = Query(...), _=Depends(check_dev)):
     gid = _require_id(guild_id, "ギルドID")
-    data = await _discord("GET", f"/guilds/{gid}/channels")
+    # 取得は webapp_admin.auth のキャッシュ層に任せる。送信タブは1回の
+    # ギルド変更で3つの選択欄が同時にここを叩くため、素通しすると同じ
+    # 問い合わせが重なって Discord のレート制限に当たる。
+    from webapp_admin.auth import _fetch_guild_channels
+
+    data = await _fetch_guild_channels(int(gid))
     if not isinstance(data, list):
-        return JSONResponse({"channels": []})
+        return JSONResponse({"channels": [], "voice_channels": []})
 
     text_types = {0, 5, 10, 11, 12, 15}  # GUILD_TEXT / ANNOUNCEMENT / THREAD / FORUM 等
     voice_types = {2, 13}                # GUILD_VOICE / STAGE_VOICE

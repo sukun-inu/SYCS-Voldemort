@@ -11,7 +11,7 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from starlette.responses import JSONResponse
 
 from config import DJAUDIO_CACHE_DIR
@@ -92,8 +92,16 @@ def _recordings(guild_id: int) -> list[dict]:
 
 @router.get("/recording")
 @limiter.limit("60/minute")
-async def recording_overview(request: Request, _=Depends(check_guild)):
-    """録音の状況と、保存されているアーカイブ一覧。"""
+async def recording_overview(
+    request: Request,
+    _=Depends(check_guild),
+    include_channels: int = Query(1),
+):
+    """録音の状況と、保存されているアーカイブ一覧。
+
+    画面は状況を数秒おきに取り直すが、チャンネル一覧はそう変わらない。
+    毎回付けると Discord への問い合わせが積み上がるため、必要なときだけ載せる。
+    """
     from services.recording_service import read_state
     from services.settings_store import get_recording_settings
     from webapp_admin.schema import choices as choice_resolver
@@ -103,20 +111,23 @@ async def recording_overview(request: Request, _=Depends(check_guild)):
     state = read_state()
     session = state.get("sessions", {}).get(str(guild_id))
 
-    # チャンネルは ID を手打ちさせず選ばせたいので、状況と一緒に返す。
-    # 取得に失敗した供給元は空リストで返る（画面側は手入力へ切り替える）。
-    picks = await choice_resolver.resolve(
-        {ChoiceSource.CHANNELS, ChoiceSource.VOICE_CHANNELS}, guild_id,
-    )
-
-    return JSONResponse({
+    payload = {
         "settings": get_recording_settings(guild_id),
         "session": session,
         "state_updated_at": state.get("updated_at", 0),
         "recordings": _recordings(guild_id),
-        "channels": picks.get(ChoiceSource.CHANNELS.value, []),
-        "voice_channels": picks.get(ChoiceSource.VOICE_CHANNELS.value, []),
-    })
+    }
+
+    if include_channels:
+        # チャンネルは ID を手打ちさせず選ばせたいので、状況と一緒に返す。
+        # 取得に失敗した供給元は空リストで返る（画面側は手入力へ切り替える）。
+        picks = await choice_resolver.resolve(
+            {ChoiceSource.CHANNELS, ChoiceSource.VOICE_CHANNELS}, guild_id,
+        )
+        payload["channels"] = picks.get(ChoiceSource.CHANNELS.value, [])
+        payload["voice_channels"] = picks.get(ChoiceSource.VOICE_CHANNELS.value, [])
+
+    return JSONResponse(payload)
 
 
 @router.post("/recording/start")

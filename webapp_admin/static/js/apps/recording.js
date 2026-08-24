@@ -225,19 +225,16 @@ export async function mount(win) {
 
   let timer = null;
 
+  // チャンネル一覧は数秒おきに取り直す必要がない。取れるまでは要求し、
+  // 一度揃ったら状況だけを取りに行く（Discord のレート制限に当たるため）。
+  let haveChannels = false;
+
   async function refresh() {
     try {
-      const payload = await api.get(BASE);
-      channelManualMode = fillChannels(channelSelect, channelManual, channelNote,
-        payload.voice_channels, {
-          voice: true, placeholder: "録音するVCを選択",
-          emptyNote: "ボイスチャンネルの一覧を取得できませんでした。ID を直接入力できます。",
-        });
-      announceManualMode = fillChannels(announceSelect, announceManual, announceNote,
-        payload.channels, {
-          voice: false, placeholder: "VCのチャット欄へ送る（既定）",
-          emptyNote: "チャンネルの一覧を取得できませんでした。ID を直接入力できます。",
-        });
+      const payload = await api.get(haveChannels ? `${BASE}?include_channels=0` : BASE);
+      if (!haveChannels) {
+        applyChannels(payload);
+      }
       renderStatus(payload.session, payload.settings);
       renderList(payload.recordings);
       if (!settingsTouched) renderSettings(payload.settings);
@@ -246,6 +243,22 @@ export async function mount(win) {
         el("div", { class: "empty", text: `状況を取得できませんでした（${error.message}）` })
       );
     }
+  }
+
+  function applyChannels(payload) {
+    channelManualMode = fillChannels(channelSelect, channelManual, channelNote,
+        payload.voice_channels, {
+          voice: true, placeholder: "録音するVCを選択",
+          emptyNote: "ボイスチャンネルの一覧を取得できませんでした。ID を直接入力できます。",
+        });
+    announceManualMode = fillChannels(announceSelect, announceManual, announceNote,
+        payload.channels, {
+          voice: false, placeholder: "VCのチャット欄へ送る（既定）",
+          emptyNote: "チャンネルの一覧を取得できませんでした。ID を直接入力できます。",
+        });
+    // 取れなかったときは次の更新でもう一度試す
+    haveChannels = Boolean((payload.voice_channels || []).length
+                           || (payload.channels || []).length);
   }
 
   // 設定を触っている最中に定期更新で上書きしない
