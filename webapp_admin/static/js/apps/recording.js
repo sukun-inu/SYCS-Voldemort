@@ -216,7 +216,15 @@ export async function mount(win) {
   function renderList(recordings) {
     clear(listBox);
     if (!recordings.length) {
-      listBox.append(el("div", { class: "empty", text: "保存されている録音はありません。" }));
+      // ここが空だとミキサーの入口も消える。機能が無いのか、まだ録音が無いだけ
+      // なのかが画面から分からなくなるので、理由を書いておく。
+      listBox.append(
+        el("div", { class: "empty" },
+           el("div", { text: "保存されている録音はありません。" }),
+           el("div", { class: "list-sub", text:
+             "録音を停止すると、ここに並びます。各行の「ミキサー」から、" +
+             "参加者ごとの波形を同じ時間軸に並べて再生・確認できます。" }))
+      );
       return;
     }
     listBox.append(
@@ -340,7 +348,11 @@ export async function mount(win) {
   // 一覧の画面は使い回す（ミキサーから戻ってきたときに組み立て直さない）
   rootView.append(
       section("録音の状況", statusBox),
-      section("保存されている録音", listBox),
+      section("保存されている録音", listBox,
+              el("p", { class: "field-help", text:
+                "「ミキサー」を押すと、参加者ごとのトラックを同じ時間軸に並べて" +
+                "波形表示・再生できます（ミュート／ソロ／音量、波形クリックで頭出し）。" +
+                "途中から参加した人は冒頭が、途中で抜けた人は末尾が無音になります。" })),
       section(
         "設定",
         field("録音を有効にする", enabledInput,
