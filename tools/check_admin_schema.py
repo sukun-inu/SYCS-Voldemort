@@ -76,7 +76,8 @@ def sample_value(field: Field, current):
         return SAMPLE_ID if str(current or "") != SAMPLE_ID else SAMPLE_ID_2
     if field.widget is Widget.BOOL:
         return not bool(current)
-    if field.widget is Widget.INT:
+    if field.widget in (Widget.INT, Widget.DURATION):
+        # DURATION も値そのものは秒（整数）なので、範囲の中から選べばよい
         low = field.min if field.min is not None else 1
         high = field.max if field.max is not None else low + 10
         candidate = low + 1 if low + 1 <= high else low

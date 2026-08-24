@@ -5,6 +5,24 @@ import { el } from "../lib/dom.js";
 
 const ID_WIDGETS = new Set(["channel", "voice_channel", "role", "snowflake"]);
 
+/* 期間の単位。大きい順に見て、割り切れる一番大きい単位で表示する。
+   サーバ側 webapp_admin/schema/duration.py と同じ規則。 */
+const DURATION_UNITS = [["日", 86400], ["時間", 3600], ["分", 60], ["秒", 1]];
+
+function splitDuration(seconds) {
+  const value = Math.max(0, Math.round(seconds));
+  if (value <= 0) return [value, "秒"];
+  for (const [label, factor] of DURATION_UNITS) {
+    if (value % factor === 0) return [value / factor, label];
+  }
+  return [value, "秒"];
+}
+
+function humanizeDuration(seconds) {
+  const [value, label] = splitDuration(seconds);
+  return `${value}${label}`;
+}
+
 let sequence = 0;
 const nextId = (key) => `f${++sequence}-${key}`;
 
@@ -94,6 +112,35 @@ export function createWidget(field, value, choices) {
     wrapper.append(el("label", { class: "field-label", for: id, text: field.label }), control);
     read = () => (control.value === "" ? null : Number(control.value));
     write = (v) => { control.value = v === null || v === undefined ? "" : String(v); };
+  } else if (field.widget === "duration") {
+    // 値は秒でやり取りする（保存形式を変えないため）。入力だけ単位を分ける。
+    // 30日を秒で打たせると 2592000 になり、桁を数える作業になってしまう。
+    const amount = el("input", { class: "input", type: "number", id, min: "0", oninput: notify });
+    const unit = el("select", { class: "select", oninput: notify },
+                    DURATION_UNITS.map(([label]) => el("option", { value: label, text: label })));
+    const factorOf = (label) => (DURATION_UNITS.find(([l]) => l === label) || ["秒", 1])[1];
+
+    control = amount;
+    wrapper.append(
+      el("label", { class: "field-label", for: id, text: field.label }),
+      el("div", { class: "row" }, amount, unit)
+    );
+
+    read = () => (amount.value === "" ? null : Math.round(Number(amount.value) * factorOf(unit.value)));
+    write = (v) => {
+      if (v === null || v === undefined || v === "") { amount.value = ""; return; }
+      const [value, label] = splitDuration(Number(v));
+      amount.value = String(value);
+      unit.value = label;
+    };
+    // 許容範囲は単位付きで添える（秒のままだと何日なのか分からない）。
+    // 項目そのものの説明を先に出したいので、help と同じ「後ろに置く」枠を使う。
+    if (field.min !== undefined || field.max !== undefined) {
+      const parts = [];
+      if (field.min !== undefined) parts.push(`${humanizeDuration(field.min)} 以上`);
+      if (field.max !== undefined) parts.push(`${humanizeDuration(field.max)} 以下`);
+      noteEl = el("p", { class: "field-help", text: parts.join(" / ") });
+    }
   } else {
     // text / snowflake / 選択肢を取得できなかった select のフォールバック
     control = el("input", { class: "input", type: "text", id, oninput: notify });

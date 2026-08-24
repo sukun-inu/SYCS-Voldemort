@@ -12,6 +12,7 @@ from services.settings_store import (
     set_djaudio_settings,
     set_djaudio_watch_channel,
 )
+from webapp_admin.schema.duration import DAY, MINUTE
 from webapp_admin.schema.types import Field, Panel, Section, Widget
 
 
@@ -58,9 +59,11 @@ PANEL = Panel(
             "制限",
             fields=(
                 Field(
-                    "cache_ttl", "キャッシュ保持時間（秒）", Widget.INT,
+                    "cache_ttl", "キャッシュ保持時間", Widget.DURATION,
                     get=get_djaudio_cache_ttl, set=_set_limit("cache_ttl"),
-                    default=600, min=60, max=86400, nullable=False,
+                    default=10 * MINUTE, min=MINUTE, max=30 * DAY, nullable=False,
+                    help="ダウンロードリンクが切れるまでの時間です。"
+                         "長くするほどサーバーのディスクを使います。",
                 ),
                 Field(
                     "cooldown", "クールダウン（秒）", Widget.INT,
