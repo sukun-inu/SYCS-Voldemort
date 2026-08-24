@@ -424,6 +424,36 @@ class DevApiTests(unittest.TestCase):
                             json={"guild_id": "abc"}, headers=CSRF_HEADER)
         self.assertEqual(bad.status_code, 400)
 
+    def test_notify_test_can_override_the_channel(self):
+        """ウェルカム/VC通知の設定を作っていないギルドでも、DEV専用にチャンネルを
+        直接指定してテスト送信できること（地震リプレイと同じ抜け道）。"""
+        from webapp_admin.api.dev import _SIGNAL_DIR
+
+        bad_channel = self.dev.post(
+            "/admin/api/dev/test-notify/welcome",
+            json={"guild_id": str(GUILD_ID), "channel_id": "xyz"}, headers=CSRF_HEADER,
+        )
+        self.assertEqual(bad_channel.status_code, 400)
+
+        ok = self.dev.post(
+            "/admin/api/dev/test-notify/vc",
+            json={"guild_id": str(GUILD_ID), "channel_id": "555"}, headers=CSRF_HEADER,
+        )
+        self.assertEqual(ok.status_code, 200)
+        self.assertIn("555", ok.json()["message"])
+        signal = json.loads((_SIGNAL_DIR / "test_vc_notify.signal").read_text(encoding="utf-8"))
+        self.assertEqual(signal["guild_id"], GUILD_ID)
+        self.assertEqual(signal["channel_id"], 555)
+
+        # チャンネル省略時は None（設定済みのチャンネルを使う、が既定のまま）
+        no_channel = self.dev.post(
+            "/admin/api/dev/test-notify/welcome",
+            json={"guild_id": str(GUILD_ID)}, headers=CSRF_HEADER,
+        )
+        self.assertEqual(no_channel.status_code, 200)
+        signal2 = json.loads((_SIGNAL_DIR / "test_welcome.signal").read_text(encoding="utf-8"))
+        self.assertIsNone(signal2["channel_id"])
+
     def test_earthquake_replay_validates_the_payload(self):
         bad = self.dev.post("/admin/api/dev/earthquake-replay",
                             json={"event_json": "{}"}, headers=CSRF_HEADER)

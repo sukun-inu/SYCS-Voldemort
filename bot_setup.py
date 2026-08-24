@@ -397,6 +397,7 @@ def setup_events(bot: Bot) -> None:
                 elif task_name == "test_welcome":
                     payload = json.loads(sig_content)
                     guild_id = int(payload.get("guild_id", 0))
+                    override_channel_id = payload.get("channel_id")
                     guild = bot.get_guild(guild_id)
                     if guild is None:
                         # bot.get_guild はローカルキャッシュしか見ない。ここが None なら
@@ -408,9 +409,14 @@ def setup_events(bot: Bot) -> None:
                     else:
                         from services.settings_store import get_welcome_settings
                         s = get_welcome_settings(guild_id)
-                        ch_id = s.get("channel_id")
+                        # channel_id を指定したときは、ウェルカムチャンネル未設定でも
+                        # そちらを使う（本番設定を作らずにテストできるようにする）。
+                        ch_id = override_channel_id or s.get("channel_id")
                         if not ch_id:
-                            logger.warning("[DEV] test_welcome: guild=%s はウェルカムチャンネル未設定です", guild_id)
+                            logger.warning(
+                                "[DEV] test_welcome: guild=%s はウェルカムチャンネル未設定です"
+                                "（送信先チャンネルIDの指定もありません）", guild_id,
+                            )
                         else:
                             ch = guild.get_channel(int(ch_id))
                             if not isinstance(ch, discord.TextChannel):
@@ -429,6 +435,7 @@ def setup_events(bot: Bot) -> None:
                 elif task_name == "test_vc_notify":
                     payload = json.loads(sig_content)
                     guild_id = int(payload.get("guild_id", 0))
+                    override_channel_id = payload.get("channel_id")
                     guild = bot.get_guild(guild_id)
                     if guild is None:
                         logger.warning(
@@ -437,9 +444,14 @@ def setup_events(bot: Bot) -> None:
                         )
                     else:
                         from services.settings_store import get_vc_notify_channel_id
-                        ch_id = get_vc_notify_channel_id(guild_id)
+                        # channel_id を指定したときは、VC通知チャンネル未設定でも
+                        # そちらを使う（本番設定を作らずにテストできるようにする）。
+                        ch_id = override_channel_id or get_vc_notify_channel_id(guild_id)
                         if not ch_id:
-                            logger.warning("[DEV] test_vc_notify: guild=%s はVC通知チャンネル未設定です", guild_id)
+                            logger.warning(
+                                "[DEV] test_vc_notify: guild=%s はVC通知チャンネル未設定です"
+                                "（送信先チャンネルIDの指定もありません）", guild_id,
+                            )
                         else:
                             ch = guild.get_channel(ch_id)
                             if not isinstance(ch, discord.TextChannel):

@@ -457,7 +457,21 @@ function notifyTab(guildOptions) {
   const guildSelect = el("select", { class: "select" },
                          el("option", { value: "", text: "ギルドを選択" }), guildOptions.map((o) => o.cloneNode(true)));
 
-  const send = (kind) => () => api.post(`${BASE}/test-notify/${kind}`, { guild_id: guildSelect.value });
+  // 指定すると、そのギルドの本番用チャンネル設定（ウェルカム / VC通知）を
+  // 一切見ずに直接そこへ送る。設定していないギルドでもテストできるように
+  // する DEV 専用の抜け道（地震リプレイと同じ考え方）。ギルド未選択の間は
+  // 「どのギルドのチャンネルか」が定まらないため使えない。
+  const channelIdInput = input({ placeholder: "未入力なら設定済みチャンネルへ", inputmode: "numeric" });
+  channelIdInput.disabled = true;
+  guildSelect.addEventListener("change", () => {
+    channelIdInput.disabled = !guildSelect.value;
+    if (channelIdInput.disabled) channelIdInput.value = "";
+  });
+
+  const send = (kind) => () => {
+    const channelId = channelIdInput.disabled ? "" : channelIdInput.value.trim();
+    return api.post(`${BASE}/test-notify/${kind}`, { guild_id: guildSelect.value, channel_id: channelId });
+  };
 
   return el(
     "div",
@@ -465,6 +479,8 @@ function notifyTab(guildOptions) {
     panel(
       "通知テスト",
       field("対象ギルド", guildSelect, "設定済みのチャンネルへテスト通知を送ります。"),
+      field("送信先チャンネルID（DEV専用・省略可）", channelIdInput,
+            "指定すると、ウェルカム/VC通知のチャンネル設定を無視してこのチャンネルへ直接送ります。"),
       el("div", { class: "row" },
          actionButton("ウェルカム通知", "bi-person-plus", send("welcome")),
          actionButton("VC通知", "bi-mic", send("vc")))
