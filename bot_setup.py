@@ -384,18 +384,36 @@ def setup_events(bot: Bot) -> None:
                     else:
                         event = payload
                         only_guild_id = None
-                    await _notify_all_guilds(bot, event, only_guild_id=only_guild_id)
+                    sent = await _notify_all_guilds(bot, event, only_guild_id=only_guild_id)
+                    # 0 件のときの理由は _notify_all_guilds 側が warning ログを出す。
+                    # ここでは「シグナル完了」ログだけでは何が起きたか分からない、
+                    # という状態を無くすために件数を残す。
+                    logger.info("[DEV] eq_replay: %d 件へ送信", sent)
                 elif task_name == "test_welcome":
                     payload = json.loads(sig_content)
                     guild_id = int(payload.get("guild_id", 0))
                     guild = bot.get_guild(guild_id)
-                    if guild:
+                    if guild is None:
+                        # bot.get_guild はローカルキャッシュしか見ない。ここが None なら
+                        # 「そのギルドに bot がいない」か「まだキャッシュが埋まっていない」。
+                        logger.warning(
+                            "[DEV] test_welcome: guild_id=%s が見つかりません"
+                            "（bot がそのギルドに参加していないか、キャッシュ未反映）", guild_id,
+                        )
+                    else:
                         from services.settings_store import get_welcome_settings
                         s = get_welcome_settings(guild_id)
                         ch_id = s.get("channel_id")
-                        if ch_id:
+                        if not ch_id:
+                            logger.warning("[DEV] test_welcome: guild=%s はウェルカムチャンネル未設定です", guild_id)
+                        else:
                             ch = guild.get_channel(int(ch_id))
-                            if isinstance(ch, discord.TextChannel):
+                            if not isinstance(ch, discord.TextChannel):
+                                logger.warning(
+                                    "[DEV] test_welcome: guild=%s channel_id=%s が見つからない"
+                                    "か、テキストチャンネルではありません", guild_id, ch_id,
+                                )
+                            else:
                                 tmpl = s.get("message") or "{user} が **{server}** に参加しました！（現在 {count} 名）"
                                 text = (tmpl
                                     .replace("{user}", "**@テストユーザー**")
@@ -407,12 +425,24 @@ def setup_events(bot: Bot) -> None:
                     payload = json.loads(sig_content)
                     guild_id = int(payload.get("guild_id", 0))
                     guild = bot.get_guild(guild_id)
-                    if guild:
+                    if guild is None:
+                        logger.warning(
+                            "[DEV] test_vc_notify: guild_id=%s が見つかりません"
+                            "（bot がそのギルドに参加していないか、キャッシュ未反映）", guild_id,
+                        )
+                    else:
                         from services.settings_store import get_vc_notify_channel_id
                         ch_id = get_vc_notify_channel_id(guild_id)
-                        if ch_id:
+                        if not ch_id:
+                            logger.warning("[DEV] test_vc_notify: guild=%s はVC通知チャンネル未設定です", guild_id)
+                        else:
                             ch = guild.get_channel(ch_id)
-                            if isinstance(ch, discord.TextChannel):
+                            if not isinstance(ch, discord.TextChannel):
+                                logger.warning(
+                                    "[DEV] test_vc_notify: guild=%s channel_id=%s が見つからない"
+                                    "か、テキストチャンネルではありません", guild_id, ch_id,
+                                )
+                            else:
                                 embed = discord.Embed(
                                     title="🎙️ テストユーザー が参加しました",
                                     description="VC: テストチャンネル",

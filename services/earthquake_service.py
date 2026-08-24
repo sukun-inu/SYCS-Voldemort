@@ -908,11 +908,16 @@ async def _resolve_jma_detail_url(event: dict, max_scale: int) -> str:
 
 # ── 通知送信（確定地震情報 551） ──────────────────────────
 
-async def _notify_all_guilds(bot: Bot, event: dict, *, only_guild_id: int | None = None) -> None:
+async def _notify_all_guilds(bot: Bot, event: dict, *, only_guild_id: int | None = None) -> int:
     """通知する。only_guild_id を渡すと、そのギルドだけに絞る
     （開発者パネルのリプレイが全サーバーへ誤爆しないようにするため）。
     絞り込んだ場合も、そのギルドの min_scale・通知タイプ・チャンネル設定は
-    そのまま適用する（本番で実際に届く内容をそのまま確認できるように）。"""
+    そのまま適用する（本番で実際に届く内容をそのまま確認できるように）。
+
+    戻り値は実際に送信を試みたチャンネル数。0 のとき「対象ギルドの設定が
+    無い／閾値で弾かれた／bot がギルドをキャッシュしていない」のどれかで
+    静かに何も起きない状態になるため、呼び出し側（開発者パネルのリプレイ等）
+    がログを残せるように返す。"""
     max_scale = _max_scale(event)
     points    = event.get("points", [])
 
@@ -972,7 +977,24 @@ async def _notify_all_guilds(bot: Bot, event: dict, *, only_guild_id: int | None
             logger.exception("[earthquake] guild=%s の対象判定に失敗", guild_id)
 
     if not targets:
-        return
+        # only_guild_id 指定（開発者パネルのリプレイ）で 0 件だと、押した側は
+        # 「受信・完了」のログしか見えず、何も届かない理由が分からない。
+        # 全ギルド一斉送信（本番の WS 経由）では毎回のほぼ全ギルドが対象外に
+        # なるのが通常なので、そちらでは出さない。
+        if only_guild_id is not None:
+            # ここは診断用のログでしかないので、settings 側が何か失敗しても
+            # 本来の「0件でした」という報告自体は必ず出す。
+            try:
+                min_scale = get_earthquake_settings(only_guild_id).get("min_scale", 30)
+            except Exception:
+                min_scale = "?"
+            logger.warning(
+                "[earthquake] guild=%s: 送信先が0件でした"
+                "（チャンネル未設定 / 通知する情報の種類がオフ / min_scale=%s が今回の震度 %s を上回る、"
+                "のいずれか。または bot がこのギルドをまだキャッシュしていません）",
+                only_guild_id, min_scale, max_scale,
+            )
+        return 0
 
     badge_data = badge_buf.getvalue() if badge_buf else None
     map_data   = map_buf.getvalue()   if map_buf   else None
@@ -989,9 +1011,13 @@ async def _notify_all_guilds(bot: Bot, event: dict, *, only_guild_id: int | None
         *(_send(ch) for _, ch in targets),
         return_exceptions=True,
     )
+    ok_count = 0
     for (guild_id, _), result in zip(targets, results):
         if isinstance(result, Exception):
             logger.exception("[earthquake] send error guild=%s: %s", guild_id, result)
+        else:
+            ok_count += 1
+    return ok_count
 
 
 # ── 津波情報通知（552） ───────────────────────────────────
