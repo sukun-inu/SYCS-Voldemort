@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import re
 import time
 from datetime import date, datetime, time as dt_time, timedelta
@@ -137,7 +138,15 @@ def _cell(value: Any) -> Any:
     if value is None or isinstance(value, (bool, int, str)):
         return _clip(value) if isinstance(value, str) else value
     if isinstance(value, float):
-        return value
+        # Postgres の float8/float4 は 'NaN' / 'Infinity' / '-Infinity' を取れるが、
+        # Starlette の JSONResponse は allow_nan=False で dumps するため、素通しすると
+        # ValueError で 500 になり結果が一切表示されない。Decimal と同じく文字列で返す。
+        # 表記は psql と揃える（Python の 'nan' / 'inf' ではなく Postgres の綴り）。
+        if math.isfinite(value):
+            return value
+        if math.isnan(value):
+            return "NaN"
+        return "Infinity" if value > 0 else "-Infinity"
     if isinstance(value, Decimal):
         return str(value)
     if isinstance(value, (datetime, date, dt_time)):

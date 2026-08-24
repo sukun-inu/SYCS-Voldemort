@@ -425,12 +425,18 @@ def setup_events(bot: Bot) -> None:
                                     "か、テキストチャンネルではありません", guild_id, ch_id,
                                 )
                             else:
-                                tmpl = s.get("message") or "{user} が **{server}** に参加しました！（現在 {count} 名）"
-                                text = (tmpl
-                                    .replace("{user}", "**@テストユーザー**")
-                                    .replace("{username}", "テストユーザー")
-                                    .replace("{server}", guild.name)
-                                    .replace("{count}", str(guild.member_count)))
+                                # 既定文面も差し替えも本番と同じものを使う。以前はここが
+                                # 独自の既定文面と replace 連鎖を持っていたため、
+                                # 「本番で何が届くか確かめる」テストが本番と違う文面を
+                                # 出していた。
+                                from services.welcome_service import DEFAULT_WELCOME, render_template
+                                text = render_template(
+                                    s.get("message") or DEFAULT_WELCOME,
+                                    user="**@テストユーザー**",
+                                    username="テストユーザー",
+                                    server=guild.name,
+                                    count=guild.member_count,
+                                )
                                 await ch.send(f"🧪 **[テスト送信 — ウェルカム]**\n{text}")
                 elif task_name == "test_vc_notify":
                     payload = json.loads(sig_content)
