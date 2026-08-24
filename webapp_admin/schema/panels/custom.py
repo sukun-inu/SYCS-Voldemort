@@ -45,3 +45,16 @@ DEV = Panel(
     dev_only=True,
     client="dev",
 )
+
+SQL = Panel(
+    id="sql",
+    title="SQL エディタ",
+    icon="bi-database-fill",
+    group="開発者",
+    window=(1100, 780),
+    custom=True,
+    dev_only=True,
+    # 接続先の一覧・オブジェクト木・実行はすべて /admin/api/sql を
+    # apps/sql.js が読んで描く（既存ページは持たない）。
+    client="sql",
+)

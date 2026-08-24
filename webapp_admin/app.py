@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.responses import RedirectResponse
+from starlette.responses import JSONResponse, RedirectResponse
 
 from webapp_admin.schema.registry import PATH_TO_ID
 from webapp_admin.extensions import limiter
@@ -122,6 +122,7 @@ def create_app() -> FastAPI:
     from webapp_admin.views.dashboard_views import router as dashboard_router
     from webapp_admin.api.apps import router as apps_api_router
     from webapp_admin.api.dev import router as dev_api_router
+    from webapp_admin.api.sql import router as sql_api_router
     from webapp_admin.api.users import router as users_api_router
     from services.djaudio_cdn import dlaudio_router
 
@@ -130,6 +131,7 @@ def create_app() -> FastAPI:
     app.include_router(apps_api_router, prefix="/admin/api")
     app.include_router(users_api_router, prefix="/admin/api")
     app.include_router(dev_api_router, prefix="/admin/api/dev")
+    app.include_router(sql_api_router, prefix="/admin/api/sql")
     app.include_router(dlaudio_router, prefix="/dlaudio")
 
     # 旧ページのURL（/admin/settings/... など）はブックマークやリンクが残っているので、
@@ -183,12 +185,15 @@ def create_app() -> FastAPI:
     async def needs_guild_handler(request: Request, exc: _NeedsGuild):
         return RedirectResponse("/admin/guilds", status_code=303)
 
+    def _is_api(request: Request) -> bool:
+        return request.url.path.startswith("/admin/api/")
+
     @app.exception_handler(RateLimitExceeded)
     async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
-        return render(
-            request, "error.html", status_code=429,
-            code=429, message="リクエストが多すぎます。しばらく待ってから再試行してください。",
-        )
+        message = "リクエストが多すぎます。しばらく待ってから再試行してください。"
+        if _is_api(request):
+            return JSONResponse({"detail": message}, status_code=429)
+        return render(request, "error.html", status_code=429, code=429, message=message)
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
@@ -199,6 +204,12 @@ def create_app() -> FastAPI:
             500: "サーバーエラーが発生しました。",
         }
         msg = msgs.get(exc.status_code, "エラーが発生しました。")
+        # API は JSON で返す。HTML のエラーページを返すと、fetch する側は本文を
+        # 読めず「HTTP 502」としか言えない。detail に入れた理由をそのまま渡す。
+        if _is_api(request):
+            detail = exc.detail if isinstance(exc.detail, str) and exc.detail else msg
+            return JSONResponse({"detail": detail}, status_code=exc.status_code,
+                                headers=getattr(exc, "headers", None))
         return render(request, "error.html", status_code=exc.status_code, code=exc.status_code, message=msg)
 
     @app.exception_handler(ExceptionGroup)

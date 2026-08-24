@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from webapp_admin.schema.panels.custom import DEV, MONITORING, USER_STATE
+from webapp_admin.schema.panels.custom import DEV, MONITORING, SQL, USER_STATE
 from webapp_admin.schema.panels.djaudio import PANEL as DJAUDIO
 from webapp_admin.schema.panels.earthquake import PANEL as EARTHQUAKE
 from webapp_admin.schema.panels.logging import PANEL as LOGGING
@@ -36,6 +36,7 @@ PANELS: tuple[Panel, ...] = (
     TTS,
     SECURITY,
     DEV,
+    SQL,
 )
 
 PANEL_BY_ID: dict[str, Panel] = {panel.id: panel for panel in PANELS}

@@ -139,7 +139,7 @@ def main():
         check("スタートメニューが自動で開く", page.locator("#start-menu").is_visible())
 
         tiles = page.locator(".app-tile")
-        check("タイルが13枚（開発者パネル込み）", tiles.count() == 13, str(tiles.count()))
+        check("タイルが14枚（開発者パネル・SQL エディタ込み）", tiles.count() == 14, str(tiles.count()))
 
         # ── 検索 ──
         page.fill("#start-search", "ログ")
@@ -407,12 +407,106 @@ def main():
         page.wait_for_timeout(150)
         check("タスク一覧が出る", "ニュースフィード" in page.locator(dev).inner_text())
 
+        # ── ログ表示 ──
+        # 開いた時点で勝手に読み込み、窓の高さいっぱいに広がること。
+        # （以前は「読み込む」を押すまで空で、押しても 320px しか映らなかった）
+        log_file = Path(os.environ["SETTINGS_DIR"]) / "logs" / "bot.log"
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        log_file.write_text(
+            "".join(
+                f"2026-08-24 03:{i:02d}:00 [{level}] services.test: 行 {i}\n"
+                for i, level in enumerate(["INFO", "DEBUG", "WARNING", "ERROR"] * 30)
+            ),
+            encoding="utf-8",
+        )
         page.locator(dev + ".tab").nth(7).click()  # ログ
-        page.wait_for_timeout(150)
-        page.locator(dev + ".btn").last.click()
-        page.wait_for_timeout(600)
-        check("ログを読み込める", len(page.locator(dev + ".log-view").last.inner_text()) > 0,
-              " ".join(page.locator(dev + ".log-view").last.inner_text()[:40].split()))
+        page.wait_for_function(
+            """() => document.querySelectorAll('.log-pane .log-line').length > 0""", timeout=8000
+        )
+        check("ログはタブを開くだけで読み込まれる",
+              page.locator(dev + ".log-pane .log-line").count() >= 100,
+              f'{page.locator(dev + ".log-pane .log-line").count()} 行')
+
+        shape = page.evaluate("""() => {
+          const view = document.querySelector('.log-pane .log-view').getBoundingClientRect();
+          const body = document.querySelector('.window[data-app-id="dev"] .window-body').getBoundingClientRect();
+          const tabs = document.querySelector('.dev-panel > .tabbed > .tabs').getBoundingClientRect();
+          const v = document.querySelector('.log-pane .log-view');
+          return {
+            ratio: Math.round((view.height / body.height) * 100),
+            spare: Math.round(body.bottom - view.bottom),
+            tabs: Math.round(tabs.height),
+            atBottom: v.scrollHeight - v.scrollTop - v.clientHeight < 24,
+            levels: ['is-error', 'is-warn', 'is-debug']
+              .map(c => document.querySelectorAll('.log-line.' + c).length),
+          };
+        }""")
+        check("ログが窓の高さに合わせて伸びる", shape["ratio"] >= 55 and shape["spare"] < 40,
+              f'本文の {shape["ratio"]}%・下の余り {shape["spare"]}px')
+        # 縦に伸ばした煽りでタブの帯が潰れて消えたことがある
+        check("タブの帯は潰れない", shape["tabs"] >= 28, f'{shape["tabs"]}px')
+        check("最新の行が見えている", shape["atBottom"])
+        check("重大度で色が分かれる", all(n > 0 for n in shape["levels"]),
+              f'エラー/警告/デバッグ = {shape["levels"]}')
+
+        # ── SQL エディタ（開発者専用） ──
+        # この検証環境に Postgres は無い。繋がらないときに白紙にならず、
+        # 理由が出てエディタは触れる、という状態までを見る。
+        page.click("#start-button")
+        page.click('.app-tile[data-app-id="sql"]')
+        page.wait_for_selector(".sql-app", timeout=15000)
+        page.wait_for_timeout(1500)
+        sql = '.window[data-app-id="sql"] '
+        check("SQL エディタが開く",
+              page.locator(sql + ".sql-input").is_visible() and page.locator("#sql-css").count() == 1)
+        check("既定は読み取り専用", "読み取り専用" in page.locator(sql + ".sql-mode").inner_text(),
+              page.locator(sql + ".sql-mode").inner_text())
+        # 接続の失敗が確定するまで待つ（読み込み中の表示のままでは見張れていない）
+        try:
+            page.wait_for_function(
+                """() => {
+                  const tree = document.querySelector('.sql-tree');
+                  return tree && tree.textContent.trim() && !tree.textContent.includes('読み込み中');
+                }""",
+                timeout=15000,
+            )
+        except Exception:
+            pass
+        tree_text = page.locator(sql + ".sql-tree").inner_text().strip()
+        check("繋がらないときは理由を出す（白紙にしない）",
+              bool(tree_text) and "読み込み中" not in tree_text,
+              " ".join(tree_text[:60].split()))
+        page.fill(sql + ".sql-input", "select 1, 'a' -- c")
+        page.wait_for_timeout(200)
+        painted = page.evaluate("""() => ({
+          keywords: document.querySelectorAll('.sql-highlight .tok-k').length,
+          strings: document.querySelectorAll('.sql-highlight .tok-s').length,
+          comments: document.querySelectorAll('.sql-highlight .tok-c').length,
+          lines: document.querySelectorAll('.sql-gutter-line').length,
+        })""")
+        check("SQL が色分けされ、行番号が出る",
+              painted["keywords"] >= 1 and painted["strings"] == 1
+              and painted["comments"] == 1 and painted["lines"] == 1,
+              json.dumps(painted))
+        # 下地（色付き）と入力欄がずれると、二重写しに見えて字が読めなくなる
+        overlay = page.evaluate("""() => {
+          const pre = document.querySelector('.sql-highlight');
+          const ta = document.querySelector('.sql-input');
+          const a = pre.getBoundingClientRect(), b = ta.getBoundingClientRect();
+          const s = getComputedStyle(pre), t = getComputedStyle(ta);
+          return {
+            dx: Math.round((a.left - b.left) * 100) / 100,
+            dy: Math.round((a.top - b.top) * 100) / 100,
+            same: s.fontFamily === t.fontFamily && s.fontSize === t.fontSize
+                  && s.lineHeight === t.lineHeight && s.paddingLeft === t.paddingLeft
+                  && s.paddingTop === t.paddingTop,
+          };
+        }""")
+        check("色分けの層と入力欄がぴったり重なる",
+              abs(overlay["dx"]) < 0.5 and abs(overlay["dy"]) < 0.5 and overlay["same"],
+              json.dumps(overlay))
+        page.locator(sql + ".window-control.close").click()
+        page.wait_for_timeout(300)
 
         # ── 配置の保存 ──
         stored = page.evaluate("() => window.localStorage.getItem('voldemort.desktop.layout.v1')")
@@ -761,8 +855,9 @@ def main():
         # この検証環境に由来するものは除外する:
         #   422 = 検証エラー表示のテストで意図的に出したもの
         #   500 = ユーザー状態監査ページが Postgres を必要とするため（埋め込み経路の確認が目的）
+        #   502 = SQL エディタの接続先（Postgres）がこの環境に無いため
         #   Failed to fetch = テストが次のページへ遷移したことによる中断
-        ignorable = ("422", "500", "Failed to fetch")
+        ignorable = ("422", "500", "502", "Failed to fetch")
         unexpected = [e for e in console_errors if not any(token in e for token in ignorable)]
         check("コンソールエラーなし", not unexpected, "; ".join(unexpected[:3]))
 
