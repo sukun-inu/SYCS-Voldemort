@@ -908,6 +908,44 @@ async def _resolve_jma_detail_url(event: dict, max_scale: int) -> str:
 
 # ── 通知送信（確定地震情報 551） ──────────────────────────
 
+def _diagnose_no_target(bot: Bot, guild_id: int, max_scale: int) -> str:
+    """1ギルドに絞ったのに送信先が0件だったとき、実際に何が原因かを1つに
+    特定する。_notify_all_guilds のフィルタと同じ順序で判定し、最初に
+    引っかかった条件を理由として返す（複数の候補を並べるだけでは、
+    どれが本当の原因か分からず紛らわしいため）。"""
+    try:
+        s = get_earthquake_settings(guild_id)
+    except Exception as exc:
+        return f"設定の読み取りに失敗しました（{exc}）"
+
+    ch_id = s.get("channel_id")
+    if not ch_id:
+        return "「アラートを送るチャンネル」が未設定です"
+
+    min_scale = s.get("min_scale", 30)
+    try:
+        if max_scale < int(min_scale):
+            return f"「通知する最小震度」が {min_scale} で、今回の震度 {max_scale} は届いていません"
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        if not get_earthquake_notify_types(guild_id).get("quake_info", True):
+            return "通知タイプ「地震情報」がオフになっています"
+    except Exception as exc:
+        return f"通知タイプの読み取りに失敗しました（{exc}）"
+
+    guild = bot.get_guild(guild_id)
+    if guild is None:
+        return "bot がこのギルドをまだキャッシュしていません（未参加、または再起動直後）"
+
+    channel = guild.get_channel(int(ch_id))
+    if not isinstance(channel, discord.TextChannel):
+        return f"設定されているチャンネル（{ch_id}）が見つからないか、テキストチャンネルではありません"
+
+    return "条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"
+
+
 async def _notify_all_guilds(bot: Bot, event: dict, *, only_guild_id: int | None = None) -> int:
     """通知する。only_guild_id を渡すと、そのギルドだけに絞る
     （開発者パネルのリプレイが全サーバーへ誤爆しないようにするため）。
@@ -982,17 +1020,9 @@ async def _notify_all_guilds(bot: Bot, event: dict, *, only_guild_id: int | None
         # 全ギルド一斉送信（本番の WS 経由）では毎回のほぼ全ギルドが対象外に
         # なるのが通常なので、そちらでは出さない。
         if only_guild_id is not None:
-            # ここは診断用のログでしかないので、settings 側が何か失敗しても
-            # 本来の「0件でした」という報告自体は必ず出す。
-            try:
-                min_scale = get_earthquake_settings(only_guild_id).get("min_scale", 30)
-            except Exception:
-                min_scale = "?"
             logger.warning(
-                "[earthquake] guild=%s: 送信先が0件でした"
-                "（チャンネル未設定 / 通知する情報の種類がオフ / min_scale=%s が今回の震度 %s を上回る、"
-                "のいずれか。または bot がこのギルドをまだキャッシュしていません）",
-                only_guild_id, min_scale, max_scale,
+                "[earthquake] guild=%s: 送信先が0件でした（理由: %s）",
+                only_guild_id, _diagnose_no_target(bot, only_guild_id, max_scale),
             )
         return 0
 
