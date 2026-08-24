@@ -1650,6 +1650,70 @@ class AnnounceChannelTests(unittest.TestCase):
     def test_resolver_handles_a_missing_guild(self):
         self.assertIsNone(self.rec.resolve_announce_channel(None))
 
+
+class RecordingPrivilegeTests(unittest.TestCase):
+    """録音の開始・停止が管理者に限られていること。
+
+    /tts join・/tts leave は誰でも打てるコマンド。そこから録音を動かせると、
+    /record start・/record stop の管理者限定を迂回できてしまう。
+    """
+
+    def _interaction(self, *, admin, in_guild=True):
+        interaction = Mock()
+        interaction.guild = Mock() if in_guild else None
+        permissions = Mock()
+        permissions.administrator = admin
+        interaction.user = Mock()
+        interaction.user.guild_permissions = permissions
+        return interaction
+
+    def test_is_admin_distinguishes_the_two(self):
+        from commands.guards import is_admin
+        self.assertTrue(is_admin(self._interaction(admin=True)))
+        self.assertFalse(is_admin(self._interaction(admin=False)))
+
+    def test_is_admin_is_false_outside_a_guild(self):
+        from commands.guards import is_admin
+        self.assertFalse(is_admin(self._interaction(admin=True, in_guild=False)))
+
+    def test_is_admin_is_false_when_permissions_are_unavailable(self):
+        from commands.guards import is_admin
+        interaction = Mock()
+        interaction.guild = Mock()
+        interaction.user = Mock(spec=[])       # guild_permissions を持たない
+        self.assertFalse(is_admin(interaction))
+
+    def test_tts_join_gates_the_recording_side_effect(self):
+        """一般利用者の /tts join で録音が始まらないこと。"""
+        import inspect
+        import commands.tts_commands as cmds
+        source = inspect.getsource(cmds.tts_join.callback)
+        self.assertIn("is_admin(interaction)", source)
+        # 録音開始がガードの内側にあること
+        guard_at = source.index("is_admin(interaction)")
+        start_at = source.index("maybe_start_for_channel")
+        self.assertLess(guard_at, start_at)
+
+    def test_tts_leave_gates_stopping_the_recording(self):
+        import inspect
+        import commands.tts_commands as cmds
+        source = inspect.getsource(cmds.tts_leave.callback)
+        self.assertIn("is_admin(interaction)", source)
+        guard_at = source.index("is_admin(interaction)")
+        stop_at = source.index("stop_recording")
+        self.assertLess(guard_at, stop_at)
+
+    def test_record_commands_require_admin(self):
+        """/record の管理系サブコマンドが素通りしないこと。"""
+        import inspect
+        import commands.recording_commands as cmds
+        source = inspect.getsource(cmds)
+        for name in ("record_start", "record_stop", "record_auto", "record_config"):
+            with self.subTest(command=name):
+                body = source[source.index(f"async def {name}("):]
+                body = body[:body.index("@group.command") if "@group.command" in body else len(body)]
+                self.assertIn("_ensure_admin(interaction)", body)
+
 if __name__ == "__main__":
     logging.disable(logging.CRITICAL)
     unittest.main()

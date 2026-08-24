@@ -5,7 +5,7 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Bot
 
-from commands.guards import ensure_admin
+from commands.guards import ensure_admin, is_admin
 from commands.interaction_utils import send_ephemeral, send_interaction
 from services import tts_service
 from services.tts_store import (
@@ -156,11 +156,18 @@ async def tts_join(
     # 読み上げと録音は独立したスイッチ。両方オンなら、こちらの入口から入っても
     # 録音が始まるようにする（人の入室イベントだけを入口にしていると、既に人が
     # いる VC へ手動で参加させたときに録音が始まらない）。
-    from services import recording_service as recording
-    await recording.maybe_start_for_channel(
-        interaction.client, interaction.guild, channel, trigger="/tts join",
-    )
-    extra = "録音も始めた。" if recording.is_recording(interaction.guild.id) else ""
+    #
+    # ただし録音は管理者専用の機能（/record start も管理者限定）なので、
+    # 誰でも打てるこのコマンドから始められるようにはしない。このガードが無いと、
+    # 一般利用者が /tts join で録音を開始できてしまう。
+    extra = ""
+    if is_admin(interaction):
+        from services import recording_service as recording
+        await recording.maybe_start_for_channel(
+            interaction.client, interaction.guild, channel, trigger="/tts join",
+        )
+        if recording.is_recording(interaction.guild.id):
+            extra = "録音も始めた。"
 
     await send_ephemeral(
         interaction,
@@ -174,9 +181,15 @@ async def tts_leave(interaction: discord.Interaction) -> None:
     assert interaction.guild
     from services import recording_service as recording
 
-    if not recording.is_recording(interaction.guild.id):
+    # 録音を止められるのは管理者だけ。誰でも打てるこのコマンドで録音を
+    # 打ち切れると、/record stop の管理者限定を迂回できてしまう。
+    # 管理者以外は読み上げだけ抜ける（接続は録音側が掴んでいるので切れない）。
+    if not recording.is_recording(interaction.guild.id) or not is_admin(interaction):
         await tts_service.disconnect(interaction.guild.id)
-        await send_ephemeral(interaction, "✅ VCから退出した。")
+        note = ""
+        if recording.is_recording(interaction.guild.id):
+            note = "\n※ 録音は続いている。止めるには管理者に `/record stop` を頼め。"
+        await send_ephemeral(interaction, f"✅ 読み上げを止めた。{note}")
         return
 
     # 録音中に黙って抜けると、そこまで録った分が宙に浮く。締めてリンクを出す。
