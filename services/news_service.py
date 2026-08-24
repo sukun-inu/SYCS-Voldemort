@@ -6,7 +6,7 @@ import re
 import time
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import aiohttp
 import discord
@@ -25,6 +25,13 @@ logger = logging.getLogger(__name__)
 
 _RSS_BASE = "https://news.google.com/rss/search?q={query}&hl=ja&gl=JP&ceid=JP:ja"
 _HEADERS  = {"User-Agent": "Mozilla/5.0 (compatible; DiscordBot/1.0)"}
+# 記事本文へのサムネイル画像は取れない。Google News RSS の <link> は
+# 実際の配信元へは直接飛ばず（HTTP のリダイレクトではなく、Google 側の
+# JS で解決する中間ページ止まり）、5件のリンクを実際に fetch して確認した
+# ところ、どれも news.google.com に留まり og:image も無かった。
+# 代わりに <source url="..."> に入っている配信元ドメインから favicon を
+# 取り、「文字だけ」を避ける（追加のリクエストが要らず、信頼性が高い）。
+_FAVICON_SERVICE = "https://www.google.com/s2/favicons?sz=128&domain={domain}"
 _NEWS_SUMMARY_MODEL = os.getenv("NEWS_SUMMARY_MODEL", "openai/gpt-oss-120b")
 _NEWS_SUMMARY_MAX_CHARS = 400
 _NEWS_SUMMARY_CACHE_TTL_SEC = 6 * 3600
@@ -123,6 +130,14 @@ async def _summarize_article(article: dict) -> str:
         return ""
 
 
+def _favicon_url(source_url: str) -> str | None:
+    """配信元の favicon URL を作る。取れなければ None（Embed に何も足さない）。"""
+    domain = urlparse(source_url or "").netloc
+    if not domain:
+        return None
+    return _FAVICON_SERVICE.format(domain=quote(domain))
+
+
 async def _fetch_articles(session: aiohttp.ClientSession, query: str) -> list[dict]:
     url = _RSS_BASE.format(query=quote(query))
     try:
@@ -159,6 +174,9 @@ async def _fetch_articles(session: aiohttp.ClientSession, query: str) -> list[di
                 article_title, source_from_title = full_title, ""
 
             source = (source_el.text or "").strip() if source_el is not None else source_from_title
+            # <source url="https://..."> に配信元サイトのドメインが入っている
+            # （favicon を引くのに使う。記事本文へのリンクとは別物）。
+            source_url = (source_el.get("url") or "").strip() if source_el is not None else ""
 
             desc_raw  = desc_el.text if desc_el is not None else ""
             desc_text = _strip_html(desc_raw or "")
@@ -167,11 +185,12 @@ async def _fetch_articles(session: aiohttp.ClientSession, query: str) -> list[di
                 desc_text = ""
 
             articles.append({
-                "title":   article_title,
-                "link":    (link_el.text or "").strip(),
-                "pubDate": (pub_el.text or "") if pub_el is not None else "",
-                "desc":    desc_text,
-                "source":  source,
+                "title":     article_title,
+                "link":      (link_el.text or "").strip(),
+                "pubDate":   (pub_el.text or "") if pub_el is not None else "",
+                "desc":      desc_text,
+                "source":    source,
+                "sourceUrl": source_url,
             })
     except ET.ParseError as e:
         logger.exception("[news_service] RSS parse error: %s", e)
@@ -219,8 +238,14 @@ async def run_news_feeds(bot: Bot) -> None:
                             embed.description = article["desc"]
                         if summary:
                             embed.add_field(name="要約 (Groq)", value=summary, inline=False)
+                        # 記事の写真は取れない（Google News の <link> は実際の配信元へ
+                        # 直接飛ばず、素朴な追跡では og:image に届かない）。せめて
+                        # 配信元の favicon を出し、文字だけの並びにしない。
+                        favicon = _favicon_url(article.get("sourceUrl", ""))
                         if article["source"]:
-                            embed.set_author(name=article["source"])
+                            embed.set_author(name=article["source"], icon_url=favicon)
+                        if favicon:
+                            embed.set_thumbnail(url=favicon)
                         if article["pubDate"]:
                             embed.set_footer(text=_format_pub_date(article["pubDate"]), icon_url=BOT_ICON_URL)
                         await channel.send(embed=embed)
