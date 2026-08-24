@@ -380,6 +380,12 @@ class DevApiTests(unittest.TestCase):
     def setUp(self):
         self.dev = make_client(user_id="4242")
         self.normal = make_client(user_id="1")
+        # レート制限は limiter がプロセス全体で1つ（TestClient は同じ
+        # 送信元IP扱いになる）。テストをまたいで前のテストの呼び出し回数が
+        # 残ると、後続のテストが無関係に 429 で落ちる。テストごとに
+        # クリアして、レート制限そのものの動作は別のテストで確認する。
+        from webapp_admin.extensions import limiter
+        limiter.reset()
 
     def test_non_developer_is_forbidden(self):
         self.assertEqual(self.normal.get("/admin/api/dev/overview").status_code, 403)
@@ -457,6 +463,47 @@ class DevApiTests(unittest.TestCase):
         self.assertEqual(all_guilds.status_code, 200)
         signal2 = json.loads((_SIGNAL_DIR / "eq_replay.signal").read_text(encoding="utf-8"))
         self.assertIsNone(signal2["guild_id"])
+
+    def test_earthquake_replay_can_override_the_channel(self):
+        """地震アラート設定を持たないギルドでも、DEV専用にチャンネルを直接指定できること。"""
+        from webapp_admin.api.dev import _SIGNAL_DIR
+
+        event = json.dumps({"earthquake": {"hypocenter": {"name": "テスト沖"}}})
+
+        # チャンネルIDだけ指定してギルドが無いのは拒否する
+        # （どのギルドのチャンネルか定まらない）
+        no_guild = self.dev.post(
+            "/admin/api/dev/earthquake-replay",
+            json={"event_json": event, "channel_id": "555"}, headers=CSRF_HEADER,
+        )
+        self.assertEqual(no_guild.status_code, 400)
+
+        bad_channel = self.dev.post(
+            "/admin/api/dev/earthquake-replay",
+            json={"event_json": event, "guild_id": str(GUILD_ID), "channel_id": "xyz"},
+            headers=CSRF_HEADER,
+        )
+        self.assertEqual(bad_channel.status_code, 400)
+
+        ok = self.dev.post(
+            "/admin/api/dev/earthquake-replay",
+            json={"event_json": event, "guild_id": str(GUILD_ID), "channel_id": "555"},
+            headers=CSRF_HEADER,
+        )
+        self.assertEqual(ok.status_code, 200)
+        self.assertIn("555", ok.json()["message"])
+        signal = json.loads((_SIGNAL_DIR / "eq_replay.signal").read_text(encoding="utf-8"))
+        self.assertEqual(signal["guild_id"], GUILD_ID)
+        self.assertEqual(signal["channel_id"], 555)
+
+        # チャンネル省略時は None（地震アラート設定のチャンネルを使う、が既定のまま）
+        no_channel = self.dev.post(
+            "/admin/api/dev/earthquake-replay",
+            json={"event_json": event, "guild_id": str(GUILD_ID)}, headers=CSRF_HEADER,
+        )
+        self.assertEqual(no_channel.status_code, 200)
+        signal2 = json.loads((_SIGNAL_DIR / "eq_replay.signal").read_text(encoding="utf-8"))
+        self.assertIsNone(signal2["channel_id"])
 
     def test_lookup_endpoints_reject_non_numeric_ids(self):
         self.assertEqual(self.dev.get("/admin/api/dev/user?user_id=abc").status_code, 400)

@@ -946,11 +946,22 @@ def _diagnose_no_target(bot: Bot, guild_id: int, max_scale: int) -> str:
     return "条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"
 
 
-async def _notify_all_guilds(bot: Bot, event: dict, *, only_guild_id: int | None = None) -> int:
+async def _notify_all_guilds(
+    bot: Bot,
+    event: dict,
+    *,
+    only_guild_id: int | None = None,
+    override_channel_id: int | None = None,
+) -> int:
     """通知する。only_guild_id を渡すと、そのギルドだけに絞る
     （開発者パネルのリプレイが全サーバーへ誤爆しないようにするため）。
     絞り込んだ場合も、そのギルドの min_scale・通知タイプ・チャンネル設定は
     そのまま適用する（本番で実際に届く内容をそのまま確認できるように）。
+
+    override_channel_id を only_guild_id とセットで渡すと、そのギルドの
+    地震アラート設定（チャンネル・min_scale・通知タイプ）を一切見ずに、
+    指定したチャンネルへ直接送る。開発者パネルでの動作確認専用の経路で、
+    本番用の「地震アラート」設定が無いギルドでも中身を確認できるようにする。
 
     戻り値は実際に送信を試みたチャンネル数。0 のとき「対象ギルドの設定が
     無い／閾値で弾かれた／bot がギルドをキャッシュしていない」のどれかで
@@ -989,37 +1000,56 @@ async def _notify_all_guilds(bot: Bot, event: dict, *, only_guild_id: int | None
 
     view = _EqView(detail_url)
 
-    guild_ids = [only_guild_id] if only_guild_id is not None else get_all_guild_ids()
-
     targets: list[tuple[int, discord.TextChannel]] = []
-    for guild_id in guild_ids:
-        # 1ギルドの設定不正（例: min_scale が壊れた値）で、他の全ギルドへの
-        # 通知まで巻き添えで止まらないようにする（ループ全体を落とさない）。
-        try:
-            s = get_earthquake_settings(guild_id)
-            ch_id = s.get("channel_id")
-            if not ch_id:
-                continue
-            if max_scale < int(s.get("min_scale", 30)):
-                continue
-            if not get_earthquake_notify_types(guild_id).get("quake_info", True):
-                continue
-            guild = bot.get_guild(guild_id)
-            if guild is None:
-                continue
-            channel = guild.get_channel(int(ch_id))
+
+    if override_channel_id is not None and only_guild_id is not None:
+        # DEV専用経路: 地震アラート設定を一切見ず、指定チャンネルへ直接送る。
+        guild = bot.get_guild(only_guild_id)
+        if guild is None:
+            logger.warning(
+                "[earthquake] guild=%s: bot がこのギルドをまだキャッシュしていません"
+                "（未参加、または再起動直後）", only_guild_id,
+            )
+        else:
+            channel = guild.get_channel(override_channel_id)
             if not isinstance(channel, discord.TextChannel):
-                continue
-            targets.append((guild_id, channel))
-        except Exception:
-            logger.exception("[earthquake] guild=%s の対象判定に失敗", guild_id)
+                logger.warning(
+                    "[earthquake] guild=%s: 指定チャンネル（%s）が見つからないか、"
+                    "テキストチャンネルではありません", only_guild_id, override_channel_id,
+                )
+            else:
+                targets.append((only_guild_id, channel))
+    else:
+        guild_ids = [only_guild_id] if only_guild_id is not None else get_all_guild_ids()
+        for guild_id in guild_ids:
+            # 1ギルドの設定不正（例: min_scale が壊れた値）で、他の全ギルドへの
+            # 通知まで巻き添えで止まらないようにする（ループ全体を落とさない）。
+            try:
+                s = get_earthquake_settings(guild_id)
+                ch_id = s.get("channel_id")
+                if not ch_id:
+                    continue
+                if max_scale < int(s.get("min_scale", 30)):
+                    continue
+                if not get_earthquake_notify_types(guild_id).get("quake_info", True):
+                    continue
+                guild = bot.get_guild(guild_id)
+                if guild is None:
+                    continue
+                channel = guild.get_channel(int(ch_id))
+                if not isinstance(channel, discord.TextChannel):
+                    continue
+                targets.append((guild_id, channel))
+            except Exception:
+                logger.exception("[earthquake] guild=%s の対象判定に失敗", guild_id)
 
     if not targets:
         # only_guild_id 指定（開発者パネルのリプレイ）で 0 件だと、押した側は
         # 「受信・完了」のログしか見えず、何も届かない理由が分からない。
         # 全ギルド一斉送信（本番の WS 経由）では毎回のほぼ全ギルドが対象外に
-        # なるのが通常なので、そちらでは出さない。
-        if only_guild_id is not None:
+        # なるのが通常なので、そちらでは出さない。override_channel_id 指定時は
+        # 上のブロックで理由を出しているのでここでは重ねて出さない。
+        if only_guild_id is not None and override_channel_id is None:
             logger.warning(
                 "[earthquake] guild=%s: 送信先が0件でした（理由: %s）",
                 only_guild_id, _diagnose_no_target(bot, only_guild_id, max_scale),

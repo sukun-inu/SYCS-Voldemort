@@ -509,8 +509,21 @@ async def earthquake_replay(request: Request, _=Depends(check_dev), _csrf=Depend
     raw_guild_id = str(body.get("guild_id") or "").strip()
     guild_id = int(_require_id(raw_guild_id, "ギルドID")) if raw_guild_id else None
 
-    _write_signal("eq_replay", {"event": data, "guild_id": guild_id})
-    target = f"ギルド {guild_id}" if guild_id else "全サーバー"
+    # チャンネルIDを指定すると、そのギルドの本番用「地震アラート」設定
+    # （チャンネル・最小震度・通知タイプ）を一切見ずに直接そこへ送る。
+    # 本番設定が無いギルドでも中身を確認したい、という DEV 専用の逃げ道。
+    raw_channel_id = str(body.get("channel_id") or "").strip()
+    if raw_channel_id and guild_id is None:
+        raise HTTPException(status_code=400, detail="送信先チャンネルを指定する場合は、ギルドも指定してください。")
+    channel_id = int(_require_id(raw_channel_id, "チャンネルID")) if raw_channel_id else None
+
+    _write_signal("eq_replay", {"event": data, "guild_id": guild_id, "channel_id": channel_id})
+    if channel_id:
+        target = f"ギルド {guild_id} のチャンネル {channel_id}（地震アラート設定は無視）"
+    elif guild_id:
+        target = f"ギルド {guild_id}"
+    else:
+        target = "全サーバー"
     return _ok(f"地震速報をリプレイキューに追加しました（送信先: {target}）。数十秒以内に通知が送信されます。",
                pending_signals=_pending_signals())
 
