@@ -21,6 +21,7 @@ import unittest
 import zipfile
 from collections import deque
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 # services/* は読み込み時に SETTINGS_DIR を解決するため、import より前に差し替える。
@@ -1135,6 +1136,113 @@ class GuildChannelCacheTests(unittest.TestCase):
         self.assertNotIn(1, self.auth._guild_channels_cooldown)
 
 
+class StreamAssemblerTests(unittest.TestCase):
+    """順不同・欠落した受信パケットを並べ直すこと。
+
+    voice_recv のジッタバッファは、順番待ちの穴が空いた瞬間にバッファ全体を
+    捨てて1つだけ返す（router 側が timeout=0 で pop するため）。本番ログでは
+    こうなっていた:
+
+        8 packets were lost being flushed in decoder-18295
+         --> (last=5487) [5491, 5482, 5492, 5484, 5485, 5486, 5490, 5488, 5489]
+
+    順不同のまま Opus に渡すと、直前の状態を使って復号するので音が壊れる。
+    """
+
+    def setUp(self):
+        import services.recording_service as recording
+        self.rec = recording
+        self.stream = recording._StreamAssembler(18295)
+
+    def _push(self, seq, now=0.0):
+        self.stream.push(seq, seq * 960, bytes([seq % 251]), now)
+
+    def _seqs(self, drained):
+        return [ts // 960 for ts, _ in drained]
+
+    def test_out_of_order_packets_come_back_in_order(self):
+        for seq in (5, 3, 1, 4, 2):
+            self._push(seq)
+        self.assertEqual(self._seqs(self.stream.flush()), [1, 2, 3, 4, 5])
+
+    def test_the_logged_ordering_is_repaired(self):
+        """本番ログに出ていた並びをそのまま流す。"""
+        for seq in (5491, 5482, 5492, 5484, 5485, 5486, 5490, 5488, 5489):
+            self._push(seq)
+        got = self._seqs(self.stream.flush())
+        self.assertEqual(got[0], 5482)
+        self.assertEqual(sorted(got), got, got)     # 昇順であること
+
+    def test_nothing_is_emitted_before_the_hold_window(self):
+        """先に届いたものから出すと、あとから届く若い番号を全部捨てることになる。"""
+        self._push(10, now=0.0)
+        self.assertEqual(self.stream.drain(0.0), [])
+        self._push(8, now=0.01)
+        self._push(9, now=0.02)
+        got = self._seqs(self.stream.drain(1.0))
+        self.assertEqual(got, [8, 9, 10])
+
+    def test_a_gap_is_given_up_on_after_the_hold_window(self):
+        self._push(1, now=0.0)
+        self._push(3, now=0.0)
+        self.assertEqual(self._seqs(self.stream.drain(1.0))[:1], [1])
+        # 2 は来なかった。待ち続けずに 3 へ進む。
+        self.assertIn(3, self._seqs(self.stream.drain(2.0)) or [3])
+        self.assertGreaterEqual(self.stream.lost, 1)
+
+    def test_a_late_packet_is_not_wedged_back_in(self):
+        """出し終えた位置より後ろへは差し込めない。数えて捨てる。"""
+        self._push(1)
+        self._push(2)
+        self.stream.flush()
+        self._push(1)
+        self.assertEqual(self.stream.flush(), [])
+        self.assertEqual(self.stream.late, 1)
+
+    def test_a_full_buffer_is_emitted_not_discarded(self):
+        """抱えすぎたときに古いほうを捨てると、いちばん欲しい音から消える。"""
+        for seq in range(1, self.rec._REORDER_MAX + 40):
+            self._push(seq, now=0.0)
+        got = self._seqs(self.stream.drain(0.0))
+        self.assertTrue(got, "溢れたまま何も出てこない")
+        self.assertEqual(got[0], 1)
+        self.assertEqual(sorted(got), got)
+
+    def test_lost_frames_are_concealed_not_skipped(self):
+        """飛ばしたままだとデコーダの状態がずれて継ぎ目が濁る。"""
+        self._push(1, now=0.0)
+        self._push(5, now=0.0)          # 2〜4 は来なかった
+        drained = self.stream.drain(1.0)
+        concealed = [payload for _, payload in drained if payload is None]
+        self.assertEqual(len(concealed), 3, drained)
+        self.assertEqual(self._seqs(drained)[0], 1)
+        self.assertEqual(self._seqs(drained)[-1], 5)
+        self.assertEqual(self.stream.lost, 3)
+
+    def test_sequence_numbers_wrap_around(self):
+        """RTP のシーケンス番号は 16bit で折り返す。"""
+        for seq in (65534, 0, 65535, 1):
+            self._push(seq)
+        got = self._seqs(self.stream.flush())
+        self.assertEqual(len(got), 4)
+        self.assertEqual(self.stream.lost, 0)
+
+    def test_timestamps_place_audio_on_the_timeline(self):
+        """到着時刻ではなく RTP タイムスタンプで位置を決めること。"""
+        base = 1_000_000
+        first = self.stream.offset_for(base, 10.0)
+        later = self.stream.offset_for(base + 48000 * 3, 10.05)   # 音は3秒ぶん先
+        self.assertAlmostEqual(first, 10.0, delta=0.001)
+        self.assertAlmostEqual(later, 13.0, delta=0.001)
+
+    def test_a_jumped_timestamp_falls_back_to_the_clock(self):
+        """相手側の時計が飛んでも、何時間ぶんもの無音を書かない。"""
+        self.stream.offset_for(1_000_000, 5.0)
+        with self.assertLogs("services.recording_service", level="WARNING"):
+            offset = self.stream.offset_for(1_000_000 + 48000 * 9999, 5.02)
+        self.assertAlmostEqual(offset, 5.02, delta=0.001)
+
+
 class OpusResilienceTests(unittest.TestCase):
     """壊れた Opus パケットで録音が止まらないこと。
 
@@ -1176,8 +1284,19 @@ class OpusResilienceTests(unittest.TestCase):
             pcm += struct.pack("<hh", v, v)
         return self.opus.Encoder().encode(bytes(pcm), 960)
 
-    def _packet(self, payload):
-        return Mock(opus=payload)
+    def _packet(self, payload, *, ssrc=18295):
+        """本物と同じ形（SSRC・連番・タイムスタンプつき）のパケットを作る。
+
+        並べ直しはこの3つを見て動くので、Mock で済ませると素通りしてしまう。
+        """
+        self._seq = getattr(self, "_seq", 1000) + 1
+        packet = SimpleNamespace(ssrc=ssrc, sequence=self._seq % 65536,
+                                 timestamp=(self._seq * 960) % (2 ** 32))
+        return SimpleNamespace(opus=payload, packet=packet)
+
+    def _drain(self):
+        """並べ直しを待たずに、抱えているぶんを書き出させる。"""
+        self.sink.flush_pending()
 
     def test_library_is_not_asked_to_decode(self):
         """wants_opus() が False だと、壊れたパケットで受信スレッドごと落ちる。"""
@@ -1191,36 +1310,43 @@ class OpusResilienceTests(unittest.TestCase):
     def test_corrupt_packet_is_skipped_not_raised(self):
         self.sink.write(self.user, self._packet(self._frame()))
         self.sink.write(self.user, self._packet(self.CORRUPT))   # 例外が出たら失敗
+        self._drain()
         self.assertEqual(self.session.dropped_packets, 1)
 
     def test_recording_continues_after_a_corrupt_packet(self):
         self.sink.write(self.user, self._packet(self._frame()))
         self.sink.write(self.user, self._packet(self.CORRUPT))
+        self._drain()
         before = self.session.tracks[1].voiced_bytes
         self.sink.write(self.user, self._packet(self._frame()))
+        self._drain()
         self.assertGreater(self.session.tracks[1].voiced_bytes, before)
 
     def test_a_flood_of_corrupt_packets_is_survivable(self):
         self.sink.write(self.user, self._packet(self._frame()))
         for _ in range(200):
             self.sink.write(self.user, self._packet(self.CORRUPT))
+        self._drain()
         self.assertEqual(self.session.dropped_packets, 200)
         self.assertIn(1, self.session.tracks)
 
     def test_excluded_users_are_not_decoded(self):
         self.session.excluded_user_ids = {1}
         self.sink.write(self.user, self._packet(self._frame()))
+        self._drain()
         self.assertEqual(self.session.tracks, {})
 
     def test_empty_payload_is_ignored(self):
         self.sink.write(self.user, self._packet(b""))
         self.sink.write(self.user, self._packet(None))
+        self._drain()
         self.assertEqual(self.session.dropped_packets, 0)
         self.assertEqual(self.session.tracks, {})
 
     def test_dropped_count_reaches_the_result(self):
         self.sink.write(self.user, self._packet(self._frame()))
         self.sink.write(self.user, self._packet(self.CORRUPT))
+        self._drain()
         result = self.rec._finalize(self.session, 1.0, "テスト")
         self.assertEqual(result["dropped_packets"], 1)
 

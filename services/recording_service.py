@@ -224,63 +224,216 @@ class _TrackWriter:
 
 # ── Sink ─────────────────────────────────────────────────────
 
+# ── 受信ストリームの組み立て ──────────────────────────────────
+
+# 順番待ちで抱えておく上限。これを過ぎたら穴は諦めて先へ進む。
+_REORDER_HOLD_SEC = 0.2
+# 一度に抱える上限（異常時に無制限へ膨らませない）
+_REORDER_MAX = 100
+_FRAME_SAMPLES = 960        # 20ms ぶんのサンプル数（RTP タイムスタンプの刻み）
+# 欠けたぶんを Opus の欠落補間で埋める上限。これを超える穴は無音のままにする。
+_PLC_MAX_FRAMES = 5
+_SEQ_MOD = 1 << 16          # RTP シーケンス番号は 16bit
+_TS_MOD = 1 << 32           # RTP タイムスタンプは 32bit（48kHz 刻み）
+
+
+def _wrapped_delta(a: int, b: int, mod: int) -> int:
+    """a - b を、折り返しを考慮した符号つきの差として返す。"""
+    return ((a - b + mod // 2) % mod) - mod // 2
+
+
+class _StreamAssembler:
+    """SSRC 1本ぶんの受信ストリームを、順序どおりに組み立てる。
+
+    voice_recv のジッタバッファは、順番待ちの穴が空いた瞬間にバッファ全体を
+    捨てて1つだけ返す（router 側が timeout=0 で pop するため）。実際に本番の
+    ログではこうなっていた:
+
+        8 packets were lost being flushed in decoder-18295
+         --> (last=5487) [5491, 5482, 5492, 5484, 5485, 5486, 5490, 5488, 5489]
+
+    大量に落ちるうえ、残ったものも順不同で出てくる。Opus は直前の状態を使って
+    復号するので、順不同のまま入れると音が壊れる（実測: 440Hz の音が 719Hz に
+    化け、振幅も振り切れた）。そこで、こちら側でもう一度並べ直してから渡す。
+
+    位置合わせも到着時刻ではなく RTP タイムスタンプ（48kHz 刻み）で行う。
+    到着時刻で置くと、ジッタのぶんだけ無音が挟まって時間軸が歪む。
+    """
+
+    def __init__(self, ssrc: int):
+        self.ssrc = ssrc
+        self.decoder = None
+        # seq -> (受信時刻, RTPタイムスタンプ, opus)
+        self._pending: dict[int, tuple[float, int, bytes]] = {}
+        self._next_seq: int | None = None
+        self._anchor_ts: int | None = None      # 最初のパケットの RTP タイムスタンプ
+        self._anchor_elapsed: float = 0.0       # そのときの録音経過秒
+        self.lost = 0        # 待っても来なかったパケット数
+        self.late = 0        # 出したあとに届いた／溢れて捨てたパケット数
+
+    def decode(self, encoded: bytes | None) -> bytes:
+        """encoded が None のときは欠落補間（PLC）。
+
+        落ちたフレームを黙って飛ばすと、Opus は直前の状態を引きずったまま次を
+        復号するので継ぎ目が濁る。1フレーム分「無かった」と教えるほうが素直。
+        """
+        if self.decoder is None:
+            from discord.opus import Decoder
+            self.decoder = Decoder()
+        return self.decoder.decode(encoded, fec=False)
+
+    def offset_for(self, timestamp: int, elapsed: float) -> float:
+        """RTP タイムスタンプを、録音開始からの秒数に直す。"""
+        if self._anchor_ts is None:
+            self._anchor_ts = timestamp
+            self._anchor_elapsed = elapsed
+        offset = (self._anchor_elapsed
+                  + _wrapped_delta(timestamp, self._anchor_ts, _TS_MOD) / SAMPLE_RATE)
+        # 相手側の時計が飛んだときに、何時間ぶんもの無音を書かないようにする。
+        if offset < 0 or offset > elapsed + 60.0:
+            logger.warning(
+                "[recording] ssrc=%s タイムスタンプが飛んだので現在時刻に合わせ直します", self.ssrc)
+            self._anchor_ts = timestamp
+            self._anchor_elapsed = elapsed
+            offset = elapsed
+        return offset
+
+    def push(self, sequence: int, timestamp: int, encoded: bytes, now: float) -> None:
+        if self._next_seq is not None and _wrapped_delta(sequence, self._next_seq, _SEQ_MOD) < 0:
+            self.late += 1      # 既に出したところより後ろ。今さら差し込めない。
+            return
+        self._pending[sequence] = (now, timestamp, encoded)
+
+    def _hold_expired(self, now: float) -> bool:
+        """順番待ちを打ち切るか。
+
+        抱えすぎたときに古いほうを捨てると、いちばん欲しい音から消える。
+        待たずに出すほうへ倒す。
+        """
+        if len(self._pending) >= _REORDER_MAX:
+            return True
+        return now - min(entry[0] for entry in self._pending.values()) >= _REORDER_HOLD_SEC
+
+    def _earliest_seq(self) -> int:
+        """抱えているなかで、いちばん若い番号（折り返しを考慮）。"""
+        ref = min(self._pending, key=lambda k: self._pending[k][0])
+        return min(self._pending, key=lambda k: _wrapped_delta(k, ref, _SEQ_MOD))
+
+    def drain(self, now: float) -> list[tuple[int, bytes | None]]:
+        """出せるぶんを、順序どおりに (RTPタイムスタンプ, opus) で返す。"""
+        out: list[tuple[int, bytes | None]] = []
+        while self._pending:
+            if self._next_seq is None:
+                # まだ1つも出していない。ここで先頭を決め打つと、あとから届く
+                # 若い番号を全部捨てることになる。少し待ってから最小値で始める。
+                if not self._hold_expired(now):
+                    break
+                self._next_seq = self._earliest_seq()
+            item = self._pending.pop(self._next_seq, None)
+            if item is not None:
+                out.append((item[1], item[2]))
+                self._next_seq = (self._next_seq + 1) % _SEQ_MOD
+                continue
+            # 穴が空いている。少しだけ待ち、それでも来なければ諦めて飛ばす。
+            if not self._hold_expired(now):
+                break
+            skipped = min(
+                self._pending, key=lambda k: _wrapped_delta(k, self._next_seq, _SEQ_MOD))
+            gap = _wrapped_delta(skipped, self._next_seq, _SEQ_MOD)
+            self.lost += gap
+            # 欠けたぶんは Opus に「無かった」と伝えて補間させる。
+            next_ts = self._pending[skipped][1]
+            for i in range(min(gap, _PLC_MAX_FRAMES)):
+                out.append(((next_ts - (gap - i) * _FRAME_SAMPLES) % _TS_MOD, None))
+            self._next_seq = skipped
+        return out
+
+    def flush(self) -> list[tuple[int, bytes | None]]:
+        return self.drain(float("inf"))
+
+
 def _make_sink_class():
     """AudioSink の実装を返す。受信拡張が無い環境では import 自体ができない。"""
     from discord.ext import voice_recv
 
     class _RecordingSink(voice_recv.AudioSink):
-        """Opus のまま受け取り、自前でデコードする。
+        """Opus のまま受け取り、並べ直してから自前でデコードする。
 
         wants_opus() を False にするとライブラリ側がデコードするが、そこで
         1つでも壊れたパケットに当たると OpusError が上がり、受信スレッドごと
         落ちて stop_listening() まで呼ばれる（router.py の run/finally）。
         つまり壊れたパケット1個で録音が黙って止まる。
 
-        こちらでデコードすれば、そのパケットを捨てて先へ進める。取りこぼしは
-        無音として扱われるが、トラックの位置合わせは経過時間を基準にしている
-        ので、ずれではなく短い欠落になるだけで済む。
+        デコーダは SSRC ごとに持つ。Opus は直前の状態を使って復号するので、
+        別々のストリームを1つのデコーダに入れると音が壊れる。user_id で持つと、
+        同じ人が付け直した SSRC が1つのデコーダに混ざる。
         """
 
         def __init__(self, session: "RecordingSession"):
             super().__init__()
             self.session = session
-            self._decoders: dict[int, "discord.opus.Decoder"] = {}
+            self._streams: dict[int, _StreamAssembler] = {}
+            self._users: dict[int, object] = {}      # ssrc -> 直近の話者
 
         def wants_opus(self) -> bool:
             return True
 
-        def _decoder_for(self, user_id: int):
-            decoder = self._decoders.get(user_id)
-            if decoder is None:
-                from discord.opus import Decoder
-                decoder = Decoder()
-                self._decoders[user_id] = decoder
-            return decoder
+        def _stream_for(self, ssrc: int) -> _StreamAssembler:
+            stream = self._streams.get(ssrc)
+            if stream is None:
+                stream = _StreamAssembler(ssrc)
+                self._streams[ssrc] = stream
+            return stream
 
         def write(self, user, data) -> None:
             # voice_recv の受信スレッドから呼ばれる。ここでイベントループには触らない。
-            if user is None:
-                return
-            encoded = data.opus
-            if not encoded:
+            packet = getattr(data, "packet", None)
+            if user is None or packet is None:
                 return
 
             user_id = int(getattr(user, "id", 0) or 0)
             if not user_id or user_id in self.session.excluded_user_ids:
                 return
 
-            try:
-                pcm = self._decoder_for(user_id).decode(encoded, fec=False)
-            except Exception:
-                # 壊れたパケットは捨てて続ける。毎回ログを出すと洪水になるので
-                # 数だけ数え、停止時にまとめて残す。
-                self.session.dropped_packets += 1
-                return
+            ssrc = int(getattr(packet, "ssrc", 0) or 0)
+            self._users[ssrc] = user
+            stream = self._stream_for(ssrc)
 
-            self.session.feed(user, pcm)
+            encoded = data.opus
+            now = time.monotonic()
+            if encoded:
+                stream.push(int(packet.sequence), int(packet.timestamp), encoded, now)
+
+            # 抱えている全ストリームを見る。喋り終えた人の最後のぶんが
+            # 出されないまま残り続けないように。
+            for other_ssrc, other in list(self._streams.items()):
+                self._emit(other_ssrc, other, other.drain(now))
+
+        def _emit(self, ssrc: int, stream: _StreamAssembler, ready) -> None:
+            if not ready:
+                return
+            user = self._users.get(ssrc)
+            if user is None:
+                return
+            elapsed = self.session.elapsed
+            for timestamp, encoded in ready:
+                try:
+                    pcm = stream.decode(encoded)
+                except Exception:
+                    # 壊れたパケットは捨てて続ける。毎回ログを出すと洪水になるので
+                    # 数だけ数え、停止時にまとめて残す。
+                    self.session.dropped_packets += 1
+                    continue
+                self.session.feed(user, pcm, at=stream.offset_for(timestamp, elapsed))
+
+        def flush_pending(self) -> None:
+            """停止時に、抱えたままのパケットを書き出す。"""
+            for ssrc, stream in list(self._streams.items()):
+                self._emit(ssrc, stream, stream.flush())
 
         def cleanup(self) -> None:
-            self._decoders.clear()
+            self._streams.clear()
+            self._users.clear()
 
     return _RecordingSink
 
@@ -303,6 +456,7 @@ class RecordingSession:
     stopping: bool = False
     dropped_packets: int = 0     # デコードできず捨てたパケット数
     announce_message: discord.Message | None = None
+    sink: object | None = None      # 停止時に、並べ直し待ちのパケットを書き出す
     _guard_task: asyncio.Task | None = None
 
     @property
@@ -324,7 +478,12 @@ class RecordingSession:
                 continue
         return total
 
-    def feed(self, user, pcm: bytes) -> None:
+    def feed(self, user, pcm: bytes, at: float | None = None) -> None:
+        """PCM を書く。at は録音開始からの秒数（None なら現在時刻）。
+
+        at には RTP タイムスタンプから求めた位置を渡す。到着時刻で置くと、
+        ジッタのぶんだけ無音が挟まったり詰まったりして時間軸が歪む。
+        """
         if self.stopping or not pcm:
             return
         user_id = int(getattr(user, "id", 0) or 0)
@@ -345,7 +504,7 @@ class RecordingSession:
             self.tracks[user_id] = track
             logger.info("[recording] guild=%s トラック追加: %s", self.guild_id, display)
 
-        track.write(pcm, self.elapsed)
+        track.write(pcm, self.elapsed if at is None else at)
 
     def status(self) -> dict:
         return {
@@ -455,8 +614,9 @@ async def start_recording(
     )
 
     sink_cls = _make_sink_class()
+    session.sink = sink_cls(session)
     try:
-        client.listen(sink_cls(session))
+        client.listen(session.sink)
     except Exception as e:
         shutil.rmtree(session.workdir, ignore_errors=True)
         raise RecordingError(f"録音を開始できませんでした（{e}）。") from e
@@ -713,6 +873,21 @@ async def stop_recording(bot, guild_id: int, *, reason: str = "") -> dict:
     if session.stopping:
         raise RecordingError("停止処理中です。")
 
+    # 先に受信を止め、並べ直し待ちのぶんを書き出してから停止扱いにする。
+    # 順序を入れ替えると feed() が stopping で弾かれ、末尾の音（最大 0.2 秒）が
+    # 毎回失われる。await を挟まないので、この間に二重停止は入り込めない。
+    client = voice_session.get(guild_id)
+    if client is not None and hasattr(client, "stop_listening"):
+        try:
+            client.stop_listening()
+        except Exception as e:
+            logger.debug("[recording] stop_listening: %s", e)
+    if session.sink is not None:
+        try:
+            session.sink.flush_pending()
+        except Exception:
+            logger.exception("[recording] 残りのパケットを書き出せませんでした")
+
     session.stopping = True
     total_elapsed = session.elapsed
     _sessions.pop(guild_id, None)
@@ -720,13 +895,6 @@ async def stop_recording(bot, guild_id: int, *, reason: str = "") -> dict:
 
     if session._guard_task and not session._guard_task.done():
         session._guard_task.cancel()
-
-    client = voice_session.get(guild_id)
-    if client is not None and hasattr(client, "stop_listening"):
-        try:
-            client.stop_listening()
-        except Exception as e:
-            logger.debug("[recording] stop_listening: %s", e)
 
     voice_session.unhold(guild_id, "recording")
     await _release_if_unused(guild_id)
