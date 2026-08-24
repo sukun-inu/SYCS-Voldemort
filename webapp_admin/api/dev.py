@@ -482,9 +482,20 @@ async def test_notify(kind: str, request: Request, _=Depends(check_dev), _csrf=D
         raise HTTPException(status_code=404, detail="不明な通知テストです。")
 
     body = await _json_body(request)
-    guild_id = _require_id(body.get("guild_id", ""), "ギルドID")
-    _write_signal(signals[kind], {"guild_id": guild_id, "created_at": datetime.now(timezone.utc).isoformat()})
-    return _ok(f"通知テストをキューに追加しました。（ギルド: {guild_id}）", pending_signals=_pending_signals())
+    guild_id = int(_require_id(body.get("guild_id", ""), "ギルドID"))
+
+    # チャンネルを指定すると、そのギルドの本番用チャンネル設定（ウェルカム/
+    # VC通知）を一切見ずに直接そこへ送る。設定していないギルドでもテスト
+    # できるようにする DEV 専用の逃げ道（地震リプレイと同じ考え方）。
+    raw_channel_id = str(body.get("channel_id") or "").strip()
+    channel_id = int(_require_id(raw_channel_id, "チャンネルID")) if raw_channel_id else None
+
+    _write_signal(signals[kind], {
+        "guild_id": guild_id, "channel_id": channel_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    target = f"ギルド {guild_id} のチャンネル {channel_id}（設定は無視）" if channel_id else f"ギルド {guild_id}"
+    return _ok(f"通知テストをキューに追加しました。（送信先: {target}）", pending_signals=_pending_signals())
 
 
 @router.post("/earthquake-replay")
