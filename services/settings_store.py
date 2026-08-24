@@ -234,10 +234,6 @@ def get_trusted_user_ids(guild_id: int) -> list[int]:
     return _parse_id_list(get_guild_settings(guild_id).get("trusted_user_ids"))
 
 
-def set_trusted_user_ids(guild_id: int, ids: list[int]) -> dict[str, Any]:
-    """信頼済みユーザーIDのリストを設定。"""
-    return update_guild_settings(guild_id, {"trusted_user_ids": list({int(i) for i in ids})})
-
 
 def add_trusted_users(guild_id: int, user_ids: list[int]) -> list[int]:
     """信頼済みユーザーに追加して、最新のリストを返す。"""
@@ -274,10 +270,6 @@ def remove_trusted_users(guild_id: int, user_ids: list[int]) -> list[int]:
 def get_bypass_role_ids(guild_id: int) -> list[int]:
     return _parse_id_list(get_guild_settings(guild_id).get("bypass_role_ids"))
 
-
-def set_bypass_role_ids(guild_id: int, role_ids: list[int]) -> dict[str, Any]:
-    """セキュリティチェックをバイパスするロールIDを設定。"""
-    return update_guild_settings(guild_id, {"bypass_role_ids": list({int(i) for i in role_ids})})
 
 
 def add_bypass_roles(guild_id: int, role_ids: list[int]) -> list[int]:
@@ -615,10 +607,6 @@ def set_earthquake_channel(guild_id: int, channel_id: int | None) -> None:
 
 def set_earthquake_min_scale(guild_id: int, scale: int) -> None:
     _update_nested(guild_id, "earthquake", {"min_scale": scale})
-
-
-def set_earthquake_last_event_id(guild_id: int, event_id: str) -> None:
-    _update_nested(guild_id, "earthquake", {"last_event_id": event_id})
 
 
 # ──────────────────────────────────────────────

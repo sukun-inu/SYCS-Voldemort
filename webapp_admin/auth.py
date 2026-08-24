@@ -7,6 +7,8 @@ from urllib.parse import urlencode
 
 import aiohttp
 
+from services.ttl_cache import TTLCache
+
 logger = logging.getLogger(__name__)
 
 DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID", "")
@@ -262,9 +264,13 @@ async def get_guild_voice_channels(guild_id: int) -> list[dict]:
     return _of_type(await _fetch_guild_channels(guild_id), 2)
 
 
-_user_info_cache: dict[int, tuple[Optional[dict], float]] = {}
-_user_info_cache_lock = asyncio.Lock()
 _USER_INFO_CACHE_TTL = 600
+# 利用者1人ごとに鍵が増えるので、件数にも上限を置く（従来は追い出しが無かった）
+_user_info_cache: TTLCache[int, Optional[dict]] = TTLCache(
+    ttl=_USER_INFO_CACHE_TTL, max_entries=2000,
+)
+_user_info_cache_lock = asyncio.Lock()
+_USER_INFO_MISS = object()   # 「取得できなかった」も覚えて叩き直しを防ぐ
 
 
 async def get_discord_user(user_id: int) -> Optional[dict]:
@@ -273,19 +279,17 @@ async def get_discord_user(user_id: int) -> Optional[dict]:
     見つからない/取得失敗時は None。設定ページで「生のユーザーID」を表示せず
     名前解決して見せるために使う（チャンネル/ロールと同様の扱いに揃える）。
     """
-    now = time.time()
     cached = _user_info_cache.get(user_id)
-    if cached and now - cached[1] < _USER_INFO_CACHE_TTL:
-        return cached[0]
+    if cached is not None:
+        return None if cached is _USER_INFO_MISS else cached
 
     if not DISCORD_BOT_TOKEN:
         return None
 
     async with _user_info_cache_lock:
-        now = time.time()
         cached = _user_info_cache.get(user_id)
-        if cached and now - cached[1] < _USER_INFO_CACHE_TTL:
-            return cached[0]
+        if cached is not None:
+            return None if cached is _USER_INFO_MISS else cached
 
         data: Optional[dict] = None
         try:
@@ -299,7 +303,9 @@ async def get_discord_user(user_id: int) -> Optional[dict]:
         except Exception as e:
             logger.warning("get_discord_user(%s) 失敗: %s", user_id, e)
 
-        _user_info_cache[user_id] = (data, now)
+        # 取得できなかったことも覚える。None をそのまま入れると get() の
+        # 「見つからない」と区別が付かず、失敗のたびに叩き直してしまう。
+        _user_info_cache.set(user_id, data if data is not None else _USER_INFO_MISS)
         return data
 
 

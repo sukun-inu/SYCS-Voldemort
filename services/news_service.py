@@ -15,6 +15,7 @@ from discord.ext.commands import Bot
 
 from config import BOT_ICON_URL, GROQ_API_KEY, JST as _JST
 from services.groq_client import create_chat_completion, get_groq_client
+from services.ttl_cache import TTLCache
 from services.settings_store import (
     get_all_guild_ids,
     get_news_feeds,
@@ -37,7 +38,10 @@ _NEWS_SUMMARY_MAX_CHARS = 400
 _NEWS_SUMMARY_CACHE_TTL_SEC = 6 * 3600
 _GROQ_BUCKET = "news_summary"
 
-_summary_cache: dict[str, tuple[str, float]] = {}
+# 記事1本ごとに鍵が増えるので、件数にも上限を置く（従来は追い出しが無かった）
+_summary_cache: TTLCache[str, str] = TTLCache(
+    ttl=_NEWS_SUMMARY_CACHE_TTL_SEC, max_entries=1000,
+)
 
 
 def _url_hash(url: str) -> str:
@@ -92,10 +96,9 @@ async def _summarize_article(article: dict) -> str:
         return ""
 
     cache_key = _url_hash(f"{article.get('link', '')}|{article.get('title', '')}|{article.get('desc', '')}")
-    now = time.time()
     cached = _summary_cache.get(cache_key)
-    if cached and now - cached[1] < _NEWS_SUMMARY_CACHE_TTL_SEC:
-        return cached[0]
+    if cached is not None:
+        return cached
 
     client = _get_groq_client()
     if client is None:
@@ -123,7 +126,7 @@ async def _summarize_article(article: dict) -> str:
         content = (response.choices[0].message.content or "").strip()
         summary = _normalize_summary_text(content)
         if summary:
-            _summary_cache[cache_key] = (summary, now)
+            _summary_cache.set(cache_key, summary)
         return summary
     except Exception as e:
         logger.warning("[news_service] summarize failed url=%s: %s", article.get("link", ""), e)

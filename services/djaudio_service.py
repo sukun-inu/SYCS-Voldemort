@@ -29,6 +29,7 @@ from config import (
 from services.djaudio_cache import register_file, update_discord_message
 from services.djaudio_isrc_meta import enrich_metadata
 from services.djaudio_site_detection import detect_site, is_djaudio_allowed_url, is_unsupported_url
+from services.ttl_cache import TTLCache
 from services.url_safety import URLSafetyError, validate_public_http_url
 from services.settings_store import (
     DJAudioRuntimeSettings,
@@ -47,7 +48,9 @@ if "localhost" in DJAUDIO_BASE_URL or "127.0.0.1" in DJAUDIO_BASE_URL:
 URL_PATTERN = re.compile(r"https?://[^\s]+")
 
 _dl_semaphore: asyncio.Semaphore | None = None
-_user_cooldown: dict[tuple[int, int], float] = {}
+# 利用者1人ごとに鍵が増える。クールダウンの上限(3600秒)を過ぎた記録はもう
+# 意味を持たないので、期限つきの入れ物で持つ（従来は追い出しが無かった）。
+_user_cooldown: TTLCache[tuple[int, int], float] = TTLCache(ttl=3600, max_entries=5000)
 _processing: set[tuple[int, int, str]] = set()
 
 _SOUNDCLOUD_CLIENT_ID_ERR = "Unable to extract client id"
@@ -455,12 +458,12 @@ async def handle_djaudio_message(bot: Bot, message: discord.Message) -> None:
 
     now = time.monotonic()
     cooldown_key = (guild_id, message.author.id)
-    last = _user_cooldown.get(cooldown_key, 0)
+    last = _user_cooldown.get(cooldown_key) or 0
     if settings.cooldown > 0 and now - last < settings.cooldown:
         remaining = int(settings.cooldown - (now - last))
         await message.reply(f"⏱️ {remaining}秒後に再試行するがよい。", mention_author=False)
         return
-    _user_cooldown[cooldown_key] = now
+    _user_cooldown.set(cooldown_key, now)
 
     await asyncio.gather(*[_process_url(bot, message, url, settings) for url in supported_urls])
 
