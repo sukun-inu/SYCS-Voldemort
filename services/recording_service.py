@@ -19,9 +19,11 @@
 
 from __future__ import annotations
 
+import array
 import asyncio
 import json
 import logging
+import math
 import shutil
 import subprocess
 import tempfile
@@ -48,6 +50,35 @@ FRAME_BYTES = 3840  # 20ms
 _SILENCE_CHUNK = b"\x00" * (BYTES_PER_SECOND // 10)  # 100ms
 
 _MAX_PAD_SECONDS = 3600 * 8  # これを超える穴埋めは異常値として切り捨てる
+
+# 波形表示用のデータ。書き出したあとに mp3 を読み直すより、書きながら拾うほうが安い。
+# 1目盛りの長さ。細かくしすぎても画面では潰れるので 0.25 秒。
+PEAK_BUCKET_SECONDS = 0.25
+PEAK_BUCKET_BYTES = int(PEAK_BUCKET_SECONDS * BYTES_PER_SECOND)
+# 書き出し時に、この点数まで間引く（6時間だと 86,400 目盛りになり JSON が重い）
+PEAK_MAX_POINTS = 3000
+# 振幅を見るときにサンプルを間引く間隔。表示用なので全部は見ない。
+_PEAK_STRIDE = 32
+
+# ZIP に入れる索引の名前。ミキサー（管理画面）がこれを読んでトラックを並べる。
+MANIFEST_NAME = "mixer.json"
+
+
+def _peak_of(pcm: bytes) -> int:
+    """PCM 断片のおおよその最大振幅（0〜32767）。
+
+    表示用なので全サンプルは見ず、一定間隔で拾う。長時間の録音でも
+    書き込みのたびに走るため、安いことを優先する。
+    """
+    usable = len(pcm) - (len(pcm) % 2)
+    if usable <= 0:
+        return 0
+    samples = array.array("h")
+    samples.frombytes(pcm[:usable])
+    picked = samples[::_PEAK_STRIDE]
+    if not picked:
+        return 0
+    return max(max(picked), -min(picked))
 
 # max_minutes に 0 を指定すると「時間では止めない」。VC が無人になるまで録り続ける。
 UNLIMITED = 0
@@ -79,6 +110,7 @@ class _TrackWriter:
         self.started_at = started_at
         self.written_bytes = 0
         self.voiced_bytes = 0          # 実際に声が入っていた分（無音埋めを除く）
+        self.peaks: list[int] = []     # 波形表示用（目盛りごとの最大振幅）
         self.failed = False
         self._process = subprocess.Popen(
             [
@@ -93,15 +125,51 @@ class _TrackWriter:
             stderr=subprocess.PIPE,
         )
 
-    def _raw(self, payload: bytes) -> None:
+    def _raw(self, payload: bytes, *, silence: bool = False) -> None:
         if self.failed or self._process.stdin is None:
             return
         try:
+            self._accumulate_peaks(payload, silence=silence)
             self._process.stdin.write(payload)
             self.written_bytes += len(payload)
-        except (BrokenPipeError, OSError) as e:
+        except (BrokenPipeError, OSError, ValueError) as e:
+            # 閉じたパイプへの書き込みは ValueError（write to closed file）で来る。
+            # OSError の仲間ではないので、明示的に受けないとここから飛び出す。
             self.failed = True
             logger.warning("[recording] トラック書き込み失敗 user=%s: %s", self.user_id, e)
+
+    def _accumulate_peaks(self, payload: bytes, *, silence: bool) -> None:
+        """書いた位置に合わせて、目盛りごとの最大振幅を記録する。
+
+        無音の穴埋めは中身を見ずに 0 として扱う（録音時間の大半が無音なので、
+        ここで手を抜けるかどうかが効いてくる）。
+        """
+        position = self.written_bytes
+        end = position + len(payload)
+        while position < end:
+            bucket = position // PEAK_BUCKET_BYTES
+            bucket_end = (bucket + 1) * PEAK_BUCKET_BYTES
+            stop = min(end, bucket_end)
+
+            while len(self.peaks) <= bucket:
+                self.peaks.append(0)
+            if not silence:
+                piece = payload[position - self.written_bytes:stop - self.written_bytes]
+                value = _peak_of(piece)
+                if value > self.peaks[bucket]:
+                    self.peaks[bucket] = value
+
+            position = stop
+
+    def peak_series(self, max_points: int = PEAK_MAX_POINTS) -> list[float]:
+        """0.0〜1.0 に均した波形データ。多すぎるときは間引く。"""
+        peaks = self.peaks
+        if not peaks:
+            return []
+        if len(peaks) > max_points:
+            group = math.ceil(len(peaks) / max_points)
+            peaks = [max(peaks[i:i + group]) for i in range(0, len(peaks), group)]
+        return [round(min(1.0, value / 32767.0), 4) for value in peaks]
 
     def pad_until(self, elapsed: float) -> None:
         """録音開始から elapsed 秒の位置まで無音で埋める。"""
@@ -115,7 +183,7 @@ class _TrackWriter:
             gap = _MAX_PAD_SECONDS * BYTES_PER_SECOND
         while gap > 0 and not self.failed:
             chunk = _SILENCE_CHUNK if gap >= len(_SILENCE_CHUNK) else b"\x00" * gap
-            self._raw(chunk)
+            self._raw(chunk, silence=True)
             gap -= len(chunk)
 
     def write(self, pcm: bytes, elapsed: float) -> None:
@@ -124,13 +192,20 @@ class _TrackWriter:
         self.voiced_bytes += len(pcm)
 
     def close(self, total_elapsed: float, timeout: float = 60.0) -> None:
-        """末尾まで無音で埋めてから ffmpeg を終わらせる。"""
+        """末尾まで無音で埋めてから ffmpeg を終わらせる。
+
+        stdin はここでは閉じない。communicate() が閉じてくれるうえ、先に閉じると
+        communicate() の中の stdin.flush() が ValueError（flush of closed file）に
+        なる。Windows の communicate() は閉じ済みの stdin を許容するが、POSIX は
+        しないため、Linux の本番だけで書き出しが落ちていた。
+        """
         self.pad_until(total_elapsed)
-        if self._process.stdin is not None:
-            try:
-                self._process.stdin.close()
-            except OSError:
-                pass
+
+        # 書き込み失敗などで既に閉じている場合は、communicate() に触らせない。
+        stdin = self._process.stdin
+        if stdin is not None and stdin.closed:
+            self._process.stdin = None
+
         try:
             _, stderr = self._process.communicate(timeout=timeout)
             if self._process.returncode not in (0, None) and stderr:
@@ -660,9 +735,17 @@ async def stop_recording(bot, guild_id: int, *, reason: str = "") -> dict:
     try:
         result = await asyncio.to_thread(_finalize, session, total_elapsed, reason)
     except Exception as e:
-        shutil.rmtree(session.workdir, ignore_errors=True)
-        logger.exception("[recording] guild=%s 書き出しに失敗: %s", guild_id, e)
-        raise RecordingError(f"録音の書き出しに失敗しました（{e}）。") from e
+        # ここで作業ディレクトリを消すと、録れていた音まで道連れになる。
+        # 書き出しの手前までは成功しているかもしれないので、場所を残して知らせる。
+        logger.exception(
+            "[recording] guild=%s 書き出しに失敗: %s。"
+            "録れた音は %s に残してあります（手動で回収できます）",
+            guild_id, e, session.workdir,
+        )
+        raise RecordingError(
+            f"録音の書き出しに失敗しました（{e}）。"
+            f"録れた音はサーバー上の {session.workdir} に残してあります。"
+        ) from e
 
     logger.info(
         "[recording] guild=%s 停止（%s / %d トラック / %.1f 分 / 取りこぼし %d パケット）",
@@ -720,11 +803,37 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
         ],
     }
 
+    # ミキサー（管理画面）が使う索引。トラックの並び・波形・長さをここで確定させる。
+    # ZIP の中にも入れておくので、落としたあとでも同じ情報が手元に残る。
+    stems = []
+    for index, track in enumerate(session.tracks.values()):
+        if not (track.out_path.exists() and track.out_path.stat().st_size > 0):
+            continue
+        stems.append({
+            "index": index,
+            "file": track.out_path.name,
+            "name": track.display_name,
+            "user_id": track.user_id,
+            "voiced_seconds": round(track.voiced_seconds, 2),
+            "size_bytes": track.out_path.stat().st_size,
+            "peaks": track.peak_series(),
+        })
+    manifest = {
+        "version": 1,
+        "channel_name": session.channel_name,
+        "started_by": session.started_by_name,
+        "duration_seconds": round(total_elapsed, 2),
+        "bucket_seconds": PEAK_BUCKET_SECONDS,
+        "dropped_packets": session.dropped_packets,
+        "stems": stems,
+    }
+
     zip_path = session.workdir / "archive.zip"
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for track in session.tracks.values():
             if track.out_path.exists() and track.out_path.stat().st_size > 0:
                 archive.write(track.out_path, arcname=track.out_path.name)
+        archive.writestr(MANIFEST_NAME, json.dumps(manifest, ensure_ascii=False))
         archive.writestr("info.json", json.dumps(info, ensure_ascii=False, indent=2))
         archive.writestr(
             "info.txt",
