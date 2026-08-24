@@ -414,7 +414,10 @@ async def list_objects(
     try:
         tables = await conn.fetch(
             """
-            SELECT n.nspname AS schema, c.relname AS name, c.relkind AS kind,
+            -- relkind は "char"（内部用の1バイト型）で、asyncpg は str ではなく
+            -- bytes で返す。素通しすると JSONResponse の json.dumps で
+            -- "Object of type bytes is not JSON serializable" になるため text へ。
+            SELECT n.nspname AS schema, c.relname AS name, c.relkind::text AS kind,
                    c.reltuples::bigint AS approx_rows,
                    pg_catalog.pg_total_relation_size(c.oid) AS bytes,
                    obj_description(c.oid, 'pg_class') AS comment
