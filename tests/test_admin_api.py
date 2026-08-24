@@ -429,6 +429,35 @@ class DevApiTests(unittest.TestCase):
         self.assertEqual(ok.status_code, 200)
         self.assertIn("eq_replay", ok.json()["pending_signals"])
 
+    def test_earthquake_replay_can_target_a_single_guild(self):
+        """全サーバーへの誤爆を避けるため、guild_id を指定した分だけに絞れること。
+
+        シグナルは {"event": ..., "guild_id": ...} という封筒形式で書かれ、
+        bot 側 (bot_setup.py) がここから対象ギルドを読み取る契約になっている。
+        """
+        from webapp_admin.api.dev import _SIGNAL_DIR
+
+        event = json.dumps({"earthquake": {"hypocenter": {"name": "テスト沖"}}})
+
+        bad = self.dev.post("/admin/api/dev/earthquake-replay",
+                            json={"event_json": event, "guild_id": "abc"}, headers=CSRF_HEADER)
+        self.assertEqual(bad.status_code, 400)
+
+        ok = self.dev.post("/admin/api/dev/earthquake-replay",
+                           json={"event_json": event, "guild_id": str(GUILD_ID)}, headers=CSRF_HEADER)
+        self.assertEqual(ok.status_code, 200)
+        self.assertIn(str(GUILD_ID), ok.json()["message"])
+        signal = json.loads((_SIGNAL_DIR / "eq_replay.signal").read_text(encoding="utf-8"))
+        self.assertEqual(signal["guild_id"], GUILD_ID)
+        self.assertIn("earthquake", signal["event"])
+
+        # guild_id 省略時は全サーバー扱い（null）のまま、明示的に選べる状態を保つ
+        all_guilds = self.dev.post("/admin/api/dev/earthquake-replay",
+                                   json={"event_json": event}, headers=CSRF_HEADER)
+        self.assertEqual(all_guilds.status_code, 200)
+        signal2 = json.loads((_SIGNAL_DIR / "eq_replay.signal").read_text(encoding="utf-8"))
+        self.assertIsNone(signal2["guild_id"])
+
     def test_lookup_endpoints_reject_non_numeric_ids(self):
         self.assertEqual(self.dev.get("/admin/api/dev/user?user_id=abc").status_code, 400)
         self.assertEqual(self.dev.get("/admin/api/dev/channels?guild_id=abc").status_code, 400)

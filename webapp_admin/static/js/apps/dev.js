@@ -34,10 +34,13 @@ function panel(title, ...children) {
 }
 
 /** 押している間は無効化し、結果をトーストで返すボタン。 */
+/** confirm は固定文字列のほか、クリック時点の状態で文言を変えたい場合は
+    関数（() => string）でも渡せる。 */
 function actionButton(label, iconName, handler, { variant = "btn", confirm = null } = {}) {
   const button = el("button", { class: `btn ${variant}`, type: "button" }, icon(iconName), label);
   button.addEventListener("click", async () => {
-    if (confirm && !window.confirm(confirm)) return;
+    const message = typeof confirm === "function" ? confirm() : confirm;
+    if (message && !window.confirm(message)) return;
     const original = button.textContent;
     button.disabled = true;
     try {
@@ -75,7 +78,7 @@ export async function mount(win) {
 
   const tabs = createTabs([
     { title: "送信", node: sendTab(data, guildOptions) },
-    { title: "地震", node: earthquakeTab() },
+    { title: "地震", node: earthquakeTab(guildOptions) },
     { title: "タスク", node: tasksTab(data), badge: data.pending_signals.length || null },
     { title: "設定", node: settingsTab(data) },
     { title: "キャッシュ", node: cacheTab(data), badge: data.cache.entries.length || null },
@@ -190,9 +193,22 @@ function sendTab(data, guildOptions) {
 
 /* ── 地震リプレイ ───────────────────────────────────────── */
 
-function earthquakeTab() {
+const _ALL_GUILDS = "__all__";
+
+function earthquakeTab(guildOptions) {
   const eventJson = el("textarea", { class: "textarea", placeholder: "地震イベントJSON", rows: 8 });
   const historyList = el("div", { class: "stack" }, el("div", { class: "empty", text: "「直近の地震を取得」を押してください。" }));
+
+  // 送信先を必ず選ばせる（未選択のまま実行できないようにする）。
+  // 全サーバー送信は一覧の最後に置いた明示的な選択肢としてだけ残す
+  // ―― 誤って全サーバーへ届いて情報が錯乱するのを防ぐため。
+  const guildSelect = el(
+    "select",
+    { class: "select" },
+    el("option", { value: "", text: "送信先のギルドを選択…" }),
+    guildOptions.map((o) => o.cloneNode(true)),
+    el("option", { value: _ALL_GUILDS, text: "⚠️ 全サーバーへ送信（本番相当・注意）" })
+  );
 
   const loadButton = actionButton("直近の地震を取得", "bi-arrow-clockwise", async () => {
     clear(historyList).append(loading());
@@ -219,17 +235,33 @@ function earthquakeTab() {
     return null;
   });
 
+  const replayButton = actionButton(
+    "リプレイをキューに追加", "bi-broadcast-pin",
+    () => {
+      const guildId = guildSelect.value === _ALL_GUILDS ? "" : guildSelect.value;
+      return api.post(`${BASE}/earthquake-replay`, { event_json: eventJson.value, guild_id: guildId });
+    },
+    {
+      variant: "btn-primary",
+      confirm: () =>
+        guildSelect.value === _ALL_GUILDS
+          ? "この地震速報を全サーバーへ実際に通知しますか？"
+          : `この地震速報を「${guildSelect.selectedOptions[0]?.textContent || guildSelect.value}」へ実際に通知しますか？`,
+    }
+  );
+  // 送信先を選ぶまでは押せない（全サーバーへの誤爆をここでも防ぐ）。
+  replayButton.disabled = true;
+  guildSelect.addEventListener("change", () => { replayButton.disabled = !guildSelect.value; });
+
   return el(
     "div",
     { class: "stack" },
     panel("直近の地震から選ぶ", el("div", { class: "row" }, loadButton), historyList),
     panel(
       "リプレイ実行",
+      field("送信先", guildSelect, "テスト用の通知を実際に送るギルドを選びます。"),
       field("イベントJSON", eventJson, "earthquake / hypocenter キーを含む P2PQuake 形式の JSON。"),
-      el("div", { class: "row" }, el("span", { class: "grow" }),
-         actionButton("リプレイをキューに追加", "bi-broadcast-pin", () =>
-           api.post(`${BASE}/earthquake-replay`, { event_json: eventJson.value }),
-           { variant: "btn-primary", confirm: "この地震速報を実際に通知しますか？" }))
+      el("div", { class: "row" }, el("span", { class: "grow" }), replayButton)
     )
   );
 }
