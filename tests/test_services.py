@@ -1427,6 +1427,69 @@ class AutoRecordingTests(unittest.TestCase):
                 self._member(), self._channel(self.REC_VC), start=boom)
         self.assertEqual(started, [])
 
+
+class ReleaseAfterRecordingTests(unittest.TestCase):
+    """録音が終わったあと、VC に残るか出るか。
+
+    録音だけのために入った接続を掴んだままにすると bot が VC に居座る。
+    逆に読み上げが使っている最中に切ると、そちらを巻き添えにする。
+    """
+
+    GUILD = 6600
+    VC = 950
+
+    def setUp(self):
+        import services.recording_service as recording
+        from services import voice_session
+        self.rec = recording
+        self.vs = voice_session
+        self.vs._clients.clear()
+        self.vs._holds.clear()
+        self.vs._locks.clear()
+
+    def tearDown(self):
+        self.vs._clients.clear()
+        self.vs._holds.clear()
+
+    def _connect(self, holds=()):
+        disconnected = []
+
+        async def disconnect(force=False):
+            disconnected.append(True)
+
+        client = Mock(spec=discord.VoiceClient)
+        client.is_connected.return_value = True
+        client.channel = Mock(id=self.VC)
+        client.disconnect = disconnect
+        self.vs._clients[self.GUILD] = client
+        for holder in holds:
+            self.vs.hold(self.GUILD, holder)
+        return disconnected
+
+    def _release(self, *, tts_enabled, tts_vc, holds=()):
+        disconnected = self._connect(holds)
+        with patch("services.tts_store.get_tts_settings",
+                   lambda g: {"enabled": tts_enabled, "vc_channel_id": tts_vc}),              patch("services.tts_service.get_effective_vc_watch",
+                   lambda g, s: (tts_vc, [])):
+            asyncio.run(self.rec._release_if_unused(self.GUILD))
+        return bool(disconnected)
+
+    def test_stays_while_tts_uses_the_same_channel(self):
+        self.assertFalse(self._release(tts_enabled=True, tts_vc=self.VC))
+
+    def test_leaves_when_tts_is_disabled(self):
+        self.assertTrue(self._release(tts_enabled=False, tts_vc=self.VC))
+
+    def test_leaves_when_tts_watches_another_channel(self):
+        self.assertTrue(self._release(tts_enabled=True, tts_vc=777))
+
+    def test_leaves_when_tts_has_no_channel(self):
+        self.assertTrue(self._release(tts_enabled=True, tts_vc=None))
+
+    def test_stays_while_something_else_holds_the_connection(self):
+        self.assertFalse(
+            self._release(tts_enabled=False, tts_vc=self.VC, holds=("something",)))
+
 if __name__ == "__main__":
     logging.disable(logging.CRITICAL)
     unittest.main()

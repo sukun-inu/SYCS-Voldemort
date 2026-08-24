@@ -639,11 +639,6 @@ def setup_events(bot: Bot) -> None:
             return
 
         result = await recording.stop_recording(bot, guild.id, reason="VC が空になりました")
-        # 読み上げを使っていないギルドでは、ここで切らないと bot が VC に
-        # 居座り続ける（TTS 側の退出処理はTTSの設定が前提のため）。
-        # 占有が残っていれば release は何もしない。
-        from services import voice_session
-        await voice_session.release(guild.id)
         embed = recording.build_result_embed(guild.id, result)
         for target in (session.announce_message.channel if session.announce_message else None, channel):
             if target is None:

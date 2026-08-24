@@ -622,6 +622,7 @@ async def stop_recording(bot, guild_id: int, *, reason: str = "") -> dict:
             logger.debug("[recording] stop_listening: %s", e)
 
     voice_session.unhold(guild_id, "recording")
+    await _release_if_unused(guild_id)
 
     # ffmpeg の終了とアーカイブ作成はブロッキングなので別スレッドで行う。
     try:
@@ -637,6 +638,31 @@ async def stop_recording(bot, guild_id: int, *, reason: str = "") -> dict:
         session.dropped_packets,
     )
     return result
+
+
+async def _release_if_unused(guild_id: int) -> None:
+    """録音が終わったあと、他に使う人がいなければ VC から出る。
+
+    録音だけのために入った接続を掴んだままにすると、bot が VC に居座る。
+    読み上げが同じ VC を使っているあいだは残す（そちらの退出条件に任せる）。
+    """
+    if voice_session.is_held(guild_id):
+        return
+
+    try:
+        from services.tts_service import get_effective_vc_watch
+        from services.tts_store import get_tts_settings
+
+        settings = get_tts_settings(guild_id)
+        if settings.get("enabled"):
+            watched, _ = get_effective_vc_watch(guild_id, settings)
+            if watched and int(watched) == voice_session.channel_id(guild_id):
+                return
+    except Exception as e:
+        logger.debug("[recording] 読み上げの利用状況を読めませんでした guild=%s: %s", guild_id, e)
+
+    if await voice_session.release(guild_id):
+        logger.info("[recording] guild=%s 録音の終了に伴い VC から退出しました", guild_id)
 
 
 def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> dict:
