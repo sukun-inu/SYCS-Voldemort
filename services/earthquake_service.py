@@ -526,16 +526,38 @@ def _build_eew_embed(event: dict) -> discord.Embed:
     検出しただけの通知）。以前はここで 556 と同じ地震情報が来る前提で
     組んでいたため、震源・規模・震度がすべて「不明」の埋まった Embed に
     なっていた。震源データが無いときは、無い情報を埋めずに検出だけを伝える。
+
+    cancelled=True（取り消し）は 556 側で実際に立つことを確認済み。以前は
+    WS 側で cancelled を丸ごと弾いていたため、取り消しが来ても誰にも
+    伝わらなかった（最初の警報だけ届いて、外れだったことは分からないまま）。
     """
-    code = event.get("code", 554)
+    code      = event.get("code", 554)
     is_forecast = code == 556
+    cancelled = bool(event.get("cancelled"))
 
     eq   = event.get("earthquake", {})
     hypo = eq.get("hypocenter", {})
     has_quake_data = bool(hypo.get("name"))
 
     # 続報番号は、公式の実データでは serialNo ではなく issue.serial に入る。
-    serial = str((event.get("issue") or {}).get("serial") or "1")
+    # `or "1"` にすると serial の値がそのまま偽になる場合（"0" 等）に既定値へ
+    # すり替わってしまうため、キーの有無で判定する。
+    issue = event.get("issue") or {}
+    serial = str(issue["serial"]) if issue.get("serial") is not None else "1"
+
+    if cancelled:
+        embed = discord.Embed(
+            title="✅ 緊急地震速報は取り消されました",
+            description=(
+                f"**{hypo.get('name')}** 付近を震源とする緊急地震速報は取り消されました。"
+                if has_quake_data else
+                "直前の緊急地震速報は取り消されました。"
+            ),
+            color=discord.Color.green(),
+        )
+        footer = "気象庁 緊急地震速報（予報）" if is_forecast else "気象庁 緊急地震速報"
+        embed.set_footer(text=footer, icon_url=BOT_ICON_URL)
+        return embed
 
     if not has_quake_data:
         embed = discord.Embed(
@@ -906,21 +928,26 @@ async def _notify_all_guilds(bot: Bot, event: dict) -> None:
 
     targets: list[tuple[int, discord.TextChannel]] = []
     for guild_id in get_all_guild_ids():
-        s = get_earthquake_settings(guild_id)
-        ch_id = s.get("channel_id")
-        if not ch_id:
-            continue
-        if max_scale < int(s.get("min_scale", 30)):
-            continue
-        if not get_earthquake_notify_types(guild_id).get("quake_info", True):
-            continue
-        guild = bot.get_guild(guild_id)
-        if guild is None:
-            continue
-        channel = guild.get_channel(int(ch_id))
-        if not isinstance(channel, discord.TextChannel):
-            continue
-        targets.append((guild_id, channel))
+        # 1ギルドの設定不正（例: min_scale が壊れた値）で、他の全ギルドへの
+        # 通知まで巻き添えで止まらないようにする（ループ全体を落とさない）。
+        try:
+            s = get_earthquake_settings(guild_id)
+            ch_id = s.get("channel_id")
+            if not ch_id:
+                continue
+            if max_scale < int(s.get("min_scale", 30)):
+                continue
+            if not get_earthquake_notify_types(guild_id).get("quake_info", True):
+                continue
+            guild = bot.get_guild(guild_id)
+            if guild is None:
+                continue
+            channel = guild.get_channel(int(ch_id))
+            if not isinstance(channel, discord.TextChannel):
+                continue
+            targets.append((guild_id, channel))
+        except Exception:
+            logger.exception("[earthquake] guild=%s の対象判定に失敗", guild_id)
 
     if not targets:
         return
@@ -953,18 +980,21 @@ async def _notify_tsunami_guilds(bot: Bot, event: dict) -> None:
 
     targets: list[discord.TextChannel] = []
     for guild_id in get_all_guild_ids():
-        s = get_earthquake_settings(guild_id)
-        ch_id = s.get("channel_id")
-        if not ch_id:
-            continue
-        if not get_earthquake_notify_types(guild_id).get("tsunami", True):
-            continue
-        guild = bot.get_guild(guild_id)
-        if guild is None:
-            continue
-        channel = guild.get_channel(int(ch_id))
-        if isinstance(channel, discord.TextChannel):
-            targets.append(channel)
+        try:
+            s = get_earthquake_settings(guild_id)
+            ch_id = s.get("channel_id")
+            if not ch_id:
+                continue
+            if not get_earthquake_notify_types(guild_id).get("tsunami", True):
+                continue
+            guild = bot.get_guild(guild_id)
+            if guild is None:
+                continue
+            channel = guild.get_channel(int(ch_id))
+            if isinstance(channel, discord.TextChannel):
+                targets.append(channel)
+        except Exception:
+            logger.exception("[tsunami] guild=%s の対象判定に失敗", guild_id)
 
     if not targets:
         return
@@ -987,8 +1017,10 @@ async def _notify_eew_guilds(bot: Bot, event: dict, notify_type: str) -> None:
 
     # 554 (EEWDetection) は震度が分からない（max_scale == -1）。
     # 分からない震度を「-1」のバッジ画像にして貼るのは避ける。
+    # 取り消し（cancelled）も、外れた震度をバッジで見せると紛らわしいので作らない。
+    cancelled = bool(event.get("cancelled"))
     badge_buf: io.BytesIO | None = None
-    if max_scale >= 0:
+    if max_scale >= 0 and not cancelled:
         try:
             badge_buf = _generate_badge(max_scale)
         except Exception:
@@ -1002,22 +1034,25 @@ async def _notify_eew_guilds(bot: Bot, event: dict, notify_type: str) -> None:
 
     targets: list[discord.TextChannel] = []
     for guild_id in get_all_guild_ids():
-        s = get_earthquake_settings(guild_id)
-        ch_id = s.get("channel_id")
-        if not ch_id:
-            continue
-        # 震度が分からない（554 の検出通知）ときは、閾値で弾かず必ず届ける。
-        # EEW は安全に倒すほうが良いという判断。
-        if max_scale >= 0 and max_scale < int(s.get("min_scale", 30)):
-            continue
-        if not get_earthquake_notify_types(guild_id).get(notify_type, True):
-            continue
-        guild = bot.get_guild(guild_id)
-        if guild is None:
-            continue
-        channel = guild.get_channel(int(ch_id))
-        if isinstance(channel, discord.TextChannel):
-            targets.append(channel)
+        try:
+            s = get_earthquake_settings(guild_id)
+            ch_id = s.get("channel_id")
+            if not ch_id:
+                continue
+            # 震度が分からない（554 の検出通知・取り消し）ときは、閾値で
+            # 弾かず必ず届ける。EEW は安全に倒すほうが良いという判断。
+            if max_scale >= 0 and max_scale < int(s.get("min_scale", 30)):
+                continue
+            if not get_earthquake_notify_types(guild_id).get(notify_type, True):
+                continue
+            guild = bot.get_guild(guild_id)
+            if guild is None:
+                continue
+            channel = guild.get_channel(int(ch_id))
+            if isinstance(channel, discord.TextChannel):
+                targets.append(channel)
+        except Exception:
+            logger.exception("[eew] guild=%s の対象判定に失敗", guild_id)
 
     if not targets:
         return
@@ -1053,10 +1088,19 @@ async def run_earthquake_ws(bot: Bot) -> None:
     554 (EEWDetection) は震源データを持たない「チャイムが鳴ったことの検出」のみの
     通知で、実際の震源・規模・震度は 556 (EEW予報) 側にしか入っていない。
 
+    P2PQuake は同一の情報を複数回配信することがあるため、公式が推奨するとおり
+    id で重複だけを弾く（https://www.p2pquake.net/develop/json_api_v2/ ）。
+    以前は EEW だけ自前の eq_time + serialNo + isFinal の合成キーで組んで
+    いたが、実際のペイロードには serialNo・isFinal がトップレベルに存在せず
+    （556 の続報番号は issue.serial、554 には earthquake すら無い）常に
+    既定値へ落ちてキーが固定化し、起動後の最初の1件を送った後は同じ震度
+    階級の通知が二度と送られない不具合になっていた。551・552 にはそもそも
+    重複排除自体が無く、P2PQuake が再配信すればそのまま二重に通知していた。
+
     通知処理はすべて asyncio.create_task() でバックグラウンド起動するため、
     WS 受信ループはタイル取得や Discord API 送信をブロックせず常に即応する。
     """
-    _eew_seen: set[str] = set()
+    _seen_ids: set[str] = set()
 
     while True:
         try:
@@ -1072,6 +1116,16 @@ async def run_earthquake_ws(bot: Bot) -> None:
                                 continue
 
                             code = data.get("code")
+                            if code not in (551, 552, 554, 556):
+                                continue
+
+                            event_id = data.get("id")
+                            if event_id:
+                                if event_id in _seen_ids:
+                                    continue
+                                _seen_ids.add(event_id)
+                                if len(_seen_ids) > 500:
+                                    _seen_ids.clear()
 
                             if code == 551:
                                 # タイル生成を含むためバックグラウンド実行
@@ -1080,25 +1134,13 @@ async def run_earthquake_ws(bot: Bot) -> None:
                             elif code == 552:
                                 _spawn(_notify_tsunami_guilds(bot, data))
 
-                            elif code in (554, 556) and not data.get("cancelled"):
+                            elif code in (554, 556):
+                                # cancelled（取り消し）も届ける。以前はここで
+                                # 丸ごと弾いていたため、緊急地震速報が
+                                # 外れたことを誰にも伝えられなかった。
                                 notify_type = "eew_forecast" if code == 556 else "eew_warning"
-                                # P2PQuake は同じ情報を複数回配信することがあるため、
-                                # 公式が推奨するとおり id で重複だけを弾く
-                                # （https://www.p2pquake.net/develop/json_api_v2/ ）。
-                                # 以前はここを自前の eq_time + serialNo + isFinal の
-                                # 合成キーで組んでいたが、実際のペイロードには
-                                # serialNo・isFinal はトップレベルに存在せず
-                                # （556 の続報番号は issue.serial、554 には
-                                # earthquake すら無い）常に既定値へ落ちてキーが固定化し、
-                                # 起動後の最初の1件を送った後は同じ震度階級の通知が
-                                # 二度と送られない不具合になっていた。
-                                event_id = data.get("id")
-                                if event_id and event_id not in _eew_seen:
-                                    _eew_seen.add(event_id)
-                                    if len(_eew_seen) > 200:
-                                        _eew_seen.clear()
-                                    # EEW は最優先でバックグラウンド起動
-                                    _spawn(_notify_eew_guilds(bot, data, notify_type))
+                                # EEW は最優先でバックグラウンド起動
+                                _spawn(_notify_eew_guilds(bot, data, notify_type))
 
                         elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
                             logger.warning("[earthquake] WS 切断: %s", msg.type)
