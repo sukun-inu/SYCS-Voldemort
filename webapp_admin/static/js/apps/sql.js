@@ -420,10 +420,16 @@ function buildLayout(win, state) {
     gutter.scrollTop = editor.scrollTop;
   }
 
+  /** 木の列名をクリックして挿す。続けて別の列を押しても読めるよう、
+      直前が識別子の文字（英数字・_・"・]）のときだけ ", " を前置する。
+      "table1." の直後や空白の直後はそのまま挿すので、修飾名を組み立てたり
+      SELECT の直後に置いたりする分には区切りが増えない。 */
   function insertAtCaret(text) {
     const start = editor.selectionStart;
     const end = editor.selectionEnd;
-    editor.setRangeText(text, start, end, "end");
+    const before = editor.value.slice(Math.max(0, start - 1), start);
+    const insert = /[\w"\]]/.test(before) ? `, ${text}` : text;
+    editor.setRangeText(insert, start, end, "end");
     editor.focus();
     sync();
   }
