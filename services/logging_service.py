@@ -158,6 +158,26 @@ async def log_action(
     if channel is None:
         return
 
+    embed = await build_log_embed(
+        level, message, user=user, fields=fields, embed_color=embed_color,
+    )
+    await channel.send(embed=embed)
+
+
+async def build_log_embed(
+    level: str,
+    message: str,
+    *,
+    user: Optional[discord.abc.User] = None,
+    fields: Optional[Mapping[str, str]] = None,
+    embed_color: Optional[discord.Color] = None,
+) -> discord.Embed:
+    """ログ用の Embed を組み立てる。
+
+    開発者パネルの「ログ出力テスト」もこれを使う。テスト側が独自に Embed を
+    組むと、本番で実際に出るものとずれていくため。
+    """
+    level = level.upper()
     jst_now = datetime.now(_JST)
 
     user_color = None
@@ -207,8 +227,7 @@ async def log_action(
     if len(footer_text) > 2048:
         footer_text = footer_text[:2045] + "..."
     embed.set_footer(text=footer_text)
-
-    await channel.send(embed=embed)
+    return embed
 
 
 async def send_log_embed(

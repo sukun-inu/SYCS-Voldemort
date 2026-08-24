@@ -416,85 +416,22 @@ def setup_events(bot: Bot) -> None:
                     # ここでは「シグナル完了」ログだけでは何が起きたか分からない、
                     # という状態を無くすために件数を残す。
                     logger.info("[DEV] eq_replay: %d 件へ送信", sent)
-                elif task_name == "test_welcome":
-                    payload = json.loads(sig_content)
-                    guild_id = int(payload.get("guild_id", 0))
-                    override_channel_id = payload.get("channel_id")
-                    guild = bot.get_guild(guild_id)
-                    if guild is None:
-                        # bot.get_guild はローカルキャッシュしか見ない。ここが None なら
-                        # 「そのギルドに bot がいない」か「まだキャッシュが埋まっていない」。
-                        logger.warning(
-                            "[DEV] test_welcome: guild_id=%s が見つかりません"
-                            "（bot がそのギルドに参加していないか、キャッシュ未反映）", guild_id,
-                        )
+                elif task_name.startswith("test_"):
+                    # 通知テストの中身は services/dev_test_notify.py が持つ。
+                    # 「本番と同じ関数を使う」「channel_id 指定なら本番の
+                    # チャンネル設定を見ずに直接送る」をそちらで一括して守る。
+                    from services.dev_test_notify import KINDS, run_test
+                    kind = task_name[len("test_"):]
+                    if kind not in KINDS:
+                        logger.warning("[DEV] 未知の通知テストです: %s", kind)
                     else:
-                        from services.settings_store import get_welcome_settings
-                        s = get_welcome_settings(guild_id)
-                        # channel_id を指定したときは、ウェルカムチャンネル未設定でも
-                        # そちらを使う（本番設定を作らずにテストできるようにする）。
-                        ch_id = override_channel_id or s.get("channel_id")
-                        if not ch_id:
-                            logger.warning(
-                                "[DEV] test_welcome: guild=%s はウェルカムチャンネル未設定です"
-                                "（送信先チャンネルIDの指定もありません）", guild_id,
-                            )
-                        else:
-                            ch = guild.get_channel(int(ch_id))
-                            if not isinstance(ch, discord.TextChannel):
-                                logger.warning(
-                                    "[DEV] test_welcome: guild=%s channel_id=%s が見つからない"
-                                    "か、テキストチャンネルではありません", guild_id, ch_id,
-                                )
-                            else:
-                                # 既定文面も差し替えも本番と同じものを使う。以前はここが
-                                # 独自の既定文面と replace 連鎖を持っていたため、
-                                # 「本番で何が届くか確かめる」テストが本番と違う文面を
-                                # 出していた。
-                                from services.welcome_service import DEFAULT_WELCOME, render_template
-                                text = render_template(
-                                    s.get("message") or DEFAULT_WELCOME,
-                                    user="**@テストユーザー**",
-                                    username="テストユーザー",
-                                    server=guild.name,
-                                    count=guild.member_count,
-                                )
-                                await ch.send(f"🧪 **[テスト送信 — ウェルカム]**\n{text}")
-                elif task_name == "test_vc_notify":
-                    payload = json.loads(sig_content)
-                    guild_id = int(payload.get("guild_id", 0))
-                    override_channel_id = payload.get("channel_id")
-                    guild = bot.get_guild(guild_id)
-                    if guild is None:
-                        logger.warning(
-                            "[DEV] test_vc_notify: guild_id=%s が見つかりません"
-                            "（bot がそのギルドに参加していないか、キャッシュ未反映）", guild_id,
+                        payload = json.loads(sig_content)
+                        await run_test(
+                            bot,
+                            kind,
+                            int(payload.get("guild_id", 0)),
+                            payload.get("channel_id"),
                         )
-                    else:
-                        from services.settings_store import get_vc_notify_channel_id
-                        # channel_id を指定したときは、VC通知チャンネル未設定でも
-                        # そちらを使う（本番設定を作らずにテストできるようにする）。
-                        ch_id = override_channel_id or get_vc_notify_channel_id(guild_id)
-                        if not ch_id:
-                            logger.warning(
-                                "[DEV] test_vc_notify: guild=%s はVC通知チャンネル未設定です"
-                                "（送信先チャンネルIDの指定もありません）", guild_id,
-                            )
-                        else:
-                            ch = guild.get_channel(ch_id)
-                            if not isinstance(ch, discord.TextChannel):
-                                logger.warning(
-                                    "[DEV] test_vc_notify: guild=%s channel_id=%s が見つからない"
-                                    "か、テキストチャンネルではありません", guild_id, ch_id,
-                                )
-                            else:
-                                embed = discord.Embed(
-                                    title="🎙️ テストユーザー が参加しました",
-                                    description="VC: テストチャンネル",
-                                    color=discord.Color.blue(),
-                                )
-                                embed.set_footer(text="🧪 テスト送信 — VC通知")
-                                await ch.send(embed=embed)
                 else:
                     # どの分岐にも当たらないと、ファイルだけ消えて「受信」「完了」の
                     # ログが残り、何も実行されないまま成功に見える。名前の打ち間違いや

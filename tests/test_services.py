@@ -382,6 +382,108 @@ class EmbedTests(unittest.TestCase):
         self.assertIn("第3報", embed.title)
 
 
+class DevTestNotifyTests(unittest.TestCase):
+    """開発者パネルの通知テスト。本番設定なしで全種類が確かめられること。"""
+
+    def setUp(self):
+        from services import dev_test_notify
+        self.dt = dev_test_notify
+        self.sent = []
+
+        channel = Mock(spec=discord.TextChannel)
+        channel.id = 555
+
+        async def send(content=None, embed=None, **kwargs):
+            self.sent.append({"content": content, "embed": embed})
+            message = Mock()
+
+            async def add_reaction(emoji):
+                self.sent.append({"reaction": emoji})
+
+            message.add_reaction = add_reaction
+            return message
+
+        channel.send = send
+        self.channel = channel
+
+        role = Mock()
+        role.mention = "@ロール"
+        guild = Mock()
+        guild.id = 1
+        guild.name = "テスト鯖"
+        guild.member_count = 7
+        guild.me = None
+        guild.members = []
+        guild.get_channel.side_effect = lambda i: channel if int(i) == 555 else None
+        guild.get_role.side_effect = lambda i: role if i else None
+        self.guild = guild
+        self.bot = bot_with(guild)
+
+        self.empty = patch.multiple(
+            "services.settings_store",
+            get_welcome_settings=Mock(return_value={}),
+            get_goodbye_settings=Mock(return_value={}),
+            get_vc_notify_channel_id=Mock(return_value=0),
+            get_sticky_messages=Mock(return_value={}),
+            get_reaction_roles=Mock(return_value={}),
+        )
+
+    def test_every_kind_sends_without_production_config(self):
+        """全種類が、本番のチャンネル設定なしで送信先を指定して確かめられること。"""
+        for kind in self.dt.KINDS:
+            with self.subTest(kind=kind):
+                self.sent.clear()
+                with self.empty, patch("services.tts_store.get_tts_settings",
+                                       return_value={}):
+                    asyncio.run(self.dt.run_test(self.bot, kind, 1, 555))
+                self.assertTrue(self.sent, f"{kind} が何も送っていない")
+
+    def test_every_kind_reports_one_reason_when_unconfigured(self):
+        for kind in self.dt.KINDS:
+            with self.subTest(kind=kind):
+                with self.empty,                      patch("services.logging_service.get_log_settings", return_value={}),                      self.assertLogs(self.dt.logger, level="WARNING") as captured:
+                    asyncio.run(self.dt.run_test(self.bot, kind, 1, None))
+                reasons = [m for m in captured.output if "送れませんでした" in m]
+                self.assertEqual(len(reasons), 1)
+                self.assertIn("未設定", reasons[0])
+
+    def test_goodbye_uses_the_production_default(self):
+        with self.empty:
+            asyncio.run(self.dt.run_test(self.bot, "goodbye", 1, 555))
+        self.assertIn("去っていった", self.sent[0]["content"])
+
+    def test_logging_reuses_the_production_embed(self):
+        with patch("services.logging_service.get_log_settings",
+                   return_value={"log_level": "WARNING"}):
+            asyncio.run(self.dt.run_test(self.bot, "logging", 1, 555))
+        embed = self.sent[0]["embed"]
+        self.assertIn("ボットログ", embed.title)
+        self.assertIn("WARNING", embed.title)
+
+    def test_reaction_roles_actually_adds_the_emoji(self):
+        """絵文字がもう使えない、が主な故障なので一覧表示では確かめられない。"""
+        mappings = {"m1": {"emoji": "👍", "role_id": 42, "channel_id": 555}}
+        with patch("services.settings_store.get_reaction_roles", return_value=mappings):
+            asyncio.run(self.dt.run_test(self.bot, "reaction_roles", 1, 555))
+        self.assertIn("👍", [s.get("reaction") for s in self.sent])
+
+    def test_sticky_calls_the_production_path(self):
+        called = []
+
+        async def fake_post(channel, guild_id):
+            called.append((channel.id, guild_id))
+
+        entry = {"555": {"content": "固定文", "message_id": None}}
+        with patch("services.settings_store.get_sticky_messages", return_value=entry),              patch("services.sticky_service.post_sticky", fake_post):
+            asyncio.run(self.dt.run_test(self.bot, "sticky", 1, 555))
+        self.assertEqual(called, [(555, 1)])
+
+    def test_unknown_kind_is_reported(self):
+        with self.assertLogs(self.dt.logger, level="WARNING") as captured:
+            asyncio.run(self.dt.run_test(self.bot, "nope", 1, 555))
+        self.assertIn("未知の種類", "\n".join(captured.output))
+
+
 class SettingsStoreTests(unittest.TestCase):
     def setUp(self):
         self.guild_id = 4242

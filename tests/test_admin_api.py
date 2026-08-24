@@ -444,8 +444,10 @@ class DevApiTests(unittest.TestCase):
         self.assertEqual(bad.status_code, 400)
 
     def test_notify_test_can_override_the_channel(self):
-        """ウェルカム/VC通知の設定を作っていないギルドでも、DEV専用にチャンネルを
-        直接指定してテスト送信できること（地震リプレイと同じ抜け道）。"""
+        """通知テストの設定を作っていないギルドでも、DEV専用にチャンネルを
+        直接指定してテスト送信できること（地震リプレイと同じ抜け道）。
+
+        シグナル名は test_<kind>。kind の一覧は services/dev_test_notify.py が持つ。"""
         from webapp_admin.api.dev import _SIGNAL_DIR
 
         bad_channel = self.dev.post(
@@ -460,7 +462,7 @@ class DevApiTests(unittest.TestCase):
         )
         self.assertEqual(ok.status_code, 200)
         self.assertIn("555", ok.json()["message"])
-        signal = json.loads((_SIGNAL_DIR / "test_vc_notify.signal").read_text(encoding="utf-8"))
+        signal = json.loads((_SIGNAL_DIR / "test_vc.signal").read_text(encoding="utf-8"))
         self.assertEqual(signal["guild_id"], GUILD_ID)
         self.assertEqual(signal["channel_id"], 555)
 
