@@ -96,16 +96,26 @@ async def recording_overview(request: Request, _=Depends(check_guild)):
     """録音の状況と、保存されているアーカイブ一覧。"""
     from services.recording_service import read_state
     from services.settings_store import get_recording_settings
+    from webapp_admin.schema import choices as choice_resolver
+    from webapp_admin.schema.types import ChoiceSource
 
     guild_id = _guild_id(request)
     state = read_state()
     session = state.get("sessions", {}).get(str(guild_id))
+
+    # チャンネルは ID を手打ちさせず選ばせたいので、状況と一緒に返す。
+    # 取得に失敗した供給元は空リストで返る（画面側は手入力へ切り替える）。
+    picks = await choice_resolver.resolve(
+        {ChoiceSource.CHANNELS, ChoiceSource.VOICE_CHANNELS}, guild_id,
+    )
 
     return JSONResponse({
         "settings": get_recording_settings(guild_id),
         "session": session,
         "state_updated_at": state.get("updated_at", 0),
         "recordings": _recordings(guild_id),
+        "channels": picks.get(ChoiceSource.CHANNELS.value, []),
+        "voice_channels": picks.get(ChoiceSource.VOICE_CHANNELS.value, []),
     })
 
 
@@ -155,8 +165,12 @@ async def recording_settings(request: Request, _=Depends(check_guild), _csrf=Dep
             minutes = int(body["max_minutes"])
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail="上限時間は分（数字）で指定してください。")
-        if not (1 <= minutes <= 720):
-            raise HTTPException(status_code=400, detail="上限時間は 1〜720 分で指定してください。")
+        # 0 は「時間では止めない」。VC が無人になるまで録り続ける。
+        if not (0 <= minutes <= 720):
+            raise HTTPException(
+                status_code=400,
+                detail="上限時間は 0〜720 分で指定してください（0 で無制限）。",
+            )
         patch["max_minutes"] = minutes
 
     if "retention_days" in body:

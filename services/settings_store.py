@@ -852,7 +852,7 @@ def get_djaudio_runtime_settings(guild_id: int) -> DJAudioRuntimeSettings:
 
 _RECORDING_DEFAULTS: dict[str, Any] = {
     "enabled": True,
-    "max_minutes": 360,        # 6時間で自動停止
+    "max_minutes": 360,        # 6時間で自動停止。0 なら時間では止めない
     "retention_days": 7,       # ダウンロードリンクの有効期間
     "announce_channel_id": None,  # 開始・完了の通知先（未設定ならVCのチャット欄）
     "excluded_user_ids": [],   # 録音しないユーザー（本人希望の除外）

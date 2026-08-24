@@ -61,16 +61,51 @@ export async function mount(win) {
   const statusBox = el("div", { class: "stack" });
   const listBox = el("div", { class: "stack" });
 
-  const channelInput = el("input", {
+  // ID を手打ちさせず選ばせる。一覧が空のとき（Bot トークン未設定など）は
+  // 設定する手段が無くならないよう手入力へ切り替える。
+  const channelSelect = el("select", { class: "select" });
+  const channelManual = el("input", {
     class: "input", type: "text", placeholder: "録音するVCのチャンネルID", inputmode: "numeric",
   });
+  const channelNote = el("p", { class: "field-help" });
+  const channelBox = el("div", { class: "stack" }, channelSelect, channelManual, channelNote);
+  let channelManualMode = false;
+  const channelValue = () =>
+    (channelManualMode ? channelManual.value.trim() : channelSelect.value);
 
   const enabledInput = el("input", { class: "input", type: "checkbox" });
-  const maxMinutesInput = el("input", { class: "input", type: "number", min: "1", max: "720" });
+  const maxMinutesInput = el("input", { class: "input", type: "number", min: "0", max: "720" });
   const retentionInput = el("input", { class: "input", type: "number", min: "1", max: "30" });
-  const announceInput = el("input", {
+  const announceSelect = el("select", { class: "select" });
+  const announceManual = el("input", {
     class: "input", type: "text", placeholder: "未入力ならVCのチャット欄", inputmode: "numeric",
   });
+  const announceNote = el("p", { class: "field-help" });
+  const announceBox = el("div", { class: "stack" }, announceSelect, announceManual, announceNote);
+  let announceManualMode = false;
+  const announceValue = () =>
+    (announceManualMode ? announceManual.value.trim() : announceSelect.value);
+
+  /** 一覧が取れたらプルダウン、取れなければ ID の手入力にする。 */
+  function fillChannels(select, manual, note, list, { voice, placeholder, emptyNote }) {
+    if (!list || !list.length) {
+      manual.hidden = false;
+      select.hidden = true;
+      note.textContent = emptyNote;
+      return true;   // 手入力モード
+    }
+    const keep = select.value;
+    manual.hidden = true;
+    select.hidden = false;
+    note.textContent = "";
+    // DOM の append は配列を平坦化しない（dom.js の el() 経由とは別物）。展開して渡す。
+    clear(select).append(
+      el("option", { value: "", text: placeholder }),
+      ...list.map((c) => el("option", { value: c.value, text: c.label }))
+    );
+    if (keep && list.some((c) => c.value === keep)) select.value = keep;
+    return false;
+  }
   const excludedInput = el("input", {
     class: "input", type: "text", placeholder: "ユーザーIDをカンマ区切り（空で全員録音）",
   });
@@ -78,7 +113,7 @@ export async function mount(win) {
   const startButton = actionButton(
     "録音を開始", "bi-record-circle",
     async () => {
-      const result = await api.post(`${BASE}/start`, { channel_id: channelInput.value.trim() });
+      const result = await api.post(`${BASE}/start`, { channel_id: channelValue() });
       setTimeout(refresh, 1500);
       return result;
     },
@@ -105,7 +140,7 @@ export async function mount(win) {
       enabled: enabledInput.checked,
       max_minutes: Number(maxMinutesInput.value),
       retention_days: Number(retentionInput.value),
-      announce_channel_id: announceInput.value.trim(),
+      announce_channel_id: announceValue(),
       excluded_user_ids: excluded,
     });
   }, { variant: "btn-primary" });
@@ -115,8 +150,8 @@ export async function mount(win) {
     if (!session) {
       statusBox.append(
         el("div", { class: "empty", text: "現在このサーバーでは録音していません。" }),
-        field("VCのチャンネルID", channelInput,
-              "録音したいボイスチャンネルのIDを入れてください。開始すると参加者へ通知されます。"),
+        field("録音するVC", channelBox,
+              "開始すると、そのVCの参加者へ録音中であることが通知されます。"),
         el("div", { class: "row" }, startButton)
       );
       if (!settings.enabled) {
@@ -127,7 +162,10 @@ export async function mount(win) {
       return;
     }
 
-    const remaining = Math.max(0, session.max_seconds - session.elapsed_seconds);
+    // 無制限のときは残り時間ではなく、何が起きたら止まるのかを出す
+    const stopsAt = session.unlimited
+      ? "全員が退出したとき"
+      : duration(Math.max(0, session.max_seconds - session.elapsed_seconds));
     statusBox.append(
       el("div", { class: "row" },
          el("span", { class: "chip danger", text: "● 録音中" }),
@@ -137,8 +175,8 @@ export async function mount(win) {
             el("span", { class: "grow", text: "経過時間" }),
             el("span", { class: "mono", text: duration(session.elapsed_seconds) })),
          el("div", { class: "list-row" },
-            el("span", { class: "grow", text: "自動停止まで" }),
-            el("span", { class: "mono", text: duration(remaining) })),
+            el("span", { class: "grow", text: session.unlimited ? "停止条件" : "自動停止まで" }),
+            el("span", { class: session.unlimited ? "list-sub" : "mono", text: stopsAt })),
          el("div", { class: "list-row" },
             el("span", { class: "grow", text: "開始した人" }),
             el("span", { class: "list-sub", text: session.started_by || "-" })),
@@ -179,7 +217,9 @@ export async function mount(win) {
     enabledInput.checked = Boolean(settings.enabled);
     maxMinutesInput.value = settings.max_minutes;
     retentionInput.value = settings.retention_days;
-    announceInput.value = settings.announce_channel_id || "";
+    const announceId = settings.announce_channel_id ? String(settings.announce_channel_id) : "";
+    if (announceManualMode) announceManual.value = announceId;
+    else announceSelect.value = announceId;
     excludedInput.value = (settings.excluded_user_ids || []).join(", ");
   }
 
@@ -188,6 +228,16 @@ export async function mount(win) {
   async function refresh() {
     try {
       const payload = await api.get(BASE);
+      channelManualMode = fillChannels(channelSelect, channelManual, channelNote,
+        payload.voice_channels, {
+          voice: true, placeholder: "録音するVCを選択",
+          emptyNote: "ボイスチャンネルの一覧を取得できませんでした。ID を直接入力できます。",
+        });
+      announceManualMode = fillChannels(announceSelect, announceManual, announceNote,
+        payload.channels, {
+          voice: false, placeholder: "VCのチャット欄へ送る（既定）",
+          emptyNote: "チャンネルの一覧を取得できませんでした。ID を直接入力できます。",
+        });
       renderStatus(payload.session, payload.settings);
       renderList(payload.recordings);
       if (!settingsTouched) renderSettings(payload.settings);
@@ -200,7 +250,8 @@ export async function mount(win) {
 
   // 設定を触っている最中に定期更新で上書きしない
   let settingsTouched = false;
-  for (const input of [enabledInput, maxMinutesInput, retentionInput, announceInput, excludedInput]) {
+  for (const input of [enabledInput, maxMinutesInput, retentionInput,
+                       announceSelect, announceManual, excludedInput]) {
     input.addEventListener("input", () => { settingsTouched = true; });
     input.addEventListener("change", () => { settingsTouched = true; });
   }
@@ -214,10 +265,11 @@ export async function mount(win) {
       section(
         "設定",
         field("録音機能を有効にする", enabledInput),
-        field("自動停止までの時間（分）", maxMinutesInput, "1〜720 分。既定は 360 分（6時間）。"),
+        field("自動停止までの時間（分）", maxMinutesInput,
+              "0〜720 分。0 にすると時間では止めず、VC から全員が退出するまで録り続けます。既定は 360 分（6時間）。"),
         field("保存期間（日）", retentionInput, "1〜30 日。過ぎるとダウンロードリンクが失効します。"),
-        field("通知チャンネルID（省略可）", announceInput,
-              "開始・完了の通知先。未入力ならVCのチャット欄へ送ります。"),
+        field("通知チャンネル（省略可）", announceBox,
+              "開始・完了の通知先。未選択ならVCのチャット欄へ送ります。"),
         field("録音しないユーザーID", excludedInput,
               "本人の希望で録音対象から外す場合に指定します。Discord 側で /record exclude を使ってもらっても構いません。"),
         el("div", { class: "row" }, el("span", { class: "grow" }), saveButton)

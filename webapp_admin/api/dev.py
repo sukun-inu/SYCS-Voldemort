@@ -554,15 +554,20 @@ async def channels(request: Request, guild_id: str = Query(...), _=Depends(check
         return JSONResponse({"channels": []})
 
     text_types = {0, 5, 10, 11, 12, 15}  # GUILD_TEXT / ANNOUNCEMENT / THREAD / FORUM 等
-    found = sorted(
-        (
-            {"id": str(c["id"]), "name": c.get("name", ""), "type": c.get("type", 0)}
-            for c in data
-            if c.get("type") in text_types
-        ),
-        key=lambda c: c["name"].lower(),
-    )
-    return JSONResponse({"channels": found})
+    voice_types = {2, 13}                # GUILD_VOICE / STAGE_VOICE
+
+    def pick(types: set[int]) -> list[dict]:
+        return sorted(
+            (
+                {"id": str(c["id"]), "name": c.get("name", ""), "type": c.get("type", 0)}
+                for c in data
+                if c.get("type") in types
+            ),
+            key=lambda c: c["name"].lower(),
+        )
+
+    # 録音の対象は VC なので、テキストと一緒に返して画面側で選ばせる。
+    return JSONResponse({"channels": pick(text_types), "voice_channels": pick(voice_types)})
 
 
 @router.get("/user")
