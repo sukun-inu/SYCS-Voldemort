@@ -344,3 +344,30 @@
   white-space: pre;
   color: var(--fg);
 }
+/* 重大度で色を分ける。読める行数が増えても、目当ての行が沈まないように */
+.log-line { white-space: pre; }
+.log-line.is-error { color: var(--danger); }
+.log-line.is-warn { color: var(--attention); }
+.log-line.is-debug { color: var(--fg-subtle); }
+
+/* ── 窓いっぱいに広げる画面（開発者パネル） ───────────────────
+   窓 → タブ → タブの中身 → ログ、と順に高さを渡す。どこか1つでも
+   高さが決まらないと、ログは max-height の 320px のままになる。 */
+.window-body.is-filled { display: flex; flex-direction: column; overflow: hidden; }
+.dev-panel { flex: 1 1 auto; min-height: 0; }
+.dev-panel > .tabbed { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+/* タブの帯は縮めない。flex: none が無いと、下の中身に押されて潰れて消える */
+.dev-panel > .tabbed > .tabs { flex: none; }
+.dev-panel > .tabbed > .tabpanel { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.dev-panel > .row { flex: none; }
+
+.log-pane { height: 100%; min-height: 0; }
+.log-pane > .section { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.log-pane > .section > .section-body { flex: 1 1 auto; min-height: 0; }
+.log-pane .log-view { flex: 1 1 auto; min-height: 120px; max-height: none; }
+.log-toolbar { flex: none; flex-wrap: wrap; }
+.log-toolbar .select { width: auto; min-width: 120px; }
+.log-toolbar .input { width: 84px; }
+.log-follow { align-items: center; flex: none; white-space: nowrap; }
+.log-follow input { margin: 0; }
+.log-status { font-variant-numeric: tabular-nums; white-space: nowrap; }

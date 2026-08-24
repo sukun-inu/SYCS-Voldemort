@@ -69,6 +69,10 @@ export async function mount(win) {
     el("option", { value: guild.id, text: `${guild.name}（${guild.id}）` })
   );
 
+  // 窓の高さいっぱいをタブの中身に使う（ログが窓の半分しか映らなかった）
+  win.body.classList.add("is-filled");
+  const logs = logsTab(win);
+
   const tabs = createTabs([
     { title: "送信", node: sendTab(data, guildOptions) },
     { title: "地震", node: earthquakeTab() },
@@ -77,14 +81,14 @@ export async function mount(win) {
     { title: "キャッシュ", node: cacheTab(data), badge: data.cache.entries.length || null },
     { title: "通知テスト", node: notifyTab(guildOptions) },
     { title: "調査", node: lookupTab(data) },
-    { title: "ログ", node: logsTab() },
+    { title: "ログ", node: logs.node, onShow: logs.onShow },
   ]);
 
   const bot = data.bot_user || {};
   clear(win.body).append(
     el(
       "div",
-      { class: "stack" },
+      { class: "stack dev-panel" },
       el(
         "div",
         { class: "row" },
@@ -472,31 +476,90 @@ function lookupTab(data) {
 
 /* ── ログ ───────────────────────────────────────────────── */
 
-function logsTab() {
+/* ログの行から重大度を見て色を分ける。
+   形式は "2026-08-24 03:00:00 [ERROR] logger: 本文"。level が読めない行（例外の
+   スタックトレースなど）は、直前の行の色を引き継いで1つのまとまりに見せる。 */
+const LOG_LEVEL = /\b(CRITICAL|ERROR|WARNING|WARN|INFO|DEBUG)\b/;
+const LEVEL_CLASS = {
+  CRITICAL: "is-error", ERROR: "is-error", WARNING: "is-warn", WARN: "is-warn",
+  INFO: "", DEBUG: "is-debug",
+};
+
+function renderLogLines(target, lines) {
+  let carried = "";
+  const nodes = lines.map((line) => {
+    const level = LOG_LEVEL.exec(line.slice(0, 80));
+    if (level) carried = LEVEL_CLASS[level[1].toUpperCase()] ?? "";
+    return el("div", { class: `log-line ${carried}`.trim(), text: line || " " });
+  });
+  clear(target).append(...nodes);
+}
+
+const REFRESH_MS = 5000;
+
+/**
+ * ログ表示。開いた時点で自動で読み込み、開いている間だけ一定間隔で追いかける。
+ * @returns {{node: HTMLElement, onShow: () => void}}
+ */
+function logsTab(win) {
   const source = el("select", { class: "select" },
                     el("option", { value: "bot", text: "bot.log" }),
                     el("option", { value: "admin", text: "admin.log" }));
-  const lines = el("input", { class: "input", type: "number", value: "200", min: "10", max: "1000" });
-  const output = el("pre", { class: "log-view", text: "「読み込む」を押してください。" });
+  const lines = el("input", { class: "input", type: "number", value: "500", min: "10", max: "1000" });
+  const follow = el("input", { type: "checkbox", checked: true });
+  const output = el("pre", { class: "log-view", text: "読み込み中…" });
+  const status = el("span", { class: "small muted log-status" });
 
-  const load = actionButton("読み込む", "bi-arrow-clockwise", async () => {
-    output.textContent = "読み込み中…";
-    const result = await api.get(`${BASE}/logs?source=${source.value}&lines=${lines.value || 200}`);
-    output.textContent = result.lines.length ? result.lines.join("\n") : "（空です）";
-    output.scrollTop = output.scrollHeight;
-    return null;
-  });
+  let busy = false;
+  let timer = null;
 
-  return el(
+  async function load({ quiet = false } = {}) {
+    if (busy) return;
+    busy = true;
+    try {
+      const result = await api.get(`${BASE}/logs?source=${source.value}&lines=${lines.value || 500}`);
+      // 読んでいる途中で下へ飛ばされると邪魔なので、いちばん下に居るときだけ追尾する
+      const atBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 24;
+      if (result.lines.length) {
+        renderLogLines(output, result.lines);
+      } else {
+        clear(output).append(el("div", { class: "log-line is-debug", text: "（空です）" }));
+      }
+      if (atBottom) output.scrollTop = output.scrollHeight;
+      status.textContent = `${result.lines.length} 行・${new Date().toLocaleTimeString("ja-JP")} 更新`;
+    } catch (error) {
+      status.textContent = `読み込めません（${error.message}）`;
+      if (!quiet) toast(error.message, "danger");
+    } finally {
+      busy = false;
+    }
+  }
+
+  const node = el(
     "div",
-    { class: "stack" },
+    { class: "stack log-pane" },
     panel(
       "ログ",
-      el("div", { class: "input-row" },
-         el("div", { class: "field grow" }, source),
-         el("div", { class: "field grow" }, lines),
-         load),
+      el("div", { class: "row log-toolbar" },
+         source,
+         lines,
+         el("label", { class: "check log-follow" }, follow, el("span", { class: "check-text", text: "自動更新" })),
+         actionButton("再読み込み", "bi-arrow-clockwise", () => load().then(() => null)),
+         el("span", { class: "row-end" }),
+         status),
       output
     )
   );
+
+  // タブが表に出ている間だけ動かす。裏に居るとき・窓を閉じたあとは何もしない。
+  timer = window.setInterval(() => {
+    if (!follow.checked || node.hidden || document.hidden || !node.isConnected) return;
+    load({ quiet: true });
+  }, REFRESH_MS);
+  win.addCleanup(() => window.clearInterval(timer));
+
+  source.addEventListener("change", () => load());
+  lines.addEventListener("change", () => load());
+
+  return { node, onShow: () => load({ quiet: true }) };
 }

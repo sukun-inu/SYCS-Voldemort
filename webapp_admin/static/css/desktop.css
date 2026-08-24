@@ -11,6 +11,12 @@ body.desktop-body { overflow: hidden; }
   position: fixed;
   inset: 0 0 var(--taskbar-height) 0;
   overflow: hidden;
+  /* hidden は「見た目を隠す」だけで scrollLeft の変更自体は防がない。
+     タブなど内側でフォーカスが移ると、ブラウザが hidden な祖先まで
+     不可視スクロールさせ、常に画面いっぱいのはずの窓が左にずれて見えた
+     （狭い画面でタブを押した直後に発生）。clip は対応ブラウザでスクロール
+     そのものを禁止できるので、対応していれば hidden を上書きする。 */
+  overflow: clip;
   background:
     radial-gradient(1100px 620px at 12% -12%, rgba(126, 208, 255, 0.55), transparent 62%),
     radial-gradient(900px 560px at 88% 4%, rgba(72, 236, 208, 0.30), transparent 60%),
