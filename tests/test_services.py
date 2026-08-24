@@ -1300,10 +1300,7 @@ class AutoRecordingTests(unittest.TestCase):
         return member
 
     def _channel(self, channel_id):
-        channel = Mock(spec=discord.VoiceChannel)
-        channel.id = channel_id
-        channel.name = "雑談VC"
-        return channel
+        return self._voice_channel(channel_id)
 
     def _run_join(self, member, channel, *, receive=True, start=None):
         from services import voice_session
@@ -1321,6 +1318,60 @@ class AutoRecordingTests(unittest.TestCase):
              patch("services.tts_store.get_tts_settings", lambda g: {}):
             asyncio.run(self.rec.maybe_auto_start(Mock(), member, channel))
         return started
+
+
+    def _voice_channel(self, channel_id, members=None):
+        channel = Mock(spec=discord.VoiceChannel)
+        channel.id = channel_id
+        channel.name = "雑談VC"
+        if members is None:
+            human = Mock()
+            human.bot = False
+            members = [human]
+        channel.members = members
+        return channel
+
+    def _run_for_channel(self, channel, *, receive=True):
+        from services import voice_session
+
+        started = []
+
+        async def fake_start(bot, guild, ch, *, started_by, announce_to=None):
+            started.append(ch.id)
+            return Mock()
+
+        guild = Mock()
+        guild.id = self.GUILD
+        guild.me = Mock()
+
+        with patch.object(self.rec, "start_recording", fake_start),              patch.object(voice_session, "RECEIVE_AVAILABLE", receive),              patch("services.tts_service.get_effective_vc_watch",
+                   lambda gid, settings: (self.TTS_VC, [])),              patch("services.tts_store.get_tts_settings", lambda g: {}):
+            asyncio.run(self.rec.maybe_start_for_channel(Mock(), guild, channel))
+        return started
+
+    def test_a_tts_join_also_starts_recording(self):
+        """/tts join のように、人の入室以外の入口からでも始まること。
+
+        入室イベントだけを入口にしていると、既に人がいる VC へ手動で
+        参加させたときに録音が始まらない。
+        """
+        store.set_recording_settings(self.GUILD, {
+            "auto_start": True, "vc_channel_id": self.REC_VC,
+        })
+        self.assertEqual(self._run_for_channel(self._voice_channel(self.REC_VC)),
+                         [self.REC_VC])
+
+    def test_an_empty_channel_is_not_recorded(self):
+        """bot だけが入っている VC を録りに行かない。"""
+        robot = Mock()
+        robot.bot = True
+        store.set_recording_settings(self.GUILD, {
+            "auto_start": True, "vc_channel_id": self.REC_VC,
+        })
+        self.assertEqual(
+            self._run_for_channel(self._voice_channel(self.REC_VC, members=[robot])), [])
+        self.assertEqual(
+            self._run_for_channel(self._voice_channel(self.REC_VC, members=[])), [])
 
     def test_join_to_the_target_starts_recording(self):
         store.set_recording_settings(self.GUILD, {

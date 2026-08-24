@@ -441,13 +441,16 @@ def auto_start_channel_id(guild_id: int) -> int | None:
     return preferred_vc_channel_id(guild_id)
 
 
-async def maybe_auto_start(bot, member, channel) -> None:
-    """人が VC に入ったときに、自動録音の条件が揃っていれば録り始める。
+async def maybe_start_for_channel(bot, guild, channel, *, trigger: str = "自動") -> None:
+    """その VC で自動録音の条件が揃っていれば録り始める。
 
-    条件が揃わない場合は静かに何もしない（入室のたびに警告を出さない）。
+    「人が入った」だけでなく、読み上げが VC に入った（/tts join など）ときの
+    入口でもある。読み上げと録音は独立したスイッチなので、両方オンなら
+    どちらの入口から入っても両方が動く、という状態にするため。
+
+    条件が揃わない場合は静かに何もしない（呼ばれるたびに警告を出さない）。
     """
-    guild = getattr(member, "guild", None)
-    if guild is None or getattr(member, "bot", False) or channel is None:
+    if guild is None or channel is None:
         return
     if guild.id in _sessions:
         return                       # すでに録音中
@@ -455,13 +458,34 @@ async def maybe_auto_start(bot, member, channel) -> None:
         return
     if auto_start_channel_id(guild.id) != channel.id:
         return
+    # 誰もいない VC を録りに行かない（bot だけが入った直後など）。
+    # 参加者を読めない相手のときは判断を保留し、開始を妨げない
+    # （空のまま録れてしまっても、無人判定で程なく書き出される）。
+    try:
+        members = list(getattr(channel, "members", None) or [])
+    except TypeError:
+        members = None
+    if members is not None and not any(m for m in members if not getattr(m, "bot", False)):
+        return
 
     try:
         await start_recording(bot, guild, channel, started_by=guild.me or bot.user)
-        logger.info("[recording] guild=%s ch=%s 自動録音を開始しました", guild.id, channel.id)
+        logger.info(
+            "[recording] guild=%s ch=%s 自動録音を開始しました（きっかけ: %s）",
+            guild.id, channel.id, trigger,
+        )
     except RecordingError as e:
-        # 自動で走る経路なので、失敗しても入室そのものは妨げない。
+        # 自動で走る経路なので、失敗しても呼び出し元の処理は妨げない。
         logger.warning("[recording] guild=%s 自動録音を開始できませんでした: %s", guild.id, e)
+
+
+async def maybe_auto_start(bot, member, channel) -> None:
+    """人が VC に入ったときの入口。"""
+    if getattr(member, "bot", False):
+        return
+    await maybe_start_for_channel(
+        bot, getattr(member, "guild", None), channel, trigger="入室",
+    )
 
 
 async def _announce_start(

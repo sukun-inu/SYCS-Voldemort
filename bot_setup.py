@@ -922,6 +922,12 @@ def setup_events(bot: Bot) -> None:
                 if _tts_cfg.get("enabled") and _tts_vc_id and int(_tts_vc_id) == after_ch.id:
                     if not _has_temp(member.guild.id):
                         await _tts_auto_join(member.guild, int(_tts_vc_id))
+                        # 読み上げが入った VC でも録音の条件を見る（入室側の
+                        # 判定と入口が違うだけで、狙いは同じ）
+                        from services import recording_service as _recording
+                        await _recording.maybe_start_for_channel(
+                            bot, member.guild, after_ch, trigger="TTS参加",
+                        )
         except Exception as e:
             logger.exception("[BOT_SETUP] TTS auto_join error: %s", e)
 

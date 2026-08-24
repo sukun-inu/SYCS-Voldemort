@@ -152,9 +152,20 @@ async def tts_join(
         await send_ephemeral(interaction, "❌ TTS が無効。先に `/tts enable` で有効にせよ。")
         return
     await tts_service.temp_join(interaction.client, interaction.guild, channel.id)
+
+    # 読み上げと録音は独立したスイッチ。両方オンなら、こちらの入口から入っても
+    # 録音が始まるようにする（人の入室イベントだけを入口にしていると、既に人が
+    # いる VC へ手動で参加させたときに録音が始まらない）。
+    from services import recording_service as recording
+    await recording.maybe_start_for_channel(
+        interaction.client, interaction.guild, channel, trigger="/tts join",
+    )
+    extra = "録音も始めた。" if recording.is_recording(interaction.guild.id) else ""
+
     await send_ephemeral(
         interaction,
-        f"✅ {channel.mention} に参加した。このVCのコメント欄を優先読み上げ中。\n`/tts leave` で退出・元の設定に戻る。",
+        f"✅ {channel.mention} に参加した。このVCのコメント欄を優先読み上げ中。{extra}"
+        f"\n`/tts leave` で退出・元の設定に戻る。",
     )
 
 
