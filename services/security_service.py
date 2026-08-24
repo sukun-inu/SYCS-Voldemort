@@ -1,7 +1,7 @@
 import datetime
 import logging
 import re
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 import aiohttp
 import discord
@@ -59,19 +59,38 @@ def is_new_member(member: discord.Member) -> bool:
     return (discord.utils.utcnow() - member.joined_at).days < NEW_MEMBER_THRESHOLD_DAYS
 
 
-def is_security_bypassed(member: discord.Member) -> Tuple[bool, str]:
+class BypassResult(NamedTuple):
+    """バイパス判定の結果。
+
+    「判定できなかった」を「バイパスなし」と同じ扱いにすると、設定を読めなかった
+    だけで全ロール剥奪（元に戻せない）まで進んでしまう。3つの状態を区別する。
+    """
+
+    bypassed: bool
+    reason: str = ""
+    check_failed: bool = False
+
+
+def is_security_bypassed(member: discord.Member) -> BypassResult:
     try:
         trusted = get_trusted_user_ids(member.guild.id)
         if member.id in trusted:
-            return True, "trusted_user"
+            return BypassResult(True, "trusted_user")
 
         bypass_roles = set(get_bypass_role_ids(member.guild.id))
         if any(r.id in bypass_roles for r in member.roles):
-            return True, "bypass_role"
+            return BypassResult(True, "bypass_role")
     except Exception as e:
-        logger.error("[SECURITY] bypass check failed: %s", e)
+        # 信頼済みかどうかが分からない状態。ここで「バイパスなし」と答えると、
+        # 設定の読み取りに失敗しただけの管理者からロールを剥がしかねない。
+        logger.error(
+            "[SECURITY] バイパス判定に失敗しました guild=%s user=%s: %s"
+            "（この検査では強制措置を行いません）",
+            member.guild.id, member.id, e, exc_info=True,
+        )
+        return BypassResult(False, "check_failed", True)
 
-    return False, ""
+    return BypassResult(False)
 
 
 async def strip_roles(member: discord.Member) -> Tuple[bool, str]:
@@ -292,17 +311,19 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     logs: List[str] = [f"[{now_jst()}] スキャン開始"]
     danger = False
 
-    bypassed, bypass_reason = is_security_bypassed(member)
-    if bypassed:
-        logs.append(f"バイパス適用: {bypass_reason}")
+    bypass = is_security_bypassed(member)
+    if bypass.bypassed:
+        logs.append(f"バイパス適用: {bypass.reason}")
         try:
             await log_action(
                 bot, message.guild.id, "INFO", "セキュリティ検査スキップ",
-                user=member, fields={"理由": bypass_reason or "bypass"},
+                user=member, fields={"理由": bypass.reason or "bypass"},
             )
         except Exception:
             logger.debug("log_action failed", exc_info=True)
         return
+    if bypass.check_failed:
+        logs.append("⚠️ バイパス判定に失敗（強制措置は行わない）")
 
     member_is_new = is_new_member(member)
     reason_flags, flag_logs, spam_count, min_interval = _check_content_flags(member, content, links)
@@ -341,7 +362,29 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
             reason_flags.append("VC_RAID")
             logs.append("VCレイド検出")
 
-    if danger:
+    if danger and bypass.check_failed:
+        # 信頼済みかどうかが分からないまま消したり剥がしたりしない。
+        # 見逃すより取り返しがつかないほうを避け、人が判断できるよう大きく残す。
+        logs.append("強制措置は見送った（バイパス判定に失敗しているため）")
+        logger.error(
+            "[SECURITY] guild=%s user=%s 危険と判定しましたが、バイパス判定に失敗している"
+            "ため強制措置（メッセージ削除・ロール剥奪）を見送りました。手動で確認してください。",
+            message.guild.id, member.id,
+        )
+        try:
+            await log_action(
+                bot, message.guild.id, "ERROR", "⚠️ 要確認: 強制措置を見送りました",
+                user=member,
+                fields={
+                    "理由": "バイパス判定に失敗（設定を読めませんでした）",
+                    "検出": "、".join(reason_flags) or "不明",
+                    "対応": "内容を確認し、必要なら手動で対処してください。",
+                },
+                embed_color=discord.Color.orange(),
+            )
+        except Exception:
+            logger.debug("log_action failed", exc_info=True)
+    elif danger:
         try:
             await message.delete()
         except discord.HTTPException as e:
@@ -397,12 +440,34 @@ async def handle_security_for_voice_join(
     if before.channel == after.channel or after.channel is None:
         return
 
-    bypassed, _ = is_security_bypassed(member)
-    if bypassed:
+    bypass = is_security_bypassed(member)
+    if bypass.bypassed:
         return
 
     channel = after.channel
     if channel and check_vc_raid(member, channel.id):
+        if bypass.check_failed:
+            # メッセージ側と同じ扱い。判定できないまま剥がさない。
+            logger.error(
+                "[SECURITY] guild=%s user=%s VCレイドを検出しましたが、バイパス判定に"
+                "失敗しているためロール剥奪を見送りました。手動で確認してください。",
+                member.guild.id, member.id,
+            )
+            try:
+                await log_action(
+                    bot, member.guild.id, "ERROR", "⚠️ 要確認: VCレイドの措置を見送りました",
+                    user=member,
+                    fields={
+                        "チャンネル": channel.mention,
+                        "理由": "バイパス判定に失敗（設定を読めませんでした）",
+                        "対応": "内容を確認し、必要なら手動で対処してください。",
+                    },
+                    embed_color=discord.Color.orange(),
+                )
+            except Exception:
+                logger.debug("log_action failed on VC raid", exc_info=True)
+            return
+
         logs = [f"[{now_jst()}] VCレイド検出", f"チャンネル: {channel.name}"]
         await strip_roles(member)
 
