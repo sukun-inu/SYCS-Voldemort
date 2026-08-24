@@ -639,6 +639,11 @@ def setup_events(bot: Bot) -> None:
             return
 
         result = await recording.stop_recording(bot, guild.id, reason="VC が空になりました")
+        # 読み上げを使っていないギルドでは、ここで切らないと bot が VC に
+        # 居座り続ける（TTS 側の退出処理はTTSの設定が前提のため）。
+        # 占有が残っていれば release は何もしない。
+        from services import voice_session
+        await voice_session.release(guild.id)
         embed = recording.build_result_embed(guild.id, result)
         for target in (session.announce_message.channel if session.announce_message else None, channel):
             if target is None:
@@ -897,6 +902,15 @@ def setup_events(bot: Bot) -> None:
             await notify_ch.send(content=content, embed=embed)
 
         await _safe(_vc_notify_handler(), "VC notify")
+
+        # 自動録音: 設定済みVCに人が入ったら録り始める。読み上げとは独立した
+        # スイッチで、両方オンなら同じ接続で両方動く。
+        if is_join and after_ch is not None:
+            from services import recording_service as recording
+            await _safe(
+                recording.maybe_auto_start(bot, member, after_ch),
+                "録音の自動開始",
+            )
 
         # TTS 自動参加: 設定済みVCに誰か入ったらBotも入る（temp override 中はスキップ）
         try:

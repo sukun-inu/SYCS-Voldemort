@@ -1211,6 +1211,145 @@ class ReceiverHealthTests(unittest.TestCase):
         self.vs._clients[1] = client
         self.assertTrue(self.rec._is_receiving(1))
 
+
+class AutoRecordingTests(unittest.TestCase):
+    """録音と読み上げを独立したスイッチとして扱えること。
+
+    両方オンなら同じ音声接続で両方動く。片方オフならその機能だけ止まる。
+    """
+
+    GUILD = 4400
+    TTS_VC = 700
+    REC_VC = 800
+
+    def setUp(self):
+        import services.recording_service as recording
+        self.rec = recording
+        store.set_recording_settings(self.GUILD, {
+            "enabled": True, "auto_start": False, "vc_channel_id": None,
+        })
+
+    def _target(self, tts_vc=TTS_VC):
+        with patch("services.tts_service.get_effective_vc_watch",
+                   lambda gid, settings: (tts_vc, [])), \
+             patch("services.tts_store.get_tts_settings", lambda g: {}):
+            return self.rec.auto_start_channel_id(self.GUILD)
+
+    def test_off_by_default(self):
+        """勝手に録られていた、という状態を既定にしない。"""
+        self.assertFalse(store.get_recording_settings(self.GUILD)["auto_start"])
+        self.assertIsNone(self._target())
+
+    def test_follows_the_tts_channel_when_unset(self):
+        """両方オンにするのに、VC を2箇所書かせない。"""
+        store.set_recording_settings(self.GUILD, {"auto_start": True})
+        self.assertEqual(self._target(), self.TTS_VC)
+
+    def test_explicit_channel_wins(self):
+        store.set_recording_settings(self.GUILD, {
+            "auto_start": True, "vc_channel_id": self.REC_VC,
+        })
+        self.assertEqual(self._target(), self.REC_VC)
+
+    def test_disabled_switch_overrides_auto(self):
+        """録音そのものを切ったら、自動録音も走らない。"""
+        store.set_recording_settings(self.GUILD, {
+            "enabled": False, "auto_start": True, "vc_channel_id": self.REC_VC,
+        })
+        self.assertIsNone(self._target())
+
+    def test_no_target_when_neither_is_configured(self):
+        store.set_recording_settings(self.GUILD, {"auto_start": True})
+        self.assertIsNone(self._target(tts_vc=None))
+
+    # ── 入室したときの挙動 ──────────────────────────────────
+
+    def _member(self, *, is_bot=False):
+        guild = Mock()
+        guild.id = self.GUILD
+        guild.me = Mock()
+        member = Mock()
+        member.bot = is_bot
+        member.guild = guild
+        return member
+
+    def _channel(self, channel_id):
+        channel = Mock(spec=discord.VoiceChannel)
+        channel.id = channel_id
+        channel.name = "雑談VC"
+        return channel
+
+    def _run_join(self, member, channel, *, receive=True, start=None):
+        from services import voice_session
+
+        started = []
+
+        async def fake_start(bot, guild, ch, *, started_by, announce_to=None):
+            started.append((guild.id, ch.id))
+            return Mock()
+
+        with patch.object(self.rec, "start_recording", start or fake_start), \
+             patch.object(voice_session, "RECEIVE_AVAILABLE", receive), \
+             patch("services.tts_service.get_effective_vc_watch",
+                   lambda gid, settings: (self.TTS_VC, [])), \
+             patch("services.tts_store.get_tts_settings", lambda g: {}):
+            asyncio.run(self.rec.maybe_auto_start(Mock(), member, channel))
+        return started
+
+    def test_join_to_the_target_starts_recording(self):
+        store.set_recording_settings(self.GUILD, {
+            "auto_start": True, "vc_channel_id": self.REC_VC,
+        })
+        self.assertEqual(
+            self._run_join(self._member(), self._channel(self.REC_VC)),
+            [(self.GUILD, self.REC_VC)],
+        )
+
+    def test_other_channels_are_ignored(self):
+        store.set_recording_settings(self.GUILD, {
+            "auto_start": True, "vc_channel_id": self.REC_VC,
+        })
+        self.assertEqual(self._run_join(self._member(), self._channel(999)), [])
+
+    def test_bots_do_not_trigger_recording(self):
+        store.set_recording_settings(self.GUILD, {
+            "auto_start": True, "vc_channel_id": self.REC_VC,
+        })
+        self.assertEqual(
+            self._run_join(self._member(is_bot=True), self._channel(self.REC_VC)), [])
+
+    def test_does_not_start_twice(self):
+        store.set_recording_settings(self.GUILD, {
+            "auto_start": True, "vc_channel_id": self.REC_VC,
+        })
+        self.rec._sessions[self.GUILD] = Mock()
+        try:
+            started = self._run_join(self._member(), self._channel(self.REC_VC))
+        finally:
+            self.rec._sessions.pop(self.GUILD, None)
+        self.assertEqual(started, [])
+
+    def test_nothing_happens_without_the_receive_extension(self):
+        store.set_recording_settings(self.GUILD, {
+            "auto_start": True, "vc_channel_id": self.REC_VC,
+        })
+        self.assertEqual(
+            self._run_join(self._member(), self._channel(self.REC_VC), receive=False), [])
+
+    def test_a_failed_start_does_not_escape(self):
+        """自動で走る経路なので、失敗しても入室処理を巻き込まない。"""
+        store.set_recording_settings(self.GUILD, {
+            "auto_start": True, "vc_channel_id": self.REC_VC,
+        })
+
+        async def boom(*args, **kwargs):
+            raise self.rec.RecordingError("テスト用の失敗")
+
+        with self.assertLogs(self.rec.logger, level="WARNING"):
+            started = self._run_join(
+                self._member(), self._channel(self.REC_VC), start=boom)
+        self.assertEqual(started, [])
+
 if __name__ == "__main__":
     logging.disable(logging.CRITICAL)
     unittest.main()

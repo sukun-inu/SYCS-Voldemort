@@ -171,6 +171,13 @@ async def recording_settings(request: Request, _=Depends(check_guild), _csrf=Dep
     if "enabled" in body:
         patch["enabled"] = bool(body["enabled"])
 
+    if "auto_start" in body:
+        patch["auto_start"] = bool(body["auto_start"])
+
+    if "vc_channel_id" in body:
+        raw = str(body["vc_channel_id"] or "").strip()
+        patch["vc_channel_id"] = _require_id(raw, "録音するVCのID") if raw else None
+
     if "max_minutes" in body:
         try:
             minutes = int(body["max_minutes"])

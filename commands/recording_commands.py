@@ -13,7 +13,11 @@ from discord.ext.commands import Bot
 from commands.guards import ensure_admin as _ensure_admin
 from commands.interaction_utils import send_ephemeral
 from services import recording_service as recording
-from services.settings_store import get_recording_settings, set_recording_excluded_users
+from services.settings_store import (
+    get_recording_settings,
+    set_recording_excluded_users,
+    set_recording_settings,
+)
 
 
 def _duration(seconds: int) -> str:
@@ -122,6 +126,41 @@ def register_recording_commands(bot: Bot) -> None:
         else:
             embed.add_field(name="録音中の参加者", value="まだ誰も喋っておらぬ。", inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @group.command(name="auto", description="【管理者】自動録音のオン／オフを切り替えます")
+    @app_commands.describe(
+        enabled="オンにすると、対象VCに人が入った時点で録音を始めます",
+        channel="自動録音するVC（未指定なら読み上げと同じVC）",
+    )
+    async def record_auto(
+        interaction: discord.Interaction,
+        enabled: bool,
+        channel: discord.VoiceChannel | None = None,
+    ):
+        if not await _ensure_admin(interaction):
+            return
+
+        patch: dict = {"auto_start": enabled}
+        if channel is not None:
+            patch["vc_channel_id"] = channel.id
+        set_recording_settings(interaction.guild_id, patch)
+
+        settings = get_recording_settings(interaction.guild_id)
+        if not enabled:
+            await send_ephemeral(interaction, "自動録音を切った。手動の `/record start` は使える。")
+            return
+
+        target_id = recording.auto_start_channel_id(interaction.guild_id)
+        if not settings.get("enabled", True):
+            where = "ただし録音そのものが無効なので、まず有効にせよ。"
+        elif target_id:
+            where = f"対象は <#{target_id}> だ。人が入った時点で録り始める。"
+        else:
+            where = (
+                "ただし対象のVCが定まっておらぬ。"
+                "channel を指定するか、読み上げの対象VCを設定せよ。"
+            )
+        await send_ephemeral(interaction, f"自動録音を入れた。{where}")
 
     @group.command(name="exclude", description="自分を録音の対象から外す／戻します")
     @app_commands.describe(exclude="True で除外、False で解除")
