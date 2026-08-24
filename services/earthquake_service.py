@@ -6,6 +6,7 @@ import math
 import os
 import re
 import time
+from collections import deque
 from datetime import datetime
 
 import aiohttp
@@ -28,6 +29,7 @@ from services.settings_store import (
 logger = logging.getLogger(__name__)
 
 _WS_URL  = "wss://api.p2pquake.net/v2/ws"
+_SEEN_ID_LIMIT = 500  # 重複排除で覚えておくイベントIDの数
 _TILE_URL = "https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png"
 _TILE_UA  = "VoldermortBot/1.0 (earthquake alert; contact: github)"
 _TILE_SZ  = 256
@@ -908,42 +910,172 @@ async def _resolve_jma_detail_url(event: dict, max_scale: int) -> str:
 
 # ── 通知送信（確定地震情報 551） ──────────────────────────
 
-def _diagnose_no_target(bot: Bot, guild_id: int, max_scale: int) -> str:
-    """1ギルドに絞ったのに送信先が0件だったとき、実際に何が原因かを1つに
-    特定する。_notify_all_guilds のフィルタと同じ順序で判定し、最初に
-    引っかかった条件を理由として返す（複数の候補を並べるだけでは、
-    どれが本当の原因か分からず紛らわしいため）。"""
-    try:
-        s = get_earthquake_settings(guild_id)
-    except Exception as exc:
-        return f"設定の読み取りに失敗しました（{exc}）"
+_NOTIFY_TYPE_LABELS: dict[str, str] = {
+    "quake_info":   "地震情報",
+    "tsunami":      "津波情報",
+    "eew_warning":  "緊急地震速報（警報）",
+    "eew_forecast": "緊急地震速報（予報）",
+}
+
+
+def _evaluate_guild(
+    bot: Bot,
+    guild_id: int,
+    *,
+    notify_type: str,
+    max_scale: int,
+    apply_min_scale: bool,
+) -> tuple[discord.TextChannel | None, str]:
+    """1ギルドが通知対象かを判定する。
+
+    以前は地震(551)・津波(552)・EEW(554/556) の3経路と「0件だった理由の説明」が
+    同じ判定をそれぞれ別に書いていた。条件を1つ直しても片方にしか反映されない、
+    という取りこぼしが実際に何度も起きたため、判定順も理由の文言もここへ集約する。
+
+    戻り値は (送信先チャンネル, 対象外の理由)。対象なら理由は空文字、対象外なら
+    チャンネルは None で、最初に引っかかった理由だけが入る（候補を並べても
+    どれが本当の原因か分からないため、必ず1つに絞る）。
+    """
+    s = get_earthquake_settings(guild_id)
 
     ch_id = s.get("channel_id")
     if not ch_id:
-        return "「アラートを送るチャンネル」が未設定です"
+        return None, "「アラートを送るチャンネル」が未設定です"
 
-    min_scale = s.get("min_scale", 30)
-    try:
-        if max_scale < int(min_scale):
-            return f"「通知する最小震度」が {min_scale} で、今回の震度 {max_scale} は届いていません"
-    except (TypeError, ValueError):
-        pass
+    if apply_min_scale:
+        try:
+            min_scale = int(s.get("min_scale", 30))
+        except (TypeError, ValueError):
+            min_scale = 30
+        if max_scale < min_scale:
+            return None, f"「通知する最小震度」が {min_scale} で、今回の震度 {max_scale} は届いていません"
 
-    try:
-        if not get_earthquake_notify_types(guild_id).get("quake_info", True):
-            return "通知タイプ「地震情報」がオフになっています"
-    except Exception as exc:
-        return f"通知タイプの読み取りに失敗しました（{exc}）"
+    if not get_earthquake_notify_types(guild_id).get(notify_type, True):
+        label = _NOTIFY_TYPE_LABELS.get(notify_type, notify_type)
+        return None, f"通知タイプ「{label}」がオフになっています"
 
     guild = bot.get_guild(guild_id)
     if guild is None:
-        return "bot がこのギルドをまだキャッシュしていません（未参加、または再起動直後）"
+        return None, "bot がこのギルドをまだキャッシュしていません（未参加、または再起動直後）"
 
     channel = guild.get_channel(int(ch_id))
     if not isinstance(channel, discord.TextChannel):
-        return f"設定されているチャンネル（{ch_id}）が見つからないか、テキストチャンネルではありません"
+        return None, f"設定されているチャンネル（{ch_id}）が見つからないか、テキストチャンネルではありません"
 
-    return "条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"
+    return channel, ""
+
+
+def _collect_targets(
+    bot: Bot,
+    *,
+    notify_type: str,
+    max_scale: int,
+    apply_min_scale: bool = True,
+    only_guild_id: int | None = None,
+) -> list[tuple[int, discord.TextChannel]]:
+    """送信対象の (guild_id, チャンネル) を集める。
+
+    1ギルドの設定不正（例: min_scale が壊れた値）で他の全ギルドへの通知まで
+    巻き添えで止まらないよう、ギルドごとに例外を閉じ込める。
+    """
+    guild_ids = [only_guild_id] if only_guild_id is not None else get_all_guild_ids()
+    targets: list[tuple[int, discord.TextChannel]] = []
+    for guild_id in guild_ids:
+        try:
+            channel, _ = _evaluate_guild(
+                bot, guild_id,
+                notify_type=notify_type, max_scale=max_scale, apply_min_scale=apply_min_scale,
+            )
+            if channel is not None:
+                targets.append((guild_id, channel))
+        except Exception:
+            logger.exception("[earthquake] guild=%s の対象判定に失敗", guild_id)
+    return targets
+
+
+def _diagnose_no_target(
+    bot: Bot,
+    guild_id: int,
+    *,
+    notify_type: str,
+    max_scale: int,
+    apply_min_scale: bool = True,
+) -> str:
+    """1ギルドに絞ったのに送信先が0件だったときの理由を1文で返す。
+
+    判定は _evaluate_guild と同じものを使う（説明用に条件を書き写すと、
+    実際のフィルタとずれて嘘の理由を出すため）。
+    """
+    try:
+        _, reason = _evaluate_guild(
+            bot, guild_id,
+            notify_type=notify_type, max_scale=max_scale, apply_min_scale=apply_min_scale,
+        )
+    except Exception as exc:
+        return f"設定の読み取りに失敗しました（{exc}）"
+    return reason or "条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"
+
+
+def _override_target(
+    bot: Bot, guild_id: int, channel_id: int,
+) -> list[tuple[int, discord.TextChannel]]:
+    """DEV専用: 地震アラート設定を一切見ず、指定チャンネルへ直接送る。
+
+    本番用の設定が無いギルドでも中身を確認できるようにするための逃げ道。
+    0件になったときは、ここで理由を出しきる（呼び出し側で重ねて出さない）。
+    """
+    guild = bot.get_guild(guild_id)
+    if guild is None:
+        logger.warning(
+            "[earthquake] guild=%s: bot がこのギルドをまだキャッシュしていません"
+            "（未参加、または再起動直後）", guild_id,
+        )
+        return []
+    channel = guild.get_channel(int(channel_id))
+    if not isinstance(channel, discord.TextChannel):
+        logger.warning(
+            "[earthquake] guild=%s: 指定チャンネル（%s）が見つからないか、"
+            "テキストチャンネルではありません", guild_id, channel_id,
+        )
+        return []
+    return [(guild_id, channel)]
+
+
+async def _dispatch(
+    targets: list[tuple[int, discord.TextChannel]],
+    *,
+    tag: str,
+    embed: discord.Embed,
+    view: discord.ui.View | None = None,
+    attachments: list[tuple[str, bytes]] | None = None,
+) -> int:
+    """対象へ一斉送信し、成功した数を返す。
+
+    discord.File は送信で消費されるため使い回せない。チャンネルごとに bytes から
+    作り直す。
+    """
+    async def _send(channel: discord.TextChannel) -> None:
+        files = [discord.File(io.BytesIO(data), filename=name) for name, data in (attachments or [])]
+        await channel.send(
+            embed=embed,
+            files=files or discord.utils.MISSING,
+            view=view or discord.utils.MISSING,
+        )
+
+    results = await asyncio.gather(*(_send(ch) for _, ch in targets), return_exceptions=True)
+    ok_count = 0
+    for (guild_id, channel), result in zip(targets, results):
+        if isinstance(result, BaseException):
+            # ここは except の外なので exc_info を明示する。logger.exception は
+            # sys.exc_info() を見るため、例外が有効でない場所では
+            # トレースが "NoneType: None" になり、どこで落ちたか残らない。
+            logger.error(
+                "[%s] send error guild=%s ch=%s: %s",
+                tag, guild_id, channel.id, result, exc_info=result,
+            )
+        else:
+            ok_count += 1
+    return ok_count
 
 
 async def _notify_all_guilds(
@@ -968,22 +1100,50 @@ async def _notify_all_guilds(
     静かに何も起きない状態になるため、呼び出し側（開発者パネルのリプレイ等）
     がログを残せるように返す。"""
     max_scale = _max_scale(event)
-    points    = event.get("points", [])
 
-    eq   = event.get("earthquake", {})
-    hypo = eq.get("hypocenter", {})
-    lat  = _parse_coord(hypo.get("latitude"))
-    lon  = _parse_coord(hypo.get("longitude"))
+    # 先に送信先を決める。以前は JMA 詳細リンクの取得・バッジ生成・震度マップ
+    # 生成（タイル25枚のHTTP取得）を対象判定より先に走らせていたため、誰も
+    # 受け取らない地震でも毎回そのぶんの通信と描画が発生していた。
+    if override_channel_id is not None and only_guild_id is not None:
+        targets = _override_target(bot, only_guild_id, override_channel_id)
+    else:
+        targets = _collect_targets(
+            bot, notify_type="quake_info", max_scale=max_scale, only_guild_id=only_guild_id,
+        )
+        # only_guild_id 指定（開発者パネルのリプレイ）で 0 件だと、押した側は
+        # 「受信・完了」のログしか見えず、何も届かない理由が分からない。
+        # 全ギルド一斉送信（本番の WS 経由）では毎回ほぼ全ギルドが対象外に
+        # なるのが通常なので、そちらでは出さない。override 経路は
+        # _override_target 側で理由を出しきっている。
+        if not targets and only_guild_id is not None:
+            logger.warning(
+                "[earthquake] guild=%s: 送信先が0件でした（理由: %s）",
+                only_guild_id,
+                _diagnose_no_target(bot, only_guild_id, notify_type="quake_info", max_scale=max_scale),
+            )
+
+    if not targets:
+        return 0
+
+    points = event.get("points", [])
+    eq     = event.get("earthquake", {})
+    hypo   = eq.get("hypocenter", {})
+    lat    = _parse_coord(hypo.get("latitude"))
+    lon    = _parse_coord(hypo.get("longitude"))
 
     detail_url = await _resolve_jma_detail_url(event, max_scale)
 
     is_minor = max_scale <= 20  # 震度1-2 はコンパクト表示
 
+    # 震度が取れないイベント（遠地地震など、points も areas も maxScale も無い）
+    # では max_scale が -1 になる。そのままバッジを作ると「最大震度 -1」と
+    # 大書きした画像を貼ってしまうため、分からないときは作らない。
     badge_buf: io.BytesIO | None = None
-    try:
-        badge_buf = _generate_badge(max_scale)
-    except Exception as e:
-        logger.exception("[earthquake] badge generation error: %s", e)
+    if max_scale >= 0:
+        try:
+            badge_buf = _generate_badge(max_scale)
+        except Exception as e:
+            logger.exception("[earthquake] badge generation error: %s", e)
 
     map_buf: io.BytesIO | None = None
     if not is_minor and lat is not None and lon is not None and points:
@@ -998,195 +1158,94 @@ async def _notify_all_guilds(
     if map_buf:
         embed.set_image(url="attachment://earthquake_map.png")
 
-    view = _EqView(detail_url)
+    attachments: list[tuple[str, bytes]] = []
+    if badge_buf:
+        attachments.append(("intensity_badge.png", badge_buf.getvalue()))
+    if map_buf:
+        attachments.append(("earthquake_map.png", map_buf.getvalue()))
 
-    targets: list[tuple[int, discord.TextChannel]] = []
-
-    if override_channel_id is not None and only_guild_id is not None:
-        # DEV専用経路: 地震アラート設定を一切見ず、指定チャンネルへ直接送る。
-        guild = bot.get_guild(only_guild_id)
-        if guild is None:
-            logger.warning(
-                "[earthquake] guild=%s: bot がこのギルドをまだキャッシュしていません"
-                "（未参加、または再起動直後）", only_guild_id,
-            )
-        else:
-            channel = guild.get_channel(override_channel_id)
-            if not isinstance(channel, discord.TextChannel):
-                logger.warning(
-                    "[earthquake] guild=%s: 指定チャンネル（%s）が見つからないか、"
-                    "テキストチャンネルではありません", only_guild_id, override_channel_id,
-                )
-            else:
-                targets.append((only_guild_id, channel))
-    else:
-        guild_ids = [only_guild_id] if only_guild_id is not None else get_all_guild_ids()
-        for guild_id in guild_ids:
-            # 1ギルドの設定不正（例: min_scale が壊れた値）で、他の全ギルドへの
-            # 通知まで巻き添えで止まらないようにする（ループ全体を落とさない）。
-            try:
-                s = get_earthquake_settings(guild_id)
-                ch_id = s.get("channel_id")
-                if not ch_id:
-                    continue
-                if max_scale < int(s.get("min_scale", 30)):
-                    continue
-                if not get_earthquake_notify_types(guild_id).get("quake_info", True):
-                    continue
-                guild = bot.get_guild(guild_id)
-                if guild is None:
-                    continue
-                channel = guild.get_channel(int(ch_id))
-                if not isinstance(channel, discord.TextChannel):
-                    continue
-                targets.append((guild_id, channel))
-            except Exception:
-                logger.exception("[earthquake] guild=%s の対象判定に失敗", guild_id)
-
-    if not targets:
-        # only_guild_id 指定（開発者パネルのリプレイ）で 0 件だと、押した側は
-        # 「受信・完了」のログしか見えず、何も届かない理由が分からない。
-        # 全ギルド一斉送信（本番の WS 経由）では毎回のほぼ全ギルドが対象外に
-        # なるのが通常なので、そちらでは出さない。override_channel_id 指定時は
-        # 上のブロックで理由を出しているのでここでは重ねて出さない。
-        if only_guild_id is not None and override_channel_id is None:
-            logger.warning(
-                "[earthquake] guild=%s: 送信先が0件でした（理由: %s）",
-                only_guild_id, _diagnose_no_target(bot, only_guild_id, max_scale),
-            )
-        return 0
-
-    badge_data = badge_buf.getvalue() if badge_buf else None
-    map_data   = map_buf.getvalue()   if map_buf   else None
-
-    async def _send(channel: discord.TextChannel) -> None:
-        files: list[discord.File] = []
-        if badge_data:
-            files.append(discord.File(io.BytesIO(badge_data), filename="intensity_badge.png"))
-        if map_data:
-            files.append(discord.File(io.BytesIO(map_data), filename="earthquake_map.png"))
-        await channel.send(embed=embed, files=files or discord.utils.MISSING, view=view)
-
-    results = await asyncio.gather(
-        *(_send(ch) for _, ch in targets),
-        return_exceptions=True,
+    return await _dispatch(
+        targets, tag="earthquake", embed=embed,
+        view=_EqView(detail_url), attachments=attachments,
     )
-    ok_count = 0
-    for (guild_id, _), result in zip(targets, results):
-        if isinstance(result, Exception):
-            logger.exception("[earthquake] send error guild=%s: %s", guild_id, result)
-        else:
-            ok_count += 1
-    return ok_count
 
 
 # ── 津波情報通知（552） ───────────────────────────────────
 
-async def _notify_tsunami_guilds(bot: Bot, event: dict) -> None:
-    """津波情報 (code 552) を全対象ギルドへ送信。"""
-    embed = _build_tsunami_embed(event)
+async def _notify_tsunami_guilds(bot: Bot, event: dict) -> int:
+    """津波情報 (code 552) を全対象ギルドへ送信。
 
-    targets: list[discord.TextChannel] = []
-    for guild_id in get_all_guild_ids():
-        try:
-            s = get_earthquake_settings(guild_id)
-            ch_id = s.get("channel_id")
-            if not ch_id:
-                continue
-            if not get_earthquake_notify_types(guild_id).get("tsunami", True):
-                continue
-            guild = bot.get_guild(guild_id)
-            if guild is None:
-                continue
-            channel = guild.get_channel(int(ch_id))
-            if isinstance(channel, discord.TextChannel):
-                targets.append(channel)
-        except Exception:
-            logger.exception("[tsunami] guild=%s の対象判定に失敗", guild_id)
-
-    if not targets:
-        return
-
-    results = await asyncio.gather(
-        *(ch.send(embed=embed) for ch in targets),
-        return_exceptions=True,
+    津波は震度を持たないので、最小震度のしきい値は適用しない。
+    """
+    targets = _collect_targets(
+        bot, notify_type="tsunami", max_scale=-1, apply_min_scale=False,
     )
-    for ch, result in zip(targets, results):
-        if isinstance(result, Exception):
-            logger.exception("[tsunami] send error ch=%s: %s", ch.id, result)
+    if not targets:
+        return 0
+    return await _dispatch(targets, tag="tsunami", embed=_build_tsunami_embed(event))
 
 
 # ── EEW 通知（554 警報 / 556 予報） ──────────────────────
 
-async def _notify_eew_guilds(bot: Bot, event: dict, notify_type: str) -> None:
+async def _notify_eew_guilds(bot: Bot, event: dict, notify_type: str) -> int:
     """EEW を全対象ギルドへ送信。notify_type: 'eew_warning' or 'eew_forecast'"""
-    max_scale  = _max_scale(event)
+    max_scale = _max_scale(event)
+    cancelled = bool(event.get("cancelled"))
+
+    # 震度が分からない（554 の検出通知・取り消し）ときは、閾値で弾かず必ず
+    # 届ける。EEW は安全に倒すほうが良いという判断。
+    targets = _collect_targets(
+        bot, notify_type=notify_type, max_scale=max_scale, apply_min_scale=max_scale >= 0,
+    )
+    if not targets:
+        return 0
+
     detail_url = await _resolve_jma_detail_url(event, max_scale)
 
     # 554 (EEWDetection) は震度が分からない（max_scale == -1）。
     # 分からない震度を「-1」のバッジ画像にして貼るのは避ける。
     # 取り消し（cancelled）も、外れた震度をバッジで見せると紛らわしいので作らない。
-    cancelled = bool(event.get("cancelled"))
     badge_buf: io.BytesIO | None = None
     if max_scale >= 0 and not cancelled:
         try:
             badge_buf = _generate_badge(max_scale)
         except Exception:
-            pass
+            logger.exception("[eew] badge generation error")
 
     embed = _build_eew_embed(event)
     if badge_buf:
         embed.set_thumbnail(url="attachment://intensity_badge.png")
 
-    view = _EqView(detail_url)
-
-    targets: list[discord.TextChannel] = []
-    for guild_id in get_all_guild_ids():
-        try:
-            s = get_earthquake_settings(guild_id)
-            ch_id = s.get("channel_id")
-            if not ch_id:
-                continue
-            # 震度が分からない（554 の検出通知・取り消し）ときは、閾値で
-            # 弾かず必ず届ける。EEW は安全に倒すほうが良いという判断。
-            if max_scale >= 0 and max_scale < int(s.get("min_scale", 30)):
-                continue
-            if not get_earthquake_notify_types(guild_id).get(notify_type, True):
-                continue
-            guild = bot.get_guild(guild_id)
-            if guild is None:
-                continue
-            channel = guild.get_channel(int(ch_id))
-            if isinstance(channel, discord.TextChannel):
-                targets.append(channel)
-        except Exception:
-            logger.exception("[eew] guild=%s の対象判定に失敗", guild_id)
-
-    if not targets:
-        return
-
-    badge_data = badge_buf.getvalue() if badge_buf else None
-
-    async def _send(channel: discord.TextChannel) -> None:
-        files = ([discord.File(io.BytesIO(badge_data), filename="intensity_badge.png")]
-                 if badge_data else discord.utils.MISSING)
-        await channel.send(embed=embed, files=files, view=view)
-
-    results = await asyncio.gather(*(_send(ch) for ch in targets), return_exceptions=True)
-    for ch, result in zip(targets, results):
-        if isinstance(result, Exception):
-            logger.exception("[eew] send error ch=%s: %s", ch.id, result)
+    attachments = [("intensity_badge.png", badge_buf.getvalue())] if badge_buf else []
+    return await _dispatch(
+        targets, tag="eew", embed=embed,
+        view=_EqView(detail_url), attachments=attachments,
+    )
 
 
 # ── WebSocket ループ ──────────────────────────────────────
 
+# 起動した通知タスクへの参照。create_task の戻り値を保持しないと、実行中に
+# GC でタスクごと消えることがある（CPython の既知の挙動）。
+_running_tasks: set[asyncio.Task] = set()
+
+
+def _on_task_done(task: asyncio.Task) -> None:
+    _running_tasks.discard(task)
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        # done_callback は except の外なので exc_info を明示する。
+        # logger.exception だとトレースが "NoneType: None" になる。
+        logger.error("[earthquake] task error: %s", exc, exc_info=exc)
+
+
 def _spawn(coro) -> asyncio.Task:
     """通知タスクをバックグラウンドで起動し、未捕捉例外をログに記録する。"""
     task = asyncio.create_task(coro)
-    task.add_done_callback(
-        lambda t: logger.exception("[earthquake] task error: %s", t.exception())
-        if not t.cancelled() and t.exception() else None
-    )
+    _running_tasks.add(task)
+    task.add_done_callback(_on_task_done)
     return task
 
 
@@ -1208,7 +1267,10 @@ async def run_earthquake_ws(bot: Bot) -> None:
     通知処理はすべて asyncio.create_task() でバックグラウンド起動するため、
     WS 受信ループはタイル取得や Discord API 送信をブロックせず常に即応する。
     """
+    # 重複排除。以前は上限を超えたら clear() で全消ししていたため、消した直後に
+    # 同じ id が再配信されると二重通知になりえた。古い順に1件ずつ捨てる。
     _seen_ids: set[str] = set()
+    _seen_order: deque[str] = deque()
 
     while True:
         try:
@@ -1232,8 +1294,9 @@ async def run_earthquake_ws(bot: Bot) -> None:
                                 if event_id in _seen_ids:
                                     continue
                                 _seen_ids.add(event_id)
-                                if len(_seen_ids) > 500:
-                                    _seen_ids.clear()
+                                _seen_order.append(event_id)
+                                while len(_seen_order) > _SEEN_ID_LIMIT:
+                                    _seen_ids.discard(_seen_order.popleft())
 
                             if code == 551:
                                 # タイル生成を含むためバックグラウンド実行

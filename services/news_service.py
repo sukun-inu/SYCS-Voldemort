@@ -18,7 +18,7 @@ from services.groq_client import create_chat_completion, get_groq_client
 from services.settings_store import (
     get_all_guild_ids,
     get_news_feeds,
-    update_news_feed_state,
+    aupdate_news_feed_state,
 )
 
 logger = logging.getLogger(__name__)
@@ -253,4 +253,6 @@ async def run_news_feeds(bot: Bot) -> None:
                     except Exception as e:
                         logger.exception("[news_service] send error feed=%s: %s", feed_id, e)
 
-                update_news_feed_state(guild_id, feed_id, now, seen)
+                # 設定の書き込みはファイルロックを sleep でポーリングする同期処理。
+                # ここは Bot のイベントループ上なので、別スレッドへ逃がす。
+                await aupdate_news_feed_state(guild_id, feed_id, now, seen)

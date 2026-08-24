@@ -14,6 +14,12 @@ _static_root = Path(__file__).resolve().parent / "static"
 
 templates = Jinja2Templates(directory=str(_template_dir))
 
+# テンプレートが url_for で引く名前だけを持つ。
+# 設定画面と開発者パネルはデスクトップUI（/admin/overview のウィンドウ）と
+# /admin/api/* に移ったため、かつてここにあった dev_* / *_settings の約30件は
+# どのテンプレートからも参照されず、しかも既に存在しない URL
+# （/admin/dev/earthquake-replay など）を指していた。
+# 名前を足すときは、テンプレート側の url_for と対で足すこと。
 _ROUTE_MAP: dict[str, str] = {
     "landing": "/",
     "guide": "/guide",
@@ -28,37 +34,6 @@ _ROUTE_MAP: dict[str, str] = {
     "guild_select": "/admin/guilds",
     "select_guild": "/admin/guilds/select",
     "overview": "/admin/overview",
-    "user_state_dashboard": "/admin/users/state",
-    "system_metrics": "/admin/api/metrics",
-    "monitor_incidents": "/admin/api/incidents",
-    "logging_settings": "/admin/settings/logging",
-    "welcome_settings": "/admin/settings/welcome",
-    "vc_notify": "/admin/settings/vc-notify",
-    "sticky": "/admin/settings/sticky",
-    "reaction_roles": "/admin/settings/reaction-roles",
-    "news_feeds": "/admin/settings/news-feeds",
-    "earthquake": "/admin/settings/earthquake",
-    "security_settings": "/admin/settings/security",
-    "djaudio_settings": "/admin/settings/djaudio",
-    "tts_settings": "/admin/settings/tts",
-    "dev_index": "/admin/dev",
-    "dev_send_message": "/admin/dev/send-message",
-    "dev_forward_message": "/admin/dev/forward-message",
-    "dev_settings_guild": "/admin/dev/settings/{guild_id}",
-    "dev_delete_cache_entry": "/admin/dev/cache/delete",
-    "dev_purge_cache": "/admin/dev/cache/purge",
-    "dev_news_send": "/admin/dev/news-send",
-    "dev_earthquake_replay": "/admin/dev/earthquake-replay",
-    "dev_api_channels": "/admin/dev/api/channels",
-    "dev_api_logs": "/admin/dev/api/logs",
-    "dev_api_user": "/admin/dev/api/user",
-    "dev_export_guild": "/admin/dev/settings/{guild_id}/export",
-    "dev_import_guild": "/admin/dev/settings/{guild_id}/import",
-    "dev_test_notify_welcome": "/admin/dev/test-notify/welcome",
-    "dev_test_notify_vc": "/admin/dev/test-notify/vc",
-    "dlaudio_health": "/dlaudio/health",
-    "serve_file": "/dlaudio/files/{guild_id}/{token}",
-    "file_info": "/dlaudio/info/{guild_id}/{token}",
     "static": "/static/{path}",
 }
 
@@ -109,9 +84,10 @@ templates.env.filters["tojson"] = lambda v: _json.dumps(v, ensure_ascii=False)
 
 
 def _get_csrf_token(request: Request) -> str:
-    if "_csrf_token" not in request.session:
-        request.session["_csrf_token"] = secrets.token_hex(32)
-    return request.session["_csrf_token"]
+    # 発行そのものは security 側に持たせる（ログイン確定時と HTML 描画時の
+    # 両方から同じ関数を使うため）。
+    from webapp_admin.security import issue_csrf_token
+    return issue_csrf_token(request)
 
 
 def flash(request: Request, message: str, category: str = "info") -> None:

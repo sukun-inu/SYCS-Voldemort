@@ -70,6 +70,26 @@ _USER_STATE_AUTO_REPAIR_WRITE_EVENTS = _env_bool("USER_STATE_AUTO_REPAIR_WRITE_E
 
 _SIGNAL_DIR = Path(os.getenv("SETTINGS_DIR", str(Path(__file__).parent / "data"))) / "_dev_signals"
 
+# VC入室時刻を覚えておく上限時間。退出イベントを取り逃した分（Bot 停止中に
+# 退出された等）が永久に残らないよう、これを過ぎた記録は捨てる。
+_VC_JOIN_TTL_SECONDS = 24 * 3600
+
+# ステータス更新の間隔（秒）。Discord のプレゼンス更新は 20秒あたり5回まで。
+_STATUS_INTERVAL_SECONDS = max(5, int(os.getenv("BOT_STATUS_INTERVAL_SECONDS", "20")))
+
+
+async def _safe(coro, name: str) -> None:
+    """付随処理の失敗で本筋を止めないためのラッパー。
+
+    イベントハンドラごとに try/except/logger.exception を書き下すと、
+    定型が積み上がって本来の分岐が埋もれる（実際 1,200行の相当部分が
+    これだった）ので1箇所にまとめる。
+    """
+    try:
+        await coro
+    except Exception as e:
+        logger.exception("[BOT_SETUP] %s error: %s", name, e)
+
 
 def create_bot() -> Bot:
     intents = discord.Intents.default()
@@ -85,6 +105,7 @@ def setup_events(bot: Bot) -> None:
     _ws_task: asyncio.Task | None = None
     _user_state_sync_task: asyncio.Task | None = None
     _user_state_repair_task: asyncio.Task | None = None
+    _djaudio_cleanup_task: asyncio.Task | None = None
     _user_state_sync_started = False
     _user_state_repair_started = False
     _user_state_sync_lock = asyncio.Lock()
@@ -296,8 +317,15 @@ def setup_events(bot: Bot) -> None:
     # --------------------------
     # ステータス更新
     # --------------------------
-    @tasks.loop(seconds=5)
+    # Discord のプレゼンス更新には 20秒あたり5回という制限がある。5秒間隔だと
+    # 20秒あたり4回で、超えてはいないが余裕がほぼ無い（1日 17,280 回）。
+    # 内容は CPU/MEM/Ping の数％の揺れなので、間隔を空けたうえで
+    # 表示が実際に変わったときだけ送る。
+    _last_status_text: str | None = None
+
+    @tasks.loop(seconds=_STATUS_INTERVAL_SECONDS)
     async def update_status():
+        nonlocal _last_status_text
         if not bot.is_ready() or bot.is_closed():
             return
         try:
@@ -308,11 +336,11 @@ def setup_events(bot: Bot) -> None:
                 latency_display = f"{round(latency_raw * 1000)}ms"
             else:
                 latency_display = "N/A"
-            await bot.change_presence(
-                activity=discord.Game(
-                    name=f"Ping: {latency_display} | CPU: {cpu}% | MEM: {mem}%"
-                )
-            )
+            text = f"Ping: {latency_display} | CPU: {cpu}% | MEM: {mem}%"
+            if text == _last_status_text:
+                return
+            await bot.change_presence(activity=discord.Game(name=text))
+            _last_status_text = text
         except Exception as e:
             if "Cannot write to closing transport" in str(e) or "ClientConnectionResetError" in type(e).__name__:
                 return
@@ -323,20 +351,14 @@ def setup_events(bot: Bot) -> None:
     # --------------------------
     @tasks.loop(minutes=5)
     async def news_feed_task():
-        try:
-            await run_news_feeds(bot)
-        except Exception as e:
-            logger.exception("[BOT_SETUP] news_feed_task error: %s", e)
+        await _safe(run_news_feeds(bot), "news_feed_task")
 
     # --------------------------
     # スティッキー pending 処理（30秒ごと）
     # --------------------------
     @tasks.loop(seconds=30)
     async def pending_sticky_task():
-        try:
-            await process_pending_stickies(bot)
-        except Exception as e:
-            logger.exception("[BOT_SETUP] pending_sticky_task error: %s", e)
+        await _safe(process_pending_stickies(bot), "pending_sticky_task")
 
     # --------------------------
     # 開発者シグナルファイル監視（30秒ごと）
@@ -394,79 +416,30 @@ def setup_events(bot: Bot) -> None:
                     # ここでは「シグナル完了」ログだけでは何が起きたか分からない、
                     # という状態を無くすために件数を残す。
                     logger.info("[DEV] eq_replay: %d 件へ送信", sent)
-                elif task_name == "test_welcome":
-                    payload = json.loads(sig_content)
-                    guild_id = int(payload.get("guild_id", 0))
-                    override_channel_id = payload.get("channel_id")
-                    guild = bot.get_guild(guild_id)
-                    if guild is None:
-                        # bot.get_guild はローカルキャッシュしか見ない。ここが None なら
-                        # 「そのギルドに bot がいない」か「まだキャッシュが埋まっていない」。
-                        logger.warning(
-                            "[DEV] test_welcome: guild_id=%s が見つかりません"
-                            "（bot がそのギルドに参加していないか、キャッシュ未反映）", guild_id,
-                        )
+                elif task_name.startswith("test_"):
+                    # 通知テストの中身は services/dev_test_notify.py が持つ。
+                    # 「本番と同じ関数を使う」「channel_id 指定なら本番の
+                    # チャンネル設定を見ずに直接送る」をそちらで一括して守る。
+                    from services.dev_test_notify import KINDS, run_test
+                    kind = task_name[len("test_"):]
+                    if kind not in KINDS:
+                        logger.warning("[DEV] 未知の通知テストです: %s", kind)
                     else:
-                        from services.settings_store import get_welcome_settings
-                        s = get_welcome_settings(guild_id)
-                        # channel_id を指定したときは、ウェルカムチャンネル未設定でも
-                        # そちらを使う（本番設定を作らずにテストできるようにする）。
-                        ch_id = override_channel_id or s.get("channel_id")
-                        if not ch_id:
-                            logger.warning(
-                                "[DEV] test_welcome: guild=%s はウェルカムチャンネル未設定です"
-                                "（送信先チャンネルIDの指定もありません）", guild_id,
-                            )
-                        else:
-                            ch = guild.get_channel(int(ch_id))
-                            if not isinstance(ch, discord.TextChannel):
-                                logger.warning(
-                                    "[DEV] test_welcome: guild=%s channel_id=%s が見つからない"
-                                    "か、テキストチャンネルではありません", guild_id, ch_id,
-                                )
-                            else:
-                                tmpl = s.get("message") or "{user} が **{server}** に参加しました！（現在 {count} 名）"
-                                text = (tmpl
-                                    .replace("{user}", "**@テストユーザー**")
-                                    .replace("{username}", "テストユーザー")
-                                    .replace("{server}", guild.name)
-                                    .replace("{count}", str(guild.member_count)))
-                                await ch.send(f"🧪 **[テスト送信 — ウェルカム]**\n{text}")
-                elif task_name == "test_vc_notify":
-                    payload = json.loads(sig_content)
-                    guild_id = int(payload.get("guild_id", 0))
-                    override_channel_id = payload.get("channel_id")
-                    guild = bot.get_guild(guild_id)
-                    if guild is None:
-                        logger.warning(
-                            "[DEV] test_vc_notify: guild_id=%s が見つかりません"
-                            "（bot がそのギルドに参加していないか、キャッシュ未反映）", guild_id,
+                        payload = json.loads(sig_content)
+                        await run_test(
+                            bot,
+                            kind,
+                            int(payload.get("guild_id", 0)),
+                            payload.get("channel_id"),
                         )
-                    else:
-                        from services.settings_store import get_vc_notify_channel_id
-                        # channel_id を指定したときは、VC通知チャンネル未設定でも
-                        # そちらを使う（本番設定を作らずにテストできるようにする）。
-                        ch_id = override_channel_id or get_vc_notify_channel_id(guild_id)
-                        if not ch_id:
-                            logger.warning(
-                                "[DEV] test_vc_notify: guild=%s はVC通知チャンネル未設定です"
-                                "（送信先チャンネルIDの指定もありません）", guild_id,
-                            )
-                        else:
-                            ch = guild.get_channel(ch_id)
-                            if not isinstance(ch, discord.TextChannel):
-                                logger.warning(
-                                    "[DEV] test_vc_notify: guild=%s channel_id=%s が見つからない"
-                                    "か、テキストチャンネルではありません", guild_id, ch_id,
-                                )
-                            else:
-                                embed = discord.Embed(
-                                    title="🎙️ テストユーザー が参加しました",
-                                    description="VC: テストチャンネル",
-                                    color=discord.Color.blue(),
-                                )
-                                embed.set_footer(text="🧪 テスト送信 — VC通知")
-                                await ch.send(embed=embed)
+                else:
+                    # どの分岐にも当たらないと、ファイルだけ消えて「受信」「完了」の
+                    # ログが残り、何も実行されないまま成功に見える。名前の打ち間違いや
+                    # 実装漏れが静かに埋もれるので、必ず声を上げる。
+                    logger.warning(
+                        "[DEV] 未知のシグナルなので何もしませんでした: %s", task_name,
+                    )
+                    continue
                 logger.info("[DEV] シグナル完了: %s", task_name)
             except Exception as e:
                 logger.exception("[DEV] シグナル実行エラー %s: %s", task_name, e)
@@ -475,6 +448,7 @@ def setup_events(bot: Bot) -> None:
     async def on_ready():
         nonlocal _ws_task, _user_state_sync_task, _user_state_sync_started
         nonlocal _user_state_repair_task, _user_state_repair_started
+        nonlocal _djaudio_cleanup_task
         logger.info("[BOT] Logged in as %s", bot.user)
         await bot.tree.sync()
         if not update_status.is_running():
@@ -488,7 +462,13 @@ def setup_events(bot: Bot) -> None:
                 pending_sticky_task.start()
             if _ws_task is None or _ws_task.done():
                 _ws_task = asyncio.create_task(run_earthquake_ws(bot))
-            asyncio.create_task(djaudio_cache_cleanup(bot=bot, interval=60))
+            # on_ready は再接続のたびに何度でも発火する。他のタスクと同じく
+            # 多重起動を防ぎ、参照も保持する（保持しないと実行中に GC で
+            # タスクごと消えることがある）。
+            if _djaudio_cleanup_task is None or _djaudio_cleanup_task.done():
+                _djaudio_cleanup_task = asyncio.create_task(
+                    djaudio_cache_cleanup(bot=bot, interval=60)
+                )
             logger.info("[BOT] background worker enabled: periodic jobs are active")
         else:
             logger.info("[BOT] BOT_BACKGROUND_WORKER=false: periodic background jobs are disabled")
@@ -523,12 +503,6 @@ def setup_events(bot: Bot) -> None:
             message.channel.id,
             message.author,
         )
-
-        async def _safe(coro, name: str) -> None:
-            try:
-                await coro
-            except Exception as e:
-                logger.exception("[BOT_SETUP] %s error: %s", name, e)
 
         async def _tts_handler() -> None:
             from services.tts_service import enqueue_message as _tts_enqueue, get_effective_vc_watch as _get_vc_watch
@@ -570,17 +544,17 @@ def setup_events(bot: Bot) -> None:
             attachment_urls = "\n".join(a.url for a in message.attachments)
             fields["添付ファイル"] = attachment_urls[:1024] + ("... (省略)" if len(attachment_urls) > 1024 else "")
 
-        try:
-            await log_action(
+        await _safe(
+            log_action(
                 bot,
                 message.guild.id,
                 "INFO",
                 f"{message.author.mention} のメッセージが削除されました。",
                 user=message.author,
                 fields=fields,
-            )
-        except Exception as e:
-            logger.exception("[BOT_SETUP] on_message_delete log_action error: %s", e)
+            ),
+            "on_message_delete log_action",
+        )
 
     # --------------------------
     # メッセージ編集
@@ -594,8 +568,8 @@ def setup_events(bot: Bot) -> None:
 
         ch_mention = before.channel.mention
 
-        try:
-            await log_action(
+        await _safe(
+            log_action(
                 bot,
                 before.guild.id,
                 "INFO",
@@ -607,13 +581,29 @@ def setup_events(bot: Bot) -> None:
                     "編集後": (after.content or "(なし)")[:1000],
                     "メッセージID": str(before.id),
                 },
-            )
-        except Exception as e:
-            logger.exception("[BOT_SETUP] on_message_edit log_action error: %s", e)
+            ),
+            "on_message_edit log_action",
+        )
 
     # --------------------------
     # VC 参加・退出・移動 + セキュリティ + VC通知チャンネル
     # --------------------------
+    def _tts_vc_became_empty(guild_id: int, channel) -> bool:
+        """監視中の VC から人間が居なくなったか。
+
+        切断判定は以前 on_voice_state_update の冒頭（退出のみ）と末尾（退出と移動）に
+        少しずつ違う条件で書かれていて、どちらが効いているのか読まないと分からなかった。
+        条件はここ1つに持たせ、呼び出し側は文脈だけを持つ。
+        """
+        if channel is None:
+            return False
+        from services.tts_service import get_effective_vc_watch as _get_vc_watch
+        from services.tts_store import get_tts_settings as _get_tts_settings
+        watched_id, _ = _get_vc_watch(guild_id, _get_tts_settings(guild_id))
+        if not watched_id or int(watched_id) != channel.id:
+            return False
+        return not any(m for m in channel.members if not m.bot)
+
     @bot.event
     async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         # TTS VC参加・退出アナウンス（bot含む全メンバー対象のため早期returnの前に実行）
@@ -631,14 +621,9 @@ def setup_events(bot: Bot) -> None:
                     from services.tts_store import get_tts_settings as _get_tts_settings
                     _cfg = _get_tts_settings(member.guild.id)
                     _vid, _ = _get_vc_watch(member.guild.id, _cfg)
-                    # 全員退出: 監視VCがBot以外0人になったらTTSを切断（再接続防止）
-                    if (
-                        _ev == "leave"
-                        and _bch is not None
-                        and _vid is not None
-                        and _bch.id == _vid
-                        and not any(m for m in _bch.members if not m.bot)
-                    ):
+                    # 全員退出: 監視VCがBot以外0人になったらTTSを切断（再接続防止）。
+                    # 判定は _tts_vc_became_empty に集約している。
+                    if _ev == "leave" and _tts_vc_became_empty(member.guild.id, _bch):
                         await _tts_disconnect(member.guild.id)
                     elif not member.bot and _cfg.get("enabled") and _cfg.get("vc_notify") and _vid:
                         _tch = _ach if _ev == "join" else _bch
@@ -650,10 +635,7 @@ def setup_events(bot: Bot) -> None:
         if member.guild is None or member.bot:
             return
 
-        try:
-            await handle_security_for_voice_join(bot, member, before, after)
-        except Exception as e:
-            logger.exception("[BOT_SETUP] VC security error: %s", e)
+        await _safe(handle_security_for_voice_join(bot, member, before, after), "VC security")
 
         # チャンネル参照を一度だけ取得（プロパティ再ルックアップによる None 化を防ぐ）
         before_ch = before.channel
@@ -667,6 +649,12 @@ def setup_events(bot: Bot) -> None:
 
         if is_join:
             _vc_join_times[key] = now_ts
+            # 退出イベントを取り逃した分（Bot 停止中に退出された等）は pop されず
+            # 永久に残る。入室のたびに期限切れを間引いて、じわじわ増えるのを止める。
+            if len(_vc_join_times) > 256:
+                cutoff = now_ts - _VC_JOIN_TTL_SECONDS
+                for stale in [k for k, ts in _vc_join_times.items() if ts < cutoff]:
+                    _vc_join_times.pop(stale, None)
         duration_str = ""
         duration_seconds: int | None = None
         if is_leave:
@@ -781,8 +769,17 @@ def setup_events(bot: Bot) -> None:
             if filter_role_id:
                 filter_role = member.guild.get_role(filter_role_id)
                 if filter_role:
-                    target_ch = after_ch if is_join else before_ch
-                    if target_ch and not target_ch.permissions_for(filter_role).view_channel:
+                    # 移動は移動元と移動先の両方が関係する。以前は is_join 以外を
+                    # すべて before_ch で判定していたため、そのロールに見えない VC へ
+                    # 移動しても、移動元さえ見えていれば通知が飛んでいた。
+                    # 関係するチャンネルのうち1つでも見えるなら通知する。
+                    related = [c for c in (before_ch, after_ch) if c is not None] if is_move \
+                        else [after_ch if is_join else before_ch]
+                    visible = [
+                        c for c in related
+                        if c is not None and c.permissions_for(filter_role).view_channel
+                    ]
+                    if not visible:
                         return
 
             if is_join:
@@ -836,10 +833,7 @@ def setup_events(bot: Bot) -> None:
 
             await notify_ch.send(content=content, embed=embed)
 
-        try:
-            await _vc_notify_handler()
-        except Exception as e:
-            logger.exception("[BOT_SETUP] VC notify error: %s", e)
+        await _safe(_vc_notify_handler(), "VC notify")
 
         # TTS 自動参加: 設定済みVCに誰か入ったらBotも入る（temp override 中はスキップ）
         try:
@@ -854,17 +848,12 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.exception("[BOT_SETUP] TTS auto_join error: %s", e)
 
-        # TTS 自動退出: VCに人間が誰もいなくなったらBotも退出（temp override も解除）
+        # TTS 自動退出: VCに人間が誰もいなくなったらBotも退出（temp override も解除）。
+        # 退出だけでなく移動も対象になるのがここ。判定そのものは冒頭と共通。
         try:
-            if (is_leave or is_move) and before_ch is not None:
-                from services.tts_service import disconnect as _tts_disconnect, get_effective_vc_watch as _get_vc_watch
-                from services.tts_store import get_tts_settings as _get_tts_settings
-                _tts_cfg = _get_tts_settings(member.guild.id)
-                _tts_vc_id, _ = _get_vc_watch(member.guild.id, _tts_cfg)
-                if _tts_vc_id and int(_tts_vc_id) == before_ch.id:
-                    non_bots = [m for m in before_ch.members if not m.bot]
-                    if not non_bots:
-                        await _tts_disconnect(member.guild.id)
+            if (is_leave or is_move) and _tts_vc_became_empty(member.guild.id, before_ch):
+                from services.tts_service import disconnect as _tts_disconnect
+                await _tts_disconnect(member.guild.id)
         except Exception as e:
             logger.exception("[BOT_SETUP] TTS auto_leave error: %s", e)
 
@@ -875,8 +864,8 @@ def setup_events(bot: Bot) -> None:
     async def on_member_join(member: discord.Member):
         joined_at = member.joined_at.astimezone(_JST).strftime("%Y/%m/%d %H:%M") if member.joined_at else "(不明)"
         created_at = member.created_at.astimezone(_JST).strftime("%Y/%m/%d %H:%M") if member.created_at else "(不明)"
-        try:
-            await log_action(
+        await _safe(
+            log_action(
                 bot,
                 member.guild.id,
                 "INFO",
@@ -888,12 +877,12 @@ def setup_events(bot: Bot) -> None:
                     "参加日時": joined_at,
                     "メンバー数": str(member.guild.member_count),
                 },
-            )
-        except Exception as e:
-            logger.exception("[BOT_SETUP] on_member_join log_action error: %s", e)
+            ),
+            "on_member_join log_action",
+        )
 
-        try:
-            await record_user_state_event(
+        await _safe(
+            record_user_state_event(
                 guild_id=member.guild.id,
                 user_id=member.id,
                 event_type="member_join",
@@ -907,14 +896,11 @@ def setup_events(bot: Bot) -> None:
                     "account_created_at": member.created_at.isoformat() if member.created_at else None,
                     "member_count": int(member.guild.member_count or 0),
                 },
-            )
-        except Exception as e:
-            logger.exception("[BOT_SETUP] on_member_join user_state persist error: %s", e)
+            ),
+            "on_member_join user_state persist",
+        )
 
-        try:
-            await send_welcome(member)
-        except Exception as e:
-            logger.exception("[BOT_SETUP] on_member_join welcome error: %s", e)
+        await _safe(send_welcome(member), "on_member_join welcome")
 
     @bot.event
     async def on_member_remove(member: discord.Member):
@@ -938,8 +924,8 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.debug("[BOT_SETUP] on_member_remove kick lookup failed: %s", e)
 
-        try:
-            await log_action(
+        await _safe(
+            log_action(
                 bot,
                 member.guild.id,
                 "INFO",
@@ -950,12 +936,12 @@ def setup_events(bot: Bot) -> None:
                     "保有ロール": " ".join(roles) if roles else "なし",
                     "メンバー数": str(member.guild.member_count),
                 },
-            )
-        except Exception as e:
-            logger.exception("[BOT_SETUP] on_member_remove log_action error: %s", e)
+            ),
+            "on_member_remove log_action",
+        )
 
-        try:
-            await record_user_state_event(
+        await _safe(
+            record_user_state_event(
                 guild_id=member.guild.id,
                 user_id=member.id,
                 event_type=event_type,
@@ -974,14 +960,11 @@ def setup_events(bot: Bot) -> None:
                         if not r.is_default()
                     ],
                 },
-            )
-        except Exception as e:
-            logger.exception("[BOT_SETUP] on_member_remove user_state persist error: %s", e)
+            ),
+            "on_member_remove user_state persist",
+        )
 
-        try:
-            await send_goodbye(member)
-        except Exception as e:
-            logger.exception("[BOT_SETUP] on_member_remove goodbye error: %s", e)
+        await _safe(send_goodbye(member), "on_member_remove goodbye")
 
     # --------------------------
     # メンバー情報変更（ニックネーム・ロール・タイムアウト）
@@ -990,8 +973,8 @@ def setup_events(bot: Bot) -> None:
     async def on_member_update(before: discord.Member, after: discord.Member):
         # ニックネーム変更
         if before.nick != after.nick:
-            try:
-                await log_action(
+            await _safe(
+                log_action(
                     bot,
                     after.guild.id,
                     "INFO",
@@ -1001,11 +984,11 @@ def setup_events(bot: Bot) -> None:
                         "旧": before.nick or "(なし)",
                         "新": after.nick or "(なし)",
                     },
-                )
-            except Exception as e:
-                logger.exception("[BOT_SETUP] on_member_update nickname log_action error: %s", e)
-            try:
-                await record_user_state_event(
+                ),
+                "on_member_update nickname log_action",
+            )
+            await _safe(
+                record_user_state_event(
                     guild_id=after.guild.id,
                     user_id=after.id,
                     event_type="member_nickname_changed",
@@ -1018,9 +1001,9 @@ def setup_events(bot: Bot) -> None:
                         "before_nickname": before.nick,
                         "after_nickname": after.nick,
                     },
-                )
-            except Exception as e:
-                logger.exception("[BOT_SETUP] on_member_update nickname user_state persist error: %s", e)
+                ),
+                "on_member_update nickname user_state persist",
+            )
 
         # ロール変更
         before_roles = set(r.id for r in before.roles if not r.is_default())
@@ -1034,19 +1017,19 @@ def setup_events(bot: Bot) -> None:
                 fields["追加されたロール"] = " ".join(r.mention for r in added_roles)
             if removed_roles:
                 fields["削除されたロール"] = " ".join(r.mention for r in removed_roles)
-            try:
-                await log_action(
+            await _safe(
+                log_action(
                     bot,
                     after.guild.id,
                     "INFO",
                     f"{after.mention} のロールが変更されました。",
                     user=after,
                     fields=fields,
-                )
-            except Exception as e:
-                logger.exception("[BOT_SETUP] on_member_update role log_action error: %s", e)
-            try:
-                await record_user_state_event(
+                ),
+                "on_member_update role log_action",
+            )
+            await _safe(
+                record_user_state_event(
                     guild_id=after.guild.id,
                     user_id=after.id,
                     event_type="member_role_changed",
@@ -1065,9 +1048,9 @@ def setup_events(bot: Bot) -> None:
                             for r in removed_roles
                         ],
                     },
-                )
-            except Exception as e:
-                logger.exception("[BOT_SETUP] on_member_update role user_state persist error: %s", e)
+                ),
+                "on_member_update role user_state persist",
+            )
 
         # タイムアウト
         before_timeout = before.timed_out_until
@@ -1075,8 +1058,8 @@ def setup_events(bot: Bot) -> None:
         if before_timeout != after_timeout:
             if after_timeout is not None:
                 until_jst = after_timeout.astimezone(_JST).strftime("%Y/%m/%d %H:%M")
-                try:
-                    await log_action(
+                await _safe(
+                    log_action(
                         bot,
                         after.guild.id,
                         "ERROR",
@@ -1084,11 +1067,11 @@ def setup_events(bot: Bot) -> None:
                         user=after,
                         fields={"解除日時 (JST)": until_jst},
                         embed_color=discord.Color.orange(),
-                    )
-                except Exception as e:
-                    logger.exception("[BOT_SETUP] on_member_update timeout log_action error: %s", e)
-                try:
-                    await record_user_state_event(
+                    ),
+                    "on_member_update timeout log_action",
+                )
+                await _safe(
+                    record_user_state_event(
                         guild_id=after.guild.id,
                         user_id=after.id,
                         event_type="member_timeout_set",
@@ -1100,22 +1083,22 @@ def setup_events(bot: Bot) -> None:
                         payload={
                             "timed_out_until": after_timeout.isoformat(),
                         },
-                    )
-                except Exception as e:
-                    logger.exception("[BOT_SETUP] on_member_update timeout user_state persist error: %s", e)
+                    ),
+                    "on_member_update timeout user_state persist",
+                )
             else:
-                try:
-                    await log_action(
+                await _safe(
+                    log_action(
                         bot,
                         after.guild.id,
                         "INFO",
                         f"{after.mention} のタイムアウトが解除されました。",
                         user=after,
-                    )
-                except Exception as e:
-                    logger.exception("[BOT_SETUP] on_member_update timeout_clear log_action error: %s", e)
-                try:
-                    await record_user_state_event(
+                    ),
+                    "on_member_update timeout_clear log_action",
+                )
+                await _safe(
+                    record_user_state_event(
                         guild_id=after.guild.id,
                         user_id=after.id,
                         event_type="member_timeout_cleared",
@@ -1125,9 +1108,9 @@ def setup_events(bot: Bot) -> None:
                         is_banned=False,
                         timed_out_until=None,
                         payload={},
-                    )
-                except Exception as e:
-                    logger.exception("[BOT_SETUP] on_member_update timeout_clear user_state persist error: %s", e)
+                    ),
+                    "on_member_update timeout_clear user_state persist",
+                )
 
     # --------------------------
     # BAN / BAN 解除
@@ -1148,8 +1131,8 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.debug("[BOT_SETUP] on_member_ban audit lookup failed: %s", e)
 
-        try:
-            await log_action(
+        await _safe(
+            log_action(
                 bot,
                 guild.id,
                 "ERROR",
@@ -1160,12 +1143,12 @@ def setup_events(bot: Bot) -> None:
                     "ユーザー名": str(user),
                 },
                 embed_color=discord.Color.red(),
-            )
-        except Exception as e:
-            logger.exception("[BOT_SETUP] on_member_ban log_action error: %s", e)
+            ),
+            "on_member_ban log_action",
+        )
 
-        try:
-            await record_user_state_event(
+        await _safe(
+            record_user_state_event(
                 guild_id=guild.id,
                 user_id=user.id,
                 event_type="member_ban",
@@ -1176,9 +1159,9 @@ def setup_events(bot: Bot) -> None:
                 in_guild=False,
                 is_banned=True,
                 payload={},
-            )
-        except Exception as e:
-            logger.exception("[BOT_SETUP] on_member_ban user_state persist error: %s", e)
+            ),
+            "on_member_ban user_state persist",
+        )
 
     @bot.event
     async def on_member_unban(guild: discord.Guild, user: discord.User):
@@ -1196,8 +1179,8 @@ def setup_events(bot: Bot) -> None:
         except Exception as e:
             logger.debug("[BOT_SETUP] on_member_unban audit lookup failed: %s", e)
 
-        try:
-            await log_action(
+        await _safe(
+            log_action(
                 bot,
                 guild.id,
                 "INFO",
@@ -1207,12 +1190,12 @@ def setup_events(bot: Bot) -> None:
                     "ユーザーID": str(user.id),
                     "ユーザー名": str(user),
                 },
-            )
-        except Exception as e:
-            logger.exception("[BOT_SETUP] on_member_unban log_action error: %s", e)
+            ),
+            "on_member_unban log_action",
+        )
 
-        try:
-            await record_user_state_event(
+        await _safe(
+            record_user_state_event(
                 guild_id=guild.id,
                 user_id=user.id,
                 event_type="member_unban",
@@ -1223,23 +1206,17 @@ def setup_events(bot: Bot) -> None:
                 in_guild=False,
                 is_banned=False,
                 payload={},
-            )
-        except Exception as e:
-            logger.exception("[BOT_SETUP] on_member_unban user_state persist error: %s", e)
+            ),
+            "on_member_unban user_state persist",
+        )
 
     # --------------------------
     # リアクションロール
     # --------------------------
     @bot.event
     async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
-        try:
-            await handle_reaction_add(bot, payload)
-        except Exception as e:
-            logger.exception("[BOT_SETUP] on_raw_reaction_add error: %s", e)
+        await _safe(handle_reaction_add(bot, payload), "on_raw_reaction_add")
 
     @bot.event
     async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
-        try:
-            await handle_reaction_remove(bot, payload)
-        except Exception as e:
-            logger.exception("[BOT_SETUP] on_raw_reaction_remove error: %s", e)
+        await _safe(handle_reaction_remove(bot, payload), "on_raw_reaction_remove")

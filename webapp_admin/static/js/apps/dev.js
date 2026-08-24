@@ -473,6 +473,18 @@ function notifyTab(guildOptions) {
     return api.post(`${BASE}/test-notify/${kind}`, { guild_id: guildSelect.value, channel_id: channelId });
   };
 
+  // 通知を出す機能はここに全部並べる。以前はウェルカムとVC通知しか無く、
+  // 残りは「本番で誰かが参加/退出するまで確かめられない」状態だった。
+  const kinds = [
+    ["welcome",        "ウェルカム",        "bi-person-plus"],
+    ["goodbye",        "お別れ",            "bi-person-dash"],
+    ["vc",             "VC通知",            "bi-mic"],
+    ["logging",        "ログ出力",          "bi-journal-text"],
+    ["sticky",         "スティッキー",      "bi-pin-angle"],
+    ["reaction_roles", "リアクションロール", "bi-emoji-smile"],
+    ["tts",            "読み上げ",          "bi-volume-up"],
+  ];
+
   return el(
     "div",
     { class: "stack" },
@@ -480,10 +492,12 @@ function notifyTab(guildOptions) {
       "通知テスト",
       field("対象ギルド", guildSelect, "設定済みのチャンネルへテスト通知を送ります。"),
       field("送信先チャンネルID（DEV専用・省略可）", channelIdInput,
-            "指定すると、ウェルカム/VC通知のチャンネル設定を無視してこのチャンネルへ直接送ります。"),
-      el("div", { class: "row" },
-         actionButton("ウェルカム通知", "bi-person-plus", send("welcome")),
-         actionButton("VC通知", "bi-mic", send("vc")))
+            "指定すると、その機能のチャンネル設定を無視してこのチャンネルへ直接送ります。"),
+      el("div", { class: "row wrap" },
+         kinds.map(([kind, label, iconName]) => actionButton(label, iconName, send(kind)))),
+      el("p", { class: "field-help", text:
+        "スティッキー・リアクションロール・読み上げは、設定が無い場合でも" +
+        "「設定が無いので本番でも何も起きない」ことをその場に返します。" })
     )
   );
 }

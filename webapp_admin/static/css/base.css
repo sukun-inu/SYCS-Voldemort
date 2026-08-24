@@ -61,6 +61,7 @@ button { font: inherit; color: inherit; }
 /* ── 最小限のユーティリティ ───────────────────────────────── */
 .stack { display: flex; flex-direction: column; gap: 12px; }
 .row { display: flex; align-items: center; gap: 8px; }
+.row.wrap { flex-wrap: wrap; }
 .row-end { margin-left: auto; }
 .grow { flex: 1 1 auto; min-width: 0; }
 .muted { color: var(--fg-muted); }

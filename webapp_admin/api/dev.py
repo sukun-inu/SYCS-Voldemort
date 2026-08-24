@@ -477,25 +477,29 @@ async def trigger_signal(task_name: str, request: Request, _=Depends(check_dev),
 @router.post("/test-notify/{kind}")
 @limiter.limit("10/minute")
 async def test_notify(kind: str, request: Request, _=Depends(check_dev), _csrf=Depends(check_csrf)):
-    signals = {"welcome": "test_welcome", "vc": "test_vc_notify"}
-    if kind not in signals:
+    from services.dev_test_notify import KINDS, kind_label
+
+    if kind not in KINDS:
         raise HTTPException(status_code=404, detail="不明な通知テストです。")
 
     body = await _json_body(request)
     guild_id = int(_require_id(body.get("guild_id", ""), "ギルドID"))
 
-    # チャンネルを指定すると、そのギルドの本番用チャンネル設定（ウェルカム/
-    # VC通知）を一切見ずに直接そこへ送る。設定していないギルドでもテスト
-    # できるようにする DEV 専用の逃げ道（地震リプレイと同じ考え方）。
+    # チャンネルを指定すると、その機能の本番用チャンネル設定を一切見ずに
+    # 直接そこへ送る。設定していないギルドでもテストできるようにする
+    # DEV 専用の逃げ道（地震リプレイと同じ考え方）。
     raw_channel_id = str(body.get("channel_id") or "").strip()
     channel_id = int(_require_id(raw_channel_id, "チャンネルID")) if raw_channel_id else None
 
-    _write_signal(signals[kind], {
+    _write_signal(f"test_{kind}", {
         "guild_id": guild_id, "channel_id": channel_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     target = f"ギルド {guild_id} のチャンネル {channel_id}（設定は無視）" if channel_id else f"ギルド {guild_id}"
-    return _ok(f"通知テストをキューに追加しました。（送信先: {target}）", pending_signals=_pending_signals())
+    return _ok(
+        f"「{kind_label(kind)}」のテストをキューに追加しました。（送信先: {target}）",
+        pending_signals=_pending_signals(),
+    )
 
 
 @router.post("/earthquake-replay")

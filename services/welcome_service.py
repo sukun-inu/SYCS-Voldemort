@@ -6,17 +6,44 @@ from services.settings_store import get_goodbye_settings, get_welcome_settings
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_WELCOME = "新たなる者よ、{user} がこの地に降り立った。**{server}** へようこそ… 余の治める場所へ。（現在 {count} 名）"
-_DEFAULT_GOODBYE = "{username} が去っていった。余の名を知りながら逃げるとは… 嘆かわしい。"
+DEFAULT_WELCOME = "新たなる者よ、{user} がこの地に降り立った。**{server}** へようこそ… 余の治める場所へ。（現在 {count} 名）"
+DEFAULT_GOODBYE = "{username} が去っていった。余の名を知りながら逃げるとは… 嘆かわしい。"
+
+# 後方互換（旧名を参照している箇所があっても壊れないように）
+_DEFAULT_WELCOME = DEFAULT_WELCOME
+_DEFAULT_GOODBYE = DEFAULT_GOODBYE
+
+
+def render_template(
+    template: str,
+    *,
+    user: str,
+    username: str,
+    server: str,
+    count: int | None,
+) -> str:
+    """プレースホルダを差し替える。
+
+    開発者パネルのテスト送信もこれを使う。以前はテスト側が自前の
+    replace 連鎖と別の既定文面を持っていたため、「本番で何が届くかを
+    確かめる」ためのテストが本番と違う文面を出していた。
+    """
+    return (
+        template
+        .replace("{user}", user)
+        .replace("{username}", username)
+        .replace("{server}", server)
+        .replace("{count}", str(count if count is not None else 0))
+    )
 
 
 def _render(template: str, member: discord.Member) -> str:
-    return (
-        template
-        .replace("{user}", member.mention)
-        .replace("{username}", str(member))
-        .replace("{server}", member.guild.name)
-        .replace("{count}", str(member.guild.member_count))
+    return render_template(
+        template,
+        user=member.mention,
+        username=str(member),
+        server=member.guild.name,
+        count=member.guild.member_count,
     )
 
 
@@ -28,7 +55,7 @@ async def send_welcome(member: discord.Member) -> None:
     channel = member.guild.get_channel(int(channel_id))
     if channel is None or not isinstance(channel, discord.TextChannel):
         return
-    message = s.get("message") or _DEFAULT_WELCOME
+    message = s.get("message") or DEFAULT_WELCOME
     try:
         await channel.send(_render(message, member))
     except Exception as e:
@@ -43,7 +70,7 @@ async def send_goodbye(member: discord.Member) -> None:
     channel = member.guild.get_channel(int(channel_id))
     if channel is None or not isinstance(channel, discord.TextChannel):
         return
-    message = s.get("message") or _DEFAULT_GOODBYE
+    message = s.get("message") or DEFAULT_GOODBYE
     try:
         await channel.send(_render(message, member))
     except Exception as e:

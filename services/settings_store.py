@@ -136,6 +136,25 @@ def _mutate_settings(mutator: Callable[[dict[str, Any]], _T]) -> _T:
         return result
 
 
+async def amutate_settings(mutator: Callable[[dict[str, Any]], _T]) -> _T:
+    """_mutate_settings を別スレッドで実行する。
+
+    ロック取得は time.sleep(0.05) のポーリングで、タイムアウトは既定10秒。
+    Bot と管理画面は別プロセスなので実際に競合する。async から直接呼ぶと
+    そのあいだ呼び出し側プロセスのイベントループ全体が止まるため、
+    非同期の文脈からはこちらを使う。
+    """
+    import asyncio
+    return await asyncio.to_thread(_mutate_settings, mutator)
+
+
+async def aupdate_news_feed_state(
+    guild_id: int, feed_id: str, last_run: float, seen_hashes: list,
+) -> None:
+    """update_news_feed_state の非同期版（ニュースループから使う）。"""
+    await amutate_settings(_news_feed_state_mutator(guild_id, feed_id, last_run, seen_hashes))
+
+
 def get_guild_settings(guild_id: int) -> dict[str, Any]:
     """指定ギルドの設定を取得（存在しない場合は空 dict）。"""
     guilds: dict[str, Any] = _load_all().get("guilds", {})  # type: ignore[assignment]
@@ -558,7 +577,10 @@ def update_news_feed(guild_id: int, feed_id: str, channel_id: int, query: str, i
     return _mutate_settings(_mutator)
 
 
-def update_news_feed_state(guild_id: int, feed_id: str, last_run: float, seen_hashes: list) -> None:
+def _news_feed_state_mutator(
+    guild_id: int, feed_id: str, last_run: float, seen_hashes: list,
+) -> Callable[[dict[str, Any]], None]:
+    """同期版・非同期版の両方から使う mutator。"""
     def _mutator(data: dict[str, Any]) -> None:
         current = _get_or_create_guild(data, guild_id)
         feeds = current.get("news_feeds", {})
@@ -572,7 +594,11 @@ def update_news_feed_state(guild_id: int, feed_id: str, last_run: float, seen_ha
         feeds[feed_id] = row
         current["news_feeds"] = feeds
 
-    _mutate_settings(_mutator)
+    return _mutator
+
+
+def update_news_feed_state(guild_id: int, feed_id: str, last_run: float, seen_hashes: list) -> None:
+    _mutate_settings(_news_feed_state_mutator(guild_id, feed_id, last_run, seen_hashes))
 
 
 # ──────────────────────────────────────────────

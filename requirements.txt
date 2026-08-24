@@ -1,26 +1,51 @@
-discord.py[voice]
-groq
-aiohttp
-requests
-orjson
-psutil
-colorthief
-vt-py
-fastapi
-uvicorn
-jinja2
-SQLAlchemy
-asyncpg
-alembic
-apscheduler
-pywebpush
-cryptography
-Pillow>=10.0.0
-slowapi
-itsdangerous
-python-multipart
+# バージョンを固定する。以前は全 26 行が未固定で、docker build のたびに
+# discord.py / fastapi / asyncpg などが最新へ動き、コードを1行も触っていない
+# のに破壊的変更でデプロイが壊れる状態だった。
+# 更新するときは、この行を書き換えるコミットとして明示的に行うこと。
+
+# --- Discord Bot ---
+discord.py[voice]==2.7.1
+
+# --- HTTP / 非同期 ---
+aiohttp==3.14.3
+
+# --- Web（管理画面・公開サイト） ---
+fastapi==0.141.1
+uvicorn==0.52.3
+jinja2==3.1.6
+itsdangerous==2.2.0
+python-multipart==0.0.32
+slowapi==0.1.10
+
+# --- DB ---
+SQLAlchemy==2.0.52
+asyncpg==0.31.0
+alembic==1.19.1
+apscheduler==3.11.3
+
+# --- 外部サービス ---
+groq==1.6.0
+vt-py==0.22.0
+pywebpush==2.4.0
+cryptography==50.0.0
+
+# --- 画像・音声 ---
+Pillow==12.2.0
+mutagen==1.48.1
+
+# --- 監視 ---
+psutil==7.2.2
+
+# --- 静的アセットの最小化 ---
+rcssmin==1.2.2
+rjsmin==1.2.5
+
+# 以下はこの環境に入っていないため実バージョンを確認できず、メジャー範囲で
+# 留めている。いずれも欠けても動く（orjson は json、colorthief は
+# ロゴ色抽出の無効化にフォールバックする）。
+orjson>=3,<4
+colorthief>=0.2,<1
+imageio-ffmpeg>=0.4,<1
+
+# yt-dlp は配信サイト側の変更に追従する必要があるため、意図的に固定しない。
 yt-dlp
-mutagen
-imageio-ffmpeg
-rcssmin
-rjsmin

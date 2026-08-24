@@ -46,7 +46,16 @@ def validate_public_http_url(
     *,
     allow_http: bool = True,
 ) -> None:
-    """URL が外部向け HTTP(S) 宛であることを検証する。"""
+    """URL が外部向け HTTP(S) 宛であることを検証する。
+
+    既知の限界（DNS リバインディング）:
+      ここで名前解決して公開IPであることを確かめても、実際に取得するのは
+      別プロセス（yt-dlp）や別のクライアントで、そちらは名前解決をやり直す。
+      DNS を握られていれば、検証時は公開IP・取得時は内部IPを返すことができる。
+      事前検証方式に共通の構造的な限界で、この関数だけでは塞げない。
+      実運用では呼び出し側のドメイン許可リスト（is_djaudio_allowed_url など）が
+      効いている。厳密にやるなら、解決済みのIPへ固定して接続する必要がある。
+    """
     parsed = urlparse((url or "").strip())
     if not parsed.scheme:
         raise URLSafetyError("missing_scheme")
