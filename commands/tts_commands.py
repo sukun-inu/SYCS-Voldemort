@@ -169,11 +169,33 @@ async def tts_join(
     )
 
 
-@tts_group.command(name="leave", description="ボットをVCから退出させキューをクリアする（temp join 中なら元の設定に戻る）")
+@tts_group.command(name="leave", description="ボットをVCから退出させキューをクリアする（録音中なら締めてから退出）")
 async def tts_leave(interaction: discord.Interaction) -> None:
     assert interaction.guild
+    from services import recording_service as recording
+
+    if not recording.is_recording(interaction.guild.id):
+        await tts_service.disconnect(interaction.guild.id)
+        await send_ephemeral(interaction, "✅ VCから退出した。")
+        return
+
+    # 録音中に黙って抜けると、そこまで録った分が宙に浮く。締めてリンクを出す。
+    # 書き出し（ffmpeg と ZIP 化）に時間がかかるので defer しておく。
+    await interaction.response.defer(thinking=True)
+    try:
+        result = await recording.stop_recording(
+            interaction.client, interaction.guild.id, reason="/tts leave で退出",
+        )
+    except recording.RecordingError as e:
+        await tts_service.disconnect(interaction.guild.id)
+        await interaction.followup.send(f"✅ VCから退出した。ただし録音の書き出しに失敗した（{e}）")
+        return
+
     await tts_service.disconnect(interaction.guild.id)
-    await send_ephemeral(interaction, "✅ VCから退出した。")
+    await interaction.followup.send(
+        content="✅ VCから退出した。録音も締めた。",
+        embed=recording.build_result_embed(interaction.guild.id, result),
+    )
 
 
 @tts_group.command(name="default_voice", description="サーバーのデフォルト声を設定する")
