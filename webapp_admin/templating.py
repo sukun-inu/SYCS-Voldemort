@@ -109,9 +109,10 @@ templates.env.filters["tojson"] = lambda v: _json.dumps(v, ensure_ascii=False)
 
 
 def _get_csrf_token(request: Request) -> str:
-    if "_csrf_token" not in request.session:
-        request.session["_csrf_token"] = secrets.token_hex(32)
-    return request.session["_csrf_token"]
+    # 発行そのものは security 側に持たせる（ログイン確定時と HTML 描画時の
+    # 両方から同じ関数を使うため）。
+    from webapp_admin.security import issue_csrf_token
+    return issue_csrf_token(request)
 
 
 def flash(request: Request, message: str, category: str = "info") -> None:

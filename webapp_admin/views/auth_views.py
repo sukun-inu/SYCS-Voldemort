@@ -1,11 +1,12 @@
 import secrets
+import time
 
 from fastapi import APIRouter, Depends, Request
 from starlette.responses import RedirectResponse
 
 from webapp_admin.auth import DISCORD_CLIENT_ID, exchange_code, get_admin_guilds, get_oauth_url, get_user_info
 from webapp_admin.extensions import limiter
-from webapp_admin.security import check_login
+from webapp_admin.security import check_csrf, check_login, issue_csrf_token
 from webapp_admin.templating import flash, render
 
 router = APIRouter()
@@ -80,12 +81,30 @@ async def callback(request: Request):
         "avatar": user_info.get("avatar"),
     }
     request.session["admin_guilds"] = admin_guilds
+    # 管理権限の一覧をいつ取得したか。ギルド選択時に古すぎたら取り直す
+    # （Discord 側で権限を外されても、セッションが切れるまで管理できてしまう）。
+    request.session["admin_guilds_at"] = time.time()
+    # ログイン確定と同時に CSRF トークンを発行する。以前は HTML を描画する
+    # ときにしか作られず、トークンが無いセッションでは検証が素通りしていた。
+    issue_csrf_token(request)
 
     return RedirectResponse("/admin/guilds", status_code=303)
 
 
-@router.get("/logout")
-async def logout(request: Request):
+@router.post("/logout")
+async def logout(request: Request, _csrf=Depends(check_csrf)):
     request.session.clear()
     flash(request, "ログアウトしました。", "info")
     return RedirectResponse("/admin/login", status_code=303)
+
+
+@router.get("/logout")
+async def logout_get(request: Request):
+    """GET でのログアウトは受け付けない。
+
+    以前は GET だけで実行できたため、外部サイトが <img src=".../admin/logout">
+    を置くだけで強制ログアウトさせられた。確認ページを出し、実行は POST に寄せる。
+    """
+    if "user" not in request.session:
+        return RedirectResponse("/admin/login", status_code=303)
+    return render(request, "logout_confirm.html")

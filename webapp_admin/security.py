@@ -40,18 +40,36 @@ def is_dev_user(request: Request) -> bool:
     return str(user.get("id", "")) == dev_user_id
 
 
+def issue_csrf_token(request: Request) -> str:
+    """セッションに CSRF トークンが無ければ発行して返す。
+
+    ログイン確定時（OAuth コールバック）と、HTML を返すときの両方から呼ぶ。
+    以前は HTML 描画時にしか作られておらず、トークンが無いセッションでは
+    check_csrf が素通りしていた。
+    """
+    token = request.session.get("_csrf_token")
+    if not token:
+        token = secrets.token_hex(32)
+        request.session["_csrf_token"] = token
+    return token
+
+
 async def check_csrf(request: Request) -> None:
     if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
         return
+    if "user" not in request.session:
+        # 未ログイン。check_login / check_guild / check_dev が同じ依存関係として
+        # 303 リダイレクトや 403 を返すので、ここでは判定しない
+        # （エラー画面ではなくログイン画面へ戻したい）。
+        return
+
     form = await request.form()
     token = str(form.get("csrf_token", "") or request.headers.get("X-CSRFToken", ""))
     expected = request.session.get("_csrf_token", "")
-    if not expected:
-        # セッションにトークンがない = 未ログインまたはセッション切れ。
-        # check_login が同じ依存関係として 303 リダイレクトを処理するため、
-        # ここでは 403 を返さない（エラー画面でなくログイン画面に戻す）。
-        return
-    if not token or not secrets.compare_digest(token, expected):
+    # ログイン済みなのにトークンが無いセッションは、素通しせず必ず弾く。
+    # 以前はここで return しており、CSRF 防御の全体が「その時点でトークンが
+    # 存在すること」に依存していた（フェイルオープン）。
+    if not expected or not token or not secrets.compare_digest(token, expected):
         raise HTTPException(status_code=403)
 
 

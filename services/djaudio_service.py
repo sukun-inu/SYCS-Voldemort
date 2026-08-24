@@ -302,7 +302,10 @@ async def _run_ytdlp(url: str, output_dir: str, sc_client_id: str | None = None)
     ]
     if sc_client_id:
         cmd += ["--extractor-args", f"soundcloud:client_id={sc_client_id}"]
-    cmd.append(url)
+    # "--" 以降はオプションとして解釈させない。URL は https?:// の正規表現・
+    # ドメイン許可リスト・SSRF 検証を通っているのでハイフン始まりは現状
+    # 到達しないが、前提が崩れても引数として注入されないようにしておく。
+    cmd += ["--", url]
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,

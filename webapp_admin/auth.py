@@ -289,3 +289,58 @@ async def get_guild_roles(guild_id: int) -> list[dict]:
             describe_exception(exc, timeout=_TIMEOUT.total),
         )
         return []
+
+
+# 管理権限の再確認をどれくらい信用し続けるか（秒）。
+ADMIN_GUILDS_MAX_AGE_SECONDS = max(60, int(os.environ.get("ADMIN_GUILDS_MAX_AGE_SECONDS", "300")))
+
+
+async def user_still_admin(guild_id: int, user_id: int) -> bool | None:
+    """Bot トークンで「その利用者が今もそのギルドの管理者か」を確かめる。
+
+    管理権限の一覧はログイン時に取得してセッションへ焼き込まれるため、Discord 側で
+    権限を外されてもセッションが切れるまで管理できてしまう。ギルド選択のたびに
+    ここで見直す。
+
+    利用者の OAuth トークンはセッションに保存しない（SessionMiddleware は署名する
+    だけで暗号化しないため）。代わりに Bot トークンでメンバーとロールを引き、
+    権限ビットを自分で組み立てる。
+
+    戻り値: True=管理者 / False=管理者ではない / None=確認できなかった
+    （Discord 側の障害でログイン中の利用者を締め出さないよう、判断を保留する）
+    """
+    if not DISCORD_BOT_TOKEN:
+        return None
+
+    headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
+    try:
+        async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
+            async with session.get(f"{_API}/guilds/{guild_id}", headers=headers) as resp:
+                if resp.status == 404:
+                    return False          # Bot が抜けている / ギルドが消えた
+                resp.raise_for_status()
+                guild = await resp.json()
+
+            async with session.get(
+                f"{_API}/guilds/{guild_id}/members/{user_id}", headers=headers
+            ) as resp:
+                if resp.status == 404:
+                    return False          # もうそのサーバーにいない
+                resp.raise_for_status()
+                member = await resp.json()
+    except Exception as e:
+        logger.warning("user_still_admin: 確認できませんでした guild=%s: %s", guild_id, e)
+        return None
+
+    if str(guild.get("owner_id")) == str(user_id):
+        return True
+
+    held = {str(r) for r in member.get("roles", [])}
+    permissions = 0
+    for role in guild.get("roles", []):
+        if str(role.get("id")) in held or str(role.get("id")) == str(guild_id):  # @everyone
+            try:
+                permissions |= int(role.get("permissions", 0))
+            except (TypeError, ValueError):
+                continue
+    return bool(permissions & _ADMINISTRATOR_BIT)

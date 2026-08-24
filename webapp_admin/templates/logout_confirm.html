@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>ログアウト - SYCS Voldemort</title>
+  <link rel="icon" type="image/png"  href="{{ admin_asset_url('favicon.png') }}">
+  <link rel="icon" type="image/webp" href="{{ admin_asset_url('admin-icon.webp') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/tokens.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/base.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/components.css') }}">
+  <link rel="stylesheet" href="{{ admin_asset_url('css/page.css') }}">
+</head>
+<body class="aero-page">
+<main class="error-page">
+  <section class="error-card lens" data-specular>
+    <p class="error-code">SYCS Voldemort</p>
+    <h1 class="error-message">ログアウトしますか？</h1>
+    <p class="muted small">ログアウトすると、もう一度 Discord で認証し直す必要があります。</p>
+    <div class="error-actions">
+      <a class="btn" href="{{ url_for('dashboard.index') }}">{{ icon('arrow-left') }}管理画面へ戻る</a>
+      <form method="post" action="{{ url_for('auth.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn-primary" type="submit">{{ icon('box-arrow-right') }}ログアウト</button>
+      </form>
+    </div>
+  </section>
+</main>
+<script type="module" src="{{ admin_asset_url('js/aero.js') }}"></script>
+</body>
+</html>

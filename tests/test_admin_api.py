@@ -12,6 +12,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,12 +38,16 @@ GUILD_ID = 999
 CSRF_HEADER = {"X-CSRFToken": CSRF}
 
 
-def make_client(user_id: str = "1", with_guild: bool = True) -> TestClient:
+def make_client(user_id: str = "1", with_guild: bool = True, csrf: str | None = CSRF) -> TestClient:
     session = {
         "user": {"id": user_id, "username": "tester", "global_name": "Tester", "avatar": None},
         "admin_guilds": [{"id": str(GUILD_ID), "name": "Test Guild", "icon": None}],
-        "_csrf_token": CSRF,
+        # 管理権限の再確認をしたばかり、という状態にしておく（再確認が走ると
+        # Discord API を叩きに行くため、テストでは古びさせない）。
+        "admin_guilds_at": time.time(),
     }
+    if csrf is not None:
+        session["_csrf_token"] = csrf
     if with_guild:
         session.update({"guild_id": GUILD_ID, "guild_name": "Test Guild", "guild_icon": None})
 
@@ -154,6 +159,20 @@ class SaveTests(unittest.TestCase):
 
     def test_missing_csrf_token_is_rejected(self):
         response = self.put("logging", {"log_level": "INFO"}, headers={})
+        self.assertEqual(response.status_code, 403)
+
+    def test_session_without_a_csrf_token_is_rejected(self):
+        """トークンが無いセッションは素通しせず必ず弾く（フェイルクローズ）。
+
+        以前は「セッションに _csrf_token が無ければ検証せず通す」実装で、
+        CSRF 防御の全体が『その時点でトークンが存在すること』に依存していた。
+        """
+        client = make_client(csrf=None)
+        response = client.put(
+            "/admin/api/apps/logging",
+            json={"values": {"log_level": "INFO"}},
+            headers=CSRF_HEADER,
+        )
         self.assertEqual(response.status_code, 403)
 
     def test_choice_outside_the_schema_is_rejected(self):
