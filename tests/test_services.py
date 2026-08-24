@@ -1782,6 +1782,110 @@ class TTLCacheTests(unittest.TestCase):
                 self.assertIsInstance(cache, self.TTLCache)
                 self.assertGreater(cache.max_entries, 0)
 
+
+class SecurityFailSafeTests(unittest.TestCase):
+    """バイパス判定に失敗したときに破壊的操作へ進まないこと。
+
+    全ロール剥奪は元に戻せない。信頼済みかどうかが分からないまま実行すると、
+    設定を読めなかっただけで管理者のロールが消える。見逃すより、取り返しが
+    つかないほうを避ける。
+    """
+
+    def setUp(self):
+        import services.security_service as security
+        self.sec = security
+
+    def _member(self):
+        member = Mock()
+        member.id = 5
+        member.bot = False
+        member.guild = Mock()
+        member.guild.id = 1
+        member.roles = []
+        member.mention = "@user"
+        return member
+
+    @staticmethod
+    def _boom(_):
+        raise RuntimeError("設定が読めない")
+
+    def _voice_channel(self):
+        channel = Mock(spec=discord.VoiceChannel)
+        channel.id = 10
+        channel.name = "雑談VC"
+        channel.mention = "<#10>"
+        return channel
+
+    # ── 判定の3状態 ──────────────────────────────────────────
+
+    def test_trusted_user_is_bypassed(self):
+        with patch.object(self.sec, "get_trusted_user_ids", lambda g: [5]),              patch.object(self.sec, "get_bypass_role_ids", lambda g: []):
+            result = self.sec.is_security_bypassed(self._member())
+        self.assertTrue(result.bypassed)
+        self.assertEqual(result.reason, "trusted_user")
+        self.assertFalse(result.check_failed)
+
+    def test_ordinary_user_is_not_bypassed(self):
+        with patch.object(self.sec, "get_trusted_user_ids", lambda g: []),              patch.object(self.sec, "get_bypass_role_ids", lambda g: []):
+            result = self.sec.is_security_bypassed(self._member())
+        self.assertFalse(result.bypassed)
+        self.assertFalse(result.check_failed)
+
+    def test_a_failed_check_is_distinguishable(self):
+        """「判定できなかった」を「バイパスなし」と同じ扱いにしない。"""
+        with patch.object(self.sec, "get_trusted_user_ids", self._boom),              self.assertLogs(self.sec.logger, level="ERROR"):
+            result = self.sec.is_security_bypassed(self._member())
+        self.assertFalse(result.bypassed)      # 検査自体は続ける
+        self.assertTrue(result.check_failed)   # ただし強制措置には進ませない
+
+    # ── VC レイド時の措置 ────────────────────────────────────
+
+    def _run_voice_join(self, *, trusted, raid):
+        stripped = []
+        logged = []
+
+        async def fake_strip(member):
+            stripped.append(member.id)
+            return True, "removed"
+
+        async def fake_log(bot, guild_id, level, message, **kwargs):
+            logged.append(message)
+
+        before = Mock()
+        before.channel = None
+        after = Mock()
+        after.channel = self._voice_channel()
+
+        with patch.object(self.sec, "get_trusted_user_ids", trusted),              patch.object(self.sec, "get_bypass_role_ids", lambda g: []),              patch.object(self.sec, "check_vc_raid", lambda m, c: raid),              patch.object(self.sec, "strip_roles", fake_strip),              patch.object(self.sec, "log_action", fake_log),              patch.object(self.sec.logger, "error"):
+            asyncio.run(self.sec.handle_security_for_voice_join(
+                Mock(), self._member(), before, after))
+        return stripped, logged
+
+    def test_raid_strips_roles_when_the_check_worked(self):
+        stripped, _ = self._run_voice_join(trusted=lambda g: [], raid=True)
+        self.assertEqual(stripped, [5])
+
+    def test_raid_does_not_strip_when_the_check_failed(self):
+        stripped, logged = self._run_voice_join(trusted=self._boom, raid=True)
+        self.assertEqual(stripped, [])
+        self.assertTrue(any("要確認" in m for m in logged), logged)
+
+    def test_no_raid_means_no_action_either_way(self):
+        stripped, logged = self._run_voice_join(trusted=self._boom, raid=False)
+        self.assertEqual(stripped, [])
+        self.assertEqual(logged, [])
+
+    # ── メッセージ側 ─────────────────────────────────────────
+
+    def test_message_path_guards_the_destructive_branch(self):
+        import inspect
+        source = inspect.getsource(self.sec.handle_security_for_message)
+        self.assertIn("if danger and bypass.check_failed:", source)
+        # 見送りの分岐が、削除・剥奪より前に置かれていること
+        self.assertLess(source.index("if danger and bypass.check_failed:"),
+                        source.index("await message.delete()"))
+        self.assertIn("要確認", source)
+
 if __name__ == "__main__":
     logging.disable(logging.CRITICAL)
     unittest.main()
