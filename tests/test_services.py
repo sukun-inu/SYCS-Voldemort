@@ -831,6 +831,47 @@ class RecordingTests(unittest.TestCase):
         self.assertTrue(mp3)
         self.assertTrue(all(t == zipfile.ZIP_STORED for t in mp3.values()), mp3)
 
+    def test_a_noisy_track_is_flagged_before_anyone_listens(self):
+        """長さも件数も正しいのに中身が雑音、という壊れ方を実際にした。
+
+        落として聞くまで気づけないのでは遅い。書き出し時に測って印を付ける。
+        """
+        import random
+        import struct
+        rng = random.Random(5)
+        noise = bytearray()
+        for _ in range(int(self.rec.SAMPLE_RATE * 1.0)):
+            v = rng.randint(-9000, 9000)
+            noise += struct.pack("<hh", v, v)
+
+        session = self._session()
+        session.feed(Mock(id=1, display_name="すずき"), self._tone(1.0))
+        session.feed(Mock(id=2, display_name="たなか"), bytes(noise))
+        result = self.rec._finalize(session, 2.0, "テスト")
+
+        self.assertEqual(result["suspect_tracks"], ["たなか"],
+                         f"周期性の判定が効いていない: {result['suspect_tracks']}")
+
+        from services.djaudio_cache import get_meta, payload_path
+        meta = get_meta(result["token"])
+        with zipfile.ZipFile(payload_path(result["token"], meta)) as archive:
+            manifest = json.loads(archive.read(self.rec.MANIFEST_NAME).decode("utf-8"))
+        by_name = {s["name"]: s for s in manifest["stems"]}
+        self.assertLess(by_name["たなか"]["periodicity"],
+                        manifest["periodicity_min"], by_name["たなか"])
+        self.assertGreaterEqual(by_name["すずき"]["periodicity"],
+                                manifest["periodicity_min"], by_name["すずき"])
+
+    def test_a_silent_track_is_not_called_broken(self):
+        """無音しか入っていないトラックは、良し悪しを判定できない。
+
+        判定できないものを「壊れている」と言うと、警告が信用されなくなる。
+        """
+        session = self._session()
+        session.feed(Mock(id=1, display_name="すずき"), bytes(4 * self.rec.SAMPLE_RATE))
+        result = self.rec._finalize(session, 1.0, "テスト")
+        self.assertEqual(result["suspect_tracks"], [])
+
     def test_retention_days_control_the_link_lifetime(self):
         session = self._session(retention_days=3)
         session.feed(Mock(id=1, display_name="すずき"), self._tone(0.2))

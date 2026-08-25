@@ -25,6 +25,7 @@ import json
 import logging
 import math
 import shutil
+import statistics
 import subprocess
 import tempfile
 import time
@@ -223,6 +224,93 @@ class _TrackWriter:
 
 
 # ── Sink ─────────────────────────────────────────────────────
+
+# ── 書き出した音が声として成立しているか ──────────────────────
+
+# 長さもトラック数も正しいのに中身が雑音になっている、という壊れ方をした。
+# 数字が正しいことと、音が聞けることは別なので、書き出したものを測る。
+#
+# 指標は周期性（自己相関の山の高さ）。声は準周期的なので山が立ち、雑音では
+# 立たない。実測での分かれ方は 正常 0.51 / 白色雑音 0.17。
+# スペクトル平坦度も試したが、mp3 のローパスに支配されて白色雑音でも 0.065
+# にしかならず、声と区別できなかったので使っていない。
+VOICE_PERIODICITY_MIN = 0.30
+_VOICE_RATE = 8000            # 声の高さは 60〜400Hz。これで足りる。
+_VOICE_WINDOW = 0.04
+_VOICE_PROBES = 8             # 何箇所から抜き出すか（長さに依らず一定にする）
+_VOICE_PROBE_SECONDS = 0.5
+_VOICE_MAX_WINDOWS = 16
+_VOICE_FLOOR = 900            # これを下回る窓は無音とみなす
+
+
+def _probe_samples(path: Path, duration: float) -> array.array:
+    """録音の各所から少しずつ抜き出して 8kHz モノラルで返す。
+
+    全体をデコードすると 6 時間で 2GB 近くになる。測るのに全部は要らない。
+    """
+    samples = array.array("h")
+    span = max(duration - _VOICE_PROBE_SECONDS, 0.0)
+    for i in range(_VOICE_PROBES):
+        at = 0.0 if _VOICE_PROBES == 1 else span * i / (_VOICE_PROBES - 1)
+        try:
+            result = subprocess.run(
+                [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error",
+                 "-ss", f"{at:.3f}", "-t", str(_VOICE_PROBE_SECONDS), "-i", str(path),
+                 "-f", "s16le", "-ar", str(_VOICE_RATE), "-ac", "1", "-"],
+                capture_output=True, timeout=60)
+        except (subprocess.SubprocessError, OSError) as e:
+            logger.warning("[recording] 音の抜き出しに失敗 %s: %s", path.name, e)
+            continue
+        raw = result.stdout
+        samples.frombytes(raw[:len(raw) - len(raw) % 2])
+    return samples
+
+
+def _periodicity(samples: array.array) -> float | None:
+    """鳴っている窓ごとの自己相関の山（0〜1）の中央値。測れなければ None。"""
+    size = int(_VOICE_RATE * _VOICE_WINDOW)
+    if len(samples) < size * 2:
+        return None
+    low = _VOICE_RATE // 400
+    high = min(_VOICE_RATE // 60, size - 1)
+    loud = [
+        i for i in range(0, len(samples) - size, size)
+        if sum(v * v for v in samples[i:i + size]) >= size * (_VOICE_FLOOR ** 2)
+    ]
+    if not loud:
+        return None                      # 全部無音。良し悪しは判定できない。
+    if len(loud) > _VOICE_MAX_WINDOWS:
+        step = len(loud) / _VOICE_MAX_WINDOWS
+        loud = [loud[int(i * step)] for i in range(_VOICE_MAX_WINDOWS)]
+
+    scores = []
+    for start in loud:
+        seg = samples[start:start + size]
+        best = 0.0
+        for lag in range(low, high):
+            count = size - lag
+            num = sum(seg[i] * seg[i + lag] for i in range(count))
+            left = sum(seg[i] * seg[i] for i in range(count))
+            right = sum(seg[i + lag] * seg[i + lag] for i in range(count))
+            denom = math.sqrt(left * right) or 1.0
+            best = max(best, num / denom)
+        scores.append(best)
+    return round(statistics.median(scores), 3)
+
+
+def measure_voice(path: Path, duration: float) -> float | None:
+    """書き出したトラックが声として成立しているかを測る。
+
+    戻り値は 0〜1。VOICE_PERIODICITY_MIN を下回るなら雑音の疑いがある。
+    無音しか入っていない、または測れなかった場合は None。
+    """
+    try:
+        return _periodicity(_probe_samples(path, duration))
+    except Exception as e:
+        # 測れないことが録音の失敗になってはいけない。
+        logger.warning("[recording] 音の確認に失敗 %s: %s", path.name, e)
+        return None
+
 
 # ── 受信ストリームの組み立て ──────────────────────────────────
 
@@ -997,8 +1085,15 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
     for index, track in enumerate(session.tracks.values()):
         if not (track.out_path.exists() and track.out_path.stat().st_size > 0):
             continue
+        voice = measure_voice(track.out_path, total_elapsed)
+        if voice is not None and voice < VOICE_PERIODICITY_MIN:
+            logger.warning(
+                "[recording] guild=%s %s のトラックが声として成立していない可能性"
+                "（周期性 %.3f < %.2f）", session.guild_id, track.display_name,
+                voice, VOICE_PERIODICITY_MIN)
         stems.append({
             "index": index,
+            "periodicity": voice,
             "file": track.out_path.name,
             "name": track.display_name,
             "user_id": track.user_id,
@@ -1012,6 +1107,7 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
         "started_by": session.started_by_name,
         "duration_seconds": round(total_elapsed, 2),
         "bucket_seconds": PEAK_BUCKET_SECONDS,
+        "periodicity_min": VOICE_PERIODICITY_MIN,
         "dropped_packets": session.dropped_packets,
         "stems": stems,
     }
@@ -1066,6 +1162,13 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
         "reason": reason or "手動停止",
         "dropped_packets": session.dropped_packets,
         "speakers": [t.display_name for t in session.tracks.values()],
+        # 声として成立していないトラック。黙って渡すと、落として聞くまで
+        # 気づけない。
+        "suspect_tracks": [
+            s["name"] for s in stems
+            if s.get("periodicity") is not None
+            and s["periodicity"] < VOICE_PERIODICITY_MIN
+        ],
     }
 
 
@@ -1092,6 +1195,15 @@ def build_result_embed(guild_id: int, result: dict) -> discord.Embed:
         embed.add_field(
             name="⚠️ 取りこぼし",
             value=f"{dropped} パケットを復元できませんでした（その分だけ音が欠けています）。",
+            inline=False,
+        )
+    suspects = result.get("suspect_tracks") or []
+    if suspects:
+        embed.add_field(
+            name="⚠️ 音が壊れている可能性",
+            value=("次のトラックが声として成立していません（雑音の疑い）:\n"
+                   + "、".join(suspects[:10])
+                   + "\n管理画面のミキサーで波形を確認してください。"),
             inline=False,
         )
     url = download_url(guild_id, result["token"])
