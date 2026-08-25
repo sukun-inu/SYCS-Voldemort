@@ -989,3 +989,78 @@ class SnowflakeJsonTests(unittest.TestCase):
         self.assertIn(f'"{self.VC_ID}"', body, body[:400])
         # 桁が落ちた値が混ざっていないこと
         self.assertNotIn("1234567890123456800", body)
+
+
+class RecordingClipTests(unittest.TestCase):
+    """区間の切り出し。ミキサーで決めた範囲だけを落とせること。"""
+
+    @classmethod
+    def setUpClass(cls):
+        import math
+        import struct
+        import time as _time
+        from unittest.mock import Mock
+
+        import services.recording_service as recording
+
+        def tone(seconds, freq=440.0):
+            out = bytearray()
+            for i in range(int(recording.SAMPLE_RATE * seconds)):
+                v = int(12000 * math.sin(2 * math.pi * freq * i / recording.SAMPLE_RATE))
+                out += struct.pack("<hh", v, v)
+            return bytes(out)
+
+        session = recording.RecordingSession(
+            guild_id=GUILD_ID, channel_id=555, channel_name="雑談VC",
+            started_by_id=1, started_by_name="すずき",
+            started_at=_time.monotonic(), max_seconds=0, retention_days=7,
+        )
+        session.feed(Mock(id=1, display_name="すずき"), tone(2.0))
+        session.feed(Mock(id=2, display_name="たなか"), tone(2.0, 660))
+        cls.result = recording._finalize(session, 4.0, "テスト")
+        cls.token = cls.result["token"]
+
+    def _url(self, start, end, guild_id=GUILD_ID, token=None):
+        return (f"/dlaudio/files/{guild_id}/{token or self.token}/clip"
+                f"?start={start}&end={end}")
+
+    def test_a_region_comes_back_as_a_zip_of_every_track(self):
+        import io
+        import zipfile
+        response = TestClient(app).get(self._url(0.5, 1.5))
+        self.assertEqual(response.status_code, 200, response.text[:200])
+        self.assertEqual(response.headers["content-type"], "application/zip")
+        self.assertIn("attachment", response.headers.get("content-disposition", ""))
+
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            names = archive.namelist()
+        self.assertEqual(len([n for n in names if n.endswith(".mp3")]), 2, names)
+        self.assertIn("info.txt", names)
+
+    def test_the_clip_is_shorter_than_the_whole_recording(self):
+        client = TestClient(app)
+        clip = client.get(self._url(0.5, 1.0)).content
+        whole = client.get(f"/dlaudio/files/{GUILD_ID}/{self.token}/stem/0").content
+        self.assertLess(len(clip), len(whole) * 2,
+                        "全部入っている（切り出せていない）")
+
+    def test_a_backwards_or_tiny_region_is_refused(self):
+        client = TestClient(app)
+        self.assertEqual(client.get(self._url(2.0, 1.0)).status_code, 400)
+        self.assertEqual(client.get(self._url(1.0, 1.0)).status_code, 400)
+
+    def test_an_absurdly_long_region_is_refused(self):
+        """丸ごと落としてもらうべき長さで、その場で切らない。"""
+        client = TestClient(app)
+        response = client.get(self._url(0, 3600 * 3))
+        self.assertEqual(response.status_code, 400)
+        # 断った理由が本文に出ること（「不正なリクエストです」で終わらせない）
+        self.assertIn("時間", response.text)
+        # fetch する側（JSON を求める相手）には JSON で理由を返すこと
+        as_json = client.get(self._url(0, 3600 * 3),
+                             headers={"Accept": "application/json"})
+        self.assertIn("時間", as_json.json()["detail"])
+
+    def test_other_guilds_cannot_clip(self):
+        self.assertEqual(
+            TestClient(app).get(self._url(0.5, 1.5, guild_id=111)).status_code, 403)

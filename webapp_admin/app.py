@@ -188,7 +188,17 @@ def create_app() -> FastAPI:
         return RedirectResponse("/admin/guilds", status_code=303)
 
     def _is_api(request: Request) -> bool:
-        return request.url.path.startswith("/admin/api/")
+        """JSON で返すべき相手か。
+
+        画面から fetch する先は /admin/api/ だけではない（配信の /dlaudio/ も
+        ミキサーが読む）。HTML のエラーページを返すと、fetch する側は本文を
+        読めず「HTTP 400」としか言えない。Accept を見て使い分ける。
+        ブラウザの遷移は text/html を要求するので、これまでどおり画面が出る。
+        """
+        if request.url.path.startswith("/admin/api/"):
+            return True
+        accept = request.headers.get("accept", "")
+        return "application/json" in accept and "text/html" not in accept
 
     @app.exception_handler(RateLimitExceeded)
     async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
@@ -206,13 +216,17 @@ def create_app() -> FastAPI:
             500: "サーバーエラーが発生しました。",
         }
         msg = msgs.get(exc.status_code, "エラーが発生しました。")
+        # 断った理由が書いてあるなら、そのまま見せる。「不正なリクエストです」
+        # だけでは、何を直せばいいのか分からない。
+        detail = exc.detail if isinstance(exc.detail, str) and exc.detail else ""
+        description = detail if detail and detail != msg else None
         # API は JSON で返す。HTML のエラーページを返すと、fetch する側は本文を
         # 読めず「HTTP 502」としか言えない。detail に入れた理由をそのまま渡す。
         if _is_api(request):
-            detail = exc.detail if isinstance(exc.detail, str) and exc.detail else msg
-            return JSONResponse({"detail": detail}, status_code=exc.status_code,
+            return JSONResponse({"detail": detail or msg}, status_code=exc.status_code,
                                 headers=getattr(exc, "headers", None))
-        return render(request, "error.html", status_code=exc.status_code, code=exc.status_code, message=msg)
+        return render(request, "error.html", status_code=exc.status_code,
+                      code=exc.status_code, message=msg, description=description)
 
     @app.exception_handler(ExceptionGroup)
     async def exception_group_handler(request: Request, exc: ExceptionGroup):

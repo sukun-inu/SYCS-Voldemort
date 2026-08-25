@@ -302,7 +302,10 @@ export async function mount(win) {
          stage)
     );
     try {
-      mixerHandle = await createMixer(stage, { manifestUrl: `${recording.url}/mixer` });
+      mixerHandle = await createMixer(stage, {
+        manifestUrl: `${recording.url}/mixer`,
+        clipUrl: `${recording.url}/clip`,
+      });
     } catch (error) {
       clear(stage).append(
         el("div", { class: "empty", text: `ミキサーを開けませんでした（${error.message}）` })
