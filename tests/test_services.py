@@ -2452,3 +2452,86 @@ class DaveDecryptionTests(unittest.TestCase):
         self.assertIn(1, session.tracks, "復号した音がトラックになっていない")
         for track in session.tracks.values():
             track.close(1.0)
+
+
+class RtpPaddingTests(unittest.TestCase):
+    """RTP のパディングを取り除くこと。
+
+    voice_recv は剥がさない（rtp.py に「discord はこのビットを使っていない
+    ようだ」と書かれている）。実際には使われていて、本番でこう届いていた:
+
+        247 バイト、全部 0xF7 … 0xF7 = 247 = 全体の長さ
+        255 バイト、全部 0xFF … 0xFF = 255 = 全体の長さ
+
+    RFC 3550 では最終バイトがパディング長（自身を含む）。全体の長さと等しい
+    なら音声は1バイトも入っていない（帯域推定のための探査パケット）。
+    """
+
+    def setUp(self):
+        import services.recording_service as recording
+        self.rec = recording
+
+    def _packet(self, padding=True):
+        return SimpleNamespace(ssrc=1, sequence=1, timestamp=0, payload=120,
+                               padding=padding)
+
+    def test_the_probe_packets_seen_in_production_are_dropped(self):
+        for size in (247, 255):
+            payload = bytes([size]) * size
+            self.assertIsNone(
+                self.rec.strip_rtp_padding(self._packet(), payload),
+                f"{size} バイトの詰め物を音声として扱っている")
+
+    def test_they_are_dropped_even_without_the_header_bit(self):
+        """ヘッダのビットが立っていない実装もある。長さで判断できる。"""
+        payload = bytes([255]) * 255
+        self.assertIsNone(self.rec.strip_rtp_padding(self._packet(padding=False), payload))
+
+    def test_partial_padding_is_trimmed(self):
+        """E2EE のフレームは末尾のマーカーがパディングに隠れる。
+
+        本番で ... 010dfafa0202 として観測した形。剥がすとマーカーが末尾に来る。
+        """
+        payload = bytes(96) + bytes.fromhex("010dfafa0202")
+        trimmed = self.rec.strip_rtp_padding(self._packet(), payload)
+        self.assertEqual(trimmed[-2:], b"\xfa\xfa", trimmed[-6:].hex())
+        self.assertEqual(len(trimmed), len(payload) - 2)
+
+    def test_ordinary_opus_is_untouched(self):
+        import discord.opus as opus
+        if not opus.is_loaded():
+            try:
+                opus._load_default()
+            except Exception:
+                self.skipTest("libopus が読み込めない環境です")
+        import math
+        import struct
+        pcm = bytearray()
+        for i in range(960):
+            v = int(12000 * math.sin(2 * math.pi * 440 * i / self.rec.SAMPLE_RATE))
+            pcm += struct.pack("<hh", v, v)
+        frame = opus.Encoder().encode(bytes(pcm), 960)
+        self.assertEqual(
+            self.rec.strip_rtp_padding(self._packet(padding=False), frame), frame)
+
+    def test_a_broken_length_is_left_alone(self):
+        """壊れた値で音を削らない。"""
+        payload = bytes(20) + bytes([200])       # 長さより大きいパディング長
+        self.assertEqual(self.rec.strip_rtp_padding(self._packet(), payload), payload)
+        self.assertEqual(self.rec.strip_rtp_padding(self._packet(), b""), b"")
+
+    def test_probe_packets_never_reach_a_track(self):
+        session = self.rec.RecordingSession(
+            guild_id=999, channel_id=1, channel_name="VC",
+            started_by_id=1, started_by_name="t",
+            started_at=time.monotonic(), max_seconds=0, retention_days=1,
+        )
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=1, display_name="すずき")
+        data = SimpleNamespace(packet=self._packet(), opus=bytes([255]) * 255)
+        for _ in range(8):
+            sink.write(user, data)
+        sink.flush_pending()
+        self.assertEqual(session.tracks, {}, "詰め物からトラックが作られている")
+        self.assertEqual(session.dropped_packets, 0, "詰め物をデコードしている")
+        self.assertEqual(sink._streams[1].padding_only, 8)

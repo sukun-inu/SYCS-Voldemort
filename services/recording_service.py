@@ -328,6 +328,39 @@ _DAVE_RATIO = 0.15
 is_dave_frame = dave.is_dave_frame
 
 
+# ── RTP のパディング ──────────────────────────────────────────
+
+def strip_rtp_padding(packet, payload: bytes | None) -> bytes | None:
+    """RTP のパディングを取り除く。中身が全部パディングなら None。
+
+    voice_recv は剥がさない（rtp.py に「discord はこのビットを使っていない
+    ようだ」と書かれている）。実際には使われていて、本番でこう届いていた:
+
+        247 バイト、全部 0xF7 … 0xF7 = 247 = 全体の長さ
+        255 バイト、全部 0xFF … 0xFF = 255 = 全体の長さ
+
+    RFC 3550 では最終バイトがパディング長（自身を含む）を表す。それが全体の
+    長さと等しいなら、音声は1バイトも入っていない。帯域推定のための探査
+    パケットで、Opus に渡しても「壊れている」と言われるだけ。
+
+    パディングが一部だけの場合もある。E2EE のフレームでは、末尾のマーカーが
+    パディングに隠れて見えなくなる（本番で ... 010dfafa0202 として観測した）。
+    """
+    if not payload:
+        return payload
+    count = payload[-1]
+    # ヘッダのビットが立っていなくても、長さが一致するならパディングとみなす。
+    # 平文の Opus が「最終バイト＝自身の長さ」になる確率は無視できる。
+    flagged = bool(getattr(packet, "padding", False))
+    if not flagged and count != len(payload):
+        return payload
+    if count <= 0 or count > len(payload):
+        return payload          # 壊れた値。触らないでおく。
+    if count == len(payload):
+        return None             # 中身はパディングだけ
+    return payload[:-count]
+
+
 # ── 受信ストリームの組み立て ──────────────────────────────────
 
 # 順番待ちで抱えておく上限。これを過ぎたら穴は諦めて先へ進む。
@@ -381,6 +414,7 @@ class _StreamAssembler:
         self.decoded = 0     # デコードできたパケット（失敗数だけでは割合が分からない）
         self.encrypted = 0   # E2EE（DAVE）で、復号できなかったフレーム
         self.decrypted = 0   # E2EE（DAVE）を復号できたフレーム
+        self.padding_only = 0   # 中身がパディングだけのパケット（音声ではない）
         self.received = 0    # 受け取った音声フレームの総数
         self.payload_types: dict[int, int] = {}   # RTP のペイロードタイプ別の数
 
@@ -525,7 +559,11 @@ def _make_sink_class():
             if ptype is not None:
                 stream.payload_types[ptype] = stream.payload_types.get(ptype, 0) + 1
 
-            encoded = data.opus
+            encoded = strip_rtp_padding(packet, data.opus)
+            if encoded is None:
+                # 中身がパディングだけ（帯域推定の探査）。音声ではない。
+                stream.padding_only += 1
+                return
             now = time.monotonic()
             sequence = int(getattr(packet, "sequence", -1))
             if encoded and dave.is_dave_frame(encoded):
@@ -597,10 +635,11 @@ def _make_sink_class():
                 name = getattr(user, "display_name", ssrc)
                 logger.info(
                     "[recording] ssrc=%s (%s) 受信=%d 成功=%d 失敗=%d "
-                    "E2EE復号=%d E2EE不可=%d 欠落=%d 手遅れ=%d 無音=%d RTP種別=%s",
+                    "E2EE復号=%d E2EE不可=%d 詰め物=%d 欠落=%d 手遅れ=%d 無音=%d "
+                    "RTP種別=%s",
                     ssrc, name, stream.received, stream.decoded, stream.failed,
-                    stream.decrypted, stream.encrypted, stream.lost, stream.late,
-                    stream.silence, stream.payload_types,
+                    stream.decrypted, stream.encrypted, stream.padding_only,
+                    stream.lost, stream.late, stream.silence, stream.payload_types,
                 )
 
         def cleanup(self) -> None:
