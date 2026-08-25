@@ -7,9 +7,11 @@ DJAudio-DL CDN 配信ルーター。
 webapp_admin にも cdn_main にも依存せず、どちらからでも import できる。
 """
 
+import io
 import json
 import logging
 import re
+import subprocess
 import zipfile
 from pathlib import Path
 
@@ -17,7 +19,7 @@ from fastapi import APIRouter, HTTPException, Request
 from starlette.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from datetime import datetime, timezone
 
-from config import DJAUDIO_CACHE_DIR
+from config import DJAUDIO_CACHE_DIR, DJAUDIO_FFMPEG_PATH
 from services.djaudio_cache import content_type_for, get_meta, payload_path
 
 logger = logging.getLogger(__name__)
@@ -245,4 +247,104 @@ async def recording_stem(guild_id: str, token: str, index: int, request: Request
     return StreamingResponse(
         stream(), status_code=206 if partial else 200,
         media_type="audio/mpeg", headers=headers,
+    )
+
+
+# 区間の切り出し。ミキサーで決めたループ区間を、そのまま ZIP で落とせるようにする。
+# 全部落として自分で切るより速く、必要な部分だけを渡せる。
+_CLIP_MAX_SECONDS = 3600 * 2      # 切り出しでも 2 時間を超えたら通しで落としてもらう
+_CLIP_MIN_SECONDS = 0.1
+
+
+def _clip_stem(zip_path: Path, member: str, start: float, length: float) -> bytes | None:
+    """ZIP 内の mp3 の一部だけを切り出して返す。
+
+    無圧縮で入っているので、展開せずにその範囲だけを ffmpeg へ渡せる。
+    再エンコードはせず（-c copy）フレーム境界で切る。中身に手を触れないので
+    速く、音も劣化しない。
+    """
+    found = _stored_member_range(zip_path, member)
+    try:
+        with zipfile.ZipFile(zip_path) as archive:
+            if found is None:
+                data = archive.read(member)          # 圧縮済みの古いもの
+            else:
+                offset, size = found
+                with open(zip_path, "rb") as handle:
+                    handle.seek(offset)
+                    data = handle.read(size)
+    except (KeyError, OSError, zipfile.BadZipFile) as e:
+        logger.warning("切り出し元を読めませんでした %s: %s", member, e)
+        return None
+
+    try:
+        result = subprocess.run(
+            [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error",
+             "-ss", f"{start:.3f}", "-t", f"{length:.3f}",
+             "-i", "pipe:0", "-c", "copy", "-f", "mp3", "pipe:1"],
+            input=data, capture_output=True, timeout=180,
+        )
+    except (subprocess.SubprocessError, OSError) as e:
+        logger.warning("切り出しに失敗 %s: %s", member, e)
+        return None
+    if result.returncode != 0 or not result.stdout:
+        logger.warning("切り出しに失敗 %s: %s", member,
+                       result.stderr.decode("utf-8", "replace")[:200])
+        return None
+    return result.stdout
+
+
+@dlaudio_router.get("/files/{guild_id}/{token}/clip")
+async def recording_clip(guild_id: str, token: str, start: float = 0.0, end: float = 0.0):
+    """指定した区間だけを切り出した ZIP を返す。
+
+    ミキサーで決めたループ区間をそのまま落とせるようにするための入口。
+    全トラックを同じ位置で切るので、落としたあとも時間軸は揃っている。
+    """
+    zip_path = _recording_zip(guild_id, token)
+    manifest = _read_manifest(zip_path)
+    stems = manifest.get("stems", [])
+    if not stems:
+        raise HTTPException(status_code=404, detail="トラックがありません。")
+
+    begin = max(0.0, float(start))
+    finish = float(end)
+    length = finish - begin
+    if length < _CLIP_MIN_SECONDS:
+        raise HTTPException(status_code=400, detail="切り出す区間が短すぎます。")
+    if length > _CLIP_MAX_SECONDS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"切り出せるのは {_CLIP_MAX_SECONDS // 3600} 時間までです。"
+                   "これより長い場合は ZIP を丸ごと落としてください。")
+
+    written = 0
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for stem in stems:
+            member = str(stem.get("file", ""))
+            piece = _clip_stem(zip_path, member, begin, length)
+            if piece is None:
+                continue
+            archive.writestr(member, piece)
+            written += 1
+        if not written:
+            raise HTTPException(status_code=500, detail="切り出しに失敗しました。")
+        archive.writestr("info.txt", "\n".join([
+            f"元の録音: {manifest.get('channel_name', '')}",
+            f"切り出した区間: {begin:.2f} 秒 〜 {finish:.2f} 秒（{length:.2f} 秒）",
+            f"トラック数: {written}",
+            "",
+            "全トラックを同じ位置で切っているので、重ねれば時間軸は揃います。",
+        ]))
+
+    payload = buffer.getvalue()
+    stamp = f"{int(begin)}-{int(finish)}"
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="clip_{stamp}.zip"',
+            "Content-Length": str(len(payload)),
+        },
     )

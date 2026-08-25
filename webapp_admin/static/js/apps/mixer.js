@@ -342,7 +342,7 @@ function createPanKnob(onChange) {
  *  代わりに録音パネルの中身を差し替えて使う。後片付けは呼び出し側が
  *  destroy() を呼んで行う。 */
 export async function createMixer(container, options = {}) {
-  const { manifestUrl } = options;
+  const { manifestUrl, clipUrl } = options;
   const idle = { destroy() {} };
   if (!manifestUrl) {
     clear(container).append(el("div", { class: "empty", text: "録音が指定されていません。" }));
@@ -384,6 +384,7 @@ export async function createMixer(container, options = {}) {
   let playing = false;
   let looping = false;
   let loopRegion = null;      // {start, end}
+  let dragging = null;       // 並べ替えで掴んでいるトラック
 
   const view = { start: 0, pxPerSecond: 10, end: 0, bucketSeconds, width: 1 };
 
@@ -507,6 +508,22 @@ export async function createMixer(container, options = {}) {
     onclick: () => { looping = !looping; loopButton.classList.toggle("is-on", looping); },
   }, icon("bi-arrow-clockwise"), "ループ");
 
+  const exportButton = el("button", {
+    class: "btn", type: "button", disabled: true,
+    title: "時間目盛りを横にドラッグして区間を決めると押せます",
+    onclick: () => exportRegion(),
+  }, icon("bi-download"), "区間を書き出す");
+
+  function exportRegion() {
+    if (!loopRegion || !clipUrl) return;
+    const url = `${clipUrl}?start=${loopRegion.start.toFixed(3)}`
+              + `&end=${loopRegion.end.toFixed(3)}`;
+    // 落とすのは普通の遷移でよい（添付として返ってくる）。
+    window.location.href = url;
+    toast(`${formatTime(loopRegion.start)} 〜 ${formatTime(loopRegion.end)} を書き出します`,
+          "success", { duration: 4000 });
+  }
+
   const zoomOut = el("button", { class: "btn btn-sm", type: "button",
                                  title: "縮小", onclick: () => zoomBy(-1) }, "−");
   const zoomIn = el("button", { class: "btn btn-sm", type: "button",
@@ -520,7 +537,7 @@ export async function createMixer(container, options = {}) {
                                     onclick: () => showView("console") }, "ミキサー");
 
   const transport = el("div", { class: "daw-transport" },
-    playButton, stopButton, loopButton,
+    playButton, stopButton, loopButton, exportButton,
     clock,
     el("span", { class: "grow" }),
     el("div", { class: "daw-tabs" }, tabArrange, tabConsole),
@@ -559,13 +576,58 @@ export async function createMixer(container, options = {}) {
          el("div", { class: "daw-head-sub",
                      text: `発話 ${formatTime(track.stem.voiced_seconds || 0)}` })),
       el("div", { class: "daw-head-buttons" }, mute, solo));
+    root.draggable = true;
+    root.addEventListener("dragstart", (event) => {
+      dragging = track;
+      root.classList.add("is-dragging");
+      event.dataTransfer.effectAllowed = "move";
+      // Firefox は何か入れないとドラッグが始まらない
+      event.dataTransfer.setData("text/plain", track.name);
+    });
+    root.addEventListener("dragend", () => {
+      dragging = null;
+      root.classList.remove("is-dragging");
+      for (const t of tracks) t.head.root.classList.remove("is-drop-target");
+    });
+    root.addEventListener("dragover", (event) => {
+      if (!dragging || dragging === track) return;
+      event.preventDefault();
+      root.classList.add("is-drop-target");
+    });
+    root.addEventListener("dragleave", () => root.classList.remove("is-drop-target"));
+    root.addEventListener("drop", (event) => {
+      event.preventDefault();
+      root.classList.remove("is-drop-target");
+      if (dragging && dragging !== track) moveTrack(dragging, track);
+    });
+
     track.head = { root, mute, solo };
     headColumn.append(root);
 
-    const canvas = el("canvas", { class: "daw-lane-canvas" });
-    track.laneCanvas = canvas;
-    laneStack.append(el("div", { class: "daw-lane" }, canvas, track.audio));
+    const lane = el("div", { class: "daw-lane" },
+                    el("canvas", { class: "daw-lane-canvas" }), track.audio);
+    track.lane = lane;
+    track.laneCanvas = lane.firstChild;
+    laneStack.append(lane);
   });
+
+  /** 掴んだトラックを、落とした先の位置へ入れ替える。
+   *
+   *  並びは見るためのものなので、画面の中だけで完結させる（保存しない）。
+   *  ヘッダ・波形・ストリップの3箇所を同じ順序に保つ。 */
+  function moveTrack(from, to) {
+    const order = tracks.slice();
+    order.splice(order.indexOf(from), 1);
+    order.splice(order.indexOf(to), 0, from);
+    tracks.length = 0;
+    tracks.push(...order);
+    for (const track of tracks) {
+      headColumn.append(track.head.root);
+      laneStack.append(track.lane);
+      if (track.strip) stripRow.insertBefore(track.strip.root, master.strip.root);
+    }
+    drawLanes();
+  }
 
   // ── ミキサー ────────────────────────────────────────────
   function buildStrip(target, label, color, isMaster) {
@@ -708,6 +770,10 @@ export async function createMixer(container, options = {}) {
   });
 
   function paintLoop() {
+    exportButton.disabled = !loopRegion || !clipUrl;
+    exportButton.title = loopRegion
+      ? `${formatTime(loopRegion.start)} 〜 ${formatTime(loopRegion.end)} を ZIP で落とす`
+      : "時間目盛りを横にドラッグして区間を決めると押せます";
     if (!loopRegion) { loopBand.hidden = true; return; }
     loopBand.hidden = false;
     loopBand.style.left = `${(loopRegion.start - view.start) * view.pxPerSecond}px`;
@@ -793,7 +859,8 @@ export async function createMixer(container, options = {}) {
        el("p", { class: "field-help", text:
          "スペースで再生／停止、←→ で移動、＋− で拡大。M＝ミュート、S＝ソロ。" +
          "フェーダーはダブルクリックで 0dB、つまみは上下ドラッグでパン。" +
-         "時間目盛りを横にドラッグするとループ区間になります。" +
+         "時間目盛りを横にドラッグするとループ区間になり、その範囲だけ書き出せます。" +
+         "トラックの名前をドラッグすると並べ替えられます。" +
          "各トラックは同じ時間軸に揃えてあるので、途中から参加した人は冒頭が、" +
          "途中で抜けた人は末尾が無音になります。" }))
   );
