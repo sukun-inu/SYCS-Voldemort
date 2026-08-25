@@ -17,9 +17,13 @@ def _base_url_is_local() -> bool:
 
 
 def register_djaudio_commands(bot: Bot) -> None:
+    group = app_commands.Group(
+        name="djaudio", description="DJAudio（URL の自動MP3変換）の設定",
+        guild_only=True,
+    )
 
-    @bot.tree.command(
-        name="djaudio_channel_set",
+    @group.command(
+        name="channel",
         description="【管理者】DJAudio の監視チャンネルを設定します",
     )
     @app_commands.describe(channel="監視するチャンネル（未指定で解除）")
@@ -65,8 +69,8 @@ def register_djaudio_commands(bot: Bot) -> None:
         missing_permissions_message="❌ チャンネル管理の権限がなければ使えぬ。",
     )
 
-    @bot.tree.command(
-        name="djaudio_output_set",
+    @group.command(
+        name="output",
         description="【管理者】DJAudio の結果送信チャンネルを設定します（未指定で監視チャンネルに返信）",
     )
     @app_commands.describe(channel="結果を送信するチャンネル（未指定で解除→監視チャンネルに返信）")
@@ -99,8 +103,8 @@ def register_djaudio_commands(bot: Bot) -> None:
         missing_permissions_message="❌ チャンネル管理の権限がなければ使えぬ。",
     )
 
-    @bot.tree.command(
-        name="djaudio_status",
+    @group.command(
+        name="status",
         description="DJAudio の現在設定を表示します",
     )
     async def djaudio_status(interaction: discord.Interaction):
@@ -130,4 +134,4 @@ def register_djaudio_commands(bot: Bot) -> None:
             )
         await interaction.response.send_message(embed=embed, ephemeral=True, view=admin_site_view())
 
-
+    bot.tree.add_command(group)

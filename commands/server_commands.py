@@ -127,12 +127,36 @@ class _NotifyTypeView(discord.ui.View):
 
 
 def register_server_commands(bot: Bot) -> None:
+    # 平坦な名前を並べると /（スラッシュ）の一覧が長くなり、関連するものが
+    # 隣り合う保証も無い。同じ話題はグループにまとめる。
+    #
+    # 入退室のあいさつは welcome と goodbye で対になっており、状況表示は
+    # 両方をまとめて出す。別々のグループにすると status の置き場所が無くなる
+    # ので、greeting の下に welcome / goodbye を置く二段構えにする。
+    greeting_group = app_commands.Group(
+        name="greeting", description="入退室のあいさつ（ウェルカム / グッバイ）", guild_only=True)
+    welcome_group = app_commands.Group(
+        name="welcome", description="入室時のあいさつ", parent=greeting_group)
+    goodbye_group = app_commands.Group(
+        name="goodbye", description="退室時のあいさつ", parent=greeting_group)
+    vcnotify_group = app_commands.Group(
+        name="vcnotify", description="VC の入退室通知", guild_only=True)
+    sticky_group = app_commands.Group(
+        name="sticky", description="チャンネル最下部に貼り付けるメッセージ", guild_only=True)
+    reactionrole_group = app_commands.Group(
+        name="reactionrole", description="リアクションでロールを付与する設定", guild_only=True)
+    news_group = app_commands.Group(
+        name="news", description="ニュースフィードの配信設定", guild_only=True)
+    quake_group = app_commands.Group(
+        name="quake", description="地震アラートの設定", guild_only=True)
+    info_group = app_commands.Group(
+        name="info", description="サーバーとユーザーの情報", guild_only=True)
 
     # ──────────────────────────────────────────────
     # ウェルカム / グッバイ
     # ──────────────────────────────────────────────
 
-    @bot.tree.command(name="welcome_channel_set", description="【管理者】ウェルカム送信チャンネルを設定します")
+    @welcome_group.command(name="channel", description="【管理者】ウェルカム送信チャンネルを設定します")
     @app_commands.describe(channel="ウェルカムメッセージを送るチャンネル")
     async def set_welcome_ch(interaction: discord.Interaction, channel: discord.TextChannel):
         if not await _ensure_admin(interaction):
@@ -140,7 +164,7 @@ def register_server_commands(bot: Bot) -> None:
         set_welcome_channel(interaction.guild.id, channel.id)
         await interaction.response.send_message(f"{channel.mention} をウェルカムチャンネルと定めた。", ephemeral=True)
 
-    @bot.tree.command(name="welcome_message_set", description="【管理者】ウェルカムメッセージを設定します")
+    @welcome_group.command(name="message", description="【管理者】ウェルカムメッセージを設定します")
     @app_commands.describe(message="テンプレート: {user} {username} {server} {count} が使用可能")
     async def set_welcome_msg(interaction: discord.Interaction, message: str):
         if not await _ensure_admin(interaction):
@@ -148,7 +172,7 @@ def register_server_commands(bot: Bot) -> None:
         set_welcome_message(interaction.guild.id, message)
         await interaction.response.send_message(f"ウェルカムメッセージを定めた。\n> {message}", ephemeral=True)
 
-    @bot.tree.command(name="goodbye_channel_set", description="【管理者】グッバイ送信チャンネルを設定します")
+    @goodbye_group.command(name="channel", description="【管理者】グッバイ送信チャンネルを設定します")
     @app_commands.describe(channel="グッバイメッセージを送るチャンネル")
     async def set_goodbye_ch(interaction: discord.Interaction, channel: discord.TextChannel):
         if not await _ensure_admin(interaction):
@@ -156,7 +180,7 @@ def register_server_commands(bot: Bot) -> None:
         set_goodbye_channel(interaction.guild.id, channel.id)
         await interaction.response.send_message(f"{channel.mention} をグッバイチャンネルと定めた。", ephemeral=True)
 
-    @bot.tree.command(name="goodbye_message_set", description="【管理者】グッバイメッセージを設定します")
+    @goodbye_group.command(name="message", description="【管理者】グッバイメッセージを設定します")
     @app_commands.describe(message="テンプレート: {user} {username} {server} {count} が使用可能")
     async def set_goodbye_msg(interaction: discord.Interaction, message: str):
         if not await _ensure_admin(interaction):
@@ -164,7 +188,7 @@ def register_server_commands(bot: Bot) -> None:
         set_goodbye_message(interaction.guild.id, message)
         await interaction.response.send_message(f"グッバイメッセージを定めた。\n> {message}", ephemeral=True)
 
-    @bot.tree.command(name="welcome_goodbye_status", description="ウェルカム/グッバイ設定を表示します")
+    @greeting_group.command(name="status", description="ウェルカム/グッバイ設定を表示します")
     async def welcome_settings_cmd(interaction: discord.Interaction):
         if interaction.guild is None:
             await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
@@ -184,7 +208,7 @@ def register_server_commands(bot: Bot) -> None:
     # VC 通知
     # ──────────────────────────────────────────────
 
-    @bot.tree.command(name="vc_notify_channel_set", description="【管理者】VC通知チャンネルを設定します")
+    @vcnotify_group.command(name="set", description="【管理者】VC通知チャンネルを設定します")
     @app_commands.describe(channel="VC通知を送るテキストチャンネル")
     async def set_vc_notify_ch(interaction: discord.Interaction, channel: discord.TextChannel):
         if not await _ensure_admin(interaction):
@@ -192,7 +216,7 @@ def register_server_commands(bot: Bot) -> None:
         set_vc_notify_channel_id(interaction.guild.id, channel.id)
         await interaction.response.send_message(f"{channel.mention} をVC通知チャンネルと定めた。", ephemeral=True)
 
-    @bot.tree.command(name="vc_notify_channel_clear", description="【管理者】VC通知チャンネル設定を解除します")
+    @vcnotify_group.command(name="clear", description="【管理者】VC通知チャンネル設定を解除します")
     async def clear_vc_notify_ch(interaction: discord.Interaction):
         if not await _ensure_admin(interaction):
             return
@@ -203,7 +227,7 @@ def register_server_commands(bot: Bot) -> None:
     # スティッキーメッセージ
     # ──────────────────────────────────────────────
 
-    @bot.tree.command(name="sticky_set", description="【管理者】このチャンネルにスティッキーを設定します")
+    @sticky_group.command(name="set", description="【管理者】このチャンネルにスティッキーを設定します")
     @app_commands.describe(content="スティッキーとして固定するメッセージ内容")
     async def sticky_cmd(interaction: discord.Interaction, content: str):
         if not await _ensure_admin(interaction):
@@ -215,7 +239,7 @@ def register_server_commands(bot: Bot) -> None:
         await interaction.response.send_message("スティッキーメッセージを刻んだ。", ephemeral=True)
         await post_sticky(interaction.channel, interaction.guild.id)
 
-    @bot.tree.command(name="sticky_clear", description="【管理者】このチャンネルのスティッキーを解除します")
+    @sticky_group.command(name="clear", description="【管理者】このチャンネルのスティッキーを解除します")
     async def unsticky_cmd(interaction: discord.Interaction):
         if not await _ensure_admin(interaction):
             return
@@ -225,7 +249,7 @@ def register_server_commands(bot: Bot) -> None:
         await interaction.response.send_message("スティッキーメッセージを取り除いた。", ephemeral=True)
         await delete_sticky(interaction.channel, interaction.guild.id)
 
-    @bot.tree.command(name="sticky_list", description="スティッキー設定一覧を表示します")
+    @sticky_group.command(name="list", description="スティッキー設定一覧を表示します")
     async def list_stickies_cmd(interaction: discord.Interaction):
         if interaction.guild is None:
             await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
@@ -241,7 +265,7 @@ def register_server_commands(bot: Bot) -> None:
     # リアクションロール
     # ──────────────────────────────────────────────
 
-    @bot.tree.command(name="reaction_role_add", description="【管理者】リアクションロールを追加します")
+    @reactionrole_group.command(name="add", description="【管理者】リアクションロールを追加します")
     @app_commands.describe(
         message_id="対象メッセージのID",
         emoji="リアクションで使う絵文字",
@@ -266,7 +290,7 @@ def register_server_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
-    @bot.tree.command(name="reaction_role_remove", description="【管理者】リアクションロールを削除します")
+    @reactionrole_group.command(name="remove", description="【管理者】リアクションロールを削除します")
     @app_commands.describe(
         message_id="対象メッセージのID（候補から選択できる）",
         emoji="削除するリアクション絵文字（候補から選択できる）",
@@ -327,7 +351,7 @@ def register_server_commands(bot: Bot) -> None:
                 break
         return choices
 
-    @bot.tree.command(name="reaction_role_list", description="リアクションロール一覧を表示します")
+    @reactionrole_group.command(name="list", description="リアクションロール一覧を表示します")
     async def list_rr_cmd(interaction: discord.Interaction):
         if interaction.guild is None:
             await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
@@ -346,7 +370,7 @@ def register_server_commands(bot: Bot) -> None:
     # ニュースフィード
     # ──────────────────────────────────────────────
 
-    @bot.tree.command(name="news_feed_add", description="【管理者】Google Newsフィードを追加します")
+    @news_group.command(name="add", description="【管理者】Google Newsフィードを追加します")
     @app_commands.describe(
         channel="ニュースを投稿するチャンネル",
         query="検索キーワード（例: AI技術）",
@@ -374,7 +398,7 @@ def register_server_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
-    @bot.tree.command(name="news_feed_remove", description="【管理者】ニュースフィードを削除します")
+    @news_group.command(name="remove", description="【管理者】ニュースフィードを削除します")
     @app_commands.describe(feed_id="削除するフィード（候補から選択できる）")
     async def remove_news_cmd(interaction: discord.Interaction, feed_id: str):
         if not await _ensure_admin(interaction):
@@ -404,7 +428,7 @@ def register_server_commands(bot: Bot) -> None:
             choices.append(app_commands.Choice(name=label[:100], value=fid))
         return choices[:25]
 
-    @bot.tree.command(name="news_feed_list", description="ニュースフィード一覧を表示します")
+    @news_group.command(name="list", description="ニュースフィード一覧を表示します")
     async def list_news_cmd(interaction: discord.Interaction):
         if interaction.guild is None:
             await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
@@ -423,7 +447,7 @@ def register_server_commands(bot: Bot) -> None:
     # 地震アラート
     # ──────────────────────────────────────────────
 
-    @bot.tree.command(name="quake_channel_set", description="【管理者】地震アラートチャンネルを設定します")
+    @quake_group.command(name="channel", description="【管理者】地震アラートチャンネルを設定します")
     @app_commands.describe(channel="地震情報を送るテキストチャンネル")
     async def set_eq_ch(interaction: discord.Interaction, channel: discord.TextChannel):
         if not await _ensure_admin(interaction):
@@ -431,7 +455,7 @@ def register_server_commands(bot: Bot) -> None:
         set_earthquake_channel(interaction.guild.id, channel.id)
         await interaction.response.send_message(f"{channel.mention} を地震アラートチャンネルと定めた。", ephemeral=True)
 
-    @bot.tree.command(name="quake_min_scale_set", description="【管理者】地震通知の最小震度を設定します")
+    @quake_group.command(name="min_scale", description="【管理者】地震通知の最小震度を設定します")
     @app_commands.describe(scale="通知する最小震度")
     @app_commands.choices(scale=[
         app_commands.Choice(name=f"震度 {label} 以上", value=code)
@@ -446,7 +470,7 @@ def register_server_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
-    @bot.tree.command(name="quake_status", description="地震アラート設定を表示します")
+    @quake_group.command(name="status", description="地震アラート設定を表示します")
     async def eq_settings_cmd(interaction: discord.Interaction):
         if interaction.guild is None:
             await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
@@ -464,7 +488,7 @@ def register_server_commands(bot: Bot) -> None:
             embed.add_field(name=label, value="✅ 有効" if types.get(key, True) else "❌ 無効", inline=True)
         await interaction.response.send_message(embed=embed, ephemeral=True, view=admin_site_view())
 
-    @bot.tree.command(name="quake_notify_type", description="【管理者】地震通知タイプのオン/オフを設定します")
+    @quake_group.command(name="type", description="【管理者】地震通知タイプのオン/オフを設定します")
     async def eq_notify_type_cmd(interaction: discord.Interaction):
         if not await _ensure_admin(interaction):
             return
@@ -478,7 +502,7 @@ def register_server_commands(bot: Bot) -> None:
     # サーバー情報 / ユーザー情報
     # ──────────────────────────────────────────────
 
-    @bot.tree.command(name="server_info", description="サーバー情報を表示します")
+    @info_group.command(name="server", description="サーバー情報を表示します")
     async def serverinfo_cmd(interaction: discord.Interaction):
         if interaction.guild is None:
             await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
@@ -505,7 +529,7 @@ def register_server_commands(bot: Bot) -> None:
         embed.add_field(name="ブースト数", value=str(g.premium_subscription_count or 0), inline=True)
         await interaction.response.send_message(embed=embed, view=admin_site_view())
 
-    @bot.tree.command(name="user_info", description="ユーザー情報を表示します")
+    @info_group.command(name="user", description="ユーザー情報を表示します")
     @app_commands.describe(member="情報を表示するメンバー（省略時は自分）")
     async def userinfo_cmd(
         interaction: discord.Interaction,
@@ -536,3 +560,8 @@ def register_server_commands(bot: Bot) -> None:
             inline=False,
         )
         await interaction.response.send_message(embed=embed)
+
+    # greeting の子（welcome / goodbye）は parent 指定で既に繋がっている。
+    for group in (greeting_group, vcnotify_group, sticky_group,
+                  reactionrole_group, news_group, quake_group, info_group):
+        bot.tree.add_command(group)

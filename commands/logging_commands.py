@@ -97,8 +97,20 @@ class _EntityPickerView(discord.ui.View):
 
 
 def register_logging_commands(bot: Bot) -> None:
+    # 平坦な名前を並べると /（スラッシュ）の一覧が長くなり、関連するものが
+    # 隣り合う保証も無い。同じ話題はグループにまとめる。
+    log_group = app_commands.Group(
+        name="log", description="ログの送信先とレベル", guild_only=True)
+    chat_group = app_commands.Group(
+        name="chat", description="AI応答チャンネルの設定", guild_only=True)
+    trusted_group = app_commands.Group(
+        name="trusted", description="信頼済みユーザー（検出の対象外）", guild_only=True)
+    bypass_group = app_commands.Group(
+        name="bypass", description="バイパスロール（検出の対象外）", guild_only=True)
+    bot_group = app_commands.Group(
+        name="bot", description="Bot の設定とヘルプ", guild_only=True)
 
-    @bot.tree.command(name="log_channel_set", description="【管理者】ログ送信チャンネルを設定します")
+    @log_group.command(name="channel", description="【管理者】ログ送信チャンネルを設定します")
     @app_commands.describe(channel="ログを投稿するテキストチャンネル")
     async def set_log_channel_cmd(interaction: discord.Interaction, channel: discord.TextChannel):
         if not await _ensure_admin_in_guild(interaction):
@@ -111,7 +123,7 @@ def register_logging_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
-    @bot.tree.command(name="log_level_set", description="【管理者】ログレベルを設定します")
+    @log_group.command(name="level", description="【管理者】ログレベルを設定します")
     @app_commands.describe(level="記録するログの詳細さ")
     @app_commands.choices(level=[
         app_commands.Choice(name="NONE（ログを記録しない）", value="NONE"),
@@ -137,7 +149,7 @@ def register_logging_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
-    @bot.tree.command(name="chat_channel_set", description="【管理者】AI応答チャンネルを設定します")
+    @chat_group.command(name="set", description="【管理者】AI応答チャンネルを設定します")
     @app_commands.describe(channel="ChatGPTが応答するテキストチャンネル")
     async def set_response_channel_cmd(interaction: discord.Interaction, channel: discord.TextChannel):
         if not await _ensure_admin_in_guild(interaction):
@@ -149,7 +161,7 @@ def register_logging_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
-    @bot.tree.command(name="chat_channel_clear", description="【管理者】AI応答チャンネル設定を解除します")
+    @chat_group.command(name="clear", description="【管理者】AI応答チャンネル設定を解除します")
     async def clear_response_channel_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
@@ -160,7 +172,7 @@ def register_logging_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
-    @bot.tree.command(name="trusted_member_add", description="【管理者】信頼済みユーザーを追加します（複数選択可）")
+    @trusted_group.command(name="add", description="【管理者】信頼済みユーザーを追加します（複数選択可）")
     async def add_trusted_members_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
@@ -174,7 +186,7 @@ def register_logging_commands(bot: Bot) -> None:
             "信頼済みに追加するユーザーを選んでから「確定」を押すがよい。", view=view, ephemeral=True
         )
 
-    @bot.tree.command(name="trusted_member_remove", description="【管理者】信頼済みユーザーを削除します（複数選択可）")
+    @trusted_group.command(name="remove", description="【管理者】信頼済みユーザーを削除します（複数選択可）")
     async def remove_trusted_members_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
@@ -188,7 +200,7 @@ def register_logging_commands(bot: Bot) -> None:
             "信頼済みから削除するユーザーを選んでから「確定」を押すがよい。", view=view, ephemeral=True
         )
 
-    @bot.tree.command(name="trusted_member_list", description="【管理者】信頼済みユーザー一覧を表示します")
+    @trusted_group.command(name="list", description="【管理者】信頼済みユーザー一覧を表示します")
     async def list_trusted_members_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
@@ -208,7 +220,7 @@ def register_logging_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
-    @bot.tree.command(name="bypass_role_add", description="【管理者】バイパスロールを追加します（複数選択可）")
+    @bypass_group.command(name="add", description="【管理者】バイパスロールを追加します（複数選択可）")
     async def add_bypass_roles_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
@@ -222,7 +234,7 @@ def register_logging_commands(bot: Bot) -> None:
             "バイパスロールに追加するロールを選んでから「確定」を押すがよい。", view=view, ephemeral=True
         )
 
-    @bot.tree.command(name="bypass_role_remove", description="【管理者】バイパスロールを削除します（複数選択可）")
+    @bypass_group.command(name="remove", description="【管理者】バイパスロールを削除します（複数選択可）")
     async def remove_bypass_roles_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
@@ -236,7 +248,7 @@ def register_logging_commands(bot: Bot) -> None:
             "バイパスロールから削除するロールを選んでから「確定」を押すがよい。", view=view, ephemeral=True
         )
 
-    @bot.tree.command(name="bypass_role_list", description="【管理者】バイパスロール一覧を表示します")
+    @bypass_group.command(name="list", description="【管理者】バイパスロール一覧を表示します")
     async def list_bypass_roles_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
@@ -256,7 +268,7 @@ def register_logging_commands(bot: Bot) -> None:
             ephemeral=True,
         )
 
-    @bot.tree.command(name="bot_settings", description="【管理者】Bot設定を一覧表示します")
+    @bot_group.command(name="settings", description="【管理者】Bot設定を一覧表示します")
     async def settings_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
@@ -309,11 +321,16 @@ def register_logging_commands(bot: Bot) -> None:
         )
         await interaction.response.send_message(embed=embed, ephemeral=True, view=admin_site_view())
 
-    @bot.tree.command(name="bot_help", description="利用可能なスラッシュコマンド一覧を表示します")
+    @bot_group.command(name="help", description="利用可能なスラッシュコマンド一覧を表示します")
     async def help_cmd(interaction: discord.Interaction):
+        # walk_commands() はグループ自身も返し、cmd.name は葉の名前しか持たない。
+        # 素直に name で集めると /log channel と /quake channel が衝突して
+        # 片方が消える。実際に打てる形（qualified_name）で並べる。
         all_commands: dict[str, str] = {}
         for cmd in bot.tree.walk_commands():
-            all_commands[cmd.name] = cmd.description or "(説明なし)"
+            if isinstance(cmd, app_commands.Group):
+                continue
+            all_commands[cmd.qualified_name] = cmd.description or "(説明なし)"
 
         items = sorted(all_commands.items(), key=lambda x: x[0])
         lines = [f"`/{name}` — {desc}" for name, desc in items]
@@ -337,3 +354,6 @@ def register_logging_commands(bot: Bot) -> None:
         await interaction.response.send_message(
             embeds=embeds, ephemeral=True, view=admin_site_view()
         )
+
+    for group in (log_group, chat_group, trusted_group, bypass_group, bot_group):
+        bot.tree.add_command(group)
