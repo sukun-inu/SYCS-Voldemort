@@ -2275,3 +2275,92 @@ class WaveformTests(unittest.TestCase):
 if __name__ == "__main__":
     logging.disable(logging.CRITICAL)
     unittest.main()
+
+
+class EndToEndEncryptionTests(unittest.TestCase):
+    """端から端まで暗号化された音声（DAVE）を、雑音として録らないこと。
+
+    Discord は 2024年9月から音声を E2EE している。暗号文をそのまま Opus に
+    食わせると、多くは例外にならずに雑音が返る。「録れているのに聞けない」
+    という一番たちの悪い壊れ方になるため、入り口で外して正直に止める。
+
+    仕様（https://github.com/discord/dave-protocol）:
+      [暗号文][認証タグ 8][nonce ULEB128][平文範囲 ULEB128][補助データ長 1][0xFAFA 2]
+    """
+
+    def setUp(self):
+        import services.recording_service as recording
+        self.rec = recording
+
+    def test_the_frames_seen_in_production_are_recognised(self):
+        """本番のログに出た末尾をそのまま判定させる。
+
+            末尾=c8db040cfafa      長さ 0x0c=12 = タグ8 + nonce1 + 長さ1 + マーカー2
+            末尾=010dfafa0202      末尾は RTP パディング（voice_recv は剥がさない）
+        """
+        first = bytes(87) + bytes.fromhex("c8db040cfafa")
+        self.assertTrue(self.rec.is_dave_frame(first), first[-6:].hex())
+
+        padded = bytes(96) + bytes.fromhex("010dfafa0202")
+        self.assertTrue(self.rec.is_dave_frame(padded), padded[-6:].hex())
+
+    def test_ordinary_opus_is_not_mistaken_for_encrypted(self):
+        import discord.opus as opus
+        if not opus.is_loaded():
+            try:
+                opus._load_default()
+            except Exception:
+                self.skipTest("libopus が読み込めない環境です")
+        import math
+        import struct
+        pcm = bytearray()
+        for i in range(960):
+            v = int(12000 * math.sin(2 * math.pi * 440 * i / self.rec.SAMPLE_RATE))
+            pcm += struct.pack("<hh", v, v)
+        frame = opus.Encoder().encode(bytes(pcm), 960)
+        self.assertFalse(self.rec.is_dave_frame(frame), frame[-6:].hex())
+
+    def test_a_stray_magic_marker_is_not_enough(self):
+        """偶然 0xFAFA が並んだだけのフレームを暗号化扱いしない。
+
+        補助データ長が筋の通る値かどうかまで見る。
+        """
+        bogus = bytes(40) + bytes.fromhex("0000fafa")   # 長さバイトが 0
+        self.assertFalse(self.rec.is_dave_frame(bogus))
+        self.assertFalse(self.rec.is_dave_frame(b""))
+        self.assertFalse(self.rec.is_dave_frame(None))
+
+    def test_a_session_is_only_judged_after_enough_frames(self):
+        """切り替わりの途中で数フレームだけ暗号化されていることがある。"""
+        session = self.rec.RecordingSession(
+            guild_id=999, channel_id=1, channel_name="VC",
+            started_by_id=1, started_by_name="t",
+            started_at=time.monotonic(), max_seconds=0, retention_days=1,
+        )
+        for _ in range(5):
+            session.note_encrypted()
+        self.assertFalse(session.is_end_to_end_encrypted, "少ない件数で決めつけている")
+
+        for _ in range(self.rec._DAVE_MIN_SAMPLES):
+            session.note_encrypted()
+        self.assertTrue(session.is_end_to_end_encrypted)
+
+    def test_encrypted_frames_never_reach_a_track(self):
+        """暗号文が音として書き込まれないこと。"""
+        session = self.rec.RecordingSession(
+            guild_id=999, channel_id=1, channel_name="VC",
+            started_by_id=1, started_by_name="t",
+            started_at=time.monotonic(), max_seconds=0, retention_days=1,
+        )
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=1, display_name="すずき")
+        payload = bytes(87) + bytes.fromhex("c8db040cfafa")
+        data = SimpleNamespace(
+            packet=SimpleNamespace(ssrc=1, sequence=100, timestamp=48000, payload=120),
+            opus=payload)
+        for _ in range(10):
+            sink.write(user, data)
+        sink.flush_pending()
+        self.assertEqual(session.tracks, {}, "暗号文からトラックが作られている")
+        self.assertEqual(session.encrypted_frames, 10)
+        self.assertEqual(session.dropped_packets, 0, "デコードを試している")

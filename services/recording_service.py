@@ -312,6 +312,68 @@ def measure_voice(path: Path, duration: float) -> float | None:
         return None
 
 
+# ── E2EE（DAVE）フレームの検出 ────────────────────────────────
+
+# Discord は 2024年9月から音声・映像を端から端まで暗号化している（DAVE）。
+# 2026年3月2日からはボットにも必須になった。
+#
+# DAVE が有効なとき、Opus フレームは「全体が」暗号化される（仕様上、Opus には
+# 復号せずに読む必要のあるメタデータが無いため、平文範囲が存在しない）。
+# 受信側でこれを復号する実装は discord.py にも discord-ext-voice-recv にも
+# 無い（discord.py の DAVE は送信専用）。
+#
+# 暗号文をそのまま Opus に食わせると、多くは例外にならずに雑音が返る。
+# 「録れているのに聞けない」という一番たちの悪い壊れ方になるので、
+# 検出して正直に止める。
+#
+# 仕様（https://github.com/discord/dave-protocol）:
+#   [暗号文][認証タグ 8][nonce ULEB128][平文範囲 ULEB128][補助データ長 1][0xFAFA 2]
+# 実際に本番で観測したフレーム:
+#   ... c8db 04 0c fafa       長さ 0x0c=12 = タグ8 + nonce1 + 長さ1 + マーカー2
+#   ... 01 0d fafa 02 02      末尾は RTP パディング（voice_recv は剥がさない）
+# 利用者に見せる停止理由。原因と、いま何ができるのかを伝える。
+ENCRYPTED_REASON = (
+    "この通話は端から端まで暗号化（E2EE / DAVE）されているため録音できません"
+)
+
+DAVE_MAGIC = b"\xfa\xfa"
+# タグ8 + nonce1 + 長さ1 + マーカー2。これを下回る補助データ長はあり得ない。
+_DAVE_MIN_SUPPLEMENTAL = 12
+# RTP パディングが残っていることがあるので、少しだけ後ろも見る。
+_DAVE_MAX_PADDING = 8
+# 何割が E2EE なら「このセッションは録れない」と判断するか。
+_DAVE_MIN_SAMPLES = 40
+_DAVE_RATIO = 0.15
+
+
+def _dave_supplemental_ok(payload: bytes, end: int) -> bool:
+    """end の直前2バイトがマーカーだとして、補助データ長が筋の通る値か。
+
+    偶然 0xFAFA が並んだ平文フレームを E2EE と誤判定しないための確認。
+    """
+    if end < 3:
+        return False
+    size = payload[end - 3]
+    return _DAVE_MIN_SUPPLEMENTAL <= size < end
+
+
+def is_dave_frame(payload: bytes | None) -> bool:
+    """端から端まで暗号化されたフレームか。
+
+    末尾に RTP パディングが残っている場合があるため、末尾から少しだけ
+    さかのぼって探す。
+    """
+    if not payload or len(payload) < _DAVE_MIN_SUPPLEMENTAL + 1:
+        return False
+    for back in range(_DAVE_MAX_PADDING + 1):
+        end = len(payload) - back
+        if end < 2:
+            break
+        if payload[end - 2:end] == DAVE_MAGIC and _dave_supplemental_ok(payload, end):
+            return True
+    return False
+
+
 # ── 受信ストリームの組み立て ──────────────────────────────────
 
 # 順番待ちで抱えておく上限。これを過ぎたら穴は諦めて先へ進む。
@@ -363,6 +425,8 @@ class _StreamAssembler:
         self.silence = 0     # 発話の切れ目に来る無音パケット（並べ直しには入れない）
         self.failed = 0      # デコードできなかったパケット
         self.decoded = 0     # デコードできたパケット（失敗数だけでは割合が分からない）
+        self.encrypted = 0   # E2EE（DAVE）のフレーム。こちらでは復号できない
+        self.received = 0    # 受け取った音声フレームの総数
         self.payload_types: dict[int, int] = {}   # RTP のペイロードタイプ別の数
 
     def decode(self, encoded: bytes | None) -> bytes:
@@ -501,7 +565,15 @@ def _make_sink_class():
             encoded = data.opus
             now = time.monotonic()
             sequence = int(getattr(packet, "sequence", -1))
+            if encoded and is_dave_frame(encoded):
+                # 端から端まで暗号化されている。こちらに復号手段は無い。
+                # Opus に食わせると例外にならず雑音が返るので、入り口で外す。
+                stream.received += 1
+                stream.encrypted += 1
+                self.session.note_encrypted()
+                return
             if encoded and sequence >= 0:
+                stream.received += 1
                 stream.push(sequence, int(packet.timestamp), encoded, now)
             elif encoded:
                 # voice_recv の SilencePacket は sequence が常に -1（rtp.py）。
@@ -557,10 +629,11 @@ def _make_sink_class():
                 user = self._users.get(ssrc)
                 name = getattr(user, "display_name", ssrc)
                 logger.info(
-                    "[recording] ssrc=%s (%s) 成功=%d 失敗=%d 欠落=%d 手遅れ=%d "
-                    "無音=%d RTP種別=%s",
-                    ssrc, name, stream.decoded, stream.failed, stream.lost,
-                    stream.late, stream.silence, stream.payload_types,
+                    "[recording] ssrc=%s (%s) 受信=%d 成功=%d 失敗=%d E2EE=%d "
+                    "欠落=%d 手遅れ=%d 無音=%d RTP種別=%s",
+                    ssrc, name, stream.received, stream.decoded, stream.failed,
+                    stream.encrypted, stream.lost, stream.late, stream.silence,
+                    stream.payload_types,
                 )
 
         def cleanup(self) -> None:
@@ -587,6 +660,8 @@ class RecordingSession:
     tracks: dict[int, _TrackWriter] = field(default_factory=dict)
     stopping: bool = False
     dropped_packets: int = 0     # デコードできず捨てたパケット数
+    encrypted_frames: int = 0    # E2EE（DAVE）で復号できなかったフレーム数
+    voice_frames: int = 0        # 受け取った音声フレームの総数
     announce_message: discord.Message | None = None
     sink: object | None = None      # 停止時に、並べ直し待ちのパケットを書き出す
     _guard_task: asyncio.Task | None = None
@@ -610,6 +685,25 @@ class RecordingSession:
                 continue
         return total
 
+    def note_encrypted(self) -> None:
+        """E2EE のフレームを受け取ったことを記録する。
+
+        受信スレッドから呼ばれる。ここで停止処理はせず、数を残すだけにする
+        （見張りの側で、割合を見てから判断する）。
+        """
+        self.encrypted_frames += 1
+        self.voice_frames += 1
+
+    @property
+    def is_end_to_end_encrypted(self) -> bool:
+        """このセッションは E2EE で、まともな音を録れないか。
+
+        まだ数が少ないうちは判断しない（切り替わりの途中で数フレームだけ
+        暗号化されていることがあるため）。
+        """
+        return (self.voice_frames >= _DAVE_MIN_SAMPLES
+                and self.encrypted_frames >= self.voice_frames * _DAVE_RATIO)
+
     def feed(self, user, pcm: bytes, at: float | None = None) -> None:
         """PCM を書く。at は録音開始からの秒数（None なら現在時刻）。
 
@@ -618,6 +712,7 @@ class RecordingSession:
         """
         if self.stopping or not pcm:
             return
+        self.voice_frames += 1
         user_id = int(getattr(user, "id", 0) or 0)
         if not user_id or user_id in self.excluded_user_ids:
             return
@@ -971,6 +1066,17 @@ async def _guard(bot, guild_id: int) -> None:
                 interval = min(_GUARD_INTERVAL_SEC, max(1.0, remaining))
             else:
                 interval = _GUARD_INTERVAL_SEC
+
+            # 端から端まで暗号化されていたら、録れているのは雑音だけ。
+            # 気づかずに録り続けても、聞けないものが出来上がるだけなので止める。
+            if session.is_end_to_end_encrypted:
+                logger.warning(
+                    "[recording] guild=%s この通話は端から端まで暗号化されている"
+                    "（DAVE）ため録音できません。%d/%d フレームが暗号化されていました",
+                    guild_id, session.encrypted_frames, session.voice_frames,
+                )
+                await stop_recording(bot, guild_id, reason=ENCRYPTED_REASON)
+                return
 
             # 受信スレッドが落ちていないか。voice_recv は内部でエラーが起きると
             # stop_listening() を呼んで受信をやめるが、こちらのセッションは
