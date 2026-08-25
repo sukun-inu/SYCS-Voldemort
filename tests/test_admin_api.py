@@ -934,3 +934,57 @@ class RecordingMixerApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SnowflakeJsonTests(unittest.TestCase):
+    """Discord の ID を JavaScript が壊さずに読めること。
+
+    ID は 19 桁あり、JavaScript の数値は 2^53-1 までしか正確に扱えない。
+    JSON に数値として入れると読んだ時点で桁が落ちる。
+
+        1342455482031542302  →  1342455482031542300
+
+    実際にこれで、実在するチャンネルを指定しているのに管理画面のプルダウンが
+    「一覧にありません」になった。
+    """
+
+    VC_ID = 1342455482031542302
+
+    def test_javascript_really_loses_these_digits(self):
+        """前提の確認。桁が落ちないなら、この対策は要らない。"""
+        self.assertNotEqual(int(float(self.VC_ID)), self.VC_ID)
+        self.assertGreater(self.VC_ID, 2 ** 53 - 1)
+
+    def test_big_integers_become_strings(self):
+        from webapp_admin.api.jsonsafe import stringify_big_ints
+        self.assertEqual(stringify_big_ints(self.VC_ID), str(self.VC_ID))
+
+    def test_ordinary_numbers_are_left_alone(self):
+        from webapp_admin.api.jsonsafe import stringify_big_ints
+        for value in (0, 1, -1, 42, 2 ** 53 - 1, 3.14):
+            self.assertEqual(stringify_big_ints(value), value, value)
+
+    def test_booleans_stay_booleans(self):
+        """bool は int の仲間。先に外さないと True が "1" になる。"""
+        from webapp_admin.api.jsonsafe import stringify_big_ints
+        self.assertIs(stringify_big_ints(True), True)
+        self.assertIs(stringify_big_ints(False), False)
+
+    def test_nested_values_are_converted(self):
+        from webapp_admin.api.jsonsafe import stringify_big_ints
+        got = stringify_big_ints(
+            {"a": [{"id": self.VC_ID}], "b": (self.VC_ID, 1), "c": "x"})
+        self.assertEqual(got, {"a": [{"id": str(self.VC_ID)}],
+                               "b": [str(self.VC_ID), 1], "c": "x"})
+
+    def test_the_recording_api_sends_ids_as_strings(self):
+        from services import settings_store as store
+        store.set_recording_settings(GUILD_ID, {
+            "vc_channel_id": self.VC_ID,
+            "announce_channel_id": self.VC_ID,
+        })
+        client = make_client()
+        body = client.get("/admin/api/recording?include_channels=0").text
+        self.assertIn(f'"{self.VC_ID}"', body, body[:400])
+        # 桁が落ちた値が混ざっていないこと
+        self.assertNotIn("1342455482031542300", body)

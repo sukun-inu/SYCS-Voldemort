@@ -20,7 +20,7 @@ from typing import Any
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from starlette.responses import JSONResponse
+from webapp_admin.api.jsonsafe import SafeJSONResponse as JSONResponse
 
 from config import DISCORD_BOT_TOKEN, DJAUDIO_CACHE_DIR
 from webapp_admin.core.config import settings_dir

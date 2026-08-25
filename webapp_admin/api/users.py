@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
-from starlette.responses import JSONResponse
+from webapp_admin.api.jsonsafe import SafeJSONResponse as JSONResponse
 
 from config import JST
 from services.user_state_service import (
