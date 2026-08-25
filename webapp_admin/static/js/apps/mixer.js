@@ -101,6 +101,9 @@ export async function createMixer(container, options = {}) {
   }
 
   const duration = Number(manifest.duration_seconds) || 0;
+  // 書き出し時に測った「声として成立しているか」。判定のしきい値も索引から
+  // 受け取る（同じ判定を画面側にも書くと、片方だけ変わって食い違う）。
+  const periodicityMin = Number(manifest.periodicity_min) || 0;
   const context = new (window.AudioContext || window.webkitAudioContext)();
   const lanes = [];
   let playing = false;
@@ -131,10 +134,15 @@ export async function createMixer(container, options = {}) {
     });
     const canvas = el("canvas", { class: "mixer-wave" });
 
+    // 雑音になっているトラックは、聞く前に分かるようにしておく。
+    const periodicity = stem.periodicity;
+    const suspect = periodicity !== null && periodicity !== undefined
+      && periodicityMin > 0 && periodicity < periodicityMin;
+
     const lane = {
       stem, audio, gain, muted: false, solo: false,
       volume: 1, canvas, peaks: stem.peaks || [], color,
-      muteButton, soloButton,
+      muteButton, soloButton, suspect,
     };
 
     const applyGain = () => {
@@ -161,7 +169,15 @@ export async function createMixer(container, options = {}) {
     laneList.append(
       el("div", { class: "mixer-lane" },
          el("div", { class: "mixer-lane-head" },
-            el("div", { class: "mixer-lane-name truncate", title: stem.name }, stem.name),
+            el("div", { class: "mixer-lane-name truncate", title: stem.name },
+               stem.name,
+               suspect
+                 ? el("span", {
+                     class: "chip danger mixer-warn",
+                     title: "自動判定です。波形と再生で確かめてください。",
+                     text: "音が壊れている可能性",
+                   })
+                 : null),
             el("div", { class: "mixer-lane-controls" }, muteButton, soloButton, volume),
             el("div", { class: "mixer-lane-sub",
                         text: `発話 ${formatTime(stem.voiced_seconds || 0)}` })),

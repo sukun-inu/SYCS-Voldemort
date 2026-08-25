@@ -446,3 +446,10 @@
   .mixer { --mixer-head: 140px; }
   .mixer-lane-sub { display: none; }
 }
+
+/* 声として成立していないトラックの印。名前の右に小さく添える。 */
+.mixer-warn {
+  margin-left: 8px;
+  font-size: 11px;
+  vertical-align: middle;
+}
