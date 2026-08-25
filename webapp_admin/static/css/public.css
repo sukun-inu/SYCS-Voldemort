@@ -379,6 +379,16 @@ body.public h3 { text-wrap: balance; }
 /* 隙間で罫線を引く以上、埋まらないセルは罫線色の塊として出る。最後の1枚に
    残りの列を張らせて必ず埋める（tools/check_admin_ui.py が実測で見張る） */
 .feature-grid > :last-child { grid-column: 1 / -1; }
+/* さらに、最後から2枚目が行の先頭に来てしまったとき（＝カード枚数が列数の
+   倍数でないとき）も、その1枚で行を埋める。ここが無いと、カードを1枚足した
+   だけで空きセルが出る。枚数を数えて調整させない。
+   auto-fit なので列数は幅で変わる。3列・2列それぞれの折り返し位置を見る。 */
+.feature-grid > :nth-last-child(2):nth-child(3n + 1),
+.feature-grid > :nth-last-child(2):nth-child(2n + 1) { grid-column: 1 / -1; }
+/* 行いっぱいに広がったカードは、本文だけが極端に長い行になって読みにくい。
+   1行の長さを他のカードと同じくらいで止める。 */
+.feature-grid > :nth-last-child(2):nth-child(3n + 1) p,
+.feature-grid > :nth-last-child(2):nth-child(2n + 1) p { max-width: 64ch; }
 
 .feature-card {
   height: 100%;

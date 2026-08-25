@@ -752,7 +752,32 @@ def main():
                 check("機能カードの間に罫線が見える", grid["seams"] > 0 and grid["ruled"],
                       f'継ぎ目 {grid["seams"]} 箇所 / 下地の塗り分け {grid["ruled"]}')
 
+            if path_ == "/":
+                body = page.locator("body").inner_text()
+                check("トップに VC録音 が載っている", "VC録音" in body)
+                check("録音対象から外れる手段がトップに書いてある",
+                      "/record exclude" in body)
+
             if path_ == "/guide":
+                body = page.locator("body").inner_text()
+                # 録音は個人に紐づく情報を扱う。参加者が「自分は対象から
+                # 外れられる」と知る手段が公開ページに無いと具合が悪い。
+                check("使い方に VC録音 の節がある", "VC録音" in body)
+                check("録音が必ず通知されると書いてある", "必ず投稿されます" in body)
+                check("/record exclude が誰でも使えると分かる",
+                      "/record exclude" in body and "誰でも使えます" in body)
+                check("録音データの保存期限が書いてある",
+                      "7 日" in body and "30 日" in body)
+                check("政府機関以外に使わない旨がある",
+                      "政府機関への提供が必要な場合を除き" in body)
+                check("ミキサーの説明がある", "ミキサー" in body and "波形" in body)
+                # コマンド名をグループ化したので、旧名が残っていないこと
+                stale = [n for n in ("/metal_", "/server_info", "/user_info",
+                                     "/bot_help") if n in body]
+                check("旧コマンド名が残っていない", not stale, str(stale))
+                check("新コマンド名になっている",
+                      "/metal gold" in body and "/info server" in body)
+
                 # 読み物ページは1本の柱で組む。見出し・本文・コマンド一覧・
                 # 箇条書き・ボタンの左端がすべて同じ位置から始まること。
                 # （コマンド一覧だけ 4px 内側に入り、罫線だけ全幅で伸びていた）
