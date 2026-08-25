@@ -233,6 +233,8 @@ _REORDER_MAX = 100
 _FRAME_SAMPLES = 960        # 20ms ぶんのサンプル数（RTP タイムスタンプの刻み）
 # 欠けたぶんを Opus の欠落補間で埋める上限。これを超える穴は無音のままにする。
 _PLC_MAX_FRAMES = 5
+# デコード失敗の中身をログに残す件数（ストリームごと）。全部出すと洪水になる。
+_FAILURE_SAMPLES = 3
 _SEQ_MOD = 1 << 16          # RTP シーケンス番号は 16bit
 _TS_MOD = 1 << 32           # RTP タイムスタンプは 32bit（48kHz 刻み）
 
@@ -270,6 +272,8 @@ class _StreamAssembler:
         self._anchor_elapsed: float = 0.0       # そのときの録音経過秒
         self.lost = 0        # 待っても来なかったパケット数
         self.late = 0        # 出したあとに届いた／溢れて捨てたパケット数
+        self.silence = 0     # 発話の切れ目に来る無音パケット（並べ直しには入れない）
+        self.failed = 0      # デコードできなかったパケット
 
     def decode(self, encoded: bytes | None) -> bytes:
         """encoded が None のときは欠落補間（PLC）。
@@ -401,8 +405,15 @@ def _make_sink_class():
 
             encoded = data.opus
             now = time.monotonic()
-            if encoded:
-                stream.push(int(packet.sequence), int(packet.timestamp), encoded, now)
+            sequence = int(getattr(packet, "sequence", -1))
+            if encoded and sequence >= 0:
+                stream.push(sequence, int(packet.timestamp), encoded, now)
+            elif encoded:
+                # voice_recv の SilencePacket は sequence が常に -1（rtp.py）。
+                # 連番で並べ直す仕組みに入れると、すべて同じ鍵で衝突したうえ、
+                # 「もう出した番号より後ろ」と見なされて捨てられる。
+                # 中身は無音なので、時間軸の穴埋めに任せて数えるだけにする。
+                stream.silence += 1
 
             # 抱えている全ストリームを見る。喋り終えた人の最後のぶんが
             # 出されないまま残り続けないように。
@@ -419,10 +430,19 @@ def _make_sink_class():
             for timestamp, encoded in ready:
                 try:
                     pcm = stream.decode(encoded)
-                except Exception:
+                except Exception as e:
                     # 壊れたパケットは捨てて続ける。毎回ログを出すと洪水になるので
-                    # 数だけ数え、停止時にまとめて残す。
+                    # 数は最後にまとめて残し、中身は最初の数件だけ記録する
+                    # （数だけ見ても何が起きたのか分からなかったため）。
                     self.session.dropped_packets += 1
+                    stream.failed += 1
+                    if stream.failed <= _FAILURE_SAMPLES:
+                        logger.warning(
+                            "[recording] デコード失敗 ssrc=%s %s: %s / %d バイト %s",
+                            ssrc, type(e).__name__, e,
+                            0 if encoded is None else len(encoded),
+                            "（欠落補間）" if encoded is None else encoded[:8].hex(),
+                        )
                     continue
                 self.session.feed(user, pcm, at=stream.offset_for(timestamp, elapsed))
 
