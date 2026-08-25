@@ -11,7 +11,7 @@
 - `DJAUDIO_FFMPEG_PATH` が不正なパスになっていないか
 - `yt-dlp` が実行できるか
 - `DJAUDIO_BASE_URL` が外部アクセス可能な URL か
-- `/djaudio_channel_set` で監視チャンネルを設定済みか
+- `/djaudio channel` で監視チャンネルを設定済みか
 
 ### TTS が動かない
 - `TTS_BASE_URL` が TTS API サーバーの正しい URL を指しているか

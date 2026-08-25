@@ -7,12 +7,12 @@
 ## 1. 機能一覧（具体）
 
 ### 1.1 金属価格コマンド
-- `/metal_gold` `/metal_silver` `/metal_platinum` `/metal_all`
+- `/metal gold` `/metal silver` `/metal platinum` `/metal all`
 - JPY ベースで価格取得し、グラム指定で合計額を表示
 - Embed で見やすく出力
 
 ### 1.2 AI 会話（チャンネル制御あり）
-- 指定チャンネルのみ AI 応答（`/chat_channel_set` / `/chat_channel_clear`）
+- 指定チャンネルのみ AI 応答（`/chat set` / `/chat clear`）
 - ユーザーごとに会話コンテキストを保持
 - モデレーション連携あり
 
@@ -179,15 +179,15 @@
 
 | 機能 | Discord 側 | 管理 UI 側 |
 |---|---|---|
-| ログ / AI 応答チャンネル | `/log_channel_set` `/log_level_set` `/chat_channel_set` `/chat_channel_clear` | `/admin/settings/logging` |
-| ウェルカム / グッバイ | `/welcome_*` `/goodbye_*` `/welcome_goodbye_status` | `/admin/settings/welcome` |
-| VC 通知 | `/vc_notify_channel_set` `/vc_notify_channel_clear` | `/admin/settings/vc-notify` |
-| スティッキー | `/sticky_set` `/sticky_clear` `/sticky_list` | `/admin/settings/sticky` |
-| リアクションロール | `/reaction_role_add` `/reaction_role_remove` `/reaction_role_list` | `/admin/settings/reaction-roles` |
-| Google News | `/news_feed_add` `/news_feed_remove` `/news_feed_list` | `/admin/settings/news-feeds` |
-| 地震アラート | `/quake_channel_set` `/quake_min_scale_set` `/quake_notify_type` `/quake_status` | `/admin/settings/earthquake` |
+| ログ / AI 応答チャンネル | `/log channel` `/log level` `/chat set` `/chat clear` | `/admin/settings/logging` |
+| ウェルカム / グッバイ | `/welcome_*` `/goodbye_*` `/greeting status` | `/admin/settings/welcome` |
+| VC 通知 | `/vcnotify set` `/vcnotify clear` | `/admin/settings/vc-notify` |
+| スティッキー | `/sticky set` `/sticky clear` `/sticky list` | `/admin/settings/sticky` |
+| リアクションロール | `/reactionrole add` `/reactionrole remove` `/reactionrole list` | `/admin/settings/reaction-roles` |
+| Google News | `/news add` `/news remove` `/news list` | `/admin/settings/news-feeds` |
+| 地震アラート | `/quake channel` `/quake min_scale` `/quake type` `/quake status` | `/admin/settings/earthquake` |
 | セキュリティ除外設定 | `/trusted_member_*` `/bypass_role_*` | `/admin/settings/security` |
-| DJAudio-DL | `/djaudio_channel_set` `/djaudio_output_set` `/djaudio_status` | `/admin/settings/djaudio` |
+| DJAudio-DL | `/djaudio channel` `/djaudio output` `/djaudio status` | `/admin/settings/djaudio` |
 | TTS 読み上げ | `/tts *` `/voice *` `/dict *` | `/admin/settings/tts` |
 | ユーザー状態監査 | （イベント自動収集） | `/admin/users/state` |
 

@@ -64,7 +64,7 @@ async def _handle_single_metal(interaction: discord.Interaction, grams: float, s
                 interaction.client,
                 interaction.guild.id,
                 "ERROR",
-                f"/metal_{spec.key} エラー",
+                f"/metal {spec.key} エラー",
                 user=interaction.user,
                 fields={"エラー内容": str(e)},
             )
@@ -73,9 +73,10 @@ async def _handle_single_metal(interaction: discord.Interaction, grams: float, s
 
 def register_metal_commands(bot: discord.Client) -> None:
     """金属価格コマンドを登録"""
+    group = app_commands.Group(name="metal", description="貴金属の現在価格")
 
     def _create_single_command(spec: MetalSpec):
-        @bot.tree.command(name=f"metal_{spec.key}", description=f"{spec.display_name}の現在価格を表示します")
+        @group.command(name=spec.key, description=f"{spec.display_name}の現在価格を表示します")
         @app_commands.describe(g="計算するグラム数を入力してください")
         async def _cmd(interaction: discord.Interaction, g: float):
             # 監査ログの送信も Discord への往復で、失敗すれば待たされる。
@@ -86,7 +87,7 @@ def register_metal_commands(bot: discord.Client) -> None:
                     interaction.client,
                     interaction.guild.id,
                     "INFO",
-                    f"/metal_{spec.key} 実行",
+                    f"/metal {spec.key} 実行",
                     user=interaction.user,
                     fields={
                         "チャンネル": interaction.channel.mention if hasattr(interaction.channel, "mention") else str(interaction.channel),
@@ -100,7 +101,7 @@ def register_metal_commands(bot: discord.Client) -> None:
     for spec in METAL_COMMANDS.values():
         _create_single_command(spec)
 
-    @bot.tree.command(name="metal_all", description="金・銀・プラチナの現在価格をまとめて表示します")
+    @group.command(name="all", description="金・銀・プラチナの現在価格をまとめて表示します")
     @app_commands.describe(g="計算するグラム数を入力してください")
     async def all_metals(interaction: discord.Interaction, g: float):
         if g <= 0:
@@ -136,7 +137,7 @@ def register_metal_commands(bot: discord.Client) -> None:
                     interaction.client,
                     interaction.guild.id,
                     "INFO",
-                    "/metal_all 実行",
+                    "/metal all 実行",
                     user=interaction.user,
                     fields={"グラム数": str(g)},
                 )
@@ -146,8 +147,10 @@ def register_metal_commands(bot: discord.Client) -> None:
                     interaction.client,
                     interaction.guild.id,
                     "ERROR",
-                    "/metal_all エラー",
+                    "/metal all エラー",
                     user=interaction.user,
                     fields={"エラー内容": str(e)},
                 )
             await _respond_error(interaction, "エラーだ。俺様の力をもってしても処理できなかった。しばらく待ってから試せ。")
+
+    bot.tree.add_command(group)
