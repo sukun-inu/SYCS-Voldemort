@@ -348,3 +348,102 @@ async def recording_clip(guild_id: str, token: str, start: float = 0.0, end: flo
             "Content-Length": str(len(payload)),
         },
     )
+
+
+# 声の解析。加工されているかを調べ、単純な変換なら打ち消して聞ける。
+# 「誰か」は出さない（出せない）。詳しくは services/voice_analysis.py を見ること。
+_RESTORE_MIN_FACTOR = 0.5
+_RESTORE_MAX_FACTOR = 2.0
+
+
+def _stem_bytes(zip_path: Path, member: str) -> bytes | None:
+    """ZIP 内の mp3 を取り出す。無圧縮なら展開せずに範囲で読む。"""
+    found = _stored_member_range(zip_path, member)
+    try:
+        if found is None:
+            with zipfile.ZipFile(zip_path) as archive:
+                return archive.read(member)
+        offset, size = found
+        with open(zip_path, "rb") as handle:
+            handle.seek(offset)
+            return handle.read(size)
+    except (KeyError, OSError, zipfile.BadZipFile) as e:
+        logger.warning("トラックを読めませんでした %s: %s", member, e)
+        return None
+
+
+def _stem_of(guild_id: str, token: str, index: int) -> tuple[Path, dict, dict]:
+    zip_path = _recording_zip(guild_id, token)
+    manifest = _read_manifest(zip_path)
+    stem = next((s for s in manifest.get("stems", [])
+                 if int(s.get("index", -1)) == index), None)
+    if stem is None:
+        raise HTTPException(status_code=404, detail="そのトラックはありません。")
+    return zip_path, manifest, stem
+
+
+@dlaudio_router.get("/files/{guild_id}/{token}/analysis/{index}")
+async def recording_analysis(guild_id: str, token: str, index: int):
+    """トラック1本の声を調べる。
+
+    その場で計算する（書き出し時にやると、全員ぶんで待たされる）。長さに
+    依らず一定のコストになるよう、録音の各所から少しずつ抜き出して見る。
+    """
+    from services import voice_analysis
+
+    zip_path, manifest, stem = _stem_of(guild_id, token, index)
+    data = _stem_bytes(zip_path, str(stem.get("file", "")))
+    if data is None:
+        raise HTTPException(status_code=500, detail="トラックを読めませんでした。")
+
+    duration = float(manifest.get("duration_seconds") or 0) or 60.0
+    try:
+        result = voice_analysis.analyse(data, duration)
+    except Exception as e:
+        logger.exception("声の解析に失敗 token=%s index=%s: %s", token, index, e)
+        raise HTTPException(status_code=500, detail="声を調べられませんでした。")
+
+    result["name"] = stem.get("name")
+    result["restore_url"] = (
+        f"/dlaudio/files/{guild_id}/{token}/stem/{index}/restored")
+    return JSONResponse(result)
+
+
+@dlaudio_router.get("/files/{guild_id}/{token}/stem/{index}/restored")
+async def recording_stem_restored(guild_id: str, token: str, index: int,
+                                  factor: float = 1.0):
+    """変換を打ち消したトラックを返す。
+
+    どの倍率を打ち消すかは呼び出し側が決める。本人の地声が分からない以上、
+    正しい倍率を機械が決めることはできない（解析が返すのは出発点の目安）。
+    """
+    from services import voice_analysis
+
+    if not (_RESTORE_MIN_FACTOR <= factor <= _RESTORE_MAX_FACTOR):
+        raise HTTPException(
+            status_code=400,
+            detail=f"倍率は {_RESTORE_MIN_FACTOR}〜{_RESTORE_MAX_FACTOR} で指定してください。")
+
+    zip_path, _, stem = _stem_of(guild_id, token, index)
+    data = _stem_bytes(zip_path, str(stem.get("file", "")))
+    if data is None:
+        raise HTTPException(status_code=500, detail="トラックを読めませんでした。")
+
+    chain = ",".join(voice_analysis.restore_command(factor))
+    try:
+        result = subprocess.run(
+            [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error",
+             "-i", "pipe:0", "-af", chain,
+             "-c:a", "libmp3lame", "-q:a", "5", "-f", "mp3", "pipe:1"],
+            input=data, capture_output=True, timeout=300,
+        )
+    except (subprocess.SubprocessError, OSError) as e:
+        logger.warning("復元に失敗 token=%s index=%s: %s", token, index, e)
+        raise HTTPException(status_code=500, detail="復元できませんでした。")
+    if result.returncode != 0 or not result.stdout:
+        logger.warning("復元に失敗 token=%s index=%s: %s", token, index,
+                       result.stderr.decode("utf-8", "replace")[:200])
+        raise HTTPException(status_code=500, detail="復元できませんでした。")
+
+    return Response(content=result.stdout, media_type="audio/mpeg",
+                    headers={"Content-Length": str(len(result.stdout))})
