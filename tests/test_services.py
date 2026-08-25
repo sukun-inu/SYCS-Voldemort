@@ -2535,3 +2535,160 @@ class RtpPaddingTests(unittest.TestCase):
         self.assertEqual(session.tracks, {}, "詰め物からトラックが作られている")
         self.assertEqual(session.dropped_packets, 0, "詰め物をデコードしている")
         self.assertEqual(sink._streams[1].padding_only, 8)
+
+
+class VoiceAnalysisTests(unittest.TestCase):
+    """録音した声に加工が入っていないかの判定。
+
+    テスト信号は音源フィルタ模型で作る（声門パルス列を実際の共鳴器に通す）。
+    倍音の振幅を整形しただけの信号だと、LPC が拾うべき極が存在せず倍音に
+    食いつくため、解析側が正しくても値が出ない。最初にそれで作って、
+    動く方法を捨てるところだった。
+    """
+
+    # 母音を並べる。1種類を長く伸ばすだけだと、追跡が「その区間の中では
+    # 一貫しているが実際とは違う組」に落ち着くことがある。変化のある発話が
+    # 一定量必要、というのは解析側の性質でもある。
+    VOWELS = [
+        [(730, 80), (1090, 90), (2440, 140), (3400, 200)],    # あ
+        [(270, 60), (2290, 100), (3010, 160), (3700, 220)],   # い
+        [(300, 60), (870, 90), (2240, 140), (3300, 200)],     # う
+        [(530, 70), (1840, 100), (2480, 150), (3500, 210)],   # え
+        [(570, 70), (840, 90), (2410, 140), (3300, 200)],     # お
+        [(730, 80), (1090, 90), (2440, 140), (3400, 200)],    # あ
+    ]
+
+    def setUp(self):
+        from services import voice_analysis
+        self.va = voice_analysis
+
+    def _voice(self, seconds=6.0, f0=120.0, scale=1.0, rate=48000):
+        import array
+        import math
+        out = array.array("h")
+        piece = seconds / len(self.VOWELS)
+        for index, formants in enumerate(self.VOWELS):
+            f0 = f0 * (1 + 0.05 * math.sin(index)) if index else f0
+            length = int(rate * piece * 0.8)
+            pulses = [0.0] * length
+            position = 0.0
+            while position < length:
+                pulses[int(position)] = 1.0
+                position += rate / (f0 * scale)
+            wave = pulses
+            for freq, width in formants:
+                f, b = freq * scale, width * scale
+                r = math.exp(-math.pi * b / rate)
+                theta = 2 * math.pi * f / rate
+                a1, a2 = 2 * r * math.cos(theta), -r * r
+                filtered = [0.0] * length
+                z1 = z2 = 0.0
+                for i, value in enumerate(wave):
+                    v = value + a1 * z1 + a2 * z2
+                    filtered[i] = v
+                    z2, z1 = z1, v
+                wave = filtered
+            peak = max(abs(v) for v in wave) or 1.0
+            for v in wave:
+                s = int(v / peak * 11000)
+                out.append(s)
+                out.append(s)
+            for _ in range(int(rate * piece * 0.2)):
+                out.append(0)
+                out.append(0)
+        return out.tobytes()
+
+    def _mp3(self, pcm, name):
+        import subprocess
+        from config import DJAUDIO_FFMPEG_PATH
+        path = Path(tempfile.mkdtemp()) / name
+        subprocess.run(
+            [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-y",
+             "-f", "s16le", "-ar", "48000", "-ac", "2", "-i", "pipe:0",
+             "-c:a", "libmp3lame", "-q:a", "4", str(path)],
+            input=pcm, check=True, timeout=300)
+        return path
+
+    def _shift(self, source, factor, name):
+        import subprocess
+        from config import DJAUDIO_FFMPEG_PATH
+        path = source.parent / name
+        chain = f"asetrate={int(48000 * factor)},aresample=48000,atempo={1/factor:.6f}"
+        subprocess.run(
+            [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-y",
+             "-i", str(source), "-af", chain, "-c:a", "libmp3lame", "-q:a", "4",
+             str(path)], check=True, timeout=300)
+        return path
+
+    def test_a_natural_voice_is_not_called_processed(self):
+        result = self.va.analyse(self._mp3(self._voice(), "plain.mp3"), 6.0)
+        self.assertEqual(result["verdict"], "natural", result.get("reason"))
+        self.assertTrue(10.0 <= result["vocal_tract_cm"] <= 19.0,
+                        result["vocal_tract_cm"])
+
+    def test_individual_differences_are_not_called_processed(self):
+        """地声の個人差で加工扱いすると、警告が信用されなくなる。"""
+        high = self._mp3(self._voice(f0=210.0, scale=1.12), "female.mp3")
+        result = self.va.analyse(high, 6.0)
+        self.assertEqual(result["verdict"], "natural", result.get("reason"))
+
+    def test_a_large_shift_is_detected(self):
+        plain = self._mp3(self._voice(), "plain.mp3")
+        for factor in (0.6, 0.72):
+            shifted = self._shift(plain, factor, f"shift{factor}.mp3")
+            result = self.va.analyse(shifted, 6.0)
+            self.assertEqual(result["verdict"], "suspect",
+                             f"{factor}: {result.get('reason')}")
+
+    def test_the_shift_factor_is_measured(self):
+        plain = self._mp3(self._voice(), "plain.mp3")
+        base = self.va.analyse(plain, 6.0)["formant_spacing_hz"]
+        for factor in (1.35, 1.7, 0.72):
+            shifted = self._shift(plain, factor, f"m{factor}.mp3")
+            moved = self.va.analyse(shifted, 6.0)["formant_spacing_hz"]
+            measured = moved / base
+            self.assertLess(abs(measured - factor), factor * 0.2,
+                            f"倍率 {factor} を {measured:.2f} と測った")
+
+    def test_a_moderate_shift_that_lands_in_range_is_not_asserted(self):
+        """人の範囲に着地する変換は、断定できないのが正しい。
+
+        大柄な人の声を 1.35 倍すると、小柄な人の実測値と同じ範囲に入る。
+        本人の地声という基準が無い以上、これは原理的に判別できない。
+        見抜けたことにする実装は、嘘の断定を作るだけなので入れない。
+        """
+        plain = self._mp3(self._voice(), "plain.mp3")
+        shifted = self._shift(plain, 1.35, "mid.mp3")
+        self.assertEqual(self.va.analyse(shifted, 6.0)["verdict"], "natural")
+
+    def test_a_known_shift_can_be_undone(self):
+        import subprocess
+        from config import DJAUDIO_FFMPEG_PATH
+        plain = self._mp3(self._voice(), "plain.mp3")
+        base = self.va.analyse(plain, 6.0)["formant_spacing_hz"]
+        shifted = self._shift(plain, 1.5, "up.mp3")
+
+        restored = shifted.parent / "back.mp3"
+        chain = ",".join(self.va.restore_command(1.5))
+        subprocess.run(
+            [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-y",
+             "-i", str(shifted), "-af", chain, "-c:a", "libmp3lame", "-q:a", "4",
+             str(restored)], check=True, timeout=300)
+
+        after = self.va.analyse(restored, 6.0)["formant_spacing_hz"]
+        self.assertLess(abs(after - base), base * 0.12, f"{after} vs {base}")
+
+    def test_the_restore_filter_uses_the_files_own_rate(self):
+        """解析用の 16kHz を当てると 48kHz のファイルで倍率が狂う。"""
+        chain = " ".join(self.va.restore_command(1.5))
+        self.assertIn("aresample=48000", chain)
+        self.assertIn(f"asetrate={int(48000 / 1.5)}", chain)
+
+    def test_silence_is_reported_as_undecidable(self):
+        result = self.va.analyse(self._mp3(bytes(48000 * 4 * 3), "quiet.mp3"), 3.0)
+        self.assertEqual(result["verdict"], "unknown")
+
+    def test_it_never_claims_to_identify_anyone(self):
+        result = self.va.analyse(self._mp3(self._voice(), "plain.mp3"), 6.0)
+        self.assertFalse(result["identifies_speaker"])
+        self.assertNotIn("speaker_id", result)

@@ -601,3 +601,13 @@
   .daw-head-col { flex-basis: 132px; }
   .daw-strip { flex-basis: 78px; }
 }
+
+/* 声の解析。トラックの「?」から開く。 */
+.daw-inspect {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--canvas);
+  padding: 12px 14px;
+}
+.daw-inspect-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.daw-inspect .list-row { padding: 4px 0; font-size: 13px; }
