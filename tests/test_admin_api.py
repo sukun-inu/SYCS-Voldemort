@@ -942,13 +942,14 @@ class SnowflakeJsonTests(unittest.TestCase):
     ID は 19 桁あり、JavaScript の数値は 2^53-1 までしか正確に扱えない。
     JSON に数値として入れると読んだ時点で桁が落ちる。
 
-        1342455482031542302  →  1342455482031542300
+        1234567890123456789  →  1234567890123456800
 
     実際にこれで、実在するチャンネルを指定しているのに管理画面のプルダウンが
     「一覧にありません」になった。
     """
 
-    VC_ID = 1342455482031542302
+    # 作り物の ID。必要なのは 19 桁で桁落ちすることだけ。
+    VC_ID = 1234567890123456789
 
     def test_javascript_really_loses_these_digits(self):
         """前提の確認。桁が落ちないなら、この対策は要らない。"""
@@ -987,4 +988,4 @@ class SnowflakeJsonTests(unittest.TestCase):
         body = client.get("/admin/api/recording?include_channels=0").text
         self.assertIn(f'"{self.VC_ID}"', body, body[:400])
         # 桁が落ちた値が混ざっていないこと
-        self.assertNotIn("1342455482031542300", body)
+        self.assertNotIn("1234567890123456800", body)

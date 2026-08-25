@@ -62,12 +62,15 @@ def _serve_channels(channels):
     admin_auth._guild_channels_cache.clear()
     admin_auth._guild_channels_cooldown.clear()
 
-# 一覧に出てこないチャンネルを指定した状態を作っておく（消えた／Bot から
-# 見えない／種類が違う、を模す）。プルダウンが空欄になって設定が消えないこと。
-_ORPHAN_CHANNEL = "1541471185798307800"
-# 実在するチャンネルの ID（19桁）。JavaScript の数値では桁が落ちるので、
-# 文字列で届かないとプルダウンが「一覧にありません」になる。
-_REAL_VC = "1342455482031542302"
+# 検証用の作り物の ID。本物を書かない。必要なのは「Discord の ID と同じく
+# 19 桁で、JavaScript の数値では桁が落ちる」という性質だけ。
+#
+# 一覧に出てこないチャンネル（消えた／Bot から見えない／種類が違う、を模す）。
+# プルダウンが空欄になって設定が消えないことを見る。
+_ORPHAN_CHANNEL = "1111111111111111111"
+# 一覧に載っているチャンネル。JSON に数値で入れると
+# 1234567890123456789 → 1234567890123456800 と桁が落ちて一致しなくなる。
+_LISTED_CHANNEL = "1234567890123456789"
 GUILD_ID = 999
 
 # ユーザー状態監査は Postgres を使う。ここでは画面の確認が目的なので、
@@ -328,13 +331,13 @@ def main():
         check("そのまま保存しても設定が消えない", str(saved) == _ORPHAN_CHANNEL, f"保存後={saved}")
 
         # 実在するチャンネルが名前で出ること。JSON に数値で入れると
-        # 1342455482031542302 → 1342455482031542300 と桁が落ちて一致しない。
+        # 1234567890123456789 → 1234567890123456800 と桁が落ちて一致しない。
         _serve_channels([
             {"id": "111", "name": "general", "type": 0},
-            {"id": _REAL_VC, "name": "室内(4LDK)", "type": 2},
+            {"id": _LISTED_CHANNEL, "name": "雑談VC", "type": 2},
         ])
         settings_store.set_recording_settings(GUILD_ID, {
-            "vc_channel_id": int(_REAL_VC), "announce_channel_id": None,
+            "vc_channel_id": int(_LISTED_CHANNEL), "announce_channel_id": None,
         })
         page.locator('.window[data-app-id="recording"] .window-control').last.click()
         page.wait_for_timeout(300)
@@ -350,7 +353,7 @@ def main():
                  .map((s) => ({ value: s.value,
                                 text: s.selectedOptions[0] ? s.selectedOptions[0].textContent : "" }))""")
         check("19桁のIDが桁落ちせず名前で出る",
-              any(x["value"] == _REAL_VC and "室内(4LDK)" in x["text"] for x in picked),
+              any(x["value"] == _LISTED_CHANNEL and "雑談VC" in x["text"] for x in picked),
               str(picked))
 
         # チェックボックスは、スキーマ駆動の画面と同じ並びにする
