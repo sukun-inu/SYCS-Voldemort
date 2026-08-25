@@ -142,6 +142,38 @@
     </div>
   </div>
 
+  <!-- VC録音 -->
+  <div class="doc-section">
+    <h2>{{ icon('record-circle') }}VC録音<span class="chip danger">開始は管理者のみ</span></h2>
+    <p>管理者がボイスチャンネルの音声を<strong>参加者ごとの別トラック</strong>で録音できます。議事録を残したい場合や、法的機関へ提出する必要が生じた場合を想定した機能です。</p>
+
+    <div class="info-panel">
+      <p class="info-panel-title">{{ icon('bell-fill') }}録音は必ず通知されます</p>
+      録音が始まると、対象のボイスチャンネルへ<strong>録音中である旨が必ず投稿されます</strong>。この通知を無効にすることはできません。黙って録るための機能ではありません。
+    </div>
+
+    <h3>録音されたくないとき</h3>
+    <div class="doc-cmd">
+      <div class="doc-cmd-entry">
+        <div class="doc-cmd-name">/record exclude</div>
+        <p class="doc-cmd-desc"><strong>誰でも使えます。</strong>自分を録音の対象から外します。進行中の録音にもその場で反映され、あなたの音声はトラックに残りません。<code>/record exclude exclude:False</code> で対象に戻せます。</p>
+      </div>
+    </div>
+
+    <h3>録音されたデータの扱い</h3>
+    <ul>
+      <li>参加者ごとに別のトラック（mp3）へ分けて記録され、ZIP でまとめて配布されます。</li>
+      <li>ダウンロードリンクには<strong>期限があり</strong>（既定 7 日、最長 30 日）、過ぎると自動的に削除されます。</li>
+      <li>各トラックは同じ時間軸に揃えられているため、途中から参加した人は冒頭が、途中で抜けた人は末尾が無音になります。</li>
+      <li>運営者は、<strong>政府機関への提供が必要な場合を除き</strong>録音データを使用しません。</li>
+    </ul>
+
+    <div class="info-panel">
+      <p class="info-panel-title">{{ icon('exclamation-triangle-fill') }}録音する側の責任</p>
+      音声は個人情報保護法上の個人情報に該当し得ます。録音の実施・保管・提供は各サーバーの責任において、法令に則って行ってください。詳細は<a href="{{ url_for('privacy') }}">プライバシーポリシー</a>をご確認ください。
+    </div>
+  </div>
+
   <!-- AI 会話 -->
   <div class="doc-section">
     <h2>{{ icon('chat-dots-fill') }}AI 会話（ヴォルデモート）<span class="chip accent">自動</span></h2>
@@ -181,7 +213,11 @@
     <p>上記の自動機能はすべてサーバーの管理者が設定する必要があります。スラッシュコマンド（Discord 上）または <strong>Web 管理画面</strong>から設定できます。</p>
     <div class="info-panel">
       <p class="info-panel-title">{{ icon('display') }}Web 管理画面でできること</p>
-      各機能の送信先チャンネルや通知条件の設定、DJAudio のキャッシュ・クールダウン調整、ニュースフィードのキーワード管理、リアクションロールの絵文字とロールの紐づけ管理、TTS の VC・読み上げチャンネル・声・辞書管理、セキュリティ設定（信頼済みユーザー・バイパスロール）。
+      各機能の送信先チャンネルや通知条件の設定、DJAudio のキャッシュ・クールダウン調整、ニュースフィードのキーワード管理、リアクションロールの絵文字とロールの紐づけ管理、TTS の VC・読み上げチャンネル・声・辞書管理、セキュリティ設定（信頼済みユーザー・バイパスロール）、VC録音の開始・停止と保存期間の設定。
+    </div>
+    <div class="info-panel">
+      <p class="info-panel-title">{{ icon('sliders') }}録音ミキサー</p>
+      録り終えた録音は、管理画面の <strong>VC録音</strong> から「ミキサー」を開くと、参加者ごとのトラックを同じ時間軸に並べて波形表示・再生できます。ミュート／ソロ／音量の調整と、波形をクリックしての頭出しに対応しています。
     </div>
   </div>
 
