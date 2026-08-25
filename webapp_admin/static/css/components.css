@@ -375,81 +375,226 @@
 /* ── 録音ミキサー ─────────────────────────────────────────
    トラックを縦に積み、右側の波形を同じ時間軸で並べる。
    左の見出し幅を固定して、目盛りと波形の左端が揃うようにしている。 */
-.mixer { --mixer-head: 200px; }
 
-.mixer-transport { align-items: center; gap: 8px; }
-.mixer-clock { font-variant-numeric: tabular-nums; opacity: .85; }
+/* ── 録音ミキサー（DAW）───────────────────────────────────────
+   アレンジ（波形＋時間軸）とミキサー（チャンネルストリップ）の2画面。
+   波形は表示範囲だけを描くので、キャンバスは常にビューポート幅。
+   横スクロールは別レイヤー（.daw-spacer）が作る。 */
+.daw { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 
-.mixer-timeline { display: flex; align-items: stretch; }
-.mixer-timeline-head { flex: 0 0 var(--mixer-head); }
-.mixer-timeline-body { position: relative; flex: 1 1 auto; min-width: 0; }
-
-.mixer-ruler {
-  position: relative;
-  height: 18px;
-  border-bottom: 1px solid var(--border, rgba(255,255,255,.12));
+.daw-transport {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--canvas-subtle);
 }
-.mixer-tick {
-  position: absolute;
-  top: 0;
-  transform: translateX(-50%);
-  font-size: 11px;
-  opacity: .6;
-  white-space: nowrap;
+.daw-clock {
   font-variant-numeric: tabular-nums;
+  font-size: 15px; letter-spacing: .02em;
+  padding: 2px 10px;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius);
+  background: var(--canvas);
 }
-.mixer-tick:first-child { transform: none; }
-
-/* 再生位置。レーン全体に重ねたいので、下方向へ伸ばす */
-.mixer-scrub { position: relative; height: 10px; cursor: pointer; }
-.mixer-playhead {
-  position: absolute;
-  top: 0;
-  width: 2px;
-  height: 10px;
-  background: var(--danger, #ff5b52);
-  pointer-events: none;
+.daw-transport .btn.is-on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
-.mixer-lanes { display: flex; flex-direction: column; gap: 6px; }
+.daw-tabs { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.daw-tab {
+  appearance: none; border: 0; cursor: pointer;
+  padding: 4px 14px; font-size: 13px;
+  background: var(--canvas); color: var(--fg-muted);
+}
+.daw-tab + .daw-tab { border-left: 1px solid var(--border); }
+.daw-tab.is-on { background: var(--accent); color: #fff; }
 
-.mixer-lane {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  background: rgba(255, 255, 255, .03);
-  border: 1px solid var(--border, rgba(255,255,255,.10));
-  border-radius: 6px;
+.daw-zoom { display: inline-flex; gap: 4px; }
+.daw-zoom .btn { min-width: 30px; padding: 0 8px; }
+
+/* ── アレンジ ── */
+.daw-arrange {
+  display: flex; align-items: stretch; min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--canvas);
   overflow: hidden;
 }
+.daw-head-col { flex: 0 0 190px; border-right: 1px solid var(--border); background: var(--canvas-subtle); }
+.daw-head-spacer { height: 26px; border-bottom: 1px solid var(--border); }
+.daw-heads { display: flex; flex-direction: column; }
 
-.mixer-lane-head {
-  flex: 0 0 calc(var(--mixer-head) - 8px);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  padding: 6px 8px;
-  min-width: 0;
+.daw-head {
+  display: flex; align-items: center; gap: 8px;
+  height: 72px; padding: 0 8px 0 0;
+  border-bottom: 1px solid var(--border-muted);
+  transition: opacity .15s ease;
 }
-.mixer-lane-name { font-size: 13px; font-weight: 500; }
-.mixer-lane-sub { font-size: 11px; opacity: .6; }
-.mixer-lane-controls { display: flex; align-items: center; gap: 4px; }
-.mixer-lane-controls .btn { padding: 0 6px; min-width: 26px; line-height: 20px; }
+.daw-head.is-silenced { opacity: .45; }
+.daw-head-color { flex: 0 0 4px; align-self: stretch; }
+.daw-head-body { flex: 1 1 auto; min-width: 0; }
+.daw-head-name { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+.daw-head-sub { font-size: 11px; color: var(--fg-subtle); font-variant-numeric: tabular-nums; }
+.daw-head-buttons { display: flex; gap: 3px; }
 
-.mixer-volume { flex: 1 1 auto; min-width: 40px; accent-color: var(--accent, #4fa9ff); }
+.daw-btn {
+  appearance: none; cursor: pointer;
+  width: 22px; height: 22px; padding: 0;
+  font-size: 11px; font-weight: 600; line-height: 1;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--canvas); color: var(--fg-muted);
+}
+.daw-btn:hover { border-color: var(--fg-subtle); }
+.daw-btn.is-on { background: var(--danger); border-color: var(--danger); color: #fff; }
+.daw-strip-buttons .daw-btn:last-child.is-on,
+.daw-head-buttons .daw-btn:last-child.is-on { background: var(--attention); border-color: var(--attention); }
 
-.mixer-lane-wave { flex: 1 1 auto; min-width: 0; }
-.mixer-wave { display: block; width: 100%; height: 56px; }
+.daw-track-area { flex: 1 1 auto; min-width: 0; position: relative; }
+.daw-viewport { position: relative; }
+.daw-ruler { position: relative; height: 26px; border-bottom: 1px solid var(--border); cursor: ew-resize; }
+.daw-ruler-canvas { display: block; width: 100%; height: 26px; }
+.daw-loop {
+  position: absolute; top: 0; bottom: 0;
+  background: var(--accent-soft);
+  border-left: 1px solid var(--accent);
+  border-right: 1px solid var(--accent);
+  pointer-events: none;
+}
+.daw-lanes { display: flex; flex-direction: column; cursor: text; }
+.daw-lane { height: 72px; border-bottom: 1px solid var(--border-muted); }
+.daw-lane-canvas { display: block; width: 100%; height: 72px; }
+
+.daw-playhead {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 1px;
+  background: var(--danger);
+  pointer-events: none;
+}
+.daw-playhead::before {
+  content: ""; position: absolute; top: 0; left: -4px;
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 6px solid var(--danger);
+}
+
+/* 横スクロールの見かけだけを作る帯。波形そのものは表示範囲しか描かない。 */
+.daw-scroll { overflow-x: auto; overflow-y: hidden; height: 12px; }
+.daw-spacer { height: 1px; }
+
+/* ── ミキサー ── */
+.daw-console {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--canvas);
+  overflow-x: auto;
+}
+.daw-strips { display: flex; align-items: flex-start; gap: 0; }
+
+.daw-strip {
+  flex: 0 0 100px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 10px 8px;
+  border-right: 1px solid var(--border-muted);
+  transition: opacity .15s ease;
+}
+.daw-strip.is-silenced { opacity: .45; }
+/* マスターは右端に貼り付ける。トラックが多くて横に流れても、
+   出力の様子が常に見えているほうがいい。 */
+.daw-strip.is-master {
+  flex: 0 0 104px;
+  position: sticky;
+  right: 0;
+  border-left: 2px solid var(--border);
+  border-right: 0;
+  background: var(--canvas-subtle);
+}
+.daw-strip-top { display: flex; align-items: center; gap: 5px; width: 100%; }
+.daw-strip-color { flex: 0 0 8px; height: 8px; border-radius: 2px; }
+.daw-strip-name { font-size: 12px; font-weight: 500; }
+.daw-strip-pan { display: flex; justify-content: center; }
+/* 高さは確定値で持つ。パーセント指定を高さ未定の親にぶら下げると、
+   キャンバスの内在高さで親が伸び、次のフレームでさらに伸びる、という
+   増殖が起きる（実際にフェーダーが 1440px まで伸びた）。 */
+.daw-strip-body { display: flex; align-items: stretch; gap: 6px; height: 220px; }
+.daw-strip-db {
+  font-size: 11px; font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--canvas-inset);
+}
+.daw-strip-buttons { display: flex; gap: 4px; }
+
+/* フェーダー */
+.daw-fader { position: relative; width: 46px; display: flex; justify-content: flex-end;
+             padding-right: 8px; cursor: ns-resize; }
+.daw-fader-scale { position: absolute; left: 0; top: 0; bottom: 0; width: 22px; pointer-events: none; }
+.daw-fader-mark {
+  position: absolute; right: 0;
+  font-size: 8px; line-height: 1;
+  color: var(--fg-subtle);
+  font-variant-numeric: tabular-nums;
+  transform: translateY(50%);
+}
+.daw-fader-mark.is-unity { color: var(--fg-muted); font-weight: 600; }
+.daw-fader:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.daw-fader-track {
+  position: relative; width: 6px; height: 100%;
+  border-radius: 3px;
+  background: var(--canvas-inset);
+  box-shadow: inset 0 0 0 1px var(--border-muted);
+}
+.daw-fader-fill {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  border-radius: 3px;
+  background: var(--accent);
+  opacity: .55;
+}
+.daw-fader-knob {
+  position: absolute; left: 50%; width: 22px; height: 12px;
+  transform: translateX(-50%);
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--canvas) 0%, var(--canvas-subtle) 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .18);
+}
+.daw-fader-knob::after {
+  content: ""; position: absolute; left: 3px; right: 3px; top: 50%;
+  height: 1px; background: var(--fg-subtle);
+}
+
+/* メーター */
+.daw-meter {
+  display: block; width: 12px; height: 100%;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px var(--border-muted);
+}
+
+/* パンつまみ */
+.daw-knob {
+  position: relative; width: 30px; height: 30px; cursor: ns-resize;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: radial-gradient(circle at 50% 35%, var(--canvas) 0%, var(--canvas-subtle) 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .16);
+}
+.daw-knob:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.daw-knob-pointer {
+  position: absolute; inset: 0;
+  transition: transform .05s linear;
+}
+.daw-knob-pointer::before {
+  content: ""; position: absolute; left: 50%; top: 3px;
+  width: 2px; height: 10px; margin-left: -1px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+.daw-warn { font-size: 10px; padding: 0 5px; }
 
 @media (max-width: 720px) {
-  .mixer { --mixer-head: 140px; }
-  .mixer-lane-sub { display: none; }
-}
-
-/* 声として成立していないトラックの印。名前の右に小さく添える。 */
-.mixer-warn {
-  margin-left: 8px;
-  font-size: 11px;
-  vertical-align: middle;
+  .daw-head-col { flex-basis: 132px; }
+  .daw-strip { flex-basis: 78px; }
 }
