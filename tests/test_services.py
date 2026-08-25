@@ -1227,6 +1227,36 @@ class StreamAssemblerTests(unittest.TestCase):
         self.assertEqual(len(got), 4)
         self.assertEqual(self.stream.lost, 0)
 
+    def test_silence_packets_do_not_enter_the_reorder_buffer(self):
+        """voice_recv の SilencePacket は sequence が常に -1（rtp.py）。
+
+        連番で並べ直す仕組みにこれを入れると、すべて同じ鍵で衝突したうえ、
+        次に来る本物のパケットとの差が数万になる。実測では lost が 27700 まで
+        膨らみ、位置合わせの基準（RTP タイムスタンプの起点）ごと作り直される。
+        中身は無音なので、時間軸の穴埋めに任せて数えるだけにする。
+        """
+        session = self.rec.RecordingSession(
+            guild_id=999, channel_id=555, channel_name="雑談VC",
+            started_by_id=1, started_by_name="すずき",
+            started_at=time.monotonic(), max_seconds=0, retention_days=7,
+        )
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=1, display_name="すずき")
+
+        def send(sequence, timestamp, payload):
+            data = SimpleNamespace(
+                packet=SimpleNamespace(ssrc=1, sequence=sequence, timestamp=timestamp),
+                opus=payload)
+            sink.write(user, data)
+
+        from discord.ext.voice_recv.rtp import OPUS_SILENCE
+        send(-1, 5_000_000, OPUS_SILENCE)          # 発話の切れ目
+        send(27700, 5_000_000, bytes(20))       # そのあとの本物
+
+        stream = sink._streams[1]
+        self.assertEqual(stream.silence, 1)
+        self.assertEqual(stream.lost, 0, "無音パケットで欠落が水増しされている")
+
     def test_timestamps_place_audio_on_the_timeline(self):
         """到着時刻ではなく RTP タイムスタンプで位置を決めること。"""
         base = 1_000_000
