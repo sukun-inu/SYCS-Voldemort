@@ -2364,3 +2364,91 @@ class EndToEndEncryptionTests(unittest.TestCase):
         self.assertEqual(session.tracks, {}, "暗号文からトラックが作られている")
         self.assertEqual(session.encrypted_frames, 10)
         self.assertEqual(session.dropped_packets, 0, "デコードを試している")
+
+
+class DaveDecryptionTests(unittest.TestCase):
+    """E2EE(DAVE)の受信側。
+
+    鍵交換（MLS）は discord.py 2.7.1 が実装済みで、davey が入っていれば
+    自動で成立する。足りないのは受信側の復号だけなので、そこを繋ぐ。
+    """
+
+    def setUp(self):
+        from services import dave
+        self.dave = dave
+
+    def test_davey_is_installed(self):
+        """入っていないと音声接続そのものが 4017 で拒否される。"""
+        self.assertTrue(self.dave.AVAILABLE, "davey が入っていない")
+        self.assertGreaterEqual(self.dave.MAX_PROTOCOL_VERSION, 1)
+
+    def test_discord_py_picks_up_davey(self):
+        """discord.py が davey を見つけていないと、版 0 を申告してしまう。"""
+        import discord.voice_state as voice_state
+        self.assertTrue(voice_state.has_dave)
+
+    def test_a_session_is_ignored_until_the_keys_are_shared(self):
+        """鍵が揃う前に復号を試すと例外になる。ready を見て避ける。"""
+        import davey
+        session = davey.DaveSession(davey.DAVE_PROTOCOL_VERSION, 111, 222)
+        self.assertFalse(session.ready)
+
+        client = SimpleNamespace(_connection=SimpleNamespace(dave_session=session))
+        self.assertIsNone(self.dave.session_of(client))
+
+        payload = bytes(87) + bytes.fromhex("c8db040cfafa")
+        self.assertIsNone(self.dave.decrypt_opus(client, 111, payload))
+
+    def test_no_client_is_handled(self):
+        self.assertIsNone(self.dave.session_of(None))
+        self.assertIsNone(self.dave.decrypt_opus(None, 111, b"x" * 40))
+
+    def test_the_reason_names_the_actual_problem(self):
+        """「録音できません」だけでは、何をすれば直るのか分からない。"""
+        reason = self.dave.unavailable_reason()
+        self.assertIn("暗号化", reason)
+        # davey が入っているので、原因は鍵の共有側だと伝わること
+        self.assertIn("鍵", reason)
+
+    def test_decryption_is_attempted_before_giving_up(self):
+        """復号できるなら、平文として録れること。"""
+        import services.recording_service as recording
+        session = recording.RecordingSession(
+            guild_id=999, channel_id=1, channel_name="VC",
+            started_by_id=1, started_by_name="t",
+            started_at=time.monotonic(), max_seconds=0, retention_days=1,
+        )
+        sink = recording._make_sink_class()(session)
+        user = Mock(id=1, display_name="すずき")
+
+        import discord.opus as opus
+        if not opus.is_loaded():
+            try:
+                opus._load_default()
+            except Exception:
+                self.skipTest("libopus が読み込めない環境です")
+        import math
+        import struct
+        pcm = bytearray()
+        for i in range(960):
+            v = int(12000 * math.sin(2 * math.pi * 440 * i / recording.SAMPLE_RATE))
+            pcm += struct.pack("<hh", v, v)
+        plain = opus.Encoder().encode(bytes(pcm), 960)
+        encrypted = bytes(87) + bytes.fromhex("c8db040cfafa")
+
+        data = SimpleNamespace(
+            packet=SimpleNamespace(ssrc=1, sequence=100, timestamp=48000, payload=120),
+            opus=encrypted)
+        with patch.object(recording.dave, "decrypt_opus", return_value=plain):
+            for i in range(5):
+                data.packet.sequence = 100 + i
+                data.packet.timestamp = 48000 + i * 960
+                sink.write(user, data)
+            sink.flush_pending()
+
+        stream = sink._streams[1]
+        self.assertEqual(stream.decrypted, 5, "復号を試していない")
+        self.assertEqual(stream.encrypted, 0, "復号できたのに諦めている")
+        self.assertIn(1, session.tracks, "復号した音がトラックになっていない")
+        for track in session.tracks.values():
+            track.close(1.0)
