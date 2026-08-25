@@ -362,6 +362,8 @@ class _StreamAssembler:
         self.late = 0        # 出したあとに届いた／溢れて捨てたパケット数
         self.silence = 0     # 発話の切れ目に来る無音パケット（並べ直しには入れない）
         self.failed = 0      # デコードできなかったパケット
+        self.decoded = 0     # デコードできたパケット（失敗数だけでは割合が分からない）
+        self.payload_types: dict[int, int] = {}   # RTP のペイロードタイプ別の数
 
     def decode(self, encoded: bytes | None) -> bytes:
         """encoded が None のときは欠落補間（PLC）。
@@ -490,6 +492,11 @@ def _make_sink_class():
             ssrc = int(getattr(packet, "ssrc", 0) or 0)
             self._users[ssrc] = user
             stream = self._stream_for(ssrc)
+            # Discord の音声は 120。別の番号が混ざっているなら、音声以外の
+            # パケットが音声として流れてきている。
+            ptype = getattr(packet, "payload", None)
+            if ptype is not None:
+                stream.payload_types[ptype] = stream.payload_types.get(ptype, 0) + 1
 
             encoded = data.opus
             now = time.monotonic()
@@ -526,18 +533,35 @@ def _make_sink_class():
                     stream.failed += 1
                     if stream.failed <= _FAILURE_SAMPLES:
                         logger.warning(
-                            "[recording] デコード失敗 ssrc=%s %s: %s / %d バイト %s",
+                            "[recording] デコード失敗 ssrc=%s %s: %s / %d バイト "
+                            "先頭=%s 末尾=%s ここまで成功=%d 失敗=%d 種別=%s",
                             ssrc, type(e).__name__, e,
                             0 if encoded is None else len(encoded),
-                            "（欠落補間）" if encoded is None else encoded[:8].hex(),
+                            "（欠落補間）" if encoded is None else encoded[:12].hex(),
+                            "-" if encoded is None else encoded[-6:].hex(),
+                            stream.decoded, stream.failed, stream.payload_types,
                         )
                     continue
+                stream.decoded += 1
                 self.session.feed(user, pcm, at=stream.offset_for(timestamp, elapsed))
 
         def flush_pending(self) -> None:
             """停止時に、抱えたままのパケットを書き出す。"""
             for ssrc, stream in list(self._streams.items()):
                 self._emit(ssrc, stream, stream.flush())
+            self.log_summary()
+
+        def log_summary(self) -> None:
+            """ストリームごとの内訳。数だけでは何が起きたか分からないため。"""
+            for ssrc, stream in self._streams.items():
+                user = self._users.get(ssrc)
+                name = getattr(user, "display_name", ssrc)
+                logger.info(
+                    "[recording] ssrc=%s (%s) 成功=%d 失敗=%d 欠落=%d 手遅れ=%d "
+                    "無音=%d RTP種別=%s",
+                    ssrc, name, stream.decoded, stream.failed, stream.lost,
+                    stream.late, stream.silence, stream.payload_types,
+                )
 
         def cleanup(self) -> None:
             self._streams.clear()
