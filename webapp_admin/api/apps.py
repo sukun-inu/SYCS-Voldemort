@@ -13,7 +13,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from starlette.responses import JSONResponse
+from webapp_admin.api.jsonsafe import SafeJSONResponse as JSONResponse
 
 from webapp_admin.schema import choices as choice_resolver
 from webapp_admin.schema.registry import PANEL_BY_ID, app_groups

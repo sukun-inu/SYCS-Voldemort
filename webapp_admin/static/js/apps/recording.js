@@ -22,6 +22,19 @@ function field(label, control, help) {
   );
 }
 
+/** オン・オフの欄。チェックと文字を横に並べる。
+ *
+ *  スキーマ駆動の画面（forms/widgets.js）が同じ見た目にしているので、
+ *  こちらだけ「ラベルが上・箱が中央」になっていると座りが悪い。 */
+function toggleField(label, input, help) {
+  return el(
+    "div",
+    { class: "field" },
+    el("label", { class: "check" }, input, el("span", { class: "check-text", text: label })),
+    help ? el("p", { class: "field-help", text: help }) : null
+  );
+}
+
 function section(title, ...children) {
   return el(
     "section",
@@ -75,8 +88,8 @@ export async function mount(win) {
   const channelValue = () =>
     (channelManualMode ? channelManual.value.trim() : channelSelect.value);
 
-  const enabledInput = el("input", { class: "input", type: "checkbox" });
-  const autoStartInput = el("input", { class: "input", type: "checkbox" });
+  const enabledInput = el("input", { type: "checkbox" });
+  const autoStartInput = el("input", { type: "checkbox" });
   // 自動録音の対象VC。未選択なら読み上げと同じVCに従う。
   const autoVcSelect = el("select", { class: "select" });
   const autoVcManual = el("input", {
@@ -367,9 +380,9 @@ export async function mount(win) {
                 "途中から参加した人は冒頭が、途中で抜けた人は末尾が無音になります。" })),
       section(
         "設定",
-        field("録音を有効にする", enabledInput,
+        toggleField("録音を有効にする", enabledInput,
               "オフにすると、自動録音も手動の開始もできません。"),
-        field("自動で録音する", autoStartInput,
+        toggleField("自動で録音する", autoStartInput,
               "オンにすると、対象VCに人が入った時点で録音を始めます。"
               + "読み上げとは独立したスイッチで、両方オンなら同じ接続で両方動きます。"),
         field("自動録音の対象VC（省略可）", autoVcBox,

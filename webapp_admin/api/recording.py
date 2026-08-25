@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from starlette.responses import JSONResponse
+from webapp_admin.api.jsonsafe import SafeJSONResponse as JSONResponse
 
 from config import DJAUDIO_CACHE_DIR
 from webapp_admin.extensions import limiter

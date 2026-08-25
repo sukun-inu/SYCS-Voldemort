@@ -31,7 +31,7 @@ from uuid import UUID
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from starlette.responses import JSONResponse
+from webapp_admin.api.jsonsafe import SafeJSONResponse as JSONResponse
 
 from webapp_admin.api.dev import check_dev
 from webapp_admin.extensions import limiter
