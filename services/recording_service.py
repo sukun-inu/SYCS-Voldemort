@@ -37,7 +37,7 @@ from pathlib import Path
 import discord
 
 from config import DJAUDIO_FFMPEG_PATH, JST as _JST
-from services import voice_session
+from services import dave, voice_session
 from services.djaudio_cache import register_file
 
 logger = logging.getLogger(__name__)
@@ -312,66 +312,20 @@ def measure_voice(path: Path, duration: float) -> float | None:
         return None
 
 
-# ── E2EE（DAVE）フレームの検出 ────────────────────────────────
+# ── E2EE（DAVE）────────────────────────────────────────────────
 
-# Discord は 2024年9月から音声・映像を端から端まで暗号化している（DAVE）。
-# 2026年3月2日からはボットにも必須になった。
+# 判定と復号は services/dave.py に置いてある。ここでは「録れないと決める
+# しきい値」だけを持つ。
 #
-# DAVE が有効なとき、Opus フレームは「全体が」暗号化される（仕様上、Opus には
-# 復号せずに読む必要のあるメタデータが無いため、平文範囲が存在しない）。
-# 受信側でこれを復号する実装は discord.py にも discord-ext-voice-recv にも
-# 無い（discord.py の DAVE は送信専用）。
-#
-# 暗号文をそのまま Opus に食わせると、多くは例外にならずに雑音が返る。
-# 「録れているのに聞けない」という一番たちの悪い壊れ方になるので、
-# 検出して正直に止める。
-#
-# 仕様（https://github.com/discord/dave-protocol）:
-#   [暗号文][認証タグ 8][nonce ULEB128][平文範囲 ULEB128][補助データ長 1][0xFAFA 2]
-# 実際に本番で観測したフレーム:
-#   ... c8db 04 0c fafa       長さ 0x0c=12 = タグ8 + nonce1 + 長さ1 + マーカー2
-#   ... 01 0d fafa 02 02      末尾は RTP パディング（voice_recv は剥がさない）
-# 利用者に見せる停止理由。原因と、いま何ができるのかを伝える。
-ENCRYPTED_REASON = (
-    "この通話は端から端まで暗号化（E2EE / DAVE）されているため録音できません"
-)
-
-DAVE_MAGIC = b"\xfa\xfa"
-# タグ8 + nonce1 + 長さ1 + マーカー2。これを下回る補助データ長はあり得ない。
-_DAVE_MIN_SUPPLEMENTAL = 12
-# RTP パディングが残っていることがあるので、少しだけ後ろも見る。
-_DAVE_MAX_PADDING = 8
-# 何割が E2EE なら「このセッションは録れない」と判断するか。
+# 何割が復号できなければ「このセッションは録れない」と判断するか。
+# 切り替わりの途中で数フレームだけ暗号化されていることがあるため、
+# 少ない件数では決めつけない。
 _DAVE_MIN_SAMPLES = 40
 _DAVE_RATIO = 0.15
 
-
-def _dave_supplemental_ok(payload: bytes, end: int) -> bool:
-    """end の直前2バイトがマーカーだとして、補助データ長が筋の通る値か。
-
-    偶然 0xFAFA が並んだ平文フレームを E2EE と誤判定しないための確認。
-    """
-    if end < 3:
-        return False
-    size = payload[end - 3]
-    return _DAVE_MIN_SUPPLEMENTAL <= size < end
-
-
-def is_dave_frame(payload: bytes | None) -> bool:
-    """端から端まで暗号化されたフレームか。
-
-    末尾に RTP パディングが残っている場合があるため、末尾から少しだけ
-    さかのぼって探す。
-    """
-    if not payload or len(payload) < _DAVE_MIN_SUPPLEMENTAL + 1:
-        return False
-    for back in range(_DAVE_MAX_PADDING + 1):
-        end = len(payload) - back
-        if end < 2:
-            break
-        if payload[end - 2:end] == DAVE_MAGIC and _dave_supplemental_ok(payload, end):
-            return True
-    return False
+# 後方互換: これまで recording_service.is_dave_frame を参照していた箇所と
+# テスト向けに、そのまま使えるようにしておく。
+is_dave_frame = dave.is_dave_frame
 
 
 # ── 受信ストリームの組み立て ──────────────────────────────────
@@ -425,7 +379,8 @@ class _StreamAssembler:
         self.silence = 0     # 発話の切れ目に来る無音パケット（並べ直しには入れない）
         self.failed = 0      # デコードできなかったパケット
         self.decoded = 0     # デコードできたパケット（失敗数だけでは割合が分からない）
-        self.encrypted = 0   # E2EE（DAVE）のフレーム。こちらでは復号できない
+        self.encrypted = 0   # E2EE（DAVE）で、復号できなかったフレーム
+        self.decrypted = 0   # E2EE（DAVE）を復号できたフレーム
         self.received = 0    # 受け取った音声フレームの総数
         self.payload_types: dict[int, int] = {}   # RTP のペイロードタイプ別の数
 
@@ -536,6 +491,14 @@ def _make_sink_class():
         def wants_opus(self) -> bool:
             return True
 
+        def _client(self):
+            """繋がっていない状態でも例外にしない。
+
+            voice_recv の AudioSink.voice_client は、接続前だと
+            AttributeError を投げる（_voice_client がまだ無い）。
+            """
+            return getattr(self, "_voice_client", None)
+
         def _stream_for(self, ssrc: int) -> _StreamAssembler:
             stream = self._streams.get(ssrc)
             if stream is None:
@@ -565,13 +528,17 @@ def _make_sink_class():
             encoded = data.opus
             now = time.monotonic()
             sequence = int(getattr(packet, "sequence", -1))
-            if encoded and is_dave_frame(encoded):
-                # 端から端まで暗号化されている。こちらに復号手段は無い。
-                # Opus に食わせると例外にならず雑音が返るので、入り口で外す。
-                stream.received += 1
-                stream.encrypted += 1
-                self.session.note_encrypted()
-                return
+            if encoded and dave.is_dave_frame(encoded):
+                # 端から端まで暗号化されている。復号してから渡す。
+                # 暗号文のまま Opus に食わせると、例外にならず雑音が返る。
+                plain = dave.decrypt_opus(self._client(), user_id, encoded)
+                if plain is None:
+                    stream.received += 1
+                    stream.encrypted += 1
+                    self.session.note_encrypted()
+                    return
+                encoded = plain
+                stream.decrypted += 1
             if encoded and sequence >= 0:
                 stream.received += 1
                 stream.push(sequence, int(packet.timestamp), encoded, now)
@@ -629,11 +596,11 @@ def _make_sink_class():
                 user = self._users.get(ssrc)
                 name = getattr(user, "display_name", ssrc)
                 logger.info(
-                    "[recording] ssrc=%s (%s) 受信=%d 成功=%d 失敗=%d E2EE=%d "
-                    "欠落=%d 手遅れ=%d 無音=%d RTP種別=%s",
+                    "[recording] ssrc=%s (%s) 受信=%d 成功=%d 失敗=%d "
+                    "E2EE復号=%d E2EE不可=%d 欠落=%d 手遅れ=%d 無音=%d RTP種別=%s",
                     ssrc, name, stream.received, stream.decoded, stream.failed,
-                    stream.encrypted, stream.lost, stream.late, stream.silence,
-                    stream.payload_types,
+                    stream.decrypted, stream.encrypted, stream.lost, stream.late,
+                    stream.silence, stream.payload_types,
                 )
 
         def cleanup(self) -> None:
@@ -1075,7 +1042,7 @@ async def _guard(bot, guild_id: int) -> None:
                     "（DAVE）ため録音できません。%d/%d フレームが暗号化されていました",
                     guild_id, session.encrypted_frames, session.voice_frames,
                 )
-                await stop_recording(bot, guild_id, reason=ENCRYPTED_REASON)
+                await stop_recording(bot, guild_id, reason=dave.unavailable_reason())
                 return
 
             # 受信スレッドが落ちていないか。voice_recv は内部でエラーが起きると
