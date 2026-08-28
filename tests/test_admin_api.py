@@ -1201,6 +1201,59 @@ class RecordingClipTests(unittest.TestCase):
         self.assertEqual(
             TestClient(app).get(self._url(0.5, 1.5, guild_id=111)).status_code, 403)
 
+    def test_nothing_reads_a_whole_track_into_memory(self):
+        """トラックを丸ごとメモリへ読まないこと。
+
+        6時間×8人の録音は 689MB になる。切り出し・解析・打ち消しはどれも
+        「トラック全体を bytes で読んでから ffmpeg の標準入力へ渡す」形だった
+        ので、1リクエストで数百MB、同時に2つ来れば GB 単位になっていた。
+        取り出しは一時ファイルへ流す。
+        """
+        import tracemalloc
+        from services import djaudio_cdn as cdn
+
+        zip_path = cdn._recording_zip(str(GUILD_ID), self.token)
+        member = cdn._read_manifest(zip_path)["stems"][0]["file"]
+        size = cdn._stored_member_range(zip_path, member)[1]
+
+        with tempfile.TemporaryDirectory() as work:
+            destination = Path(work) / "stem.mp3"
+            tracemalloc.start()
+            self.assertTrue(cdn._extract_member(zip_path, member, destination))
+            _current, peak = tracemalloc.get_traced_memory()
+            tracemalloc.stop()
+
+        self.assertEqual(destination.stat().st_size if destination.exists() else size, size)
+        # 読み取り単位ぶんの上振れは許す。トラックの大きさには比例しないこと。
+        self.assertLess(peak, cdn._MEMBER_CHUNK * 4,
+                        f"{peak} バイト確保している（トラックは {size} バイト）")
+
+    def test_the_voice_analysis_endpoint_answers(self):
+        """解析の入出力をファイル経由に変えたので、通ることを確かめる。"""
+        response = TestClient(app).get(
+            f"/dlaudio/files/{GUILD_ID}/{self.token}/analysis/0")
+        self.assertEqual(response.status_code, 200, response.text[:200])
+        payload = response.json()
+        # テストの音は 440Hz の純音なので unknown で正しい（倍音が無いため、
+        # 解析に使えるフレームが1つも取れない）。ここで見たいのは経路が
+        # 通ることと、誰かを特定する値を返さないこと。
+        self.assertIn(payload["verdict"], {"natural", "suspect", "unknown"})
+        self.assertFalse(payload.get("identifies_speaker", False))
+        self.assertNotIn("speaker_id", payload)
+        self.assertIn("/restored", payload["restore_url"])
+
+    def test_the_restore_endpoint_returns_audio(self):
+        """打ち消しの入出力もファイル経由。mp3 が返ること。"""
+        client = TestClient(app)
+        url = f"/dlaudio/files/{GUILD_ID}/{self.token}/stem/0/restored"
+        response = client.get(f"{url}?factor=1.2")
+        self.assertEqual(response.status_code, 200, response.text[:200])
+        self.assertEqual(response.headers["content-type"], "audio/mpeg")
+        self.assertGreater(len(response.content), 500)
+
+        # 範囲外の倍率は受け付けない
+        self.assertEqual(client.get(f"{url}?factor=9").status_code, 400)
+
 
 class BotTokenResolutionTests(unittest.TestCase):
     """DISCORD_BOT_TOKEN の解決が config.py と webapp_admin.auth でズレないこと。

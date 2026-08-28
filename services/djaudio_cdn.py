@@ -8,15 +8,17 @@ webapp_admin にも cdn_main にも依存せず、どちらからでも import �
 """
 
 import asyncio
-import io
 import json
 import logging
 import re
+import shutil
 import subprocess
+import tempfile
 import zipfile
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
+from starlette.background import BackgroundTask
 from starlette.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from datetime import datetime, timezone
 
@@ -265,37 +267,33 @@ _CLIP_MAX_SECONDS = 3600 * 2      # 切り出しでも 2 時間を超えたら�
 _CLIP_MIN_SECONDS = 0.1
 
 
-def _clip_stem(zip_path: Path, member: str, start: float, length: float) -> bytes | None:
-    """ZIP 内の mp3 の一部だけを切り出して返す。
+def _clip_stem(zip_path: Path, member: str, start: float, length: float,
+               source: Path | None = None) -> bytes | None:
+    """mp3 の一部だけを切り出して返す。
 
-    無圧縮で入っているので、展開せずにその範囲だけを ffmpeg へ渡せる。
     再エンコードはせず（-c copy）フレーム境界で切る。中身に手を触れないので
     速く、音も劣化しない。
-    """
-    found = _stored_member_range(zip_path, member)
-    try:
-        with zipfile.ZipFile(zip_path) as archive:
-            if found is None:
-                data = archive.read(member)          # 圧縮済みの古いもの
-            else:
-                offset, size = found
-                with open(zip_path, "rb") as handle:
-                    handle.seek(offset)
-                    data = handle.read(size)
-    except (KeyError, OSError, zipfile.BadZipFile) as e:
-        logger.warning("切り出し元を読めませんでした %s: %s", member, e)
-        return None
 
-    try:
-        result = subprocess.run(
-            [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error",
-             "-ss", f"{start:.3f}", "-t", f"{length:.3f}",
-             "-i", "pipe:0", "-c", "copy", "-f", "mp3", "pipe:1"],
-            input=data, capture_output=True, timeout=180,
-        )
-    except (subprocess.SubprocessError, OSError) as e:
-        logger.warning("切り出しに失敗 %s: %s", member, e)
-        return None
+    source に取り出し済みのファイルを渡すとそれを使う。渡さなければ ZIP から
+    一時ファイルへ取り出す。以前はメンバー全体をメモリへ読んで ffmpeg の
+    標準入力へ渡していたので、1リクエストで最大 86MB（6時間のトラック）を
+    抱えていた。
+    """
+    with tempfile.TemporaryDirectory(prefix="clip-") as work:
+        if source is None:
+            source = Path(work) / "stem.mp3"
+            if not _extract_member(zip_path, member, source):
+                return None
+        try:
+            result = subprocess.run(
+                [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error",
+                 "-ss", f"{start:.3f}", "-t", f"{length:.3f}",
+                 "-i", str(source), "-c", "copy", "-f", "mp3", "pipe:1"],
+                capture_output=True, timeout=180,
+            )
+        except (subprocess.SubprocessError, OSError) as e:
+            logger.warning("切り出しに失敗 %s: %s", member, e)
+            return None
     if result.returncode != 0 or not result.stdout:
         logger.warning("切り出しに失敗 %s: %s", member,
                        result.stderr.decode("utf-8", "replace")[:200])
@@ -327,9 +325,19 @@ async def recording_clip(guild_id: str, token: str, start: float = 0.0, end: flo
             detail=f"切り出せるのは {_CLIP_MAX_SECONDS // 3600} 時間までです。"
                    "これより長い場合は ZIP を丸ごと落としてください。")
 
+    # 出力はディスクへ組み立てて、そのまま流す。BytesIO に作っていたときは、
+    # 切り出しの元を全部メモリへ読んだうえ（6時間×8人で 689MB）、完成した ZIP
+    # まで丸ごと抱えていた。同時に2人が押せば軽く GB を超える。
+    work = Path(tempfile.mkdtemp(prefix="clip-out-"))
+    out_path = work / "clip.zip"
     written = 0
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+    try:
+        _build = zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED)
+    except OSError as e:
+        shutil.rmtree(work, ignore_errors=True)
+        logger.warning("切り出しの出力を作れませんでした: %s", e)
+        raise HTTPException(status_code=500, detail="切り出しに失敗しました。")
+    with _build as archive:
         for stem in stems:
             member = str(stem.get("file", ""))
             # ffmpeg の subprocess.run はブロッキング（最大180秒）。ここで直接
@@ -341,6 +349,7 @@ async def recording_clip(guild_id: str, token: str, start: float = 0.0, end: flo
             archive.writestr(member, piece)
             written += 1
         if not written:
+            shutil.rmtree(work, ignore_errors=True)
             raise HTTPException(status_code=500, detail="切り出しに失敗しました。")
         archive.writestr("info.txt", "\n".join([
             f"元の録音: {manifest.get('channel_name', '')}",
@@ -350,15 +359,13 @@ async def recording_clip(guild_id: str, token: str, start: float = 0.0, end: flo
             "全トラックを同じ位置で切っているので、重ねれば時間軸は揃います。",
         ]))
 
-    payload = buffer.getvalue()
     stamp = f"{int(begin)}-{int(finish)}"
-    return Response(
-        content=payload,
+    return FileResponse(
+        out_path,
         media_type="application/zip",
-        headers={
-            "Content-Disposition": f'attachment; filename="clip_{stamp}.zip"',
-            "Content-Length": str(len(payload)),
-        },
+        filename=f"clip_{stamp}.zip",
+        # 送り終えてから消す。ここで消さないと一時ファイルが残り続ける。
+        background=BackgroundTask(shutil.rmtree, work, ignore_errors=True),
     )
 
 
@@ -368,20 +375,56 @@ _RESTORE_MIN_FACTOR = 0.5
 _RESTORE_MAX_FACTOR = 2.0
 
 
-def _stem_bytes(zip_path: Path, member: str) -> bytes | None:
-    """ZIP 内の mp3 を取り出す。無圧縮なら展開せずに範囲で読む。"""
+# ZIP からトラックを取り出すときの読み取り単位。
+# 6時間の録音は1トラックで 86MB、8人ぶんで 689MB になる。丸ごとメモリへ
+# 載せると、切り出しや解析のリクエストが2つ重なっただけで GB 単位になる。
+_MEMBER_CHUNK = 256 * 1024
+
+
+def _iter_member(zip_path: Path, member: str):
+    """ZIP 内のメンバーを少しずつ読む。全体をメモリに載せない。
+
+    無圧縮（録音は ZIP_STORED）なら展開せずに範囲を直接読み、圧縮されている
+    古いアーカイブは zipfile の展開ストリームから読む。
+    """
     found = _stored_member_range(zip_path, member)
+    if found is None:
+        with zipfile.ZipFile(zip_path) as archive:
+            with archive.open(member) as stream:
+                while True:
+                    chunk = stream.read(_MEMBER_CHUNK)
+                    if not chunk:
+                        return
+                    yield chunk
+        return
+
+    offset, size = found
+    with open(zip_path, "rb") as handle:
+        handle.seek(offset)
+        remaining = size
+        while remaining > 0:
+            chunk = handle.read(min(_MEMBER_CHUNK, remaining))
+            if not chunk:
+                return
+            remaining -= len(chunk)
+            yield chunk
+
+
+def _extract_member(zip_path: Path, member: str, destination: Path) -> bool:
+    """ZIP 内のメンバーをファイルへ書き出す。メモリには載せない。
+
+    ffmpeg に「途中から少しだけ」を読ませたいときは、パイプではなく実体の
+    ファイルを渡す。パイプだと先頭から読み捨てる必要があり、6時間の録音の
+    終盤を見るために毎回 86MB を流し込むことになる。
+    """
     try:
-        if found is None:
-            with zipfile.ZipFile(zip_path) as archive:
-                return archive.read(member)
-        offset, size = found
-        with open(zip_path, "rb") as handle:
-            handle.seek(offset)
-            return handle.read(size)
+        with open(destination, "wb") as out:
+            for chunk in _iter_member(zip_path, member):
+                out.write(chunk)
+        return True
     except (KeyError, OSError, zipfile.BadZipFile) as e:
-        logger.warning("トラックを読めませんでした %s: %s", member, e)
-        return None
+        logger.warning("トラックを取り出せませんでした %s: %s", member, e)
+        return False
 
 
 def _stem_of(guild_id: str, token: str, index: int) -> tuple[Path, dict, dict]:
@@ -404,18 +447,28 @@ async def recording_analysis(guild_id: str, token: str, index: int):
     from services import voice_analysis
 
     zip_path, manifest, stem = _stem_of(guild_id, token, index)
-    data = _stem_bytes(zip_path, str(stem.get("file", "")))
-    if data is None:
-        raise HTTPException(status_code=500, detail="トラックを読めませんでした。")
-
     duration = float(manifest.get("duration_seconds") or 0) or 60.0
+
+    def _run() -> dict:
+        # 解析は録音の8箇所から1秒ずつ抜き出す。以前はトラック全体をメモリへ
+        # 読んでから、その bytes を8回 ffmpeg の標準入力へ流していた。
+        # 6時間のトラックなら 86MB を抱えたうえ、毎回先頭から読み捨てさせて
+        # いたことになる。一時ファイルへ出せば ffmpeg が直接その位置へ飛べる。
+        with tempfile.TemporaryDirectory(prefix="analysis-") as work:
+            source = Path(work) / "stem.mp3"
+            if not _extract_member(zip_path, str(stem.get("file", "")), source):
+                raise FileNotFoundError(stem.get("file"))
+            return voice_analysis.analyse(source, duration)
+
     try:
         # analyse() は ffmpeg を8回起動したうえで自己相関と LPC を回す。
-        # 60秒のトラックでも実測 7 秒かかり、直接 await すると、その間この
+        # 60秒のトラックでも実測 3 秒かかり、直接 await すると、その間この
         # ワーカーが受けている他のリクエスト（配信・切り出し・ヘルスチェック）
         # まで巻き添えで止まる。切り出しと復元は同じ理由でスレッドへ逃がして
         # あるので、こちらも揃える。
-        result = await asyncio.to_thread(voice_analysis.analyse, data, duration)
+        result = await asyncio.to_thread(_run)
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="トラックを読めませんでした。")
     except Exception as e:
         logger.exception("声の解析に失敗 token=%s index=%s: %s", token, index, e)
         raise HTTPException(status_code=500, detail="声を調べられませんでした。")
@@ -442,28 +495,44 @@ async def recording_stem_restored(guild_id: str, token: str, index: int,
             detail=f"倍率は {_RESTORE_MIN_FACTOR}〜{_RESTORE_MAX_FACTOR} で指定してください。")
 
     zip_path, _, stem = _stem_of(guild_id, token, index)
-    data = _stem_bytes(zip_path, str(stem.get("file", "")))
-    if data is None:
-        raise HTTPException(status_code=500, detail="トラックを読めませんでした。")
-
     chain = ",".join(voice_analysis.restore_command(factor))
+
+    # 入力も出力もファイルにする。以前は元のトラックをメモリへ読み（6時間で
+    # 86MB）、変換後も丸ごとメモリに受けていたので、1リクエストで倍を抱えて
+    # いた。打ち消しは全体に掛けるので途中で切れず、大きさは録音の長さで決まる。
+    work = Path(tempfile.mkdtemp(prefix="restore-"))
+    source = work / "stem.mp3"
+    out_path = work / "restored.mp3"
+
+    def _run() -> subprocess.CompletedProcess | None:
+        if not _extract_member(zip_path, str(stem.get("file", "")), source):
+            return None
+        return subprocess.run(
+            [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-y",
+             "-i", str(source), "-af", chain,
+             "-c:a", "libmp3lame", "-q:a", "5", str(out_path)],
+            capture_output=True, timeout=300,
+        )
+
     try:
         # 最大300秒ブロッキングしうる呼び出し。直接 await すると、その間
         # このワーカーのイベントループごと他のリクエストが止まってしまう。
-        result = await asyncio.to_thread(
-            subprocess.run,
-            [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error",
-             "-i", "pipe:0", "-af", chain,
-             "-c:a", "libmp3lame", "-q:a", "5", "-f", "mp3", "pipe:1"],
-            input=data, capture_output=True, timeout=300,
-        )
+        result = await asyncio.to_thread(_run)
     except (subprocess.SubprocessError, OSError) as e:
+        shutil.rmtree(work, ignore_errors=True)
         logger.warning("復元に失敗 token=%s index=%s: %s", token, index, e)
         raise HTTPException(status_code=500, detail="復元できませんでした。")
-    if result.returncode != 0 or not result.stdout:
+
+    if result is None:
+        shutil.rmtree(work, ignore_errors=True)
+        raise HTTPException(status_code=500, detail="トラックを読めませんでした。")
+    if result.returncode != 0 or not out_path.exists() or out_path.stat().st_size == 0:
+        shutil.rmtree(work, ignore_errors=True)
         logger.warning("復元に失敗 token=%s index=%s: %s", token, index,
                        result.stderr.decode("utf-8", "replace")[:200])
         raise HTTPException(status_code=500, detail="復元できませんでした。")
 
-    return Response(content=result.stdout, media_type="audio/mpeg",
-                    headers={"Content-Length": str(len(result.stdout))})
+    return FileResponse(
+        out_path, media_type="audio/mpeg",
+        background=BackgroundTask(shutil.rmtree, work, ignore_errors=True),
+    )
