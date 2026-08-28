@@ -1228,6 +1228,103 @@ class RecordingClipTests(unittest.TestCase):
         self.assertLess(peak, cdn._MEMBER_CHUNK * 4,
                         f"{peak} バイト確保している（トラックは {size} バイト）")
 
+    def test_the_segment_carries_one_channel_per_track(self):
+        """再生用の区切りは「1トラック＝1チャンネル」の生 PCM で返すこと。
+
+        トラックごとに <audio> を持つと時計が人数ぶん並び、揃え続けるための
+        補正が要る。1つの音源にまとめれば時計も1つで、ずれようがない。
+
+        コンテナに入れないのは実測の結果。Opus(WebM) はブラウザ側で
+        チャンネル順が入れ替わり、WAV は3チャンネルのとき
+        EncodingError で復号を拒まれた（ffmpeg が 2.1 のレイアウトを書くため）。
+        生の PCM なら並びは書いた順そのもの。
+        """
+        client = TestClient(app)
+        manifest = client.get(
+            f"/dlaudio/files/{GUILD_ID}/{self.token}/mixer").json()
+        self.assertIn("/segment", manifest["segment_url"])
+        self.assertEqual(manifest["segment_format"], {
+            "encoding": "s16le", "sample_rate": 48000,
+            "channels": len(manifest["stems"]),
+        })
+
+        response = client.get(f"{manifest['segment_url']}?start=1&length=1")
+        self.assertEqual(response.status_code, 200, response.text[:200])
+        channels = manifest["segment_format"]["channels"]
+        frames = len(response.content) / 2 / channels
+        self.assertAlmostEqual(frames / 48000, 1.0, delta=0.05)
+
+        # チャンネルごとに中身が違うこと（全部同じなら混ざっている）
+        import array
+        samples = array.array("h")
+        samples.frombytes(response.content[:len(response.content) // 2 * 2])
+        per_channel = [samples[c::channels] for c in range(channels)]
+        energies = [sum(abs(v) for v in ch[:4000]) for ch in per_channel]
+        self.assertTrue(all(e > 0 for e in energies), energies)
+        self.assertNotEqual(per_channel[0][:200], per_channel[1][:200],
+                            "チャンネルが同じ中身になっている")
+
+    def test_the_segment_starts_exactly_where_it_was_asked_to(self):
+        """区切りの先頭がずれないこと。
+
+        入力側の -ss だけで切ると、区切りの先頭に無音が入る。subfile 越しの
+        mp3 は索引を使った正確なシークができないためで、実測では要求位置に
+        よって 110〜195ms とばらついた。区切りの継ぎ目ごとに音が欠け、
+        しかも欠ける量が位置によって違う、という一番たちの悪い形になる。
+        入力側は手前まで飛ぶだけにして、端数は出力側で捨てる。
+        """
+        import array
+        import math
+        import struct
+        import time as _time
+
+        import services.recording_service as recording
+        from services.djaudio_cache import get_meta, payload_path
+        from services import djaudio_cdn as cdn
+
+        # 5秒ごとに 0.2 秒の合図が入る 30 秒の録音。位置が分かるようにする。
+        rate = recording.SAMPLE_RATE
+        pcm = bytearray()
+        for i in range(int(rate * 30)):
+            loud = ((i / rate) % 5.0) < 0.2
+            value = int(12000 * math.sin(2 * math.pi * 880 * i / rate)) if loud else 0
+            pcm += struct.pack("<hh", value, value)
+
+        session = recording.RecordingSession(
+            guild_id=GUILD_ID, channel_id=555, channel_name="目印",
+            started_by_id=1, started_by_name="すずき",
+            started_at=_time.monotonic(), max_seconds=0, retention_days=7,
+        )
+        track = recording._TrackWriter(1, "すずき", Path(session.workdir) / "01-a.mp3",
+                                       session.started_at)
+        session.tracks[1] = track
+        track.write(bytes(pcm), 0.0)
+        with patch.object(recording, "measure_voice", return_value=None):
+            result = recording._finalize(session, 30.0, "テスト")
+
+        zip_path = payload_path(result["token"], get_meta(result["token"]))
+        stems = cdn._read_manifest(zip_path)["stems"]
+        with tempfile.TemporaryDirectory() as work:
+            out = Path(work) / "segment.pcm"
+            for start in (5.0, 10.0, 20.0, 25.0):
+                self.assertTrue(cdn._segment_pcm(zip_path, stems, start, 1.0, out))
+                samples = array.array("h")
+                samples.frombytes(out.read_bytes())
+                first = next((i for i, v in enumerate(samples) if abs(v) > 500), None)
+                self.assertIsNotNone(first, f"{start} 秒の区切りに音が無い")
+                self.assertLess(first / 48000, 0.01,
+                                f"{start} 秒を要求したのに先頭が "
+                                f"{first / 48000 * 1000:.1f} ms ずれている")
+
+    def test_the_segment_rejects_impossible_requests(self):
+        client = TestClient(app)
+        base = f"/dlaudio/files/{GUILD_ID}/{self.token}/segment"
+        self.assertEqual(client.get(f"{base}?start=0&length=0").status_code, 400)
+        self.assertEqual(client.get(f"{base}?start=0&length=999").status_code, 400)
+        self.assertEqual(
+            client.get(f"/dlaudio/files/111/{self.token}/segment?start=0&length=1").status_code,
+            403)
+
     def test_the_voice_analysis_endpoint_answers(self):
         """解析の入出力をファイル経由に変えたので、通ることを確かめる。"""
         response = TestClient(app).get(

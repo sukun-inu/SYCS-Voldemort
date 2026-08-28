@@ -183,9 +183,28 @@ def _read_manifest(zip_path: Path) -> dict:
 @dlaudio_router.get("/files/{guild_id}/{token}/mixer")
 async def recording_manifest(guild_id: str, token: str):
     """ミキサーが読む索引（トラックの並び・波形・長さ）。"""
-    manifest = _read_manifest(_recording_zip(guild_id, token))
-    for stem in manifest.get("stems", []):
+    zip_path = _recording_zip(guild_id, token)
+    manifest = _read_manifest(zip_path)
+    stems = manifest.get("stems", [])
+    for stem in stems:
         stem["url"] = f"/dlaudio/files/{guild_id}/{token}/stem/{stem['index']}"
+
+    # 再生用の区切り配信が使えるか。使えるなら全トラックを1つの音源として
+    # 鳴らせる（時計が1つなので、トラック同士がずれようがない）。
+    # 圧縮された古いアーカイブは subfile で読めないので使えない。
+    usable = (
+        0 < len(stems) <= SEGMENT_MAX_TRACKS
+        and all(_stored_member_range(zip_path, str(s.get("file", ""))) is not None
+                for s in stems)
+    )
+    if usable:
+        manifest["segment_url"] = f"/dlaudio/files/{guild_id}/{token}/segment"
+        # 生の PCM を組み立てるのに要る情報。チャンネルの並びは stems の並びと同じ。
+        manifest["segment_format"] = {
+            "encoding": "s16le",
+            "sample_rate": SEGMENT_RATE,
+            "channels": len(stems),
+        }
     return JSONResponse(manifest)
 
 
@@ -299,6 +318,136 @@ def _clip_stem(zip_path: Path, member: str, start: float, length: float,
                        result.stderr.decode("utf-8", "replace")[:200])
         return None
     return result.stdout
+
+
+# ── ミキサーの再生（多チャンネルの区切り配信）────────────────
+#
+# トラックごとに <audio> を1本ずつ持つと、時計が人数ぶん並ぶ。<audio> は
+# それぞれ独立に進むので、揃え続けるには常に補正が要る。
+#
+# そこで、再生に使うぶんだけを「1トラック＝1チャンネル」の WAV にまとめて
+# 渡す。ブラウザ側は decodeAudioData で1つの AudioBuffer にし、
+# ChannelSplitter で分ける。音源が1つなので、時計も1つしかない
+# ＝ずれようがない。音量・パン・ミュートは分けたあとに掛ける。
+#
+# 送るのは**生の PCM**（16bit little-endian のインターリーブ）。コンテナに
+# 入れない理由は実測から。
+#
+#   - Opus(WebM) は再生できるが、ブラウザ側でチャンネル順が入れ替わる
+#     （ffmpeg で読み直すと正しい順なので、並べ替えているのは復号側）
+#   - WAV は 8ch では順序も保たれて復号できたが、3ch だと
+#     EncodingError: Unable to decode audio data で落ちた。ffmpeg が
+#     WAVE_FORMAT_EXTENSIBLE に channelMask=0xb（FL/FR/LFE の 2.1）を
+#     書くためで、人数によって通ったり通らなかったりする
+#
+# 生の PCM なら、並びは書いた順そのもので、復号器の解釈が入らない。
+# 標本化周波数とチャンネル数は索引で伝える。
+#
+# ffmpeg の subfile プロトコルで ZIP 内の範囲を直接読めるので、トラックを
+# 取り出して置いておく必要はない。
+#
+# 音は 1トラック＝モノラルにする。Discord の音声はもともとモノラルで、
+# 録音時にステレオへ複製されているだけなので、情報は失われない。
+_SEGMENT_MAX_SECONDS = 30.0
+_SEGMENT_MIN_SECONDS = 0.1
+# ChannelSplitterNode の上限が 32。これを超える人数の録音では、
+# 従来どおりトラックごとに配信する（クライアントが判断する）。
+SEGMENT_MAX_TRACKS = 32
+# 送る PCM の標本化周波数。録音がこの値で書かれている。
+SEGMENT_RATE = 48000
+# 入力側で粗く飛んだあと、出力側で捨てる長さ（→ _segment_pcm）
+_SEGMENT_PREROLL = 2.0
+
+
+def _segment_pcm(zip_path: Path, stems: list[dict], start: float, length: float,
+                 destination: Path) -> bool:
+    """全トラックの同じ区間を、1トラック＝1チャンネルの生 PCM にまとめる。
+
+    ZIP からの取り出しはしない。無圧縮で入っているので、subfile プロトコルで
+    その範囲だけを直接読ませる。
+    """
+    # 位置合わせは「粗く入力側で飛んでから、出力側で正確に切る」。
+    #
+    # 入力側の -ss だけで切ると、区切りの先頭に無音が入る。subfile 越しの mp3 は
+    # 索引を使った正確なシークができないためで、実測では要求位置によって
+    # 110〜195ms とばらついた。区切りの継ぎ目ごとに音が欠け、しかも欠ける量が
+    # 位置によって違う、という一番たちの悪い形になる。
+    #
+    #   10.0 秒を要求: 入力シークのみ 110.8ms ずれ / 粗+出力シーク 0.0ms
+    #   20.0 秒を要求: 入力シークのみ 194.6ms ずれ / 粗+出力シーク 0.0ms
+    #
+    # 入力側は少し手前まで飛ぶだけにして、そこからの端数を出力側で捨てる。
+    preroll = min(_SEGMENT_PREROLL, start)
+    inputs: list[str] = []
+    for stem in stems:
+        found = _stored_member_range(zip_path, str(stem.get("file", "")))
+        if found is None:
+            return False              # 圧縮された古いアーカイブ。この経路は使えない
+        offset, size = found
+        inputs += [
+            "-ss", f"{start - preroll:.3f}",
+            "-i", f"subfile,,start,{offset},end,{offset + size},,:{zip_path}",
+        ]
+
+    count = len(stems)
+    chain = "".join(f"[{i}:a]pan=mono|c0=0.5*c0+0.5*c1[m{i}];" for i in range(count))
+    if count == 1:
+        chain += "[m0]anull[out]"
+    else:
+        chain += "".join(f"[m{i}]" for i in range(count)) + f"amerge=inputs={count}[out]"
+
+    try:
+        result = subprocess.run(
+            [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-y",
+             *inputs, "-filter_complex", chain, "-map", "[out]",
+             "-ss", f"{preroll:.3f}", "-t", f"{length:.3f}",
+             "-f", "s16le", "-acodec", "pcm_s16le", "-ar", str(SEGMENT_RATE),
+             str(destination)],
+            capture_output=True, timeout=120,
+        )
+    except (subprocess.SubprocessError, OSError) as e:
+        logger.warning("区切りの書き出しに失敗: %s", e)
+        return False
+    if result.returncode != 0 or not destination.exists() or destination.stat().st_size == 0:
+        logger.warning("区切りの書き出しに失敗: %s",
+                       result.stderr.decode("utf-8", "replace")[:200])
+        return False
+    return True
+
+
+@dlaudio_router.get("/files/{guild_id}/{token}/segment")
+async def recording_segment(guild_id: str, token: str,
+                            start: float = 0.0, length: float = 10.0):
+    """再生用の区切り。全トラックを1つの多チャンネル WAV にまとめて返す。"""
+    zip_path = _recording_zip(guild_id, token)
+    stems = _read_manifest(zip_path).get("stems", [])
+    if not stems:
+        raise HTTPException(status_code=404, detail="トラックがありません。")
+    if len(stems) > SEGMENT_MAX_TRACKS:
+        raise HTTPException(
+            status_code=409,
+            detail=f"トラックが多すぎます（{SEGMENT_MAX_TRACKS} まで）。")
+
+    begin = max(0.0, float(start))
+    span = float(length)
+    if not (_SEGMENT_MIN_SECONDS <= span <= _SEGMENT_MAX_SECONDS):
+        raise HTTPException(
+            status_code=400,
+            detail=f"区切りの長さは {_SEGMENT_MIN_SECONDS}〜{_SEGMENT_MAX_SECONDS} 秒です。")
+
+    work = Path(tempfile.mkdtemp(prefix="segment-"))
+    out_path = work / "segment.pcm"
+    # ffmpeg はブロッキング。直接呼ぶとこのワーカーの他のリクエストまで止まる。
+    ok = await asyncio.to_thread(_segment_pcm, zip_path, stems, begin, span, out_path)
+    if not ok:
+        shutil.rmtree(work, ignore_errors=True)
+        raise HTTPException(status_code=500, detail="区切りを作れませんでした。")
+
+    return FileResponse(
+        out_path, media_type="application/octet-stream",
+        headers={"Cache-Control": "private, max-age=600"},
+        background=BackgroundTask(shutil.rmtree, work, ignore_errors=True),
+    )
 
 
 @dlaudio_router.get("/files/{guild_id}/{token}/clip")

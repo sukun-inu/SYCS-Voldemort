@@ -403,6 +403,23 @@ export async function createMixer(container, options = {}) {
   masterAnalyser.fftSize = 1024;
   masterGain.connect(masterAnalyser).connect(context.destination);
 
+  /* 音の入口を2通り持つ。
+
+     区切り配信（segment_url）が使えるなら、全トラックを「1トラック＝1
+     チャンネル」の1つの音源として受け取り、ChannelSplitter で分ける。
+     音源が1つなので時計も1つしかなく、トラック同士がずれようがない。
+
+     使えないのは、圧縮されたまま入っている古いアーカイブと、人数が
+     ChannelSplitter の上限（32）を超える録音。そのときは従来どおり
+     トラックごとに <audio> を持ち、ずれを補正しながら鳴らす。 */
+  const SPLITTER_MAX = 32;
+  const useSegments = Boolean(manifest.segment_url) && stems.length <= SPLITTER_MAX;
+  const splitter = useSegments ? context.createChannelSplitter(stems.length) : null;
+  if (splitter) {
+    splitter.channelCountMode = "explicit";
+    splitter.channelInterpretation = "discrete";
+  }
+
   const tracks = [];
   let soloActive = false;
   let playing = false;
@@ -422,25 +439,31 @@ export async function createMixer(container, options = {}) {
     const suspect = periodicity !== null && periodicity !== undefined
       && periodicityMin > 0 && periodicity < periodicityMin;
 
-    // DOM に置いておく（hidden）。切り離したままだと、閉じたときの後片付けや
-    // デバッグで追いにくい。
-    //
-    // preload は metadata のまま（auto にすると数時間ぶんを人数分まとめて
-    // 落としにいく）。ただし読めるまでは currentTime への代入が黙って捨てられる
-    // ので、頭出しと再生の前に loadedmetadata を待つこと（whenReady）。
-    const audio = el("audio", {
-      src: stem.url, preload: "metadata", hidden: true,
-      dataset: { stem: String(stem.index) },
-    });
-    audio.crossOrigin = "use-credentials";
-    audio.preservesPitch = true;   // 同期のための速度調整で音程を変えない
+    // 音の入口は2通りある（→ createSegmentTransport / createElementTransport）。
+    // 区切り配信が使えるときは <audio> を作らない。
+    let audio = null;
+    if (!useSegments) {
+      // DOM に置いておく（hidden）。切り離したままだと、閉じたときの後片付けや
+      // デバッグで追いにくい。
+      //
+      // preload は metadata のまま（auto にすると数時間ぶんを人数分まとめて
+      // 落としにいく）。ただし読めるまでは currentTime への代入が黙って捨てられる
+      // ので、頭出しと再生の前に loadedmetadata を待つこと（whenReady）。
+      audio = el("audio", {
+        src: stem.url, preload: "metadata", hidden: true,
+        dataset: { stem: String(stem.index) },
+      });
+      audio.crossOrigin = "use-credentials";
+      audio.preservesPitch = true;   // 同期のための速度調整で音程を変えない
+    }
 
-    const source = context.createMediaElementSource(audio);
     const gain = context.createGain();
     const panner = context.createStereoPanner();
     const analyser = context.createAnalyser();
     analyser.fftSize = 1024;
-    source.connect(gain).connect(panner).connect(analyser).connect(masterGain);
+    gain.connect(panner).connect(analyser).connect(masterGain);
+    if (audio) context.createMediaElementSource(audio).connect(gain);
+    else splitter.connect(gain, index);
 
     const track = {
       stem, audio, gain, panner, analyser, color, suspect,
@@ -455,9 +478,12 @@ export async function createMixer(container, options = {}) {
 
     // 読み込みが終わる前に指示された頭出しを、読めた時点で当て直す。
     // これが無いと、そのトラックだけ 0 秒から鳴り始める。
-    audio.addEventListener("loadedmetadata", () => {
-      if (!playing && desiredPosition > 0) applySeek(track, desiredPosition);
-    }, { once: true });
+    // （区切り配信のときは <audio> を持たないので不要）
+    if (audio) {
+      audio.addEventListener("loadedmetadata", () => {
+        if (!playing && desiredPosition > 0) applySeek(track, desiredPosition);
+      }, { once: true });
+    }
   });
 
   /* 同期の基準にするトラック。
@@ -540,8 +566,131 @@ export async function createMixer(container, options = {}) {
     drawLanes();
   }
 
+  /* ── 区切り配信での再生 ──────────────────────────────────
+
+     先の区間を少しずつ取ってきて、AudioContext の時計の上に並べる。
+     位置は「鳴らし始めた時刻からの経過」で持つので、トラックごとの
+     時計を突き合わせる必要が無い。 */
+  const SEGMENT_SECONDS = 6;        // 1回に取る長さ
+  const SEGMENT_LOOKAHEAD = 12;     // これだけ先まで用意しておく
+  const SEGMENT_RETRY_MS = 1500;
+  const segmentFormat = manifest.segment_format || {};
+  const segmentRate = Number(segmentFormat.sample_rate) || 48000;
+  const segmentChannels = Number(segmentFormat.channels) || stems.length;
+
+  /** 生の PCM（16bit LE のインターリーブ）を AudioBuffer にする。
+   *
+   *  コンテナに入れて decodeAudioData に任せると、チャンネルの扱いが復号器
+   *  次第になる。実測では Opus(WebM) が順序を入れ替え、WAV は人数が3人の
+   *  ときだけ復号を拒んだ（ffmpeg が 2.1 のレイアウトを書くため）。
+   *  生の PCM なら、並びは書いた順そのもの。 */
+  function pcmToBuffer(bytes) {
+    const samples = new Int16Array(bytes);
+    const frames = Math.floor(samples.length / segmentChannels);
+    const buffer = context.createBuffer(segmentChannels, frames, segmentRate);
+    for (let channel = 0; channel < segmentChannels; channel += 1) {
+      const target = buffer.getChannelData(channel);
+      for (let i = 0; i < frames; i += 1) {
+        target[i] = samples[i * segmentChannels + channel] / 32768;
+      }
+    }
+    return buffer;
+  }
+
+  const segmentTransport = {
+    origin: 0,          // 鳴らし始めたときの context.currentTime
+    base: 0,            // そのときの再生位置
+    filled: 0,          // どこまで並べ終えたか（再生位置）
+    playing: false,
+    sources: new Set(),
+    fetching: false,
+    generation: 0,      // 頭出しのたびに増やす。古い取得結果を捨てるため
+
+    position() {
+      if (!this.playing) return this.base;
+      return this.base + (context.currentTime - this.origin);
+    },
+
+    stopSources() {
+      for (const source of this.sources) {
+        try { source.stop(); } catch { /* もう終わっている */ }
+        try { source.disconnect(); } catch { /* noop */ }
+      }
+      this.sources.clear();
+    },
+
+    seek(seconds) {
+      this.generation += 1;
+      this.stopSources();
+      this.base = seconds;
+      this.filled = seconds;
+      this.origin = context.currentTime;
+    },
+
+    async start() {
+      if (context.state === "suspended") await context.resume();
+      this.origin = context.currentTime;
+      this.filled = this.base;
+      this.playing = true;
+      this.pump();
+    },
+
+    stop() {
+      if (this.playing) this.base = this.position();
+      this.playing = false;
+      this.generation += 1;
+      this.stopSources();
+      this.filled = this.base;
+    },
+
+    /** 足りなくなったぶんを取りに行く。1つずつ順に並べる。 */
+    async pump() {
+      if (!this.playing || this.fetching) return;
+      if (duration && this.filled >= duration) return;
+      if (this.filled - this.position() >= SEGMENT_LOOKAHEAD) return;
+
+      const generation = this.generation;
+      const start = this.filled;
+      const length = Math.min(SEGMENT_SECONDS,
+                              duration ? duration - start : SEGMENT_SECONDS);
+      if (length <= 0.01) return;
+
+      this.fetching = true;
+      try {
+        const response = await fetch(
+          `${manifest.segment_url}?start=${start.toFixed(3)}&length=${length.toFixed(3)}`,
+          { credentials: "same-origin" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const buffer = pcmToBuffer(await response.arrayBuffer());
+        // 頭出しが挟まっていたら、この区間はもう要らない
+        if (generation !== this.generation || !this.playing) return;
+
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(splitter);
+        // 並べる位置。既に過ぎていたら、その場から鳴らす（取得が間に合わなかった）
+        const when = this.origin + (start - this.base);
+        const late = context.currentTime - when;
+        if (late > 0) source.start(context.currentTime, Math.min(late, buffer.duration));
+        else source.start(when);
+        source.onended = () => { this.sources.delete(source); };
+        this.sources.add(source);
+        this.filled = start + buffer.duration;
+      } catch (error) {
+        // 取れなかった区間は少し待って取り直す。黙って無音にしない。
+        console.warn("[mixer] 区切りを取得できませんでした", error);
+        window.setTimeout(() => this.pump(), SEGMENT_RETRY_MS);
+        return;
+      } finally {
+        this.fetching = false;
+      }
+      this.pump();
+    },
+  };
+
   // ── 再生 ────────────────────────────────────────────────
   function positionOf() {
+    if (useSegments) return segmentTransport.position();
     const audio = masterAudio();
     if (!audio || audio.readyState < 1) return desiredPosition;
     return audio.currentTime || 0;
@@ -550,7 +699,12 @@ export async function createMixer(container, options = {}) {
   function seek(seconds) {
     const target = Math.max(0, Math.min(duration || Infinity, seconds));
     desiredPosition = target;
-    for (const track of tracks) applySeek(track, target);
+    if (useSegments) {
+      segmentTransport.seek(target);
+      if (playing) segmentTransport.start();
+    } else {
+      for (const track of tracks) applySeek(track, target);
+    }
     followPlayhead(target);
     render();
   }
@@ -559,6 +713,13 @@ export async function createMixer(container, options = {}) {
     // 待つ前に読む。待っているあいだに基準を読み直すと、まだ 0 秒のトラックが
     // 基準になって頭出しした位置を失う。
     const base = positionOf();
+    if (useSegments) {
+      segmentTransport.base = base;
+      await segmentTransport.start();
+      playing = true;
+      clear(playButton).append(icon("bi-pause-fill"), "一時停止");
+      return;
+    }
     if (context.state === "suspended") await context.resume();
     // 全部のメタデータが揃うまで待ってから位置を合わせる。読めていない
     // <audio> は currentTime を受け取らないので、待たずに鳴らすと、そのトラック
@@ -571,9 +732,13 @@ export async function createMixer(container, options = {}) {
   }
 
   function pause() {
-    for (const track of tracks) {
-      track.audio.pause();
-      track.audio.playbackRate = 1;   // 同期のための速度調整を持ち越さない
+    if (useSegments) {
+      segmentTransport.stop();
+    } else {
+      for (const track of tracks) {
+        track.audio.pause();
+        track.audio.playbackRate = 1;   // 同期のための速度調整を持ち越さない
+      }
     }
     playing = false;
     clear(playButton).append(icon("bi-play-fill"), "再生");
@@ -1013,7 +1178,15 @@ export async function createMixer(container, options = {}) {
       for (const track of tracks) measure(track, now);
       measure(master, now);
     }
-    if (playing) {
+    if (playing && useSegments) {
+      // 音源が1つなので、トラック同士を突き合わせる必要が無い。
+      // 先の区間を切らさないことだけ見る。
+      segmentTransport.pump();
+      const base = segmentTransport.position();
+      if (looping && loopRegion && base >= loopRegion.end) seek(loopRegion.start);
+      else if (duration && base >= duration - 0.05) pause();
+      else followPlayhead(base);
+    } else if (playing) {
       const reference = masterAudio();
       const base = reference ? reference.currentTime || 0 : 0;
       // 基準からのずれを直す。小さいうちは速度で吸収し、頭出しは最後の手段に
@@ -1093,7 +1266,9 @@ export async function createMixer(container, options = {}) {
       window.removeEventListener("keydown", onKeyDown);
       if (raf) window.cancelAnimationFrame(raf);
       raf = null;
+      segmentTransport.stop();
       for (const track of tracks) {
+        if (!track.audio) continue;
         track.audio.pause();
         track.audio.src = "";
       }
