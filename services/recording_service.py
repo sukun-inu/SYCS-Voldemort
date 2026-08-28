@@ -477,9 +477,14 @@ class _StreamAssembler:
         ref = min(self._pending, key=lambda k: self._pending[k][0])
         return min(self._pending, key=lambda k: _wrapped_delta(k, ref, _SEQ_MOD))
 
-    def drain(self, now: float) -> list[tuple[int, bytes | None]]:
-        """出せるぶんを、順序どおりに (RTPタイムスタンプ, opus) で返す。"""
-        out: list[tuple[int, bytes | None]] = []
+    def drain(self, now: float) -> list[tuple[int, bytes | None, float]]:
+        """出せるぶんを、順序どおりに (RTPタイムスタンプ, opus, 受信時刻) で返す。
+
+        受信時刻も返すのは、時間軸の起点をここで決めるため。呼び出し側が
+        「出したときの時刻」で起点を取ると、抱えていたあいだのぶんだけ
+        トラックまるごと後ろへずれる（→ offset_for）。
+        """
+        out: list[tuple[int, bytes | None, float]] = []
         while self._pending:
             if self._next_seq is None:
                 # まだ1つも出していない。ここで先頭を決め打つと、あとから届く
@@ -489,7 +494,7 @@ class _StreamAssembler:
                 self._next_seq = self._earliest_seq()
             item = self._pending.pop(self._next_seq, None)
             if item is not None:
-                out.append((item[1], item[2]))
+                out.append((item[1], item[2], item[0]))
                 self._next_seq = (self._next_seq + 1) % _SEQ_MOD
                 continue
             # 穴が空いている。少しだけ待ち、それでも来なければ諦めて飛ばす。
@@ -501,12 +506,14 @@ class _StreamAssembler:
             self.lost += gap
             # 欠けたぶんは Opus に「無かった」と伝えて補間させる。
             next_ts = self._pending[skipped][1]
+            # 欠けたぶんには受信時刻が無い。次に届いたものの時刻で代用する。
+            next_at = self._pending[skipped][0]
             for i in range(min(gap, _PLC_MAX_FRAMES)):
-                out.append(((next_ts - (gap - i) * _FRAME_SAMPLES) % _TS_MOD, None))
+                out.append(((next_ts - (gap - i) * _FRAME_SAMPLES) % _TS_MOD, None, next_at))
             self._next_seq = skipped
         return out
 
-    def flush(self) -> list[tuple[int, bytes | None]]:
+    def flush(self) -> list[tuple[int, bytes | None, float]]:
         return self.drain(float("inf"))
 
 
@@ -609,8 +616,19 @@ def _make_sink_class():
             user = self._users.get(ssrc)
             if user is None:
                 return
-            elapsed = self.session.elapsed
-            for timestamp, encoded in ready:
+            # 時間軸の起点は「受信した時刻」で取る。ここで self.session.elapsed
+            # （＝出したときの時刻）を使っていたため、並べ直しで抱えていた
+            # あいだのぶんだけトラックまるごと後ろへずれていた。
+            #
+            # drain() は誰かのパケットが届いたときにしか回らない。ある人が
+            # 一言だけ話して黙ると、その声は「次に誰かが話すまで」抱えられた
+            # ままになり、そのときの時刻を起点にされる。実測では 5.00 秒に
+            # 話した声が 20.00 秒の位置に書き込まれた（次の発話が 20.00 秒
+            # だったため）。しかも起点は最初のパケットで決まるので、以後の
+            # 音は全部そのぶんずれたまま。トラックごとにずれ幅が違うのは、
+            # 「次に誰かが話した時刻」がトラックごとに違うため。
+            started_at = self.session.started_at
+            for timestamp, encoded, arrived_at in ready:
                 try:
                     pcm = stream.decode(encoded)
                 except Exception as e:
@@ -631,6 +649,7 @@ def _make_sink_class():
                         )
                     continue
                 stream.decoded += 1
+                elapsed = arrived_at - started_at
                 self.session.feed(user, pcm, at=stream.offset_for(timestamp, elapsed))
 
         def flush_pending(self) -> None:

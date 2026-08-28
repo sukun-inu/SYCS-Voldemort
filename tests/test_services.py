@@ -1573,7 +1573,8 @@ class StreamAssemblerTests(unittest.TestCase):
         self.stream.push(seq, seq * 960, bytes([seq % 251]), now)
 
     def _seqs(self, drained):
-        return [ts // 960 for ts, _ in drained]
+        # drain() は (RTPタイムスタンプ, opus, 受信時刻) を返す
+        return [ts // 960 for ts, _payload, _at in drained]
 
     def test_out_of_order_packets_come_back_in_order(self):
         for seq in (5, 3, 1, 4, 2):
@@ -1628,7 +1629,7 @@ class StreamAssemblerTests(unittest.TestCase):
         self._push(1, now=0.0)
         self._push(5, now=0.0)          # 2〜4 は来なかった
         drained = self.stream.drain(1.0)
-        concealed = [payload for _, payload in drained if payload is None]
+        concealed = [payload for _ts, payload, _at in drained if payload is None]
         self.assertEqual(len(concealed), 3, drained)
         self.assertEqual(self._seqs(drained)[0], 1)
         self.assertEqual(self._seqs(drained)[-1], 5)
@@ -1686,6 +1687,58 @@ class StreamAssemblerTests(unittest.TestCase):
         with self.assertLogs("services.recording_service", level="WARNING"):
             offset = self.stream.offset_for(1_000_000 + 48000 * 9999, 5.02)
         self.assertAlmostEqual(offset, 5.02, delta=0.001)
+
+    def test_the_timeline_starts_from_when_the_packet_arrived(self):
+        """並べ直しで抱えていたぶん、トラックまるごとずれないこと。
+
+        drain() は誰かのパケットが届いたときにしか回らない。ある人が一言だけ
+        話して黙ると、その声は「次に誰かが話すまで」抱えられたままになる。
+        起点を「出したときの時刻」で取っていたため、そのときの時刻が起点に
+        なっていた。実測では 5.00 秒に話した声が 20.00 秒の位置へ書き込まれた。
+
+        しかも起点は最初のパケットで決まるので、以後その人の音は全部同じだけ
+        ずれる（だんだんずれるのではなく、最初から位置が違う）。ずれ幅は
+        「次に誰かが話した時刻」で決まるため、トラックごとに違う。
+        """
+        frame = bytes(self.rec.FRAME_BYTES)
+        clock = {"t": 0.0}
+        placed: list[tuple[int, float]] = []
+
+        with patch.object(self.rec.time, "monotonic", lambda: clock["t"]), \
+                patch.object(self.rec._StreamAssembler, "decode",
+                             lambda self, encoded: frame):
+            session = self.rec.RecordingSession(
+                guild_id=999, channel_id=555, channel_name="雑談VC",
+                started_by_id=1, started_by_name="すずき",
+                started_at=0.0, max_seconds=0, retention_days=7,
+            )
+            session.feed = lambda user, pcm, at=None: placed.append((int(user.id), at))
+            sink = self.rec._make_sink_class()(session)
+
+            def speak(user_id, ssrc, at, timestamp):
+                user = Mock(id=user_id, display_name=f"u{user_id}")
+                for i in range(5):
+                    clock["t"] = at + i * 0.02
+                    sink.write(user, SimpleNamespace(
+                        packet=SimpleNamespace(ssrc=ssrc, sequence=i,
+                                               timestamp=timestamp + i * 960),
+                        opus=b"\x01" * 20))
+
+            # それぞれ一言ずつ、間隔をばらばらにする
+            speak(1, 101, at=5.0, timestamp=1_000_000)
+            speak(2, 102, at=20.0, timestamp=2_000_000)
+            speak(3, 103, at=95.0, timestamp=3_000_000)
+            sink.flush_pending()
+
+        first: dict[int, float] = {}
+        for user_id, at in placed:
+            first.setdefault(user_id, at)
+        self.assertEqual(set(first), {1, 2, 3}, placed)
+        for user_id, spoke_at in ((1, 5.0), (2, 20.0), (3, 95.0)):
+            self.assertAlmostEqual(
+                first[user_id], spoke_at, delta=0.05,
+                msg=f"user{user_id} の声が {first[user_id]:.2f} 秒に置かれた"
+                    f"（発話は {spoke_at:.2f} 秒）")
 
 
 class OpusResilienceTests(unittest.TestCase):
