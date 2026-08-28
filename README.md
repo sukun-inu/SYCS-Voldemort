@@ -70,6 +70,7 @@ All of them run against a temporary `SETTINGS_DIR`, so your real `settings.json`
 
 | | |
 |---|---|
+| [docs/DESIGN.ja.md](docs/DESIGN.ja.md) | Overall design: how it is built and why |
 | [docs/FEATURES.ja.md](docs/FEATURES.ja.md) | Every feature in detail, and which of them can be driven from where |
 | [docs/COMMANDS.ja.md](docs/COMMANDS.ja.md) | Slash command reference |
 | [docs/SETUP.ja.md](docs/SETUP.ja.md) | Docker Compose, environment variables, multi-instance setups |
