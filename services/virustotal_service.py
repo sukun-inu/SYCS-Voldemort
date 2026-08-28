@@ -3,7 +3,6 @@ import hashlib
 import logging
 import os
 import tempfile
-import time
 from typing import Any, Dict, Optional
 from urllib.parse import urljoin
 
@@ -11,14 +10,18 @@ import aiohttp
 import vt
 
 from config import VIRUSTOTAL_API_KEY
+from envutil import env_int
+from services.ttl_cache import TTLCache
 from services.url_safety import URLSafetyError, validate_public_http_url
 
 MALICIOUS_THRESHOLD = 10
 VT_CACHE_TTL = 60 * 60 * 6
-VT_MAX_REDIRECTS = max(0, int(os.getenv("VT_MAX_REDIRECTS", "5")))
-VT_MAX_DOWNLOAD_BYTES = max(1, int(os.getenv("VT_MAX_DOWNLOAD_BYTES", str(20 * 1024 * 1024))))
+VT_MAX_REDIRECTS = env_int("VT_MAX_REDIRECTS", 5, minimum=0)
+VT_MAX_DOWNLOAD_BYTES = env_int("VT_MAX_DOWNLOAD_BYTES", 20 * 1024 * 1024, minimum=1)
 
-_vt_cache: Dict[str, Dict[str, Any]] = {}
+# URL 1件ごとに鍵が増える。追い出しの無い素の dict だったため、大量の
+# 異なる URL がスキャンされ続けると TTL の6時間が経つまで際限なく膨らんでいた。
+_vt_cache: TTLCache[str, Dict[str, Any]] = TTLCache(ttl=VT_CACHE_TTL, max_entries=5000)
 logger = logging.getLogger(__name__)
 
 
@@ -27,21 +30,11 @@ def hash_text(text: str) -> str:
 
 
 def _vt_cache_get(key: str) -> Optional[Dict[str, Any]]:
-    entry = _vt_cache.get(key)
-    if entry is None:
-        return None
-    if time.time() - entry["time"] > VT_CACHE_TTL:
-        _vt_cache.pop(key, None)
-        return None
-    return entry["data"]
+    return _vt_cache.get(key)
 
 
 def _vt_cache_set(key: str, data: Dict[str, Any]) -> None:
-    now = time.time()
-    _vt_cache[key] = {"time": now, "data": data}
-    expired = [k for k, v in list(_vt_cache.items()) if now - v["time"] > VT_CACHE_TTL]
-    for k in expired:
-        _vt_cache.pop(k, None)
+    _vt_cache.set(key, data)
 
 
 async def fetch_content_type(session: aiohttp.ClientSession, url: str) -> str:

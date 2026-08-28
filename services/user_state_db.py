@@ -7,9 +7,22 @@ from urllib.parse import quote_plus
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
+from envutil import env_int, env_raw
 from webapp.models import UserStateCurrent, UserStateEvent
 
 logger = logging.getLogger(__name__)
+
+
+def _pooled_int(primary_key: str, fallback_key: str, default: int, *, minimum: int) -> int:
+    """primary_key → fallback_key → default の優先順で整数設定を読む。
+
+    関数引数は呼び出し時に必ず両方とも評価されるため、無条件に
+    env_int(primary, env_int(fallback, ...)) と入れ子にすると、primary が
+    有効な値のときでも fallback 側の壊れた値について筋違いの警告が出て
+    しまう。先に env_raw でどちらが実際に効くかを決めてから1回だけ読む。
+    """
+    key = primary_key if env_raw(primary_key) is not None else fallback_key
+    return env_int(key, default, minimum=minimum)
 
 
 def _read_secret_file(path: str | None) -> str | None:
@@ -19,7 +32,12 @@ def _read_secret_file(path: str | None) -> str | None:
         with open(path, "r", encoding="utf-8") as f:
             value = f.read().strip()
             return value or None
-    except OSError:
+    except OSError as e:
+        # ここで None を返すと、呼び出し側の _build_user_state_database_url は
+        # 「ファイル指定なし」と区別できず、次の候補（さらには既定パスワード
+        # "postgres"）へ静かに落ちる。*_FILE を明示的に指定したのに読めない、
+        # というのは設定ミスの可能性が高いので、必ず理由を残す。
+        logger.warning("シークレットファイルを読めませんでした %s: %s", path, e)
         return None
 
 
@@ -45,10 +63,10 @@ def _build_user_state_database_url() -> str:
 
 DATABASE_URL = _build_user_state_database_url()
 
-DB_POOL_SIZE = max(1, int(os.getenv("USER_STATE_DB_POOL_SIZE", os.getenv("DB_POOL_SIZE", "5"))))
-DB_MAX_OVERFLOW = max(0, int(os.getenv("USER_STATE_DB_MAX_OVERFLOW", os.getenv("DB_MAX_OVERFLOW", "10"))))
-DB_POOL_TIMEOUT = max(5, int(os.getenv("USER_STATE_DB_POOL_TIMEOUT", os.getenv("DB_POOL_TIMEOUT", "30"))))
-DB_POOL_RECYCLE = max(60, int(os.getenv("USER_STATE_DB_POOL_RECYCLE", os.getenv("DB_POOL_RECYCLE", "1800"))))
+DB_POOL_SIZE = _pooled_int("USER_STATE_DB_POOL_SIZE", "DB_POOL_SIZE", 5, minimum=1)
+DB_MAX_OVERFLOW = _pooled_int("USER_STATE_DB_MAX_OVERFLOW", "DB_MAX_OVERFLOW", 10, minimum=0)
+DB_POOL_TIMEOUT = _pooled_int("USER_STATE_DB_POOL_TIMEOUT", "DB_POOL_TIMEOUT", 30, minimum=5)
+DB_POOL_RECYCLE = _pooled_int("USER_STATE_DB_POOL_RECYCLE", "DB_POOL_RECYCLE", 1800, minimum=60)
 
 engine: AsyncEngine = create_async_engine(
     DATABASE_URL,

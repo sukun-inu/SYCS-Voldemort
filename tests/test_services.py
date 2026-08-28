@@ -486,6 +486,22 @@ class DevTestNotifyTests(unittest.TestCase):
             asyncio.run(self.dt.run_test(self.bot, "sticky", 1, 555))
         self.assertEqual(called, [(555, 1)])
 
+    def test_tts_forwards_the_real_bot_to_enqueue_message(self):
+        """enqueue_message に None を渡すと、新しく立つ _player_loop が
+        bot.get_guild() で AttributeError を起こして黙って死に、キューに
+        入れた音声が二度と再生されない（テストは「成功」を返すのに無音）。"""
+        received = {}
+        self.guild.me = Mock()  # スピーカーが取れないと enqueue_message まで到達しない
+
+        async def fake_enqueue(bot, guild, member, text):
+            received["bot"] = bot
+
+        with patch("services.tts_store.get_tts_settings",
+                   return_value={"enabled": True, "vc_channel_id": 999}),              patch("services.tts_service.enqueue_message", fake_enqueue):
+            asyncio.run(self.dt.run_test(self.bot, "tts", 1, 555))
+
+        self.assertIs(received.get("bot"), self.bot)
+
     def test_unknown_kind_is_reported(self):
         with self.assertLogs(self.dt.logger, level="WARNING") as captured:
             asyncio.run(self.dt.run_test(self.bot, "nope", 1, 555))
@@ -523,6 +539,7 @@ class SettingsStoreTests(unittest.TestCase):
         self.assertFalse(saved["quake_info"])
         self.assertNotIn("nope", saved)
 
+
     def test_news_feed_state_keeps_only_recent_hashes(self):
         store.add_news_feed(self.guild_id, "feed1", 100, "クエリ", 60)
         store.update_news_feed_state(self.guild_id, "feed1", 1.0, [str(i) for i in range(150)])
@@ -536,6 +553,69 @@ class SettingsStoreTests(unittest.TestCase):
         row = store.get_news_feeds(self.guild_id)["feed2"]
         self.assertEqual(row["last_run"], 9.0)
         self.assertEqual(row["seen_hashes"], ["a"])
+
+
+class SettingsLockLoggingTests(unittest.TestCase):
+    """settings.json のファイルロック。永続化に関わるので、握りつぶさず
+    理由を残すこと（他プロセスが最大 _SETTINGS_LOCK_STALE_SEC 待たされる）。"""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="settings-lock-"))
+        self.lock_path = self.tmp / "settings.json.lock"
+        self._orig_dir = store._SETTINGS_DIR
+        self._orig_lock_file = store._SETTINGS_LOCK_FILE
+        store._SETTINGS_DIR = self.tmp
+        store._SETTINGS_LOCK_FILE = self.lock_path
+
+    def tearDown(self):
+        store._SETTINGS_DIR = self._orig_dir
+        store._SETTINGS_LOCK_FILE = self._orig_lock_file
+
+    def test_stale_check_failure_is_logged_not_silent(self):
+        """経過時間を確認できないと、恒久的な原因でも最後は無言の
+        TimeoutError にしかならない。理由だけは残すこと。"""
+        self.lock_path.write_text("someone-else", encoding="utf-8")  # 既存ロック
+        real_stat = Path.stat
+        lock_path = self.lock_path
+
+        def fake_stat(self, *args, **kwargs):
+            if self == lock_path:
+                raise OSError("boom")
+            return real_stat(self, *args, **kwargs)
+
+        with patch.object(Path, "stat", fake_stat),              self.assertLogs(store.logger, level="DEBUG") as captured:
+            with self.assertRaises(TimeoutError):
+                with store._settings_file_lock(timeout_sec=0.05):
+                    pass
+        self.assertTrue(any("経過時間を確認できません" in m for m in captured.output), captured.output)
+
+    def test_read_owner_failure_on_release_is_logged(self):
+        lock_path = self.lock_path
+        real_read_text = Path.read_text
+
+        def fake_read_text(self, *args, **kwargs):
+            if self == lock_path:
+                raise OSError("boom")
+            return real_read_text(self, *args, **kwargs)
+
+        with patch.object(Path, "read_text", fake_read_text),              self.assertLogs(store.logger, level="WARNING") as captured:
+            with store._settings_file_lock(timeout_sec=1.0):
+                pass
+        self.assertTrue(any("所有者を確認できません" in m for m in captured.output), captured.output)
+
+    def test_unlink_failure_on_release_is_logged(self):
+        lock_path = self.lock_path
+        real_unlink = Path.unlink
+
+        def fake_unlink(self, *args, **kwargs):
+            if self == lock_path:
+                raise OSError("boom")
+            return real_unlink(self, *args, **kwargs)
+
+        with patch.object(Path, "unlink", fake_unlink),              self.assertLogs(store.logger, level="WARNING") as captured:
+            with store._settings_file_lock(timeout_sec=1.0):
+                pass
+        self.assertTrue(any("削除できません" in m for m in captured.output), captured.output)
 
 
 class WelcomeTemplateTests(unittest.TestCase):
@@ -593,6 +673,169 @@ class NewsFaviconTests(unittest.TestCase):
         self.assertIsNone(_favicon_url("not a url"))
 
 
+class UserStateDbSecretFileTests(unittest.TestCase):
+    """*_PASSWORD_FILE が読めないと、次の候補（さらには既定パスワード）へ
+    静かに落ちる。設定ミスの可能性が高いので理由を残すこと。"""
+
+    def setUp(self):
+        import services.user_state_db as user_state_db
+        self.udb = user_state_db
+
+    def test_missing_file_is_logged_not_silent(self):
+        with self.assertLogs(self.udb.logger, level="WARNING") as captured:
+            result = self.udb._read_secret_file("/definitely/does/not/exist")
+        self.assertIsNone(result)
+        self.assertTrue(any("読めませんでした" in m for m in captured.output), captured.output)
+
+    def test_no_path_configured_is_not_an_error(self):
+        """そもそも *_FILE が指定されていないだけなら、警告は不要。"""
+        with self.assertRaises(AssertionError):
+            with self.assertLogs(self.udb.logger, level="WARNING"):
+                self.udb._read_secret_file(None)
+
+    def test_pooled_int_prefers_primary_without_warning_about_unused_fallback(self):
+        """primary が有効なら、無関係な fallback 側の壊れた値について
+        （env_int を無条件に入れ子にすると出てしまう）筋違いの警告を出さない。"""
+        import envutil
+
+        os.environ["_TEST_PRIMARY_POOL"] = "20"
+        os.environ["_TEST_FALLBACK_POOL"] = "oops"
+        try:
+            with self.assertRaises(AssertionError):
+                with self.assertLogs(envutil.logger, level="WARNING"):
+                    self.udb._pooled_int(
+                        "_TEST_PRIMARY_POOL", "_TEST_FALLBACK_POOL", 5, minimum=1)
+            self.assertEqual(
+                self.udb._pooled_int("_TEST_PRIMARY_POOL", "_TEST_FALLBACK_POOL", 5, minimum=1),
+                20,
+            )
+        finally:
+            os.environ.pop("_TEST_PRIMARY_POOL", None)
+            os.environ.pop("_TEST_FALLBACK_POOL", None)
+
+
+class DjaudioCacheAtomicWriteTests(unittest.TestCase):
+    """配信キャッシュのメタJSON書き込み。
+
+    CDN（cdn_main.py）は Bot とは別プロセスで、同じディレクトリの .json を
+    直接 glob/read する。直接 open("w") で上書きすると、読む側が書き込み
+    途中のファイルを掴んで JSONDecodeError になりうる。
+    """
+
+    def setUp(self):
+        import services.djaudio_cache as djaudio_cache
+        self.dc = djaudio_cache
+
+    def _register(self) -> str:
+        src_dir = Path(tempfile.mkdtemp(prefix="djaudio-src-"))
+        src = src_dir / "x.mp3"
+        src.write_bytes(b"fake-mp3-bytes")
+        return self.dc.register_file(src, "http://example.com/x", "タイトル", 999, ttl=600)
+
+    def test_register_and_update_leave_no_tmp_file_behind(self):
+        token = self._register()
+        self.dc.update_discord_message(token, 111, 222)
+
+        meta = self.dc.get_meta(token)
+        self.assertEqual(meta["discord_channel_id"], "111")
+        leftover = list(self.dc.DJAUDIO_CACHE_DIR.glob(f"{token}.json.tmp"))
+        self.assertEqual(leftover, [], "tmp ファイルが残っている（replace されていない）")
+
+    def test_corrupt_metadata_is_logged_not_silently_treated_as_expired(self):
+        """壊れているのか本当に期限切れなのかが、ログでしか見分けられない。"""
+        token = "deadbeefdeadbeefdeadbeefdeadbeef"
+        bad_path = self.dc.DJAUDIO_CACHE_DIR / f"{token}.json"
+        bad_path.write_text("{not valid json", encoding="utf-8")
+
+        with self.assertLogs(self.dc.logger, level="WARNING") as captured:
+            result = self.dc.get_meta(token)
+
+        self.assertIsNone(result)
+        self.assertTrue(any("壊れています" in m for m in captured.output), captured.output)
+
+    def test_orphaned_tmp_file_is_eventually_swept(self):
+        """_write_meta_atomic が tmp.replace() の前に落ちると .tmp が残る。
+        *.json の glob には引っかからないので、専用の掃除が要る。"""
+        old_tmp = self.dc.DJAUDIO_CACHE_DIR / "orphan.json.tmp"
+        old_tmp.write_text("{}", encoding="utf-8")
+        old_time = time.time() - (self.dc._TMP_ORPHAN_MAX_AGE_SEC + 60)
+        os.utime(old_tmp, (old_time, old_time))
+
+        asyncio.run(self.dc._cleanup_expired(None))
+
+        self.assertFalse(old_tmp.exists())
+
+    def test_a_fresh_tmp_file_mid_write_is_left_alone(self):
+        """書き込み中（一瞬）の tmp を誤って消さないこと。"""
+        fresh_tmp = self.dc.DJAUDIO_CACHE_DIR / "inflight.json.tmp"
+        fresh_tmp.write_text("{}", encoding="utf-8")
+
+        asyncio.run(self.dc._cleanup_expired(None))
+
+        self.assertTrue(fresh_tmp.exists())
+        fresh_tmp.unlink()
+
+
+class DjaudioSiteDetectionTests(unittest.TestCase):
+    def setUp(self):
+        import services.djaudio_site_detection as sd
+        self.sd = sd
+
+    def test_allowed_host_passes(self):
+        self.assertTrue(self.sd.is_djaudio_allowed_url("https://www.youtube.com/watch?v=1"))
+
+    def test_unlisted_host_is_rejected(self):
+        self.assertFalse(self.sd.is_djaudio_allowed_url("https://example.com/x"))
+
+    def test_malformed_url_is_rejected_and_logged(self):
+        """「未対応」と「URLとして壊れている」は呼び出し元からは同じ拒否に
+        見えるが、原因を追えるようログだけは残すこと。"""
+        with self.assertLogs(self.sd.logger, level="DEBUG") as captured:
+            result = self.sd.is_djaudio_allowed_url("http://[::1")
+        self.assertFalse(result)
+        self.assertTrue(any("解釈できませんでした" in m for m in captured.output), captured.output)
+
+
+class DjaudioReactionSafeTests(unittest.TestCase):
+    """進捗の絵文字リアクションが付けられなくても処理は止めないが、
+    黙って何もしないのではなく理由をログへ残すこと。"""
+
+    def setUp(self):
+        import services.djaudio_service as djaudio
+        self.dj = djaudio
+
+    def test_add_reaction_failure_is_logged(self):
+        message = Mock(spec=discord.Message)
+
+        async def boom(emoji):
+            raise discord.HTTPException(Mock(status=404), "Unknown Message")
+
+        message.add_reaction = boom
+        with self.assertLogs(self.dj.logger, level="DEBUG") as captured:
+            asyncio.run(self.dj._add_reaction_safe(message, "⏳"))
+        self.assertTrue(any("リアクション追加に失敗" in m for m in captured.output))
+
+    def test_remove_reaction_failure_is_logged(self):
+        message = Mock(spec=discord.Message)
+
+        async def boom(emoji, member):
+            raise discord.HTTPException(Mock(status=404), "Unknown Message")
+
+        message.remove_reaction = boom
+        bot = Mock()
+        bot.user = Mock()
+        with self.assertLogs(self.dj.logger, level="DEBUG") as captured:
+            asyncio.run(self.dj._remove_reaction_safe(message, "⏳", bot))
+        self.assertTrue(any("リアクション除去に失敗" in m for m in captured.output))
+
+    def test_remove_reaction_without_bot_user_is_logged_not_silent(self):
+        message = Mock(spec=discord.Message)
+        bot = Mock()
+        bot.user = None
+        with self.assertLogs(self.dj.logger, level="DEBUG") as captured:
+            asyncio.run(self.dj._remove_reaction_safe(message, "⏳", bot))
+        self.assertTrue(any("bot.user が未確定" in m for m in captured.output))
+
 
 class VoiceSessionTests(unittest.TestCase):
     """読み上げと録音がひとつの接続を共有するための層。"""
@@ -641,6 +884,23 @@ class VoiceSessionTests(unittest.TestCase):
         self.vs.unhold(1, "something-else")
         self.assertFalse(self.vs.is_held(1))
 
+    def test_release_logs_when_disconnect_fails(self):
+        """切断失敗を黙って握りつぶすと、_clients からは既に消えているのに
+        実際の接続だけ生き残る（bot が VC に居座る）ことに誰も気づけない。"""
+        async def boom(force=True):
+            raise RuntimeError("ネットワークが死んでいる")
+
+        client = Mock(spec=discord.VoiceClient)
+        client.disconnect = boom
+        self.vs._clients[1] = client
+
+        with self.assertLogs(self.vs.logger, level="WARNING") as captured:
+            result = asyncio.run(self.vs.release(1))
+
+        self.assertTrue(result)  # _clients からは pop 済みなので戻り値自体は True
+        self.assertNotIn(1, self.vs._clients)
+        self.assertTrue(any("切断に失敗" in m for m in captured.output), captured.output)
+
     def test_held_connection_is_not_moved_to_another_channel(self):
         """録音中に読み上げの都合で別VCへ連れ出されると録音が途切れる。"""
         client = Mock(spec=discord.VoiceClient)
@@ -672,6 +932,18 @@ class VoiceSessionTests(unittest.TestCase):
         got = asyncio.run(self.vs.acquire(guild, 99, purpose="tts"))
         self.assertIs(got, client)
         client.move_to.assert_called_once()
+
+    def test_release_does_not_drop_the_guild_lock(self):
+        """release() が _locks を pop すると、同時に走っている acquire() の
+        排他が効かなくなる（新しい Lock が作られ、別タスクが素通りできる）。"""
+        lock_before = self.vs._locks.setdefault(1, asyncio.Lock())
+        client = Mock(spec=discord.VoiceClient)
+        client.disconnect = Mock(return_value=asyncio.sleep(0))
+        self.vs._clients[1] = client
+
+        asyncio.run(self.vs.release(1))
+
+        self.assertIs(self.vs._locks.get(1), lock_before)
 
 
 class RecordingTests(unittest.TestCase):
@@ -899,6 +1171,15 @@ class RecordingTests(unittest.TestCase):
             self.rec._sessions.pop(999, None)
         self.assertIn("999", state["sessions"])
         self.assertEqual(state["sessions"]["999"]["channel_name"], "雑談")
+
+    def test_state_file_ignores_an_empty_settings_dir(self):
+        """SETTINGS_DIR=""（宣言だけで空）は Path("") = カレントディレクトリに
+        ならないこと。Bot と管理画面のカレントディレクトリが違うと、
+        書いた場所と読む場所がずれて「録音中」の表示が更新されなくなる。"""
+        with patch.dict(os.environ, {"SETTINGS_DIR": ""}):
+            path = self.rec._state_file()
+        self.assertNotEqual(path.parent, Path("."))
+        self.assertTrue(path.is_absolute())
 
     def test_start_refuses_without_the_receive_extension(self):
         """受信拡張が無い環境では、黙って失敗せず理由を返すこと。"""
@@ -1472,6 +1753,16 @@ class ReceiverHealthTests(unittest.TestCase):
         self.vs._clients[1] = client
         self.assertTrue(self.rec._is_receiving(1))
 
+    def test_is_listening_raising_is_logged_but_still_treated_as_healthy(self):
+        """is_listening() 自体が例外を投げるのは想定外。方針（判断できないなら
+        止めない）は変えないが、黙って握りつぶさず理由を残すこと。"""
+        client = Mock()
+        client.is_listening = Mock(side_effect=RuntimeError("boom"))
+        self.vs._clients[1] = client
+        with self.assertLogs(self.rec.logger, level="DEBUG") as captured:
+            self.assertTrue(self.rec._is_receiving(1))
+        self.assertTrue(any("is_listening" in m for m in captured.output))
+
 
 class AutoRecordingTests(unittest.TestCase):
     """録音と読み上げを独立したスイッチとして扱えること。
@@ -2030,6 +2321,7 @@ class TTLCacheTests(unittest.TestCase):
         import services.djaudio_service as djaudio
         import services.earthquake_service as earthquake
         import services.news_service as news
+        import services.virustotal_service as virustotal
         import webapp_admin.auth as auth
 
         for owner, name in (
@@ -2037,6 +2329,7 @@ class TTLCacheTests(unittest.TestCase):
             (news, "_summary_cache"),
             (djaudio, "_user_cooldown"),
             (auth, "_user_info_cache"),
+            (virustotal, "_vt_cache"),
         ):
             with self.subTest(cache=name):
                 cache = getattr(owner, name)
@@ -2146,6 +2439,27 @@ class SecurityFailSafeTests(unittest.TestCase):
         self.assertLess(source.index("if danger and bypass.check_failed:"),
                         source.index("await message.delete()"))
         self.assertIn("要確認", source)
+
+
+class GptUnknownReportingTests(unittest.TestCase):
+    """gpt_assess が失敗を意味する "UNKNOWN" を返したとき、埋め込みが
+    「問題なし」に化けないこと（判定できなかったことを隠さない）。"""
+
+    def setUp(self):
+        import services.security_service as security
+        self.sec = security
+
+    def test_gpt_icon_treats_unknown_as_a_warning_not_safe(self):
+        self.assertEqual(self.sec.gpt_icon("UNKNOWN"), self.sec.WARN_ICON)
+
+    def test_final_embed_does_not_report_all_clear_when_gpt_is_unknown(self):
+        embed = self.sec.build_final_embed([], "UNKNOWN", ["GPT:UNKNOWN"], ["ログ"])
+        self.assertNotEqual(embed.color, __import__("discord").Color.green())
+        self.assertNotIn("問題なし", embed.title)
+
+    def test_final_embed_still_reports_all_clear_when_gpt_is_safe(self):
+        embed = self.sec.build_final_embed([], "SAFE", ["GPT:SAFE"], ["ログ"])
+        self.assertEqual(embed.color, __import__("discord").Color.green())
 
 
 class TrackCloseTests(unittest.TestCase):

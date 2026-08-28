@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 import uuid
@@ -6,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, TypeVar
 
+from envutil import env_float, env_path
+
 try:
     import orjson as _json
     _ORJSON = True
@@ -13,14 +16,21 @@ except ImportError:
     import json as _json  # type: ignore
     _ORJSON = False
 
+logger = logging.getLogger(__name__)
+
 # Docker: ./data:/app/data がボリュームマウントされるため /app/data 配下に保存。
 # SETTINGS_DIR 環境変数で上書き可能（ローカル開発用）。
+# 素の os.getenv(..., "既定値") は、変数が空文字で「宣言だけされている」場合に
+# 既定値へ倒れない（int/float なら例外、Path なら Path("") = カレントディレクトリに
+# なって事故る）。envutil はそれを空文字ごと「未設定」として扱う。
 _default_dir = Path(__file__).resolve().parent.parent / "data"
-_SETTINGS_DIR = Path(os.getenv("SETTINGS_DIR", str(_default_dir)))
+_SETTINGS_DIR = env_path("SETTINGS_DIR", _default_dir)
 _SETTINGS_FILE = _SETTINGS_DIR / "settings.json"
 _SETTINGS_LOCK_FILE = _SETTINGS_DIR / "settings.json.lock"
-_SETTINGS_LOCK_TIMEOUT_SEC = max(0.2, float(os.getenv("SETTINGS_LOCK_TIMEOUT_SECONDS", "10")))
-_SETTINGS_LOCK_STALE_SEC = max(_SETTINGS_LOCK_TIMEOUT_SEC, float(os.getenv("SETTINGS_LOCK_STALE_SECONDS", "30")))
+_SETTINGS_LOCK_TIMEOUT_SEC = env_float("SETTINGS_LOCK_TIMEOUT_SECONDS", 10.0, minimum=0.2)
+_SETTINGS_LOCK_STALE_SEC = env_float(
+    "SETTINGS_LOCK_STALE_SECONDS", 30.0, minimum=_SETTINGS_LOCK_TIMEOUT_SEC,
+)
 _SETTINGS_LOCK_POLL_SEC = 0.05
 
 # メモリ内キャッシュ。ファイル署名（mtime_ns + size）が変わったら自動無効化するため、
@@ -81,8 +91,12 @@ def _settings_file_lock(timeout_sec: float = _SETTINGS_LOCK_TIMEOUT_SEC):
                 if lock_age > _SETTINGS_LOCK_STALE_SEC:
                     _SETTINGS_LOCK_FILE.unlink(missing_ok=True)
                     continue
-            except OSError:
-                pass
+            except OSError as e:
+                # ポーリング中（最短0.05秒間隔）に起きうるので debug に留める。
+                # stat() が失敗するのはファイルが競合相手に削除された直後などで
+                # 一過性のことが多いが、恒久的な原因（権限不足等）なら最終的に
+                # 下の TimeoutError で気づける。理由だけは残しておく。
+                logger.debug("[settings] ロックの経過時間を確認できませんでした: %s", e)
             if time.monotonic() >= deadline:
                 raise TimeoutError("settings.json のロック取得がタイムアウトしました。")
             time.sleep(_SETTINGS_LOCK_POLL_SEC)
@@ -92,13 +106,19 @@ def _settings_file_lock(timeout_sec: float = _SETTINGS_LOCK_TIMEOUT_SEC):
     finally:
         try:
             current_owner = _SETTINGS_LOCK_FILE.read_text(encoding="utf-8")
-        except OSError:
+        except OSError as e:
+            # 所有者を確認できない以上、他人のロックを消さないため空扱いにして
+            # unlink はしない（安全側）。ただし本来なら自分が持っているはずの
+            # ロックを読めなかった、という異常は残しておく。
+            logger.warning("[settings] ロックファイルの所有者を確認できませんでした: %s", e)
             current_owner = ""
         if current_owner == owner_id:
             try:
                 _SETTINGS_LOCK_FILE.unlink(missing_ok=True)
-            except OSError:
-                pass
+            except OSError as e:
+                # 自分のロックを消せなかった。他プロセスは _SETTINGS_LOCK_STALE_SEC
+                # 経過するまで「使用中」と誤認して待たされ続けるので、原因を残す。
+                logger.warning("[settings] ロックファイルを削除できませんでした: %s", e)
 
 
 def _load_all() -> dict[str, Any]:

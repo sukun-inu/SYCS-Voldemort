@@ -224,7 +224,7 @@ async def _send_reaction_roles(channel, guild) -> str:
     return f"{len(lines)} 件を表示し、{added} 個の絵文字を実際に付けました"
 
 
-async def _send_tts(channel, guild) -> str:
+async def _send_tts(channel, guild, bot: Bot) -> str:
     """本番と同じ enqueue_message を通す。TTS が無効／VC 未設定なら何も鳴らない
     ので、その旨をチャンネルへ返す。"""
     from services.tts_service import enqueue_message, get_effective_vc_watch
@@ -244,7 +244,11 @@ async def _send_tts(channel, guild) -> str:
     if speaker is None:
         return "読み上げを実行するメンバーを取得できませんでした"
 
-    await enqueue_message(None, guild, speaker, "これは読み上げのテストです。")
+    # bot を渡さないと、新しく立つ _player_loop が bot.get_guild() で
+    # AttributeError を起こして黙って死ぬ（キューに入れた音声が二度と
+    # 再生されない）。ここは「キューに入れました」と成功を返した直後に
+    # 本番と違う理由で無音になる、という一番気づきにくい壊れ方だった。
+    await enqueue_message(bot, guild, speaker, "これは読み上げのテストです。")
     await channel.send(
         f"🧪 **[テスト送信 — 読み上げ]**\n<#{vc_id}> で読み上げをキューに入れました。"
     )
@@ -252,12 +256,12 @@ async def _send_tts(channel, guild) -> str:
 
 
 _SENDERS = {
-    "welcome":        lambda ch, g: _send_welcome_like(ch, g, goodbye=False),
-    "goodbye":        lambda ch, g: _send_welcome_like(ch, g, goodbye=True),
-    "vc":             _send_vc,
-    "logging":        _send_logging,
-    "sticky":         _send_sticky,
-    "reaction_roles": _send_reaction_roles,
+    "welcome":        lambda ch, g, bot: _send_welcome_like(ch, g, goodbye=False),
+    "goodbye":        lambda ch, g, bot: _send_welcome_like(ch, g, goodbye=True),
+    "vc":             lambda ch, g, bot: _send_vc(ch, g),
+    "logging":        lambda ch, g, bot: _send_logging(ch, g),
+    "sticky":         lambda ch, g, bot: _send_sticky(ch, g),
+    "reaction_roles": lambda ch, g, bot: _send_reaction_roles(ch, g),
     "tts":            _send_tts,
 }
 
@@ -279,7 +283,7 @@ async def run_test(
         return
 
     guild = bot.get_guild(guild_id)
-    result = await _SENDERS[kind](channel, guild)
+    result = await _SENDERS[kind](channel, guild, bot)
     logger.info(
         "[DEV] test_notify(%s): guild=%s ch=%s %s", kind, guild_id, channel.id, result,
     )

@@ -425,6 +425,73 @@ class DevApiTests(unittest.TestCase):
         self.assertTrue(secret_row["secret"])
         self.assertNotIn("x" * 10, secret_row["value"] or "")
 
+    def test_overview_explains_why_guilds_is_empty_when_token_is_missing(self):
+        # テスト環境では DISCORD_BOT_TOKEN は未設定。0件と「取得失敗」が
+        # 同じ見た目にならないよう、理由が payload に出ること。
+        payload = self.dev.get("/admin/api/dev/overview").json()
+        self.assertEqual(payload["guilds"], [])
+        self.assertIn("DISCORD_BOT_TOKEN", payload.get("discord_error") or "")
+
+    def test_overview_explains_a_discord_api_failure(self):
+        import asyncio as _asyncio
+
+        class _FailingSession:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            def request(self, *args, **kwargs):
+                raise _asyncio.TimeoutError()
+
+        with patch("webapp_admin.api.dev.DISCORD_BOT_TOKEN", "test-token"), \
+             patch("webapp_admin.api.dev.aiohttp.ClientSession", _FailingSession):
+            payload = self.dev.get("/admin/api/dev/overview").json()
+
+        self.assertEqual(payload["guilds"], [])
+        self.assertIn("取得できませんでした", payload.get("discord_error") or "")
+
+    def test_overview_has_no_discord_error_on_success(self):
+        class _FakeResponse:
+            def __init__(self, payload):
+                self._payload = payload
+                self.status = 200
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            async def json(self):
+                return self._payload
+
+        class _WorkingSession:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return False
+
+            def request(self, method, url, **kwargs):
+                if "/guilds" in url:
+                    return _FakeResponse([{"id": "1", "name": "Sample", "icon": None}])
+                return _FakeResponse({"id": "42", "username": "bot"})
+
+        with patch("webapp_admin.api.dev.DISCORD_BOT_TOKEN", "test-token"), \
+             patch("webapp_admin.api.dev.aiohttp.ClientSession", _WorkingSession):
+            payload = self.dev.get("/admin/api/dev/overview").json()
+
+        self.assertNotIn("discord_error", payload)
+        self.assertEqual(payload["guilds"], [{"id": "1", "name": "Sample", "icon": None}])
+
     def test_task_signal_is_queued(self):
         response = self.dev.post("/admin/api/dev/signal/news_feeds", json={}, headers=CSRF_HEADER)
         self.assertEqual(response.status_code, 200)
@@ -1064,3 +1131,141 @@ class RecordingClipTests(unittest.TestCase):
     def test_other_guilds_cannot_clip(self):
         self.assertEqual(
             TestClient(app).get(self._url(0.5, 1.5, guild_id=111)).status_code, 403)
+
+
+class BotTokenResolutionTests(unittest.TestCase):
+    """DISCORD_BOT_TOKEN の解決が config.py と webapp_admin.auth でズレないこと。
+
+    以前は webapp_admin/auth.py が独自に os.environ.get("DISCORD_BOT_TOKEN", "")
+    で読んでおり、config.py（envutil 経由、前後の空白を落とす）とは別の解釈だった。
+    webapp_admin/api/dev.py は既に config.DISCORD_BOT_TOKEN を使っていたため、
+    同じプロセス内で「Bot 本体・dev タブは繋がるのに、ギルド/チャンネル一覧を
+    取る auth.py 側だけ Discord API に 401 で弾かれる」という食い違いが起きうる
+    状態だった（環境変数に前後の空白が入っただけで発生する）。
+    """
+
+    def test_bot_token_strips_whitespace_like_config_does(self):
+        import importlib
+
+        import config as config_module
+        import webapp_admin.auth as admin_auth_module
+
+        original_env = os.environ.get("DISCORD_BOT_TOKEN")
+        try:
+            os.environ["DISCORD_BOT_TOKEN"] = "  padded-token-value  "
+            importlib.reload(config_module)
+            importlib.reload(admin_auth_module)
+            self.assertEqual(admin_auth_module.DISCORD_BOT_TOKEN, "padded-token-value")
+            self.assertEqual(admin_auth_module.DISCORD_BOT_TOKEN, config_module.DISCORD_BOT_TOKEN)
+        finally:
+            if original_env is None:
+                os.environ.pop("DISCORD_BOT_TOKEN", None)
+            else:
+                os.environ["DISCORD_BOT_TOKEN"] = original_env
+            importlib.reload(config_module)
+            importlib.reload(admin_auth_module)
+
+
+class EnvBoolConsolidationTests(unittest.TestCase):
+    """read_env_bool の3重実装を envutil.env_bool へ一本化したことの回帰防止。
+
+    以前は webapp/forecast_utils.py・webapp/security.py・webapp/vapid_service.py が
+    それぞれ独立に真偽値パーサを実装しており、同じ判定ロジックが3箇所に分散していた
+    （どれか1箇所だけ直る／どれか1箇所だけ壊れる取りこぼしの主因）。現在はすべて
+    envutil.env_bool に委譲・統一している。ここでは3つの呼び出し経路すべてが
+    envutil.env_bool と同じ結果になることを確認する。
+
+    なお実測の結果、旧3実装はいずれも解釈不能な値（例: "banana"）に対して
+    「default 引数」へフォールバックしており、envutil.env_bool と挙動は元々
+    一致していた（追加されるのは警告ログのみ）。そのためこのテストは「今回の
+    変更でバグが直った」証明ではなく、「今後どれか1箇所だけ判定ロジックが
+    ズレる」将来の劣化を検知するための回帰ガードとして追加している。
+    """
+
+    # None は未設定（環境変数を削除）を表す。
+    BOOL_CASES = [
+        None, "", " ", "1", "0", "true", "True", "TRUE", " true ", "yes", "no",
+        "on", "off", "banana", "2", "-1", "tru", "FALSE",
+    ]
+
+    def _set_env(self, name: str, raw: str | None) -> None:
+        if raw is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = raw
+
+    def test_security_read_env_bool_matches_envutil(self):
+        from envutil import env_bool
+        from webapp.security import read_env_bool
+
+        name = "X_ENV_BOOL_CONSOLIDATION_TEST"
+        original = os.environ.get(name)
+        try:
+            for default in (True, False):
+                for raw in self.BOOL_CASES:
+                    self._set_env(name, raw)
+                    expected = env_bool(name, default)
+                    actual = read_env_bool(name, default)
+                    self.assertEqual(
+                        actual, expected,
+                        f"webapp.security.read_env_bool が envutil.env_bool と食い違った "
+                        f"raw={raw!r} default={default!r}",
+                    )
+        finally:
+            self._set_env(name, original)
+
+    def test_forecast_signals_llm_enabled_matches_envutil(self):
+        import importlib
+
+        from envutil import env_bool
+        import webapp.forecast_signals as forecast_signals_module
+
+        for name in ("FORECAST_LLM_ENABLED", "FORECAST_SUMMARY_ENABLED"):
+            original = os.environ.get(name)
+            try:
+                for raw in self.BOOL_CASES:
+                    self._set_env(name, raw)
+                    importlib.reload(forecast_signals_module)
+                    expected = env_bool(name, True)
+                    actual = getattr(forecast_signals_module, name)
+                    self.assertEqual(
+                        actual, expected,
+                        f"webapp.forecast_signals.{name} が envutil.env_bool と食い違った "
+                        f"raw={raw!r}",
+                    )
+            finally:
+                self._set_env(name, original)
+                importlib.reload(forecast_signals_module)
+
+    def test_vapid_auto_generate_matches_envutil(self):
+        from envutil import env_bool
+        import webapp.vapid_service as vapid_service_module
+
+        name = "VAPID_AUTO_GENERATE"
+        original = os.environ.get(name)
+        original_public = os.environ.get("VAPID_PUBLIC_KEY")
+        original_private = os.environ.get("VAPID_PRIVATE_KEY")
+        try:
+            # 明示鍵が設定されていると自動生成の分岐に入らないため、この2つは空けておく。
+            os.environ.pop("VAPID_PUBLIC_KEY", None)
+            os.environ.pop("VAPID_PRIVATE_KEY", None)
+            for raw in self.BOOL_CASES:
+                self._set_env(name, raw)
+                expected = env_bool(name, True)
+                with patch.object(
+                    vapid_service_module, "_ensure_generated_keys",
+                    return_value=("dummy-public", "dummy-private"),
+                ) as mock_ensure:
+                    config = vapid_service_module.load_vapid_config()
+                self.assertEqual(
+                    mock_ensure.called, expected,
+                    f"webapp.vapid_service の自動生成分岐が envutil.env_bool と食い違った "
+                    f"raw={raw!r}",
+                )
+                if not expected:
+                    self.assertIsNone(config.public_key)
+                    self.assertIsNone(config.private_key)
+        finally:
+            self._set_env(name, original)
+            self._set_env("VAPID_PUBLIC_KEY", original_public)
+            self._set_env("VAPID_PRIVATE_KEY", original_private)

@@ -28,7 +28,8 @@
 ### 1.3.1 ユーザー状態監査DB（10年保持）
 - `user_state_current`: 各ユーザーの最新状態（在籍/BAN/Timeout/ロール/権限）を保持
 - `user_state_event`: 参加/退出、BAN/KICK、VC入退室、ロール変更などを時系列保存
-- 保持期間は既定10年（`USER_STATE_RETENTION_DAYS=3650`）で、古い履歴は定期削除
+- 保持期間は既定10年（`USER_STATE_RETENTION_DAYS=3650`）で、古い履歴は定期削除。
+  10年は下限でもあるため、環境変数で伸ばすことはできても短くはできない
 - 価格データDB（`POSTGRES_DB`）とは別DB（既定 `USER_STATE_POSTGRES_DB=user_state_audit`）で管理可能
 - DB不整合時はテーブル再生成を試み、定期突合で同期ズレ（在籍/BAN/Timeout/JSON破損）を自動補正
 - 管理UIの「ユーザー状態監査」アプリで検索・閲覧可能（旧URL `/admin/users/state` からも開けます）

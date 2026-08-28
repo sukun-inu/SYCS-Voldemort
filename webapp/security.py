@@ -9,6 +9,8 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from envutil import env_bool
+
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -171,15 +173,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 
 def read_env_bool(name: str, default: bool = False) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    value = raw.strip().lower()
-    if value in {"1", "true", "yes", "on"}:
-        return True
-    if value in {"0", "false", "no", "off"}:
-        return False
-    return default
+    # 実装は envutil.env_bool に一本化している(旧実装との差分は解釈不能値でも
+    # 警告ログを残す点のみで、返り値の挙動は同一であることを確認済み)。
+    # webapp/app.py がこの名前で import しているため、関数名はそのまま残す。
+    return env_bool(name, default)
 
 
 def load_allowed_hosts() -> list[str]:

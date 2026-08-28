@@ -184,6 +184,274 @@ class GuardHelperTests(unittest.TestCase):
         self.assertTrue(calls, "断った理由を返していない")
 
 
+class MetalAllControlFlowTests(unittest.TestCase):
+    """/metal all: 成功時に誤ってエラー文言を送らないこと、一人称が統一されていること。
+
+    以前 except ブロック内の1行だけインデントが外れ、_respond_error が成功時にも
+    無条件で呼ばれるリグレッションが一瞬入ったため、固定化しておく。
+    """
+
+    def _register(self):
+        import commands.metal_commands as metal
+        registry = {}
+
+        class FakeGroup:
+            def __init__(self, **kwargs):
+                pass
+            def command(self, *, name, description=""):
+                def wrap(fn):
+                    registry[name] = fn
+                    return fn
+                return wrap
+            def add_command(self, *a, **k):
+                pass
+
+        with patch.object(metal.app_commands, "Group", FakeGroup):
+            metal.register_metal_commands(Mock())
+        return metal, registry
+
+    def test_success_does_not_send_the_error_message(self):
+        metal, registry = self._register()
+        interaction, calls = make_interaction()
+        with patch.object(metal, "calculate_metal_value",
+                          AsyncMock(return_value={"買取価格": 1000})), \
+             patch.object(metal, "log_action", AsyncMock()), \
+             patch.object(metal, "_respond_error", AsyncMock()) as respond_error:
+            asyncio.run(registry["all"](interaction, 1.0))
+        respond_error.assert_not_called()
+
+    def test_error_message_uses_the_bot_persona(self):
+        """一人称は「余」で統一。「俺」「俺様」は使わない（config.py の口調ルール）。"""
+        metal, registry = self._register()
+        interaction, calls = make_interaction()
+        with patch.object(metal, "calculate_metal_value",
+                          AsyncMock(side_effect=RuntimeError("boom"))), \
+             patch.object(metal, "log_action", AsyncMock()), \
+             patch.object(metal, "_respond_error", AsyncMock()) as respond_error:
+            asyncio.run(registry["all"](interaction, 1.0))
+        respond_error.assert_called_once()
+        message = respond_error.call_args.args[1]
+        self.assertIn("余の力", message)
+        self.assertNotIn("俺", message)
+
+    def test_single_metal_error_message_uses_the_bot_persona(self):
+        from config import METAL_COMMANDS
+        import commands.metal_commands as metal
+        spec = next(iter(METAL_COMMANDS.values()))
+        interaction, calls = make_interaction()
+        with patch.object(metal, "calculate_metal_value",
+                          AsyncMock(side_effect=metal.MetalPriceError("boom"))), \
+             patch.object(metal, "log_action", AsyncMock()), \
+             patch.object(metal, "_respond_error", AsyncMock()) as respond_error:
+            asyncio.run(metal._handle_single_metal(interaction, 1.0, spec))
+        respond_error.assert_called_once()
+        message = respond_error.call_args.args[1]
+        self.assertIn("余の力", message)
+        self.assertNotIn("俺", message)
+
+
+class TtsValidationTests(unittest.TestCase):
+    """空白のみの入力は strip 後に空文字として保存されてしまう。
+
+    辞書エントリなら「何にでもマッチする空パターン」に、声設定なら
+    settings.get(key, default) がキー存在扱いになり既定値へ落ちない、という
+    形で後段を壊すため、コマンド側で弾く。
+    """
+
+    def test_dict_add_rejects_whitespace_only_word(self):
+        import commands.tts_commands as tc
+        interaction, calls = make_interaction()
+        with patch.object(tc, "add_tts_dictionary_entry") as add_entry:
+            asyncio.run(tc.dict_add.callback(interaction, "   ", "reading"))
+        add_entry.assert_not_called()
+        self.assertTrue(calls, "何も返していない")
+
+    def test_dict_add_accepts_a_normal_entry_and_strips_it(self):
+        import commands.tts_commands as tc
+        interaction, calls = make_interaction()
+        with patch.object(tc, "add_tts_dictionary_entry") as add_entry:
+            asyncio.run(tc.dict_add.callback(interaction, " 単語 ", " たんご "))
+        add_entry.assert_called_once_with(999, "単語", "たんご")
+
+    def test_default_voice_rejects_whitespace_only(self):
+        import commands.tts_commands as tc
+        interaction, calls = make_interaction(administrator=True)
+        with patch.object(tc, "set_tts_default_voice") as set_voice:
+            asyncio.run(tc.tts_default_voice_cmd.callback(interaction, "   "))
+        set_voice.assert_not_called()
+
+    def test_voice_set_treats_whitespace_only_voice_as_unspecified(self):
+        import commands.tts_commands as tc
+        interaction, calls = make_interaction()
+        with patch.object(tc, "set_user_tts_settings") as set_settings:
+            asyncio.run(tc.voice_set.callback(interaction, "   ", None))
+        set_settings.assert_not_called()
+        self.assertTrue(calls, "何も返していない")
+
+    def test_voice_set_still_accepts_and_strips_a_real_voice(self):
+        import commands.tts_commands as tc
+        interaction, calls = make_interaction()
+        with patch.object(tc, "set_user_tts_settings") as set_settings:
+            asyncio.run(tc.voice_set.callback(interaction, " Kyoko ", None))
+        set_settings.assert_called_once_with(999, 1, voice="Kyoko", rate=None)
+
+
+class TtsJoinDeferTests(unittest.TestCase):
+    """/tts join: VC接続前にdeferすること。
+
+    temp_join はVC接続を伴い、管理者なら録音の自動開始判定も続く。どちらも
+    Discordとの往復があり、defer無しでは3秒の持ち時間を超えて
+    「アプリケーションが応答しませんでした」になりうる。
+    """
+
+    def test_defer_happens_before_the_vc_connect(self):
+        import commands.tts_commands as tc
+        interaction, calls = make_interaction()
+        seen_before_join = []
+
+        async def slow_join(*a, **k):
+            seen_before_join.append(list(calls))
+
+        with patch.object(tc, "get_tts_settings", Mock(return_value={"enabled": True})), \
+             patch.object(tc.tts_service, "temp_join", slow_join), \
+             patch.object(tc, "is_admin", Mock(return_value=False)):
+            asyncio.run(tc.tts_join.callback(interaction, Mock(mention="#vc")))
+
+        self.assertTrue(seen_before_join, "temp_join が呼ばれていない")
+        self.assertIn("defer", seen_before_join[0], f"接続前の応答: {seen_before_join[0]}")
+        self.assertEqual(calls, ["defer", "followup.send"], str(calls))
+
+
+class RecordingListCapTests(unittest.TestCase):
+    """録音の除外リスト・参加者リストは、件数が多くても省略件数を隠さない。"""
+
+    def _register(self):
+        import commands.recording_commands as rc
+        registry = {}
+
+        class FakeGroup:
+            def __init__(self, **kwargs):
+                pass
+            def command(self, *, name, description=""):
+                def wrap(fn):
+                    registry[name] = fn
+                    return fn
+                return wrap
+            def add_command(self, *a, **k):
+                pass
+
+        with patch.object(rc.app_commands, "Group", FakeGroup):
+            rc.register_recording_commands(Mock())
+        return rc, registry
+
+    def test_excluded_list_shows_the_omitted_count(self):
+        rc, registry = self._register()
+        interaction, calls = make_interaction(administrator=True)
+        sent = {}
+
+        async def fake_send(*a, **k):
+            sent["embed"] = k.get("embed")
+        interaction.response.send_message = fake_send
+
+        excluded_ids = list(range(30))
+        with patch.object(rc, "get_recording_settings", Mock(return_value={
+            "enabled": True, "auto_start": False, "max_minutes": 60,
+            "retention_days": 7, "excluded_user_ids": excluded_ids,
+        })), patch.object(rc.recording, "preferred_vc_channel_id", Mock(return_value=None)):
+            asyncio.run(registry["config"](interaction))
+
+        field = next(f for f in sent["embed"].fields if f.name == "録音しない人")
+        self.assertIn("…他10人", field.value)
+
+
+class ServerNewsListTests(unittest.TestCase):
+    """/news add のクエリ長・/news list の一覧表示。"""
+
+    def _register(self):
+        import commands.server_commands as sc
+        registry = {}
+
+        class FakeGroup:
+            def __init__(self, **kwargs):
+                pass
+            def command(self, *, name, description=""):
+                def wrap(fn):
+                    fn.autocomplete = lambda param: (lambda g: g)
+                    registry[name] = fn
+                    return fn
+                return wrap
+            def add_command(self, *a, **k):
+                pass
+
+        with patch.object(sc.app_commands, "Group", FakeGroup):
+            sc.register_server_commands(Mock())
+        return sc, registry
+
+    def test_news_query_has_a_length_cap(self):
+        """クエリの長さが無制限だと、フィード数を10件までに絞っても
+        /news list の一覧だけでメッセージ上限(2000文字)を超えうる。"""
+        import inspect
+        _, registry = self._register()
+        annotation = inspect.signature(registry["add"]).parameters["query"].annotation
+        self.assertEqual(getattr(annotation, "max_value", None), 100)
+
+    def test_news_list_body_stays_within_the_message_limit_even_with_long_queries(self):
+        """クエリ長の上限(100文字)は新規追加分にしか効かない。既存データ
+        （上限導入前に登録されたもの）が長いクエリを持っていても、
+        /news list 自体がメッセージ上限を超えないことの保険。"""
+        sc, registry = self._register()
+        interaction, calls = make_interaction()
+        sent = {}
+
+        async def fake_send(content, **k):
+            sent["content"] = content
+        interaction.response.send_message = fake_send
+
+        # Range上限(100文字)導入前に登録されたデータを想定し、あえて長くする。
+        feeds = {f"id{i}": {"query": "Q" * 500, "channel_id": 123, "interval": 60} for i in range(10)}
+        with patch.object(sc, "get_news_feeds", Mock(return_value=feeds)):
+            asyncio.run(registry["list"](interaction))
+        self.assertLessEqual(len(sent["content"]), 2000)
+
+
+class LoggingSettingsListDedupTests(unittest.TestCase):
+    """/bot settings の一覧表示が cap_list_for_message に統一されていること。"""
+
+    def test_settings_shows_the_omitted_count_via_the_shared_helper(self):
+        import commands.logging_commands as lc
+        registry = {}
+
+        class FakeGroup:
+            def __init__(self, **kwargs):
+                pass
+            def command(self, *, name, description=""):
+                def wrap(fn):
+                    registry[name] = fn
+                    return fn
+                return wrap
+            def add_command(self, *a, **k):
+                pass
+
+        with patch.object(lc.app_commands, "Group", FakeGroup):
+            lc.register_logging_commands(Mock())
+
+        interaction, calls = make_interaction(administrator=True)
+        sent = {}
+
+        async def fake_send(*a, **k):
+            sent["embed"] = k.get("embed")
+        interaction.response.send_message = fake_send
+
+        with patch.object(lc, "get_log_settings", Mock(return_value={})), \
+             patch.object(lc, "get_response_channel_id", Mock(return_value=None)), \
+             patch.object(lc, "get_trusted_user_ids", Mock(return_value=list(range(20)))), \
+             patch.object(lc, "get_bypass_role_ids", Mock(return_value=[])):
+            asyncio.run(registry["settings"](interaction))
+
+        field = next(f for f in sent["embed"].fields if "信頼済みユーザー" in f.name)
+        self.assertIn("…他5名", field.value)
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -272,3 +540,96 @@ class CommandTreeTests(unittest.TestCase):
         self.assertEqual(len(listed), len(self.leaves))
         self.assertIn("log channel", listed)
         self.assertIn("quake channel", listed)
+
+
+class CapListBudgetTests(unittest.TestCase):
+    """cap_list_for_message が名乗りどおり文字数の上限を守ること。
+
+    以前は items[:limit] と件数だけで打ち切っており、docstring が名乗る
+    「2000文字に収まる」を実際には保証していなかった（1件の長さが可変な
+    /news list や、embed field(1024) に流用した /record status で破れる）。
+    件数ではなく文字数を最終的な保証にしたので、そこを境界で押さえる。
+    """
+
+    def test_worst_case_call_sites_stay_within_budget(self):
+        from commands.interaction_utils import (
+            EMBED_FIELD_BUDGET,
+            MESSAGE_BUDGET,
+            cap_list_for_message,
+        )
+
+        cases = [
+            # /sticky list: 1行 = "<#"+19桁+">: "+content[:50]。チャンネル数に上限が無い
+            ("sticky", [f"<#{'9' * 19}>: {'あ' * 50}" for _ in range(500)],
+             MESSAGE_BUDGET, "**スティッキー一覧**\n", 25, "件", "\n"),
+            # /record status: 表示名は最大32文字。embed field なので上限は 1024
+            ("speakers", [f"・{'名' * 32}（発話 1時間23分45秒）" for _ in range(200)],
+             EMBED_FIELD_BUDGET, "", 20, "人", "\n"),
+            # /log settings: embed field に読点区切りで並べる
+            ("trusted", [f"<@{'9' * 19}>" for _ in range(300)],
+             EMBED_FIELD_BUDGET, "", 15, "名", ", "),
+        ]
+        for label, items, budget, header, limit, unit, joiner in cases:
+            with self.subTest(label):
+                body = cap_list_for_message(
+                    items, budget=budget, header=header,
+                    limit=limit, omitted_unit=unit, joiner=joiner,
+                )
+                self.assertLessEqual(len(header) + len(body), budget)
+
+    def test_omission_line_growth_is_accounted_for(self):
+        """省略件数が桁上がりして省略行自体が伸びても予算を超えないこと。
+
+        末尾に省略行を足してから溢れる、という壊れ方をしやすい箇所。
+        """
+        from commands.interaction_utils import MESSAGE_BUDGET, cap_list_for_message
+
+        body = cap_list_for_message(
+            [f"<@{'9' * 19}>" for _ in range(1500)],
+            budget=MESSAGE_BUDGET, omitted_unit="名",
+        )
+        self.assertLessEqual(len(body), MESSAGE_BUDGET)
+        self.assertRegex(body, r"…他\d+名$")
+
+    def test_header_is_charged_against_the_budget(self):
+        """ヘッダの長さも予算から引かれること（ヘッダ込みで上限を守る）。"""
+        from commands.interaction_utils import cap_list_for_message
+
+        header = "H" * 40
+        body = cap_list_for_message(
+            ["abc"] * 50, budget=60, header=header, omitted_unit="件",
+        )
+        self.assertLessEqual(len(header) + len(body), 60)
+
+    def test_no_omission_line_when_everything_fits(self):
+        from commands.interaction_utils import MESSAGE_BUDGET, cap_list_for_message
+
+        self.assertEqual(
+            cap_list_for_message(["a", "b"], budget=MESSAGE_BUDGET, omitted_unit="件"),
+            "a\nb",
+        )
+        self.assertEqual(
+            cap_list_for_message([], budget=MESSAGE_BUDGET, omitted_unit="件"), "",
+        )
+
+    def test_every_call_site_passes_a_budget(self):
+        """呼び出し側が budget を渡し忘れていないこと。
+
+        budget はキーワード必須引数なので、渡し忘れると実行時に TypeError で
+        コマンドごと落ちる（実際に移行の途中でそうなっていた）。静的に押さえる。
+        """
+        import ast
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent / "commands"
+        missing = []
+        for path in root.glob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                if getattr(node.func, "id", None) != "cap_list_for_message":
+                    continue
+                if not any(kw.arg == "budget" for kw in node.keywords):
+                    missing.append(f"{path.name}:{node.lineno}")
+        self.assertEqual(missing, [])

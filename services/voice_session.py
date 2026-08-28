@@ -170,8 +170,11 @@ async def acquire(
 async def _force_disconnect(guild_id: int, client: discord.VoiceClient) -> None:
     try:
         await client.disconnect(force=True)
-    except Exception:
-        pass
+    except Exception as e:
+        # 失敗しても呼び出し元は新しい接続を張りに行くので処理は止めないが、
+        # 古い接続が discord.py 側には生きたまま残っている可能性があるので
+        # 理由は残す（黙って握りつぶすと、居座りに気づく手がかりが無くなる）。
+        logger.warning("[voice] guild=%s 古い接続の強制切断に失敗しました: %s", guild_id, e)
     if _clients.get(guild_id) is client:
         _clients.pop(guild_id, None)
 
@@ -189,14 +192,25 @@ async def release(guild_id: int, *, force: bool = False) -> bool:
         )
         return False
 
+    # _locks はここでは消さない。acquire() は "async with lock" の間だけ
+    # _locks[guild_id] を見ており、ここで pop すると、その最中に別の
+    # acquire() 呼び出しが setdefault() で新しい（ロックされていない）Lock を
+    # 作ってしまい、進行中の acquire() と排他が効かないまま両方が同時に
+    # channel.connect() へ進んでしまう。ギルド数は有限なので Lock を
+    # 残しておいても増え続ける心配はない。
     client = _clients.pop(guild_id, None)
-    _locks.pop(guild_id, None)
     if force:
         _holds.pop(guild_id, None)
     if client is None:
         return False
     try:
         await client.disconnect(force=True)
-    except Exception:
-        pass
+    except Exception as e:
+        # _clients からは既に pop 済みなので、ここで諦めると実際の接続が
+        # 生きたまま管理外になる（bot が VC に居座り続ける、次の acquire() が
+        # 拾い直すまで誰も気づけない）。黙って握りつぶさず理由を残す。
+        logger.warning(
+            "[voice] guild=%s 切断に失敗しました（管理外の接続が残っている可能性）: %s",
+            guild_id, e,
+        )
     return True

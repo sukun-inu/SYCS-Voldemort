@@ -51,7 +51,7 @@ docker compose up -d --build
 | `USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS` | 任意 | 起動後、最初の定期修復までの待機秒（既定 `180`） |
 | `USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD` | 任意 | 1ギルドあたりの整合性修復対象上限（既定 `50000`） |
 | `USER_STATE_AUTO_REPAIR_WRITE_EVENTS` | 任意 | 定期修復時にも同期イベントを書き込む（既定 `false`） |
-| `USER_STATE_RETENTION_DAYS` | 任意 | 状態監査履歴の保持日数（既定 `3650`） |
+| `USER_STATE_RETENTION_DAYS` | 任意 | 状態監査履歴の保持日数（既定 `3650` ＝10年）。**10年は下限でもあり、これより短くはできない**（監査履歴のため）。短い値を設定しても `3650` に丸められ、警告がログに出る |
 | `USER_STATE_CLEANUP_INTERVAL_SECONDS` | 任意 | 古い履歴削除の実行間隔秒（既定 `21600`） |
 | `DJAUDIO_BASE_URL` | DJAudio時推奨 | MP3 配信 URL ベース。未設定時は `http://localhost:5001` になり配信リンクが外部から開けなくなるため、本番では必ず外部到達可能な URL を設定すること（未設定/localhostのままだと起動時ログと `/djaudio status` に警告が出る） |
 | `DJAUDIO_FFMPEG_PATH` | 任意 | ffmpeg 実行ファイルを明示指定 |

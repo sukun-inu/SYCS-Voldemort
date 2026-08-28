@@ -393,17 +393,21 @@ def _build_result_embed(results: list[tuple[str, str]], guild_id: int, cache_ttl
 async def _add_reaction_safe(message: discord.Message, emoji: str) -> None:
     try:
         await message.add_reaction(emoji)
-    except discord.HTTPException:
-        pass
+    except discord.HTTPException as e:
+        # メッセージが既に消えている等、進捗の絵文字が付けられないだけなら
+        # 実害は小さいが、黙って何もしないと権限不足など別の原因と見分けが
+        # つかなくなる。
+        logger.debug("[DJAudio] リアクション追加に失敗 %s: %s", emoji, e)
 
 
 async def _remove_reaction_safe(message: discord.Message, emoji: str, bot: Bot) -> None:
     if bot.user is None:
+        logger.debug("[DJAudio] bot.user が未確定のためリアクション除去をスキップ")
         return
     try:
         await message.remove_reaction(emoji, bot.user)
-    except discord.HTTPException:
-        pass
+    except discord.HTTPException as e:
+        logger.debug("[DJAudio] リアクション除去に失敗 %s: %s", emoji, e)
 
 
 # ──────────────────────────────────────────────
@@ -514,8 +518,10 @@ async def _process_url(
             await _remove_reaction_safe(message, "⏳", bot)
             await _add_reaction_safe(message, "❌")
             await message.reply("⚠️ タイムアウトしたぞ。時間をおいてから再試行せよ。", mention_author=False)
-        except discord.HTTPException:
-            pass
+        except discord.HTTPException as e:
+            # 失敗そのものは上でログ済みだが、その失敗を利用者に伝える返信すら
+            # 送れなかった場合は、ここでも黙って終わらせない。
+            logger.warning("[DJAudio] タイムアウト通知を送れませんでした [%s]: %s", url, e)
     except Exception as e:
         logger.exception("処理失敗 [%s]: %s", url, e)
         try:
@@ -525,7 +531,7 @@ async def _process_url(
                 "⚠️ ダウンロードに失敗した。URL を確認して再試行せよ。",
                 mention_author=False,
             )
-        except discord.HTTPException:
-            pass
+        except discord.HTTPException as e2:
+            logger.warning("[DJAudio] 失敗通知を送れませんでした [%s]: %s", url, e2)
     finally:
         _processing.discard(key)

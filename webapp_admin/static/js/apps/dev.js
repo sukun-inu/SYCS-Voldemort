@@ -190,6 +190,11 @@ export async function mount(win) {
       tabs.el
     )
   );
+
+  // guilds が0件なのは「Bot が本当にどこにも参加していない」のか
+  // 「Discord API から取得できなかった」のか、見た目だけでは区別できない。
+  // サーバー側が理由を返しているときは、黙って「0 ギルド」と表示しない。
+  if (data.discord_error) toast(data.discord_error, "danger", { duration: 8000 });
 }
 
 /* ── 送信 ───────────────────────────────────────────────── */
@@ -288,26 +293,33 @@ function earthquakeTab(guildOptions) {
 
   const loadButton = actionButton("直近の地震を取得", "bi-arrow-clockwise", async () => {
     clear(historyList).append(loading());
-    const result = await api.get(`${BASE}/earthquakes`);
-    // サーバは失敗しても200で返す（理由は error に入る）。原因を画面にも出す。
-    clear(historyList).append(
-      rows(
-        result.events,
-        (event) =>
-          el(
-            "div",
-            { class: "list-row" },
-            el("div", { class: "grow list-main" },
-               el("div", { class: "truncate", text: `${event.place}（${event.scale_label}）` }),
-               el("div", { class: "list-sub", text: `${event.time || "-"} / M${event.magnitude ?? "-"}` })),
-            el("button", {
-              class: "btn btn-sm", type: "button",
-              onclick: () => { eventJson.value = event.json; toast("JSONを読み込みました", "success", { duration: 2000 }); },
-            }, "選ぶ")
-          ),
-        result.error ? `取得できませんでした: ${result.error}` : "地震情報がありません。"
-      )
-    );
+    try {
+      const result = await api.get(`${BASE}/earthquakes`);
+      // サーバは失敗しても200で返す（理由は error に入る）。原因を画面にも出す。
+      clear(historyList).append(
+        rows(
+          result.events,
+          (event) =>
+            el(
+              "div",
+              { class: "list-row" },
+              el("div", { class: "grow list-main" },
+                 el("div", { class: "truncate", text: `${event.place}（${event.scale_label}）` }),
+                 el("div", { class: "list-sub", text: `${event.time || "-"} / M${event.magnitude ?? "-"}` })),
+              el("button", {
+                class: "btn btn-sm", type: "button",
+                onclick: () => { eventJson.value = event.json; toast("JSONを読み込みました", "success", { duration: 2000 }); },
+              }, "選ぶ")
+            ),
+          result.error ? `取得できませんでした: ${result.error}` : "地震情報がありません。"
+        )
+      );
+    } catch (error) {
+      // ここで戻さないと、リストが「読み込み中…」のまま固まって見える
+      // （ボタン側のトーストは数秒で消えるため、それだけでは気づけない）。
+      clear(historyList).append(el("div", { class: "empty", text: `取得できませんでした（${error.message}）` }));
+      throw error;
+    }
     return null;
   });
 
@@ -397,6 +409,10 @@ function settingsTab(data) {
   async function show(guildId) {
     viewer.hidden = false;
     viewer.textContent = "読み込み中…";
+    // 取れているあいだだけ guildId を持たせる。ここで消しておかないと、
+    // 前回表示していた別ギルドの成功状態が残ったまま「書き出し」に
+    // 「取得できた」と誤解させてしまう。
+    delete viewer.dataset.guildId;
     try {
       const result = await api.get(`${BASE}/settings/${guildId}`);
       viewer.textContent = JSON.stringify(result.settings, null, 2);
@@ -443,8 +459,16 @@ function settingsTab(data) {
            el("div", { class: "truncate", text: guild ? guild.name : "（Bot 不参加）" }),
            el("div", { class: "list-sub mono", text: guildId })),
         el("button", { class: "btn btn-sm", type: "button", onclick: () => show(guildId) }, "表示"),
-        el("button", { class: "btn btn-sm", type: "button",
-                       onclick: async () => { await show(guildId); download(guildId); } }, "書き出し"),
+        el("button", {
+          class: "btn btn-sm", type: "button",
+          onclick: async () => {
+            await show(guildId);
+            // 取得に失敗していたら、エラー文言そのものを「設定」として
+            // ダウンロードさせてしまわないよう書き出しを取りやめる。
+            if (viewer.dataset.guildId === guildId) download(guildId);
+            else toast("設定を取得できなかったため、書き出しを中止しました。", "danger");
+          },
+        }, "書き出し"),
         el("button", {
           class: "btn btn-sm btn-danger", type: "button",
           onclick: () => {
@@ -662,6 +686,11 @@ function logsTab(win) {
 
   let busy = false;
   let timer = null;
+  // タブを開いた最初の1回が失敗すると、output は初期値の「読み込み中…」の
+  // ままになる。status（小さな隅の文字）だけでは気づきにくく、いつまでも
+  // 読み込み中に見えてしまうので、まだ一度も表示できていないときだけ
+  // output 側にも失敗を出す（表示済みのログを定期更新の失敗で消しはしない）。
+  let loaded = false;
 
   async function load({ quiet = false } = {}) {
     if (busy) return;
@@ -677,8 +706,10 @@ function logsTab(win) {
       }
       if (atBottom) output.scrollTop = output.scrollHeight;
       status.textContent = `${result.lines.length} 行・${new Date().toLocaleTimeString("ja-JP")} 更新`;
+      loaded = true;
     } catch (error) {
       status.textContent = `読み込めません（${error.message}）`;
+      if (!loaded) clear(output).append(el("div", { class: "log-line is-error", text: `読み込めませんでした（${error.message}）` }));
       if (!quiet) toast(error.message, "danger");
     } finally {
       busy = false;

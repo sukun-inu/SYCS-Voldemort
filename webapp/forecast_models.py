@@ -21,10 +21,11 @@ FORECAST_TILT_MAX_PCT_PER_DAY で厳しく制限している。
 
 import logging
 import math
-import os
 from datetime import datetime, timedelta
 from statistics import pstdev
 from typing import Any
+
+from envutil import env_float, env_int
 
 from .forecast_series import (
     build_return_series,
@@ -40,19 +41,19 @@ logger = logging.getLogger(__name__)
 MODEL_VARIANT = "interval_rw_v1"
 
 # AI(Groq)判定のスコア×確信度が中心値の傾き(tilt)にどれだけ反映されるかの係数。
-FORECAST_LLM_WEIGHT = max(0.0, float(os.getenv("FORECAST_LLM_WEIGHT", "0.008")))
+FORECAST_LLM_WEIGHT = env_float("FORECAST_LLM_WEIGHT", 0.008, minimum=0.0)
 
 # 中心値の傾きの上限(%/日)。時系列外挿に予測力が無いことは実証済みで、外部シグナルの
 # 有効性は未検証のため、中心が現在価格から大きく離れないよう厳しく抑える。
 # 既定 0.15%/日 = 7日で約 ±1.05%。
-FORECAST_TILT_MAX_PCT_PER_DAY = max(0.0, float(os.getenv("FORECAST_TILT_MAX_PCT_PER_DAY", "0.15"))) / 100.0
+FORECAST_TILT_MAX_PCT_PER_DAY = env_float("FORECAST_TILT_MAX_PCT_PER_DAY", 0.15, minimum=0.0) / 100.0
 
 # 予測区間の名目確率。既定80%(10%〜90%分位)。
-FORECAST_INTERVAL_PROB = min(0.99, max(0.5, float(os.getenv("FORECAST_INTERVAL_PROB", "0.8"))))
+FORECAST_INTERVAL_PROB = env_float("FORECAST_INTERVAL_PROB", 0.8, minimum=0.5, maximum=0.99)
 
 # 為替β(金属リターンのUSD/JPY感応度)を実データから推定する際の設定。共通日が足りない
 # 場合や為替側の分散がほぼ0の場合は下の既定値へフォールバックする。
-FX_BETA_MIN_SAMPLES = max(20, int(os.getenv("FORECAST_FX_BETA_MIN_SAMPLES", "40")))
+FX_BETA_MIN_SAMPLES = env_int("FORECAST_FX_BETA_MIN_SAMPLES", 40, minimum=20)
 FX_BETA_BOUNDS = (-0.5, 1.5)
 
 FX_BETA_BY_METAL = {
@@ -62,18 +63,19 @@ FX_BETA_BY_METAL = {
 }
 
 # 直近の平均絶対誤差(MAE%)を信頼度へ反映するための閾値。
-FORECAST_ACCURACY_GOOD_MAE_PCT = max(0.1, float(os.getenv("FORECAST_ACCURACY_GOOD_MAE_PCT", "1.5")))
-FORECAST_ACCURACY_BAD_MAE_PCT = max(
-    FORECAST_ACCURACY_GOOD_MAE_PCT + 0.1, float(os.getenv("FORECAST_ACCURACY_BAD_MAE_PCT", "6.0"))
+FORECAST_ACCURACY_GOOD_MAE_PCT = env_float("FORECAST_ACCURACY_GOOD_MAE_PCT", 1.5, minimum=0.1)
+# minimum は他の環境変数(FORECAST_ACCURACY_GOOD_MAE_PCT)由来の値に連動する下限。
+FORECAST_ACCURACY_BAD_MAE_PCT = env_float(
+    "FORECAST_ACCURACY_BAD_MAE_PCT", 6.0, minimum=FORECAST_ACCURACY_GOOD_MAE_PCT + 0.1
 )
 FORECAST_ACCURACY_MAX_BONUS = 0.05
 FORECAST_ACCURACY_MAX_PENALTY = 0.30
 # 答え合わせ実績がまだ無い状態で高い信頼度を出すのは過信なので上限を設ける。
-FORECAST_CONFIDENCE_CAP_WITHOUT_ACCURACY = min(
-    0.95, max(0.3, float(os.getenv("FORECAST_CONFIDENCE_CAP_WITHOUT_ACCURACY", "0.75")))
+FORECAST_CONFIDENCE_CAP_WITHOUT_ACCURACY = env_float(
+    "FORECAST_CONFIDENCE_CAP_WITHOUT_ACCURACY", 0.75, minimum=0.3, maximum=0.95
 )
 # 信頼度を区間の狭さから求めるときの基準。7日の片側幅がこの%なら信頼度への寄与が0になる。
-FORECAST_WIDTH_REFERENCE_PCT = max(1.0, float(os.getenv("FORECAST_WIDTH_REFERENCE_PCT", "12.0")))
+FORECAST_WIDTH_REFERENCE_PCT = env_float("FORECAST_WIDTH_REFERENCE_PCT", 12.0, minimum=1.0)
 
 
 def extract_prices(history_items: list[dict[str, Any]]) -> list[float]:

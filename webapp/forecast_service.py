@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -10,6 +9,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import METAL_COMMANDS
+from envutil import env_int
 
 from .forecast_accuracy_service import load_recent_forecast_error, record_forecast_snapshot
 from .forecast_models import (
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 # 予測区間の推定に使う価格履歴の日数。重複ありの7日リターンを十分な本数集めるため、
 # 長めに取る(経験分位点には最低20本必要)。
-FORECAST_HISTORY_WINDOW_MIN_DAYS = max(45, int(os.getenv("FORECAST_HISTORY_WINDOW_MIN_DAYS", "120")))
+FORECAST_HISTORY_WINDOW_MIN_DAYS = env_int("FORECAST_HISTORY_WINDOW_MIN_DAYS", 120, minimum=45)
 
 
 async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7) -> dict[str, Any]:

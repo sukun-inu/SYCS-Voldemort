@@ -8,6 +8,8 @@ from pathlib import Path
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
+from envutil import env_bool
+
 logger = logging.getLogger(__name__)
 DEFAULT_VAPID_SUBJECT = "mailto:admin@example.com"
 _VAPID_SUBJECT_PATTERN = re.compile(
@@ -22,18 +24,6 @@ class VapidConfig:
     public_key: str | None
     private_key: str | None
     subject: str
-
-
-def _read_env_bool(name: str, default: bool = False) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    value = raw.strip().lower()
-    if value in {"1", "true", "yes", "on"}:
-        return True
-    if value in {"0", "false", "no", "off"}:
-        return False
-    return default
 
 
 def _b64url_no_padding(value: bytes) -> str:
@@ -114,7 +104,7 @@ def load_vapid_config() -> VapidConfig:
     if env_public and env_private:
         return VapidConfig(public_key=env_public, private_key=env_private, subject=subject)
 
-    if not _read_env_bool("VAPID_AUTO_GENERATE", True):
+    if not env_bool("VAPID_AUTO_GENERATE", True):
         return VapidConfig(public_key=None, private_key=None, subject=subject)
 
     generated_public, generated_private = _ensure_generated_keys()

@@ -327,10 +327,20 @@ async def overview(request: Request, _=Depends(check_dev)):
     guild_list = guilds if isinstance(guilds, list) else []
     guild_list.sort(key=lambda g: (g.get("name") or "").lower())
 
+    # guilds が空になる理由は「Bot がどこにも参加していない」と
+    # 「Discord API から取得できなかった」のどちらもありうるが、見た目は
+    # 同じ「0 ギルド」になってしまう。失敗は _discord() 内でログには残るが、
+    # ログを見ない限り気づけないので、画面にも理由を伝える。
+    discord_error = None
+    if not DISCORD_BOT_TOKEN:
+        discord_error = "DISCORD_BOT_TOKEN が未設定です。"
+    elif guilds is None:
+        discord_error = "Discord API からギルド一覧を取得できませんでした（ログを確認してください）。"
+
     settings = _all_settings()
     entries = _cache_entries()
 
-    return JSONResponse({
+    payload: dict[str, Any] = {
         "bot_user": bot_user or {},
         "guilds": [
             {"id": str(g.get("id")), "name": g.get("name") or "Unknown", "icon": g.get("icon")}
@@ -345,7 +355,10 @@ async def overview(request: Request, _=Depends(check_dev)):
         "tasks": VALID_TASKS,
         "env_rows": _env_rows(),
         "stickies": _all_stickies(),
-    })
+    }
+    if discord_error:
+        payload["discord_error"] = discord_error
+    return JSONResponse(payload)
 
 
 @router.get("/earthquakes")

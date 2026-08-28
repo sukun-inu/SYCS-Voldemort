@@ -161,8 +161,11 @@ def _get_font(size: int) -> "ImageFont.ImageFont":
     if _FONT_PATH:
         try:
             font = ImageFont.truetype(_FONT_PATH, size)
-        except Exception:
-            pass
+        except Exception as e:
+            # サイズごとに _FONT_CACHE へ結果を残すため、ここは初回の一度しか
+            # 通らない。既定フォントへ切り替わったこと自体は害が無いが、
+            # 理由を残さないと「なぜ見た目のフォントが違うか」が追えない。
+            logger.warning("[earthquake] フォント %s の読み込みに失敗: %s", _FONT_PATH, e)
 
     if font is None:
         try:

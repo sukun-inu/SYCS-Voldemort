@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Sequence
 
 import discord
 from discord import app_commands
@@ -7,6 +8,69 @@ from discord.ext.commands import Bot
 from config import ADMIN_SITE_URL, METALS_SITE_URL
 
 logger = logging.getLogger(__name__)
+
+
+# Discord側の各種文字数上限。呼び出し側が「ここは field だから1024」のように
+# その場の数字を書くと、書き間違いや context 違い（メッセージ用の値を embed
+# field に流用する等）に気づけない。名前を付けてここに集約する。
+MESSAGE_BUDGET = 2000           # メッセージ本文
+EMBED_DESCRIPTION_BUDGET = 4096  # embed の description
+EMBED_FIELD_BUDGET = 1024        # embed の 1 field の value
+
+
+def cap_list_for_message(
+    items: Sequence[str],
+    *,
+    budget: int,
+    omitted_unit: str,
+    joiner: str = "\n",
+    limit: int | None = None,
+    header: str = "",
+) -> str:
+    """一覧を文字数予算(budget)に収まるよう打ち切る。件数(limit)ではなく
+    文字数を最終的な保証にする。
+
+    件数だけで打ち切ると、1件あたりの長さが可変な入力（検索クエリや辞書の
+    読みなど）では上限超過を防げない（実際に /news list で発生した）。
+    budget には MESSAGE_BUDGET / EMBED_DESCRIPTION_BUDGET / EMBED_FIELD_BUDGET
+    のうち、呼び出し側の文脈に合ったものを渡すこと。
+
+    - header はメッセージの前置き（"**一覧**\n" 等）。込みで budget を守れる
+      よう、header の長さを先に差し引く。
+    - 省略行（"…他N件"）自身の長さも budget に含めて計算する。省略件数が
+      2桁→3桁になると省略行自体が伸びるため、末尾に足してからはみ出す事故を
+      防ぐには、これを見込んでおく必要がある。
+    - limit を指定すると、文字数に余裕があっても件数でも打ち切る（両方を
+      満たす）。省略表記のUXとして、極端に短い項目が大量にあっても表示件数を
+      抑えたい場合に使う。
+    """
+    remaining = budget - len(header)
+    total = len(items)
+    candidates = list(items) if limit is None else list(items[:limit])
+
+    # 1) budget を見ながら候補を1件ずつ足す。
+    fitted: list[str] = []
+    for item in candidates:
+        text = joiner.join(fitted + [item])
+        if len(text) > remaining:
+            break
+        fitted.append(item)
+
+    # 2) 省略行が必要なら、その分も budget に収まるまで後ろから削る
+    #    （省略件数が増えるほど省略行はわずかに伸びうるため）。
+    omitted_count = total - len(fitted)
+    while True:
+        if omitted_count <= 0:
+            return joiner.join(fitted)
+        omission = f"…他{omitted_count}{omitted_unit}"
+        text = joiner.join(fitted)
+        candidate = f"{text}{joiner}{omission}" if text else omission
+        if len(candidate) <= remaining or not fitted:
+            # fitted が空でもなお収まらないのは budget 自体が極端に小さい
+            # 呼び出し側の誤り。無限ループにせず、best-effort で返す。
+            return candidate
+        fitted.pop()
+        omitted_count += 1
 
 
 def metals_site_view() -> discord.ui.View:

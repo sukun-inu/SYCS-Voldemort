@@ -146,7 +146,10 @@ def vt_icon(malicious: int, suspicious: int, status: Optional[str] = None) -> st
 def gpt_icon(result: str) -> str:
     if result == "DANGEROUS":
         return ALERT_ICON
-    if result == "SUSPICIOUS":
+    if result in ("SUSPICIOUS", "UNKNOWN"):
+        # UNKNOWN は gpt_assess が Groq 呼び出しに失敗したときの値で、
+        # 「安全と判定した」わけではない。SAFE と同じ扱いにすると、
+        # 判定できなかったことが埋め込みの上では「問題なし」に化けてしまう。
         return WARN_ICON
     return SAFE_ICON
 
@@ -167,12 +170,20 @@ def build_final_embed(
     is_spam = "SPAM" in reasons
     is_vt_suspicious = "VT_SUSPICIOUS" in reasons
 
+    # gpt_result == "UNKNOWN" は Groq 呼び出し自体が失敗した合図であり、
+    # 「GPTが安全と判定した」のではない。ここで無視すると、判定できなかった
+    # 投稿がそのまま緑色の「問題なし」として報告されてしまう。
+    is_gpt_unknown = gpt_result == "UNKNOWN"
+
     if is_vt_dangerous or gpt_result == "DANGEROUS" or is_vc_raid:
         color = discord.Color.red()
         title = "危険な投稿を検出"
     elif is_vt_suspicious or gpt_result == "SUSPICIOUS" or is_spam:
         color = discord.Color.orange()
         title = "注意：スパム/不審な投稿の可能性"
+    elif is_gpt_unknown:
+        color = discord.Color.orange()
+        title = "注意：GPT判定に失敗しました"
     else:
         color = discord.Color.green()
         title = "検査完了：問題なし"

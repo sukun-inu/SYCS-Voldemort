@@ -1599,7 +1599,12 @@ async function disablePushNotifications() {
   if (subscription) {
     try {
       await removePushSubscription(subscription);
-    } catch (_) {}
+    } catch (error) {
+      // サーバー側の解除に失敗しても、ブラウザ側の購読は必ず切る
+      // （利用者は「無効化した」つもりなのに通知が届き続けるほうが問題）。
+      // 理由はコンソールへ残す（何も出さないと気づけない）。
+      console.error(error);
+    }
     await subscription.unsubscribe();
   }
   setPushButtonState({ subscribed: false, disabled: false });
@@ -1661,11 +1666,23 @@ async function initializePwaAndPush() {
 
   const existing = await swRegistration.pushManager.getSubscription();
   if (existing) {
+    let syncFailed = false;
     try {
       await syncPushSubscription(existing);
-    } catch (_) {}
+    } catch (error) {
+      // ここで黙って「有効です」と言うと、サーバーが購読情報を持っていない
+      // （DBが飛んだ・以前の解除が失敗した等）のに通知が来ると利用者に
+      // 思わせてしまう。ブラウザ側は購読済みなので subscribed 表示は保つが、
+      // 文言では同期できなかった事実を隠さない。
+      console.error(error);
+      syncFailed = true;
+    }
     setPushButtonState({ subscribed: true, disabled: false });
-    setPushStatus(`Push通知は有効です。毎日 ${pushNotifyTimeJst} (JST) に通知します。`);
+    setPushStatus(
+      syncFailed
+        ? "Push購読情報をサーバーと同期できませんでした。通知が届かない場合は、無効化してから有効化し直してください。"
+        : `Push通知は有効です。毎日 ${pushNotifyTimeJst} (JST) に通知します。`
+    );
   } else {
     setPushButtonState({ subscribed: false, disabled: false });
     setPushStatus(`Push通知を有効化すると、毎日 ${pushNotifyTimeJst} (JST) に通知します。`);

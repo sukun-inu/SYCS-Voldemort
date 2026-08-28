@@ -28,45 +28,35 @@ from config import JST as _JST
 from services.settings_store import get_vc_notify_channel_id, get_vc_notify_filter_role_id, get_vc_notify_role_id
 from services.sticky_service import handle_sticky, process_pending_stickies
 from services.welcome_service import send_goodbye, send_welcome
+from envutil import env_bool, env_float, env_int
 
 logger = logging.getLogger(__name__)
 
 _WDAYS = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
-_TRUE_SET = {"1", "true", "yes", "on"}
 
-
-def _env_bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in _TRUE_SET
-
-
-_BOT_BACKGROUND_WORKER = _env_bool("BOT_BACKGROUND_WORKER", True)
-_USER_STATE_SYNC_ON_READY = _env_bool("USER_STATE_SYNC_ON_READY", True)
-_USER_STATE_SYNC_DELAY_SECONDS = max(0, int(os.getenv("USER_STATE_SYNC_DELAY_SECONDS", "20")))
-_USER_STATE_SYNC_GUILD_PAUSE_SECONDS = max(
-    0.0,
-    float(os.getenv("USER_STATE_SYNC_GUILD_PAUSE_SECONDS", "1.0")),
+# 環境変数の読み取りは envutil に一本化している（config.py と同じ方針）。
+# 以前は int(os.getenv(...)) を直書きしていたため、値が空文字や数値以外だと
+# インポート時に ValueError で bot 全体が起動しなかった。
+_BOT_BACKGROUND_WORKER = env_bool("BOT_BACKGROUND_WORKER", True)
+_USER_STATE_SYNC_ON_READY = env_bool("USER_STATE_SYNC_ON_READY", True)
+_USER_STATE_SYNC_DELAY_SECONDS = env_int("USER_STATE_SYNC_DELAY_SECONDS", 20, minimum=0)
+_USER_STATE_SYNC_GUILD_PAUSE_SECONDS = env_float(
+    "USER_STATE_SYNC_GUILD_PAUSE_SECONDS", 1.0, minimum=0.0,
 )
-_USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD = max(
-    0,
-    int(os.getenv("USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD", "0")),
+_USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD = env_int(
+    "USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD", 0, minimum=0,
 )
-_USER_STATE_AUTO_REPAIR_ENABLED = _env_bool("USER_STATE_AUTO_REPAIR_ENABLED", True)
-_USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS = max(
-    300,
-    int(os.getenv("USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS", "1800")),
+_USER_STATE_AUTO_REPAIR_ENABLED = env_bool("USER_STATE_AUTO_REPAIR_ENABLED", True)
+_USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS = env_int(
+    "USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS", 1800, minimum=300,
 )
-_USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS = max(
-    0,
-    int(os.getenv("USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS", "180")),
+_USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS = env_int(
+    "USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS", 180, minimum=0,
 )
-_USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD = max(
-    100,
-    int(os.getenv("USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD", "50000")),
+_USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD = env_int(
+    "USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD", 50000, minimum=100,
 )
-_USER_STATE_AUTO_REPAIR_WRITE_EVENTS = _env_bool("USER_STATE_AUTO_REPAIR_WRITE_EVENTS", False)
+_USER_STATE_AUTO_REPAIR_WRITE_EVENTS = env_bool("USER_STATE_AUTO_REPAIR_WRITE_EVENTS", False)
 
 _SIGNAL_DIR = Path(os.getenv("SETTINGS_DIR", str(Path(__file__).parent / "data"))) / "_dev_signals"
 
@@ -75,7 +65,7 @@ _SIGNAL_DIR = Path(os.getenv("SETTINGS_DIR", str(Path(__file__).parent / "data")
 _VC_JOIN_TTL_SECONDS = 24 * 3600
 
 # ステータス更新の間隔（秒）。Discord のプレゼンス更新は 20秒あたり5回まで。
-_STATUS_INTERVAL_SECONDS = max(5, int(os.getenv("BOT_STATUS_INTERVAL_SECONDS", "20")))
+_STATUS_INTERVAL_SECONDS = env_int("BOT_STATUS_INTERVAL_SECONDS", 20, minimum=5)
 
 
 async def _safe(coro, name: str) -> None:

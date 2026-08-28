@@ -1,6 +1,5 @@
 import json
 import math
-import os
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
@@ -12,18 +11,6 @@ PCT_SCALE = Decimal("0.000001")
 # APIキー不要で配信するFrankfurter(https://frankfurter.dev)を使う。
 USDJPY_TIMESERIES_BASE_URL = "https://api.frankfurter.dev/v1"
 GOOGLE_NEWS_RSS_URL = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
-
-
-def read_env_bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    value = raw.strip().lower()
-    if value in {"1", "true", "yes", "on"}:
-        return True
-    if value in {"0", "false", "no", "off"}:
-        return False
-    return default
 
 
 def clamp(value: float, lower: float, upper: float) -> float:

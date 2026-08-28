@@ -11,6 +11,7 @@ from xml.etree import ElementTree
 import aiohttp
 
 from config import GROQ_API_KEY, METAL_COMMANDS
+from envutil import env_bool, env_int
 from services.groq_client import create_json_chat_completion, get_groq_client
 from .forecast_utils import (
     GOOGLE_NEWS_RSS_URL,
@@ -19,7 +20,6 @@ from .forecast_utils import (
     clamp,
     extract_first_json_object,
     json_dumps,
-    read_env_bool,
     safe_float,
 )
 from .forecast_models import daily_trend, daily_volatility, extract_prices
@@ -33,9 +33,9 @@ def _get_groq_client(timeout: float):
     return get_groq_client(timeout=timeout, bucket=_GROQ_BUCKET)
 
 
-FORECAST_LLM_ENABLED = read_env_bool("FORECAST_LLM_ENABLED", True)
+FORECAST_LLM_ENABLED = env_bool("FORECAST_LLM_ENABLED", True)
 FORECAST_LLM_MODEL = (os.getenv("FORECAST_LLM_MODEL") or "openai/gpt-oss-120b").strip() or "openai/gpt-oss-120b"
-FORECAST_LLM_TIMEOUT_SECONDS = max(8, int(os.getenv("FORECAST_LLM_TIMEOUT_SECONDS", "20")))
+FORECAST_LLM_TIMEOUT_SECONDS = env_int("FORECAST_LLM_TIMEOUT_SECONDS", 20, minimum=8)
 
 # 「予測の根拠」に出すモデル内訳(区間の算出根拠やシグナル寄与など)が専門的で
 # わかりにくいというフィードバックを受け、Groqで一般利用者向けの平易な要約文に
@@ -43,15 +43,15 @@ FORECAST_LLM_TIMEOUT_SECONDS = max(8, int(os.getenv("FORECAST_LLM_TIMEOUT_SECOND
 # ("drivers"はforecast_for_metal計算後でないと確定しないため合成不可)が、
 # 予測リフレッシュ1回につき+1回(既存のscoring callと合わせて計2回)に収まり、
 # 共有レート制限(services/groq_client)の対象にもなっているため安全。
-FORECAST_SUMMARY_ENABLED = read_env_bool("FORECAST_SUMMARY_ENABLED", True)
-FORECAST_SUMMARY_TIMEOUT_SECONDS = max(8, int(os.getenv("FORECAST_SUMMARY_TIMEOUT_SECONDS", "20")))
+FORECAST_SUMMARY_ENABLED = env_bool("FORECAST_SUMMARY_ENABLED", True)
+FORECAST_SUMMARY_TIMEOUT_SECONDS = env_int("FORECAST_SUMMARY_TIMEOUT_SECONDS", 20, minimum=8)
 
 # gpt-ossは推論モデルで、推論トークンも生成枠を消費する。以前は max_tokens=420/500 という
 # 小さすぎる枠を渡していたため、推論だけで枠を使い切って content が空になり、JSONパースが
 # 常に失敗していた(scoresもrationalesも常に0/空、AI判定が予測に一切効いていなかった)。
 # 推論分を見込んだ十分な枠を確保する。
-FORECAST_LLM_MAX_COMPLETION_TOKENS = max(512, int(os.getenv("FORECAST_LLM_MAX_COMPLETION_TOKENS", "3000")))
-FORECAST_SUMMARY_MAX_COMPLETION_TOKENS = max(512, int(os.getenv("FORECAST_SUMMARY_MAX_COMPLETION_TOKENS", "3000")))
+FORECAST_LLM_MAX_COMPLETION_TOKENS = env_int("FORECAST_LLM_MAX_COMPLETION_TOKENS", 3000, minimum=512)
+FORECAST_SUMMARY_MAX_COMPLETION_TOKENS = env_int("FORECAST_SUMMARY_MAX_COMPLETION_TOKENS", 3000, minimum=512)
 # 推論の深さ。gpt-ossでは "low" で十分な品質が得られ、レイテンシとトークン消費を抑えられる。
 # 空文字を設定するとパラメータ自体を送らない(モデル既定に任せる)。
 FORECAST_LLM_REASONING_EFFORT = (os.getenv("FORECAST_LLM_REASONING_EFFORT", "low") or "").strip()

@@ -41,10 +41,11 @@ async function boot() {
   if (layout.length) {
     await desktop.restore(layout);
   }
-  if (target) {
-    await desktop.open(target);
-  }
-  if (!desktop.windows.size && !layout.length && !target) {
+  // open() は存在しない/権限が無い appId なら null を返す（トーストは open() 側で出す）。
+  // その場合にスタートメニューも出さずに終わると、何も開かれていないのに
+  // 真っ白な画面のまま放置される。
+  const targetOpened = target ? Boolean(await desktop.open(target)) : false;
+  if (!desktop.windows.size && !layout.length && (!target || !targetOpened)) {
     desktop.openStartMenu();
   }
 

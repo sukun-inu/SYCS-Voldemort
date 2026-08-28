@@ -68,7 +68,8 @@ async def _handle_single_metal(interaction: discord.Interaction, grams: float, s
                 user=interaction.user,
                 fields={"エラー内容": str(e)},
             )
-        await _respond_error(interaction, "エラーだ。俺様の力をもってしても処理できなかった。しばらく待ってから試せ。")
+        # 一人称は「余」で統一している（「俺」「俺様」はこのbotの口調ルール違反）。
+        await _respond_error(interaction, "エラーだ。余の力をもってしても処理できなかった。しばらく待ってから試せ。")
 
 
 def register_metal_commands(bot: discord.Client) -> None:
@@ -151,6 +152,7 @@ def register_metal_commands(bot: discord.Client) -> None:
                     user=interaction.user,
                     fields={"エラー内容": str(e)},
                 )
-            await _respond_error(interaction, "エラーだ。俺様の力をもってしても処理できなかった。しばらく待ってから試せ。")
+            # 一人称は「余」で統一している（「俺」「俺様」はこのbotの口調ルール違反）。
+            await _respond_error(interaction, "エラーだ。余の力をもってしても処理できなかった。しばらく待ってから試せ。")
 
     bot.tree.add_command(group)
