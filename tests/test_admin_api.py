@@ -1269,3 +1269,85 @@ class EnvBoolConsolidationTests(unittest.TestCase):
             self._set_env(name, original)
             self._set_env("VAPID_PUBLIC_KEY", original_public)
             self._set_env("VAPID_PRIVATE_KEY", original_private)
+
+
+class ConfigReadingConsistencyTests(unittest.TestCase):
+    """設定の読み方が、リポジトリで統一した envutil の解釈と揃っていること。
+
+    「保存できる（＝設定できる）のに効かない」設定を作らないための検査。
+    """
+
+    def _reload_app_module(self):
+        import importlib
+
+        import webapp_admin.app as app_module
+
+        return importlib.reload(app_module)
+
+    def test_flask_secure_cookies_accepts_the_usual_truthy_values(self):
+        """FLASK_SECURE_COOKIES=1 で Secure が有効になること。
+
+        以前は `== "true"` の手書き判定だったため、"1"/"yes"/"on" が黙って
+        偽になり、管理画面のセッション Cookie に Secure が付かないまま
+        平文で飛んでいた。他の設定は envutil でこれらを真として扱うので、
+        ここだけ違うと管理者は設定したつもりで無防備なままになる。
+        """
+        from envutil import env_bool
+
+        original = os.environ.get("FLASK_SECURE_COOKIES")
+        try:
+            for raw in ("1", "yes", "on", "true", "TRUE"):
+                with self.subTest(raw):
+                    os.environ["FLASK_SECURE_COOKIES"] = raw
+                    self.assertTrue(env_bool("FLASK_SECURE_COOKIES", False))
+            for raw in ("0", "no", "off", "false"):
+                with self.subTest(raw):
+                    os.environ["FLASK_SECURE_COOKIES"] = raw
+                    self.assertFalse(env_bool("FLASK_SECURE_COOKIES", False))
+        finally:
+            if original is None:
+                os.environ.pop("FLASK_SECURE_COOKIES", None)
+            else:
+                os.environ["FLASK_SECURE_COOKIES"] = original
+
+    def test_app_module_has_no_handwritten_bool_parsing(self):
+        """app.py に `== "true"` 形式の手書き真偽判定が残っていないこと。"""
+        from pathlib import Path
+
+        source = (
+            Path(__file__).resolve().parent.parent / "webapp_admin" / "app.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn('.lower() == "true"', source)
+
+    def test_dev_user_id_is_read_from_one_place(self):
+        """DEV_USER_ID の「設定されているか」の判定が1箇所であること。
+
+        以前は api/dev.py が os.getenv を直に見ており(strip なし)、
+        security.py の is_dev_user (strip あり) と食い違っていた。
+        DEV_USER_ID=" " のとき、片方は「設定済み」もう片方は「未設定」と
+        判断していた（どちらも拒否なので実害は無かったが、同じ判定が
+        2箇所にある状態そのものが取りこぼしの元）。
+        """
+        from pathlib import Path
+
+        from webapp_admin.security import dev_user_id
+
+        original = os.environ.get("DEV_USER_ID")
+        try:
+            os.environ["DEV_USER_ID"] = "   "
+            self.assertEqual(dev_user_id(), "", "空白のみは未設定として扱う")
+            os.environ["DEV_USER_ID"] = "  12345  "
+            self.assertEqual(dev_user_id(), "12345", "前後の空白は落とす")
+            os.environ.pop("DEV_USER_ID", None)
+            self.assertEqual(dev_user_id(), "")
+        finally:
+            if original is None:
+                os.environ.pop("DEV_USER_ID", None)
+            else:
+                os.environ["DEV_USER_ID"] = original
+
+        source = (
+            Path(__file__).resolve().parent.parent / "webapp_admin" / "api" / "dev.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn('os.getenv("DEV_USER_ID")', source)
+        self.assertNotIn('os.environ.get("DEV_USER_ID"', source)

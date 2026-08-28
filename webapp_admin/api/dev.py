@@ -25,7 +25,7 @@ from webapp_admin.api.jsonsafe import SafeJSONResponse as JSONResponse
 from config import DISCORD_BOT_TOKEN, DJAUDIO_CACHE_DIR
 from webapp_admin.core.config import settings_dir
 from webapp_admin.extensions import limiter
-from webapp_admin.security import _NeedsLogin, check_csrf, is_dev_user, sanitize
+from webapp_admin.security import _NeedsLogin, check_csrf, dev_user_id, is_dev_user, sanitize
 
 logger = logging.getLogger(__name__)
 
@@ -114,8 +114,15 @@ _CONFIG_ENV_ATTRS: dict[str, str] = {
 # ── 認可 ─────────────────────────────────────────────────────
 
 def check_dev(request: Request) -> dict:
-    """DEV_USER_ID と一致する開発者だけを通す。未設定なら存在しない扱い。"""
-    if not os.getenv("DEV_USER_ID"):
+    """DEV_USER_ID と一致する開発者だけを通す。未設定なら存在しない扱い。
+
+    「設定されているか」の判定は security.dev_user_id() に寄せる。ここで
+    os.getenv() を直に見ていたときは空白の扱いが security.is_dev_user()
+    （strip する）と食い違い、DEV_USER_ID=" " のときだけ 404 ではなく 403 に
+    なっていた。どちらも拒否なので実害は無かったが、同じ判定が2箇所にある
+    状態そのものが取りこぼしの元になる。
+    """
+    if not dev_user_id():
         raise HTTPException(status_code=404)
     if not request.session.get("user"):
         raise _NeedsLogin()
