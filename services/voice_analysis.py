@@ -74,6 +74,44 @@ PROBE_SECONDS = 1.0
 _MIN_RMS = 700
 _MIN_PERIODICITY = 0.70
 _MIN_FRAMES = 25
+
+# 倍音の構造を確かめる条件。
+#
+# 自己相関の山（周期性）だけでは「周期的な音」までしか言えない。純音・電源
+# ハム・送風音・楽器の持続音はどれも山が立つが、声ではないので LPC の極を
+# フォルマントとして読むと意味の無い値になる。声道長はフォルマントの間隔から
+# 求めているので、こういうフレームが混ざると中央値ごと引きずられ、地声を
+# 加工扱いしたり、その逆をしたりする。
+#
+# 人の有声音は声帯の準周期パルスを声道が濾したものなので、基音 F0 とその
+# 整数倍に確かに山が並ぶ。そこを直接確かめる。
+_HARMONIC_COUNT = 8            # 見る倍音の本数（F0 の 1〜8 倍）
+_HARMONIC_MIN_RESOLVED = 3     # このうち何本が立っていれば声とみなすか
+_HARMONIC_TOLERANCE = 0.25     # 山を探す幅（F0 に対する割合）
+# 倍音の山が、倍音と倍音のあいだ（谷）に対して何倍あれば「立っている」か。
+_HARMONIC_MIN_PROMINENCE = 2.0
+# 山が「いちばん強い倍音」に対して最低これだけの大きさを持つこと。
+#
+# 比だけで見ると、純音のように倍音がほぼ無い信号で谷も山も 0 に近くなり、
+# 窓の漏れ（数値的な裾）どうしの比が条件を満たしてしまう。実際これで純音と
+# 電源ハムが「声」として通った。分母が小さいときの比は意味を持たないので、
+# 絶対量の下限を併せて課す。
+_HARMONIC_MIN_LEVEL = 0.02     # 最大の倍音に対して -34dB
+
+# 倍音を見るときだけ使う窓の長さ。
+#
+# フォルマントを取る 32ms のフレームをそのまま使うと、周波数分解能が 31Hz に
+# しかならない。倍音の谷（F0/2 だけ離れた位置）は F0 120Hz で 1.9 bin しか
+# 離れず、山と谷が混ざって「倍音が立っていない」と読める。実際これで、
+# 120Hz の地声を全フレーム落として判定不能にした。
+#
+#   32ms  分解能 31.2Hz … F0 120Hz の谷まで 1.9 bin （分離できない）
+#   96ms  分解能 10.4Hz … F0 120Hz の谷まで 5.8 bin
+#
+# 倍音があるかどうかは 100ms 程度では変わらないので、この判定にだけ前後を
+# 含めた広い窓を使う。フォルマントの追跡は 32ms のままにする（そちらは
+# 音が変わっていく様子を見る必要があるため）。
+_HARMONIC_WINDOW_SECONDS = 0.096
 # 追跡は途切れない区間ごとに行う。短すぎる区間は連続性を使えない。
 _MIN_RUN = 6
 
@@ -353,28 +391,124 @@ def _median(values: list[float], trim: float = 0.2) -> float:
     return (ordered[middle - 1] + ordered[middle]) / 2
 
 
-def _runs(chunk: list[float]) -> list[list[list[tuple[float, float]]]]:
-    """声が続いているあいだを1区間として、フレームごとの候補を並べる。"""
+def harmonic_prominence(frame: list[float], f0: float) -> tuple[int, float]:
+    """基音 f0 の倍音がどれだけ立っているか。(立っている本数, 山と谷の比)。
+
+    有声音は声帯の準周期パルスを声道が濾したものなので、f0 の整数倍に確かに
+    山が並ぶ。山（k×f0 のあたりの最大値）と谷（倍音と倍音の中間）の比を見る。
+
+      純音       … 第1倍音しか無いので本数で落ちる
+      雑音       … 山と谷に差が出ないので比で落ちる
+      電源ハム等 … 倍音は並ぶが本数が足りない／比が伸びない
+      有声音     … 4本以上が谷の数倍で立つ
+    """
+    if f0 <= 0 or len(frame) < 2:
+        return 0, 0.0
+
+    data = np.asarray(frame, dtype=float)
+    data = data * np.hanning(len(data))
+    spectrum = np.abs(np.fft.rfft(data))
+    if spectrum.size < 2:
+        return 0, 0.0
+    freqs = np.fft.rfftfreq(len(data), 1.0 / RATE)
+    nyquist = RATE / 2.0
+
+    def band_max(centre: float) -> float:
+        width = f0 * _HARMONIC_TOLERANCE
+        picked = spectrum[(freqs >= centre - width) & (freqs <= centre + width)]
+        return float(picked.max()) if picked.size else 0.0
+
+    peaks: list[float] = []
+    valleys: list[float] = []
+    for k in range(1, _HARMONIC_COUNT + 1):
+        centre = f0 * k
+        if centre >= nyquist:
+            break
+        peaks.append(band_max(centre))
+        middle = centre + f0 / 2.0        # 倍音と倍音のあいだ
+        if middle < nyquist:
+            valleys.append(band_max(middle))
+
+    if not peaks or not valleys:
+        return 0, 0.0
+
+    floor = float(np.median(valleys)) or 1e-9
+    strongest = max(peaks) or 1e-9
+    resolved = sum(
+        1 for peak in peaks
+        if peak >= floor * _HARMONIC_MIN_PROMINENCE
+        and peak >= strongest * _HARMONIC_MIN_LEVEL
+    )
+    ratio = float(np.median(peaks)) / floor
+    return resolved, ratio
+
+
+def voiced_f0(frame: list[float], context: list[float] | None = None) -> float | None:
+    """このフレームを解析に使ってよいか。使えるなら基音を返す。
+
+    判定はここ1箇所に持つ。以前は analyse() と _runs() がそれぞれ RMS と
+    周期性を見ていて、片方だけ条件を足すと両者の選ぶフレームがずれていた。
+
+    条件は4つ。
+      1. 鳴っていること（無音・子音を除く）
+      2. 周期的であること（自己相関の山）
+      3. 基音が人の声の範囲にあること
+      4. 基音の倍音が実際に並んでいること
+
+    4 が無いと「周期的な音」までしか言えない。純音や電源ハムでも山は立つが、
+    そこから取った LPC の極はフォルマントではないので、声道長の推定ごと
+    引きずられる。
+
+    context には、そのフレームの前後を含む広い窓を渡す（→
+    _HARMONIC_WINDOW_SECONDS）。4 の判定にだけ使う。渡さなければフレーム
+    自身を使うが、F0 が低い声では分解能が足りずに落としてしまう。
+    """
+    size = len(frame)
+    if size <= 0:
+        return None
+    if math.sqrt(sum(v * v for v in frame) / size) < _MIN_RMS:
+        return None
+    f0, periodicity = _f0_and_periodicity(frame)
+    if periodicity < _MIN_PERIODICITY:
+        return None
+    if not (F0_MIN_HZ <= f0 <= F0_MAX_HZ):
+        return None
+    resolved, _ = harmonic_prominence(context if context else frame, f0)
+    if resolved < _HARMONIC_MIN_RESOLVED:
+        return None
+    return f0
+
+
+def _runs(chunk: list[float]) -> tuple[list[list[list[tuple[float, float]]]], list[float]]:
+    """声が続いているあいだを1区間として、フレームごとの候補を並べる。
+
+    あわせて、採用したフレームの基音も返す。フォルマントを取るフレームと
+    基音を取るフレームが違うと、「この高さならこの声道長のはず」という
+    突き合わせが別々の音を見ることになる。
+    """
     frame_size = int(RATE * FRAME_SECONDS)
     hop = int(RATE * HOP_SECONDS)
+    window = int(RATE * _HARMONIC_WINDOW_SECONDS)
     runs: list[list] = []
     current: list = []
+    f0s: list[float] = []
     for start in range(0, len(chunk) - frame_size, hop):
         frame = chunk[start:start + frame_size]
-        rms = math.sqrt(sum(v * v for v in frame) / frame_size)
-        voiced = False
-        if rms >= _MIN_RMS:
-            _, periodicity = _f0_and_periodicity(frame)
-            voiced = periodicity >= _MIN_PERIODICITY
-        if not voiced:
+        # 倍音を見るための窓。フレームを中心に前後へ広げる（端では寄せる）。
+        centre = start + frame_size // 2
+        begin = max(0, min(centre - window // 2, len(chunk) - window))
+        context = chunk[begin:begin + window]
+        f0 = voiced_f0(frame, context if len(context) >= frame_size else None)
+        if f0 is None:
             if current:
                 runs.append(current)
                 current = []
             continue
+        f0s.append(f0)
         current.append(_candidates(frame))
     if current:
         runs.append(current)
-    return runs
+    return runs, f0s
 
 
 def analyse(source: bytes | Path, duration: float) -> dict:
@@ -389,18 +523,14 @@ def analyse(source: bytes | Path, duration: float) -> dict:
     formant_sets: list[list[float]] = []
     f0s: list[float] = []
 
-    frame_size = int(RATE * FRAME_SECONDS)
-    hop = int(RATE * HOP_SECONDS)
-
+    # フレームの選別は _runs（= voiced_f0）に一本化してある。以前はここでも
+    # 別に RMS と周期性を見ていたため、基音を取るフレームとフォルマントを取る
+    # フレームが違い、「この高さならこの声道長のはず」の突き合わせが別々の音を
+    # 見ていた。
     for chunk in _probe(source, duration):
-        for start in range(0, len(chunk) - frame_size, hop):
-            frame = chunk[start:start + frame_size]
-            if math.sqrt(sum(v * v for v in frame) / frame_size) < _MIN_RMS:
-                continue
-            f0, periodicity = _f0_and_periodicity(frame)
-            if periodicity >= _MIN_PERIODICITY:
-                f0s.append(f0)
-        for run in _runs(chunk):
+        runs, chunk_f0s = _runs(chunk)
+        f0s.extend(chunk_f0s)
+        for run in runs:
             for formants in _track(run):
                 formant_sets.append(formants)
                 spacings.append((formants[-1] - formants[0]) / (len(formants) - 1))

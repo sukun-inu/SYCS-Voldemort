@@ -3100,3 +3100,89 @@ class VoiceAnalysisTests(unittest.TestCase):
         result = self.va.analyse(self._mp3(self._voice(), "plain.mp3"), 6.0)
         self.assertFalse(result["identifies_speaker"])
         self.assertNotIn("speaker_id", result)
+
+    # ── 解析に使うフレームの選び方 ──────────────────────────
+
+    def _tone_chunk(self, hz, seconds=1.0, amp=8000.0, harmonics=(1,)):
+        import math
+        rate = self.va.RATE
+        return [
+            amp * sum(math.sin(2 * math.pi * hz * k * i / rate) / k for k in harmonics)
+            for i in range(int(rate * seconds))
+        ]
+
+    def _voice_chunk(self, f0, seconds=1.0):
+        """声門パルス列を共鳴器に通した 16kHz の生波形（解析が受け取る形）。"""
+        import math
+        rate = self.va.RATE
+        length = int(rate * seconds)
+        wave = [0.0] * length
+        position = 0.0
+        while position < length:
+            wave[int(position)] = 1.0
+            position += rate / f0
+        for freq, width in [(730, 80), (1090, 90), (2440, 140), (3400, 200)]:
+            r = math.exp(-math.pi * width / rate)
+            theta = 2 * math.pi * freq / rate
+            a1, a2 = 2 * r * math.cos(theta), -r * r
+            filtered = [0.0] * length
+            z1 = z2 = 0.0
+            for i, value in enumerate(wave):
+                v = value + a1 * z1 + a2 * z2
+                filtered[i] = v
+                z2, z1 = z1, v
+            wave = filtered
+        peak = max(abs(v) for v in wave) or 1.0
+        return [v / peak * 9000 for v in wave]
+
+    def _accepted_ratio(self, chunk):
+        _runs, f0s = self.va._runs(chunk)
+        frame = int(self.va.RATE * self.va.FRAME_SECONDS)
+        hop = int(self.va.RATE * self.va.HOP_SECONDS)
+        total = len(range(0, len(chunk) - frame, hop))
+        return len(f0s) / total if total else 0.0
+
+    def test_periodic_sounds_that_are_not_voices_are_not_analysed(self):
+        """周期性だけでは「声」と言えない。
+
+        純音・電源ハムは自己相関の山が 1.0 近くまで立つので、周期性だけを
+        見ていたころは解析に使われていた。そこから取った LPC の極は
+        フォルマントではないので、声道長の推定ごと引きずられる。
+        基音の倍音が実際に並んでいるかまで確かめる。
+        """
+        import random
+        rng = random.Random(3)
+
+        # 純音は周期性が満点でも、倍音が無いので使わない
+        tone = self._tone_chunk(200)
+        _f0, periodicity = self.va._f0_and_periodicity(tone[:int(self.va.RATE * self.va.FRAME_SECONDS)])
+        self.assertGreater(periodicity, 0.9, "純音は周期性では落とせない（前提の確認）")
+        self.assertEqual(self._accepted_ratio(tone), 0.0)
+
+        # 電源ハム（倍音が2本しかない）
+        self.assertEqual(self._accepted_ratio(self._tone_chunk(100, harmonics=(1, 2))), 0.0)
+        # 雑音
+        noise = [rng.uniform(-8000, 8000) for _ in range(self.va.RATE)]
+        self.assertEqual(self._accepted_ratio(noise), 0.0)
+
+    def test_real_voices_are_analysed_across_the_human_pitch_range(self):
+        """低い男性の声から子どもの声まで落とさないこと。
+
+        倍音の判定をフォルマント用の 32ms フレームでやると、周波数分解能が
+        31Hz にしかならず、F0 120Hz では倍音の谷が 1.9 bin しか離れない。
+        実際これで 120Hz の地声を全フレーム落として判定不能にした。
+        倍音を見るときだけ広い窓を使う。
+        """
+        for f0 in (75, 100, 120, 210, 330):
+            with self.subTest(f0=f0):
+                self.assertGreater(self._accepted_ratio(self._voice_chunk(f0)), 0.8)
+
+    def test_the_same_gate_is_used_for_pitch_and_formants(self):
+        """基音を取るフレームとフォルマントを取るフレームが揃っていること。
+
+        別々に選んでいたころは、「この高さならこの声道長のはず」の突き合わせが
+        別々の音を見ていた。_runs が両方を返す形にして1箇所に寄せてある。
+        """
+        runs, f0s = self.va._runs(self._voice_chunk(120))
+        self.assertTrue(f0s)
+        self.assertEqual(len(f0s), sum(len(run) for run in runs))
