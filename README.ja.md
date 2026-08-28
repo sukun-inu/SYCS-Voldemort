@@ -80,6 +80,7 @@ python tools/generate_admin_docs.py         # docs/ADMIN.ja.md の設定表を�
 
 | | |
 |---|---|
+| [docs/DESIGN.ja.md](docs/DESIGN.ja.md) | 全体の設計。どう作られているか、なぜそうしたか |
 | [docs/FEATURES.ja.md](docs/FEATURES.ja.md) | 全機能の詳細と、機能ごとの管理導線の早見表 |
 | [docs/COMMANDS.ja.md](docs/COMMANDS.ja.md) | スラッシュコマンド一覧（一般 / 管理 / セキュリティ / DJAudio / TTS） |
 | [docs/SETUP.ja.md](docs/SETUP.ja.md) | Docker Compose、環境変数、マルチインスタンス運用 |
