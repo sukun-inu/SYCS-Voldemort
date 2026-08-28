@@ -4,6 +4,7 @@ import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from envutil import env_bool
 from webapp_admin.core.config import resolve_session_secret, settings_dir
 
 _LOG_FMT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
@@ -290,7 +291,7 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def security_headers_middleware(request: Request, call_next):
         response = await call_next(request)
-        secure = os.environ.get("FLASK_SECURE_COOKIES", "false").lower() == "true"
+        secure = env_bool("FLASK_SECURE_COOKIES", False)
         if request.url.path.startswith("/static"):
             response.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
             response.headers["Pragma"] = "no-cache"
@@ -331,7 +332,7 @@ def create_app() -> FastAPI:
         session_cookie="admin_session",
         max_age=3600,
         same_site="lax",
-        https_only=os.environ.get("FLASK_SECURE_COOKIES", "false").lower() == "true",
+        https_only=env_bool("FLASK_SECURE_COOKIES", False),
     )
 
     start_background_monitor(logger)

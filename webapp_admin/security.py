@@ -3,6 +3,8 @@ import secrets
 
 from fastapi import HTTPException, Request
 
+from envutil import env_str
+
 MAX_STR_LEN = 2000
 
 
@@ -33,11 +35,21 @@ def is_dev_user(request: Request) -> bool:
     デスクトップUI（スタートメニューへの表示・直接URLアクセス時のリダイレクト可否）
     の両方から参照する単一の情報源。DEV_USER_ID 未設定時は常に False。
     """
-    dev_user_id = os.environ.get("DEV_USER_ID", "").strip()
-    if not dev_user_id:
+    configured = dev_user_id()
+    if not configured:
         return False
     user = request.session.get("user") or {}
-    return str(user.get("id", "")) == dev_user_id
+    return str(user.get("id", "")) == configured
+
+
+def dev_user_id() -> str:
+    """設定されている DEV_USER_ID。未設定・空白のみなら空文字。
+
+    「開発者パネルが存在するか(404)」と「この人が開発者か(403)」の両方が
+    この値を見る。読み方が分かれると、空白だけ設定したときに片方だけが
+    「設定済み」と判断する食い違いになる。
+    """
+    return env_str("DEV_USER_ID", "") or ""
 
 
 def issue_csrf_token(request: Request) -> str:
