@@ -10,6 +10,8 @@ import os
 import secrets
 from pathlib import Path
 
+from envutil import env_path
+
 logger = logging.getLogger(__name__)
 
 _SECRET_ENV = "ADMIN_FLASK_SECRET_KEY"
@@ -18,9 +20,15 @@ _MIN_SECRET_LEN = 32
 
 
 def settings_dir() -> Path:
-    """設定・ログ・監視データの保存先ディレクトリ。"""
+    """設定・ログ・監視データの保存先ディレクトリ。
+
+    素の os.getenv("SETTINGS_DIR", 既定値) は、変数が空文字で宣言だけされて
+    いるとき既定値へ倒れず Path("") = カレントディレクトリになる。同じプロセスの
+    中で services/settings_store.py（env_path 経由で data/ に倒れる）と場所が
+    割れ、書いた設定を読む側が別の場所を見る。envutil に揃える。
+    """
     default_dir = Path(__file__).resolve().parent.parent.parent / "data"
-    return Path(os.getenv("SETTINGS_DIR", str(default_dir)))
+    return env_path("SETTINGS_DIR", default_dir)
 
 
 def _read_secret_file(path: Path) -> str | None:

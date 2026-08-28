@@ -163,15 +163,25 @@ class _TrackWriter:
 
             position = stop
 
-    def peak_series(self, max_points: int = PEAK_MAX_POINTS) -> list[float]:
-        """0.0〜1.0 に均した波形データ。多すぎるときは間引く。"""
+    def peak_series(self, *, group: int = 1, points: int | None = None) -> list[float]:
+        """0.0〜1.0 に均した波形データ。
+
+        group は「1点が何目盛りぶんか」、points は返す点数。どちらも
+        **全トラックで同じ値を渡すこと**。ここで各トラックが自分の長さから
+        間引き幅を決めていたため、1点あたりの秒数がトラックごとに変わり、
+        同じ時間軸に並べられなくなっていた（間引いたことを索引にも書いて
+        いなかったので、12.5分を超える録音では波形が先頭へ圧縮された）。
+        """
         peaks = self.peaks
-        if not peaks:
-            return []
-        if len(peaks) > max_points:
-            group = math.ceil(len(peaks) / max_points)
+        if group > 1:
             peaks = [max(peaks[i:i + group]) for i in range(0, len(peaks), group)]
-        return [round(min(1.0, value / 32767.0), 4) for value in peaks]
+        series = [round(min(1.0, value / 32767.0), 4) for value in peaks]
+        if points is not None:
+            # 書き込みに失敗して途中で終わったトラックは短い。末尾を無音で
+            # 揃えないと、そのトラックだけ横に引き伸ばされて表示される。
+            del series[points:]
+            series.extend([0.0] * (points - len(series)))
+        return series
 
     def pad_until(self, elapsed: float) -> None:
         """録音開始から elapsed 秒の位置まで無音で埋める。"""
@@ -1277,6 +1287,20 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
 
     # ミキサー（管理画面）が使う索引。トラックの並び・波形・長さをここで確定させる。
     # ZIP の中にも入れておくので、落としたあとでも同じ情報が手元に残る。
+    #
+    # 波形の縮尺は全トラックで1つに揃え、間引いたあとの「1点＝何秒か」を索引に
+    # 書く。以前は各トラックが自分の長さから間引き幅を決めたうえで、索引には
+    # 間引く前の 0.25 秒を書いていたため、12.5分を超える録音では波形が時間軸の
+    # 先頭へ圧縮され（6時間なら全体が先頭12.4分ぶんに潰れる）、長さの違う
+    # トラック同士でも縮尺が食い違っていた。
+    peak_buckets = max(
+        [len(t.peaks) for t in session.tracks.values()]
+        + [math.ceil(max(total_elapsed, 0.0) / PEAK_BUCKET_SECONDS)]
+    )
+    peak_group = max(1, math.ceil(peak_buckets / PEAK_MAX_POINTS))
+    peak_points = math.ceil(peak_buckets / peak_group)
+    peak_seconds = round(PEAK_BUCKET_SECONDS * peak_group, 6)
+
     stems = []
     for index, track in enumerate(session.tracks.values()):
         if not (track.out_path.exists() and track.out_path.stat().st_size > 0):
@@ -1295,14 +1319,17 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
             "user_id": track.user_id,
             "voiced_seconds": round(track.voiced_seconds, 2),
             "size_bytes": track.out_path.stat().st_size,
-            "peaks": track.peak_series(),
+            "peaks": track.peak_series(group=peak_group, points=peak_points),
+            # 1点が何秒ぶんか。索引全体の bucket_seconds と同じ値だが、
+            # トラック単位で読めるほうが読み手が迷わない。
+            "bucket_seconds": peak_seconds,
         })
     manifest = {
         "version": 1,
         "channel_name": session.channel_name,
         "started_by": session.started_by_name,
         "duration_seconds": round(total_elapsed, 2),
-        "bucket_seconds": PEAK_BUCKET_SECONDS,
+        "bucket_seconds": peak_seconds,
         "periodicity_min": VOICE_PERIODICITY_MIN,
         "dropped_packets": session.dropped_packets,
         "stems": stems,

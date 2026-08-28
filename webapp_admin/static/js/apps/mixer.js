@@ -39,8 +39,18 @@ const METER_MAX_DB = 6;
 const PEAK_HOLD_MS = 1200;
 const PEAK_FALL_DB_PER_SEC = 24;
 
-// 再生位置の追従。ずれてきたら黙って引き戻す。
-const SYNC_TOLERANCE = 0.25;
+// トラック同士の同期。<audio> は1本ずつ別の時計で動くので、放っておくと
+// 少しずつ離れていく。以前は 0.25 秒ずれるまで放置したうえ、直し方が毎回の
+// 頭出しだった。0.25 秒は会話としてはっきり聞こえるずれで、しかも頭出しは
+// 音が途切れるため、ずれるたびに鳴り直す状態になっていた。
+//   小さいずれ … 再生速度をわずかに変えて、聞こえないうちに追いつかせる
+//   大きいずれ … 速度では追いつかないので頭出しし直す
+const SYNC_IGNORE_SEC = 0.02;    // これ以下は触らない（直そうとするほうが荒れる）
+const SYNC_RESEEK_SEC = 0.75;    // これを超えたら頭出しし直す
+const SYNC_MAX_RATE = 0.06;      // 速度の変更幅（±6%。音程は既定で保たれる）
+// メタデータ待ち・頭出し待ちの上限。1本読めなくても他を止めない。
+const READY_TIMEOUT_MS = 10000;
+const SEEK_TIMEOUT_MS = 3000;
 
 const TRACK_COLORS = [
   "#4fa9ff", "#33cfcf", "#ff9a3c", "#a78bfa",
@@ -169,6 +179,7 @@ function drawWaveform(canvas, track, view) {
   const peaks = track.peaks;
   if (!peaks || !peaks.length) return;
 
+  // 1点が何秒ぶんか。全トラックで同じ値を使う（view が持っている）。
   const bucket = view.bucketSeconds || 0.25;
   const usable = height - 10;
 
@@ -370,8 +381,21 @@ export async function createMixer(container, options = {}) {
   }
 
   const duration = Number(manifest.duration_seconds) || 0;
-  const bucketSeconds = Number(manifest.bucket_seconds) || 0.25;
   const periodicityMin = Number(manifest.periodicity_min) || 0;
+
+  /* 波形1点が何秒ぶんか。
+     録音側は点数が多くなりすぎないよう目盛りを間引くが、以前は間引いたことを
+     索引に書いていなかった（bucket_seconds は間引く前の 0.25 のまま）。その
+     ため 12.5 分を超える録音では波形が時間軸の先頭に圧縮されていた（6時間なら
+     全体が先頭 12.4 分ぶんに潰れる）。録音側は直したので新しい録音は
+     stem.bucket_seconds を持つ。それが無い古いアーカイブは、長さと点数から
+     割り戻して描く（索引の値をそのまま信じるより実態に合う）。 */
+  const declared = Number(stems[0].bucket_seconds) || 0;
+  const maxPoints = Math.max(0, ...stems.map((s) => (s.peaks || []).length));
+  const bucketSeconds = declared
+    || (maxPoints > 0 && duration > 0 ? duration / maxPoints : 0)
+    || Number(manifest.bucket_seconds)
+    || 0.25;
 
   const context = new (window.AudioContext || window.webkitAudioContext)();
   const masterGain = context.createGain();
@@ -385,6 +409,9 @@ export async function createMixer(container, options = {}) {
   let looping = false;
   let loopRegion = null;      // {start, end}
   let dragging = null;       // 並べ替えで掴んでいるトラック
+  // 頭出しで指示された位置。メタデータが読めていないあいだは <audio> が
+  // 覚えてくれないので、こちらで持っておいて読めた時点で当て直す。
+  let desiredPosition = 0;
 
   const view = { start: 0, pxPerSecond: 10, end: 0, bucketSeconds, width: 1 };
 
@@ -397,11 +424,16 @@ export async function createMixer(container, options = {}) {
 
     // DOM に置いておく（hidden）。切り離したままだと、閉じたときの後片付けや
     // デバッグで追いにくい。
+    //
+    // preload は metadata のまま（auto にすると数時間ぶんを人数分まとめて
+    // 落としにいく）。ただし読めるまでは currentTime への代入が黙って捨てられる
+    // ので、頭出しと再生の前に loadedmetadata を待つこと（whenReady）。
     const audio = el("audio", {
       src: stem.url, preload: "metadata", hidden: true,
       dataset: { stem: String(stem.index) },
     });
     audio.crossOrigin = "use-credentials";
+    audio.preservesPitch = true;   // 同期のための速度調整で音程を変えない
 
     const source = context.createMediaElementSource(audio);
     const gain = context.createGain();
@@ -410,7 +442,7 @@ export async function createMixer(container, options = {}) {
     analyser.fftSize = 1024;
     source.connect(gain).connect(panner).connect(analyser).connect(masterGain);
 
-    tracks.push({
+    const track = {
       stem, audio, gain, panner, analyser, color, suspect,
       name: stem.name, peaks: stem.peaks || [],
       muted: false, solo: false, dimmed: false,
@@ -418,8 +450,61 @@ export async function createMixer(container, options = {}) {
       samples: new Float32Array(analyser.fftSize),
       level: { rmsDb: -Infinity, holdDb: -Infinity, holdAt: 0 },
       laneCanvas: null, strip: null, head: null, meterCanvas: null,
-    });
+    };
+    tracks.push(track);
+
+    // 読み込みが終わる前に指示された頭出しを、読めた時点で当て直す。
+    // これが無いと、そのトラックだけ 0 秒から鳴り始める。
+    audio.addEventListener("loadedmetadata", () => {
+      if (!playing && desiredPosition > 0) applySeek(track, desiredPosition);
+    }, { once: true });
   });
+
+  /* 同期の基準にするトラック。
+     並べ替えは tracks を並べ替えるので、tracks[0] を基準にしていると
+     ドラッグしただけで基準が入れ替わり、再生位置が別のトラックの時計へ飛ぶ。
+     最初の並びを別に取っておき、読めなかったときだけ次へ譲る。 */
+  const syncOrder = tracks.slice();
+  let syncMaster = syncOrder[0] || null;
+
+  function masterAudio() {
+    if (!syncMaster || syncMaster.audio.error) {
+      syncMaster = syncOrder.find((t) => !t.audio.error) || syncOrder[0] || null;
+    }
+    return syncMaster ? syncMaster.audio : null;
+  }
+
+  /** メタデータが読めるまで待つ（読めなかった場合もそのまま進む）。 */
+  function whenReady(track) {
+    const audio = track.audio;
+    if (audio.readyState >= 1 || audio.error) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => {
+        audio.removeEventListener("loadedmetadata", done);
+        audio.removeEventListener("error", done);
+        resolve();
+      };
+      audio.addEventListener("loadedmetadata", done);
+      audio.addEventListener("error", done);
+      window.setTimeout(done, READY_TIMEOUT_MS);
+    });
+  }
+
+  /** 1本を target 秒へ動かす。読めていなければ何もしない（後で当て直す）。 */
+  function applySeek(track, target) {
+    const audio = track.audio;
+    if (audio.error || audio.readyState < 1) return Promise.resolve();
+    const limit = Number.isFinite(audio.duration) ? audio.duration : target;
+    const to = Math.max(0, Math.min(target, limit));
+    audio.playbackRate = 1;
+    if (Math.abs(audio.currentTime - to) < 0.01) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => { audio.removeEventListener("seeked", done); resolve(); };
+      audio.addEventListener("seeked", done);
+      window.setTimeout(done, SEEK_TIMEOUT_MS);
+      try { audio.currentTime = to; } catch { done(); }
+    });
+  }
 
   const master = {
     analyser: masterAnalyser,
@@ -457,31 +542,39 @@ export async function createMixer(container, options = {}) {
 
   // ── 再生 ────────────────────────────────────────────────
   function positionOf() {
-    return tracks.length ? tracks[0].audio.currentTime || 0 : 0;
+    const audio = masterAudio();
+    if (!audio || audio.readyState < 1) return desiredPosition;
+    return audio.currentTime || 0;
   }
 
   function seek(seconds) {
     const target = Math.max(0, Math.min(duration || Infinity, seconds));
-    for (const track of tracks) {
-      try { track.audio.currentTime = target; } catch { /* まだ読めていない */ }
-    }
+    desiredPosition = target;
+    for (const track of tracks) applySeek(track, target);
     followPlayhead(target);
     render();
   }
 
   async function play() {
-    if (context.state === "suspended") await context.resume();
+    // 待つ前に読む。待っているあいだに基準を読み直すと、まだ 0 秒のトラックが
+    // 基準になって頭出しした位置を失う。
     const base = positionOf();
-    for (const track of tracks) {
-      try { track.audio.currentTime = base; } catch { /* noop */ }
-    }
+    if (context.state === "suspended") await context.resume();
+    // 全部のメタデータが揃うまで待ってから位置を合わせる。読めていない
+    // <audio> は currentTime を受け取らないので、待たずに鳴らすと、そのトラック
+    // だけ 0 秒から始まる（人数が多い・録音が長いほど当たりやすい）。
+    await Promise.all(tracks.map(whenReady));
+    await Promise.all(tracks.map((track) => applySeek(track, base)));
     await Promise.allSettled(tracks.map((t) => t.audio.play()));
     playing = true;
     clear(playButton).append(icon("bi-pause-fill"), "一時停止");
   }
 
   function pause() {
-    for (const track of tracks) track.audio.pause();
+    for (const track of tracks) {
+      track.audio.pause();
+      track.audio.playbackRate = 1;   // 同期のための速度調整を持ち越さない
+    }
     playing = false;
     clear(playButton).append(icon("bi-play-fill"), "再生");
   }
@@ -912,18 +1005,32 @@ export async function createMixer(container, options = {}) {
   }
 
   let raf = null;
+  let destroyed = false;
   function tick(now) {
+    if (destroyed) return;
     render();
     if (currentView === "console" || playing) {
       for (const track of tracks) measure(track, now);
       measure(master, now);
     }
     if (playing) {
-      const base = tracks[0]?.audio.currentTime || 0;
-      // ずれてきたら先頭トラックに合わせ直す
-      for (const track of tracks.slice(1)) {
-        if (Math.abs(track.audio.currentTime - base) > SYNC_TOLERANCE) {
-          try { track.audio.currentTime = base; } catch { /* noop */ }
+      const reference = masterAudio();
+      const base = reference ? reference.currentTime || 0 : 0;
+      // 基準からのずれを直す。小さいうちは速度で吸収し、頭出しは最後の手段に
+      // する（頭出しは音が途切れるので、細かいずれのたびにやると鳴り直しに
+      // なって、かえって聞けたものではなくなる）。
+      for (const track of tracks) {
+        const audio = track.audio;
+        if (audio === reference || audio.error || audio.readyState < 1 || audio.seeking) continue;
+        const drift = audio.currentTime - base;   // 正なら進みすぎ
+        const size = Math.abs(drift);
+        if (size > SYNC_RESEEK_SEC) {
+          applySeek(track, base);
+        } else if (size > SYNC_IGNORE_SEC) {
+          audio.playbackRate =
+            1 + Math.max(-SYNC_MAX_RATE, Math.min(SYNC_MAX_RATE, -drift));
+        } else if (audio.playbackRate !== 1) {
+          audio.playbackRate = 1;
         }
       }
       if (looping && loopRegion && base >= loopRegion.end) seek(loopRegion.start);
@@ -966,8 +1073,12 @@ export async function createMixer(container, options = {}) {
   const onResize = () => layout();
   window.addEventListener("resize", onResize);
 
-  // レイアウトが決まってから描く
-  window.requestAnimationFrame(() => {
+  // レイアウトが決まってから描く。
+  // このハンドルも raf に入れておくこと。入れていなかったときは、最初の1コマが
+  // 来る前に destroy() されると（一覧へ戻るのを続けて押した等）取り消せず、
+  // 閉じたあとに描画ループが立ち上がっていた。
+  raf = window.requestAnimationFrame(() => {
+    if (destroyed) return;
     zoomToFit();
     applyRouting();
     raf = window.requestAnimationFrame(tick);
@@ -975,9 +1086,13 @@ export async function createMixer(container, options = {}) {
 
   return {
     destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      playing = false;
       window.removeEventListener("resize", onResize);
       window.removeEventListener("keydown", onKeyDown);
       if (raf) window.cancelAnimationFrame(raf);
+      raf = null;
       for (const track of tracks) {
         track.audio.pause();
         track.audio.src = "";
