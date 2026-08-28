@@ -255,47 +255,54 @@ def main() -> int:
                   late < 0.05, f"95%地点の塗り={late:.2f}")
             page.evaluate("window.__mixer.destroy()")
 
-            print("\n== 2. 全トラックが同じ位置を再生すること（20秒） ==")
+            print("\n== 2. 区切り配信での再生（時計が1つ） ==")
             open_mixer(page, play_token)
-            positions = page.evaluate("""async () => {
-              const audios = [...document.querySelectorAll("audio")];
+            played = page.evaluate("""async () => {
               const stage = document.getElementById("stage");
-              // 波形の上をクリックして頭出し（利用者と同じ操作）
+              const clockText = () => stage.querySelector(".daw-clock").textContent || "";
+              const clock = () => {
+                const head = clockText().split("/")[0].trim();
+                const m = head.match(/(?:(\d+):)?(\d+):(\d+)\.(\d+)/) || head.match(/(\d+):(\d+)\.(\d+)/);
+                if (!m) return 0;
+                const parts = m.slice(1).filter((v) => v !== undefined).map(Number);
+                const cents = parts.pop();
+                let seconds = 0;
+                for (const p of parts) seconds = seconds * 60 + p;
+                return seconds + cents / 100;
+              };
               const lane = document.querySelector(".daw-lanes");
               const box = lane.getBoundingClientRect();
               lane.dispatchEvent(new PointerEvent("pointerdown", {
                 clientX: box.left + box.width * 0.5, clientY: box.top + 20, bubbles: true,
               }));
               await new Promise((r) => setTimeout(r, 300));
-              const afterSeek = audios.map((a) => a.currentTime);
-
+              const afterSeek = clock();
               [...stage.querySelectorAll("button")]
                 .find((b) => b.textContent.includes("再生")).click();
-              await new Promise((r) => setTimeout(r, 1800));
-              const whilePlaying = audios.map((a) => a.currentTime);
-              const paused = audios.map((a) => a.paused);
-              return { afterSeek, whilePlaying, paused };
+              await new Promise((r) => setTimeout(r, 2000));
+              return { afterSeek, whilePlaying: clock(), raw: clockText(),
+                       audios: document.querySelectorAll("audio").length };
             }""")
-
-            seek = positions["afterSeek"]
-            check("頭出しが全トラックに効く",
-                  bool(seek) and max(seek) - min(seek) < 0.05 and min(seek) > 0.5,
-                  f"各トラックの位置={['%.2f' % v for v in seek]}")
-            check("再生が始まっている", not any(positions["paused"]),
-                  f"paused={positions['paused']}")
-            live = positions["whilePlaying"]
-            check("再生中も位置が揃っている",
-                  bool(live) and max(live) - min(live) < 0.15,
-                  f"最大差={max(live) - min(live):.3f} 秒 / 位置={['%.2f' % v for v in live]}")
-            check("再生位置が進んでいる", bool(live) and min(live) > min(seek) + 0.5,
-                  f"{min(seek):.2f} -> {min(live):.2f}")
+            check("トラックごとの <audio> を持たない（音源が1つ）",
+                  played["audios"] == 0, f"<audio> が {played['audios']} 本ある")
+            check("頭出しが効く", played["afterSeek"] > 0.5,
+                  f"{played['afterSeek']:.2f} 秒 / 時計={played['raw']}")
+            check("再生位置が進む",
+                  played["whilePlaying"] > played["afterSeek"] + 0.5,
+                  f"{played['afterSeek']:.2f} -> {played['whilePlaying']:.2f} 秒")
             page.evaluate("window.__mixer.destroy()")
 
-            print("\n== 3. 読み込みが遅いトラックがあっても揃うこと ==")
-            # 読み込めていない <audio> は currentTime への代入を黙って捨てる。
-            # 待たずに鳴らすと、そのトラックだけ 0 秒から始まる。1本だけ
-            # 応答を遅らせて、その状況を実際に作る。
+            print("\n== 3. 従来経路（区切り配信が使えない古いアーカイブ） ==")
+            # 索引から segment_url を落として、トラックごとに <audio> を持つ経路を
+            # 通す。読み込みの遅いトラックを1本作り、待たずに再生しても 0 秒から
+            # 始まらないことを見る。
             slowed = {"done": False}
+
+            def strip_segment(route):
+                body = route.fetch().json()
+                body.pop("segment_url", None)
+                route.fulfill(status=200, content_type="application/json",
+                              body=json.dumps(body))
 
             def slow_first(route):
                 if not slowed["done"]:
@@ -303,6 +310,7 @@ def main() -> int:
                     time.sleep(1.5)
                 route.continue_()
 
+            page.route(f"{BASE}/dlaudio/files/{GUILD_ID}/{play_token}/mixer", strip_segment)
             page.route(f"{BASE}/dlaudio/files/{GUILD_ID}/{play_token}/stem/1", slow_first)
             open_mixer(page, play_token)
             late = page.evaluate("""async () => {
@@ -313,22 +321,86 @@ def main() -> int:
               lane.dispatchEvent(new PointerEvent("pointerdown", {
                 clientX: box.left + box.width * 0.5, clientY: box.top + 20, bubbles: true,
               }));
-              // 読み込みを待たずにすぐ再生を押す（利用者が待てない状況）
               [...stage.querySelectorAll("button")]
                 .find((b) => b.textContent.includes("再生")).click();
               await new Promise((r) => setTimeout(r, 2500));
               return { at: audios.map((a) => a.currentTime),
-                       paused: audios.map((a) => a.paused),
-                       ready: audios.map((a) => a.readyState) };
+                       paused: audios.map((a) => a.paused) };
             }""")
+            check("従来経路に落ちている", bool(late["at"]),
+                  f"<audio> が {len(late['at'])} 本")
             check("遅れて読めたトラックも 0 秒から始まっていない",
                   bool(late["at"]) and min(late["at"]) > 0.5,
-                  f"位置={['%.2f' % v for v in late['at']]} readyState={late['ready']}")
-            check("遅れて読めたトラックも他と揃っている",
+                  f"位置={['%.2f' % v for v in late['at']]}")
+            check("トラック同士が揃っている",
                   bool(late["at"]) and max(late["at"]) - min(late["at"]) < 0.15,
                   f"最大差={max(late['at']) - min(late['at']):.3f} 秒")
             page.evaluate("window.__mixer.destroy()")
+            page.unroute(f"{BASE}/dlaudio/files/{GUILD_ID}/{play_token}/mixer")
             page.unroute(f"{BASE}/dlaudio/files/{GUILD_ID}/{play_token}/stem/1")
+
+            print("\n== 4. 区切り配信で、チャンネルとトラックが対応すること ==")
+            # 全トラックを1つの多チャンネル音源として受け取り、ChannelSplitter で
+            # 分ける経路。順序が入れ替わると「別人の声にフェーダーが効く」ので、
+            # トラックごとに違う高さの音を入れて、ソロにして確かめる。
+            open_mixer(page, play_token)
+            mode = page.evaluate("""() => ({
+              segment: document.querySelectorAll('audio').length === 0,
+              audios: document.querySelectorAll('audio').length,
+            })""")
+            check("区切り配信の経路が選ばれている", mode["segment"],
+                  f"<audio> が {mode['audios']} 本ある")
+
+            if mode["segment"]:
+                # チャンネルの並び自体は、この検査の外で確かめてある
+                #   - 送り出す WAV の各チャンネルが stems の順であること（ffmpeg で確認）
+                #   - 多チャンネル WAV がブラウザで順序を保つこと（8ch で確認）
+                # ここで見るのは「分けたあとが各トラックに配線されているか」。
+                # ソロにしたトラックのメーターだけが振れること。
+                levels = page.evaluate("""async () => {
+                  const stage = document.getElementById("stage");
+                  const buttons = [...stage.querySelectorAll("button")];
+                  buttons.find((b) => b.textContent.includes("再生")).click();
+                  // メーターはコンソール画面で描かれる
+                  buttons.find((b) => b.textContent === "ミキサー").click();
+                  await new Promise((r) => setTimeout(r, 1200));
+
+                  const strips = [...stage.querySelectorAll(".daw-strip:not(.is-master)")];
+                  const solos = strips.map((s) => [...s.querySelectorAll("button")]
+                    .find((b) => b.textContent === "S"));
+                  const inked = (canvas) => {
+                    const ctx = canvas.getContext("2d");
+                    const { width, height } = canvas;
+                    if (!width || !height) return 0;
+                    const data = ctx.getImageData(0, 0, width, height).data;
+                    let lit = 0;
+                    for (let i = 0; i < data.length; i += 4) {
+                      // メーターの帯は緑〜赤。灰色の下地と枠は数えない
+                      if (data[i + 3] > 40 &&
+                          Math.max(data[i], data[i+1], data[i+2]) -
+                          Math.min(data[i], data[i+1], data[i+2]) > 40) lit += 1;
+                    }
+                    return lit;
+                  };
+                  const out = [];
+                  for (let i = 0; i < solos.length; i += 1) {
+                    solos.forEach((s, j) => {
+                      if ((j === i) !== s.classList.contains("is-on")) s.click();
+                    });
+                    await new Promise((r) => setTimeout(r, 600));
+                    out.push(strips.map((s) => inked(s.querySelector(".daw-meter"))));
+                  }
+                  return out;
+                }""")
+                ok = True
+                for i, row in enumerate(levels or []):
+                    loud = [j for j, v in enumerate(row) if v > 0]
+                    if loud != [i]:
+                        ok = False
+                    print(f"      トラック{i} をソロ -> 振れているメーター {loud}")
+                check("ソロにしたトラックのメーターだけが振れる",
+                      bool(levels) and ok, "配線がトラックとずれている" if not ok else "")
+            page.evaluate("window.__mixer.destroy()")
 
             browser.close()
     finally:
