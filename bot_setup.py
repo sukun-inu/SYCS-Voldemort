@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import math
-import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +11,7 @@ import psutil
 from commands.chat_commands import handle_chatgpt_message
 from discord.ext import commands, tasks
 from discord.ext.commands import Bot
+from services import dev_signals
 from services.djaudio_cache import cache_cleanup_loop as djaudio_cache_cleanup
 from services.djaudio_service import handle_djaudio_message
 from services.earthquake_service import run_earthquake_ws
@@ -58,7 +58,11 @@ _USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD = env_int(
 )
 _USER_STATE_AUTO_REPAIR_WRITE_EVENTS = env_bool("USER_STATE_AUTO_REPAIR_WRITE_EVENTS", False)
 
-_SIGNAL_DIR = Path(os.getenv("SETTINGS_DIR", str(Path(__file__).parent / "data"))) / "_dev_signals"
+# シグナルの置き場と名前の付け方は services/dev_signals.py に一本化している
+# （管理画面も同じモジュールを見る）。ここで
+# Path(os.getenv("SETTINGS_DIR", ...)) と書いていたときは、SETTINGS_DIR="" の
+# とき Path("") = カレントディレクトリになり、settings.json（env_path 経由で
+# data/ に倒れる）と置き場が割れていた。
 
 # VC入室時刻を覚えておく上限時間。退出イベントを取り逃した分（Bot 停止中に
 # 退出された等）が永久に残らないよう、これを過ぎた記録は捨てる。
@@ -355,10 +359,10 @@ def setup_events(bot: Bot) -> None:
     # --------------------------
     @tasks.loop(seconds=30)
     async def dev_signal_task():
-        if not _SIGNAL_DIR.exists():
-            return
-        for sig_file in list(_SIGNAL_DIR.glob("*.signal")):
-            task_name = sig_file.stem
+        # 置かれた順に処理する。同じ用途が複数溜まっていることがあり
+        # （録音の開始と停止など）、順序が入れ替わると噛み合わない。
+        for sig_file in dev_signals.collect():
+            task_name = dev_signals.task_name_of(sig_file)
             try:
                 try:
                     sig_content = sig_file.read_text(encoding="utf-8")

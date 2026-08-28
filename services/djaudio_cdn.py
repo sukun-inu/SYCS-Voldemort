@@ -220,10 +220,18 @@ async def recording_stem(guild_id: str, token: str, index: int, request: Request
             end = int(raw_end) if raw_end else size - 1
         elif raw_end:                       # bytes=-N（末尾から N バイト）
             begin = max(0, size - int(raw_end))
-        if begin >= size:
-            return Response(status_code=416, headers={"Content-Range": f"bytes */{size}"})
-        end = min(end, size - 1)
-        partial = True
+        else:
+            # "bytes=-" は数字がどちらも無く、範囲として成立しない。
+            # RFC 9110 では壊れた Range は無視して全体を返す。
+            raw_begin = raw_end = ""
+        if raw_begin or raw_end:
+            end = min(end, size - 1)
+            # 終わりが始まりより手前（"bytes=500-100" など）は満たせない。
+            # 弾かずに進むと length が負になり、Content-Length: -399 という
+            # 壊れたヘッダを 206 で返していた。
+            if begin >= size or begin > end:
+                return Response(status_code=416, headers={"Content-Range": f"bytes */{size}"})
+            partial = True
 
     length = end - begin + 1
 
@@ -402,7 +410,12 @@ async def recording_analysis(guild_id: str, token: str, index: int):
 
     duration = float(manifest.get("duration_seconds") or 0) or 60.0
     try:
-        result = voice_analysis.analyse(data, duration)
+        # analyse() は ffmpeg を8回起動したうえで自己相関と LPC を回す。
+        # 60秒のトラックでも実測 7 秒かかり、直接 await すると、その間この
+        # ワーカーが受けている他のリクエスト（配信・切り出し・ヘルスチェック）
+        # まで巻き添えで止まる。切り出しと復元は同じ理由でスレッドへ逃がして
+        # あるので、こちらも揃える。
+        result = await asyncio.to_thread(voice_analysis.analyse, data, duration)
     except Exception as e:
         logger.exception("声の解析に失敗 token=%s index=%s: %s", token, index, e)
         raise HTTPException(status_code=500, detail="声を調べられませんでした。")

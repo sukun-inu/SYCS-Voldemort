@@ -508,6 +508,44 @@ class DevTestNotifyTests(unittest.TestCase):
         self.assertIn("未知の種類", "\n".join(captured.output))
 
 
+class TtsDictionaryTests(unittest.TestCase):
+    """読み上げ辞書の当て方。
+
+    1語ずつ str.replace() を重ねていたため、前の規則の「出力」に次の規則が
+    当たっていた。設定した本人にはまず理解できない読み方になるうえ、結果が
+    登録順に依存していた。
+    """
+
+    def setUp(self):
+        from services.tts_service import _apply_dictionary
+        self.apply = _apply_dictionary
+
+    def test_a_reading_is_not_replaced_again(self):
+        # 「鈴木→すずき」と「すずき→スズキ」は、どちらも単独では正しい登録。
+        forward = {"鈴木": "すずき", "すずき": "スズキ"}
+        self.assertEqual(self.apply("鈴木さん", forward), "すずきさん")
+
+        # 登録した順で結果が変わらないこと
+        backward = {"すずき": "スズキ", "鈴木": "すずき"}
+        self.assertEqual(self.apply("鈴木さん", backward), "すずきさん")
+
+        # 登録どおりの単独変換は当然そのまま効く
+        self.assertEqual(self.apply("すずきさん", forward), "スズキさん")
+
+    def test_the_longer_entry_wins(self):
+        """短い語が先に当たると、長い語の登録が意味を持たなくなる。"""
+        dictionary = {"AI": "エーアイ", "AI研": "エーアイけん"}
+        self.assertEqual(self.apply("AI研に行く", dictionary), "エーアイけんに行く")
+        self.assertEqual(self.apply("AIの話", dictionary), "エーアイの話")
+
+    def test_plain_cases_still_work(self):
+        self.assertEqual(self.apply("そのまま", {}), "そのまま")
+        self.assertEqual(self.apply("wwwすごい", {"w": "わら"}), "わらわらわらすごい")
+        # 正規表現の記号を含む見出し語をそのまま扱えること
+        self.assertEqual(self.apply("a.b を読む", {"a.b": "エービー"}), "エービー を読む")
+        self.assertEqual(self.apply("axb を読む", {"a.b": "エービー"}), "axb を読む")
+
+
 class SettingsStoreTests(unittest.TestCase):
     def setUp(self):
         self.guild_id = 4242
@@ -1062,13 +1100,24 @@ class RecordingTests(unittest.TestCase):
         self.assertTrue(all(v == 0 for v in silent), series)
         track.close(4.0)
 
-    def test_peak_series_is_capped_so_long_recordings_stay_drawable(self):
-        """6時間ぶんの目盛りをそのまま送ると数万点になる。間引くこと。"""
+    def test_peak_series_downsamples_and_pads_as_told(self):
+        """間引き幅と点数は呼び出し側が決める。
+
+        以前はトラックが自分の長さから間引き幅を決めていたため、長さの違う
+        トラック同士で1点あたりの秒数が変わり、同じ時間軸に並べられなかった。
+        """
         track = self.rec._TrackWriter(1, "A", self.work / "a.mp3", time.monotonic())
         track.peaks = [32767] * 20000
-        series = track.peak_series()
-        self.assertLessEqual(len(series), self.rec.PEAK_MAX_POINTS)
+        series = track.peak_series(group=10, points=2000)
+        self.assertEqual(len(series), 2000)
         self.assertTrue(all(v == 1.0 for v in series))   # 間引いても山は残る
+
+        # 短いトラックは末尾を無音で埋めて、長いものと同じ点数に揃える。
+        track.peaks = [32767] * 50
+        padded = track.peak_series(group=10, points=2000)
+        self.assertEqual(len(padded), 2000)
+        self.assertTrue(all(v == 1.0 for v in padded[:5]))
+        self.assertTrue(all(v == 0.0 for v in padded[5:]))
         track.close(0.0)
 
     def test_manifest_lines_the_tracks_up_for_the_mixer(self):
@@ -1088,6 +1137,50 @@ class RecordingTests(unittest.TestCase):
         self.assertEqual({s["name"] for s in manifest["stems"]}, {"すずき", "たなか"})
         self.assertTrue(all(s["peaks"] for s in manifest["stems"]))
         self.assertTrue(all(s["size_bytes"] > 0 for s in manifest["stems"]))
+
+    def test_waveform_covers_the_whole_recording_however_long_it_is(self):
+        """索引の bucket_seconds × 点数 が録音の長さと一致すること。
+
+        以前はトラックが自分の長さで間引くのに索引には間引く前の 0.25 秒を
+        書いていた。12.5分を超える録音では波形が時間軸の先頭へ圧縮され
+        （6時間なら全体が先頭12.4分ぶんに潰れる）、長さの違うトラック同士でも
+        縮尺が食い違っていた。実際の録音を6時間ぶん流すのは重いので、
+        目盛りを直接置いて書き出しだけを通す。
+        """
+        session = self._session()
+        for user_id, name in ((1, "すずき"), (2, "たなか")):
+            session.feed(Mock(id=user_id, display_name=name), self._tone(0.3))
+
+        duration = 6 * 3600.0
+        buckets = int(duration / self.rec.PEAK_BUCKET_SECONDS)
+        tracks = list(session.tracks.values())
+        tracks[0].peaks = [32767] * buckets
+        # 途中で書き込みに失敗して短く終わったトラック。長いほうに揃うこと。
+        tracks[1].peaks = [32767] * (buckets // 3)
+
+        # 6時間ぶんを本当に書くと、末尾の穴埋めだけで1トラック 4GB を ffmpeg へ
+        # 流すことになる。ここで見たいのは目盛りの縮尺だけなので、穴埋めと
+        # 声の判定は省く（mp3 の書き出し自体は通す）。
+        with patch.object(self.rec._TrackWriter, "pad_until", lambda self, *a, **k: None), \
+                patch.object(self.rec, "measure_voice", return_value=None):
+            result = self.rec._finalize(session, duration, "テスト")
+
+        from services.djaudio_cache import get_meta, payload_path
+        meta = get_meta(result["token"])
+        with zipfile.ZipFile(payload_path(result["token"], meta)) as archive:
+            manifest = json.loads(archive.read(self.rec.MANIFEST_NAME).decode("utf-8"))
+
+        stems = manifest["stems"]
+        bucket = manifest["bucket_seconds"]
+        self.assertGreater(bucket, self.rec.PEAK_BUCKET_SECONDS)   # 間引かれている
+        lengths = {len(s["peaks"]) for s in stems}
+        self.assertEqual(len(lengths), 1, "トラックごとに点数が違うと縮尺がずれる")
+        points = lengths.pop()
+        self.assertLessEqual(points, self.rec.PEAK_MAX_POINTS)
+        # 1点あたりの秒数 × 点数 が録音全体を覆っていること（誤差は1点ぶん）。
+        # 直す前はここが 12.4 分ぶんにしかならなかった。
+        self.assertAlmostEqual(points * bucket, duration, delta=bucket)
+        self.assertTrue(all(s["bucket_seconds"] == bucket for s in stems))
 
     def test_mp3_go_in_uncompressed_so_the_mixer_can_seek(self):
         """ZIP を展開せずに Range で読むため、mp3 は無圧縮で入れる。"""
@@ -2573,7 +2666,8 @@ class WaveformTests(unittest.TestCase):
     def test_long_recordings_are_downsampled(self):
         track = self.rec._TrackWriter(3, "C", self.work / "c.mp3", time.monotonic())
         track.peaks = [1000] * 90_000            # 6時間ぶん相当
-        series = track.peak_series()
+        group = 30
+        series = track.peak_series(group=group, points=3000)
         self.assertLessEqual(len(series), self.rec.PEAK_MAX_POINTS)
         self.assertTrue(all(0.0 <= v <= 1.0 for v in series))
         track._process.stdin.close()

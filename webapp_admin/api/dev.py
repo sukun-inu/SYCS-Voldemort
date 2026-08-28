@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from webapp_admin.api.jsonsafe import SafeJSONResponse as JSONResponse
 
 from config import DISCORD_BOT_TOKEN, DJAUDIO_CACHE_DIR
+from services import dev_signals
 from webapp_admin.core.config import settings_dir
 from webapp_admin.extensions import limiter
 from webapp_admin.security import _NeedsLogin, check_csrf, dev_user_id, is_dev_user, sanitize
@@ -35,7 +36,6 @@ _DISCORD_API = "https://discord.com/api/v10"
 _P2PQUAKE_API = "https://api.p2pquake.net/v2/history"
 _TIMEOUT = aiohttp.ClientTimeout(total=10)
 _MAX_IMPORT_BYTES = 512 * 1024  # 512 KB
-_SIGNAL_DIR = settings_dir() / "_dev_signals"
 _LOG_DIR = settings_dir() / "logs"
 _ID_PATTERN = re.compile(r"\d+")
 _MESSAGE_URL_PATTERN = re.compile(r"https?://discord(?:app)?\.com/channels/\d+/(\d+)/(\d+)")
@@ -211,17 +211,10 @@ def _cache_entries() -> list[dict]:
     return entries
 
 
-def _pending_signals() -> list[str]:
-    try:
-        return sorted(p.stem for p in _SIGNAL_DIR.glob("*.signal"))
-    except OSError:
-        return []
-
-
-def _write_signal(name: str, payload: Any) -> None:
-    _SIGNAL_DIR.mkdir(parents=True, exist_ok=True)
-    text = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
-    (_SIGNAL_DIR / f"{name}.signal").write_text(text, encoding="utf-8")
+# シグナルの読み書きは services/dev_signals.py に一本化している。Bot 側も
+# 同じモジュールを見るので、置き場と名前の付け方が食い違わない。
+_pending_signals = dev_signals.pending
+_write_signal = dev_signals.write
 
 
 def _normalize_env_value(value: object) -> str | None:
@@ -511,10 +504,12 @@ async def test_notify(kind: str, request: Request, _=Depends(check_dev), _csrf=D
     raw_channel_id = str(body.get("channel_id") or "").strip()
     channel_id = int(_require_id(raw_channel_id, "チャンネルID")) if raw_channel_id else None
 
+    # 対象のギルドは payload の中にしかない。用途名だけのファイル名にすると、
+    # Bot が拾う前に別のギルド宛で上書きされて消える（per_guild=True）。
     _write_signal(f"test_{kind}", {
         "guild_id": guild_id, "channel_id": channel_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
-    })
+    }, per_guild=True)
     target = f"ギルド {guild_id} のチャンネル {channel_id}（設定は無視）" if channel_id else f"ギルド {guild_id}"
     return _ok(
         f"「{kind_label(kind)}」のテストをキューに追加しました。（送信先: {target}）",
@@ -552,7 +547,10 @@ async def earthquake_replay(request: Request, _=Depends(check_dev), _csrf=Depend
         raise HTTPException(status_code=400, detail="送信先チャンネルを指定する場合は、ギルドも指定してください。")
     channel_id = int(_require_id(raw_channel_id, "チャンネルID")) if raw_channel_id else None
 
-    _write_signal("eq_replay", {"event": data, "guild_id": guild_id, "channel_id": channel_id})
+    # 送信先が payload の中にしかないので、1件ずつ別のファイルにする。
+    _write_signal("eq_replay",
+                  {"event": data, "guild_id": guild_id, "channel_id": channel_id},
+                  per_guild=True)
     if channel_id:
         target = f"ギルド {guild_id} のチャンネル {channel_id}（地震アラート設定は無視）"
     elif guild_id:

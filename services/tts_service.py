@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+from functools import lru_cache
 from typing import Optional
 
 import aiohttp
@@ -54,10 +55,31 @@ def _clean_text(text: str, max_len: int) -> str:
     return text
 
 
+@lru_cache(maxsize=64)
+def _dictionary_pattern(words: tuple[str, ...]):
+    """辞書の見出し語をまとめた1つのパターン。長い語を先に当てる。
+
+    ギルドごとに辞書は数十語で、読み上げのたびに組み直すのは無駄なので
+    見出し語の組み合わせで覚えておく。
+    """
+    return re.compile("|".join(re.escape(word) for word in words))
+
+
 def _apply_dictionary(text: str, dictionary: dict[str, str]) -> str:
-    for word, reading in dictionary.items():
-        text = text.replace(word, reading)
-    return text
+    """辞書の読みを当てる。置き換えた結果は、もう一度は置き換えない。
+
+    1語ずつ str.replace() を重ねていたため、前の規則の「出力」に次の規則が
+    当たっていた。「鈴木→すずき」と「すずき→スズキ」を別々に登録している
+    だけで「鈴木さん」が「スズキさん」になり、しかも結果が JSON の登録順に
+    依存していた。1回の走査で置き換えて、その連鎖を断つ。
+
+    同じ位置に複数の語が当たるときは長いほうを採る（「エーアイ研」と「エーアイ」
+    なら前者）。短いほうが先に当たると、長い語の登録が意味を持たなくなる。
+    """
+    words = tuple(sorted((w for w in dictionary if w), key=len, reverse=True))
+    if not words:
+        return text
+    return _dictionary_pattern(words).sub(lambda m: dictionary[m.group(0)], text)
 
 
 async def _synthesize(text: str, voice: str, rate: int) -> Optional[str]:

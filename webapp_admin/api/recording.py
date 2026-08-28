@@ -45,12 +45,16 @@ def _require_id(value, label: str) -> int:
 
 
 def _write_signal(name: str, payload: dict) -> None:
-    from webapp_admin.api.dev import _SIGNAL_DIR
+    """録音の開始・停止を Bot へ渡す。
 
-    _SIGNAL_DIR.mkdir(parents=True, exist_ok=True)
-    (_SIGNAL_DIR / f"{name}.signal").write_text(
-        json.dumps(payload, ensure_ascii=False), encoding="utf-8",
-    )
+    対象のギルドは payload の中にしかないので、必ず1件ずつ別のファイルにする
+    （per_guild=True）。用途名だけのファイル名で書いていたときは、2つの
+    サーバーの管理者が Bot の巡回間隔より短い間に押すと先の1件が上書きで
+    消え、押した側には「キューに追加しました」と出たまま何も起きなかった。
+    """
+    from services import dev_signals
+
+    dev_signals.write(name, payload, per_guild=True)
 
 
 def _recordings(guild_id: int) -> list[dict]:

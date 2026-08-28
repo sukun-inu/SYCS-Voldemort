@@ -517,7 +517,7 @@ class DevApiTests(unittest.TestCase):
         直接指定してテスト送信できること（地震リプレイと同じ抜け道）。
 
         シグナル名は test_<kind>。kind の一覧は services/dev_test_notify.py が持つ。"""
-        from webapp_admin.api.dev import _SIGNAL_DIR
+        from services.dev_signals import latest as latest_signal
 
         bad_channel = self.dev.post(
             "/admin/api/dev/test-notify/welcome",
@@ -531,7 +531,7 @@ class DevApiTests(unittest.TestCase):
         )
         self.assertEqual(ok.status_code, 200)
         self.assertIn("555", ok.json()["message"])
-        signal = json.loads((_SIGNAL_DIR / "test_vc.signal").read_text(encoding="utf-8"))
+        signal = json.loads(latest_signal("test_vc").read_text(encoding="utf-8"))
         self.assertEqual(signal["guild_id"], GUILD_ID)
         self.assertEqual(signal["channel_id"], 555)
 
@@ -541,7 +541,7 @@ class DevApiTests(unittest.TestCase):
             json={"guild_id": str(GUILD_ID)}, headers=CSRF_HEADER,
         )
         self.assertEqual(no_channel.status_code, 200)
-        signal2 = json.loads((_SIGNAL_DIR / "test_welcome.signal").read_text(encoding="utf-8"))
+        signal2 = json.loads(latest_signal("test_welcome").read_text(encoding="utf-8"))
         self.assertIsNone(signal2["channel_id"])
 
     def test_earthquake_replay_validates_the_payload(self):
@@ -561,7 +561,7 @@ class DevApiTests(unittest.TestCase):
         シグナルは {"event": ..., "guild_id": ...} という封筒形式で書かれ、
         bot 側 (bot_setup.py) がここから対象ギルドを読み取る契約になっている。
         """
-        from webapp_admin.api.dev import _SIGNAL_DIR
+        from services.dev_signals import latest as latest_signal
 
         event = json.dumps({"earthquake": {"hypocenter": {"name": "テスト沖"}}})
 
@@ -573,7 +573,7 @@ class DevApiTests(unittest.TestCase):
                            json={"event_json": event, "guild_id": str(GUILD_ID)}, headers=CSRF_HEADER)
         self.assertEqual(ok.status_code, 200)
         self.assertIn(str(GUILD_ID), ok.json()["message"])
-        signal = json.loads((_SIGNAL_DIR / "eq_replay.signal").read_text(encoding="utf-8"))
+        signal = json.loads(latest_signal("eq_replay").read_text(encoding="utf-8"))
         self.assertEqual(signal["guild_id"], GUILD_ID)
         self.assertIn("earthquake", signal["event"])
 
@@ -581,12 +581,12 @@ class DevApiTests(unittest.TestCase):
         all_guilds = self.dev.post("/admin/api/dev/earthquake-replay",
                                    json={"event_json": event}, headers=CSRF_HEADER)
         self.assertEqual(all_guilds.status_code, 200)
-        signal2 = json.loads((_SIGNAL_DIR / "eq_replay.signal").read_text(encoding="utf-8"))
+        signal2 = json.loads(latest_signal("eq_replay").read_text(encoding="utf-8"))
         self.assertIsNone(signal2["guild_id"])
 
     def test_earthquake_replay_can_override_the_channel(self):
         """地震アラート設定を持たないギルドでも、DEV専用にチャンネルを直接指定できること。"""
-        from webapp_admin.api.dev import _SIGNAL_DIR
+        from services.dev_signals import latest as latest_signal
 
         event = json.dumps({"earthquake": {"hypocenter": {"name": "テスト沖"}}})
 
@@ -612,7 +612,7 @@ class DevApiTests(unittest.TestCase):
         )
         self.assertEqual(ok.status_code, 200)
         self.assertIn("555", ok.json()["message"])
-        signal = json.loads((_SIGNAL_DIR / "eq_replay.signal").read_text(encoding="utf-8"))
+        signal = json.loads(latest_signal("eq_replay").read_text(encoding="utf-8"))
         self.assertEqual(signal["guild_id"], GUILD_ID)
         self.assertEqual(signal["channel_id"], 555)
 
@@ -622,8 +622,51 @@ class DevApiTests(unittest.TestCase):
             json={"event_json": event, "guild_id": str(GUILD_ID)}, headers=CSRF_HEADER,
         )
         self.assertEqual(no_channel.status_code, 200)
-        signal2 = json.loads((_SIGNAL_DIR / "eq_replay.signal").read_text(encoding="utf-8"))
+        signal2 = json.loads(latest_signal("eq_replay").read_text(encoding="utf-8"))
         self.assertIsNone(signal2["channel_id"])
+
+    def test_signals_for_different_guilds_do_not_overwrite_each_other(self):
+        """対象がギルドごとに違うシグナルは、1件ずつ別のファイルにすること。
+
+        Bot は30秒ごとにしか拾わない。用途名だけのファイル名で書いていたため、
+        2つのサーバーの管理者がその間に操作すると先の1件が上書きで消え、
+        押した側には「キューに追加しました」と出たまま何も起きなかった。
+        """
+        from services import dev_signals
+
+        for path in dev_signals.collect():
+            path.unlink(missing_ok=True)
+
+        event = json.dumps({"earthquake": {"hypocenter": {"name": "テスト沖"}}})
+        for guild_id in ("111", "222"):
+            response = self.dev.post(
+                "/admin/api/dev/earthquake-replay",
+                json={"event_json": event, "guild_id": guild_id}, headers=CSRF_HEADER,
+            )
+            self.assertEqual(response.status_code, 200)
+
+        signals = [p for p in dev_signals.collect()
+                   if dev_signals.task_name_of(p) == "eq_replay"]
+        self.assertEqual(len(signals), 2, "2回押したぶんが残っていない")
+        sent = [json.loads(p.read_text(encoding="utf-8"))["guild_id"] for p in signals]
+        self.assertEqual(sorted(sent), [111, 222])
+        # Bot 側は用途名で分岐する。名前を一意にしても同じ分岐に落ちること。
+        self.assertTrue(all(dev_signals.task_name_of(p) == "eq_replay" for p in signals))
+
+    def test_repeatable_tasks_keep_collapsing_into_one_signal(self):
+        """何度実行しても結果が同じものは、溜めずに上書きでよい。"""
+        from services import dev_signals
+
+        for path in dev_signals.collect():
+            path.unlink(missing_ok=True)
+
+        for _ in range(3):
+            response = self.dev.post("/admin/api/dev/signal/news_feeds", headers=CSRF_HEADER)
+            self.assertEqual(response.status_code, 200)
+
+        signals = [p for p in dev_signals.collect()
+                   if dev_signals.task_name_of(p) == "news_feeds"]
+        self.assertEqual(len(signals), 1)
 
     def test_lookup_endpoints_reject_non_numeric_ids(self):
         self.assertEqual(self.dev.get("/admin/api/dev/user?user_id=abc").status_code, 400)
@@ -986,6 +1029,32 @@ class RecordingMixerApiTests(unittest.TestCase):
 
         beyond = self.client.get(url, headers={"Range": f"bytes={len(whole) + 10}-"})
         self.assertEqual(beyond.status_code, 416)
+
+    def test_broken_ranges_do_not_produce_a_broken_response(self):
+        """満たせない Range は 416、範囲として成立しないものは全体を返すこと。
+
+        終わりが始まりより手前（"bytes=500-100"）を弾いていなかったため、
+        Content-Length: -399 という壊れたヘッダを 206 で返していた。厳格な
+        プロキシやクライアントはここで接続を切る。
+        """
+        url = self.client.get(self._mixer_url()).json()["stems"][0]["url"]
+        size = len(self.client.get(url).content)
+
+        for header in ("bytes=500-100", "bytes=900-100", f"bytes={size}-{size + 10}"):
+            response = self.client.get(url, headers={"Range": header})
+            self.assertEqual(response.status_code, 416, header)
+            self.assertEqual(response.headers.get("content-range"), f"bytes */{size}", header)
+
+        # 数字がどちらも無いものは Range として成立しない。無視して全体を返す。
+        whole = self.client.get(url, headers={"Range": "bytes=-"})
+        self.assertEqual(whole.status_code, 200)
+        self.assertEqual(len(whole.content), size)
+
+        # どの応答でも Content-Length が負にならないこと
+        for header in ("bytes=0-99", "bytes=500-100", "bytes=-", "bytes=-50"):
+            response = self.client.get(url, headers={"Range": header})
+            length = response.headers.get("content-length")
+            self.assertTrue(length is None or int(length) >= 0, (header, length))
 
     def test_other_guilds_cannot_read_the_recording(self):
         self.assertEqual(self.client.get(self._mixer_url(guild_id=111)).status_code, 403)
