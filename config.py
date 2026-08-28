@@ -1,10 +1,11 @@
-import os
 import logging
 import shutil
 from dataclasses import dataclass
 from datetime import timezone, timedelta
 from pathlib import Path
-from typing import Dict, Mapping, Optional
+from typing import Dict, Mapping
+
+from envutil import env_bool, env_int, env_path, env_raw
 
 JST = timezone(timedelta(hours=9))
 logger = logging.getLogger(__name__)
@@ -20,34 +21,21 @@ SCALE_LABELS: Dict[int, str] = {
 }
 
 
-def _read_env(key: str) -> Optional[str]:
-    """環境変数を空文字チェック込みで取得"""
-    value = os.environ.get(key)
-    if value is None:
-        return None
-    value = value.strip()
-    return value or None
-
-
-def _read_env_bool(key: str, default: bool) -> bool:
-    raw = _read_env(key)
-    if raw is None:
-        return default
-    return raw.lower() in {"1", "true", "yes", "on"}
-
+# 環境変数の読み取りは envutil に一本化している。ここに独自実装を戻さないこと
+# （同じ判定を2箇所に書くと、片方だけ直る取りこぼしが起きる）。
 
 # 環境変数から定数を取得
-DISCORD_BOT_TOKEN = _read_env("DISCORD_BOT_TOKEN")
-METALPRICE_API_KEY = _read_env("METALPRICE_API_KEY")
-OPENAI_API_KEY = _read_env("OPENAI_API_KEY")
-GROQ_API_KEY = _read_env("GROQ_API_KEY")
-VIRUSTOTAL_API_KEY = _read_env("VIRUSTOTAL_API_KEY")
+DISCORD_BOT_TOKEN = env_raw("DISCORD_BOT_TOKEN")
+METALPRICE_API_KEY = env_raw("METALPRICE_API_KEY")
+OPENAI_API_KEY = env_raw("OPENAI_API_KEY")
+GROQ_API_KEY = env_raw("GROQ_API_KEY")
+VIRUSTOTAL_API_KEY = env_raw("VIRUSTOTAL_API_KEY")
 
 # API エンドポイント
 METALPRICE_BASE_URL = "https://api.metalpriceapi.com/v1/latest"
 # 金属価格APIの呼び出しをキャッシュする秒数（既定30分）。
 # コマンド連打や複数ユーザーの同時利用で無駄な外部API呼び出しが増えるのを防ぐ。
-METALPRICE_CACHE_TTL_SECONDS = int(os.environ.get("METALPRICE_CACHE_TTL_SECONDS", "1800"))
+METALPRICE_CACHE_TTL_SECONDS = env_int("METALPRICE_CACHE_TTL_SECONDS", 1800, minimum=0)
 
 # 純度情報
 CARAT_PURITY: Dict[str, float] = {
@@ -126,7 +114,7 @@ def _resolve_ffmpeg_path() -> str:
     2) システムの ffmpeg (PATH)
     3) imageio-ffmpeg による自動取得（既定で有効）
     """
-    explicit = _read_env("DJAUDIO_FFMPEG_PATH")
+    explicit = env_raw("DJAUDIO_FFMPEG_PATH")
     if explicit:
         return explicit
 
@@ -134,7 +122,7 @@ def _resolve_ffmpeg_path() -> str:
     if system_ffmpeg:
         return system_ffmpeg
 
-    if not _read_env_bool("DJAUDIO_AUTO_INSTALL_FFMPEG", default=True):
+    if not env_bool("DJAUDIO_AUTO_INSTALL_FFMPEG", default=True):
         return "ffmpeg"
 
     try:
@@ -149,22 +137,22 @@ def _resolve_ffmpeg_path() -> str:
 
     return "ffmpeg"
 
-DJAUDIO_BASE_URL       = (_read_env("DJAUDIO_BASE_URL") or "http://localhost:5001").rstrip("/")
-TTS_BASE_URL           = (_read_env("TTS_BASE_URL") or "http://localhost:8080").rstrip("/")
+DJAUDIO_BASE_URL       = (env_raw("DJAUDIO_BASE_URL") or "http://localhost:5001").rstrip("/")
+TTS_BASE_URL           = (env_raw("TTS_BASE_URL") or "http://localhost:8080").rstrip("/")
 
-METALS_SITE_URL = (_read_env("METALS_SITE_URL") or "https://metals.kawasaki-n3t.f5.si/").rstrip("/") + "/"
-ADMIN_SITE_URL  = (_read_env("ADMIN_SITE_URL")  or "https://vol.kawasaki-n3t.f5.si/admin/login")
-DJAUDIO_CACHE_TTL        = int(os.environ.get("DJAUDIO_CACHE_TTL_SECONDS", "600"))
-DJAUDIO_CACHE_DIR        = Path(os.environ.get("DJAUDIO_CACHE_DIR", str(_default_djaudio_cache)))
-DJAUDIO_COOLDOWN         = int(os.environ.get("DJAUDIO_COOLDOWN_SECONDS", "30"))
-DJAUDIO_MAX_URLS         = int(os.environ.get("DJAUDIO_MAX_URLS_PER_MSG", "3"))
-DJAUDIO_DL_CONCURRENCY   = int(os.environ.get("DJAUDIO_DL_CONCURRENCY", "3"))
-DJAUDIO_DL_TIMEOUT       = int(os.environ.get("DJAUDIO_DL_TIMEOUT_SECONDS", "120"))
+METALS_SITE_URL = (env_raw("METALS_SITE_URL") or "https://metals.kawasaki-n3t.f5.si/").rstrip("/") + "/"
+ADMIN_SITE_URL  = (env_raw("ADMIN_SITE_URL")  or "https://vol.kawasaki-n3t.f5.si/admin/login")
+DJAUDIO_CACHE_TTL        = env_int("DJAUDIO_CACHE_TTL_SECONDS", 600, minimum=0)
+DJAUDIO_CACHE_DIR        = env_path("DJAUDIO_CACHE_DIR", _default_djaudio_cache)
+DJAUDIO_COOLDOWN         = env_int("DJAUDIO_COOLDOWN_SECONDS", 30, minimum=0)
+DJAUDIO_MAX_URLS         = env_int("DJAUDIO_MAX_URLS_PER_MSG", 3, minimum=1)
+DJAUDIO_DL_CONCURRENCY   = env_int("DJAUDIO_DL_CONCURRENCY", 3, minimum=1)
+DJAUDIO_DL_TIMEOUT       = env_int("DJAUDIO_DL_TIMEOUT_SECONDS", 120, minimum=1)
 DJAUDIO_FFMPEG_PATH      = _resolve_ffmpeg_path()
 # SoundCloudはサーバーIPをbotと判定して空レスポンスを返すため動的取得が不可能。
 # ブラウザの DevTools (Network タブ) で api-v2.soundcloud.com へのリクエストURLから
 # client_id=XXXX を見つけてこの環境変数に設定すること。
-SOUNDCLOUD_CLIENT_ID     = os.environ.get("SOUNDCLOUD_CLIENT_ID", "")
+SOUNDCLOUD_CLIENT_ID     = env_raw("SOUNDCLOUD_CLIENT_ID") or ""
 
 # ChatGPTシステムメッセージ
 CHATGPT_SYSTEM_MESSAGE = (

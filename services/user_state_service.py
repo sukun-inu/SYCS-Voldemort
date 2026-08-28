@@ -2,23 +2,26 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Sequence
 
 from sqlalchemy import String, cast, delete, func, or_, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
+from envutil import env_int
 from services.settings_store import get_bypass_role_ids, get_trusted_user_ids
 from services.user_state_db import SessionLocal, ensure_user_state_db
 from webapp.models import UserStateCurrent, UserStateEvent
 
 logger = logging.getLogger(__name__)
 
-USER_STATE_RETENTION_DAYS = max(3650, int(os.getenv("USER_STATE_RETENTION_DAYS", "3650")))
-USER_STATE_CLEANUP_INTERVAL_SECONDS = max(
-    300,
-    int(os.getenv("USER_STATE_CLEANUP_INTERVAL_SECONDS", "21600")),
+# 「ユーザー状態監査DB（10年保持）」は機能として謳っている保証であり、下限を
+# 既定値と同じ3650日にしているのは意図的。env で短縮できる値にすると、
+# 誤って短い値を入れただけで監査履歴が10年より早く消える事故になる。
+# 伸ばす方向（3650日超）だけを env で受け付ける。
+USER_STATE_RETENTION_DAYS = env_int("USER_STATE_RETENTION_DAYS", 3650, minimum=3650)
+USER_STATE_CLEANUP_INTERVAL_SECONDS = env_int(
+    "USER_STATE_CLEANUP_INTERVAL_SECONDS", 21600, minimum=300,
 )
 
 _last_cleanup_at: datetime | None = None

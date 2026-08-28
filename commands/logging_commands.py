@@ -5,7 +5,12 @@ from discord import app_commands
 from discord.ext.commands import Bot
 
 from commands.guards import ensure_admin as _ensure_admin_in_guild
-from commands.interaction_utils import admin_site_view
+from commands.interaction_utils import (
+    EMBED_FIELD_BUDGET,
+    MESSAGE_BUDGET,
+    admin_site_view,
+    cap_list_for_message,
+)
 from services.logging_service import get_log_settings, set_log_channel, set_log_level
 from services.settings_store import (
     add_bypass_roles,
@@ -215,8 +220,11 @@ def register_logging_commands(bot: Bot) -> None:
             m = interaction.guild.get_member(uid)
             members.append(m.mention if m else f"<@{uid}>")
 
+        # 件数が多いとDiscordのメッセージ上限(2000文字)を超えて送信自体が失敗する。
+        header = "余が認めた者の一覧だ:\n"
+        body = cap_list_for_message(members, budget=MESSAGE_BUDGET, header=header, limit=60, omitted_unit="名")
         await interaction.response.send_message(
-            "余が認めた者の一覧だ:\n" + "\n".join(members),
+            header + body,
             ephemeral=True,
         )
 
@@ -263,8 +271,11 @@ def register_logging_commands(bot: Bot) -> None:
             r = interaction.guild.get_role(rid)
             role_mentions.append(r.mention if r else f"<@&{rid}>")
 
+        # 件数が多いとDiscordのメッセージ上限(2000文字)を超えて送信自体が失敗する。
+        header = "バイパスロール一覧:\n"
+        body = cap_list_for_message(role_mentions, budget=MESSAGE_BUDGET, header=header, limit=60, omitted_unit="個")
         await interaction.response.send_message(
-            "バイパスロール一覧:\n" + "\n".join(role_mentions),
+            header + body,
             ephemeral=True,
         )
 
@@ -287,19 +298,20 @@ def register_logging_commands(bot: Bot) -> None:
         if not trusted_ids:
             trusted_text = "なし"
         else:
-            mentions = [f"<@{uid}>" for uid in trusted_ids[:15]]
-            trusted_text = ", ".join(mentions)
-            if len(trusted_ids) > 15:
-                trusted_text += f" …他{len(trusted_ids) - 15}名"
+            mentions = [f"<@{uid}>" for uid in trusted_ids]
+            # embedのfield value（メッセージ本文ではない）なので上限は1024文字。
+            trusted_text = cap_list_for_message(
+                mentions, budget=EMBED_FIELD_BUDGET, limit=15, omitted_unit="名", joiner=", ",
+            )
 
         bypass_ids = get_bypass_role_ids(guild_id)
         if not bypass_ids:
             bypass_text = "なし"
         else:
-            mentions = [f"<@&{rid}>" for rid in bypass_ids[:15]]
-            bypass_text = ", ".join(mentions)
-            if len(bypass_ids) > 15:
-                bypass_text += f" …他{len(bypass_ids) - 15}個"
+            mentions = [f"<@&{rid}>" for rid in bypass_ids]
+            bypass_text = cap_list_for_message(
+                mentions, budget=EMBED_FIELD_BUDGET, limit=15, omitted_unit="個", joiner=", ",
+            )
 
         embed = discord.Embed(
             title="余の現在の設定だ",

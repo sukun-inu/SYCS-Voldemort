@@ -10,6 +10,8 @@ from typing import Any
 
 import psutil
 
+from envutil import env_float
+
 
 _APP_STARTED_AT = time.time()
 _REQUEST_TIMESTAMPS: deque[float] = deque()
@@ -102,7 +104,7 @@ def collect_host_metrics() -> dict:
     cpu_percent = psutil.cpu_percent(interval=0.1)
     memory = psutil.virtual_memory()
     tps = _request_tps(now)
-    tps_target = max(_env_float("ADMIN_TPS_TARGET", 50.0), 0.01)
+    tps_target = env_float("ADMIN_TPS_TARGET", 50.0, minimum=0.01)
     tps_percent = _clamp_percent((tps / tps_target) * 100)
     boot_time = psutil.boot_time()
     sla_percent = _month_to_date_sla_percent(now)
@@ -115,14 +117,14 @@ def collect_host_metrics() -> dict:
                 "percent": _clamp_percent(cpu_percent),
                 "display": f"{cpu_percent:.1f}%",
                 "detail": f"論理コア {psutil.cpu_count(logical=True) or 1}",
-                "tone": load_tone(cpu_percent, _env_float("ADMIN_CPU_ALERT_PERCENT", 90.0)),
+                "tone": load_tone(cpu_percent, env_float("ADMIN_CPU_ALERT_PERCENT", 90.0)),
             },
             "memory": {
                 "label": "Memory",
                 "percent": _clamp_percent(memory.percent),
                 "display": f"{memory.percent:.1f}%",
                 "detail": f"{_format_bytes(memory.used)} / {_format_bytes(memory.total)}",
-                "tone": load_tone(memory.percent, _env_float("ADMIN_MEMORY_ALERT_PERCENT", 90.0)),
+                "tone": load_tone(memory.percent, env_float("ADMIN_MEMORY_ALERT_PERCENT", 90.0)),
             },
             "tps": {
                 "label": "TPS",
@@ -131,7 +133,7 @@ def collect_host_metrics() -> dict:
                 # 秒間リクエスト数が 0.4 なのか、目標の 0.4% なのか読めない。
                 "display": f"{tps:.2f} req/s",
                 "detail": f"目標 {tps_target:g} req/s の {tps_percent:.0f}%",
-                "tone": load_tone(tps_percent, _env_float("ADMIN_TPS_ALERT_PERCENT", 100.0)),
+                "tone": load_tone(tps_percent, env_float("ADMIN_TPS_ALERT_PERCENT", 100.0)),
             },
             "sla": {
                 "label": "SLA",
@@ -211,7 +213,7 @@ def _monitor_loop(logger: Any | None) -> None:
         if logger:
             logger.warning("admin monitor startup failed: %s", exc)
 
-    interval = max(_env_float("ADMIN_MONITOR_INTERVAL_SECONDS", 30.0), 5.0)
+    interval = env_float("ADMIN_MONITOR_INTERVAL_SECONDS", 30.0, minimum=5.0)
     while True:
         time.sleep(interval)
         try:
@@ -230,7 +232,7 @@ def _record_startup_downtime() -> None:
         return
 
     now = time.time()
-    grace = max(_env_float("ADMIN_DOWNTIME_GRACE_SECONDS", 120.0), 1.0)
+    grace = env_float("ADMIN_DOWNTIME_GRACE_SECONDS", 120.0, minimum=1.0)
     downtime = now - float(last_seen)
     if downtime <= grace:
         return
@@ -249,9 +251,9 @@ def _record_startup_downtime() -> None:
 
 def _record_threshold_alerts(metrics: dict[str, Any]) -> None:
     thresholds = {
-        "cpu": _env_float("ADMIN_CPU_ALERT_PERCENT", 90.0),
-        "memory": _env_float("ADMIN_MEMORY_ALERT_PERCENT", 90.0),
-        "tps": _env_float("ADMIN_TPS_ALERT_PERCENT", 100.0),
+        "cpu": env_float("ADMIN_CPU_ALERT_PERCENT", 90.0),
+        "memory": env_float("ADMIN_MEMORY_ALERT_PERCENT", 90.0),
+        "tps": env_float("ADMIN_TPS_ALERT_PERCENT", 100.0),
     }
     metric_map = metrics.get("metrics", {})
     if not isinstance(metric_map, dict):
@@ -285,7 +287,7 @@ def _record_alert_with_cooldown(
     metadata: dict[str, Any],
 ) -> None:
     now = time.time()
-    cooldown = max(_env_float("ADMIN_MONITOR_ALERT_COOLDOWN_SECONDS", 300.0), 0.0)
+    cooldown = env_float("ADMIN_MONITOR_ALERT_COOLDOWN_SECONDS", 300.0, minimum=0.0)
     last_at = _LAST_ALERT_AT.get(key, 0)
     if now - last_at < cooldown:
         return
@@ -449,13 +451,6 @@ def _read_json(path: Path) -> dict[str, Any]:
 def _iso(epoch: float | None = None) -> str:
     value = time.time() if epoch is None else epoch
     return datetime.fromtimestamp(value, timezone.utc).isoformat()
-
-
-def _env_float(name: str, default: float) -> float:
-    try:
-        return float(os.environ.get(name, default))
-    except (TypeError, ValueError):
-        return default
 
 
 def _clamp_percent(value: float) -> float:

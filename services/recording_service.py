@@ -37,6 +37,7 @@ from pathlib import Path
 import discord
 
 from config import DJAUDIO_FFMPEG_PATH, JST as _JST
+from envutil import env_path
 from services import dave, voice_session
 from services.djaudio_cache import register_file
 
@@ -766,9 +767,13 @@ class RecordingSession:
 # 開始・停止のたびに共有ディレクトリへ書き出して、そちらから読めるようにする
 # （開発者パネルのシグナルと同じ考え方）。
 def _state_file() -> Path:
-    import os
-    base = Path(os.getenv("SETTINGS_DIR", str(Path(__file__).resolve().parent.parent / "data")))
-    return base / "_recording_state.json"
+    # settings_store.py と同じ SETTINGS_DIR を見る。素の os.getenv(..., 既定値) は
+    # SETTINGS_DIR="" （空文字で宣言だけされている）のとき既定値へ倒れず
+    # Path("") = カレントディレクトリになる。Bot と管理画面プロセスとで
+    # カレントディレクトリが違うと、書いた場所と読む場所がずれて「録音中」の
+    # 表示が黙って更新されなくなる。
+    default_dir = Path(__file__).resolve().parent.parent / "data"
+    return env_path("SETTINGS_DIR", default_dir) / "_recording_state.json"
 
 
 def _write_state() -> None:
@@ -1034,7 +1039,11 @@ def _is_receiving(guild_id: int) -> bool:
         return True          # 判断できないなら止めない
     try:
         return bool(is_listening())
-    except Exception:
+    except Exception as e:
+        # is_listening() 自体が例外を投げるのは想定外だが、ここでも方針は
+        # 上と同じ「判断できないなら止めない」。ただし想定外の失敗である
+        # ことは分かるようにしておく（voice_recv 側の変化に気づく手がかり）。
+        logger.debug("[recording] guild=%s is_listening() が失敗しました: %s", guild_id, e)
         return True
 
 
@@ -1048,6 +1057,40 @@ def _vc_is_empty(bot, session: "RecordingSession") -> bool:
     if members is None:
         return False
     return not any(m for m in members if not m.bot)
+
+
+async def _announce_stop(bot, session: "RecordingSession", result: dict) -> None:
+    """guard が自分の判断で止めた結果を知らせる。
+
+    手動停止（スラッシュコマンド／管理画面）は呼び出し元が build_result_embed を
+    送るが、guard がここで自発的に止める経路には送り先を持つ人がいない。
+    開始告知と同じ優先順位（設定した通知先 → 開始告知を出した場所 →
+    VC のチャット欄）で送る。ダウンロードリンクを一切知らせないまま
+    ファイルだけ出来上がる、という状態を避けるため。
+    """
+    guild = bot.get_guild(session.guild_id) if bot is not None else None
+    embed = build_result_embed(session.guild_id, result)
+    configured = resolve_announce_channel(guild)
+    announced = session.announce_message.channel if session.announce_message else None
+    channel = guild.get_channel(session.channel_id) if guild is not None else None
+    for target in (configured, announced, channel):
+        if target is None or not isinstance(target, discord.abc.Messageable):
+            continue
+        try:
+            await target.send(embed=embed)
+            return
+        except Exception as e:
+            logger.debug("[recording] 停止通知を送れませんでした: %s", e)
+    logger.warning(
+        "[recording] guild=%s 停止結果を知らせる先がありませんでした（token=%s）",
+        session.guild_id, result.get("token"),
+    )
+
+
+async def _guard_stop(bot, guild_id: int, session: "RecordingSession", reason: str) -> None:
+    """guard が停止条件を見つけたときの共通処理: 止めて、結果を知らせる。"""
+    result = await stop_recording(bot, guild_id, reason=reason)
+    await _announce_stop(bot, session, result)
 
 
 async def _guard(bot, guild_id: int) -> None:
@@ -1067,7 +1110,7 @@ async def _guard(bot, guild_id: int) -> None:
                 remaining = session.max_seconds - session.elapsed
                 if remaining <= 0:
                     logger.info("[recording] guild=%s 上限時間に達したので停止します", guild_id)
-                    await stop_recording(bot, guild_id, reason="上限時間に達しました")
+                    await _guard_stop(bot, guild_id, session, "上限時間に達しました")
                     return
                 interval = min(_GUARD_INTERVAL_SEC, max(1.0, remaining))
             else:
@@ -1081,7 +1124,7 @@ async def _guard(bot, guild_id: int) -> None:
                     "（DAVE）ため録音できません。%d/%d フレームが暗号化されていました",
                     guild_id, session.encrypted_frames, session.voice_frames,
                 )
-                await stop_recording(bot, guild_id, reason=dave.unavailable_reason())
+                await _guard_stop(bot, guild_id, session, dave.unavailable_reason())
                 return
 
             # 受信スレッドが落ちていないか。voice_recv は内部でエラーが起きると
@@ -1092,19 +1135,24 @@ async def _guard(bot, guild_id: int) -> None:
                 logger.warning(
                     "[recording] guild=%s 音声の受信が止まっていたので書き出します", guild_id,
                 )
-                await stop_recording(bot, guild_id, reason="音声の受信が止まりました")
+                await _guard_stop(bot, guild_id, session, "音声の受信が止まりました")
                 return
 
             # 開始直後は参加者のキャッシュが揃っていないことがあるので少し待つ
             if session.elapsed > _EMPTY_GRACE_SEC and _vc_is_empty(bot, session):
                 logger.info("[recording] guild=%s VC が無人になったので停止します", guild_id)
-                await stop_recording(bot, guild_id, reason="VC が空になりました")
+                await _guard_stop(bot, guild_id, session, "VC が空になりました")
                 return
 
             _write_state()
             await asyncio.sleep(interval)
     except asyncio.CancelledError:
         raise
+    except RecordingError as e:
+        # 他の経路（コマンド／管理画面／on_voice_state_update）と競合して
+        # 既に止められていた、などのレース。二重停止自体は害がないので、
+        # 「なぜ何もしなかったか」だけ残して終える。
+        logger.info("[recording] guild=%s guard: 既に停止済みでした（%s）", guild_id, e)
     except Exception as e:
         logger.exception("[recording] guard error guild=%s: %s", guild_id, e)
 
@@ -1137,7 +1185,19 @@ async def stop_recording(bot, guild_id: int, *, reason: str = "") -> dict:
     _sessions.pop(guild_id, None)
     _write_state()
 
-    if session._guard_task and not session._guard_task.done():
+    # guard 自身が上限時間・DAVE検出・受信停止・VC無人化を見つけて
+    # stop_recording() を呼ぶ場合、ここでの caller は guard タスクそのもの。
+    # asyncio の Task.cancel() は「自分自身」に対して呼んでも即座には効かず、
+    # 次に本当にサスペンドする await（_release_if_unused の中の
+    # client.disconnect() など）で CancelledError が飛んでくる。その結果
+    # asyncio.to_thread(_finalize, ...) まで辿り着けず、ZIP 化もアーカイブの
+    # 登録も完了通知も一切行われないまま、ログも残さず黙って終わっていた
+    # （cancel されたタスクは「例外を拾われなかった」警告の対象にもならない）。
+    # guard は stop_recording() の直後に return するだけなので、自分自身を
+    # キャンセルする意味はそもそもない。他のタスク（コマンド／管理画面）から
+    # 呼ばれた場合だけ、まだ回っている guard ループを止める。
+    if (session._guard_task and not session._guard_task.done()
+            and session._guard_task is not asyncio.current_task()):
         session._guard_task.cancel()
 
     voice_session.unhold(guild_id, "recording")

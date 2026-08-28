@@ -6,7 +6,12 @@ from discord import app_commands
 from discord.ext.commands import Bot
 
 from commands.guards import ensure_admin, is_admin
-from commands.interaction_utils import send_ephemeral, send_interaction
+from commands.interaction_utils import (
+    EMBED_DESCRIPTION_BUDGET,
+    cap_list_for_message,
+    send_ephemeral,
+    send_interaction,
+)
 from services import tts_service
 from services.tts_store import (
     add_tts_dictionary_entry,
@@ -150,6 +155,10 @@ async def tts_join(
     channel: discord.VoiceChannel,
 ) -> None:
     assert interaction.guild
+    # VC接続（temp_join）、さらに管理者なら録音の自動開始判定も続けて行う。
+    # どちらもDiscordとの往復を伴い、3秒の持ち時間を超えうるので先にdeferする
+    # （/record start や /tts leave の録音締め処理と同じ考え方）。
+    await interaction.response.defer(ephemeral=True, thinking=True)
     settings = get_tts_settings(interaction.guild.id)
     if not settings.get("enabled"):
         await send_ephemeral(interaction, "❌ TTS が無効。先に `/tts enable` で有効にせよ。")
@@ -223,7 +232,13 @@ async def tts_default_voice_cmd(
     if not await ensure_admin(interaction):
         return
     assert interaction.guild
-    set_tts_default_voice(interaction.guild.id, voice.strip())
+    voice = voice.strip()
+    # 空白のみだと空文字が保存され、以後 settings.get("default_voice", ...) は
+    # キーが存在する扱いになって既定値へフォールバックせず、空の声設定のまま残る。
+    if not voice:
+        await send_ephemeral(interaction, "❌ 声の名前は空白のみでは指定できぬ。")
+        return
+    set_tts_default_voice(interaction.guild.id, voice)
     await send_ephemeral(interaction, f"✅ デフォルト声を `{voice}` に設定した。")
 
 
@@ -296,6 +311,10 @@ async def voice_set(
     if interaction.guild is None:
         await send_ephemeral(interaction, "ギルド内でのみ使えるぞ。")
         return
+    # 他のvoice系コマンド（tts default_voice等）と同じくstripする。ここだけ
+    # stripしないと、空白だけの入力がそのまま声設定として保存されてしまう。
+    if voice is not None:
+        voice = voice.strip() or None
     if voice is None and rate is None:
         await send_ephemeral(interaction, "❌ voice か rate のどちらかを指定せよ。")
         return
@@ -372,10 +391,17 @@ async def dict_add(
     if interaction.guild is None:
         await send_ephemeral(interaction, "ギルド内でのみ使えるぞ。")
         return
+    word = word.strip()
+    reading = reading.strip()
+    # strip前の長さで判定すると、空白だけの入力("　"等)が長さチェックを通り抜けて
+    # 空文字キーとして登録されてしまう（読み上げ時に何にでもマッチしてしまう）。
+    if not word or not reading:
+        await send_ephemeral(interaction, "❌ 単語・読みのいずれも空白のみは指定できぬ。")
+        return
     if len(word) > 50 or len(reading) > 100:
         await send_ephemeral(interaction, "❌ 単語は50文字以内、読みは100文字以内にせよ。")
         return
-    add_tts_dictionary_entry(interaction.guild.id, word.strip(), reading.strip())
+    add_tts_dictionary_entry(interaction.guild.id, word, reading)
     await send_ephemeral(interaction, f"✅ `{word}` → `{reading}` を辞書に登録した。")
 
 
@@ -405,12 +431,16 @@ async def dict_list(interaction: discord.Interaction) -> None:
         await send_ephemeral(interaction, "辞書は空だ。")
         return
     items = list(d.items())
-    lines = [f"`{w}` → `{r}`" for w, r in items[:50]]
-    if len(items) > 50:
-        lines.append(f"... 他 {len(items) - 50} 件")
+    lines = [f"`{w}` → `{r}`" for w, r in items]
+    # word は最大50文字・readingは最大100文字まで許容している（dict_add参照）ため、
+    # 単純に件数だけで打ち切ると1行が最大約160文字になり、embedのdescription
+    # 上限(4096文字)を超えて送信自体が失敗しうる。文字数予算ベースで打ち切る
+    # （一覧の打ち切りはcap_list_for_messageに一本化しており、ここだけ別実装を
+    # 持たない）。
+    description = cap_list_for_message(lines, budget=EMBED_DESCRIPTION_BUDGET, omitted_unit="件")
     embed = discord.Embed(
         title="TTS 辞書",
-        description="\n".join(lines),
+        description=description,
         color=discord.Color.blue(),
     )
     await send_interaction(interaction, embed=embed, ephemeral=True)

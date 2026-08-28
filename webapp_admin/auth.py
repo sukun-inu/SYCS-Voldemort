@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 
 import aiohttp
 
+from envutil import env_int, env_raw
 from services.ttl_cache import TTLCache
 
 logger = logging.getLogger(__name__)
@@ -14,7 +15,10 @@ logger = logging.getLogger(__name__)
 DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID", "")
 DISCORD_CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET", "")
 DISCORD_REDIRECT_URI = os.environ.get("DISCORD_REDIRECT_URI", "http://localhost:5001/admin/callback")
-DISCORD_BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN", "")
+# config.py の DISCORD_BOT_TOKEN(env_raw、前後空白を除去)と読み方を揃える。
+# ここだけ素の os.environ.get のままだと、同じトークンでも前後に空白が付いた
+# ときにこちらだけ弾かれる/一致しないという取りこぼしが起きる。
+DISCORD_BOT_TOKEN = env_raw("DISCORD_BOT_TOKEN") or ""
 DISCORD_OAUTH_PROMPT = os.environ.get("DISCORD_OAUTH_PROMPT", "").strip().lower()
 if DISCORD_OAUTH_PROMPT and DISCORD_OAUTH_PROMPT not in {"none", "consent"}:
     logger.warning("DISCORD_OAUTH_PROMPT=%s は無効なため無視します。", DISCORD_OAUTH_PROMPT)
@@ -344,7 +348,7 @@ async def get_guild_roles(guild_id: int) -> list[dict]:
 
 
 # 管理権限の再確認をどれくらい信用し続けるか（秒）。
-ADMIN_GUILDS_MAX_AGE_SECONDS = max(60, int(os.environ.get("ADMIN_GUILDS_MAX_AGE_SECONDS", "300")))
+ADMIN_GUILDS_MAX_AGE_SECONDS = env_int("ADMIN_GUILDS_MAX_AGE_SECONDS", 300, minimum=60)
 
 
 async def user_still_admin(guild_id: int, user_id: int) -> bool | None:

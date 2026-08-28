@@ -22,6 +22,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 from config import METAL_COMMANDS
+from envutil import env_int
 from services.url_safety import URLSafetyError, validate_public_http_url
 from .cache import TTLCache
 from .asset_version import render_index_html, render_service_worker
@@ -59,11 +60,11 @@ INDEX_FILE = STATIC_DIR / "index.html"
 SW_FILE = STATIC_DIR / "sw.js"
 MANIFEST_FILE = STATIC_DIR / "manifest.webmanifest"
 RESERVED_TOP_LEVEL_PATHS = {"api", "static", "health", "docs", "redoc", "openapi.json", "sw.js", "manifest.webmanifest"}
-API_RESPONSE_CACHE_SECONDS = max(1, int(os.getenv("API_RESPONSE_CACHE_SECONDS", "20")))
-PURITY_OPTIONS_CACHE_SECONDS = max(60, int(os.getenv("PURITY_OPTIONS_CACHE_SECONDS", "3600")))
-PUSH_PUBLIC_KEY_CACHE_SECONDS = max(300, int(os.getenv("PUSH_PUBLIC_KEY_CACHE_SECONDS", "3600")))
-FORECAST_CACHE_SECONDS = max(60, int(os.getenv("FORECAST_CACHE_SECONDS", "1800")))
-FORECAST_REFRESH_MINUTE_JST = max(0, min(59, int(os.getenv("FORECAST_REFRESH_MINUTE_JST", "5"))))
+API_RESPONSE_CACHE_SECONDS = env_int("API_RESPONSE_CACHE_SECONDS", 20, minimum=1)
+PURITY_OPTIONS_CACHE_SECONDS = env_int("PURITY_OPTIONS_CACHE_SECONDS", 3600, minimum=60)
+PUSH_PUBLIC_KEY_CACHE_SECONDS = env_int("PUSH_PUBLIC_KEY_CACHE_SECONDS", 3600, minimum=300)
+FORECAST_CACHE_SECONDS = env_int("FORECAST_CACHE_SECONDS", 1800, minimum=60)
+FORECAST_REFRESH_MINUTE_JST = env_int("FORECAST_REFRESH_MINUTE_JST", 5, minimum=0, maximum=59)
 # JST 00:00の日次スナップショット直後は既にjst_daily_metal_snapshot_and_forecastが
 # 予測を更新するため、ここには含めない。価格データ自体は1日1回しか変わらないため、
 # 日中はニュース動向を拾う目的でこの時刻にだけ強制リフレッシュする(以前は毎時実行して
@@ -73,11 +74,11 @@ FORECAST_REFRESH_EXTRA_HOURS_JST = [
     for hour in os.getenv("FORECAST_REFRESH_EXTRA_HOURS_JST", "6,12,18").split(",")
     if hour.strip()
 ]
-PUSH_NOTIFY_HOUR_JST = max(0, min(23, int(os.getenv("PUSH_NOTIFY_HOUR_JST", "11"))))
-PUSH_NOTIFY_MINUTE_JST = max(0, min(59, int(os.getenv("PUSH_NOTIFY_MINUTE_JST", "0"))))
+PUSH_NOTIFY_HOUR_JST = env_int("PUSH_NOTIFY_HOUR_JST", 11, minimum=0, maximum=23)
+PUSH_NOTIFY_MINUTE_JST = env_int("PUSH_NOTIFY_MINUTE_JST", 0, minimum=0, maximum=59)
 NOTIFY_TOP_DELTA_TYPE = "daily_top_delta"
 APP_PUBLIC_PATH = (os.getenv("APP_PUBLIC_PATH") or os.getenv("APP_ROOT_PATH") or "/").strip() or "/"
-PUSH_MAX_SUBSCRIPTIONS = max(100, int(os.getenv("PUSH_MAX_SUBSCRIPTIONS", "50000")))
+PUSH_MAX_SUBSCRIPTIONS = env_int("PUSH_MAX_SUBSCRIPTIONS", 50000, minimum=100)
 _PUSH_ALLOWED_ENDPOINT_SUFFIXES = tuple(
     part.strip().lower()
     for part in os.getenv("PUSH_ALLOWED_ENDPOINT_SUFFIXES", "").split(",")
@@ -118,7 +119,7 @@ STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT = read_env_bool("STARTUP_TEST_RUN_MIDNIGHT
 STARTUP_TEST_FORCE_SNAPSHOT_REFRESH = read_env_bool("STARTUP_TEST_FORCE_SNAPSHOT_REFRESH", True)
 WEB_SCHEDULER_ENABLED = read_env_bool("WEB_SCHEDULER_ENABLED", True)
 METAL_AUTO_REPAIR_ENABLED = read_env_bool("METAL_AUTO_REPAIR_ENABLED", True)
-METAL_AUTO_REPAIR_INTERVAL_MINUTES = max(5, int(os.getenv("METAL_AUTO_REPAIR_INTERVAL_MINUTES", "30")))
+METAL_AUTO_REPAIR_INTERVAL_MINUTES = env_int("METAL_AUTO_REPAIR_INTERVAL_MINUTES", 30, minimum=5)
 METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH = read_env_bool("METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH", False)
 
 history_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=64)
@@ -696,8 +697,8 @@ app = FastAPI(
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=load_allowed_hosts())
 app.add_middleware(
     RateLimitMiddleware,
-    requests_per_window=int(os.getenv("API_RATE_LIMIT_PER_MINUTE", "120")),
-    calculate_requests_per_window=int(os.getenv("API_CALCULATE_RATE_LIMIT_PER_MINUTE", "60")),
+    requests_per_window=env_int("API_RATE_LIMIT_PER_MINUTE", 120),
+    calculate_requests_per_window=env_int("API_CALCULATE_RATE_LIMIT_PER_MINUTE", 60),
     window_seconds=60,
     trust_cf_headers=read_env_bool("TRUST_CF_HEADERS", False),
     require_cf_connecting_ip=read_env_bool("REQUIRE_CF_CONNECTING_IP", False),

@@ -7,6 +7,7 @@ from urllib.parse import quote_plus
 from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
+from envutil import env_int
 from .models import Base
 
 logger = logging.getLogger(__name__)
@@ -45,10 +46,10 @@ def _build_database_url() -> str:
 
 DATABASE_URL = _build_database_url()
 
-DB_POOL_SIZE = max(1, int(os.getenv("DB_POOL_SIZE", "5")))
-DB_MAX_OVERFLOW = max(0, int(os.getenv("DB_MAX_OVERFLOW", "10")))
-DB_POOL_TIMEOUT = max(5, int(os.getenv("DB_POOL_TIMEOUT", "30")))
-DB_POOL_RECYCLE = max(60, int(os.getenv("DB_POOL_RECYCLE", "1800")))
+DB_POOL_SIZE = env_int("DB_POOL_SIZE", 5, minimum=1)
+DB_MAX_OVERFLOW = env_int("DB_MAX_OVERFLOW", 10, minimum=0)
+DB_POOL_TIMEOUT = env_int("DB_POOL_TIMEOUT", 30, minimum=5)
+DB_POOL_RECYCLE = env_int("DB_POOL_RECYCLE", 1800, minimum=60)
 
 engine: AsyncEngine = create_async_engine(
     DATABASE_URL,

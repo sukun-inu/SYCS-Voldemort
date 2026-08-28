@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
@@ -10,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import METAL_COMMANDS
+from envutil import env_int
 
 from .forecast_service import load_stored_weekly_forecast, refresh_weekly_forecast_cache
 from .models import MetalPriceDaily
@@ -23,7 +23,7 @@ _TRACKED_KEYS = {m.key for m in TRACKED_METALS}
 # (このジョブ自体が既定30分おきに実行される)、API失敗→欠損継続→再試行…の無限ループで
 # 枠を食いつぶしてしまう。ここにクールダウンを設け、一定時間は再取得を試みないようにする。
 MISSING_DATA_REPAIR_COOLDOWN = timedelta(
-    hours=max(1, int(os.getenv("METAL_REPAIR_RETRY_COOLDOWN_HOURS", "6")))
+    hours=env_int("METAL_REPAIR_RETRY_COOLDOWN_HOURS", 6, minimum=1)
 )
 _last_missing_data_repair_attempt: datetime | None = None
 

@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 import random
 import time
 from typing import Any
@@ -8,6 +7,7 @@ from typing import Any
 from groq import AsyncGroq, BadRequestError, RateLimitError
 
 from config import GROQ_API_KEY
+from envutil import env_float, env_int
 
 logger = logging.getLogger(__name__)
 
@@ -16,12 +16,13 @@ logger = logging.getLogger(__name__)
 # 呼び出し側同士に調整が無いと、あるサービスの呼び出しバーストが他サービスを巻き込んで
 # レート制限(429)を誘発しかねないため、用途ごと(bucket)に同時実行数と最小呼び出し間隔を
 # 制御する共通ラッパーをここに集約する。
-GROQ_MAX_CONCURRENT_REQUESTS = max(1, int(os.getenv("GROQ_MAX_CONCURRENT_REQUESTS", "3")))
-GROQ_MIN_REQUEST_INTERVAL_SECONDS = max(0.0, float(os.getenv("GROQ_MIN_REQUEST_INTERVAL_SECONDS", "0.25")))
-GROQ_MAX_RETRIES = max(0, int(os.getenv("GROQ_MAX_RETRIES", "2")))
-GROQ_RETRY_BASE_DELAY_SECONDS = max(0.5, float(os.getenv("GROQ_RETRY_BASE_DELAY_SECONDS", "2.0")))
-GROQ_RETRY_MAX_DELAY_SECONDS = max(
-    GROQ_RETRY_BASE_DELAY_SECONDS, float(os.getenv("GROQ_RETRY_MAX_DELAY_SECONDS", "20.0"))
+# 素の int()/float() は空文字や壊れた値でインポート時に例外を投げるため envutil を使う。
+GROQ_MAX_CONCURRENT_REQUESTS = env_int("GROQ_MAX_CONCURRENT_REQUESTS", 3, minimum=1)
+GROQ_MIN_REQUEST_INTERVAL_SECONDS = env_float("GROQ_MIN_REQUEST_INTERVAL_SECONDS", 0.25, minimum=0.0)
+GROQ_MAX_RETRIES = env_int("GROQ_MAX_RETRIES", 2, minimum=0)
+GROQ_RETRY_BASE_DELAY_SECONDS = env_float("GROQ_RETRY_BASE_DELAY_SECONDS", 2.0, minimum=0.5)
+GROQ_RETRY_MAX_DELAY_SECONDS = env_float(
+    "GROQ_RETRY_MAX_DELAY_SECONDS", 20.0, minimum=GROQ_RETRY_BASE_DELAY_SECONDS,
 )
 
 _clients: dict[str, AsyncGroq] = {}

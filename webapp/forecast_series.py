@@ -9,10 +9,11 @@
 from __future__ import annotations
 
 import math
-import os
 import statistics
 from datetime import date
 from typing import Any, Sequence
+
+from envutil import env_float
 
 # MAD(中央絶対偏差)から標準偏差へ換算する定数。正規分布を仮定した標準的な係数。
 MAD_TO_SIGMA = 1.4826
@@ -35,14 +36,10 @@ MAD_TO_SIGMA = 1.4826
 # という二段構えにする。(2) があるので、合成データで求めた (1) のカーブが多少ズレて
 # いても、運用しながら正しい幅へ収束する。実測被覆率は forecast_accuracy_log の
 # within_interval から供給される。
-FORECAST_INTERVAL_WIDTH_MULTIPLIER = max(
-    0.5, float(os.getenv("FORECAST_INTERVAL_WIDTH_MULTIPLIER", "1.35"))
-)
+FORECAST_INTERVAL_WIDTH_MULTIPLIER = env_float("FORECAST_INTERVAL_WIDTH_MULTIPLIER", 1.35, minimum=0.5)
 # 逓減の下限。合成データでは1.0まで下がってよいが、実データの裾は合成より重かったため、
 # 下げすぎて被覆不足になる方を避ける。
-FORECAST_INTERVAL_WIDTH_MULTIPLIER_MIN = max(
-    0.5, float(os.getenv("FORECAST_INTERVAL_WIDTH_MULTIPLIER_MIN", "1.10"))
-)
+FORECAST_INTERVAL_WIDTH_MULTIPLIER_MIN = env_float("FORECAST_INTERVAL_WIDTH_MULTIPLIER_MIN", 1.10, minimum=0.5)
 # 逓減の開始・終了サンプル数(重複あり7日リターンの本数)。
 INTERVAL_MULTIPLIER_SMALL_N = 43    # 本番実データで1.35を較正したときの本数
 INTERVAL_MULTIPLIER_LARGE_N = 150   # 合成データで補正不要になった本数

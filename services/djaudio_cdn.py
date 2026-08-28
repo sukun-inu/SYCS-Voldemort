@@ -7,6 +7,7 @@ DJAudio-DL CDN 配信ルーター。
 webapp_admin にも cdn_main にも依存せず、どちらからでも import できる。
 """
 
+import asyncio
 import io
 import json
 import logging
@@ -323,7 +324,10 @@ async def recording_clip(guild_id: str, token: str, start: float = 0.0, end: flo
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for stem in stems:
             member = str(stem.get("file", ""))
-            piece = _clip_stem(zip_path, member, begin, length)
+            # ffmpeg の subprocess.run はブロッキング（最大180秒）。ここで直接
+            # 呼ぶと FastAPI のイベントループごと止まり、同じワーカーが受けている
+            # 他のリクエスト（配信・ヘルスチェック含む）まで巻き添えで固まる。
+            piece = await asyncio.to_thread(_clip_stem, zip_path, member, begin, length)
             if piece is None:
                 continue
             archive.writestr(member, piece)
@@ -431,7 +435,10 @@ async def recording_stem_restored(guild_id: str, token: str, index: int,
 
     chain = ",".join(voice_analysis.restore_command(factor))
     try:
-        result = subprocess.run(
+        # 最大300秒ブロッキングしうる呼び出し。直接 await すると、その間
+        # このワーカーのイベントループごと他のリクエストが止まってしまう。
+        result = await asyncio.to_thread(
+            subprocess.run,
             [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error",
              "-i", "pipe:0", "-af", chain,
              "-c:a", "libmp3lame", "-q:a", "5", "-f", "mp3", "pipe:1"],

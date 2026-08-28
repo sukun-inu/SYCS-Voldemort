@@ -92,11 +92,24 @@ def register_file(
         "size_bytes": dest.stat().st_size,
         "expires_at": expires_at,
     }
-    with meta_path.open("w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False)
+    _write_meta_atomic(meta_path, meta)
 
     logger.info("キャッシュ登録: %s guild=%s (%s) TTL=%ss", token, guild_id, safe_title, effective_ttl)
     return token
+
+
+def _write_meta_atomic(meta_path: Path, meta: dict) -> None:
+    """メタJSONを一時ファイル経由で書く。
+
+    直接 open("w") で上書きすると、CDN（別プロセス）側の get_meta() や
+    定期掃除の glob() が書き込み途中のファイルを読んで JSONDecodeError に
+    なりうる（本番の CDN と Bot は別プロセスで、同じディレクトリを見ている）。
+    settings_store / recording_service と同じ tmp→replace の作法に揃える。
+    """
+    tmp = meta_path.with_suffix(meta_path.suffix + ".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False)
+    tmp.replace(meta_path)
 
 
 def update_discord_message(token: str, channel_id: int, message_id: int) -> None:
@@ -107,8 +120,7 @@ def update_discord_message(token: str, channel_id: int, message_id: int) -> None
             meta = json.load(f)
         meta["discord_channel_id"] = str(channel_id)
         meta["discord_message_id"] = str(message_id)
-        with meta_path.open("w", encoding="utf-8") as f:
-            json.dump(meta, f, ensure_ascii=False)
+        _write_meta_atomic(meta_path, meta)
     except (json.JSONDecodeError, OSError) as e:
         logger.warning("Discord メッセージ情報の更新失敗 %s: %s", token, e)
 
@@ -123,7 +135,12 @@ def get_meta(token: str) -> dict | None:
     try:
         with meta_path.open("r", encoding="utf-8") as f:
             meta = json.load(f)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        # 書き込み途中を読んだ、または壊れて残った場合にここへ来る。
+        # 呼び出し元にはこれまでどおり「期限切れ」として返すが（利用者に
+        # 見せる文面は変えたくない）、本当に期限切れたのか壊れていたのかが
+        # 追えなくなるので理由は残す。
+        logger.warning("キャッシュメタデータが壊れています %s: %s", meta_path.name, e)
         return None
 
     if payload_path(token, meta) is None:
@@ -180,3 +197,29 @@ async def _cleanup_expired(bot=None) -> None:
             logger.warning("掃除中にエラー %s: %s", meta_path, e)
     if deleted:
         logger.info("DJAudio 期限切れキャッシュ %s 件を削除", deleted)
+    _cleanup_orphaned_tmp_files(now)
+
+
+# _write_meta_atomic() が tmp.replace() の前に落ちると *.tmp が残る。
+# *.json の glob には引っかからないので、ここで掃除しないと永久に残る。
+# 書き込み自体は json.dump 一回ぶんで一瞬なので、進行中の書き込みを誤って
+# 消さないよう、十分に古いものだけを「落ちて残った」とみなす。
+_TMP_ORPHAN_MAX_AGE_SEC = 300
+
+
+def _cleanup_orphaned_tmp_files(now: float) -> None:
+    removed = 0
+    for tmp_path in DJAUDIO_CACHE_DIR.glob("*.json.tmp"):
+        try:
+            age = now - tmp_path.stat().st_mtime
+        except OSError:
+            continue
+        if age <= _TMP_ORPHAN_MAX_AGE_SEC:
+            continue
+        try:
+            tmp_path.unlink(missing_ok=True)
+            removed += 1
+        except OSError as e:
+            logger.warning("一時ファイルの削除に失敗 %s: %s", tmp_path, e)
+    if removed:
+        logger.info("DJAudio 書き込み中に残った一時ファイル %s 件を削除", removed)

@@ -3,6 +3,7 @@ import os
 
 import uvicorn
 
+from envutil import env_int
 from webapp_admin.core.config import resolve_session_secret
 
 logging.basicConfig(
@@ -12,8 +13,10 @@ logging.basicConfig(
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("ADMIN_PORT", 5001))
-    workers = max(1, int(os.environ.get("ADMIN_WORKERS", "1")))
+    # int(os.environ.get(...)) は値が空文字や数値以外だと起動時に ValueError で
+    # 落ちる。envutil 経由にして安全側（既定値へフォールバック）に倒す。
+    port = env_int("ADMIN_PORT", 5001, minimum=1, maximum=65535)
+    workers = env_int("ADMIN_WORKERS", 1, minimum=1)
 
     if workers > 1:
         # ホストメトリクス(TPS)・監視スレッド・レート制限はいずれもプロセスローカルで、

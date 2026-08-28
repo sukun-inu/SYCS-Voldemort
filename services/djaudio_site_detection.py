@@ -1,7 +1,10 @@
 """yt-dlp の info.json からソース媒体を判定するユーティリティ。"""
 
+import logging
 import re
 from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED_SITES: frozenset[str] = frozenset({
     "youtube",
@@ -34,7 +37,10 @@ def is_djaudio_allowed_url(url: str) -> bool:
     """
     try:
         hostname = (urlparse(url).hostname or "").lower().removeprefix("www.")
-    except Exception:
+    except Exception as e:
+        # 「未対応サービス」と「URLとして壊れている」を呼び出し元は区別できず
+        # 同じ拒否メッセージになるが、原因の切り分けのために理由は残す。
+        logger.debug("[DJAudio] URL を解釈できませんでした %r: %s", url, e)
         return False
     if hostname in _DJAUDIO_ALLOWED_HOSTS:
         return True

@@ -11,7 +11,7 @@ from discord import app_commands
 from discord.ext.commands import Bot
 
 from commands.guards import ensure_admin as _ensure_admin
-from commands.interaction_utils import send_ephemeral
+from commands.interaction_utils import EMBED_FIELD_BUDGET, cap_list_for_message, send_ephemeral
 from services import recording_service as recording
 from services.settings_store import (
     get_recording_settings,
@@ -120,11 +120,17 @@ def register_recording_commands(bot: Bot) -> None:
                 inline=True,
             )
         if status["speakers"]:
+            speaker_lines = [
+                f"・{s['name']}（発話 {_duration(s['voiced_seconds'])}）"
+                for s in status["speakers"]
+            ]
+            # 大人数のVCでは全員分を出すとembedのfield上限を超えうる。表示名は
+            # 最大32文字あるため件数だけでは守れない。件数だけ隠れて減って
+            # 見えないよう、省いた分は明示する。
             embed.add_field(
                 name="録音中の参加者",
-                value="\n".join(
-                    f"・{s['name']}（発話 {_duration(s['voiced_seconds'])}）"
-                    for s in status["speakers"][:20]
+                value=cap_list_for_message(
+                    speaker_lines, budget=EMBED_FIELD_BUDGET, limit=20, omitted_unit="人",
                 ),
                 inline=False,
             )
@@ -243,11 +249,14 @@ def register_recording_commands(bot: Bot) -> None:
             inline=True,
         )
         excluded = settings.get("excluded_user_ids") or []
-        embed.add_field(
-            name="録音しない人",
-            value=("、".join(f"<@{u}>" for u in excluded[:20]) if excluded else "なし"),
-            inline=False,
+        excluded_text = (
+            cap_list_for_message(
+                [f"<@{u}>" for u in excluded],
+                budget=EMBED_FIELD_BUDGET, limit=20, omitted_unit="人", joiner="、",
+            )
+            if excluded else "なし"
         )
+        embed.add_field(name="録音しない人", value=excluded_text, inline=False)
         if not settings["enabled"] and settings["auto_start"]:
             embed.set_footer(text="録音機能が無効なので、自動録音はオンでも動かぬ。")
         await interaction.response.send_message(embed=embed, ephemeral=True)

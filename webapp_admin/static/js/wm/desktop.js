@@ -4,6 +4,7 @@
 
 import { el, icon, clear } from "../lib/dom.js";
 import { DUR, EASE_IN, play, stopAnimations } from "../lib/motion.js";
+import { toast } from "../lib/toast.js";
 import { AppWindow } from "./window.js";
 import { mountPanel } from "../forms/panel.js";
 
@@ -43,7 +44,14 @@ export class Desktop {
 
   async open(appId, rect = null) {
     const app = this.apps.get(appId);
-    if (!app) return null;
+    if (!app) {
+      // 存在しない・権限が無いアプリID（開発者専用パネルへの古いリンクを
+      // 非開発者が踏んだ、リネーム済みパネルへの古いブックマーク等）。
+      // 何も言わずに戻ると、デスクトップに何も開かれないまま
+      // スタートメニューも出ない「真っ白な画面」になり、壊れて見える。
+      toast(`「${appId}」は開けません（存在しないか、権限がありません）。`, "danger");
+      return null;
+    }
 
     const existing = this.windows.get(appId);
     if (existing) {

@@ -12,12 +12,13 @@ webadmin とは独立したプロセスで動き、MP3 ファイルの配信の�
 """
 
 import logging
-import os
 
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from envutil import env_int
 
 logging.basicConfig(
     level=logging.INFO,
@@ -98,7 +99,9 @@ app = create_cdn_app()
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("CDN_PORT", "5002"))
-    workers = max(1, int(os.environ.get("CDN_WORKERS", "2")))
+    # int(os.environ.get(...)) は値が空文字や数値以外だと起動時に ValueError で
+    # 落ちる。envutil 経由にして安全側（既定値へフォールバック）に倒す。
+    port = env_int("CDN_PORT", 5002, minimum=1, maximum=65535)
+    workers = env_int("CDN_WORKERS", 2, minimum=1)
     logger.info("CDN サーバーを起動します: port=%d workers=%d", port, workers)
     uvicorn.run("cdn_main:app", host="0.0.0.0", port=port, reload=False, workers=workers)
