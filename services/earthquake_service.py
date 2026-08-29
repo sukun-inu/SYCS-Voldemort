@@ -8,6 +8,7 @@ import re
 import time
 from collections import deque
 from datetime import datetime
+from pathlib import Path
 
 import aiohttp
 import discord
@@ -44,7 +45,7 @@ _SEEN_ID_LIMIT = 500  # 重複排除で覚えておくイベントIDの数
 # 使える（政府標準利用規約）。白地図なので文字も色も入っておらず、こちらで
 # 暗色へ塗り替えられる。1枚 13KB と軽い（標準地図は 117KB）。
 _TILE_URL = "https://cyberjapandata.gsi.go.jp/xyz/blank/{z}/{x}/{y}.png"
-_TILE_ATTRIBUTION = "地理院タイル（国土地理院）"
+_TILE_ATTRIBUTION = "地理院タイル・地球地図日本（国土地理院）を加工して作成"
 _TILE_UA  = "VoldermortBot/1.0 (earthquake alert; contact: github)"
 _TILE_SZ  = 256
 
@@ -358,6 +359,55 @@ def _latlon_to_tile_float(lat: float, lon: float, zoom: int) -> tuple[float, flo
 
 
 
+# 都道府県の輪郭。tools/build_pref_polygons.py が作る。
+# 出典: 地球地図日本 第2.1版 行政界（国土地理院）を加工して作成。
+_SHAPE_PATH = Path(__file__).resolve().parent.parent / "assets" / "jp_prefectures.json"
+_SHAPE_ATTRIBUTION = "地球地図日本（国土地理院）を加工"
+_shape_cache: dict[str, list] | None = None
+
+
+def _load_prefecture_shapes() -> dict[str, list]:
+    """県名 → 輪のリスト（各輪は numpy の (N, 2) 配列、経度・緯度の順）。
+
+    読むのは1回だけ。無ければ空を返して、塗りだけを飛ばす（地図と札は出す）。
+    速報の画像が「県が塗られていない」で済むのと、出ないのとでは重みが違う。
+    """
+    global _shape_cache
+    if _shape_cache is not None:
+        return _shape_cache
+    try:
+        payload = json.loads(_SHAPE_PATH.read_text(encoding="utf-8"))
+        unit = float(payload.get("unit") or 1000)
+        shapes: dict[str, list] = {}
+        for name, rings in payload.get("prefectures", {}).items():
+            built = []
+            for ring in rings:
+                # [x0, y0, dx1, dy1, ...] の差分列を足し戻す。
+                flat = np.asarray(ring, dtype=np.float64).reshape(-1, 2)
+                built.append(np.cumsum(flat, axis=0) / unit)
+            if built:
+                shapes[name] = built
+        _shape_cache = shapes
+    except (OSError, ValueError, KeyError) as e:
+        logger.warning("[earthquake] 県の輪郭を読めませんでした（塗りなしで描きます）: %s", e)
+        _shape_cache = {}
+    return _shape_cache
+
+
+def _project(points: "np.ndarray", zoom: int) -> "np.ndarray":
+    """(N, 2) の経度・緯度を、タイル座標の画素へ。_latlon_to_tile_float と同じ式。
+
+    輪郭は多いときで数万点になる。1点ずつ Python で回すと、緊急地震速報を
+    配信しようとしているまさにその瞬間に数百ミリ秒使うことになるので、
+    まとめて計算する。
+    """
+    n = 2 ** zoom
+    lon, lat = points[:, 0], points[:, 1]
+    tx = (lon + 180.0) / 360.0 * n
+    ty = (1 - np.arcsinh(np.tan(np.radians(lat))) / np.pi) / 2 * n
+    return np.stack([tx, ty], axis=1) * _TILE_SZ
+
+
 def _resolve_point_coord(addr: str, pref: str) -> tuple[float, float] | None:
     """pref / addr → (lat, lon)。都道府県中心座標を使用。"""
     return _PREF_CENTERS.get(pref) or _PREF_CENTERS.get(addr)
@@ -399,6 +449,49 @@ def _ink_for(rgb: tuple[int, int, int]) -> tuple[int, int, int, int]:
     """その色の上に置く文字の色。明るい震度では白が沈む。"""
     luma = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
     return (16, 20, 26, 255) if luma > 150 else (255, 255, 255, 255)
+
+
+def _fill_alpha(scale: int) -> int:
+    """県を塗る濃さ。強い震度ほど濃く。
+
+    濃くしすぎると札の色と喧嘩して、どちらが「点の震度」でどちらが「面の震度」
+    なのか分からなくなる。面は背景、札が主役という関係を保てる範囲に収める。
+    """
+    return 84 + int(min(scale, 70) / 70 * 96)
+
+
+def _fill_prefectures(canvas: "Image.Image", plot: list[tuple[float, float, int, str]],
+                      zoom: int, origin_x: float, origin_y: float, ss: int) -> None:
+    """揺れた県を、その震度の色で塗る。
+
+    札（点）だけだと「その県のどこか1点が揺れた」ようにしか見えず、揺れの
+    広がりが伝わらない。面で塗ると、震央からどちらへ強く伝わったのかが
+    一目で分かる。
+
+    輪郭は市区町村の単位のまま持っているが、同じ県を同じ色で塗るので県の
+    内側に境界線は出ない。県ごとに図形を融合する計算をせずに済ませている。
+    """
+    shapes = _load_prefecture_shapes()
+    if not shapes:
+        return
+
+    layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    width, height = canvas.size
+    # 弱い順に塗る。県境が接しているところは、あとから塗る強い方を残す。
+    for _lat, _lon, scale, name in sorted(plot, key=lambda point: point[2]):
+        rings = shapes.get(name)
+        if not rings:
+            continue
+        paint = (*_MAP_FILL_RGB.get(scale, (120, 130, 150)), _fill_alpha(scale))
+        for ring in rings:
+            px = (_project(ring, zoom) - (origin_x, origin_y)) * ss
+            # 画面の外に出ている輪は描かない（沖縄まで含む地震では大半が外）。
+            if (px[:, 0].max() < 0 or px[:, 0].min() > width
+                    or px[:, 1].max() < 0 or px[:, 1].min() > height):
+                continue
+            draw.polygon([(x, y) for x, y in px], fill=paint)
+    canvas.alpha_composite(layer)
 
 
 def _badge_size(scale: int) -> int:
@@ -680,6 +773,9 @@ def _compose_intensity_map(
                  rects: list[tuple[float, float, float, float]]) -> bool:
         return any(not (box[2] <= r[0] or box[0] >= r[2]
                         or box[3] <= r[1] or box[1] >= r[3]) for r in rects)
+
+    # 先に県の面を塗る。札はその上。
+    _fill_prefectures(canvas, plot, zoom, origin_x, origin_y, ss)
 
     # 観測点。全部の札に震度の数字を入れる。
     #
