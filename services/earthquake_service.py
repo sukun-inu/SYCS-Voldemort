@@ -800,11 +800,21 @@ def _compose_intensity_map(
     # 置いても輪は外にはみ出して見える。速報として消してよいのは震源印の
     # 中心であって、震度の数字ではない。
     ex, ey = to_px(lat, lon)
-    seat_r = 24 * ss
-    seat = Image.new("RGBA", (seat_r * 2, seat_r * 2), (0, 0, 0, 0))
-    ImageDraw.Draw(seat).ellipse([0, 0, seat_r * 2 - 1, seat_r * 2 - 1], fill=(8, 11, 17, 130))
-    canvas.alpha_composite(seat.filter(ImageFilter.GaussianBlur(seat_r / 3)),
-                           (int(ex - seat_r), int(ey - seat_r)))
+    # 座は中心が濃く、外へなめらかに抜ける円。
+    #
+    # 以前は「円を描いてガウスぼかし」で作っていたが、ぼかす版が円の外接矩形
+    # ちょうどの大きさしかなく、にじみが版の縁で切り落とされていた。結果として
+    # 丸い影ではなく、角の取れた四角い影が震源印の後ろに出ていた。
+    # 中心からの距離で直接アルファを作れば、切れる縁がそもそも無い。
+    seat_r = 30 * ss
+    yy, xx = np.mgrid[0:seat_r * 2, 0:seat_r * 2]
+    dist = np.hypot(xx - seat_r + 0.5, yy - seat_r + 0.5) / seat_r
+    # 累乗の前に 0〜1 へ丸める。外側は 1 - dist が負になり、負数の小数乗は
+    # NaN になる（uint8 へ落とすと値が化ける。実際、影が丸ごと消えていた）。
+    alpha = 120 * np.clip(1.0 - dist, 0.0, 1.0) ** 1.1
+    seat = Image.new("RGBA", (seat_r * 2, seat_r * 2), (8, 11, 17, 0))
+    seat.putalpha(Image.fromarray(alpha.astype(np.uint8), "L"))
+    canvas.alpha_composite(seat, (int(ex - seat_r), int(ey - seat_r)))
     marker = _epicentre_marker(40 * ss)
     canvas.alpha_composite(marker, (int(ex - marker.width / 2), int(ey - marker.height / 2)))
 

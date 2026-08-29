@@ -344,6 +344,27 @@ class IntensityMapTests(unittest.TestCase):
                    and abs(b - rgb[2]) <= 26)
         self.assertLess(hits, 60, "地図の中に最大震度の札が戻っている")
 
+    def test_the_epicentre_shadow_fades_without_a_hard_edge(self):
+        """震源印の後ろの影が、四角く切れずに滑らかに消える。
+
+        影は「円を描いてガウスぼかし」で作っていたが、ぼかす版が円の外接矩形
+        ちょうどの大きさしかなく、にじみが版の縁で切り落とされていた。丸い影の
+        つもりが、角の取れた四角い影が震源印の後ろに出ていた。
+
+        斜め45度に外へ向かって明るさを測り、隣り合う標本の段差を見る。
+        矩形で切れていると、縁のところで急に地色へ戻る。
+        暗い海の上では影そのものが見えない（地色と影の色がほぼ同じ）ので、
+        影が本来効くべき「塗られた県の上」で測る。
+        """
+        plot = [(36.341, 140.447, 40, "茨城県")]
+        image, to_px = self._render(plot, 36.55, 140.30, zoom=8)
+        ex, ey = to_px(36.55, 140.30)
+        walk = [sum(image.getpixel((int(ex + d), int(ey + d))))
+                for d in (19, 21, 23, 25, 27)]
+        steps = [abs(b - a) for a, b in zip(walk, walk[1:])]
+        self.assertLess(max(steps), 15,
+                        f"影が縁で切れている（斜めの明るさ {walk}）")
+
     def test_the_map_credits_the_outline_source(self):
         """輪郭は国土地理院のデータ。出典と、加工した旨を画像に載せる（PDL1.0）。"""
         self.assertIn("地球地図日本", eq._TILE_ATTRIBUTION)
