@@ -518,6 +518,23 @@ async def recording_clip(guild_id: str, token: str, start: float = 0.0, end: flo
     )
 
 
+def wants_json(request) -> bool:
+    """エラーを JSON で返すべき相手か。
+
+    /dlaudio/files/ の下には2種類が同居している。ブラウザが直接開く配信リンクと、
+    ミキサーが fetch する索引・解析・切り出し。パスの接頭辞では区別できないので
+    Accept で見る。ブラウザの遷移は text/html を要求し、fetch する側は
+    application/json を指定する。
+
+    ここを1箇所に置いて、管理画面（webapp_admin/app.py）と単体の配信プロセス
+    （cdn_main.py）の両方から使う。別々に書いていたころは、同じ URL でも
+    どちらのプロセスが応答したかで JSON と HTML が入れ替わり、ミキサーは
+    理由を読めずに「Unexpected token '<'」としか言えなかった。
+    """
+    accept = request.headers.get("accept", "")
+    return "application/json" in accept and "text/html" not in accept
+
+
 # 声の解析。加工されているかを調べ、単純な変換なら打ち消して聞ける。
 # 「誰か」は出さない（出せない）。詳しくは services/voice_analysis.py を見ること。
 _RESTORE_MIN_FACTOR = 0.5
@@ -587,27 +604,47 @@ def _stem_of(guild_id: str, token: str, index: int) -> tuple[Path, dict, dict]:
 
 
 @dlaudio_router.get("/files/{guild_id}/{token}/analysis/{index}")
-async def recording_analysis(guild_id: str, token: str, index: int):
+async def recording_analysis(guild_id: str, token: str, index: int,
+                             start: float | None = None,
+                             end: float | None = None):
     """トラック1本の声を調べる。
 
-    その場で計算する（書き出し時にやると、全員ぶんで待たされる）。長さに
-    依らず一定のコストになるよう、録音の各所から少しずつ抜き出して見る。
+    その場で計算する（書き出し時にやると、全員ぶんで待たされる）。
+
+    start / end はミキサーで選んだ区間。渡されたらそこだけを見る。
+    渡されなければ録音の各所から少しずつ抜き出すが、長い録音では
+    まず当たらない（4時間22分の実録音5本で試すと、5本とも判定不能に
+    なった）。画面は区間を選ばせてから呼ぶ。
     """
     from services import voice_analysis
 
     zip_path, manifest, stem = _stem_of(guild_id, token, index)
     duration = float(manifest.get("duration_seconds") or 0) or 60.0
 
+    # 区間を渡されたのに使えない、という場合は黙って全体へ広げない。
+    # 広げると「選んだのに関係ない所の結果が返る」ことになり、しかも
+    # 見た目には成功したように見える。理由を返して選び直してもらう。
+    if (start is None) != (end is None):
+        raise HTTPException(
+            status_code=400, detail="区間は開始と終了の両方を指定してください。")
+    if start is not None and voice_analysis.selection_bounds(duration, start, end) is None:
+        if end <= start:
+            detail = "選択範囲の終わりは始まりより後にしてください。"
+        else:
+            detail = (f"選択範囲が短すぎます（{voice_analysis.SELECTION_MIN_SECONDS} 秒以上）。"
+                      "その人が喋っている所を、もう少し広めに選んでください。")
+        raise HTTPException(status_code=400, detail=detail)
+
     def _run() -> dict:
-        # 解析は録音の8箇所から1秒ずつ抜き出す。以前はトラック全体をメモリへ
-        # 読んでから、その bytes を8回 ffmpeg の標準入力へ流していた。
-        # 6時間のトラックなら 86MB を抱えたうえ、毎回先頭から読み捨てさせて
-        # いたことになる。一時ファイルへ出せば ffmpeg が直接その位置へ飛べる。
+        # 解析は録音の一部だけを見る。以前はトラック全体をメモリへ読んでから、
+        # その bytes を ffmpeg の標準入力へ何度も流していた。6時間のトラック
+        # なら 86MB を抱えたうえ、毎回先頭から読み捨てさせていたことになる。
+        # 一時ファイルへ出せば ffmpeg が直接その位置へ飛べる。
         with tempfile.TemporaryDirectory(prefix="analysis-") as work:
             source = Path(work) / "stem.mp3"
             if not _extract_member(zip_path, str(stem.get("file", "")), source):
                 raise FileNotFoundError(stem.get("file"))
-            return voice_analysis.analyse(source, duration)
+            return voice_analysis.analyse(source, duration, start=start, end=end)
 
     try:
         # analyse() は ffmpeg を8回起動したうえで自己相関と LPC を回す。
@@ -630,11 +667,17 @@ async def recording_analysis(guild_id: str, token: str, index: int):
 
 @dlaudio_router.get("/files/{guild_id}/{token}/stem/{index}/restored")
 async def recording_stem_restored(guild_id: str, token: str, index: int,
-                                  factor: float = 1.0):
+                                  factor: float = 1.0,
+                                  start: float | None = None,
+                                  end: float | None = None):
     """変換を打ち消したトラックを返す。
 
     どの倍率を打ち消すかは呼び出し側が決める。本人の地声が分からない以上、
     正しい倍率を機械が決めることはできない（解析が返すのは出発点の目安）。
+
+    start / end を渡すとその区間だけを返す。解析を区間で行うようにしたので、
+    聞いて確かめるのも同じ区間で足りる。4時間の録音を丸ごと変換してから
+    10秒を聞く、という待ち方をしなくて済む。
     """
     from services import voice_analysis
 
@@ -643,8 +686,15 @@ async def recording_stem_restored(guild_id: str, token: str, index: int,
             status_code=400,
             detail=f"倍率は {_RESTORE_MIN_FACTOR}〜{_RESTORE_MAX_FACTOR} で指定してください。")
 
-    zip_path, _, stem = _stem_of(guild_id, token, index)
+    zip_path, manifest, stem = _stem_of(guild_id, token, index)
     chain = ",".join(voice_analysis.restore_command(factor))
+
+    # 区間の切り出しは解析と同じ規則で行う（範囲として成立しないものは
+    # 全体扱い）。judge する場所を2つに分けると、聞いている区間と調べた
+    # 区間がずれる。
+    duration = float(manifest.get("duration_seconds") or 0) or 0.0
+    bounds = voice_analysis.selection_bounds(duration, start, end)
+    trim = ["-ss", f"{bounds[0]:.3f}", "-t", f"{bounds[1] - bounds[0]:.3f}"] if bounds else []
 
     # 入力も出力もファイルにする。以前は元のトラックをメモリへ読み（6時間で
     # 86MB）、変換後も丸ごとメモリに受けていたので、1リクエストで倍を抱えて
@@ -658,7 +708,7 @@ async def recording_stem_restored(guild_id: str, token: str, index: int,
             return None
         return subprocess.run(
             [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-y",
-             "-i", str(source), "-af", chain,
+             *trim, "-i", str(source), "-af", chain,
              "-c:a", "libmp3lame", "-q:a", "5", str(out_path)],
             capture_output=True, timeout=300,
         )

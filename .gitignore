@@ -37,3 +37,6 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# 検証用の実音声（実際の会話。個人が識別されうるので絶対に公開しない）
+sample-audio/
