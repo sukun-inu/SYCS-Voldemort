@@ -174,30 +174,64 @@ _FONT_SEARCH_PATHS = [
     "C:/Windows/Fonts/msgothic.ttc",
     "C:/Windows/Fonts/YuGothR.ttc",
 ]
-_FONT_PATH: str | None = None
-_FONT_CACHE: dict[int, "ImageFont.ImageFont"] = {}
+
+# 太字。震度の数字のように、大きく置いて遠くから読ませる字で使う。
+# 見つからなければ通常の字面へ落とす（縁を太らせる擬似ボールドは、
+# 大きく引き伸ばすと輪郭が濁るので使わない）。
+_BOLD_FONT_SEARCH_PATHS = [
+    # Debian/Ubuntu: fonts-noto-cjk パッケージ（Regular と Bold が入る）
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJKjp-Bold.otf",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc",
+    # Windows
+    "C:/Windows/Fonts/meiryob.ttc",
+    "C:/Windows/Fonts/YuGothB.ttc",
+]
+_FONT_PATHS: dict[bool, str | None] = {}   # bold → 見つかった実体（1つも無ければ None）
+_FONT_CACHE: dict[tuple[int, bool], "ImageFont.ImageFont"] = {}
 
 
-def _get_font(size: int) -> "ImageFont.ImageFont":
-    global _FONT_PATH
-    if size in _FONT_CACHE:
-        return _FONT_CACHE[size]
+def _font_path(bold: bool) -> str | None:
+    """使うフォントの実体。1つも入っていなければ None（PIL の既定へ落とす）。"""
+    if bold not in _FONT_PATHS:
+        candidates = _BOLD_FONT_SEARCH_PATHS if bold else _FONT_SEARCH_PATHS
+        found = next((p for p in candidates if os.path.exists(p)), None)
+        if bold and found is None:
+            found = _font_path(False)
+            if found is not None:
+                # 太字が無いこと自体は困らないが、理由を残さないと
+                # 「なぜ震度の数字が細いのか」を後から追えない。
+                logger.info("[earthquake] 太字のフォントが無いので通常の字面で描きます")
+        _FONT_PATHS[bold] = found
+    return _FONT_PATHS[bold]
 
-    if _FONT_PATH is None:
-        for p in _FONT_SEARCH_PATHS:
-            if os.path.exists(p):
-                _FONT_PATH = p
-                break
 
+def _has_cjk_font() -> bool:
+    """和字を出せるか。
+
+    _FONT_SEARCH_PATHS はどれも CJK フォントなので、1つでも見つかれば
+    「最大震度」も「弱」も出せる。1つも無いと PIL の既定フォント（欧文のみ）へ
+    落ち、和字は □ になる。そのときは和字を避けた字面に切り替える。
+    """
+    return _font_path(False) is not None
+
+
+def _get_font(size: int, bold: bool = False) -> "ImageFont.ImageFont":
+    key = (size, bold)
+    if key in _FONT_CACHE:
+        return _FONT_CACHE[key]
+
+    path = _font_path(bold)
     font = None
-    if _FONT_PATH:
+    if path:
         try:
-            font = ImageFont.truetype(_FONT_PATH, size)
+            font = ImageFont.truetype(path, size)
         except Exception as e:
             # サイズごとに _FONT_CACHE へ結果を残すため、ここは初回の一度しか
             # 通らない。既定フォントへ切り替わったこと自体は害が無いが、
             # 理由を残さないと「なぜ見た目のフォントが違うか」が追えない。
-            logger.warning("[earthquake] フォント %s の読み込みに失敗: %s", _FONT_PATH, e)
+            logger.warning("[earthquake] フォント %s の読み込みに失敗: %s", path, e)
 
     if font is None:
         try:
@@ -205,7 +239,7 @@ def _get_font(size: int) -> "ImageFont.ImageFont":
         except TypeError:
             font = ImageFont.load_default()
 
-    _FONT_CACHE[size] = font
+    _FONT_CACHE[key] = font
     return font
 
 
@@ -288,59 +322,185 @@ def _format_time(time_str: str) -> tuple[str, datetime | None]:
 
 # ── バッジ画像生成 ─────────────────────────────────────────
 
-def _generate_badge(scale: int) -> io.BytesIO | None:
-    """震度バッジを生成して BytesIO で返す。
+def _badge_glyphs(scale: int) -> tuple[str, str, bool] | None:
+    """札に置く「数字」「添え字」と、添え字をベースラインに載せるか。
+    知らない震度には None。
 
-    以前は等倍で角丸と文字を描いていたため、角が階段状に出て安っぽかった
-    （PIL はアンチエイリアスしない）。倍で描いてから縮めると、縮小の平均化が
-    そのままアンチエイリアスになる。
+    _SCALE_BADGE_LABEL の '5-' '5+' を2つに分ける。数字だけをどの震度でも同じ
+    大きさで置きたいので、添え字は別の字として扱う。
+
+    和字（弱・強）はベースラインに載せると数字と底が揃う。和字が出せない環境
+    では '-' '+' のまま添えるが（□ になるより読める）、こちらは字の背が低く、
+    ベースラインに載せると数字の足元へ落ちて見える。数字の高さの中央へ置く。
+    """
+    label = _SCALE_BADGE_LABEL.get(scale)
+    if label is None:
+        return None
+    numeral, mark = label[0], label[1:]
+    if mark and _has_cjk_font():
+        return numeral, ("弱" if mark == "-" else "強"), True
+    return numeral, mark, False
+
+
+# 札の角。iOS のアイコンの輪郭は単なる角丸ではない。直線と円弧をつなぐと
+# 継ぎ目で曲がり方が飛ぶので、角が大きいほど「丸を貼った四角」に見える。
+# 辺はまっすぐ保ったまま、角だけを円弧より角ばった曲線（超楕円）でつないで、
+# 直線から曲線へなだらかに入るようにする。
+#
+# 辺ごと超楕円にする手もあるが（|x|^n + |y|^n = 1）、それだと辺が外へ
+# 膨らんで、四角ではなく座布団に見える。角の外だけを超楕円で測る。
+_SQUIRCLE_R = 0.45   # 角の大きさ。辺の半分に対する割合（＝一辺の 22.5%、iOS と同じ）
+_SQUIRCLE_P = 4.2    # 角の曲がり方。2 でただの円弧、上げるほど直線からなだらかに入る
+
+
+def _squircle(w: int, h: int, inset: float = 0.0) -> "np.ndarray":
+    """札の抜き型。0.0〜1.0 の濃度で返す（正方形を前提）。
+
+    inset は内側へ縮める画素数（縁の光は、縮めた型との差で作る）。境目の
+    半透明を式から直に出すので、PIL の図形と違ってぎざぎざが出ない。
+    """
+    xs = np.abs(np.linspace(-1.0, 1.0, w, dtype=np.float32))[None, :]
+    ys = np.abs(np.linspace(-1.0, 1.0, h, dtype=np.float32))[:, None]
+    qx = np.clip(xs - (1.0 - _SQUIRCLE_R), 0.0, None)
+    qy = np.clip(ys - (1.0 - _SQUIRCLE_R), 0.0, None)
+    # 辺の上ではどちらかが 0 になるので、そこはまっすぐな縁が残る。
+    dist = (qx ** _SQUIRCLE_P + qy ** _SQUIRCLE_P) ** (1.0 / _SQUIRCLE_P) - _SQUIRCLE_R
+    px = 2.0 / w                      # 画素1つ分（正規化した座標での長さ）
+    return np.clip(-dist / px - inset + 0.5, 0.0, 1.0)
+
+
+def _badge_ground(w: int, h: int, rgb: tuple[int, int, int]) -> "Image.Image":
+    """札の地。上から下へ、ごくわずかに沈ませる。
+
+    真っ平らな一色は、色紙を切って貼ったように見える。黒を重ねて暗くすると
+    色が濁るので、震度の色そのものを明暗させる。
+    """
+    ramp = (1.09 - 0.23 * np.linspace(0.0, 1.0, h, dtype=np.float32))[:, None, None]
+    column = np.asarray(rgb, dtype=np.float32) * ramp          # (h, 1, 3)
+    field = np.clip(np.broadcast_to(column, (h, w, 3)), 0, 255).astype(np.uint8)
+    return Image.fromarray(field, "RGB").convert("RGBA")
+
+
+def _badge_rim(w: int, h: int, mask: "np.ndarray") -> "Image.Image":
+    """縁の光と影。上から光が当たっているように、上の縁を明るく、下を暗く。
+
+    これが無いと、色を塗った紙を切り抜いただけに見える。アイコンに厚みを
+    感じさせているのは、たいていこの1画素の縁。
+    """
+    # 4 は描画時（倍率をかけた側）の画素数。縮めたあとで約1画素の線になる。
+    rim = np.clip(mask - _squircle(w, h, inset=4.0), 0.0, 1.0)
+    ys = np.linspace(0.0, 1.0, h, dtype=np.float32)[:, None]
+    light = rim * np.clip(1.0 - ys / 0.55, 0.0, 1.0) ** 1.6 * 112.0
+    shade = rim * np.clip((ys - 0.45) / 0.55, 0.0, 1.0) ** 1.6 * 80.0
+
+    layer = np.zeros((h, w, 4), dtype=np.float32)
+    layer[..., 3] = light + shade
+    # 上半分は白、下半分は黒。境目のあたりはどちらも 0 なので色は効かない。
+    layer[..., :3] = np.where(light[..., None] >= shade[..., None], 255.0, 0.0)
+    return Image.fromarray(layer.astype(np.uint8), "RGBA")
+
+
+def _draw_tracked(draw: "ImageDraw.ImageDraw", centre: tuple[float, float], text: str,
+                  font: "ImageFont.ImageFont", fill: tuple[int, int, int, int],
+                  tracking: float) -> None:
+    """字間を空けて、中央揃えで1行置く。
+
+    PIL に字送りの指定は無いので1文字ずつ置く。小さな見出しは、詰めたままだと
+    字ではなく塊に見える。
+    """
+    widths = [draw.textlength(ch, font=font) for ch in text]
+    x = centre[0] - (sum(widths) + tracking * (len(text) - 1)) / 2
+    for ch, width in zip(text, widths):
+        draw.text((x, centre[1]), ch, font=font, fill=fill, anchor="lm")
+        x += width + tracking
+
+
+def _draw_intensity(draw: "ImageDraw.ImageDraw", centre: tuple[float, float],
+                    numeral: str, suffix: str, numeral_font: "ImageFont.ImageFont",
+                    suffix_font: "ImageFont.ImageFont", gap: float,
+                    on_baseline: bool, fill: tuple[int, int, int, int]) -> None:
+    """数字と添え字を、ひとかたまりとして中央へ置く。
+
+    数字はどの震度でも同じ大きさにする。2文字だからと数字ごと縮めると、
+    震度4より震度5弱の方が小さく見え、字の大小が揺れの強さと逆になる。
+
+    中央合わせは字の実体（インクの箱）で取る。書体が持つ上下の余白ごと
+    中央に合わせると、数字が下へ沈んで見える。
+    """
+    left, top, right, bottom = draw.textbbox((0, 0), numeral, font=numeral_font, anchor="ls")
+    placed = [(numeral, numeral_font, 0.0, 0.0)]
+    if suffix:
+        s_left, s_top, s_right, s_bottom = draw.textbbox(
+            (0, 0), suffix, font=suffix_font, anchor="ls")
+        rise = 0.0 if on_baseline else (top + bottom) / 2 - (s_top + s_bottom) / 2
+        offset = right + gap - s_left
+        placed.append((suffix, suffix_font, offset, rise))
+        right = offset + s_right
+        top, bottom = min(top, s_top + rise), max(bottom, s_bottom + rise)
+
+    ox = centre[0] - (left + right) / 2
+    oy = centre[1] - (top + bottom) / 2
+    for text, font, offset, rise in placed:
+        draw.text((ox + offset, oy + rise), text, font=font, fill=fill, anchor="ls")
+
+
+def _generate_badge(scale: int) -> io.BytesIO | None:
+    """最大震度の札。Discord の埋め込みにサムネイルとして貼る。
+
+    本文の脇に 80px ほどで出るので、その大きさで読めるのは数字だけ。数字を
+    主役に据えて大きく中央へ置き、見出しは上に字間を空けて小さく載せる。
+    仕上げはアプリのアイコンと同じ組み立て——超楕円の輪郭、上を明るくした
+    地の色、上の縁の光と下の縁の影——で、面の中に字が乗っている形にする。
+
+    以前は上端に黒い帯を敷いて「最大震度」を大書きし、残りに数字を置いていた。
+    帯が高さの4分の1を取るのに、帯の中の字はサムネイルの大きさでは読めず、
+    肝心の数字の場所だけが狭くなっていた。「5弱」のような2文字の震度では
+    数字ごと縮めるので、震度4と大きさが揃わなかった。外周には白い線を明暗
+    なしで1周させていたので、縁だけが地から浮いて見えた。
+
+    知らない震度は札にしない。呼び出し側も震度が分かるときだけ呼ぶが、
+    「最大震度 -1」と大書きした画像を貼る事故は、ここでも止めておく。
     """
     if not _PIL:
         return None
 
+    glyphs = _badge_glyphs(scale)
+    if glyphs is None:
+        logger.warning("[earthquake] 震度 %s は札にできないので作りません", scale)
+        return None
+    numeral, suffix, on_baseline = glyphs
+
     rgb = _MAP_FILL_RGB.get(scale, (120, 130, 150))
-    label = _SCALE_BADGE_LABEL.get(scale, str(scale))
+    ink = _ink_for(rgb)[:3]
 
-    ss = 3
-    size = 180
+    # 倍で描いてから縮める。PIL は字を整数の画素にしか置けないので、等倍だと
+    # 字間も中央合わせも1画素ずつずれる。3倍なら 1/3 画素まで詰められる。
+    ss, size = 3, 240
     w = h = size * ss
-    header_h = 44 * ss
-    radius = 22 * ss
 
-    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
+    mask = _squircle(w, h)
+    img = _badge_ground(w, h, rgb)
+    img.putalpha(Image.fromarray((mask * 255).astype(np.uint8), "L"))
+    img.alpha_composite(_badge_rim(w, h, mask))
 
-    # 本体。上から下へわずかに沈ませて、平らな板に見えないようにする。
-    draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=radius, fill=(*rgb, 255))
-    shade = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    shade_draw = ImageDraw.Draw(shade)
-    for row in range(header_h, h):
-        t = (row - header_h) / max(1, h - header_h)
-        shade_draw.line([(0, row), (w, row)], fill=(0, 0, 0, int(46 * t ** 1.4)))
-    mask = Image.new("L", (w, h), 0)
-    ImageDraw.Draw(mask).rounded_rectangle([0, 0, w - 1, h - 1], radius=radius, fill=255)
-    img.alpha_composite(Image.composite(shade, Image.new("RGBA", (w, h), (0, 0, 0, 0)), mask))
+    # 字は別の層に描いてから重ねる。RGBA へ直に描くと、半透明の指定が
+    # 「半透明の穴」になって地の色ごと薄く抜けてしまう。
+    over = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(over)
 
-    # 見出しの帯。角丸は上だけなので、下側は四角で埋める。
-    header = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    hd = ImageDraw.Draw(header)
-    hd.rounded_rectangle([0, 0, w - 1, header_h + radius], radius=radius, fill=(9, 13, 21, 255))
-    hd.rectangle([0, header_h, w - 1, header_h + radius], fill=(9, 13, 21, 255))
-    img.alpha_composite(Image.composite(header, Image.new("RGBA", (w, h), (0, 0, 0, 0)), mask))
-    draw.rectangle([0, header_h - ss, w - 1, header_h], fill=(255, 255, 255, 38))
+    # 見出し。和字が出せないときだけ欧文へ落とす。
+    caption, ratio = ("最大震度", 0.098) if _has_cjk_font() else ("MAX INTENSITY", 0.060)
+    caption_px = int(size * ratio * ss)
+    _draw_tracked(draw, (w / 2, h * 0.225), caption, _get_font(caption_px, bold=True),
+                  (*ink, 170), tracking=caption_px * 0.16)
 
-    draw.text((w / 2, header_h / 2), "最大震度", font=_get_font(int(21 * ss)),
-              fill=(226, 234, 244, 255), anchor="mm")
+    numeral_px = int(size * 0.56 * ss)
+    _draw_intensity(draw, (w / 2, h * 0.600), numeral, suffix,
+                    _get_font(numeral_px, bold=True),
+                    _get_font(int(numeral_px * 0.42), bold=True),
+                    gap=numeral_px * 0.10, on_baseline=on_baseline, fill=(*ink, 255))
 
-    # 数字。明るい震度では白が沈むので黒に切り替える。
-    body_cy = header_h + (h - header_h) / 2
-    draw.text((w / 2, body_cy), label,
-              font=_get_font(int(size * ss * (0.50 if len(label) == 1 else 0.34))),
-              fill=_ink_for(rgb), anchor="mm")
-
-    # 縁の光。板の厚みに見せる。
-    draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=radius,
-                           outline=(255, 255, 255, 46), width=max(1, ss))
+    img.alpha_composite(over)
 
     buf = io.BytesIO()
     img.resize((size, size), Image.LANCZOS).save(buf, format="PNG", optimize=True)
