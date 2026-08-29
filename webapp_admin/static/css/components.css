@@ -138,14 +138,58 @@
 .check-list { display: flex; flex-direction: column; gap: 6px; }
 
 /* ── セクション ───────────────────────────────────────────── */
-.section { border: 1px solid var(--border); border-radius: var(--radius); background: var(--canvas); }
-.section + .section { margin-top: 14px; }
-.section-head {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  background: var(--canvas-subtle);
-  border-radius: var(--radius) var(--radius) 0 0;
+/* 面をわずかに透かす。見出しをガラスにしても、背後が完全な不透明だと
+   曇らせる相手がおらず、ただの灰色の帯になるため（窓の本体 → 窓のガラス →
+   壁紙、と後ろへ抜ける道を作る）。 */
+.section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--canvas) 84%, transparent);
 }
+.section + .section { margin-top: 14px; }
+/* 見出しはガラスの帯として置く。
+
+   白い grosgrain を上から塗ると Vista になる（前にそれで灰色の帯にした）。
+   Liquid Glass は「塗る」のではなく「背後を曇らせて色を拾う」材質なので、
+   塗りは薄く、backdrop-filter と縁の光で見せる。
+
+   - 面   … 薄い膜（--rail-bg）。背後の色が透ける
+   - 曇り … blur + saturate。後ろの色みを吸って、面が生きて見える
+   - 縁   … 上端に細い光、下端に影。板の厚みに見える
+   - 鏡面 … ポインタに追従する光（[data-specular]、panel.js が属性を付ける） */
+.section-head {
+  position: relative;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--glass-edge);
+  background: var(--rail-bg);
+  -webkit-backdrop-filter: var(--rail-blur);
+  backdrop-filter: var(--rail-blur);
+  border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: inset 0 1px 0 var(--rail-top), inset 0 -1px 0 var(--rail-shade);
+}
+/* 透明を抑える設定の環境では、材質をやめて平らな面に戻す。
+   曇りガラスは背後が透けるぶん、地と文字の境目が読みにくくなる人がいる。 */
+@media (prefers-reduced-transparency: reduce) {
+  .section { background: var(--canvas); }
+  .section-head {
+    background: var(--canvas-subtle);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+    border-bottom-color: var(--border);
+  }
+  .section-head[data-specular]::after { display: none; }
+}
+
+/* 鏡面は文字の下に敷く（上に乗せると見出しが白茶ける）。
+   既定の光は窓やタスクバーのような広い面に合わせた 220x140px で、高さ 38px の
+   帯では上の端だけしか掛からない。帯の形に合わせて平たくする。 */
+.section-head[data-specular]::after {
+  z-index: 0;
+  background: radial-gradient(200px 46px at var(--spec-x) var(--spec-y),
+                              var(--spec), transparent 74%);
+}
+.section-head > * { position: relative; z-index: 1; }
 .section-title { font-size: 13.5px; }
 .section-help { font-size: 12px; color: var(--fg-muted); }
 .section-body { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
