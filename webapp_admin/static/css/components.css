@@ -60,7 +60,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--gap-icon);
   padding: 5px 12px;
   /* 入力欄と同じ 32px に揃える（20 + 5+5 + 1+1）。
      以前は行送りが 18px で高さ 30px、入力欄は 32px だったので、同じ行に
@@ -150,7 +150,10 @@
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--canvas) 84%, transparent);
 }
-.section + .section { margin-top: 14px; }
+/* 節どうしは、節の中の項目どうし（--gap-stack 14px）より広く離す。
+   同じ 14px にしていたころは、「項目が並んでいる」のか「別の節が始まった」
+   のかが間隔から読み取れなかった。入れ子の外側ほど広く離すのが筋。 */
+.section + .section { margin-top: var(--gap-section); }
 /* 見出しはガラスの帯として置く。
 
    白い grosgrain を上から塗ると Vista になる（前にそれで灰色の帯にした）。
@@ -196,7 +199,8 @@
 .section-head > * { position: relative; z-index: 1; }
 .section-title { font-size: var(--text-md); }
 .section-help { font-size: var(--text-sm); color: var(--fg-muted); }
-.section-body { padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.section-body { padding: 14px; display: flex; flex-direction: column;
+                gap: var(--gap-stack); }
 
 /* ── タブ ─────────────────────────────────────────────────── */
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); overflow-x: auto; }
@@ -241,7 +245,7 @@
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--gap-icon);
   padding: 1px 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
