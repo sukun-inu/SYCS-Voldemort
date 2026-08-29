@@ -32,6 +32,15 @@ jobs:
         # トラックの中身を検証する（モックしていない）。
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
+      - name: ffmpeg の素性を控える
+        # 録音は libmp3lame で mp3 に符号化する。手元（Windows）と CI で
+        # ビルドが違うため、符号化器が入っているかどうかをログに残しておく。
+        # 落ちたときにここを見れば、環境の問題かコードの問題かが切り分けられる。
+        run: |
+          ffmpeg -hide_banner -version | head -3
+          echo "--- mp3 の符号化器 ---"
+          ffmpeg -hide_banner -encoders 2>/dev/null | grep -i mp3 || echo "mp3 の符号化器が見つからない"
+
       - name: 依存関係をインストール
         run: pip install -r requirements.txt -r requirements-dev.txt
 
