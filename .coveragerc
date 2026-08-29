@@ -1,0 +1,38 @@
+# coverage.py の設定。
+#
+# `source = .` を使うのがポイント。単に「テストが実行した行」だけでなく、
+# 「テストが一度も import すらしていない本体モジュール」も分母に含めて
+# 0% として数えたいので、omit で対象外を削った上でリポジトリ全体を
+# source に指定している（omit だけで絞ると、import されないモジュールが
+# 集計から丸ごと消えて実態より良い数字が出てしまう）。
+#
+# 計測対象は本体コード（ルート直下の .py、services/、commands/、webapp/、
+# webapp_admin/）のみ。tests/・tools/・migrations/・scripts/ は本体コードの
+# テスト対象ではないので除外する。
+[run]
+source = .
+omit =
+    tests/*
+    tools/*
+    migrations/*
+    scripts/*
+    */__pycache__/*
+    .venv/*
+    venv/*
+    env/*
+
+[report]
+show_missing = True
+skip_empty = True
+precision = 2
+
+# 下限。ここを割ると coverage report が異常終了し、CI が落ちる。
+#
+# 測り始めた時点の実測が 46.14%。そこへ張り付けず 44 にしてあるのは、
+# ローカル（Python 3.13）と CI（3.11、Dockerfile と同じ）でバージョン依存の
+# 分岐が入れ替わり、数字が1ポイント前後動くことがあるため。「下げない」ための
+# 歯止めであって、目標値ではない。テストを足したら、この数字も上げること。
+fail_under = 44
+
+[html]
+directory = htmlcov
