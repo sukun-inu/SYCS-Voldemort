@@ -75,7 +75,7 @@ _MAP_FILL_RGB = {
     10: ( 58, 122, 216), 20: ( 46, 158, 214), 30: ( 44, 176, 154),
     40: (226, 192,  62), 45: (232, 152,  48),
     50: (233, 119,  43), 55: (226,  78,  44),
-    60: (206,  47,  62), 65: (168,  42, 106), 70: (132,  44, 128),
+    60: (206,  47,  62), 70: (132,  44, 128),
 }
 
 # 地図の面と線の色（暗い埋め込みに合わせる）。白地図を塗り替えるときに使う。
@@ -92,21 +92,22 @@ _MAP_W, _MAP_H = 900, 540
 _MAP_SS = 2
 
 # 凡例・ログ用（全角）
+# 全角表記（凡例・ログ用）。対応は config.SCALE_LABELS と同じ仕様に従う。
 _SCALE_MAP = {
-    10: "１", 20: "２", 30: "３", 40: "４", 45: "４強",
-    50: "５弱", 55: "５強", 60: "６弱", 65: "６強", 70: "７",
+    10: "１", 20: "２", 30: "３", 40: "４", 45: "５弱",
+    50: "５強", 55: "６弱", 60: "６強", 70: "７",
 }
 
 # バッジ画像用（ASCII のみ・CJK フォント不要）
 _SCALE_BADGE_LABEL = {
-    10: "1", 20: "2", 30: "3", 40: "4", 45: "4+",
-    50: "5-", 55: "5+", 60: "6-", 65: "6+", 70: "7",
+    10: "1", 20: "2", 30: "3", 40: "4", 45: "5-",
+    50: "5+", 55: "6-", 60: "6+", 70: "7",
 }
 
 # EEW予報 (556) の forecastMaxInt 文字列 → 内部スケール値
 _FORECAST_INT_TO_SCALE: dict[str, int] = {
-    "1": 10, "2": 20, "3": 30, "4": 40, "4+": 45,
-    "5-": 50, "5+": 55, "6-": 60, "6+": 65, "7": 70,
+    "1": 10, "2": 20, "3": 30, "4": 40,
+    "5-": 45, "5+": 50, "6-": 55, "6+": 60, "7": 70,
 }
 
 # 震度別 RGB — Kiwi Monitor カラースキーム 第2版
@@ -114,7 +115,7 @@ _SCALE_RGB = {
     10: (  0,  64, 255), 20: (  0, 148, 255), 30: (  0, 200, 200),
     40: (250, 230,  20), 45: (255, 175,   0),
     50: (255, 120,   0), 55: (255,  60,   0),
-    60: (220,   0,   0), 65: (170,   0, 170), 70: (110,   0, 130),
+    60: (220,   0,   0), 70: (110,   0, 130),
 }
 
 _SCALE_COLORS = {k: discord.Color.from_rgb(*v) for k, v in _SCALE_RGB.items()}
@@ -122,9 +123,9 @@ _SCALE_COLORS = {k: discord.Color.from_rgb(*v) for k, v in _SCALE_RGB.items()}
 # タイトル絵文字（震度別）
 _SCALE_TITLE_EMOJI = {
     10: "🔵", 20: "🔵", 30: "🔵",
-    40: "🟡", 45: "🟡",
-    50: "🟠", 55: "🟠",
-    60: "🔴", 65: "🔴", 70: "🔴",
+    40: "🟡", 45: "🟠",
+    50: "🟠", 55: "🔴",
+    60: "🔴", 70: "🔴",
 }
 
 _TSUNAMI_TEXT = {
@@ -471,6 +472,30 @@ def _epicentre_marker(size: int) -> "Image.Image":
     return img
 
 
+def _label_box(canvas: "Image.Image", text: str) -> tuple[int, int]:
+    """地名ラベルの大きさ。"""
+    ss = _MAP_SS
+    width = int(ImageDraw.Draw(canvas).textlength(text, font=_get_font(13 * ss)))
+    return width + 12 * ss, 19 * ss
+
+
+def _draw_place_label(canvas: "Image.Image", left: float, top: float, text: str) -> None:
+    """地名ラベルを1枚置く。
+
+    震度の丸と数字だけでは、地図に詳しくないと「どこの話か」が読み取れない。
+    暗い座を敷いてから字を置く（地図の上にそのまま置くと、陸の模様に紛れる）。
+    """
+    ss = _MAP_SS
+    width, height = _label_box(canvas, text)
+    box = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    ImageDraw.Draw(box).rounded_rectangle(
+        [0, 0, width - 1, height - 1], radius=5 * ss,
+        fill=(10, 14, 21, 214), outline=(120, 140, 170, 110), width=max(1, ss // 2))
+    canvas.alpha_composite(box, (int(left), int(top)))
+    ImageDraw.Draw(canvas).text((left + 6 * ss, top + height / 2), text,
+                                font=_get_font(13 * ss), fill=(232, 238, 246, 255), anchor="lm")
+
+
 def _draw_map_chrome(canvas: "Image.Image", title: str, subtitle: str,
                      scales: list[int]) -> None:
     """見出しの帯・凡例・出典。画像だけを見ても意味が通るようにする。
@@ -533,14 +558,17 @@ async def _generate_intensity_map(
     if not _PIL:
         return None
 
-    plot: list[tuple[float, float, int]] = []
+    # (緯度, 経度, 震度, 地名)。地名まで持つのは、画像だけを見て「どこの話か」が
+    # 分かるようにするため。震度の丸だけでは、地図に詳しくないと読み取れない。
+    plot: list[tuple[float, float, int, str]] = []
     for point in points:
         scale = point.get("scale", -1)
         if scale < 10:
             continue
-        coord = _resolve_point_coord(point.get("addr", ""), point.get("pref", ""))
+        pref = str(point.get("pref", "") or "")
+        coord = _resolve_point_coord(point.get("addr", ""), pref)
         if coord:
-            plot.append((*coord, scale))
+            plot.append((*coord, scale, pref or str(point.get("addr", "") or "")))
 
     if not plot:
         return None
@@ -549,12 +577,12 @@ async def _generate_intensity_map(
     # 観測点は全部ひとつの座標に重なるので、いちばん強い震度だけ残す。
     # 残さないと、同じ場所に何枚も丸を描いたうえ、札の重なり避けで肝心の
     # 最大震度が弾かれる。
-    strongest: dict[tuple[float, float], int] = {}
-    for point_lat, point_lon, scale in plot:
+    strongest: dict[tuple[float, float], tuple[int, str]] = {}
+    for point_lat, point_lon, scale, name in plot:
         key = (point_lat, point_lon)
-        if scale > strongest.get(key, -1):
-            strongest[key] = scale
-    plot = [(k[0], k[1], v) for k, v in strongest.items()]
+        if scale > strongest.get(key, (-1, ""))[0]:
+            strongest[key] = (scale, name)
+    plot = [(k[0], k[1], v[0], v[1]) for k, v in strongest.items()]
 
     lats = [p[0] for p in plot] + [lat]
     lons = [p[1] for p in plot] + [lon]
@@ -631,28 +659,52 @@ def _compose_intensity_map(
                            (int(hx - halo_r), int(hy - halo_r)))
 
     # 観測点。弱い順に置いて、強い方を上に重ねる
-    for point_lat, point_lon, scale in sorted(plot, key=lambda p: p[2]):
+    for point_lat, point_lon, scale, _name in sorted(plot, key=lambda p: p[2]):
         x, y = to_px(point_lat, point_lon)
         dot = _scale_dot(scale, 15 * ss)
         canvas.alpha_composite(dot, (int(x - dot.width / 2), int(y - dot.height / 2)))
 
-    # 札は強い方から数点だけ。全部に付けると重なって読めない。
-    # 震源の位置を先に「置いた場所」として登録しておく。震源は最後に描くので、
-    # ここで避けておかないと最大震度の札が震源に隠れる（実際に隠れた）。
+    # 札と地名は強い方から数点だけ。全部に付けると重なって読めない。
+    #
+    # 置いた矩形を覚えておいて、次はそこを避ける。点どうしの距離だけで見て
+    # いたころは、札は離れていても地名が別の札に重なっていた。
+    # 震源の位置も先に登録しておく（震源は最後に描くので、避けておかないと
+    # 最大震度の札が震源に隠れる。実際に隠れた）。
+    def overlaps(box: tuple[float, float, float, float]) -> bool:
+        return any(not (box[2] <= r[0] or box[0] >= r[2]
+                        or box[3] <= r[1] or box[1] >= r[3]) for r in taken)
+
     ex_pre, ey_pre = to_px(lat, lon)
-    placed: list[tuple[float, float]] = [(ex_pre, ey_pre)]
-    for point_lat, point_lon, scale in sorted(plot, key=lambda p: -p[2])[:6]:
+    pin_size = 34 * ss
+    taken: list[tuple[float, float, float, float]] = [
+        (ex_pre - 22 * ss, ey_pre - 22 * ss, ex_pre + 22 * ss, ey_pre + 22 * ss)]
+
+    for point_lat, point_lon, scale, name in sorted(plot, key=lambda p: -p[2])[:6]:
         x, y = to_px(point_lat, point_lon)
-        # 既定は右上。埋まっていたら左上・右下・左下と順に試す。
-        for dx, dy in ((17, -17), (-17, -17), (17, 17), (-17, 17), (0, -26), (0, 26)):
+        label_w, label_h = _label_box(canvas, name) if name else (0, 0)
+
+        for dx, dy, side in ((17, -17, 1), (-17, -17, -1), (17, 17, 1),
+                             (-17, 17, -1), (0, -26, 1), (0, 26, 1)):
             px, py = x + dx * ss, y + dy * ss
-            if not any(math.hypot(px - qx, py - qy) < 44 * ss for qx, qy in placed):
+            pin_box = (px - pin_size / 2, py - pin_size / 2,
+                       px + pin_size / 2, py + pin_size / 2)
+            if side > 0:
+                lx = px + pin_size / 2 + 4 * ss
+            else:
+                lx = px - pin_size / 2 - 4 * ss - label_w
+            label = (lx, py - label_h / 2, lx + label_w, py + label_h / 2)
+            inside = 0 <= label[0] and label[2] <= canvas.width
+            if not overlaps(pin_box) and (not name or (inside and not overlaps(label))):
                 break
         else:
             continue
-        placed.append((px, py))
-        pin = _scale_pin(scale, 34 * ss)
+
+        taken.append(pin_box)
+        pin = _scale_pin(scale, pin_size)
         canvas.alpha_composite(pin, (int(px - pin.width / 2), int(py - pin.height / 2)))
+        if name:
+            taken.append(label)
+            _draw_place_label(canvas, label[0], label[1], name)
 
     # 震源は最後に。点や札に埋もれないよう、背後に暗い座を敷く
     ex, ey = to_px(lat, lon)
@@ -664,7 +716,7 @@ def _compose_intensity_map(
     marker = _epicentre_marker(40 * ss)
     canvas.alpha_composite(marker, (int(ex - marker.width / 2), int(ey - marker.height / 2)))
 
-    _draw_map_chrome(canvas, title, subtitle, sorted({scale for _, _, scale in plot}))
+    _draw_map_chrome(canvas, title, subtitle, sorted({point[2] for point in plot}))
 
     buf = io.BytesIO()
     canvas.resize((_MAP_W, _MAP_H), Image.LANCZOS).convert("RGB").save(

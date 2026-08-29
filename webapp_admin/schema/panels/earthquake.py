@@ -21,7 +21,8 @@ NOTIFY_TYPES: tuple[tuple[str, str], ...] = (
     ("bot_news", "ボットに関するお知らせ"),
 )
 
-VALID_SCALES: tuple[int, ...] = (10, 20, 30, 40, 45, 50, 55, 60, 65, 70)
+# P2PQuake の仕様にある値だけ。65 は存在しない階級で、選べても一致しない。
+VALID_SCALES: tuple[int, ...] = (10, 20, 30, 40, 45, 50, 55, 60, 70)
 
 
 def _channel(guild_id: int):
