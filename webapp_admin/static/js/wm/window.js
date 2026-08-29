@@ -4,6 +4,16 @@
 import { el, icon } from "../lib/dom.js";
 import { DUR, EASE_IN, EASE_OUT, deltaTransform, play, stopAnimations } from "../lib/motion.js";
 
+/** 置き場の大きさを整数で返す。
+
+    getBoundingClientRect() は小数を返しうる。その値を上限に clamp して
+    style へ書くと、端に当たった窓だけが小数 px になってにじむ。使う手前で
+    丸め、窓の座標と大きさは常に整数に保つ。 */
+function boundsOf(element) {
+  const box = element.getBoundingClientRect();
+  return { w: Math.round(box.width), h: Math.round(box.height) };
+}
+
 const MIN_W = 320;
 const MIN_H = 200;
 
@@ -25,11 +35,15 @@ export class AppWindow {
     /** 閉じたときに止めたい処理（タイマーなど）を登録する。 */
     this.cleanups = [];
 
-    const bounds = layer.getBoundingClientRect();
-    const w = clamp(rect?.w ?? width ?? 760, MIN_W, Math.max(MIN_W, bounds.width));
-    const h = clamp(rect?.h ?? height ?? 620, MIN_H, Math.max(MIN_H, bounds.height));
-    const x = clamp(rect?.x ?? 0, 0, Math.max(0, bounds.width - w));
-    const y = clamp(rect?.y ?? 0, 0, Math.max(0, bounds.height - h));
+    /* 置き場の大きさは小数になりうる（ブラウザの拡大や、端数の出る画面）。
+       それを上限にして clamp すると、窓が端に当たったときだけ大きさや位置が
+       小数 px になり、枠と文字がにじむ。実測で height:572.594px が出た。
+       測った時点で整数に丸めておく。 */
+    const bounds = boundsOf(layer);
+    const w = clamp(rect?.w ?? width ?? 760, MIN_W, Math.max(MIN_W, bounds.w));
+    const h = clamp(rect?.h ?? height ?? 620, MIN_H, Math.max(MIN_H, bounds.h));
+    const x = clamp(rect?.x ?? 0, 0, Math.max(0, bounds.w - w));
+    const y = clamp(rect?.y ?? 0, 0, Math.max(0, bounds.h - h));
 
     this.titleEl = el("span", { class: "window-title truncate", text: title });
     this.dirtyEl = el("span", { class: "window-dirty", hidden: true, title: "未保存の変更があります" }, "●");
@@ -147,8 +161,7 @@ export class AppWindow {
   }
 
   #dragBounds() {
-    const layer = this.el.parentElement.getBoundingClientRect();
-    return { w: layer.width, h: layer.height };
+    return boundsOf(this.el.parentElement);
   }
 
   #startDrag(event) {

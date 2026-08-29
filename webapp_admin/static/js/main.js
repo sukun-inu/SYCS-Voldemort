@@ -2,7 +2,7 @@
    タイル一覧を API から取り、前回の配置を復元し、ディープリンクを開く。 */
 
 import * as api from "./lib/api.js";
-import { el } from "./lib/dom.js";
+import { el, measureScrollbar } from "./lib/dom.js";
 import { toast } from "./lib/toast.js";
 import { Desktop } from "./wm/desktop.js";
 import { attachSpecular } from "./wm/specular.js";
@@ -22,6 +22,9 @@ function targetFromLocation() {
 }
 
 async function boot() {
+  // スクロールバーの太さを CSS へ渡す（送り先の外にある要素を揃えるため）
+  measureScrollbar();
+
   const target = targetFromLocation();
 
   let groups;

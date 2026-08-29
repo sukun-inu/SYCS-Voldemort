@@ -92,3 +92,29 @@ export function field(label, control, help) {
     el("span", { class: "field-label", text: label }),
     control, tail);
 }
+
+/* スクロールバーが場所を取るかどうかは端末で違う。
+
+   Windows の Chrome は幅を持つ（実測 10px）。macOS や headless の Chromium は
+   中身に重ねて描くので 0px。この差が、送り先の外にある要素との間にズレを生む
+   ——保存バーは送り先の外にあるので幅いっぱいに伸びるが、中の設定項目は
+   スクロールバーのぶん狭くなり、右端が 10px ずれる。
+
+   headless では 0px なので、検査では気づけなかった。値を1回測って CSS 変数に
+   渡し、外側の要素も同じだけ内側へ寄せる。 */
+export function measureScrollbar() {
+  // 測る側も .panel-scroll と同じ条件にすること。scrollbar-gutter: stable を
+  // 付けずに測ると、中身に重ねて描く環境で 0px と出るのに、実際の送り先は
+  // 溝を確保していて食い違う（headless がまさにそうだった）。
+  const probe = el("div", {
+    style: {
+      position: "absolute", top: "-9999px", width: "100px", height: "100px",
+      overflow: "scroll", scrollbarGutter: "stable", visibility: "hidden",
+    },
+  });
+  document.body.append(probe);
+  const width = probe.offsetWidth - probe.clientWidth;
+  probe.remove();
+  document.documentElement.style.setProperty("--scrollbar", `${width}px`);
+  return width;
+}

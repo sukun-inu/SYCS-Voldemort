@@ -327,7 +327,11 @@ body.public h3 { text-wrap: balance; }
   position: absolute;
   left: 0;
   top: 0;
-  line-height: inherit;
+  /* 番号を本文の1行目と同じ高さに乗せる。
+     line-height を数値で継承すると、番号側の font-size（12px）に掛かって
+     12 × 1.85 = 22.2px の行になり、本文の 15 × 1.85 = 27.75px と中心が
+     (27.75 - 22.2) / 2 ≒ 2.8px ずれる。本文の行高をそのまま指定する。 */
+  line-height: 27.75px;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--ink-3);
