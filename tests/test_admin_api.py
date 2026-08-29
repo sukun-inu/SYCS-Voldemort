@@ -1514,6 +1514,41 @@ class RecordingClipTests(unittest.TestCase):
         self.assertLess(len(part.content), len(whole.content))
 
 
+class DjaudioLimitTests(unittest.TestCase):
+    """画面の上下限と、保存側で丸める範囲が同じであること。
+
+    以前は同じ数値を2箇所に手で書いていた（パネルの Field.min/max と
+    settings_store の定数）。片方だけ変えると、画面の検証は通るのに保存される
+    値は黙って別の値へ丸められる——「保存できたのに効かない」に見える。
+    表を1つにしたので、ここではそれが崩れていないことだけを見る。
+    """
+
+    def test_the_panel_uses_the_same_range_as_the_store(self):
+        from services.settings_store import DJAUDIO_LIMITS
+
+        panel = PANEL_BY_ID["djaudio"]
+        checked = 0
+        for field in panel.fields:
+            if field.key not in DJAUDIO_LIMITS:
+                continue
+            low, high = DJAUDIO_LIMITS[field.key]
+            with self.subTest(field=field.key):
+                self.assertEqual((field.min, field.max), (low, high))
+            checked += 1
+        self.assertEqual(checked, len(DJAUDIO_LIMITS))
+
+    def test_a_value_over_the_limit_is_refused_rather_than_rounded(self):
+        from services.settings_store import DJAUDIO_LIMITS
+
+        client = make_client()
+        _low, high = DJAUDIO_LIMITS["cooldown"]
+        response = client.put("/admin/api/apps/djaudio",
+                              json={"values": {"cooldown": high + 1}},
+                              headers=CSRF_HEADER)
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("cooldown", response.json()["errors"])
+
+
 class CdnErrorShapeTests(unittest.TestCase):
     """単体の配信プロセスでも、fetch する側には JSON で理由を返すこと。
 

@@ -6,21 +6,11 @@
 import * as api from "../lib/api.js";
 import { createMixer } from "./mixer.js";
 import { fillSelect, selectValue } from "../lib/choices.js";
-import { el, icon, clear, loading } from "../lib/dom.js";
+import { el, icon, clear, loading, field } from "../lib/dom.js";
 import { toast } from "../lib/toast.js";
 
 const BASE = "/admin/api/recording";
 const POLL_INTERVAL = 5000;
-
-function field(label, control, help) {
-  return el(
-    "div",
-    { class: "field" },
-    el("span", { class: "field-label", text: label }),
-    control,
-    help ? el("p", { class: "field-help", text: help }) : null
-  );
-}
 
 /** オン・オフの欄。チェックと文字を横に並べる。
  *

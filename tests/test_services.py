@@ -1344,9 +1344,15 @@ class DurationWidgetTests(unittest.TestCase):
             validate_field(self.field, "しばらく", {})
 
     def test_store_and_schema_share_the_same_ceiling(self):
-        """片方だけ古いと、画面で入れた値が黙って丸められる。"""
-        self.assertEqual(store._CACHE_TTL_MAX, self.field.max)
-        self.assertEqual(store._CACHE_TTL_MIN, self.field.min)
+        """片方だけ古いと、画面で入れた値が黙って丸められる。
+
+        以前は同じ数値を2箇所に手で書いており、この検査だけが両者を
+        結び付けていた。いまはパネルが store の表（DJAUDIO_LIMITS）を
+        読んで min/max を作るので、ずれようがない。表の側が壊れていない
+        ことを見る。
+        """
+        self.assertEqual(store.DJAUDIO_LIMITS["cache_ttl"],
+                         (self.field.min, self.field.max))
 
     def test_thirty_days_survives_a_save_and_reread(self):
         store.set_djaudio_settings(4244, {"cache_ttl": 30 * 86400})
@@ -2996,6 +3002,61 @@ class RtpPaddingTests(unittest.TestCase):
         self.assertEqual(session.tracks, {}, "詰め物からトラックが作られている")
         self.assertEqual(session.dropped_packets, 0, "詰め物をデコードしている")
         self.assertEqual(sink._streams[1].padding_only, 8)
+
+
+class ReactionRoleEmojiTests(unittest.TestCase):
+    """カスタム絵文字でも、保存した形と実際のリアクションが一致すること。
+
+    保存側（管理画面・スラッシュコマンド）は入力された文字列をそのまま
+    キーにしていたが、照合側は PartialEmoji から `str(emoji.id)` を作って
+    引いていた。`<:name:123>` と `123` は一致しないので、カスタム絵文字の
+    リアクションロールはログも残さず一切動いていなかった。ユニコード絵文字は
+    両者が同じ文字列になるため偶然動いていて、気付きにくかった。
+    """
+
+    def setUp(self):
+        from services import reaction_role_service
+
+        self.rr = reaction_role_service
+
+    def test_every_way_of_writing_a_custom_emoji_lands_on_the_same_key(self):
+        same = ["<:kusa:123456789012345678>", "kusa:123456789012345678",
+                "123456789012345678"]
+        keys = {self.rr.emoji_key(v) for v in same}
+        self.assertEqual(keys, {"123456789012345678"})
+        # アニメーション絵文字（<a:...>）も同じ規則で読む
+        self.assertEqual(self.rr.emoji_key("<a:spin:987654321098765432>"),
+                         "987654321098765432")
+
+    def test_a_unicode_emoji_is_left_alone(self):
+        self.assertEqual(self.rr.emoji_key("👍"), "👍")
+        self.assertEqual(self.rr.emoji_key("  🎉 "), "🎉")
+
+    def test_a_partial_emoji_object_uses_its_id(self):
+        custom = Mock(id=555)
+        self.assertEqual(self.rr.emoji_key(custom), "555")
+        unicode_emoji = Mock(id=None)
+        unicode_emoji.__str__ = Mock(return_value="👍")
+        self.assertEqual(self.rr.emoji_key(unicode_emoji), "👍")
+
+    def test_settings_saved_in_the_old_form_still_match(self):
+        """入れ直してもらわずに動くこと。
+
+        すでに `<:name:123>` の形で保存されている設定を、移行作業なしで
+        拾えること。ここが効かないと「直したのに直っていない」になる。
+        """
+        mapping = {"<:kusa:123456789012345678>": 42, "👍": 7}
+        custom = Mock(id=123456789012345678)
+        self.assertEqual(self.rr._role_id_for(mapping, custom), 42)
+
+        unicode_emoji = Mock(id=None)
+        unicode_emoji.__str__ = Mock(return_value="👍")
+        self.assertEqual(self.rr._role_id_for(mapping, unicode_emoji), 7)
+
+    def test_an_unmapped_emoji_still_returns_nothing(self):
+        mapping = {"123456789012345678": 42}
+        other = Mock(id=999999999999999999)
+        self.assertIsNone(self.rr._role_id_for(mapping, other))
 
 
 class VoiceAnalysisTests(unittest.TestCase):

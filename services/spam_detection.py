@@ -44,7 +44,3 @@ def check_spam(guild_id: int, user_id: int) -> Tuple[bool, int, float]:
 
     return count >= SPAM_REPEAT_THRESHOLD, count, min_interval
 
-
-def is_spam(guild_id: int, user_id: int) -> bool:
-    result, _, _ = check_spam(guild_id, user_id)
-    return result
