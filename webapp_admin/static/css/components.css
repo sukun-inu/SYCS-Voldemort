@@ -204,9 +204,15 @@
 .chip.warning { color: var(--attention); border-color: transparent; background: var(--attention-soft); }
 
 /* ── 保存バー ─────────────────────────────────────────────── */
+/* 設定パネルは「送る中身」と「下に居座る保存バー」の2段。
+   バーを中身と一緒に流して sticky で貼り付けていたころは、開いた直後から
+   バーが次の項目に重なり、本体の下パディングぶん浮いた隙間からその項目が
+   覗いていた（＝途中で切れて見える）。バーを流れの外に出す。 */
+.panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.panel-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
 .savebar {
-  position: sticky;
-  bottom: 0;
+  flex: none;
   display: flex;
   align-items: center;
   gap: 10px;
