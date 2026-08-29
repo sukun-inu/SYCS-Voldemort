@@ -2,23 +2,13 @@
    操作はすべて /admin/api/dev/* を叩き、結果はトーストで返す。 */
 
 import * as api from "../lib/api.js";
-import { el, icon, clear, loading } from "../lib/dom.js";
+import { el, icon, clear, loading, field } from "../lib/dom.js";
 import { createTabs } from "../lib/tabs.js";
 import { toast } from "../lib/toast.js";
 
 const BASE = "/admin/api/dev";
 
 /* ── 小さな部品 ─────────────────────────────────────────── */
-
-function field(label, control, help) {
-  return el(
-    "div",
-    { class: "field" },
-    el("span", { class: "field-label", text: label }),
-    control,
-    help ? el("p", { class: "field-help", text: help }) : null
-  );
-}
 
 function input(props = {}) {
   return el("input", { class: "input", type: "text", ...props });

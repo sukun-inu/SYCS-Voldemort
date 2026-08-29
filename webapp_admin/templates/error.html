@@ -19,7 +19,10 @@
     <h1 class="error-message">{{ message }}</h1>
     <p class="muted small">{{ description or "リクエストを処理できませんでした。" }}</p>
     <div class="error-actions">
-      <a class="btn" href="javascript:history.back()">{{ icon('arrow-left') }}前のページへ</a>
+      {# javascript: の疑似URLは、JS を切っている環境や CSP の厳しい環境では
+         押しても何も起きない死んだリンクになる。動きが JS でしか作れない
+         ものは、リンクではなくボタンで出す。 #}
+      <button class="btn" type="button" onclick="history.back()">{{ icon('arrow-left') }}前のページへ</button>
       <a class="btn btn-primary" href="{{ url_for('dashboard.index') }}">{{ icon('house-fill') }}管理画面へ</a>
     </div>
   </section>

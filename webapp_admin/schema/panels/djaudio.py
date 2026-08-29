@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from services.settings_store import (
+    DJAUDIO_LIMITS,
     get_djaudio_cache_ttl,
     get_djaudio_cooldown,
     get_djaudio_max_urls,
@@ -12,8 +13,14 @@ from services.settings_store import (
     set_djaudio_settings,
     set_djaudio_watch_channel,
 )
-from webapp_admin.schema.duration import DAY, MINUTE
 from webapp_admin.schema.types import Field, Panel, Section, Widget
+
+# 上下限は保存側（services/settings_store.py）の表をそのまま使う。
+# 別々に書いていると、片方だけ変えたときに画面の検証は通るのに保存される値が
+# 黙って丸められる。
+_TTL_MIN, _TTL_MAX = DJAUDIO_LIMITS["cache_ttl"]
+_COOLDOWN_MIN, _COOLDOWN_MAX = DJAUDIO_LIMITS["cooldown"]
+_URLS_MIN, _URLS_MAX = DJAUDIO_LIMITS["max_urls"]
 
 
 def _watch_channel(guild_id: int):
@@ -61,20 +68,20 @@ PANEL = Panel(
                 Field(
                     "cache_ttl", "キャッシュ保持時間", Widget.DURATION,
                     get=get_djaudio_cache_ttl, set=_set_limit("cache_ttl"),
-                    default=10 * MINUTE, min=MINUTE, max=30 * DAY, nullable=False,
+                    default=600, min=_TTL_MIN, max=_TTL_MAX, nullable=False,
                     help="ダウンロードリンクが切れるまでの時間です。"
                          "長くするほどサーバーのディスクを使います。",
                 ),
                 Field(
                     "cooldown", "クールダウン（秒）", Widget.INT,
                     get=get_djaudio_cooldown, set=_set_limit("cooldown"),
-                    default=30, min=0, max=3600, nullable=False,
+                    default=30, min=_COOLDOWN_MIN, max=_COOLDOWN_MAX, nullable=False,
                     help="同じ利用者が連続で実行できるまでの間隔です。",
                 ),
                 Field(
                     "max_urls", "1メッセージあたりの URL 上限", Widget.INT,
                     get=get_djaudio_max_urls, set=_set_limit("max_urls"),
-                    default=3, min=1, max=10, nullable=False,
+                    default=3, min=_URLS_MIN, max=_URLS_MAX, nullable=False,
                 ),
             ),
         ),

@@ -170,6 +170,16 @@
     </header>
 
     <main class="page-content" id="dashboardTop">
+      <!-- 読み込みや更新の失敗を出す場所。以前はここだけ alert() を使って
+           いたため、通信が一瞬詰まっただけで画面全体が止まっていた。
+           他の失敗（予測の取得・純度の計算）は画面の中に出している。 -->
+      <div id="appAlert" class="app-alert" role="alert" hidden>
+        <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+        <span id="appAlertText" class="app-alert-text"></span>
+        <button type="button" id="appAlertClose" class="app-alert-close" aria-label="閉じる">
+          <i class="bi bi-x-lg" aria-hidden="true"></i>
+        </button>
+      </div>
       <div id="priceTicker" class="price-ticker" aria-label="価格ティッカー">
         <div id="priceTickerTrack" class="price-ticker-track"></div>
       </div>

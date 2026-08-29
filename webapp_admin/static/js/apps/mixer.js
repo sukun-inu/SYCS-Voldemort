@@ -997,8 +997,10 @@ export async function createMixer(container, options = {}) {
     const verdict = {
       natural: ["加工の形跡なし", ""],
       suspect: ["加工の形跡あり", "danger"],
-      unknown: ["判定できず", "warn"],
-    }[result.verdict] || ["判定できず", "warn"];
+      // CSS 側の名前は .chip.warning（.chip.warn は存在しない）。
+      // 綴りが違うと、無色の既定チップとして出て注意色にならない。
+      unknown: ["判定できず", "warning"],
+    }[result.verdict] || ["判定できず", "warning"];
 
     const rows = [];
     // 「どこを調べたか」を最初に出す。結果だけ見せると、選び直せば変わる値
@@ -1059,6 +1061,7 @@ export async function createMixer(container, options = {}) {
     const value = el("span", { class: "mono", text: suggested.toFixed(2) });
     const slider = el("input", {
       class: "input", type: "range", min: "50", max: "200",
+      "aria-label": "打ち消す倍率（百分率）",
       value: String(Math.round(suggested * 100)),
       oninput: () => { value.textContent = (slider.value / 100).toFixed(2); },
     });

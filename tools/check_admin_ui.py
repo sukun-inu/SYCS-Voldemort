@@ -347,6 +347,28 @@ def main():
         check("録音が無いときにミキサーの入口が説明される",
               "録音を停止すると" in rec_body and "ミキサー" in rec_body)
 
+        # ── ラベルが入力欄に結び付いていること ──
+        # 開発者パネルと録音パネルは、それぞれ自前で同じ field() を持っていて、
+        # どちらもラベルを <span> で作っていた。見た目は同じでも、読み上げでは
+        # 「編集（空欄）」としか読まれず、ラベルを押してもフォーカスが移らない。
+        # 共通の lib/dom.js field() に寄せて <label for> にしてある。
+        unlabelled = page.evaluate("""(selector) => {
+          const out = [];
+          for (const field of document.querySelectorAll(selector + " .field")) {
+            const control = field.querySelector("input, select, textarea");
+            if (!control) continue;                       // 表示だけの枠
+            if (control.type === "checkbox") continue;    // チェックは <label> で包む形
+            const label = field.querySelector("label[for]");
+            const named = control.getAttribute("aria-label");
+            if (!named && !(label && label.htmlFor === control.id && control.id)) {
+              out.push((field.querySelector(".field-label")?.textContent || "?").slice(0, 20));
+            }
+          }
+          return out;
+        }""", '.window[data-app-id="recording"]')
+        check("録音パネルのラベルが入力欄に結び付いている",
+              unlabelled == [], f"結び付いていない: {unlabelled}")
+
         # select.value に一覧へ無い値を入れても、ブラウザは黙って無視して空欄にする。
         # そのまま保存すると設定が消える（実際に起きた）。
         picked = page.evaluate(

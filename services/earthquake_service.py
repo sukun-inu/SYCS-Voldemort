@@ -433,6 +433,27 @@ async def _generate_intensity_map(
         return_exceptions=True,
     )
 
+    # ここから先は PIL の同期処理（合成・描画・PNG の最適化保存）。25枚の
+    # タイルを 1280x1280 に貼って重ね、最後に optimize=True で書き出すので
+    # 数百ミリ秒かかる。直に実行すると、その間 Bot のイベントループ全体が
+    # 止まる——緊急地震速報を全ギルドへ配信しようとしている、まさにその
+    # 瞬間に。余震が続けば短時間に何度も起きる。スレッドへ逃がす。
+    return await asyncio.to_thread(
+        _compose_intensity_map, coords, tile_imgs, tx0, ty0, tx1, ty1,
+        zoom, plot, lat, lon, img_w, img_h,
+    )
+
+
+def _compose_intensity_map(
+    coords: list[tuple[int, int]],
+    tile_imgs: list,
+    tx0: int, ty0: int, tx1: int, ty1: int,
+    zoom: int,
+    plot: list[tuple[float, float, int]],
+    lat: float, lon: float,
+    img_w: int, img_h: int,
+) -> io.BytesIO:
+    """取り込んだタイルから地図を組み立てる（同期。呼ぶ側がスレッドへ逃がす）。"""
     map_w = (tx1 - tx0 + 1) * _TILE_SZ
     map_h = (ty1 - ty0 + 1) * _TILE_SZ
     base = Image.new("RGBA", (map_w, map_h), (20, 22, 30, 255))
@@ -1147,7 +1168,9 @@ async def _notify_all_guilds(
     badge_buf: io.BytesIO | None = None
     if max_scale >= 0:
         try:
-            badge_buf = _generate_badge(max_scale)
+            # PIL の描画と PNG 保存。地図ほど重くはないが、同じ理由で
+            # イベントループの上では回さない。
+            badge_buf = await asyncio.to_thread(_generate_badge, max_scale)
         except Exception as e:
             logger.exception("[earthquake] badge generation error: %s", e)
 
@@ -1214,7 +1237,9 @@ async def _notify_eew_guilds(bot: Bot, event: dict, notify_type: str) -> int:
     badge_buf: io.BytesIO | None = None
     if max_scale >= 0 and not cancelled:
         try:
-            badge_buf = _generate_badge(max_scale)
+            # PIL の描画と PNG 保存。地図ほど重くはないが、同じ理由で
+            # イベントループの上では回さない。
+            badge_buf = await asyncio.to_thread(_generate_badge, max_scale)
         except Exception:
             logger.exception("[eew] badge generation error")
 

@@ -721,6 +721,10 @@ function updateMarketWidgets() {
       const deltaClass = delta > 0 ? "is-up" : delta < 0 ? "is-down" : "is-flat";
       const deltaIcon = delta > 0 ? "bi-arrow-up-short" : delta < 0 ? "bi-arrow-down-short" : "bi-dash";
 
+      // 予測のレンジ表示で付けた小さい字を戻す。ここで外していなかったので、
+      // 一度でも「1週間予測」を見たあとは、最新価格へ戻しても価格が
+      // 1.25rem のまま（本来 1.7rem）表示され続けていた。
+      priceEl.classList.remove("is-range");
       priceEl.textContent = formatYen(data.price_per_gram);
       deltaEl.className = `market-widget-delta-pill ${deltaClass}`;
       deltaEl.innerHTML = `<i class="bi ${deltaIcon}"></i>前日差: ${formatDelta(delta)}`;
@@ -732,6 +736,26 @@ function updateMarketWidgets() {
     }
   });
 }
+
+/** 読み込み・更新の失敗を画面の中に出す。
+ *
+ *  以前はここだけ alert() を使っていた。同じ画面の中で、予測の取得失敗は
+ *  カード内に、純度計算の失敗は計算欄に出しているのに、ダッシュボードの
+ *  失敗だけが操作を止めるダイアログになっていた。 */
+function showAppAlert(message) {
+  const box = document.getElementById("appAlert");
+  const text = document.getElementById("appAlertText");
+  if (!box || !text) return;
+  text.textContent = message;
+  box.hidden = false;
+}
+
+function hideAppAlert() {
+  const box = document.getElementById("appAlert");
+  if (box) box.hidden = true;
+}
+
+document.getElementById("appAlertClose")?.addEventListener("click", hideAppAlert);
 
 function setForecastError(message) {
   const meta = document.getElementById("forecastMeta");
@@ -1454,6 +1478,9 @@ function renderMetalChart(metalKey, history, dailyAxis, forecastItem = null, his
 
 async function loadDashboard() {
   setDashboardLoadingState();
+  // 前回の失敗表示を消す。読み直しに成功したのに赤い帯が残っていると、
+  // いまも壊れているように見える。
+  hideAppAlert();
   try {
     await ensureChartLibrary();
     const historyQuery = buildRangeQuery(currentRangeState);
@@ -1692,7 +1719,7 @@ async function initializePwaAndPush() {
 document.getElementById("reloadButton").addEventListener("click", () => {
   loadDashboard().catch((err) => {
     console.error(err);
-    alert(err.message || "ダッシュボードの更新に失敗しました。");
+    showAppAlert(err.message || "ダッシュボードの更新に失敗しました。");
   });
 });
 
@@ -1746,6 +1773,10 @@ function syncRangeUi(state) {
       (state.mode === "all" && button.dataset.rangeDays === "all") ||
       (state.mode === "preset" && button.dataset.rangeDays === String(state.days));
     button.classList.toggle("is-active", isMatch);
+    // 同じ見た目のトグル（移動平均・前日差）は aria-pressed を更新している。
+    // ここだけクラスの付け替えで済ませていたため、読み上げでは、どの期間が
+    // 選ばれているのか分からなかった。
+    button.setAttribute("aria-pressed", String(isMatch));
   });
   if (state.mode === "custom") {
     const startInput = document.getElementById("rangeStartInput");
@@ -1780,7 +1811,7 @@ function applyRangeState(state) {
   closeRangeDropdown();
   loadDashboard().catch((err) => {
     console.error(err);
-    alert(err.message || "ダッシュボードの更新に失敗しました。");
+    showAppAlert(err.message || "ダッシュボードの更新に失敗しました。");
   });
 }
 
@@ -1892,7 +1923,7 @@ startForecastAutoRefresh();
 
 loadDashboard().catch((err) => {
   console.error(err);
-  alert(err.message || "初期ロードに失敗しました。");
+  showAppAlert(err.message || "初期ロードに失敗しました。");
 });
 
 setCalcLoadingState();

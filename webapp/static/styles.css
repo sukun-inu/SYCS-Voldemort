@@ -1049,3 +1049,30 @@ a {
     align-items: flex-start;
   }
 }
+
+/* 読み込み・更新の失敗を画面の中で伝える帯。
+   ここだけ alert() でブロックしていたのを、他の失敗表示に揃えたもの。 */
+.app-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--down);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+.app-alert > .bi-exclamation-triangle-fill { color: var(--down); flex: none; }
+.app-alert-text { flex: 1 1 auto; min-width: 0; }
+.app-alert-close {
+  flex: none;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.app-alert-close:hover { background: var(--hover-bg); color: var(--ink); }
