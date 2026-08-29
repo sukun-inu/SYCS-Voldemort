@@ -364,6 +364,9 @@ body.desktop-body { overflow: hidden; }
 .start-search { padding: 8px; }
 .start-groups {
   overflow-y: auto;
+  /* 溝を常に確保する。アプリが1つ増えて縦に溢れた瞬間に、タイルが
+     まとめて 12px 左へ飛ぶのを防ぐ。 */
+  scrollbar-gutter: stable;
   padding: 10px;
   display: flex;
   flex-direction: column;

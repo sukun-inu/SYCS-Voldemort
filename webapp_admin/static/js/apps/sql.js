@@ -558,9 +558,13 @@ function buildLayout(win, state) {
     const upto = editor.value.slice(0, editor.selectionStart);
     const lines = upto.split("\n");
     const metrics = charMetrics();
+    /* 1文字の幅は「10文字を測って10で割った」小数。行数・桁数に掛けるので、
+       下の行・長い行ほど誤差が積もり、候補がキャレットから離れていく。
+       置く直前に丸める。 */
     return {
-      line: lines.length * metrics.height + 6 - editor.scrollTop,
-      column: (lines[lines.length - 1].length) * metrics.width + 10 - editor.scrollLeft,
+      line: Math.round(lines.length * metrics.height + 6 - editor.scrollTop),
+      column: Math.round(
+        (lines[lines.length - 1].length) * metrics.width + 10 - editor.scrollLeft),
     };
   }
 
@@ -918,7 +922,10 @@ function wireSplitter(splitter, code) {
   let startHeight = 0;
 
   const onMove = (event) => {
-    const next = Math.max(90, Math.min(startHeight + (event.clientY - startY), splitter.parentElement.clientHeight - 160));
+    // 実測値（小数）を基準に足し引きするので、書き出す前に丸める。
+    // 丸めないと境界線がにじんだまま残る。
+    const next = Math.round(Math.max(90, Math.min(
+      startHeight + (event.clientY - startY), splitter.parentElement.clientHeight - 160)));
     code.style.height = `${next}px`;
   };
   const onUp = () => {

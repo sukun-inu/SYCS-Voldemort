@@ -308,7 +308,65 @@ def main():
                   overlap.get("bodyOverflow") == 0, f"はみ出し {overlap.get('bodyOverflow')}px")
             check(f"{app_id} の保存バーが中身の下に居る",
                   overlap.get("barBelowContent") is True)
+
+            # 保存バーは送り先の外にあるので、放っておくとスクロールバーのぶん
+            # だけ設定項目より右へはみ出す（Windows の Chrome で実測 10px、
+            # headless では 0px なので気づけなかった）。溝を常に確保し、
+            # バーも同じだけ内側へ寄せて揃える。
+            edges = page.evaluate("""(id) => {
+              const win = document.querySelector(`.window[data-app-id="${id}"]`);
+              const section = win.querySelector(".section");
+              const bar = win.querySelector(".savebar");
+              const scroller = win.querySelector(".panel-scroll");
+              return {
+                section: section.getBoundingClientRect().right,
+                bar: bar.getBoundingClientRect().right,
+                gutter: scroller.getBoundingClientRect().width - scroller.clientWidth,
+                variable: getComputedStyle(document.documentElement)
+                            .getPropertyValue("--scrollbar").trim(),
+              };
+            }""", app_id)
+            check(f"{app_id} の保存バーと節の右端が揃う",
+                  abs(edges["bar"] - edges["section"]) < 0.6,
+                  f"節 {edges['section']:.1f} / バー {edges['bar']:.1f} "
+                  f"（溝 {edges['gutter']:.0f}px, --scrollbar {edges['variable']}）")
             page.click(f'.window[data-app-id="{app_id}"] .window-control.close')
+
+        # ── 窓の座標と大きさが整数であること ──
+        # 置き場の大きさは小数になりうる（ブラウザの拡大、端数の出る画面）。
+        # それを上限に clamp した値をそのまま style へ書いていたため、窓が
+        # 端に当たると height:572.594px のような小数になり、枠と文字がにじんだ。
+        # ここでは置き場をわざと小数にして、窓が整数に収まることを見る。
+        page.evaluate("""() => {
+          const d = document.getElementById("desktop");
+          d.style.height = "612.6px"; d.style.width = "999.4px";
+        }""")
+        page.wait_for_timeout(200)
+        page.click("#start-button")
+        page.click('.app-tile[data-app-id="djaudio"]')
+        page.wait_for_selector('.window[data-app-id="djaudio"]', timeout=6000)
+        page.wait_for_timeout(1100)
+        boxes = page.evaluate("""() => {
+          const out = [];
+          for (const w of document.querySelectorAll(".window")) {
+            for (const key of ["left", "top", "width", "height"]) {
+              const raw = w.style[key];
+              if (!raw) continue;
+              const value = parseFloat(raw);
+              if (Math.abs(value - Math.round(value)) > 0.001) {
+                out.push(`${w.dataset.appId}.${key}=${raw}`);
+              }
+            }
+          }
+          return out;
+        }""")
+        check("窓の座標と大きさが小数にならない", boxes == [], f"小数: {boxes}")
+        page.evaluate("""() => {
+          const d = document.getElementById("desktop");
+          d.style.height = ""; d.style.width = "";
+        }""")
+        page.click('.window[data-app-id="djaudio"] .window-control.close')
+        page.wait_for_timeout(200)
 
         # ── コレクションのあるパネル ──
         page.click("#start-button")

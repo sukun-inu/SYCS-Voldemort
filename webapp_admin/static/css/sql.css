@@ -376,6 +376,11 @@ body.is-resizing-rows { cursor: row-resize; user-select: none; }
   font-weight: 600;
   margin-bottom: 10px;
 }
+/* アイコンを文字の1行目の中心に置く。行高 13.5px × 1.7 = 22.95px、
+   アイコン 13.5px なので上の余りは (22.95 - 13.5) / 2 ≒ 4.7px。
+   flex-start のままだと行の上端に貼り付いて約5px上に浮く
+   （.toast > .icon と同じ勘定）。 */
+.sql-error-message > .icon { margin-top: 4.7px; }
 .sql-error-meta {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

@@ -91,7 +91,9 @@ export class Desktop {
   }
 
   #cascadeRect(app) {
-    const bounds = this.layer.getBoundingClientRect();
+    // 小数のまま style へ流すと窓の縁がにじむ（→ wm/window.js の boundsOf）
+    const box = this.layer.getBoundingClientRect();
+    const bounds = { width: Math.round(box.width), height: Math.round(box.height) };
     const w = Math.min(app.window?.w || 760, Math.max(320, bounds.width - 40));
     const h = Math.min(app.window?.h || 620, Math.max(200, bounds.height - 40));
     const offset = (this.windows.size % 8) * 26;
@@ -316,8 +318,8 @@ export class Desktop {
         return;
       }
       const rect = button.getBoundingClientRect();
-      menu.style.right = `${Math.max(8, window.innerWidth - rect.right)}px`;
-      menu.style.bottom = `${window.innerHeight - rect.top + 8}px`;
+      menu.style.right = `${Math.round(Math.max(8, window.innerWidth - rect.right))}px`;
+      menu.style.bottom = `${Math.round(window.innerHeight - rect.top + 8)}px`;
       this.#showMenu(menu);
       button.setAttribute("aria-expanded", "true");
       this.#openBackdrop(() => this.closeUserMenu());
@@ -359,11 +361,13 @@ export class Desktop {
 
   #wireResize() {
     window.addEventListener("resize", () => {
-      const bounds = this.layer.getBoundingClientRect();
+      const box = this.layer.getBoundingClientRect();
+      const width = Math.round(box.width);
+      const height = Math.round(box.height);
       for (const win of this.windows.values()) {
         if (win.maximized) continue;
-        win.el.style.left = `${Math.max(0, Math.min(win.el.offsetLeft, bounds.width - 80))}px`;
-        win.el.style.top = `${Math.max(0, Math.min(win.el.offsetTop, bounds.height - 32))}px`;
+        win.el.style.left = `${Math.max(0, Math.min(win.el.offsetLeft, width - 80))}px`;
+        win.el.style.top = `${Math.max(0, Math.min(win.el.offsetTop, height - 32))}px`;
       }
     });
   }

@@ -1212,8 +1212,12 @@ export async function createMixer(container, options = {}) {
 
     if (!loopRegion) { loopBand.hidden = true; return; }
     loopBand.hidden = false;
-    loopBand.style.left = `${(loopRegion.start - view.start) * view.pxPerSecond}px`;
-    loopBand.style.width = `${(loopRegion.end - loopRegion.start) * view.pxPerSecond}px`;
+    /* 目盛りとグリッド線はキャンバス側で Math.round して1pxに置いている
+       （drawRuler / drawWaveform）。こちらだけ小数のままだと、帯の縁が
+       目盛りの線から最大1pxずれて見える。同じ丸め方に揃える。 */
+    loopBand.style.left = `${Math.round((loopRegion.start - view.start) * view.pxPerSecond)}px`;
+    loopBand.style.width =
+      `${Math.round((loopRegion.end - loopRegion.start) * view.pxPerSecond)}px`;
   }
 
   // ── メーターと再生位置 ──────────────────────────────────
@@ -1244,7 +1248,8 @@ export async function createMixer(container, options = {}) {
 
   function render() {
     const at = positionOf();
-    const x = (at - view.start) * view.pxPerSecond;
+    // 再生位置も目盛りと同じ丸めにする（ずれると線が二重に見える）
+    const x = Math.round((at - view.start) * view.pxPerSecond);
     playhead.style.transform = `translateX(${x}px)`;
     playhead.hidden = x < -2 || x > view.width + 2;
     clock.textContent = `${formatTime(at, true)} / ${formatTime(duration)}`;
