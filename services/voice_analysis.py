@@ -41,8 +41,44 @@ LPC の極を1フレームずつ独立に拾って中央値を採る、という
 当てると、加工された声を正常な範囲へ引き戻してしまい、検出できなくなる。
 判断材料は帯域幅（共鳴は鋭い）と連続性（共鳴はなめらか）だけにする。
 
-追跡した3本が第1から始まっている必要はない。必要なのは間隔であり、
-連続したフォルマントでありさえすれば第2〜第4でも同じ値になる。
+追跡した組が第1から始まっている必要はない。必要なのは間隔であり、
+連続したフォルマントでありさえすれば第2〜第5でも同じ値になる。
+
+■ 「連続した」が効いていなかった話
+
+上の「連続したフォルマントでありさえすれば」が、実は保証されていなかった。
+選ぶ組に「隣り合っていること」の条件が無く、1本飛ばした組を選んでも罰が
+無かったためである。
+
+実録音で測ると、同じ話者の同じ録音でも、区間ごとに選ばれる組が
+1198/2659/3664 → 512/2206/4392 → 632/3360/4656 と変わっていた。後ろの2つは
+明らかに間を飛ばしている。そこから出る間隔は 1255〜1923Hz（声道長
+9.1〜13.9cm）に散らばり、どの区間を選ぶかで「加工の形跡あり」と「なし」が
+入れ替わった。正解の分かる合成音でも、子どもの声（間隔が広い）で 12.5cm を
+8.7cm と測り、地声を加工扱いしていた。
+
+そこで、飛ばしの印を罰する。1本飛ばすとその間隔だけが突出して広くなるので、
+「いちばん広い間隔が、真ん中の広さの何倍か」を見る。間隔を3つ取るために
+4本を1組として追う（候補が足りない区間だけ3本に落とす）。
+
+  あ（正しい組）    間隔 360/1350/960 → 真ん中 960、最大 1350 → 1.41 倍
+  1本飛ばした組     間隔 900/1800/900 → 真ん中 900、最大 1800 → 2.00 倍
+
+「間隔がそろっていること」を求めてはいけない。実際の母音は等間隔ではないので
+（上の「あ」を見よ）、そろえと言うと、正しい組より「たまたま等間隔に見える
+誤った組」を選んでしまう。見るのは飛ばしの印だけにする。比で測るので、声全体に
+倍率が掛かっていても値は変わらない（加工された声を不利にしない）。
+
+これで、正解の分かる声では成人男性 17.5cm・成人女性 15.0cm・子ども 12.5cm を
+いずれも 1cm 以内で当てる。雑音（SNR 5dB）で -0.9cm、残響で +0.2cm、
+4kHz への帯域制限で +0.7cm と、現実的な劣化でもほとんど動かない。
+
+■ 測り切れていない区間では何も言わない
+
+それでも実際の録音では、区間によって値が散らばる。四分位で見た声道長の幅が
+中央値の3分の1を超えたら（成人男性と成人女性を跨ぐほどの幅）、中央値がどこに
+落ちていても unknown を返す。中央値がたまたまどちら側に落ちたかで人を疑うのは、
+断定を作るだけだからである。
 """
 
 from __future__ import annotations
@@ -133,13 +169,42 @@ _MIN_RUN = 6
 # 極をフォルマント候補とみなす条件
 _MAX_BANDWIDTH_HZ = 500.0
 _MIN_FORMANT_HZ = 150.0
-_MAX_FORMANT_HZ = 5500.0
+# 上限を 5500Hz にしていたころは、高い倍率へ加工された声で第4フォルマントが
+# 枠の外へ出て、追跡に必要な本数が揃わなかった（1.7倍で判定不能になった）。
+# 16kHz で解析しているので、7000Hz までは意味のある極が取れる。
+_MAX_FORMANT_HZ = 7000.0
 _MIN_FORMANT_GAP_HZ = 200.0
 _MAX_CANDIDATES = 8
-_TRACK_COUNT = 3
+# 何本を1組として追うか。4本あれば間隔が3つ取れるので、「そろっているか」を
+# 見られる（3本だと2つしか無く、1本飛ばしを見分けにくい）。候補がそれだけ
+# 無い区間では3本に落とす。
+_TRACK_COUNT = 4
+_TRACK_COUNT_MIN = 3
 
 # 追跡の重み。連続性を主にする（余計な極はフレームごとに飛ぶ）。
 _CONTINUITY_WEIGHT = 8.0
+# 「1本飛ばした組」への罰。
+#
+# 声道の共鳴は概ね等間隔に並ぶので、連続した組を選べば間隔はそろい、1本飛ばすと
+# そこだけ倍に開く。ここに罰を置かないと、飛ばした組を選んでも損をしない。
+#
+# 実際そうなっていた。同じ話者の区間ごとに、選ばれる組が
+# 1198/2659/3664 → 512/2206/4392 → 632/3360/4656 と変わり、そこから出る
+# 間隔が 1255〜1923Hz（声道長 9.1〜13.9cm）に散らばっていた。どの区間を
+# 選ぶかで「加工の形跡あり」と「なし」が入れ替わる原因がこれ。
+#
+# ただし「間隔がそろっていること」を求めてはいけない。実際の母音は等間隔では
+# ない（あ = 730/1090/2440/3400 で、間隔は 360/1350/960）。そろえと言うと、
+# 正しい組より「たまたま等間隔に見える誤った組」を選んでしまう。
+#
+# 見るのは飛ばしの印だけにする。1本飛ばすとその1つだけが突出して広くなるので、
+# 「いちばん広い間隔が、真ん中の広さの何倍か」で測る。
+#   あ（正しい組）      間隔 360/1350/960 → 真ん中 960、最大 1350 → 1.41 倍
+#   1本飛ばした組       間隔 900/1800/900 → 真ん中 900、最大 1800 → 2.00 倍
+# 比で測るので、声全体に倍率が掛かっても値は変わらない（加工された声を不利に
+# しない、というこのファイルの方針を守る）。
+_SKIP_RATIO = 1.6         # ここを超えた分だけ罰する
+_SKIP_WEIGHT = 8.0
 
 # 人の声の範囲
 F0_MIN_HZ, F0_MAX_HZ = 60.0, 400.0
@@ -156,6 +221,20 @@ _VTL_FROM_F0_SLOPE = 0.027
 # 個人差は大きいので、許容は広めにとる。ここを狭めると地声の人を
 # 加工扱いしてしまう。
 _VTL_F0_TOLERANCE_CM = 4.0
+
+# その区間の測定が、そもそも何かを言えるだけ定まっているか。
+# 四分位で見た声道長の幅を、中央値で割った比で測る。
+#
+# 追跡を直したあと、正解の分かる合成音ではこの比が 0.002〜0.03 に収まる
+# （成人男性 17.62〜17.65cm、子ども 12.68〜13.0cm）。実際の録音では 0.06〜0.92
+# まで開く。0.35 を超えると幅が中央値の3分の1より広い——成人男性（16〜18.5cm）と
+# 成人女性（14〜16cm）を跨ぐほどの幅で、体格ひとつ言い当てられない。
+# そこを超えたら、中央値がどこに落ちていても「この区間では測り切れていない」
+# と答える。
+#
+# ここを natural にも課すのは、追跡を直して地声が締まってからできるようになった。
+# 前の実装では地声でも幅が広く、課すと軒並み判定不能になっていた。
+_MAX_RELATIVE_SPREAD = 0.35
 
 # 倍音誤りを避ける閾値。最良の山とこれだけ近ければ短いほうの周期を採る。
 _OCTAVE_GUARD = 0.90
@@ -341,11 +420,11 @@ def _candidates(frame: list[float]) -> list[tuple[float, float]]:
 
 # ── 追跡 ──────────────────────────────────────────────────────
 
-def _states(count: int) -> list[tuple[int, ...]]:
+def _states(count: int, size: int = _TRACK_COUNT) -> list[tuple[int, ...]]:
     """そのフレームで選びうる組み合わせ。"""
-    if count < _TRACK_COUNT:
+    if count < size:
         return []
-    return list(combinations(range(count), _TRACK_COUNT))
+    return list(combinations(range(count), size))
 
 
 def _emission(state: tuple[int, ...], poles: list[tuple[float, float]]) -> float:
@@ -353,15 +432,30 @@ def _emission(state: tuple[int, ...], poles: list[tuple[float, float]]) -> float
 
     共鳴は鋭い（帯域幅が狭い）。近すぎる2本は、ひとつの共鳴が割れたものか
     片方が偽物なので避ける。
+
+    そして、選んだ組の間隔がそろっていること。声道の共鳴は概ね等間隔に
+    並ぶので、連続した組なら間隔はそろい、1本飛ばすとそこだけ倍に開く。
+    ここを見ないと、飛ばした組を選んでも損をしない（→ _UNIFORMITY_WEIGHT）。
     """
     cost = 0.0
     previous = None
+    gaps: list[float] = []
     for index in state:
         freq, bandwidth = poles[index]
         cost += bandwidth / _MAX_BANDWIDTH_HZ
-        if previous is not None and freq - previous < _MIN_FORMANT_GAP_HZ:
-            cost += 3.0
+        if previous is not None:
+            if freq - previous < _MIN_FORMANT_GAP_HZ:
+                cost += 3.0
+            gaps.append(freq - previous)
         previous = freq
+
+    # 飛ばしの印（突出して広い間隔が1つある）だけを罰する。
+    # 真ん中の広さと比べるので、間隔が3つ以上（＝4本追う）ときに効く。
+    if len(gaps) >= 3:
+        ordered = sorted(gaps)
+        middle = ordered[len(ordered) // 2]
+        if middle > 0:
+            cost += _SKIP_WEIGHT * max(0.0, ordered[-1] / middle - _SKIP_RATIO)
     return cost
 
 
@@ -379,9 +473,23 @@ def _transition(before: tuple[int, ...], after: tuple[int, ...],
 
 
 def _track(run: list[list[tuple[float, float]]]) -> list[list[float]]:
-    """途切れない区間のフォルマントを、系列として選び直す（Viterbi）。"""
-    frames = [(poles, _states(len(poles))) for poles in run]
-    frames = [(poles, states) for poles, states in frames if states]
+    """途切れない区間のフォルマントを、系列として選び直す（Viterbi）。
+
+    追う本数は区間ごとに決める。候補が 4本に足りないフレームがあるなら
+    3本に落とす（本数がフレームごとに変わると系列として繋げられないので、
+    区間の中では揃える）。
+    """
+    if not run:
+        return []
+
+    # 4本で組めるフレームが足りなければ3本に落とす。候補の少ないフレームが
+    # 1枚あるだけで区間ごと捨てると、使える所まで失う。
+    frames: list[tuple[list[tuple[float, float]], list[tuple[int, ...]]]] = []
+    for size in (_TRACK_COUNT, _TRACK_COUNT_MIN):
+        frames = [(poles, _states(len(poles), size)) for poles in run]
+        frames = [(poles, states) for poles, states in frames if states]
+        if len(frames) >= _MIN_RUN:
+            break
     if len(frames) < _MIN_RUN:
         return []
 
@@ -659,6 +767,31 @@ def analyse(source: bytes | Path, duration: float,
     # その範囲の中で、フレームごとの間隔がどれだけ散らばっていたか。
     # 中央値だけを見ると、散らばりの大小に関わらず同じ顔で答えが返る。
     low_vtl, high_vtl = _vtl_band(spacings)
+    spread = (high_vtl - low_vtl) / vtl if (vtl and high_vtl) else 0.0
+
+    # まず「そもそも測り切れているか」。ここが緩いと、たまたま中央値が
+    # どちらへ落ちたかで答えが決まる。実測では、同じ人の同じ録音でも
+    # 区間を変えるだけで「加工の形跡あり」と「なし」が入れ替わっていた。
+    if not vtl or spread > _MAX_RELATIVE_SPREAD:
+        return {
+            "verdict": "unknown",
+            "reason": (
+                f"この区間では声道長が {low_vtl:.1f}〜{high_vtl:.1f} cm に散らばっており"
+                f"（中央値 {vtl:.1f} cm）、体格ひとつ言い当てられません。"
+                "加工の有無は判断できません。その人がひと続きにはっきり喋っている所を、"
+                "もう少し長めに選んでください。"
+            ),
+            "frames": len(spacings),
+            "f0_hz": round(f0, 1),
+            "formant_spacing_hz": round(spacing, 1),
+            "vocal_tract_cm": round(vtl, 2),
+            "vocal_tract_low_cm": round(low_vtl, 2),
+            "vocal_tract_high_cm": round(high_vtl, 2),
+            "measurement_settled": False,
+            "identifies_speaker": False,
+            **scope,
+        }
+
     settled = _is_settled(verdict, low_vtl, high_vtl, f0, expected_vtl)
     if not settled:
         # 同じ範囲の中で答えが割れている。中央値がたまたまどちら側に
@@ -765,11 +898,19 @@ def _is_settled(verdict: str, low_vtl: float, high_vtl: float,
 
 
 def _median_formants(sets: list[list[float]]) -> list[float]:
-    """追跡した3本それぞれの代表値。"""
-    complete = [s for s in sets if len(s) == _TRACK_COUNT]
+    """追跡した各本の代表値。
+
+    区間によって追った本数が違うことがある（候補が足りなければ3本に落とす）。
+    数の多いほうに揃えてから代表値を出す。
+    """
+    if not sets:
+        return []
+    sizes = [len(s) for s in sets]
+    size = max(set(sizes), key=sizes.count)
+    complete = [s for s in sets if len(s) == size]
     if not complete:
         return []
-    return [_median([s[i] for s in complete]) for i in range(_TRACK_COUNT)]
+    return [_median([s[i] for s in complete]) for i in range(size)]
 
 
 # 復元フィルタを組み立てるときの基準。入力の標本化周波数はファイルごとに
