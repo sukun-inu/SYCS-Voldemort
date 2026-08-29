@@ -607,28 +607,12 @@ def _draw_map_chrome(canvas: "Image.Image", title: str, subtitle: str,
         draw.text((22 * ss, 47 * ss), subtitle, font=_get_font(14 * ss),
                   fill=(178, 192, 210, 255))
 
-    # 最大震度は帯の右端に、その震度の色で大きく置く。
+    # 最大震度は地図の中には出さない。
     #
-    # 見出しの文字列にも「最大震度6強」とは書いてあるが、地図に落ちた札を
-    # 目で追って最大値を探すのと、数字が1つ大きく出ているのとでは、読み取りに
-    # かかる時間が違う。速報として最初に伝わるべき値なので、色と大きさを与える。
-    if scales:
-        top = max(scales)
-        rgb = _MAP_FILL_RGB.get(top, (120, 130, 150))
-        label = _SCALE_BADGE_LABEL.get(top, str(top))
-        box_w, box_h = 96 * ss, 58 * ss
-        bx = width - box_w - 20 * ss
-        by = 12 * ss
-        seat = Image.new("RGBA", (box_w, box_h), (0, 0, 0, 0))
-        ImageDraw.Draw(seat).rounded_rectangle(
-            [0, 0, box_w - 1, box_h - 1], radius=10 * ss, fill=(*rgb, 255))
-        canvas.alpha_composite(seat, (int(bx), int(by)))
-        ink = _ink_for(rgb)
-        draw.text((bx + box_w / 2, by + 13 * ss), "最大震度", font=_get_font(12 * ss),
-                  fill=(*ink[:3], 215), anchor="mm")
-        draw.text((bx + box_w / 2, by + 38 * ss), label,
-                  font=_get_font(int(34 * ss * (1.0 if len(label) == 1 else 0.78))),
-                  fill=ink, anchor="mm")
+    # 一時はここの右上に色付きの札を置いていたが、Discord の埋め込みには
+    # すでに最大震度だけの画像がサムネイルとして付いている（_generate_badge、
+    # attachment://intensity_badge.png）。同じものが同じ画面に2つ出ることになる。
+    # 地図に残す必要もない——見出しの文字列に「最大震度 4」と入っている。
 
     chip, gap, pad = 22 * ss, 7 * ss, 12 * ss
     box_w = pad * 2 + len(scales) * chip + max(0, len(scales) - 1) * gap
