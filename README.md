@@ -64,6 +64,25 @@ python tools/generate_admin_docs.py         # Regenerate the settings table in d
 
 All of them run against a temporary `SETTINGS_DIR`, so your real `settings.json` is left alone.
 
+On every push to `main` and every pull request, `.github/workflows/tests.yml` runs
+`unittest`, `check_admin_schema.py`, `check_requirements.py`, and
+`generate_admin_docs.py --check` automatically (`check_admin_ui.py` needs a real
+browser, so it stays local-only).
+
+### Measuring coverage
+
+```bash
+pip install -r requirements-dev.txt          # adds coverage
+python -m coverage run -m unittest discover -s tests -t .
+python -m coverage report -m                  # per-file execution rate
+python -m coverage html && open htmlcov/index.html   # line-by-line view
+```
+
+Only the application code is measured (top-level `.py` files, `services/`,
+`commands/`, `webapp/`, `webapp_admin/`, …); `tests/`, `tools/`, `migrations/`,
+and `scripts/` are excluded via `.coveragerc`. It uses `source = .` so that
+modules nothing ever imports still count as 0%, keeping the number honest.
+
 ---
 
 ## Documentation

@@ -74,6 +74,26 @@ python tools/generate_admin_docs.py         # docs/ADMIN.ja.md の設定表を�
 
 いずれも一時ディレクトリを `SETTINGS_DIR` にして動くため、本物の `settings.json` は変更しません。
 
+`main` への push と pull request では、`.github/workflows/tests.yml` がこのうち
+`python -m unittest`・`check_admin_schema.py`・`check_requirements.py`・
+`generate_admin_docs.py --check` を自動で実行します（`check_admin_ui.py` は
+実ブラウザが要るため CI には含めていません）。
+
+### カバレッジを測る
+
+```bash
+pip install -r requirements-dev.txt          # coverage を追加インストール
+python -m coverage run -m unittest discover -s tests -t .
+python -m coverage report -m                  # ファイルごとの実行率を表示
+python -m coverage html && start htmlcov/index.html   # 行単位で見たいとき
+```
+
+対象は本体コード（ルート直下の `.py`、`services/`、`commands/`、`webapp/`、
+`webapp_admin/` など）のみで、`tests/`・`tools/`・`migrations/`・`scripts/`
+は `.coveragerc` の `omit` で除外しています。一度も import されないモジュールも
+0% として数えるように `source = .` を使っているため、テストが薄い場所ほど
+数字が正直に低く出ます。
+
 ---
 
 ## ドキュメント
