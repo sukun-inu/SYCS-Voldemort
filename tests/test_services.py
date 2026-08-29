@@ -111,6 +111,67 @@ class MaxScaleTests(unittest.TestCase):
         self.assertEqual(eq._max_scale({}), -1)
 
 
+class ScaleLabelTests(unittest.TestCase):
+    """震度の数値と階級の対応が、配信元の仕様と一致していること。
+
+    P2PQuake JSON API v2 の仕様（swagger-ui/specification.yaml）に
+      -1(不明) 0(震度0) 10(震度1) 20(震度2) 30(震度3) 40(震度4)
+      45(震度5弱) 50(震度5強) 55(震度6弱) 60(震度6強) 70(震度7) 99(～程度以上)
+    と定義されている。
+
+    ここは以前 45 を「4強」、50 を「5弱」…と1段ずつずらして持っていた。
+    震度5弱の地震を「震度4強」（気象庁に存在しない階級）、震度6強を
+    「震度6弱」と、実際より低く伝えていたことになる。災害速報として
+    致命的なので、表を触ったら必ずここで気づけるようにする。
+    """
+
+    # 配信元の仕様そのまま。ここを実装に合わせて書き換えないこと。
+    SPEC = {10: "1", 20: "2", 30: "3", 40: "4", 45: "5弱",
+            50: "5強", 55: "6弱", 60: "6強", 70: "7"}
+
+    def test_the_labels_match_the_upstream_spec(self):
+        from config import SCALE_LABELS
+
+        self.assertEqual(dict(SCALE_LABELS), self.SPEC)
+
+    def test_every_table_covers_exactly_the_spec_values(self):
+        """階級ごとの表（全角・バッジ・色・絵文字）に抜けや余りが無いこと。
+
+        以前は存在しない 65 が各表に入っており、選べるのに一致しない
+        設定値になっていた。
+        """
+        from webapp_admin.schema.panels.earthquake import VALID_SCALES
+
+        tables = {
+            "全角表記": eq._SCALE_MAP,
+            "バッジ": eq._SCALE_BADGE_LABEL,
+            "地図の色": eq._MAP_FILL_RGB,
+            "帯の色": eq._SCALE_RGB,
+            "絵文字": eq._SCALE_TITLE_EMOJI,
+        }
+        for name, table in tables.items():
+            with self.subTest(name):
+                self.assertEqual(sorted(table), sorted(self.SPEC),
+                                 f"{name} の階級が仕様と違う")
+        self.assertEqual(sorted(VALID_SCALES), sorted(self.SPEC),
+                         "設定画面で選べる震度が仕様と違う")
+
+    def test_the_forecast_notation_maps_to_the_same_levels(self):
+        """緊急地震速報の表記（5- など）と、地震情報の数値が同じ階級を指すこと。
+
+        以前は EEW の "5-" を 50、地震情報の 45 を「4強」と読んでいたため、
+        同じ震度5弱でも経路によって内部の数値が違い、通知する最小震度の
+        判定が経路ごとにずれていた。
+        """
+        pairs = {"1": 10, "2": 20, "3": 30, "4": 40,
+                 "5-": 45, "5+": 50, "6-": 55, "6+": 60, "7": 70}
+        self.assertEqual(dict(eq._FORECAST_INT_TO_SCALE), pairs)
+        # 表記 → 数値 → 表示 が元の表記へ戻ること
+        for text, value in pairs.items():
+            with self.subTest(text):
+                self.assertEqual(eq._SCALE_BADGE_LABEL[value], text)
+
+
 class BadgeTests(unittest.TestCase):
     def test_known_scale_produces_an_image(self):
         buf = eq._generate_badge(40)
@@ -183,7 +244,9 @@ class IntensityMapTests(unittest.TestCase):
         """タイルが1枚も取れなくても、震度は出す。"""
         from PIL import Image
 
-        plot = [(38.7, 141.0, 60), (37.7, 140.4, 40), (35.6, 139.7, 10)]
+        # (緯度, 経度, 震度, 地名)
+        plot = [(38.7, 141.0, 60, "宮城県"), (37.7, 140.4, 40, "福島県"),
+                (35.6, 139.7, 10, "東京都")]
         buf = eq._compose_intensity_map(
             [(0, 0)], [None], 0.0, 0.0, 7, plot, 38.7, 141.0,
             "最大震度 6弱", "宮城県沖  M6.8")
@@ -216,7 +279,7 @@ class IntensityMapTests(unittest.TestCase):
         with patch.object(eq, "_compose_intensity_map", fake_compose),              patch.object(eq, "_fetch_tile", no_tile):
             asyncio.run(eq._generate_intensity_map(None, 38.7, 141.0, points))
 
-        scales = sorted(scale for _, _, scale in captured["plot"])
+        scales = sorted(point[2] for point in captured["plot"])
         self.assertEqual(scales, [50, 60], "同じ県の点がまとまっていない")
 
 class EvaluateGuildTests(unittest.TestCase):
