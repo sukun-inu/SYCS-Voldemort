@@ -451,7 +451,7 @@ body.desktop-body { overflow: hidden; }
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--gap-icon);
   width: 100%;
   padding: 8px 10px;
   border: 1px solid transparent;

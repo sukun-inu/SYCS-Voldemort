@@ -1582,6 +1582,67 @@ class TextContrastTests(unittest.TestCase):
                     f"本文に必要な {self.MIN_RATIO}:1 に届いていません")
 
 
+class SpacingScaleTests(unittest.TestCase):
+    """余白と字の段階が、尺度として成り立っていること。
+
+    数字を格子へ丸めること自体が目的ではない。「同じ役割なのに値が違う」
+    「入れ子の内と外で広さの順が逆」を防ぐのが目的なので、順序を検査する。
+    """
+
+    ROOT = Path(__file__).resolve().parent.parent
+
+    def _tokens(self) -> dict[str, int]:
+        text = (self.ROOT / "webapp_admin/static/css/tokens.css").read_text(encoding="utf-8")
+        found = {}
+        for name, value in re.findall(r"(--(?:gap|text)-[a-z0-9]+)\s*:\s*(\d+)px", text):
+            found.setdefault(name, int(value))
+        return found
+
+    def test_the_outer_gap_is_wider_than_the_inner_one(self):
+        """節どうしは、節の中の項目どうしより広く離す。
+
+        同じ 14px にしていたころは、「項目が並んでいる」のか「別の節が
+        始まった」のかが間隔から読み取れなかった。
+        """
+        gaps = self._tokens()
+        for name in ("--gap-icon", "--gap-inline", "--gap-stack", "--gap-section"):
+            self.assertIn(name, gaps, f"{name} が tokens.css に無い")
+        self.assertLess(gaps["--gap-icon"], gaps["--gap-stack"])
+        self.assertLess(gaps["--gap-stack"], gaps["--gap-section"])
+
+    def test_the_icon_gap_is_written_in_one_place(self):
+        """アイコンと文字の間が、また複数の値に分かれていないこと。
+
+        以前は .btn 6px / .chip 5px / .menu-item 8px と三通りあった。
+        """
+        css_dir = self.ROOT / "webapp_admin/static/css"
+        offenders = []
+        for name in ("components", "desktop"):
+            text = (css_dir / f"{name}.css").read_text(encoding="utf-8")
+            text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+            for block in re.finditer(r"([^{}]+)\{([^{}]*)\}", text):
+                selector = " ".join(block.group(1).split())
+                if not any(key in selector for key in (".btn", ".chip", ".menu-item")):
+                    continue
+                for value in re.findall(r"gap\s*:\s*(\d+)px", block.group(2)):
+                    offenders.append(f"{name}.css: {selector[:40]} → gap {value}px")
+        self.assertEqual(offenders, [],
+                         "アイコンと文字の間に生の値が残っています（--gap-icon を使う）:"
+                         + chr(10) + chr(10).join(offenders))
+
+    def test_font_sizes_are_whole_pixels(self):
+        """0.5px 刻みを使わない（端末で丸め方が違い、行の高さが揃わない）。"""
+        css_dir = self.ROOT / "webapp_admin/static/css"
+        offenders = []
+        for path in css_dir.glob("*.css"):
+            if path.name == "public.css":     # 読み物ページは別の尺度
+                continue
+            for value in re.findall(r"font-size:\s*([0-9]+\.[0-9]+)px",
+                                    path.read_text(encoding="utf-8")):
+                offenders.append(f"{path.name}: {value}px")
+        self.assertEqual(offenders, [], f"小数の字の大きさ: {offenders}")
+
+
 class DjaudioLimitTests(unittest.TestCase):
     """画面の上下限と、保存側で丸める範囲が同じであること。
 
