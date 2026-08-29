@@ -117,6 +117,28 @@ class BadgeTests(unittest.TestCase):
         self.assertIsNotNone(buf)
         self.assertGreater(len(buf.getvalue()), 0)
 
+    def test_the_badge_is_smooth_at_the_corners(self):
+        """等倍で描くと角が階段状になる（PIL はアンチエイリアスしない）。
+
+        倍で描いてから縮めているので、角の内側には中間色の画素が並ぶはず。
+        全部が「透明か不透明か」の2値なら、縮小が効いていない。
+        """
+        from PIL import Image
+
+        image = Image.open(eq._generate_badge(40)).convert("RGBA")
+        alpha = image.getchannel("A")
+        corner = alpha.crop((0, 0, 24, 24)).getdata()
+        midtones = [v for v in corner if 8 < v < 247]
+        self.assertGreater(len(midtones), 12, "角に中間色が無い（等倍で描いている）")
+
+    def test_the_number_stays_readable_on_light_scales(self):
+        """震度4 は明るい黄色。白抜きだと沈むので黒にしている。"""
+        light = eq._MAP_FILL_RGB[40]
+        dark = eq._MAP_FILL_RGB[70]
+        self.assertEqual(eq._ink_for(light)[:3], (16, 20, 26))
+        self.assertEqual(eq._ink_for(dark)[:3], (255, 255, 255))
+
+
     def test_notify_does_not_build_a_badge_for_unknown_scale(self):
         """震度不明のまま作ると「最大震度 -1」と大書きした画像になる。"""
         made = []
@@ -136,6 +158,66 @@ class BadgeTests(unittest.TestCase):
 
         self.assertEqual(made, [])
 
+class IntensityMapTests(unittest.TestCase):
+    """地図の組み立て。タイルは取りに行かず、描画の道筋だけを見る。"""
+
+    def test_the_tile_source_needs_no_api_key(self):
+        """配信元が鍵を要求するようになると、画像に文字が刷り込まれて届く。
+
+        実際 CARTO がそうなり、「API KEY REQUIRED」と斜めに書かれた地図を
+        そのまま Discord へ流していた。鍵の要らない地理院タイルを使う。
+        """
+        self.assertIn("cyberjapandata.gsi.go.jp", eq._TILE_URL)
+        self.assertIn("国土地理院", eq._TILE_ATTRIBUTION)
+
+    def test_a_white_map_is_repainted_dark(self):
+        from PIL import Image
+
+        tile = Image.new("L", (4, 4), 255)      # 白＝面
+        tile.putpixel((0, 0), 0)                # 黒＝線
+        out = eq._recolour_tile(tile)
+        self.assertEqual(out.getpixel((1, 1)), eq._MAP_LAND)
+        self.assertEqual(out.getpixel((0, 0)), eq._MAP_LINE)
+
+    def test_it_draws_even_when_no_tile_arrives(self):
+        """タイルが1枚も取れなくても、震度は出す。"""
+        from PIL import Image
+
+        plot = [(38.7, 141.0, 60), (37.7, 140.4, 40), (35.6, 139.7, 10)]
+        buf = eq._compose_intensity_map(
+            [(0, 0)], [None], 0.0, 0.0, 7, plot, 38.7, 141.0,
+            "最大震度 6弱", "宮城県沖  M6.8")
+        image = Image.open(buf)
+        self.assertEqual(image.size, (eq._MAP_W, eq._MAP_H))
+
+    def test_points_in_the_same_prefecture_keep_the_strongest(self):
+        """観測点の座標は県庁所在地に丸めている。
+
+        同じ県の点を全部描くと、ひとつの座標に何枚も丸が重なり、札の重なり
+        避けで肝心の最大震度が弾かれる。
+        """
+        import asyncio
+
+        captured = {}
+
+        def fake_compose(coords, tiles, ox, oy, zoom, plot, lat, lon, title, sub):
+            captured["plot"] = plot
+            import io as _io
+            return _io.BytesIO(b"x")
+
+        async def no_tile(session, z, x, y):
+            return None
+
+        points = [
+            {"addr": "宮城県栗原市", "pref": "宮城県", "scale": 60},
+            {"addr": "宮城県登米市", "pref": "宮城県", "scale": 55},
+            {"addr": "岩手県一関市", "pref": "岩手県", "scale": 50},
+        ]
+        with patch.object(eq, "_compose_intensity_map", fake_compose),              patch.object(eq, "_fetch_tile", no_tile):
+            asyncio.run(eq._generate_intensity_map(None, 38.7, 141.0, points))
+
+        scales = sorted(scale for _, _, scale in captured["plot"])
+        self.assertEqual(scales, [50, 60], "同じ県の点がまとまっていない")
 
 class EvaluateGuildTests(unittest.TestCase):
     """対象判定。ここが地震・津波・EEW・診断の唯一の判定元。"""
