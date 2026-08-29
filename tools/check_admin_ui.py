@@ -257,6 +257,59 @@ def main():
                   not page.locator(window + ".window-dirty").is_visible())
             page.click(window + ".window-control.close")
 
+        # ── 保存バーが中身に重ならないこと ──
+        # 以前は保存バーも中身と一緒に流れていて position:sticky で貼り付けて
+        # いたため、開いた直後から画面に入りきらない項目の上に重なっていた
+        # （実測で「クールダウン（秒）」の見出しごと 22px、その欄が 48px）。
+        # さらに本体の下パディング 15px ぶんバーが浮き、その隙間から隠れた欄が
+        # 覗くので「途中で切れている」ように見えていた。
+        for app_id in ("djaudio", "welcome", "tts"):
+            page.keyboard.press("Escape")
+            page.click("#start-button")
+            page.click(f'.app-tile[data-app-id="{app_id}"]')
+            page.wait_for_selector(f'.window[data-app-id="{app_id}"] .savebar', timeout=8000)
+            page.wait_for_timeout(300)
+            overlap = page.evaluate("""(id) => {
+              const win = document.querySelector(`.window[data-app-id="${id}"]`);
+              const body = win.querySelector(".window-body");
+              const scroller = win.querySelector(".panel-scroll");
+              const bar = win.querySelector(".savebar");
+              if (!scroller) return { missing: true };
+              const barBox = bar.getBoundingClientRect();
+              const clip = scroller.getBoundingClientRect();
+
+              // 「見えている範囲」でバーと重なっている中身を探す。
+              // 送り先で切り取られた分は見えていないので数えない。
+              const hidden = [];
+              for (const el of win.querySelectorAll(".field-label, .field-help, .input, .select")) {
+                const b = el.getBoundingClientRect();
+                if (b.height === 0) continue;
+                const top = Math.max(b.top, clip.top);
+                const bottom = Math.min(b.bottom, clip.bottom);
+                if (bottom <= top) continue;
+                const over = Math.min(bottom, barBox.bottom) - Math.max(top, barBox.top);
+                if (over > 2) hidden.push((el.textContent || el.value || "入力欄").trim().slice(0, 18));
+              }
+              return {
+                hidden,
+                // 本体ごと送るのではなく、中身だけが送られること
+                bodyOverflow: body.scrollHeight - body.clientHeight,
+                barBelowContent: Math.round(barBox.top) >= Math.round(clip.bottom) - 1,
+              };
+            }""", app_id)
+            if overlap.get("missing"):
+                check(f"{app_id} の保存バーが中身に重ならない", False,
+                      ".panel-scroll が無い（保存バーがまた中身と一緒に流れている）")
+                page.click(f'.window[data-app-id="{app_id}"] .window-control.close')
+                continue
+            check(f"{app_id} の保存バーが中身に重ならない",
+                  overlap["hidden"] == [], f"隠れている: {overlap['hidden']}")
+            check(f"{app_id} は中身だけが送られる（窓ごと送られない）",
+                  overlap.get("bodyOverflow") == 0, f"はみ出し {overlap.get('bodyOverflow')}px")
+            check(f"{app_id} の保存バーが中身の下に居る",
+                  overlap.get("barBelowContent") is True)
+            page.click(f'.window[data-app-id="{app_id}"] .window-control.close')
+
         # ── コレクションのあるパネル ──
         page.click("#start-button")
         page.click('.app-tile[data-app-id="news-feeds"]')

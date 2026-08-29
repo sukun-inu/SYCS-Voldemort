@@ -56,18 +56,29 @@ function renderPanel(win, schema) {
   const widgets = new Map();
   const baseline = { ...schema.values };
 
+  /* 中身と保存バーを分ける。
+
+     以前は保存バーも中身と一緒に流れていて、position:sticky で下に貼り付けて
+     いた。すると開いた直後から、画面に入りきらない項目の上にバーが重なる
+     （実測で「クールダウン（秒）」の見出しごと 22px、その欄が 48px 隠れていた）。
+     しかも本体の下パディング 15px ぶんだけバーが浮くので、その隙間から隠れた
+     欄が覗く。「途中で切れている」ように見えるのはこれ。
+
+     送るのは中身だけにして、保存バーは下に置いたままにする。 */
   const container = el("div", { class: "panel" });
+  const scroller = el("div", { class: "panel-scroll" });
   const sections = schema.sections.map((section) =>
     renderSection(section, schema, widgets, () => onChange())
   );
 
   if (schema.layout === "tabs" && sections.length > 1) {
-    container.append(
+    scroller.append(
       createTabs(schema.sections.map((section, index) => ({ title: section.title, node: sections[index] }))).el
     );
   } else {
-    container.append(...sections);
+    scroller.append(...sections);
   }
+  container.append(scroller);
 
   /* ── 保存バー ─────────────────────────────────────────── */
   const status = el("span", { class: "savebar-status", text: "変更はありません" });
