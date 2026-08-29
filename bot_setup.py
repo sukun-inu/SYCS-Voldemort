@@ -15,7 +15,6 @@ from services import dev_signals
 from services.djaudio_cache import cache_cleanup_loop as djaudio_cache_cleanup
 from services.djaudio_service import handle_djaudio_message
 from services.earthquake_service import run_earthquake_ws
-from services.kmoni_service import run_kmoni_eew
 from services.logging_service import log_action
 from services.news_service import run_news_feeds
 from services.reaction_role_service import handle_reaction_add, handle_reaction_remove
@@ -98,8 +97,6 @@ def create_bot() -> Bot:
 
 def setup_events(bot: Bot) -> None:
     _ws_task: asyncio.Task | None = None
-    # 強震モニタの監視（P2PQuake とは別系統の入口）
-    _kmoni_task: asyncio.Task | None = None
     _user_state_sync_task: asyncio.Task | None = None
     _user_state_repair_task: asyncio.Task | None = None
     _djaudio_cleanup_task: asyncio.Task | None = None
@@ -489,7 +486,7 @@ def setup_events(bot: Bot) -> None:
     async def on_ready():
         nonlocal _ws_task, _user_state_sync_task, _user_state_sync_started
         nonlocal _user_state_repair_task, _user_state_repair_started
-        nonlocal _djaudio_cleanup_task, _kmoni_task
+        nonlocal _djaudio_cleanup_task
         logger.info("[BOT] Logged in as %s", bot.user)
         await bot.tree.sync()
         if not update_status.is_running():
@@ -503,10 +500,6 @@ def setup_events(bot: Bot) -> None:
                 pending_sticky_task.start()
             if _ws_task is None or _ws_task.done():
                 _ws_task = asyncio.create_task(run_earthquake_ws(bot))
-            # 強震モニタ（防災科研）。P2PQuake とは配信元も経路も別なので、
-            # 片方が詰まってももう片方から届く。
-            if _kmoni_task is None or _kmoni_task.done():
-                _kmoni_task = asyncio.create_task(run_kmoni_eew(bot))
             # on_ready は再接続のたびに何度でも発火する。他のタスクと同じく
             # 多重起動を防ぎ、参照も保持する（保持しないと実行中に GC で
             # タスクごと消えることがある）。
