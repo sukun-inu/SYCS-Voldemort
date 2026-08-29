@@ -288,6 +288,49 @@ class IntensityMapTests(unittest.TestCase):
             if abs(r - rgb[0]) <= tol and abs(g - rgb[1]) <= tol and abs(b - rgb[2]) <= tol
         )
 
+    def test_every_prefecture_outline_sits_where_that_prefecture_is(self):
+        """輪郭と県名の対応がずれていないか。
+
+        輪郭は市区町村コードの上2桁を JIS の都道府県コードとみなして束ねている。
+        並びが1つずれても図としては成立してしまい、宮城の震度で福島が塗られる。
+        画像を見ても気づけないので、県庁所在地との距離で押さえる。
+        """
+        import numpy as np
+
+        shapes = eq._load_prefecture_shapes()
+        self.assertEqual(len(shapes), 47)
+        for name, (lat, lon) in eq._PREF_CENTERS.items():
+            rings = shapes.get(name)
+            self.assertTrue(rings, f"{name} の輪郭が無い")
+            lons = np.concatenate([ring[:, 0] for ring in rings])
+            lats = np.concatenate([ring[:, 1] for ring in rings])
+            nearest = float(np.min(np.hypot(lons - lon, lats - lat)))
+            self.assertLess(nearest, 0.35, f"{name} の輪郭が県庁所在地から離れすぎている")
+
+    def test_a_shaken_prefecture_is_painted(self):
+        """揺れた県は面でも塗る。
+
+        札（点）だけでは「県のどこか1点が揺れた」ようにしか見えず、揺れが
+        どちらへ広がったのかが伝わらない。
+        """
+        plot = [(38.268, 140.872, 50, "宮城県")]
+        image, to_px = self._render(plot, 38.268, 140.872, zoom=8)
+        # 県庁所在地から少し離れた、札には隠れない位置を見る。
+        x, y = to_px(38.60, 140.70)
+        patch = image.crop((int(x - 6), int(y - 6), int(x + 6), int(y + 6)))
+        rgb = eq._MAP_FILL_RGB[50]
+        # 塗られていれば、地の色（暗い青灰）より赤が強くなる。
+        reds = [r for r, g, b in patch.getdata()]
+        self.assertGreater(sum(reds) / len(reds), eq._MAP_LAND[0] + 25,
+                           "揺れた県が塗られていない")
+        self.assertLess(sum(reds) / len(reds), rgb[0],
+                        "塗りが濃すぎて札より目立っている")
+
+    def test_the_map_credits_the_outline_source(self):
+        """輪郭は国土地理院のデータ。出典と、加工した旨を画像に載せる（PDL1.0）。"""
+        self.assertIn("地球地図日本", eq._TILE_ATTRIBUTION)
+        self.assertIn("加工", eq._TILE_ATTRIBUTION)
+
     def test_the_strongest_badge_survives_the_epicentre(self):
         """震央と最寄りの観測点が同じ場所でも、最大震度の札は残る。
 
