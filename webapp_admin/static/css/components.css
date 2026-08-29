@@ -137,42 +137,6 @@
 .check-text { font-size: 13.5px; }
 .check-list { display: flex; flex-direction: column; gap: 6px; }
 
-/* ── Aero の質感（ログイン画面とデスクトップの両方）────────────
-
-   この一式は page.css にあったが、page.css を読むのはログイン系の4枚だけで、
-   デスクトップ（shell.html）は読んでいなかった。そのため `.desktop-body` 側の
-   指定は一度も効いておらず、ログイン画面のボタンだけが艶を持ち、管理画面の
-   ボタンは素のままという食い違いになっていた（motion.css の
-   `.desktop-body .btn` は shell.html が読むので、動きだけは効いていた）。
-
-   両方が読む components.css へ移して、書いたとおりに効くようにする。 */
-.aero-page .btn,
-.desktop-body .btn {
-  border-radius: var(--radius-control);
-  background-image: var(--gloss);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
-}
-.aero-page .btn:hover:not(:disabled),
-.desktop-body .btn:hover:not(:disabled) {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 14px rgba(110, 190, 255, 0.4);
-}
-.aero-page .btn-primary,
-.desktop-body .btn-primary {
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.04));
-}
-.aero-page .input:focus,
-.aero-page .select:focus,
-.aero-page .textarea:focus,
-.desktop-body .input:focus,
-.desktop-body .select:focus,
-.desktop-body .textarea:focus {
-  box-shadow: 0 0 0 3px rgba(110, 190, 255, 0.35), 0 0 12px rgba(110, 190, 255, 0.3);
-}
-.desktop-body .section { box-shadow: 0 1px 2px rgba(16, 40, 80, 0.08); }
-.desktop-body .section-head {
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
-}
-
 /* ── セクション ───────────────────────────────────────────── */
 .section { border: 1px solid var(--border); border-radius: var(--radius); background: var(--canvas); }
 .section + .section { margin-top: 14px; }

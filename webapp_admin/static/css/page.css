@@ -161,6 +161,38 @@ body.aero-page {
 .btn-lg { min-height: 42px; padding: 9px 20px; font-size: 14.5px; }
 .btn-block { width: 100%; }
 
+/* ── Aero スコープでのボタン・入力欄の質感（ログイン系のページだけ）──
+
+   ここは `.aero-page`（login / guild_select / error / logout_confirm）専用。
+   以前は同じ規則に `.desktop-body` も並べてあったが、page.css を読むのは
+   上の4枚だけで、デスクトップ（shell.html）は読んでいないため一度も効いて
+   いなかった。
+
+   気づいて components.css へ移して効かせてみたところ、ダークテーマで
+   セクション見出しが明るい灰色の帯になった。白を rgba(255,255,255,0.55) と
+   直に書いており、テーマに追随しないため（`--gloss` はライト 0.42 /
+   ダーク 0.14 と切り替わるのに、こちらは固定）。Vista 風の古い見た目になる。
+
+   デスクトップ側の見出しは `background: var(--canvas-subtle)` の平らな面で
+   統一されている。そちらが現行の意匠なので、`.desktop-body` 側は復活させず
+   落とした。ここはライト固定のログイン画面なので、そのまま残す。 */
+.aero-page .btn {
+  border-radius: var(--radius-control);
+  background-image: var(--gloss);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.aero-page .btn:hover:not(:disabled) {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 14px rgba(110, 190, 255, 0.4);
+}
+.aero-page .btn-primary {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.04));
+}
+.aero-page .input:focus,
+.aero-page .select:focus,
+.aero-page .textarea:focus {
+  box-shadow: 0 0 0 3px rgba(110, 190, 255, 0.35), 0 0 12px rgba(110, 190, 255, 0.3);
+}
+
 /* ガラスのカードは desktop.css の .lens / [data-specular] と同じ扱いにする */
 .aero-page .login-card,
 .aero-page .error-card,
