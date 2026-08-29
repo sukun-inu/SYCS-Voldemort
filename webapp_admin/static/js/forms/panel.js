@@ -206,7 +206,8 @@ function renderSection(section, schema, widgets, onChange) {
     { class: "section" },
     el(
       "div",
-      { class: "section-head" },
+      // data-specular: ポインタに追従する鏡面（wm/specular.js が座標を入れる）
+      { class: "section-head", "data-specular": "" },
       el("h2", { class: "section-title", text: section.title }),
       section.help ? el("p", { class: "section-help", text: section.help }) : null
     ),
