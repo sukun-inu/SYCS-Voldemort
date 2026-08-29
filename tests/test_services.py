@@ -12,6 +12,7 @@ Discord とネットワークには一切触らない。discord.py の型は Moc
 
 import ast
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -1295,6 +1296,8 @@ class RecordingTests(unittest.TestCase):
         import services.recording_service as recording
         self.rec = recording
         self.work = Path(tempfile.mkdtemp(prefix="rectest-"))
+        self._encode_log = ""
+        self._last_probe_stderr = ""
 
     def _tone(self, seconds: float, freq: float = 440.0) -> bytes:
         import math
@@ -1314,30 +1317,82 @@ class RecordingTests(unittest.TestCase):
             [DJAUDIO_FFMPEG_PATH, "-i", str(path), "-f", "null", "-"],
             capture_output=True, text=True, timeout=60,
         )
+        self._last_probe_stderr = out.stderr
         match = re.search(r"time=(\d+):(\d+):(\d+\.\d+)", out.stderr)
         if not match:
             return -1.0
         return int(match.group(1)) * 3600 + int(match.group(2)) * 60 + float(match.group(3))
+
+    def _track_report(self, writer, path: Path) -> str:
+        """トラックが期待どおりで無かったときに、原因を追える材料を並べる。
+
+        「0.0 != 5.0」だけでは、ffmpeg が起動しなかったのか、符号化器が無いのか、
+        パイプが途中で折れたのかが区別できない。実際 Linux の CI でだけこの
+        assert が落ち、この情報が無いために手元（Windows）から先へ進めなかった。
+        """
+        size = path.stat().st_size if path.exists() else None
+        return (
+            f"\n  ファイル: {path.name} = {size if size is not None else '存在しない'} バイト"
+            f"\n  書き込み: written_bytes={writer.written_bytes} failed={writer.failed}"
+            f"\n  ffmpeg: {self._ffmpeg_path()}"
+            f"\n  符号化時のログ:\n{self._indent(self._encode_log)}"
+            f"\n  長さ測定時の ffmpeg stderr:\n{self._indent(getattr(self, '_last_probe_stderr', ''))}"
+        )
+
+    @staticmethod
+    def _ffmpeg_path() -> str:
+        from config import DJAUDIO_FFMPEG_PATH
+        return DJAUDIO_FFMPEG_PATH
+
+    @staticmethod
+    def _indent(text: str) -> str:
+        lines = (text or "(出力なし)").strip().splitlines() or ["(出力なし)"]
+        return "\n".join("    " + line for line in lines[-20:])
+
+    @contextlib.contextmanager
+    def _capture_recording_log(self):
+        """recording_service の警告を溜める。
+
+        ffmpeg の終了コードと stderr は close() の中で warning に落ちるだけで、
+        テストからは見えない。落ちたときにいちばん効く情報なので拾っておく。
+        """
+        import logging
+        collected: list[str] = []
+        handler = logging.Handler()
+        handler.emit = lambda record: collected.append(record.getMessage())
+        logger = logging.getLogger("services.recording_service")
+        logger.addHandler(handler)
+        try:
+            yield collected
+        finally:
+            logger.removeHandler(handler)
 
     def test_tracks_are_padded_onto_one_timeline(self):
         """喋った時刻が違っても、全トラックが同じ長さ・同じ時間軸に揃うこと。
 
         受信できるのは発話中のパケットだけなので、素直に繋ぐと無音が詰まって
         トラック同士がずれる。ずれると重ねて編集できず、マルチトラックの意味が無い。
+
+        このテストだけが「ffmpeg が実際に音を符号化できているか」を見ている。
+        落ちたときに何も分からないと困るので、失敗時は ffmpeg の言い分ごと出す。
         """
         started = time.monotonic()
-        early = self.rec._TrackWriter(1, "A", self.work / "01-A.mp3", started)
-        late = self.rec._TrackWriter(2, "B", self.work / "02-B.mp3", started)
+        with self._capture_recording_log() as log:
+            early = self.rec._TrackWriter(1, "A", self.work / "01-A.mp3", started)
+            late = self.rec._TrackWriter(2, "B", self.work / "02-B.mp3", started)
 
-        early.write(self._tone(0.5), 0.0)   # A は冒頭で発話
-        late.write(self._tone(0.5), 3.0)    # B は3秒後に発話
-        early.close(5.0)
-        late.close(5.0)
+            early.write(self._tone(0.5), 0.0)   # A は冒頭で発話
+            late.write(self._tone(0.5), 3.0)    # B は3秒後に発話
+            early.close(5.0)
+            late.close(5.0)
+        self._encode_log = "\n".join(log)
 
         a = self._duration(self.work / "01-A.mp3")
+        self.assertAlmostEqual(a, 5.0, delta=0.3,
+                               msg=self._track_report(early, self.work / "01-A.mp3"))
         b = self._duration(self.work / "02-B.mp3")
-        self.assertAlmostEqual(a, 5.0, delta=0.3)
-        self.assertAlmostEqual(b, 5.0, delta=0.3)
+        self.assertAlmostEqual(b, 5.0, delta=0.3,
+                               msg=self._track_report(late, self.work / "02-B.mp3"))
         self.assertAlmostEqual(a, b, delta=0.3)
 
     def test_voiced_time_excludes_the_padding(self):
