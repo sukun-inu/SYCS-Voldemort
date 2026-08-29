@@ -253,6 +253,82 @@ class IntensityMapTests(unittest.TestCase):
         image = Image.open(buf)
         self.assertEqual(image.size, (eq._MAP_W, eq._MAP_H))
 
+    def _render(self, plot, lat, lon, zoom=8, centre=None):
+        """タイルなしで地図を描き、画像と「緯度経度→画素」の変換を返す。
+
+        原点を渡さないと札はすべて画面の外へ出る。それに気づかず面積だけを
+        数えていたときは、見出しの「最大震度」の色札を数えてしまい、地図から
+        札が消えていても通る検査になっていた。中心を明示して原点を決める。
+        """
+        from PIL import Image
+
+        cx, cy = centre or (lat, lon)
+        px, py = eq._latlon_to_tile_float(cx, cy, zoom)
+        origin_x = px * eq._TILE_SZ - eq._MAP_W / 2
+        origin_y = py * eq._TILE_SZ - eq._MAP_H / 2
+        buf = eq._compose_intensity_map(
+            [(0, 0)], [None], origin_x, origin_y, zoom, plot, lat, lon,
+            "最大震度", "検査用")
+
+        def to_px(point_lat, point_lon):
+            tx, ty = eq._latlon_to_tile_float(point_lat, point_lon, zoom)
+            return (tx * eq._TILE_SZ - origin_x, ty * eq._TILE_SZ - origin_y)
+
+        return Image.open(buf).convert("RGB"), to_px
+
+    def _badge_area(self, image, at, rgb, span=26, tol=26):
+        """その座標のまわりに、その色がどれだけ出ているか。
+
+        見出しの色札や凡例のチップを数えないよう、地図上の一点だけを見る。
+        """
+        x, y = at
+        box = image.crop((int(x - span), int(y - span), int(x + span), int(y + span)))
+        return sum(
+            1 for r, g, b in box.getdata()
+            if abs(r - rgb[0]) <= tol and abs(g - rgb[1]) <= tol and abs(b - rgb[2]) <= tol
+        )
+
+    def test_the_strongest_badge_survives_the_epicentre(self):
+        """震央と最寄りの観測点が同じ場所でも、最大震度の札は残る。
+
+        震源の位置を「札を置かない枠」として先に押さえていたころは、内陸の
+        地震（震央＝県庁所在地の近く）で最大震度の札が丸ごと弾かれ、見出しに
+        「最大震度6強」と書いてあるのに地図には 6強 がどこにも無かった。
+        その後は震源印を最後に上から描いていたので、今度は札の数字が印の下に
+        隠れた。速報として最初に読む値なので、どちらでも消えてはいけない。
+        """
+        plot = [(32.80, 130.71, 60, "熊本県"), (33.59, 130.40, 30, "福岡県")]
+        image, to_px = self._render(plot, 32.80, 130.71)   # 震央＝最大震度の点
+        area = self._badge_area(image, to_px(32.80, 130.71), eq._MAP_FILL_RGB[60])
+        self.assertGreater(area, 400, "最大震度の札が震源印に消されている")
+
+    def test_every_observation_point_carries_its_number(self):
+        """札は色だけでなく数字を持つ。
+
+        震度4(黄)と5弱(橙)は色が隣同士で、Discord に縮小されて届くと色だけでは
+        見分けられない。「一目だと分かりにくい」の直接の原因だった。
+        数字が入っていれば、札の中心付近に地の色ではない画素が現れる。
+        """
+        plot = [(38.70, 141.00, 40, "宮城県")]
+        image, to_px = self._render(plot, 38.70, 141.00, centre=(38.70, 141.00))
+        x, y = to_px(38.70, 141.00)
+        core = image.crop((int(x - 5), int(y - 5), int(x + 5), int(y + 5)))
+        rgb = eq._MAP_FILL_RGB[40]
+        ink = sum(1 for r, g, b in core.getdata()
+                  if abs(r - rgb[0]) > 40 or abs(g - rgb[1]) > 40 or abs(b - rgb[2]) > 40)
+        self.assertGreater(ink, 12, "札の中心に数字が入っていない")
+
+    def test_a_weaker_badge_is_dropped_before_a_stronger_one(self):
+        """重なったときに消えるのは弱い方。"""
+        # ほぼ同じ場所に 6強 と 1。片方しか置けない。
+        plot = [(38.700, 141.000, 60, "A"), (38.702, 141.002, 10, "B")]
+        image, to_px = self._render(plot, 40.0, 143.0, zoom=9, centre=(38.70, 141.00))
+        self.assertGreater(
+            self._badge_area(image, to_px(38.700, 141.000), eq._MAP_FILL_RGB[60]), 400)
+        self.assertLess(
+            self._badge_area(image, to_px(38.702, 141.002), eq._MAP_FILL_RGB[10]), 40,
+            "弱い方が残って強い方を押しのけている")
+
     def test_points_in_the_same_prefecture_keep_the_strongest(self):
         """観測点の座標は県庁所在地に丸めている。
 

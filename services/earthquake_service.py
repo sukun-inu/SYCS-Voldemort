@@ -88,7 +88,9 @@ _MAP_LINE = (96, 114, 142)
 # PIL の ellipse / line はアンチエイリアスしないので、等倍で描くと円も×印も
 # 階段状になる（これが「チープに見える」いちばんの原因だった）。倍で描いて
 # から縮小すると、縮小の平均化がそのままアンチエイリアスになる。
-_MAP_W, _MAP_H = 900, 540
+# 幅を 900 から広げた。観測点は県庁所在地に丸めてあるので札の数は最大47枚だが、
+# 900 幅では東北のように県が密なところで札が重なり、重なり避けで消えていた。
+_MAP_W, _MAP_H = 1200, 720
 _MAP_SS = 2
 
 # 凡例・ログ用（全角）
@@ -355,10 +357,6 @@ def _latlon_to_tile_float(lat: float, lon: float, zoom: int) -> tuple[float, flo
     return tx, ty
 
 
-def _km_to_px(km: float, lat: float, zoom: int) -> float:
-    tile_km = (40075.017 * math.cos(math.radians(lat))) / (2 ** zoom)
-    return km * _TILE_SZ / tile_km
-
 
 def _resolve_point_coord(addr: str, pref: str) -> tuple[float, float] | None:
     """pref / addr → (lat, lon)。都道府県中心座標を使用。"""
@@ -396,22 +394,6 @@ def _recolour_tile(gray: "Image.Image") -> "Image.Image":
     return Image.fromarray((land * (1 - ink) + line * ink).astype(np.uint8), "RGB")
 
 
-def _soft_disc(radius: int, rgb: tuple[int, int, int]) -> "Image.Image":
-    """中心が濃く外へ抜ける円。最大震度のあたりに1つだけ敷く。
-
-    平らな円を観測点ごとに重ねると地図が色の海になり、陸の形が読めなくなる
-    （以前は 55km 半径の円を全点に置いていた）。視線を導くための暈として、
-    最大震度の位置に1枚だけ置く。
-    """
-    size = radius * 2
-    yy, xx = np.mgrid[0:size, 0:size]
-    dist = np.hypot(xx - radius + 0.5, yy - radius + 0.5) / radius
-    alpha = np.clip(150 - 150 * dist ** 1.6, 0, 255)
-    alpha[dist > 1.0] = 0
-    layer = Image.new("RGBA", (size, size), (*rgb, 0))
-    layer.putalpha(Image.fromarray(alpha.astype(np.uint8), "L"))
-    return layer
-
 
 def _ink_for(rgb: tuple[int, int, int]) -> tuple[int, int, int, int]:
     """その色の上に置く文字の色。明るい震度では白が沈む。"""
@@ -419,35 +401,49 @@ def _ink_for(rgb: tuple[int, int, int]) -> tuple[int, int, int, int]:
     return (16, 20, 26, 255) if luma > 150 else (255, 255, 255, 255)
 
 
-def _scale_dot(scale: int, size: int) -> "Image.Image":
-    """観測点の丸。小さく打つ（気象庁や報道の図と同じ考え方）。"""
-    rgb = _MAP_FILL_RGB.get(scale, (120, 130, 150))
-    pad = size // 2
-    img = Image.new("RGBA", (size + pad * 2, size + pad * 2), (0, 0, 0, 0))
-    shade = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    ImageDraw.Draw(shade).ellipse(
-        [pad, pad + size // 8, pad + size, pad + size + size // 8], fill=(0, 0, 0, 170))
-    img.alpha_composite(shade.filter(ImageFilter.GaussianBlur(size / 5)))
-    ImageDraw.Draw(img).ellipse([pad, pad, pad + size, pad + size], fill=(*rgb, 255),
-                                outline=(255, 255, 255, 225), width=max(1, size // 7))
-    return img
+def _badge_size(scale: int) -> int:
+    """震度の札の一辺（ss を掛ける前）。強いほど大きく。
+
+    全部同じ大きさにすると、震度1の海のなかから震度5弱を探すことになる。
+    大小を付けておくと、色が読めなくても視線が強い方へ落ちる。
+    """
+    if scale >= 55:      # 6弱以上
+        return 34
+    if scale >= 45:      # 5弱・5強
+        return 30
+    if scale >= 40:      # 4
+        return 26
+    if scale >= 30:      # 3
+        return 22
+    return 18            # 1・2
 
 
-def _scale_pin(scale: int, size: int) -> "Image.Image":
-    """震度の札。丸い座に数字を置き、細い縁と落ち影を付ける。"""
+def _scale_badge(scale: int, size: int) -> "Image.Image":
+    """観測点の札。角丸の座に震度の数字を入れる。
+
+    以前は「全点は色だけの小さな丸、上位6点だけ数字の札」だった。丸は色しか
+    情報を持たないので、震度4(黄)と5弱(橙)を並べても一目では分からない。
+    凡例と同じ角丸＋数字に揃え、地図の上でも凡例と同じ読み方ができるようにする。
+    """
     rgb = _MAP_FILL_RGB.get(scale, (120, 130, 150))
     label = _SCALE_BADGE_LABEL.get(scale, str(scale))
-    pad = size // 4
+    pad = size // 3
     img = Image.new("RGBA", (size + pad * 2, size + pad * 2), (0, 0, 0, 0))
+
+    # 落ち影。暗い地図の上で札の縁が溶けないよう、下に薄く敷く。
     shade = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    ImageDraw.Draw(shade).ellipse(
-        [pad, pad + size // 12, pad + size, pad + size + size // 12], fill=(0, 0, 0, 150))
-    img.alpha_composite(shade.filter(ImageFilter.GaussianBlur(size / 9)))
+    ImageDraw.Draw(shade).rounded_rectangle(
+        [pad, pad + size // 10, pad + size, pad + size + size // 10],
+        radius=size // 4, fill=(0, 0, 0, 165))
+    img.alpha_composite(shade.filter(ImageFilter.GaussianBlur(size / 8)))
+
     draw = ImageDraw.Draw(img)
-    draw.ellipse([pad, pad, pad + size, pad + size], fill=(*rgb, 255),
-                 outline=(255, 255, 255, 235), width=max(1, size // 16))
-    font = _get_font(int(size * (0.62 if len(label) == 1 else 0.44)))
-    draw.text((pad + size / 2, pad + size / 2), label, font=font,
+    draw.rounded_rectangle([pad, pad, pad + size, pad + size], radius=size // 4,
+                           fill=(*rgb, 255), outline=(255, 255, 255, 210),
+                           width=max(1, size // 14))
+    # 「5-」のような2文字は1文字より小さく組む。同じ字送りだと札からはみ出す。
+    font = _get_font(int(size * (0.60 if len(label) == 1 else 0.44)))
+    draw.text((pad + size / 2, pad + size / 2 + size // 28), label, font=font,
               fill=_ink_for(rgb), anchor="mm")
     return img
 
@@ -517,6 +513,29 @@ def _draw_map_chrome(canvas: "Image.Image", title: str, subtitle: str,
     if subtitle:
         draw.text((22 * ss, 47 * ss), subtitle, font=_get_font(14 * ss),
                   fill=(178, 192, 210, 255))
+
+    # 最大震度は帯の右端に、その震度の色で大きく置く。
+    #
+    # 見出しの文字列にも「最大震度6強」とは書いてあるが、地図に落ちた札を
+    # 目で追って最大値を探すのと、数字が1つ大きく出ているのとでは、読み取りに
+    # かかる時間が違う。速報として最初に伝わるべき値なので、色と大きさを与える。
+    if scales:
+        top = max(scales)
+        rgb = _MAP_FILL_RGB.get(top, (120, 130, 150))
+        label = _SCALE_BADGE_LABEL.get(top, str(top))
+        box_w, box_h = 96 * ss, 58 * ss
+        bx = width - box_w - 20 * ss
+        by = 12 * ss
+        seat = Image.new("RGBA", (box_w, box_h), (0, 0, 0, 0))
+        ImageDraw.Draw(seat).rounded_rectangle(
+            [0, 0, box_w - 1, box_h - 1], radius=10 * ss, fill=(*rgb, 255))
+        canvas.alpha_composite(seat, (int(bx), int(by)))
+        ink = _ink_for(rgb)
+        draw.text((bx + box_w / 2, by + 13 * ss), "最大震度", font=_get_font(12 * ss),
+                  fill=(*ink[:3], 215), anchor="mm")
+        draw.text((bx + box_w / 2, by + 38 * ss), label,
+                  font=_get_font(int(34 * ss * (1.0 if len(label) == 1 else 0.78))),
+                  fill=ink, anchor="mm")
 
     chip, gap, pad = 22 * ss, 7 * ss, 12 * ss
     box_w = pad * 2 + len(scales) * chip + max(0, len(scales) - 1) * gap
@@ -594,8 +613,11 @@ async def _generate_intensity_map(
         x1, _ = _latlon_to_tile_float(min(lats), max(lons), candidate)
         _, y0 = _latlon_to_tile_float(max(lats), min(lons), candidate)
         _, y1 = _latlon_to_tile_float(min(lats), max(lons), candidate)
-        if (abs(x1 - x0) * _TILE_SZ < _MAP_W * 0.80
-                and abs(y1 - y0) * _TILE_SZ < _MAP_H * 0.70):
+        # 収まる範囲でできるだけ大きく。0.80/0.70 のころは海ばかりが写り、
+        # 肝心の札が画面の 1/3 に押し込められていた。上の帯と凡例の分だけ
+        # 縦を控えめにする。
+        if (abs(x1 - x0) * _TILE_SZ < _MAP_W * 0.92
+                and abs(y1 - y0) * _TILE_SZ < _MAP_H * 0.84):
             zoom = candidate
             break
 
@@ -651,70 +673,92 @@ def _compose_intensity_map(
         px, py = _latlon_to_tile_float(point_lat, point_lon, zoom)
         return ((px * _TILE_SZ - origin_x) * ss, (py * _TILE_SZ - origin_y) * ss)
 
-    # 最大震度のあたりに、淡い暈をひとつだけ置いて視線を導く
-    top = max(plot, key=lambda p: p[2])
-    hx, hy = to_px(top[0], top[1])
-    halo_r = int(max(60 * ss, _km_to_px(70, top[0], zoom) * ss))
-    canvas.alpha_composite(_soft_disc(halo_r, _MAP_FILL_RGB.get(top[2], (120, 130, 150))),
-                           (int(hx - halo_r), int(hy - halo_r)))
-
-    # 観測点。弱い順に置いて、強い方を上に重ねる
-    for point_lat, point_lon, scale, _name in sorted(plot, key=lambda p: p[2]):
-        x, y = to_px(point_lat, point_lon)
-        dot = _scale_dot(scale, 15 * ss)
-        canvas.alpha_composite(dot, (int(x - dot.width / 2), int(y - dot.height / 2)))
-
-    # 札と地名は強い方から数点だけ。全部に付けると重なって読めない。
-    #
-    # 置いた矩形を覚えておいて、次はそこを避ける。点どうしの距離だけで見て
-    # いたころは、札は離れていても地名が別の札に重なっていた。
-    # 震源の位置も先に登録しておく（震源は最後に描くので、避けておかないと
-    # 最大震度の札が震源に隠れる。実際に隠れた）。
-    def overlaps(box: tuple[float, float, float, float]) -> bool:
+    # 暈（最大震度のまわりの淡い円）は置かない。
+    # 札が色だけの丸だったころは視線を導く役に立っていたが、札に数字と大小が
+    # 入った今は、最大震度の札そのものを赤くにじませて読みにくくするだけ。
+    def overlaps(box: tuple[float, float, float, float],
+                 rects: list[tuple[float, float, float, float]]) -> bool:
         return any(not (box[2] <= r[0] or box[0] >= r[2]
-                        or box[3] <= r[1] or box[1] >= r[3]) for r in taken)
+                        or box[3] <= r[1] or box[1] >= r[3]) for r in rects)
 
-    ex_pre, ey_pre = to_px(lat, lon)
-    pin_size = 34 * ss
-    taken: list[tuple[float, float, float, float]] = [
-        (ex_pre - 22 * ss, ey_pre - 22 * ss, ex_pre + 22 * ss, ey_pre + 22 * ss)]
-
-    for point_lat, point_lon, scale, name in sorted(plot, key=lambda p: -p[2])[:6]:
+    # 観測点。全部の札に震度の数字を入れる。
+    #
+    # 以前は「全点を色だけの丸で打ち、上位6点にだけ数字の札」という二段構えで、
+    # 地図の大半は色しか情報を持っていなかった。震度4と5弱は黄と橙で隣同士
+    # なので、縮小されて届く Discord の埋め込みでは一目で見分けられない。
+    #
+    # 数字を全部に入れると密集地で重なるので、強い順に置いて、既に置いた札と
+    # 重なるものは落とす。落とすのは常に弱い方（速報として消してよいのは
+    # 弱い方だけ）。距離ではなく実際の矩形で見るので、札の大小を変えても
+    # 間隔の定数を調整し直さなくてよい。
+    #
+    # 震源の位置は「空けておく枠」に入れない。入れていたときは、震源のすぐ
+    # 隣にある最大震度の札が弾かれて地図から消えていた（青森県沖の地震で
+    # 6強と6弱の札が両方とも出なかった）。速報で最初に見るべき札を、
+    # 重なり避けの都合で消してはいけない。震源は最後に上から描く。
+    taken: list[tuple[float, float, float, float]] = []
+    badges: list[tuple[float, float, int]] = []
+    placed_at: set[tuple[float, float]] = set()
+    for index, (point_lat, point_lon, scale, _name) in enumerate(
+            sorted(plot, key=lambda p: -p[2])):
         x, y = to_px(point_lat, point_lon)
-        label_w, label_h = _label_box(canvas, name) if name else (0, 0)
-
-        for dx, dy, side in ((17, -17, 1), (-17, -17, -1), (17, 17, 1),
-                             (-17, 17, -1), (0, -26, 1), (0, 26, 1)):
-            px, py = x + dx * ss, y + dy * ss
-            pin_box = (px - pin_size / 2, py - pin_size / 2,
-                       px + pin_size / 2, py + pin_size / 2)
-            if side > 0:
-                lx = px + pin_size / 2 + 4 * ss
-            else:
-                lx = px - pin_size / 2 - 4 * ss - label_w
-            label = (lx, py - label_h / 2, lx + label_w, py + label_h / 2)
-            inside = 0 <= label[0] and label[2] <= canvas.width
-            if not overlaps(pin_box) and (not name or (inside and not overlaps(label))):
-                break
-        else:
+        half = _badge_size(scale) * ss / 2
+        box = (x - half, y - half, x + half, y + half)
+        # 先頭＝最大震度は無条件で置く。見出しに出す震度が地図に無いと、
+        # 画像と本文が食い違って見える。
+        if index and overlaps(box, taken):
             continue
+        taken.append(box)
+        badges.append((x, y, scale))
+        placed_at.add((point_lat, point_lon))
 
-        taken.append(pin_box)
-        pin = _scale_pin(scale, pin_size)
-        canvas.alpha_composite(pin, (int(px - pin.width / 2), int(py - pin.height / 2)))
-        if name:
-            taken.append(label)
-            _draw_place_label(canvas, label[0], label[1], name)
-
-    # 震源は最後に。点や札に埋もれないよう、背後に暗い座を敷く
+    # 震源は札より先に描く。
+    #
+    # 以前は最後に上から描いていた。震央と最寄りの観測点がほぼ同じ場所になる
+    # 内陸の地震（熊本県熊本地方など）では、震源印が最大震度の札にそのまま
+    # 重なって数字が読めなくなっていた。震源印は輪と十字なので、札を上に
+    # 置いても輪は外にはみ出して見える。速報として消してよいのは震源印の
+    # 中心であって、震度の数字ではない。
     ex, ey = to_px(lat, lon)
-    seat_r = 26 * ss
+    seat_r = 24 * ss
     seat = Image.new("RGBA", (seat_r * 2, seat_r * 2), (0, 0, 0, 0))
-    ImageDraw.Draw(seat).ellipse([0, 0, seat_r * 2 - 1, seat_r * 2 - 1], fill=(8, 11, 17, 165))
+    ImageDraw.Draw(seat).ellipse([0, 0, seat_r * 2 - 1, seat_r * 2 - 1], fill=(8, 11, 17, 130))
     canvas.alpha_composite(seat.filter(ImageFilter.GaussianBlur(seat_r / 3)),
                            (int(ex - seat_r), int(ey - seat_r)))
     marker = _epicentre_marker(40 * ss)
     canvas.alpha_composite(marker, (int(ex - marker.width / 2), int(ey - marker.height / 2)))
+
+    # 描くのは弱い順。落ち影が強い札の上に乗らないようにする。
+    for x, y, scale in sorted(badges, key=lambda b: b[2]):
+        badge = _scale_badge(scale, _badge_size(scale) * ss)
+        canvas.alpha_composite(badge, (int(x - badge.width / 2), int(y - badge.height / 2)))
+
+    # 地名は強い方から数点だけ。全部に付けると読めない。
+    # 札そのものは既に置いてあるので、ここで探すのはラベルの置き場所だけ。
+    #
+    # 震源の座はここで初めて予約する。地名が震源印に重なると字が読めないが、
+    # 札を消してよい理由にはならない（上の placed_at を参照）。
+    ex_pre, ey_pre = to_px(lat, lon)
+    taken.append((ex_pre - 20 * ss, ey_pre - 20 * ss, ex_pre + 20 * ss, ey_pre + 20 * ss))
+
+    for point_lat, point_lon, scale, name in sorted(plot, key=lambda p: -p[2])[:5]:
+        # 札が置けなかった点に地名だけ出すと、何も無い場所を指す札になる。
+        if not name or (point_lat, point_lon) not in placed_at:
+            continue
+        x, y = to_px(point_lat, point_lon)
+        half = _badge_size(scale) * ss / 2
+        label_w, label_h = _label_box(canvas, name)
+        # 右→左→上→下の順に空きを探す。左右だけを見ていたころは、震源印の
+        # そばにある最大震度の地名がどちらにも置けず、名前なしで出ていた。
+        for dx, dy in ((half + 5 * ss, 0), (-half - 5 * ss - label_w, 0),
+                       (-label_w / 2, -half - label_h / 2 - 3 * ss),
+                       (-label_w / 2, half + label_h / 2 + 3 * ss)):
+            lx, ly = x + dx, y + dy - label_h / 2
+            label = (lx, ly, lx + label_w, ly + label_h)
+            if 0 <= label[0] and label[2] <= canvas.width and not overlaps(label, taken):
+                taken.append(label)
+                _draw_place_label(canvas, label[0], label[1], name)
+                break
 
     _draw_map_chrome(canvas, title, subtitle, sorted({point[2] for point in plot}))
 
