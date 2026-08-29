@@ -1643,6 +1643,80 @@ class SpacingScaleTests(unittest.TestCase):
         self.assertEqual(offenders, [], f"小数の字の大きさ: {offenders}")
 
 
+class ElevationAndMotionTests(unittest.TestCase):
+    """影と動きが、その場しのぎの値ではなく段階になっていること。"""
+
+    ROOT = Path(__file__).resolve().parent.parent
+    CSS = ROOT / "webapp_admin/static/css"
+
+    # 相互作用ではない長さ。ここだけは生の値でよい。
+    #   spin        … 読み込み中の回転（無限ループ）
+    #   aurora      … 壁紙のオーロラ（無限ループ）
+    #   taskbar-rise / fade-up … 起動時に一度だけ流れる演出
+    ALLOWED_RAW = ("spin", "aurora-drift", "taskbar-rise", "fade-up")
+
+    def test_the_elevation_scale_exists_in_both_themes(self):
+        """暗い地では影が見えにくいので、テーマごとに濃さを持つこと。
+
+        白を固定値で書いてダークで破綻させた前例があるので、影も同じ轍を
+        踏まないよう両方に定義を要求する。
+        """
+        text = (self.CSS / "tokens.css").read_text(encoding="utf-8")
+        for name in ("--shadow-1", "--shadow-2"):
+            found = re.findall(re.escape(name) + r"\s*:", text)
+            self.assertEqual(len(found), 2,
+                             f"{name} はライトとダークの両方に要る（いま {len(found)} 箇所）")
+        for name in ("--glow-soft", "--glow-strong", "--dur-0", "--dur-1", "--dur-2", "--dur-3"):
+            self.assertIn(name, text, f"{name} が tokens.css に無い")
+
+    def test_interaction_timings_go_through_the_tokens(self):
+        """相互作用の長さを生の秒数で書かない。
+
+        以前は .12s / .15s / .18s / .3s / .05s が各ファイルに散っており、
+        motion.css だけがトークンを使っていた。同じ要素の長さが2箇所で
+        別々に決まっている状態だった。
+        """
+        offenders = []
+        for path in sorted(self.CSS.glob("*.css")):
+            if path.name == "public.css":      # 読み物ページは別体系
+                continue
+            text = path.read_text(encoding="utf-8")
+            for line_no, line in enumerate(text.split(chr(10)), 1):
+                if not re.search(r"(transition|animation)\s*:", line):
+                    continue
+                if any(key in line for key in self.ALLOWED_RAW):
+                    continue
+                for raw in re.findall(r"(?<![\w.-])(\.?\d+(?:\.\d+)?m?s)(?![\w.-])", line):
+                    offenders.append(f"{path.name}:{line_no} {raw}")
+        self.assertEqual(offenders, [],
+                         "生の時間が残っています（var(--dur-*) を使う）:"
+                         + chr(10) + chr(10).join(offenders))
+
+    def test_the_glow_has_only_two_strengths(self):
+        """光りの強さが半端に散っていないこと。
+
+        もとは 0 0 10px / 14px / 16px / 20px / 22px と5通りあった。
+        置いてあるだけは soft、指を乗せたら strong の2段にする。
+        """
+        offenders = []
+        for name in ("desktop", "page", "components"):
+            text = (self.CSS / f"{name}.css").read_text(encoding="utf-8")
+            text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+            # アクセント色（水色）の光りだけを見る。Discord のブランド色
+            # rgb(88,101,242) のように、色そのものに意味がある光りは別。
+            # 「0 0 0 3px」はフォーカスリング（広がり付き）で、光りではない。
+            # 直前が "0 0 " のものは除く。
+            pattern = (r"(?:^|[:,])\s*0 0 \d+px rgba\(\s*"
+                       r"(\d+),\s*(\d+),\s*(\d+)")
+            for match in re.findall(pattern, text):
+                r, g, b = (int(v) for v in match)
+                if b > 230 and g > 160 and r < 160:
+                    offenders.append(f"{name}.css: rgb({r},{g},{b})")
+        self.assertEqual(offenders, [],
+                         "アクセントの光りに生の値が残っています"
+                         "（--glow-soft / --glow-strong を使う）: " + str(offenders))
+
+
 class DjaudioLimitTests(unittest.TestCase):
     """画面の上下限と、保存側で丸める範囲が同じであること。
 
