@@ -169,7 +169,7 @@ async def recording_stop(request: Request, _=Depends(check_guild), _csrf=Depends
 @router.put("/recording/settings")
 @limiter.limit("30/minute")
 async def recording_settings(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
-    from services.settings_store import get_recording_settings, set_recording_settings
+    from services.settings_store import awrite, get_recording_settings, set_recording_settings
 
     guild_id = _guild_id(request)
     body = await _json_body(request)
@@ -227,7 +227,7 @@ async def recording_settings(request: Request, _=Depends(check_guild), _csrf=Dep
     if not patch:
         raise HTTPException(status_code=400, detail="変更する項目がありません。")
 
-    set_recording_settings(guild_id, patch)
+    await awrite(set_recording_settings, guild_id, patch)
     return JSONResponse({
         "message": "録音の設定を保存しました。",
         "settings": get_recording_settings(guild_id),

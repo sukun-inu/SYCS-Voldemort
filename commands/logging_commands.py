@@ -15,6 +15,7 @@ from services.logging_service import get_log_settings, set_log_channel, set_log_
 from services.settings_store import (
     add_bypass_roles,
     add_trusted_users,
+    awrite,
     get_bypass_role_ids,
     get_response_channel_id,
     get_trusted_user_ids,
@@ -160,7 +161,7 @@ def register_logging_commands(bot: Bot) -> None:
         if not await _ensure_admin_in_guild(interaction):
             return
 
-        set_response_channel_id(interaction.guild.id, channel.id)
+        await awrite(set_response_channel_id, interaction.guild.id, channel.id)
         await interaction.response.send_message(
             f"{channel.mention} を余への語りかけチャンネルと定めた。",
             ephemeral=True,
@@ -171,7 +172,7 @@ def register_logging_commands(bot: Bot) -> None:
         if not await _ensure_admin_in_guild(interaction):
             return
 
-        set_response_channel_id(interaction.guild.id, None)
+        await awrite(set_response_channel_id, interaction.guild.id, None)
         await interaction.response.send_message(
             "余への語りかけチャンネルを解除した。再設定されるまで余は応答しない。",
             ephemeral=True,

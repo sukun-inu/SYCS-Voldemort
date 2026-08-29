@@ -10,6 +10,7 @@ Discord とネットワークには一切触らない。discord.py の型は Moc
 差し替え、設定ストアは一時ディレクトリを使う。
 """
 
+import ast
 import asyncio
 import json
 import logging
@@ -3002,6 +3003,155 @@ class RtpPaddingTests(unittest.TestCase):
         self.assertEqual(session.tracks, {}, "詰め物からトラックが作られている")
         self.assertEqual(session.dropped_packets, 0, "詰め物をデコードしている")
         self.assertEqual(sink._streams[1].padding_only, 8)
+
+
+class SettingsWriteOffloadTests(unittest.TestCase):
+    """設定の書き込みが、イベントループの上で行われていないこと。
+
+    settings.json の書き込みはファイルロックを取り、空くのを待つ間は
+    time.sleep(0.05) のポーリングで最大10秒待つ。Bot と管理画面は別プロセスで
+    同じファイルを共有しているので、競合は実際に起きる。
+
+    async の中から同期のセッターを直に呼ぶと、その間イベントループ全体が
+    止まる。Bot なら Discord のハートビートと全ギルドの処理が、管理画面
+    （既定 workers=1）ならヘルスチェックを含む全 HTTP 応答が固まる。
+
+    直呼びは見た目では気付けない（普通の関数呼び出しにしか見えない）ので、
+    構文木から機械的に見つける。非同期から書き込むときは
+    services.settings_store.awrite() か asyncio.to_thread を通すこと。
+    """
+
+    ROOT = Path(__file__).resolve().parent.parent
+    SKIP_DIRS = {".git", "tests", "migrations", "__pycache__", ".venv", "venv"}
+
+    def _writers(self) -> set[str]:
+        """settings.json を書き換える同期の公開関数を、実装から求める。
+
+        名前を並べた表を持つと、関数が増えたときに更新を忘れる。
+        _mutate_settings から辿れるものを、その都度たどる。
+        """
+        tree = ast.parse((self.ROOT / "services/settings_store.py").read_text(encoding="utf-8"))
+        calls_of, async_names = {}, set()
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                calls_of[node.name] = {
+                    n.func.id for n in ast.walk(node)
+                    if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                }
+                if isinstance(node, ast.AsyncFunctionDef):
+                    async_names.add(node.name)
+
+        reached = {"_mutate_settings"}
+        while True:
+            grew = False
+            for name, called in calls_of.items():
+                if name in reached or name in async_names:
+                    continue
+                if called & reached:
+                    reached.add(name)
+                    grew = True
+            if not grew:
+                break
+        return {name for name in reached if not name.startswith("_")}
+
+    def _direct_calls(self, tree: ast.AST, names: set[str]) -> list[tuple[int, str]]:
+        """async 関数の本体で直接呼ばれているものだけを返す。
+
+        async の中に def を書いた場合、その中は同期の文脈なので対象外。
+        ast.walk では境界を越えて拾ってしまうので、自分で降りる。
+        """
+        found: list[tuple[int, str]] = []
+
+        def scan(node, inside_async: bool):
+            for child in ast.iter_child_nodes(node):
+                if isinstance(child, ast.AsyncFunctionDef):
+                    scan(child, True)
+                    continue
+                if isinstance(child, (ast.FunctionDef, ast.Lambda)):
+                    scan(child, False)
+                    continue
+                if (inside_async and isinstance(child, ast.Call)
+                        and isinstance(child.func, ast.Name)
+                        and child.func.id in names):
+                    found.append((child.lineno, child.func.id))
+                scan(child, inside_async)
+
+        scan(tree, False)
+        return found
+
+    def test_awrite_lets_the_event_loop_keep_running(self):
+        """awrite が実際に待ちをイベントループの外へ出していること。
+
+        構文木の検査は「直呼びが無いこと」しか見ない。仕組みそのものが効いて
+        いるかは、実際に止めてみて確かめる。書き込みが 0.3 秒かかる状況を作り、
+        その間に別のコルーチンが進めるかを数える。
+        """
+        import time
+
+        from services import settings_store
+
+        def slow_write(_guild_id):
+            time.sleep(0.3)
+
+        async def count_ticks(offload: bool) -> int:
+            ticks = 0
+
+            async def ticker():
+                nonlocal ticks
+                while True:
+                    await asyncio.sleep(0.01)
+                    ticks += 1
+
+            task = asyncio.ensure_future(ticker())
+            await asyncio.sleep(0.02)          # 先に動かしておく
+            if offload:
+                await settings_store.awrite(slow_write, 1)
+            else:
+                slow_write(1)                  # 直呼び（比較用）
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            return ticks
+
+        offloaded = asyncio.run(count_ticks(True))
+        blocking = asyncio.run(count_ticks(False))
+
+        self.assertGreater(offloaded, 5,
+                           f"awrite でもループが止まっている（{offloaded} 回）")
+        self.assertLess(blocking, 5,
+                        f"直呼びが止めていない。比較にならない（{blocking} 回）")
+
+    def test_the_writer_list_is_actually_found(self):
+        """探し方が壊れていたら、この検査は何も見なくなる。"""
+        writers = self._writers()
+        self.assertIn("set_welcome_channel", writers)
+        self.assertIn("add_reaction_role", writers)
+        self.assertIn("replace_guild_settings", writers)
+        self.assertGreater(len(writers), 20, writers)
+        # 非同期版そのものは対象に含めない
+        self.assertNotIn("awrite", writers)
+        self.assertNotIn("amutate_settings", writers)
+
+    def test_no_async_function_writes_settings_directly(self):
+        writers = self._writers()
+        offenders = []
+        for path in sorted(self.ROOT.rglob("*.py")):
+            if any(part in self.SKIP_DIRS for part in path.relative_to(self.ROOT).parts):
+                continue
+            try:
+                tree = ast.parse(path.read_text(encoding="utf-8"))
+            except (SyntaxError, UnicodeDecodeError):
+                continue
+            for line, name in self._direct_calls(tree, writers):
+                offenders.append(f"{path.relative_to(self.ROOT)}:{line} {name}()")
+
+        joined = chr(10).join(offenders)
+        self.assertEqual(
+            offenders, [],
+            "async から設定を直接書いています。"
+            "await awrite(関数, 引数...) を通してください:" + chr(10) + joined)
 
 
 class ReactionRoleEmojiTests(unittest.TestCase):

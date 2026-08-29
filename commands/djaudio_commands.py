@@ -6,6 +6,7 @@ from commands.guards import ensure_admin as _ensure_admin
 from commands.interaction_utils import admin_site_view, bind_permission_error_handler
 from config import DJAUDIO_BASE_URL
 from services.settings_store import (
+    awrite,
     get_djaudio_runtime_settings,
     set_djaudio_output_channel,
     set_djaudio_watch_channel,
@@ -37,7 +38,7 @@ def register_djaudio_commands(bot: Bot) -> None:
         runtime = get_djaudio_runtime_settings(interaction.guild_id)
 
         if channel is None:
-            set_djaudio_watch_channel(interaction.guild_id, None)
+            await awrite(set_djaudio_watch_channel, interaction.guild_id, None)
             embed = discord.Embed(
                 title="✅ DJAudio 監視チャンネル解除",
                 description="URL の自動 MP3 変換を無効にした。",
@@ -46,7 +47,7 @@ def register_djaudio_commands(bot: Bot) -> None:
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
-        set_djaudio_watch_channel(interaction.guild_id, channel.id)
+        await awrite(set_djaudio_watch_channel, interaction.guild_id, channel.id)
         embed = discord.Embed(title="✅ DJAudio チャンネル設定完了", color=discord.Color.green())
         embed.description = (
             f"{channel.mention} を監視チャンネルと定めた。\n"
@@ -83,14 +84,14 @@ def register_djaudio_commands(bot: Bot) -> None:
             return
 
         if channel is None:
-            set_djaudio_output_channel(interaction.guild_id, None)
+            await awrite(set_djaudio_output_channel, interaction.guild_id, None)
             embed = discord.Embed(
                 title="✅ DJAudio 出力チャンネル解除",
                 description="結果は監視チャンネルへの返信で送られるようになった。",
                 color=discord.Color.red(),
             )
         else:
-            set_djaudio_output_channel(interaction.guild_id, channel.id)
+            await awrite(set_djaudio_output_channel, interaction.guild_id, channel.id)
             embed = discord.Embed(
                 title="✅ DJAudio 出力チャンネル設定完了",
                 description=f"{channel.mention} に MP3 リンクを送信するよう定めた。",

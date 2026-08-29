@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -153,15 +154,26 @@ async def save_app(
     choices = await _choices_for_keys(panel, incoming.keys(), guild_id)
     clean, errors = validate_values(panel, incoming, choices)
 
-    saved: list[str] = []
-    for key, value in clean.items():
-        field = panel.field(key)
-        try:
-            field.set(guild_id, value)
-            saved.append(key)
-        except Exception as exc:
-            logger.exception("設定の保存に失敗 panel=%s field=%s", panel.id, key)
-            errors[key] = f"保存できませんでした（{exc}）"
+    # 保存は settings.json のファイルロックを取る。ロックが空くのを待つ間は
+    # 同期のポーリング（最大10秒）なので、直に呼ぶとこのワーカーのイベント
+    # ループごと止まり、他の全リクエスト（ヘルスチェック含む）が固まる。
+    # Bot と管理画面は同じファイルを共有していて、競合は実際に起きる。
+    # 項目ごとにスレッドを跨ぐ必要は無いので、ループごと逃がす。
+    def _apply() -> tuple[list[str], dict[str, str]]:
+        applied: list[str] = []
+        failures: dict[str, str] = {}
+        for key, value in clean.items():
+            field = panel.field(key)
+            try:
+                field.set(guild_id, value)
+                applied.append(key)
+            except Exception as exc:
+                logger.exception("設定の保存に失敗 panel=%s field=%s", panel.id, key)
+                failures[key] = f"保存できませんでした（{exc}）"
+        return applied, failures
+
+    saved, failures = await asyncio.to_thread(_apply)
+    errors.update(failures)
 
     values, _ = _read_values(panel, guild_id)
     payload = {"saved": saved, "values": values}
@@ -207,7 +219,7 @@ async def add_item(
         return JSONResponse({"errors": errors, "items": collection.list(guild_id)}, status_code=422)
 
     try:
-        item_id = collection.add(guild_id, clean)
+        item_id = await asyncio.to_thread(collection.add, guild_id, clean)
     except Exception as exc:
         logger.exception("一覧への追加に失敗 panel=%s collection=%s", panel.id, key)
         return JSONResponse(
@@ -248,7 +260,7 @@ async def update_item(
         return JSONResponse({"errors": errors, "items": collection.list(guild_id)}, status_code=422)
 
     try:
-        collection.update(guild_id, item_id, clean)
+        await asyncio.to_thread(collection.update, guild_id, item_id, clean)
     except Exception as exc:
         logger.exception("一覧の更新に失敗 panel=%s collection=%s", panel.id, key)
         return JSONResponse(
@@ -276,7 +288,7 @@ async def remove_item(
 
     guild_id = _guild_id(request)
     try:
-        collection.remove(guild_id, item_id)
+        await asyncio.to_thread(collection.remove, guild_id, item_id)
     except Exception as exc:
         logger.exception("一覧からの削除に失敗 panel=%s collection=%s", panel.id, key)
         return JSONResponse(

@@ -4,6 +4,7 @@ import logging
 import discord
 
 from services.settings_store import (
+    awrite,
     get_all_guild_ids,
     get_sticky_messages,
     remove_sticky_message,
@@ -32,7 +33,7 @@ async def _post_once(channel: discord.TextChannel, guild_id: int, content: str, 
 
     try:
         new_msg = await channel.send(f"📌 {content}")
-        update_sticky_message_id(guild_id, channel.id, new_msg.id)
+        await awrite(update_sticky_message_id, guild_id, channel.id, new_msg.id)
     except Exception as e:
         logger.exception("[sticky_service] send error ch=%s: %s", channel.id, e)
 
@@ -62,7 +63,7 @@ async def delete_sticky(channel: discord.TextChannel, guild_id: int) -> None:
             await old_msg.delete()
         except (discord.NotFound, discord.HTTPException):
             pass
-    remove_sticky_message(guild_id, channel.id)
+    await awrite(remove_sticky_message, guild_id, channel.id)
 
 
 async def handle_sticky(message: discord.Message) -> None:
@@ -126,4 +127,4 @@ async def process_pending_stickies(bot: discord.Client) -> None:
                             await old_msg.delete()
                         except (discord.NotFound, discord.HTTPException):
                             pass
-                    remove_sticky_message(guild_id, channel_id)
+                    await awrite(remove_sticky_message, guild_id, channel_id)

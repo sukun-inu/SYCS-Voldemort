@@ -187,6 +187,11 @@ body.desktop-body { overflow: hidden; }
   border-right: 2px solid var(--glass-edge);
   border-bottom: 2px solid var(--glass-edge);
 }
+/* キーボードで掴めるようにしたので、当たっている位置が見えること。
+   フェーダーやパンつまみと同じ出し方に揃える。 */
+.window-resize:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
+/* 最大化中は大きさが画面に固定されるので、つまみごと消す
+   （消えていれば焦点も当たらない）。 */
 .window.is-maximized .window-resize { display: none; }
 
 .desktop.is-interacting .window-body { pointer-events: none; }

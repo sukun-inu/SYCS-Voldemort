@@ -416,7 +416,10 @@ def main() -> int:
             page.evaluate("""() => {
               document.querySelector(".daw-head-buttons button[title^='声を調べる']").click();
             }""")
-            page.wait_for_timeout(600)
+            page.wait_for_function(
+                "() => { const p = document.querySelector('.daw-inspect');"
+                " return p && !p.hidden && !p.querySelector('.loading'); }",
+                timeout=15000)
             check("区間を選ばなければ、これまでどおり全体を見る",
                   len(asked) == 1 and "start=" not in asked[-1],
                   asked[-1].split("/analysis/")[-1] if asked else "呼ばれていない")
@@ -452,7 +455,12 @@ def main() -> int:
             page.evaluate("""() => {
               document.querySelector(".daw-head-buttons button[title$='の声を調べる']").click();
             }""")
-            page.wait_for_timeout(900)
+            # 固定時間で待つと、解析が遅れたときに「まだ読み込み中」の中身を
+            # 見て落ちる（実際に一度そうなった）。読み込みが終わるまで待つ。
+            page.wait_for_function(
+                "() => { const p = document.querySelector('.daw-inspect');"
+                " return p && !p.hidden && !p.querySelector('.loading'); }",
+                timeout=15000)
             last = asked[-1] if asked else ""
             check("選んだ区間がリクエストに乗る",
                   len(asked) == 2 and "start=" in last and "end=" in last,

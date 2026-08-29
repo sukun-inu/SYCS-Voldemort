@@ -25,7 +25,7 @@
   /* 文字 */
   --fg: #1f2328;
   --fg-muted: #636c76;
-  --fg-subtle: #8c959f;
+  --fg-subtle: #68727d;
 
   /* 意味を持つ色 */
   --accent: #0969da;
@@ -120,7 +120,7 @@
 
     --fg: #e6edf3;
     --fg-muted: #9198a1;
-    --fg-subtle: #6e7681;
+    --fg-subtle: #7a838e;
 
     --accent: #4493f8;
     --accent-hover: #6cb6ff;
