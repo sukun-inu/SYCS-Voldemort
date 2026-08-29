@@ -33,6 +33,7 @@ import itsdangerous  # noqa: E402
 import uvicorn  # noqa: E402
 
 try:
+    from playwright.sync_api import TimeoutError as PlaywrightTimeout
     from playwright.sync_api import sync_playwright
 except ImportError:  # 検証環境にブラウザが無い場合はスキップする
     print("playwright が見つからないためスキップします。")
@@ -219,6 +220,42 @@ def main():
         # ── 一覧が取得できない環境では手入力に切り替わる ──
         check("チャンネル欄が手入力にフォールバックする",
               page.locator('.window .field[data-key="log_channel_id"] input').count() == 1)
+
+        # ── 開いただけのパネルは「変更なし」で始まること ──
+        # DJAudio-DL は、何も触っていないのに開いた瞬間から「未保存の変更 1 件」
+        # と出続けていた。期間の項目（キャッシュ保持時間）だけが JSON で文字列
+        # として返り、入力欄からは数値で読み返されるため、値が同じでも
+        # 「変わった」と判定されていた。1つのパネルだけを見ても気付けないので、
+        # 保存バーを持つパネルを全部開いて確かめる。
+        #
+        # この検査の前後で開いている窓の数を変えないこと（あとの検査が
+        # 窓の枚数と、開いたままの「ログ設定」に依存している）。
+        page.click("#start-button")
+        page.wait_for_selector(".app-tile", timeout=5000)
+        panel_ids = page.eval_on_selector_all(
+            ".app-tile", "els => els.map(e => e.dataset.appId)")
+        page.keyboard.press("Escape")
+        already = set(page.eval_on_selector_all(
+            ".window", "els => els.map(e => e.dataset.appId)"))
+
+        for app_id in panel_ids:
+            if app_id in already:
+                continue
+            page.click("#start-button")
+            page.click(f'.app-tile[data-app-id="{app_id}"]')
+            window = f'.window[data-app-id="{app_id}"] '
+            try:
+                page.wait_for_selector(window + ".savebar-status", timeout=3000)
+            except PlaywrightTimeout:
+                # 保存バーを持たない画面（録音・SQL・監視など）はここでは見ない
+                page.click(window + ".window-control.close")
+                continue
+            bar = page.locator(window + ".savebar-status")
+            check(f"{app_id} を開いただけでは変更なし",
+                  bar.inner_text() == "変更はありません", bar.inner_text())
+            check(f"{app_id} に未保存の印が出ていない",
+                  not page.locator(window + ".window-dirty").is_visible())
+            page.click(window + ".window-control.close")
 
         # ── コレクションのあるパネル ──
         page.click("#start-button")

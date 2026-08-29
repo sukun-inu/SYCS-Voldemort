@@ -196,10 +196,11 @@ def create_app() -> FastAPI:
         読めず「HTTP 400」としか言えない。Accept を見て使い分ける。
         ブラウザの遷移は text/html を要求するので、これまでどおり画面が出る。
         """
+        from services.djaudio_cdn import wants_json
+
         if request.url.path.startswith("/admin/api/"):
             return True
-        accept = request.headers.get("accept", "")
-        return "application/json" in accept and "text/html" not in accept
+        return wants_json(request)
 
     @app.exception_handler(RateLimitExceeded)
     async def rate_limit_handler(request: Request, exc: RateLimitExceeded):

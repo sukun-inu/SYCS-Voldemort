@@ -66,9 +66,24 @@ HOP_SECONDS = 0.016
 LPC_ORDER = 16                 # 16kHz なら 2 + 標本化周波数/1000 が目安
 PRE_EMPHASIS = 0.97
 
-# 抜き出す箇所と長さ。録音の長さに依らず一定のコストにする。
+# 範囲を指定されなかったときに抜き出す箇所と長さ。録音の長さに依らず
+# 一定のコストにする代わりに、喋っている所へ当たるかどうかは運任せになる。
 PROBES = 8
 PROBE_SECONDS = 1.0
+
+# 範囲を指定されたときの上限と下限。
+#
+# 自動で散らす方式は、長い録音になるほど当たらない。4時間22分の実録音5本で
+# 試すと、8箇所×1秒＝8秒（全体の 0.05%）しか見ないため5本とも判定不能に
+# なり、うち4本は使えるフレームが1枚も取れなかった。無音や相槌に当たれば
+# そうなるのが道理で、閾値をいじって直る類の外れ方ではない。
+#
+# 操作する人は波形を見て「ここで喋っている」と分かっているので、その範囲を
+# そのまま渡してもらう。上限は、誤って全体を選んだときに1リクエストが
+# 何分も走らないようにするためのもの。
+SELECTION_MAX_SECONDS = 30.0
+# これより短いとフレームが足りず、必ず判定不能になる。
+SELECTION_MIN_SECONDS = 0.5
 
 # 声とみなす下限。無音や物音、子音の部分で判定しない。
 _MIN_RMS = 700
@@ -165,20 +180,45 @@ def _decode(source: bytes | Path, at: float, length: float) -> list[float]:
         return []
     raw = result.stdout
     usable = len(raw) - (len(raw) % 2)
-    return [int.from_bytes(raw[i:i + 2], "little", signed=True)
-            for i in range(0, usable, 2)]
+    # 1標本ずつ int.from_bytes で組み立てていたころは、ここだけで 30 秒ぶん
+    # （48万標本）に数秒かかっていた。選択範囲をまとめて読むようになると
+    # 効いてくるので、まとめて変換する。
+    return np.frombuffer(raw[:usable], dtype="<i2").astype(np.float64)
 
 
-def _probe(source: bytes | Path, duration: float) -> list[list[float]]:
-    """録音の各所から少しずつ取り出す。"""
-    span = max(duration - PROBE_SECONDS, 0.0)
-    out = []
-    for i in range(PROBES):
-        at = 0.0 if PROBES == 1 else span * i / (PROBES - 1)
-        chunk = _decode(source, at, PROBE_SECONDS)
-        if chunk:
+def _spread(source: bytes | Path, begin: float, span: float,
+            slices: int, seconds: float) -> list[np.ndarray]:
+    """begin から span 秒のあいだに、seconds 秒を slices 回ぶん散らして取る。"""
+    room = max(span - seconds, 0.0)
+    out: list[np.ndarray] = []
+    for i in range(slices):
+        at = begin + (0.0 if slices == 1 else room * i / (slices - 1))
+        chunk = _decode(source, at, seconds)
+        if chunk.size:
             out.append(chunk)
     return out
+
+
+def _probe(source: bytes | Path, duration: float,
+           start: float | None = None, end: float | None = None) -> list[np.ndarray]:
+    """調べる音を取り出す。
+
+    範囲を渡されたら、そこだけを続けて読む（散らさない）。渡されなければ
+    録音の各所から少しずつ取る。どちらを使ったかは analyse() が返す。
+    """
+    if start is None or end is None:
+        return _spread(source, 0.0, duration, PROBES, PROBE_SECONDS)
+
+    length = max(0.0, end - start)
+    if length <= SELECTION_MAX_SECONDS:
+        # 選ばれた区間をそのまま、切れ目なく1つとして読む。区切ると
+        # 区切り目でフォルマントの追跡が途切れ、そのぶん判断材料が減る。
+        chunk = _decode(source, start, length)
+        return [chunk] if chunk.size else []
+
+    # 上限を超えて選ばれたときは、その範囲の中だけで散らす（録音全体へは
+    # 広げない）。合計は上限に収める。
+    return _spread(source, start, length, PROBES, SELECTION_MAX_SECONDS / PROBES)
 
 
 # ── 基本周波数 ────────────────────────────────────────────────
@@ -190,48 +230,50 @@ def _f0_and_periodicity(frame: list[float]) -> tuple[float, float]:
     実際より低い値を返す（実測で 220Hz が 73Hz になった）。最良とほぼ同じ
     高さなら、短いほうの周期を採る。
     """
-    size = len(frame)
+    samples = np.asarray(frame, dtype=np.float64)
+    size = samples.size
     low = int(RATE / F0_MAX_HZ)
     high = min(int(RATE / F0_MIN_HZ), size - 1)
-    scores = []
-    best = 0.0
-    for lag in range(low, high):
-        count = size - lag
-        num = left = right = 0.0
-        for i in range(0, count, 2):
-            a, b = frame[i], frame[i + lag]
-            num += a * b
-            left += a * a
-            right += b * b
-        score = num / (math.sqrt(left * right) or 1.0)
-        scores.append(score)
-        if score > best:
-            best = score
-    if best <= 0 or not scores:
+    if high <= low:
         return 0.0, 0.0
 
+    # 遅延ごとの正規化相互相関。1標本ずつ回すと1フレームで 11 万回の乗算に
+    # なり、選択範囲（数十秒）を調べるには重すぎる。遅延の数（200 強）だけ
+    # numpy を呼ぶ形に置き換える。標本を1つ飛ばしで見るのは元のまま
+    # （粗くしても山の位置は変わらず、費用は半分になる）。
+    scores = np.empty(high - low, dtype=np.float64)
+    for index, lag in enumerate(range(low, high)):
+        count = size - lag
+        a = samples[0:count:2]
+        b = samples[lag:lag + count:2]
+        denominator = math.sqrt(float(a @ a) * float(b @ b)) or 1.0
+        scores[index] = float(a @ b) / denominator
+
+    best = float(scores.max())
+    if best <= 0:
+        return 0.0, 0.0
+
+    # 山の2倍・3倍の遅延にも同じ高さの山が立つ（＝1オクターブ低く読む）。
+    # 最良とほぼ同じ高さなら、短いほうの周期を採る。
     threshold = best * _OCTAVE_GUARD
-    for index, score in enumerate(scores):
-        if score < threshold:
-            continue
-        peak = index
-        while peak + 1 < len(scores) and scores[peak + 1] >= scores[peak]:
+    reached = np.flatnonzero(scores >= threshold)
+    if reached.size:
+        peak = int(reached[0])
+        while peak + 1 < scores.size and scores[peak + 1] >= scores[peak]:
             peak += 1
-        return RATE / (low + peak), scores[peak]
-    return RATE / (low + scores.index(best)), best
+        return RATE / (low + peak), float(scores[peak])
+    return RATE / (low + int(scores.argmax())), best
 
 
 # ── フォルマントの候補 ────────────────────────────────────────
 
 def _lpc(frame: list[float], order: int) -> list[float] | None:
     """線形予測係数（Levinson-Durbin）。"""
-    size = len(frame)
-    auto = []
-    for lag in range(order + 1):
-        total = 0.0
-        for i in range(size - lag):
-            total += frame[i] * frame[i + lag]
-        auto.append(total)
+    samples = np.asarray(frame, dtype=np.float64)
+    size = samples.size
+    if size <= order:
+        return None
+    auto = [float(samples[:size - lag] @ samples[lag:]) for lag in range(order + 1)]
     if auto[0] <= 0:
         return None
 
@@ -262,12 +304,13 @@ def _candidates(frame: list[float]) -> list[tuple[float, float]]:
     LPC の分母多項式の根がそのまま共鳴に対応する。角度が周波数、原点からの
     距離が鋭さ（帯域幅）になる。ここでは絞り込みすぎず、選ぶのは追跡に任せる。
     """
-    shaped = [frame[0]]
-    for i in range(1, len(frame)):
-        shaped.append(frame[i] - PRE_EMPHASIS * frame[i - 1])
-    size = len(shaped)
-    windowed = [shaped[i] * (0.54 - 0.46 * math.cos(2 * math.pi * i / (size - 1)))
-                for i in range(size)]
+    samples = np.asarray(frame, dtype=np.float64)
+    size = samples.size
+    if size < 2:
+        return []
+    shaped = samples.copy()
+    shaped[1:] -= PRE_EMPHASIS * samples[:-1]
+    windowed = shaped * np.hamming(size)
 
     coeffs = _lpc(windowed, LPC_ORDER)
     if coeffs is None:
@@ -463,17 +506,20 @@ def voiced_f0(frame: list[float], context: list[float] | None = None) -> float |
     _HARMONIC_WINDOW_SECONDS）。4 の判定にだけ使う。渡さなければフレーム
     自身を使うが、F0 が低い声では分解能が足りずに落としてしまう。
     """
-    size = len(frame)
+    samples = np.asarray(frame, dtype=np.float64)
+    size = samples.size
     if size <= 0:
         return None
-    if math.sqrt(sum(v * v for v in frame) / size) < _MIN_RMS:
+    if math.sqrt(float(samples @ samples) / size) < _MIN_RMS:
         return None
     f0, periodicity = _f0_and_periodicity(frame)
     if periodicity < _MIN_PERIODICITY:
         return None
     if not (F0_MIN_HZ <= f0 <= F0_MAX_HZ):
         return None
-    resolved, _ = harmonic_prominence(context if context else frame, f0)
+    # context は numpy 配列で渡ることがある。真偽で見ると「要素が複数ある
+    # 配列の真偽は決まらない」で落ちるので、渡されたかどうかで判断する。
+    resolved, _ = harmonic_prominence(frame if context is None else context, f0)
     if resolved < _HARMONIC_MIN_RESOLVED:
         return None
     return f0
@@ -511,8 +557,36 @@ def _runs(chunk: list[float]) -> tuple[list[list[list[tuple[float, float]]]], li
     return runs, f0s
 
 
-def analyse(source: bytes | Path, duration: float) -> dict:
+def selection_bounds(duration: float, start: float | None,
+                     end: float | None) -> tuple[float, float] | None:
+    """指定された範囲を、この録音の中に収まる形へ整える。
+
+    範囲として成立しないものは None を返し、呼び出し側は録音全体を見る形に
+    落ちる。ここを1箇所に置いて、API と解析で同じ規則を使う。
+    """
+    if start is None or end is None:
+        return None
+    try:
+        begin, finish = float(start), float(end)
+    except (TypeError, ValueError):
+        return None
+    if not (math.isfinite(begin) and math.isfinite(finish)):
+        return None
+    limit = duration if duration > 0 else max(begin, finish)
+    begin = min(max(begin, 0.0), limit)
+    finish = min(max(finish, 0.0), limit)
+    if finish - begin < SELECTION_MIN_SECONDS:
+        return None
+    return begin, finish
+
+
+def analyse(source: bytes | Path, duration: float,
+            start: float | None = None, end: float | None = None) -> dict:
     """1トラックを調べる。
+
+    start / end を渡すと、その区間だけを見る。渡さなければ録音の各所から
+    少しずつ取って見るが、長い録音ではまず当たらないので、画面からは
+    範囲を選んで呼ぶ形にしてある。
 
     verdict は3つ。
       natural … 人の声として無理のない値だった
@@ -523,11 +597,18 @@ def analyse(source: bytes | Path, duration: float) -> dict:
     formant_sets: list[list[float]] = []
     f0s: list[float] = []
 
+    bounds = selection_bounds(duration, start, end)
+    if bounds is None:
+        chunks = _probe(source, duration)
+    else:
+        chunks = _probe(source, duration, bounds[0], bounds[1])
+    analysed = sum(chunk.size for chunk in chunks) / RATE
+
     # フレームの選別は _runs（= voiced_f0）に一本化してある。以前はここでも
     # 別に RMS と周期性を見ていたため、基音を取るフレームとフォルマントを取る
     # フレームが違い、「この高さならこの声道長のはず」の突き合わせが別々の音を
     # 見ていた。
-    for chunk in _probe(source, duration):
+    for chunk in chunks:
         runs, chunk_f0s = _runs(chunk)
         f0s.extend(chunk_f0s)
         for run in runs:
@@ -535,11 +616,34 @@ def analyse(source: bytes | Path, duration: float) -> dict:
                 formant_sets.append(formants)
                 spacings.append((formants[-1] - formants[0]) / (len(formants) - 1))
 
+    scope = {
+        "scope": "selection" if bounds else "whole",
+        "analysed_seconds": round(analysed, 2),
+    }
+    if bounds:
+        scope["range"] = {"start": round(bounds[0], 3), "end": round(bounds[1], 3)}
+
     if len(spacings) < _MIN_FRAMES:
+        # 何が足りなかったのかを言う。ここを「判定できません」だけで返して
+        # いたころは、範囲を選び直せば済むのか、そもそも無理なのかが
+        # 操作する人に伝わらなかった。
+        if bounds:
+            reason = (
+                f"選んだ範囲（{bounds[1] - bounds[0]:.1f} 秒）に、判定できるだけの"
+                "声が入っていません。その人がはっきり喋っている所を選び直してください"
+                "（数秒あれば足ります）。"
+            )
+        else:
+            reason = (
+                "録音全体から少しずつ抜き出して調べましたが、判定できるだけの声を"
+                "拾えませんでした。長い録音ではまず当たりません。波形を見て、"
+                "その人が喋っている区間を選んでから調べてください。"
+            )
         return {
             "verdict": "unknown",
-            "reason": "判定できるだけの声が入っていません。",
+            "reason": reason,
             "frames": len(spacings),
+            **scope,
         }
 
     f0 = _median(f0s) if f0s else 0.0
@@ -550,7 +654,57 @@ def analyse(source: bytes | Path, duration: float) -> dict:
     expected_vtl = _VTL_FROM_F0_INTERCEPT - _VTL_FROM_F0_SLOPE * f0 if f0 else 0.0
     mismatch = abs(vtl - expected_vtl) if (vtl and expected_vtl) else 0.0
 
-    reasons = []
+    verdict, reasons = _judge(vtl, f0, expected_vtl)
+
+    # その範囲の中で、フレームごとの間隔がどれだけ散らばっていたか。
+    # 中央値だけを見ると、散らばりの大小に関わらず同じ顔で答えが返る。
+    low_vtl, high_vtl = _vtl_band(spacings)
+    settled = _is_settled(verdict, low_vtl, high_vtl, f0, expected_vtl)
+    if not settled:
+        # 同じ範囲の中で答えが割れている。中央値がたまたまどちら側に
+        # 落ちたかで「加工の形跡あり」と言い切るのは、断定を作るだけになる。
+        verdict = "unknown"
+        reasons = [
+            f"中央値だけを見れば加工の形跡がありますが（声道長 {vtl:.1f} cm）、"
+            f"同じ範囲の中で {low_vtl:.1f}〜{high_vtl:.1f} cm に散らばっており、"
+            "加工の有無を分ける境目をまたいでいます。この範囲は根拠になりません。"
+            "その人がひと続きにはっきり喋っている所を、もう少し長めに選んでください。"
+        ]
+
+    return {
+        "verdict": verdict,
+        "reason": " ".join(reasons) if reasons else "人の声として無理のない値でした。",
+        "frames": len(spacings),
+        "f0_hz": round(f0, 1),
+        "formants_hz": [round(v, 1) for v in _median_formants(formant_sets)],
+        "formant_spacing_hz": round(spacing, 1),
+        "vocal_tract_cm": round(vtl, 2),
+        # 中央値だけでなく、その範囲の中でどこからどこまで散らばっていたかを
+        # 併せて返す。画面はこれを併記して、値の硬さが見えるようにする。
+        "vocal_tract_low_cm": round(low_vtl, 2),
+        "vocal_tract_high_cm": round(high_vtl, 2),
+        "measurement_settled": settled,
+        "expected_vocal_tract_cm": round(expected_vtl, 2),
+        "vocal_tract_mismatch_cm": round(mismatch, 2),
+        # 「話者が平均的な大人だったと仮定したときの」倍率。本人の地声が
+        # 分からない以上、これは出発点の目安でしかない。復元は、この値を
+        # そのまま当てるのではなく、操作する人が耳で決められるようにする。
+        "estimated_factor": round(factor, 3),
+        "restorable": verdict == "suspect" and 0.5 <= factor <= 2.0,
+        # ここで言えるのは「加工されているか」までで、「誰か」は言えない。
+        "identifies_speaker": False,
+        **scope,
+    }
+
+
+def _judge(vtl: float, f0: float, expected_vtl: float) -> tuple[str, list[str]]:
+    """測った値ひと組から判定と理由を出す。
+
+    判定の規則をここ1箇所に持つ。中央値だけでなく、散らばりの端でも同じ
+    規則を当てて「範囲の中で答えが割れていないか」を見るため、条件を
+    2箇所に書くと必ずどちらかが古くなる。
+    """
+    reasons: list[str] = []
     if f0 and not (F0_MIN_HZ <= f0 <= F0_MAX_HZ):
         reasons.append(f"基本周波数が人の声の範囲外です（{f0:.0f} Hz）。")
     if vtl and not (VTL_IMPLAUSIBLE[0] <= vtl <= VTL_IMPLAUSIBLE[1]):
@@ -561,31 +715,53 @@ def analyse(source: bytes | Path, duration: float) -> dict:
         reasons.append(
             f"フォルマントの間隔から求めた声道長が {vtl:.1f} cm で、"
             "人の範囲の外側寄りです。")
-    elif mismatch > _VTL_F0_TOLERANCE_CM:
+    elif expected_vtl and vtl and abs(vtl - expected_vtl) > _VTL_F0_TOLERANCE_CM:
         # 声の高さと体格が食い違う。地声ではこうならない。
         reasons.append(
             f"声の高さ（{f0:.0f} Hz）に対して声道長 {vtl:.1f} cm は食い違います"
             f"（この高さなら {expected_vtl:.1f} cm 前後）。")
+    return ("suspect" if reasons else "natural"), reasons
 
-    verdict = "suspect" if reasons else "natural"
-    return {
-        "verdict": verdict,
-        "reason": " ".join(reasons) if reasons else "人の声として無理のない値でした。",
-        "frames": len(spacings),
-        "f0_hz": round(f0, 1),
-        "formants_hz": [round(v, 1) for v in _median_formants(formant_sets)],
-        "formant_spacing_hz": round(spacing, 1),
-        "vocal_tract_cm": round(vtl, 2),
-        "expected_vocal_tract_cm": round(expected_vtl, 2),
-        "vocal_tract_mismatch_cm": round(mismatch, 2),
-        # 「話者が平均的な大人だったと仮定したときの」倍率。本人の地声が
-        # 分からない以上、これは出発点の目安でしかない。復元は、この値を
-        # そのまま当てるのではなく、操作する人が耳で決められるようにする。
-        "estimated_factor": round(factor, 3),
-        "restorable": verdict == "suspect" and 0.5 <= factor <= 2.0,
-        # ここで言えるのは「加工されているか」までで、「誰か」は言えない。
-        "identifies_speaker": False,
-    }
+
+def _vtl_band(spacings: list[float]) -> tuple[float, float]:
+    """その範囲の中で、声道長がどこからどこまで散らばっていたか。
+
+    四分位で見る（最小・最大だと、たまたま1枚外した極で端が決まる）。
+    間隔と声道長は反比例なので、上下が入れ替わることに注意。
+    """
+    values = np.asarray(spacings, dtype=np.float64)
+    q1, q3 = (float(v) for v in np.percentile(values, [25, 75]))
+    if q1 <= 0 or q3 <= 0:
+        return 0.0, 0.0
+    return SPEED_OF_SOUND_CM / (2 * q3), SPEED_OF_SOUND_CM / (2 * q1)
+
+
+def _is_settled(verdict: str, low_vtl: float, high_vtl: float,
+                f0: float, expected_vtl: float) -> bool:
+    """「加工の形跡あり」と言い切ってよいだけ、値が落ち着いているか。
+
+    実際の録音で測ると、6秒の中でも声道長が 9.8〜18.5cm に散らばることが
+    ある（人の範囲ほぼ全体）。この状態の中央値は、どちら側に落ちるかが
+    たまたまで決まる。実測では同じ人・同じ録音で、選ぶ区間を変えただけで
+    「加工の形跡あり」と「形跡なし」が入れ替わった（あるトラックで 5対2、
+    別のトラックで 2対4）。中央値だけを見ていると、この揺れが見えないまま
+    断定が出る。
+
+    そこで、散らばりの端まで同じ判定になるときだけ suspect を出す。
+
+    natural には同じ条件を課さない。natural は「加工の形跡が見つからな
+    かった」であって、何かを言い当てた主張ではない。両方に厳しくすると、
+    地声を録っただけの音が軒並み「判定できず」になり、警告そのものが
+    使われなくなる。厳しくするのは、人を疑う側の答えだけでよい。
+    """
+    if verdict != "suspect":
+        return True
+    if not (low_vtl and high_vtl):
+        return False
+    return all(
+        _judge(edge, f0, expected_vtl)[0] == "suspect"
+        for edge in (low_vtl, high_vtl)
+    )
 
 
 def _median_formants(sets: list[list[float]]) -> list[float]:

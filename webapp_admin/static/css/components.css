@@ -452,9 +452,15 @@
   background: var(--canvas); color: var(--fg-muted);
 }
 .daw-btn:hover { border-color: var(--fg-subtle); }
+/* ミュートは赤、ソロは橙。以前は「並びの最後がソロ」という前提で
+   :last-child に色を当てていたので、トラック見出しに「声を調べる」を足した
+   とたんソロが赤（ミュートと同じ見た目）になり、押しても区別が付かなく
+   なった。並び順ではなく役割で決める。 */
 .daw-btn.is-on { background: var(--danger); border-color: var(--danger); color: #fff; }
-.daw-strip-buttons .daw-btn:last-child.is-on,
-.daw-head-buttons .daw-btn:last-child.is-on { background: var(--attention); border-color: var(--attention); }
+.daw-btn.is-solo.is-on { background: var(--attention); border-color: var(--attention); }
+/* 選択範囲があるとき、その区間を見るという合図。押せる・押せないの話では
+   ないので、ミュートやソロのように塗りつぶさず縁だけを変える。 */
+.daw-btn.is-armed { border-color: var(--accent); color: var(--accent); }
 
 .daw-track-area { flex: 1 1 auto; min-width: 0; position: relative; }
 .daw-viewport { position: relative; }

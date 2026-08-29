@@ -817,9 +817,11 @@ export async function createMixer(container, options = {}) {
     el("div", { class: "daw-track-area" }, viewport, scroller));
 
   tracks.forEach((track) => {
-    const mute = el("button", { class: "daw-btn", type: "button", title: "ミュート",
+    const mute = el("button", { class: "daw-btn is-mute", type: "button", title: "ミュート",
+                                "aria-label": `${track.name} をミュート`,
                                 onclick: () => { track.muted = !track.muted; applyRouting(); } }, "M");
-    const solo = el("button", { class: "daw-btn", type: "button", title: "ソロ",
+    const solo = el("button", { class: "daw-btn is-solo", type: "button", title: "ソロ",
+                                "aria-label": `${track.name} をソロ`,
                                 onclick: () => { track.solo = !track.solo; applyRouting(); } }, "S");
     const root = el("div", { class: "daw-head" },
       el("span", { class: "daw-head-color", style: { background: track.color } }),
@@ -835,8 +837,11 @@ export async function createMixer(container, options = {}) {
                      text: `発話 ${formatTime(track.stem.voiced_seconds || 0)}` })),
       el("div", { class: "daw-head-buttons" }, mute, solo,
          analysisUrl
-           ? el("button", { class: "daw-btn", type: "button", title: "声を調べる",
-                            onclick: () => inspect(track) }, "?")
+           ? (track.inspectButton = el("button", {
+               class: "daw-btn", type: "button", title: "声を調べる",
+               "aria-label": `${track.name} の声を調べる`,
+               onclick: () => inspect(track),
+             }, "?"))
            : null));
     root.draggable = true;
     root.addEventListener("dragstart", (event) => {
@@ -907,9 +912,11 @@ export async function createMixer(container, options = {}) {
     let solo = null;
     if (!isMaster) {
       pan = createPanKnob((value) => { target.pan = value; applyRouting(); });
-      mute = el("button", { class: "daw-btn", type: "button", title: "ミュート",
+      mute = el("button", { class: "daw-btn is-mute", type: "button", title: "ミュート",
+                            "aria-label": `${label} をミュート`,
                             onclick: () => { target.muted = !target.muted; applyRouting(); } }, "M");
-      solo = el("button", { class: "daw-btn", type: "button", title: "ソロ",
+      solo = el("button", { class: "daw-btn is-solo", type: "button", title: "ソロ",
+                            "aria-label": `${label} をソロ`,
                             onclick: () => { target.solo = !target.solo; applyRouting(); } }, "S");
     }
 
@@ -948,14 +955,38 @@ export async function createMixer(container, options = {}) {
   }
 
   async function inspect(track) {
+    /* 押した時点の選択範囲を控える。応答を待つあいだに範囲を動かされても、
+       結果に添える「どこを調べたか」がずれないようにする。 */
+    const region = loopRegion ? { ...loopRegion } : null;
+
     inspectPanel.hidden = false;
-    clear(inspectBody).append(loading("声を調べています…"));
+    clear(inspectBody).append(loading(
+      region
+        ? `${formatTime(region.start)} 〜 ${formatTime(region.end)} の声を調べています…`
+        : "録音全体から抜き出して調べています…"));
+
+    /* 範囲を選んであればそこだけを調べる。自動で抜き出す方式は、長い録音
+       になるほど喋っている所へ当たらない（4時間の実録音では全トラックが
+       判定不能になった）。どこを見るかは、波形を見ている人が決めるのが
+       いちばん確かなので、選択範囲をそのまま渡す。 */
+    const query = region
+      ? `?start=${region.start.toFixed(3)}&end=${region.end.toFixed(3)}`
+      : "";
+
     let result;
     try {
-      const response = await fetch(`${analysisUrl}/${track.stem.index}`, {
+      const response = await fetch(`${analysisUrl}/${track.stem.index}${query}`, {
         credentials: "same-origin", headers: { Accept: "application/json" },
       });
-      result = await response.json();
+      /* 本文が JSON とは限らない（プロキシや前段が HTML のエラーページを
+         返すことがある）。先に json() を呼ぶと、断られた理由ではなく
+         「Unexpected token '<'」が利用者に出る。文字列で受けてから試す。 */
+      const body = await response.text();
+      try {
+        result = JSON.parse(body);
+      } catch {
+        throw new Error(response.ok ? "応答を解釈できませんでした" : `HTTP ${response.status}`);
+      }
       if (!response.ok) throw new Error(result.detail || `HTTP ${response.status}`);
     } catch (error) {
       clear(inspectBody).append(
@@ -970,6 +1001,15 @@ export async function createMixer(container, options = {}) {
     }[result.verdict] || ["判定できず", "warn"];
 
     const rows = [];
+    // 「どこを調べたか」を最初に出す。結果だけ見せると、選び直せば変わる値
+    // だということが伝わらない。
+    if (result.range) {
+      rows.push(row("調べた区間",
+                    `${formatTime(result.range.start)} 〜 ${formatTime(result.range.end)}`
+                    + `（${result.analysed_seconds} 秒）`));
+    } else if (result.analysed_seconds) {
+      rows.push(row("調べた音", `録音全体から抜き出した ${result.analysed_seconds} 秒`));
+    }
     if (result.f0_hz) rows.push(row("声の高さ（基本周波数）", `${result.f0_hz} Hz`));
     if (result.formants_hz && result.formants_hz.length) {
       rows.push(row("フォルマント", result.formants_hz.map((v) => `${v}`).join(" / ") + " Hz"));
@@ -978,12 +1018,24 @@ export async function createMixer(container, options = {}) {
       rows.push(row("フォルマントの間隔", `${result.formant_spacing_hz} Hz`));
     }
     if (result.vocal_tract_cm) {
-      rows.push(row("そこから求めた声道長", `${result.vocal_tract_cm} cm`));
+      // 中央値だけを出すと、値の硬さが分からない。同じ区間の中でどこまで
+      // 散らばっていたかを併記する。
+      const band = (result.vocal_tract_low_cm && result.vocal_tract_high_cm)
+        ? `${result.vocal_tract_cm} cm`
+          + `（この区間では ${result.vocal_tract_low_cm}〜${result.vocal_tract_high_cm} cm）`
+        : `${result.vocal_tract_cm} cm`;
+      rows.push(row("そこから求めた声道長", band));
     }
     if (result.expected_vocal_tract_cm) {
       rows.push(row("この声の高さなら", `${result.expected_vocal_tract_cm} cm 前後`));
     }
     if (result.frames) rows.push(row("調べたフレーム数", String(result.frames)));
+
+    // 範囲を選ばずに呼んだときは、次にどうすればよいかを添える。
+    const hint = result.range ? null : el("p", { class: "field-help", text:
+      "時間目盛りを横にドラッグしてその人が喋っている区間を選んでから調べると、"
+      + "確かな値が出ます。区間を選ばない場合は録音全体から少しずつ抜き出すため、"
+      + "長い録音ではほとんど当たりません。" });
 
     // clear() が返すのは素の DOM ノードで、その append は null を文字列
     // "null" にしてしまう。dom.js の append は飛ばしてくれる。
@@ -992,8 +1044,9 @@ export async function createMixer(container, options = {}) {
          el("strong", { text: result.name || track.name }),
          el("span", { class: `chip ${verdict[1]}`, text: verdict[0] })),
       el("p", { class: "field-help", text: result.reason || "" }),
+      hint,
       rows.length ? el("div", { class: "list" }, rows) : null,
-      result.restorable ? restoreControls(track, result) : null,
+      result.restorable ? restoreControls(track, result, region) : null,
       el("p", { class: "field-help", text:
         "この解析が言えるのは「加工されているか」までです。誰の声かは判定していません"
         + "（できません）。RVC のように声質そのものを別人へ置き換える方式では、"
@@ -1001,7 +1054,7 @@ export async function createMixer(container, options = {}) {
     ]);
   }
 
-  function restoreControls(track, result) {
+  function restoreControls(track, result, region) {
     const suggested = Math.min(2, Math.max(0.5, result.estimated_factor || 1));
     const value = el("span", { class: "mono", text: suggested.toFixed(2) });
     const slider = el("input", {
@@ -1010,11 +1063,18 @@ export async function createMixer(container, options = {}) {
       oninput: () => { value.textContent = (slider.value / 100).toFixed(2); },
     });
     const play = el("button", { class: "btn btn-sm", type: "button", onclick: () => {
-      // 元のトラックと差し替えず、別に鳴らす（比べられるように）
+      // 元のトラックと差し替えず、別に鳴らす（比べられるように）。
+      // 調べた区間と同じ所だけを返してもらう。全体を変換させると、4時間の
+      // 録音では数秒を聞くために長々と待つことになる。
       const factor = (slider.value / 100).toFixed(3);
-      const audio = new Audio(`${result.restore_url}?factor=${factor}`);
+      const span = region
+        ? `&start=${region.start.toFixed(3)}&end=${region.end.toFixed(3)}`
+        : "";
+      const audio = new Audio(`${result.restore_url}?factor=${factor}${span}`);
       audio.play().catch((e) => toast(`再生できません（${e.message}）`, "danger"));
-      toast(`${factor} 倍を打ち消して再生します`, "success", { duration: 3000 });
+      toast(region
+        ? `${formatTime(region.start)} 〜 ${formatTime(region.end)} を ${factor} 倍で打ち消して再生します`
+        : `${factor} 倍を打ち消して再生します`, "success", { duration: 3000 });
     } }, icon("bi-play-fill"), "打ち消して聞く");
 
     return el("div", { class: "stack" },
@@ -1129,6 +1189,24 @@ export async function createMixer(container, options = {}) {
     exportButton.title = loopRegion
       ? `${formatTime(loopRegion.start)} 〜 ${formatTime(loopRegion.end)} を ZIP で落とす`
       : "時間目盛りを横にドラッグして区間を決めると押せます";
+
+    /* 「声を調べる」は区間の有無で見るものが変わる。押す前に分かるように、
+       説明をここで書き換える（結果の中だけに書いても、押したあとにしか
+       読めない）。 */
+    const span = loopRegion
+      ? `${formatTime(loopRegion.start)} 〜 ${formatTime(loopRegion.end)}`
+      : null;
+    for (const track of tracks) {
+      if (!track.inspectButton) continue;
+      track.inspectButton.classList.toggle("is-armed", Boolean(loopRegion));
+      track.inspectButton.title = span
+        ? `${span} の声を調べる`
+        : "声を調べる（時間目盛りをドラッグして区間を選ぶと確かになります）";
+      track.inspectButton.setAttribute(
+        "aria-label",
+        span ? `${track.name} の ${span} の声を調べる` : `${track.name} の声を調べる`);
+    }
+
     if (!loopRegion) { loopBand.hidden = true; return; }
     loopBand.hidden = false;
     loopBand.style.left = `${(loopRegion.start - view.start) * view.pxPerSecond}px`;
@@ -1238,6 +1316,8 @@ export async function createMixer(container, options = {}) {
          "スペースで再生／停止、←→ で移動、＋− で拡大。M＝ミュート、S＝ソロ。" +
          "フェーダーはダブルクリックで 0dB、つまみは上下ドラッグでパン。" +
          "時間目盛りを横にドラッグするとループ区間になり、その範囲だけ書き出せます。" +
+         "声を調べるときも同じ区間を見ます（その人がはっきり喋っている所を" +
+         "選んでから「?」を押してください）。" +
          "トラックの名前をドラッグすると並べ替えられます。" +
          "各トラックは同じ時間軸に揃えてあるので、途中から参加した人は冒頭が、" +
          "途中で抜けた人は末尾が無音になります。" }))

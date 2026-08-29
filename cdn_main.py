@@ -79,9 +79,15 @@ def create_cdn_app() -> FastAPI:
 
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-        # ブラウザで直接開かれる配信リンク (/dlaudio/files/...) だけ、簡易HTMLの案内ページを返す。
-        # /dlaudio/info/... 等のAPIエンドポイントは従来どおりJSONを返す。
-        if request.url.path.startswith("/dlaudio/files/"):
+        # ブラウザで直接開かれる配信リンクには簡易HTMLの案内ページを返す。
+        # ただし /dlaudio/files/ の下には、ミキサーが fetch する索引・解析・
+        # 切り出しも同居している。パスの接頭辞で決めていたころは、そちらにも
+        # HTML を返していたため、ミキサーは断られた理由を読めなかった
+        # （JSON として解釈できず「Unexpected token '<'」になる）。
+        # 判定は services/djaudio_cdn.wants_json に1つだけ置く。
+        from services.djaudio_cdn import wants_json
+
+        if request.url.path.startswith("/dlaudio/files/") and not wants_json(request):
             return HTMLResponse(
                 _render_error_page(exc.status_code, exc.detail),
                 status_code=exc.status_code,

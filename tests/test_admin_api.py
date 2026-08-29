@@ -33,6 +33,8 @@ import itsdangerous  # noqa: E402
 from starlette.testclient import TestClient  # noqa: E402
 
 from webapp_admin.app import app  # noqa: E402
+from webapp_admin.schema.registry import PANEL_BY_ID  # noqa: E402
+from webapp_admin.schema.types import Field, Widget  # noqa: E402
 
 SECRET = "x" * 64
 CSRF = "t" * 64
@@ -134,6 +136,116 @@ class PanelSchemaTests(unittest.TestCase):
 
     def test_unknown_panel_is_404(self):
         self.assertEqual(self.client.get("/admin/api/apps/nope").status_code, 404)
+
+
+class PanelValueTypeTests(unittest.TestCase):
+    """開いた瞬間に「未保存の変更」が出ないこと。
+
+    画面側は「サーバーが返した現在値」と「入力欄から読み返した値」を
+    JSON.stringify で比べて変更の有無を決める。だから型が違うだけで、
+    何も触っていないのに変更ありになる。実際に Widget.DURATION が
+    文字列 "600" で返っていて、入力欄は数値 600 を返すため、DJAudio-DL の
+    パネルは開いた瞬間から常に1件の未保存を表示していた。
+
+    この食い違いは Python 側だけを読んでも JS 側だけを読んでも見つからない
+    ので、両者の約束をここに表として書き、全パネルの全項目へ当てる。
+    表は webapp_admin/static/js/forms/widgets.js の read() と対で保つこと。
+    """
+
+    # widget → 入力欄から読み返したときに画面側が作る型（null は共通で許す）
+    BROWSER_TYPES = {
+        Widget.TEXT: str,
+        Widget.TEXTAREA: str,
+        Widget.INT: int,
+        Widget.DURATION: int,
+        Widget.BOOL: bool,
+        Widget.SELECT: str,
+        Widget.CHANNEL: str,
+        Widget.VOICE_CHANNEL: str,
+        Widget.ROLE: str,
+        Widget.CHECKLIST: list,
+        Widget.SNOWFLAKE: str,
+    }
+
+    # 保存されている値としてありうる形。settings.json には設定した経路によって
+    # 数値と文字列が混在するので、どちらで入っていても JSON の型は揃うこと。
+    STORED_SAMPLES = {
+        Widget.TEXT: ("あ", ""),
+        Widget.TEXTAREA: ("あ", ""),
+        Widget.INT: (30, "30"),
+        Widget.DURATION: (600, "600"),
+        Widget.BOOL: (True, False, 1, 0),
+        Widget.SELECT: ("a", 1),
+        Widget.CHANNEL: (123, "123"),
+        Widget.VOICE_CHANNEL: (123, "123"),
+        Widget.ROLE: (123, "123"),
+        Widget.CHECKLIST: (["a"], ("a",), {"a": True}),
+        Widget.SNOWFLAKE: (123, "123"),
+    }
+
+    def _fields(self):
+        for panel in PANEL_BY_ID.values():
+            for field in panel.fields:
+                yield panel, field
+            for collection in panel.collections:
+                for field in collection.item_fields:
+                    yield panel, field
+
+    def test_every_widget_covers_the_browser_contract(self):
+        """新しい widget を足したらこの表も足す、を強制する。"""
+        self.assertEqual(set(self.BROWSER_TYPES), set(Widget))
+        self.assertEqual(set(self.STORED_SAMPLES), set(Widget))
+
+    def test_stored_values_serialise_to_the_type_the_browser_reads_back(self):
+        for panel, field in self._fields():
+            expected = self.BROWSER_TYPES[field.widget]
+            for stored in self.STORED_SAMPLES[field.widget]:
+                with self.subTest(panel=panel.id, field=field.key, stored=stored):
+                    value = field.to_json_value(stored)
+                    if value is None:
+                        continue
+                    # bool は int の派生なので、int 期待の項目に紛れ込ませない
+                    if expected is int:
+                        self.assertNotIsInstance(value, bool)
+                    self.assertIsInstance(value, expected)
+
+    def test_a_freshly_opened_panel_has_nothing_to_save(self):
+        """API が実際に返す現在値の型を、全スキーマパネルについて見る。"""
+        client = make_client()
+        for panel in PANEL_BY_ID.values():
+            if panel.custom:
+                continue
+            payload = client.get(f"/admin/api/apps/{panel.id}").json()
+            for field in panel.fields:
+                with self.subTest(panel=panel.id, field=field.key):
+                    self.assertIn(field.key, payload["values"])
+                    value = payload["values"][field.key]
+                    if value is None:
+                        continue
+                    expected = self.BROWSER_TYPES[field.widget]
+                    if expected is int:
+                        self.assertNotIsInstance(value, bool)
+                    self.assertIsInstance(value, expected)
+
+    def test_a_duration_survives_the_round_trip_unchanged(self):
+        """秒 → 入力欄（値＋単位）→ 秒 が同じ値に戻ること。
+
+        画面側は「割り切れる一番大きい単位」で表示し、読み返すときに
+        その単位を掛け戻す。表示の都合で値が変わってはいけない。
+        """
+        units = ((86400, "日"), (3600, "時間"), (60, "分"), (1, "秒"))
+
+        def browser_round_trip(seconds: int) -> int:
+            for factor, _label in units:
+                if seconds % factor == 0:
+                    return round(seconds / factor * factor)
+            return seconds
+
+        for seconds in (60, 600, 3600, 86400, 2592000, 90, 3661):
+            with self.subTest(seconds=seconds):
+                field = Field("ttl", "保持時間", Widget.DURATION, default=600)
+                value = field.to_json_value(seconds)
+                self.assertEqual(browser_round_trip(value), seconds)
 
 
 class SaveTests(unittest.TestCase):
@@ -1350,6 +1462,83 @@ class RecordingClipTests(unittest.TestCase):
 
         # 範囲外の倍率は受け付けない
         self.assertEqual(client.get(f"{url}?factor=9").status_code, 400)
+
+    def test_the_analysis_endpoint_takes_the_selected_range(self):
+        """ミキサーで選んだ区間を渡せること。
+
+        録音全体から自動で抜き出す方式は、長い録音ほど喋っている所へ当たらない。
+        どこを見るかは波形を見ている人が決める。
+        """
+        client = TestClient(app)
+        url = f"/dlaudio/files/{GUILD_ID}/{self.token}/analysis/0"
+
+        response = client.get(f"{url}?start=0.5&end=2.5")
+        self.assertEqual(response.status_code, 200, response.text[:200])
+        payload = response.json()
+        self.assertEqual(payload["scope"], "selection")
+        self.assertEqual(payload["range"], {"start": 0.5, "end": 2.5})
+
+        # 区間を渡さなければ、これまでどおり全体から抜き出す
+        whole = client.get(url).json()
+        self.assertEqual(whole["scope"], "whole")
+        self.assertNotIn("range", whole)
+
+        # 使えない区間は黙って全体へ広げない。広げると「選んだのに関係ない所の
+        # 結果が返る」うえ、見た目には成功したように見える。
+        # 断る理由は、ミキサーと同じ Accept を送って JSON で受け取れること。
+        json_headers = {"Accept": "application/json"}
+        for query, wanted in (("?start=5&end=1", "後にして"),
+                              ("?start=1&end=1.1", "短すぎます"),
+                              ("?start=1", "両方")):
+            with self.subTest(query=query):
+                refused = client.get(url + query, headers=json_headers)
+                self.assertEqual(refused.status_code, 400)
+                self.assertEqual(refused.headers["content-type"], "application/json")
+                self.assertIn(wanted, refused.json()["detail"])
+
+    def test_the_restore_endpoint_can_return_just_the_selected_range(self):
+        """調べた区間と同じ所だけを聞けること。
+
+        全体を変換させると、4時間の録音では数秒を聞くために長々と待つ。
+        """
+        client = TestClient(app)
+        url = f"/dlaudio/files/{GUILD_ID}/{self.token}/stem/0/restored"
+
+        part = client.get(f"{url}?factor=1.2&start=0.5&end=1.5")
+        self.assertEqual(part.status_code, 200, part.text[:200])
+        self.assertEqual(part.headers["content-type"], "audio/mpeg")
+
+        whole = client.get(f"{url}?factor=1.2")
+        self.assertEqual(whole.status_code, 200)
+        # 区間を指定したほうが短いこと（＝実際に切り出されている）
+        self.assertLess(len(part.content), len(whole.content))
+
+
+class CdnErrorShapeTests(unittest.TestCase):
+    """単体の配信プロセスでも、fetch する側には JSON で理由を返すこと。
+
+    /dlaudio/files/ の下には2種類が同居している。ブラウザが直接開く配信リンクと、
+    ミキサーが fetch する索引・解析・切り出し。cdn_main.py はパスの接頭辞だけで
+    「配信リンクだから HTML」と決めていたため、ミキサーが受け取るのも HTML に
+    なり、断られた理由を読めなかった（JSON として解釈できず
+    「Unexpected token '<'」としか言えない）。判定は Accept で行う。
+    """
+
+    def setUp(self):
+        from cdn_main import create_cdn_app
+
+        self.client = TestClient(create_cdn_app())
+        self.url = f"/dlaudio/files/{GUILD_ID}/nosuchtoken/analysis/0"
+
+    def test_a_fetching_client_gets_json(self):
+        response = self.client.get(self.url, headers={"Accept": "application/json"})
+        self.assertEqual(response.headers["content-type"], "application/json")
+        self.assertIn("detail", response.json())
+
+    def test_a_browser_still_gets_the_guidance_page(self):
+        response = self.client.get(
+            self.url, headers={"Accept": "text/html,application/xhtml+xml"})
+        self.assertIn("text/html", response.headers["content-type"])
 
 
 class BotTokenResolutionTests(unittest.TestCase):

@@ -3230,6 +3230,78 @@ class VoiceAnalysisTests(unittest.TestCase):
             with self.subTest(f0=f0):
                 self.assertGreater(self._accepted_ratio(self._voice_chunk(f0)), 0.8)
 
+    # ── 調べる区間の選び方 ────────────────────────────────
+
+    def _voice_between_silence(self, lead=8.0, tail=8.0):
+        """前後を無音で挟んだ声。ミキサーで区間を選ぶ状況を作る。"""
+        quiet = bytes(int(48000 * lead) * 4)          # 2ch × 2byte
+        after = bytes(int(48000 * tail) * 4)
+        return quiet + self._voice() + after
+
+    def test_the_selected_range_is_what_gets_analysed(self):
+        """選んだ区間だけを見ること。
+
+        自動で散らす方式は、長い録音になるほど当たらない（4時間22分の実録音
+        5本では、5本とも判定不能になり、うち4本は使えるフレームが1枚も
+        取れなかった）。波形を見ている人が選んだ区間をそのまま使う。
+        """
+        lead = 8.0
+        path = self._mp3(self._voice_between_silence(lead), "gap.mp3")
+        duration = lead * 2 + 6.0
+
+        spoken = self.va.analyse(path, duration, start=lead, end=lead + 6.0)
+        self.assertNotEqual(spoken["verdict"], "unknown", spoken.get("reason"))
+        self.assertEqual(spoken["scope"], "selection")
+        self.assertEqual(spoken["range"]["start"], round(lead, 3))
+
+        silent = self.va.analyse(path, duration, start=0.0, end=lead - 1.0)
+        self.assertEqual(silent["verdict"], "unknown")
+        # 選び直せば済むことが伝わる文言であること
+        self.assertIn("選び直して", silent["reason"])
+
+    def test_without_a_range_the_answer_says_it_looked_everywhere(self):
+        result = self.va.analyse(self._mp3(self._voice(), "plain.mp3"), 6.0)
+        self.assertEqual(result["scope"], "whole")
+        self.assertNotIn("range", result)
+
+    def test_a_range_that_cannot_be_used_falls_back_to_the_whole_track(self):
+        self.assertIsNone(self.va.selection_bounds(100.0, 10.0, 10.2))   # 短すぎる
+        self.assertIsNone(self.va.selection_bounds(100.0, None, 20.0))   # 片方だけ
+        self.assertIsNone(self.va.selection_bounds(100.0, 30.0, 10.0))   # 逆順
+        self.assertEqual(self.va.selection_bounds(100.0, -5.0, 500.0), (0.0, 100.0))
+
+    def test_a_long_selection_stays_bounded(self):
+        """誤って全体を選んでも、1回の解析が青天井にならないこと。"""
+        import numpy as np
+
+        calls = []
+
+        def fake_decode(source, at, length):
+            calls.append((at, length))
+            return np.zeros(int(length * self.va.RATE))
+
+        with patch.object(self.va, "_decode", fake_decode):
+            self.va._probe(Path("x"), 3600.0, 100.0, 1000.0)
+
+        self.assertLessEqual(sum(length for _, length in calls),
+                             self.va.SELECTION_MAX_SECONDS + 0.01)
+        # 選ばれた範囲の外は見ない
+        self.assertTrue(all(100.0 <= at <= 1000.0 for at, _ in calls))
+
+    def test_suspect_is_withheld_when_the_range_disagrees_with_itself(self):
+        """同じ区間の中で答えが割れているなら、加工と言い切らない。
+
+        実録音のあるトラック（10748-10755秒）では声道長が 9.6〜14.4cm に散らばり、
+        中央値がどちら側へ落ちるかで判定が入れ替わっていた。
+        """
+        # f0 157Hz なら 16.3cm 前後が期待値。端で判定が変わる → 言い切らない
+        self.assertFalse(self.va._is_settled("suspect", 9.6, 14.4, 156.9, 16.26))
+        # 端まで一貫して短い → 言い切ってよい
+        self.assertTrue(self.va._is_settled("suspect", 9.5, 10.8, 117.6, 17.33))
+        # natural は「形跡が見つからなかった」であって主張ではないので、
+        # 同じ厳しさを課さない（課すと地声が軒並み判定不能になる）
+        self.assertTrue(self.va._is_settled("natural", 9.8, 18.5, 80.0, 18.3))
+
     def test_the_same_gate_is_used_for_pitch_and_formants(self):
         """基音を取るフレームとフォルマントを取るフレームが揃っていること。
 

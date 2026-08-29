@@ -110,7 +110,11 @@ class Field:
             if isinstance(value, (list, tuple, set)):
                 return [str(v) for v in value]
             return []
-        if self.widget is Widget.INT:
+        # DURATION は秒の整数。画面側も数値として読み返すので、ここで文字列に
+        # すると開いた瞬間に「未保存の変更」として数えられてしまう（実際に
+        # DJAudio-DL のパネルが、何も触っていないのに常に1件変更ありになって
+        # いた）。INT と同じ扱いにして、型を1箇所で決める。
+        if self.widget in (Widget.INT, Widget.DURATION):
             try:
                 return int(value)
             except (TypeError, ValueError):
@@ -133,7 +137,7 @@ class Field:
             if isinstance(value, str):
                 return value.strip().lower() in ("1", "true", "on", "yes")
             return bool(value)
-        if self.widget is Widget.INT:
+        if self.widget in (Widget.INT, Widget.DURATION):
             if value in (None, "") and self.default is not None:
                 return int(self.default)
             return int(value)
