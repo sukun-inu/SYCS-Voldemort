@@ -1309,7 +1309,19 @@ class RecordingTests(unittest.TestCase):
         return bytes(out)
 
     def _duration(self, path: Path) -> float:
-        """mp3 の長さを ffmpeg でデコードして測る。"""
+        """mp3 の長さを ffmpeg でデコードして測る。
+
+        **最後の time= を採ること。** ffmpeg は進捗を time= の行で流すが、
+        何行出るかはビルドによって違う。6.x は復号を始める前に
+        `time=00:00:00.00` を1行出してから、終了時にもう1行出す。ここで
+        re.search（最初の一致）を使うと、その開始時の 0 秒を長さとして
+        読んでしまう。
+
+        手元の ffmpeg（Windows のビルド）は time= を1行しか出さないので
+        最初と最後が同じになり、この取り違えが表に出なかった。Linux の CI で
+        だけ「5秒のはずの mp3 が 0.0 秒」で落ちて発覚した。mp3 自体は
+        どちらでも正しく5秒で作られている。
+        """
         import re
         import subprocess
         from config import DJAUDIO_FFMPEG_PATH
@@ -1318,10 +1330,11 @@ class RecordingTests(unittest.TestCase):
             capture_output=True, text=True, timeout=60,
         )
         self._last_probe_stderr = out.stderr
-        match = re.search(r"time=(\d+):(\d+):(\d+\.\d+)", out.stderr)
-        if not match:
+        matches = re.findall(r"time=(\d+):(\d+):(\d+\.\d+)", out.stderr)
+        if not matches:
             return -1.0
-        return int(match.group(1)) * 3600 + int(match.group(2)) * 60 + float(match.group(3))
+        hours, minutes, seconds = matches[-1]
+        return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
 
     def _track_report(self, writer, path: Path) -> str:
         """トラックが期待どおりで無かったときに、原因を追える材料を並べる。
