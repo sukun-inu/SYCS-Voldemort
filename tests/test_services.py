@@ -326,6 +326,24 @@ class IntensityMapTests(unittest.TestCase):
         self.assertLess(sum(reds) / len(reds), rgb[0],
                         "塗りが濃すぎて札より目立っている")
 
+    def test_the_map_does_not_repeat_the_max_intensity_badge(self):
+        """最大震度の札を地図の中に持たない。
+
+        Discord の埋め込みには最大震度だけの画像がサムネイルとして付く
+        （_generate_badge / attachment://intensity_badge.png）。地図の右上にも
+        同じものを置くと、ひとつの吹き出しに同じ札が2つ出る。
+        最大震度は見出しの文字列（「最大震度 4」）で足りる。
+        """
+        plot = [(36.341, 140.447, 40, "茨城県"), (35.605, 140.123, 30, "千葉県")]
+        image, _ = self._render(plot, 35.5, 140.9, zoom=7)
+        # 右上（凡例も出典も無い側）に、その震度の色の面が無いこと。
+        corner = image.crop((image.width - 150, 0, image.width, 90))
+        rgb = eq._MAP_FILL_RGB[40]
+        hits = sum(1 for r, g, b in corner.getdata()
+                   if abs(r - rgb[0]) <= 26 and abs(g - rgb[1]) <= 26
+                   and abs(b - rgb[2]) <= 26)
+        self.assertLess(hits, 60, "地図の中に最大震度の札が戻っている")
+
     def test_the_map_credits_the_outline_source(self):
         """輪郭は国土地理院のデータ。出典と、加工した旨を画像に載せる（PDL1.0）。"""
         self.assertIn("地球地図日本", eq._TILE_ATTRIBUTION)
