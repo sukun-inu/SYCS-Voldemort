@@ -32,7 +32,7 @@
   border-radius: inherit;
   background: radial-gradient(220px 140px at var(--spec-x) var(--spec-y), var(--spec), transparent 72%);
   opacity: 0;
-  transition: opacity .3s ease;
+  transition: opacity var(--dur-3) ease;
   pointer-events: none;
 }
 [data-specular]:hover::after { opacity: 1; }
@@ -75,7 +75,7 @@
   line-height: 20px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+  transition: background-color var(--dur-1) ease, border-color var(--dur-1) ease, color var(--dur-1) ease;
 }
 .btn:hover:not(:disabled) { background: var(--canvas-inset); }
 .btn:disabled { opacity: .55; cursor: not-allowed; }
@@ -350,7 +350,7 @@
   box-shadow: var(--shadow-popover), inset 0 1px 0 var(--glass-highlight);
   font-size: var(--text-md);
   line-height: 22px;
-  animation: toast-in .18s ease-out;
+  animation: toast-in var(--dur-2) ease-out;
 }
 /* backdrop-filter が使えない環境では透かさない（読めなくなるため） */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -395,7 +395,7 @@
 .metric-label { font-size: var(--text-md); color: var(--fg-muted); }
 .metric-value { font-size: var(--text-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
 .meter { height: 6px; border-radius: var(--radius-pill); background: var(--canvas-inset); overflow: hidden; }
-.meter-fill { display: block; height: 100%; background: var(--accent); transition: width .3s ease; }
+.meter-fill { display: block; height: 100%; background: var(--accent); transition: width var(--dur-3) ease; }
 .metric.tone-success .meter-fill { background: var(--success); }
 .metric.tone-warning .meter-fill { background: var(--attention); }
 .metric.tone-danger .meter-fill { background: var(--danger); }
@@ -511,7 +511,7 @@
   display: flex; align-items: center; gap: 8px;
   height: 72px; padding: 0 8px 0 0;
   border-bottom: 1px solid var(--border-muted);
-  transition: opacity .15s ease;
+  transition: opacity var(--dur-1) ease;
 }
 .daw-head.is-silenced { opacity: .45; }
 .daw-head { cursor: grab; }
@@ -586,7 +586,7 @@
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   padding: 10px 8px;
   border-right: 1px solid var(--border-muted);
-  transition: opacity .15s ease;
+  transition: opacity var(--dur-1) ease;
 }
 .daw-strip.is-silenced { opacity: .45; }
 /* マスターは右端に貼り付ける。トラックが多くて横に流れても、
@@ -647,7 +647,7 @@
   border-radius: 3px;
   border: 1px solid var(--border);
   background: linear-gradient(180deg, var(--canvas) 0%, var(--canvas-subtle) 100%);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .18);
+  box-shadow: var(--shadow-1);
 }
 .daw-fader-knob::after {
   content: ""; position: absolute; left: 3px; right: 3px; top: 50%;
@@ -670,12 +670,12 @@
   border-radius: 50%;
   border: 1px solid var(--border);
   background: radial-gradient(circle at 50% 35%, var(--canvas) 0%, var(--canvas-subtle) 100%);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .16);
+  box-shadow: var(--shadow-1);
 }
 .daw-knob:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .daw-knob-pointer {
   position: absolute; inset: 0;
-  transition: transform .05s linear;
+  transition: transform var(--dur-0) linear;
 }
 .daw-knob-pointer::before {
   content: ""; position: absolute; left: 50%; top: 3px;

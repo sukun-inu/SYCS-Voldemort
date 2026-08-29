@@ -53,15 +53,15 @@ body.aero-page {
   background: var(--glass-bg-strong);
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
-  box-shadow: inset 0 1px 0 var(--glass-highlight), 0 6px 18px rgba(4, 18, 40, 0.3);
+  box-shadow: inset 0 1px 0 var(--glass-highlight), var(--shadow-2);
   color: var(--fg);
   text-align: left;
   cursor: pointer;
-  transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease;
+  transition: box-shadow var(--dur-1) ease, transform var(--dur-1) ease, border-color var(--dur-1) ease;
 }
 .guild-card:hover {
   border-color: rgba(120, 195, 255, 0.85);
-  box-shadow: inset 0 1px 0 var(--glass-highlight), 0 0 22px rgba(110, 190, 255, 0.55),
+  box-shadow: inset 0 1px 0 var(--glass-highlight), var(--glow-strong),
     0 10px 24px rgba(4, 18, 40, 0.35);
   transform: translateY(-2px);
 }
@@ -135,7 +135,7 @@ body.aero-page {
   display: block;
   margin: 0 auto;
   border-radius: 20px;
-  box-shadow: 0 6px 20px rgba(6, 24, 54, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  box-shadow: var(--shadow-2), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 .login-title { font-size: var(--text-2xl); margin: 18px 0 6px; }
 .login-subtitle { color: var(--fg-muted); font-size: var(--text-md); line-height: 1.9; }
@@ -182,7 +182,7 @@ body.aero-page {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 .aero-page .btn:hover:not(:disabled) {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 14px rgba(110, 190, 255, 0.4);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), var(--glow-strong);
 }
 .aero-page .btn-primary {
   background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.04));
@@ -190,7 +190,7 @@ body.aero-page {
 .aero-page .input:focus,
 .aero-page .select:focus,
 .aero-page .textarea:focus {
-  box-shadow: 0 0 0 3px rgba(110, 190, 255, 0.35), 0 0 12px rgba(110, 190, 255, 0.3);
+  box-shadow: 0 0 0 3px rgba(110, 190, 255, 0.35), var(--glow-soft);
 }
 
 /* ガラスのカードは desktop.css の .lens / [data-specular] と同じ扱いにする */

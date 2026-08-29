@@ -139,12 +139,12 @@ body.desktop-body { overflow: hidden; }
   color: var(--fg-muted);
   cursor: pointer;
   font-size: var(--text-sm);
-  transition: background-color .12s ease, box-shadow .12s ease, color .12s ease;
+  transition: background-color var(--dur-1) ease, box-shadow var(--dur-1) ease, color var(--dur-1) ease;
 }
 .window-control:hover {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.25));
   border-color: var(--glass-highlight);
-  box-shadow: 0 0 10px rgba(120, 190, 255, 0.5);
+  box-shadow: var(--glow-soft);
   color: var(--fg);
 }
 .window-control.close:hover {
@@ -240,15 +240,15 @@ body.desktop-body { overflow: hidden; }
   font-weight: 600;
   text-shadow: 0 1px 2px rgba(0, 16, 40, 0.6);
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 0 14px rgba(90, 180, 255, 0.35);
-  transition: box-shadow .15s ease, background-color .15s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), var(--glow-soft);
+  transition: box-shadow var(--dur-1) ease, background-color var(--dur-1) ease;
 }
 /* 帯の中で唯一の直角だと異物に見えるので、他のアイコンと同じく角を丸める */
 .start-button img { border-radius: 5px; }
 .start-button:hover,
 .start-button[aria-expanded="true"] {
   background: linear-gradient(180deg, rgba(150, 215, 255, 0.55), rgba(60, 140, 230, 0.35));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 22px rgba(120, 200, 255, 0.7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), var(--glow-strong);
 }
 
 /* min-width:0 が無いと flex アイテムが縮まず、overflow-x が効かないまま
@@ -280,14 +280,14 @@ body.desktop-body { overflow: hidden; }
   font-size: var(--text-md);
   line-height: 20px;     /* 20 + 5+5 + 1+1 = 32px（スタートと同じ高さ） */
   cursor: pointer;
-  transition: background-color .12s ease, box-shadow .12s ease, color .12s ease;
+  transition: background-color var(--dur-1) ease, box-shadow var(--dur-1) ease, color var(--dur-1) ease;
 }
 .taskbar-app:hover { color: #fff; background: rgba(255, 255, 255, 0.18); }
 .taskbar-app.is-active {
   color: #fff;
   border-color: rgba(255, 255, 255, 0.45);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.10));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 0 14px rgba(110, 190, 255, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), var(--glow-soft);
   font-weight: 600;
 }
 .taskbar-app.is-minimized { opacity: .6; }
@@ -396,13 +396,13 @@ body.desktop-body { overflow: hidden; }
   font-size: var(--text-sm);
   text-align: center;
   cursor: pointer;
-  transition: background-color .12s ease, box-shadow .12s ease, transform .12s ease;
+  transition: background-color var(--dur-1) ease, box-shadow var(--dur-1) ease, transform var(--dur-1) ease;
 }
 .app-tile:hover,
 .app-tile:focus-visible {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(190, 225, 255, 0.35));
   border-color: rgba(120, 190, 255, 0.7);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 0 16px rgba(110, 190, 255, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), var(--glow-strong);
   transform: translateY(-1px);
 }
 .app-tile-icon {
