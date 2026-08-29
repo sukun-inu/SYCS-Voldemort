@@ -14,7 +14,10 @@ import discord
 from discord.ext.commands import Bot
 
 try:
-    from PIL import Image, ImageDraw, ImageFont
+    # ImageFilter は落ち影のぼかし、numpy は白地図の塗り替えと暈の生成に使う。
+    # numpy は requirements にあり、PIL と同じく画像生成にだけ要る。
+    import numpy as np
+    from PIL import Image, ImageDraw, ImageFilter, ImageFont
     _PIL = True
 except ImportError:
     _PIL = False
@@ -31,7 +34,17 @@ logger = logging.getLogger(__name__)
 
 _WS_URL  = "wss://api.p2pquake.net/v2/ws"
 _SEEN_ID_LIMIT = 500  # 重複排除で覚えておくイベントIDの数
-_TILE_URL = "https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png"
+# 地図のタイル。
+#
+# 以前は CARTO の dark_all を使っていたが、鍵が要るようになり、届く画像に
+# 「API KEY REQUIRED」が斜めに刷り込まれるようになった。それをそのまま
+# Discord へ流していた。
+#
+# 地理院タイルの白地図（blank）に替える。鍵は要らず、出典を書けば自由に
+# 使える（政府標準利用規約）。白地図なので文字も色も入っておらず、こちらで
+# 暗色へ塗り替えられる。1枚 13KB と軽い（標準地図は 117KB）。
+_TILE_URL = "https://cyberjapandata.gsi.go.jp/xyz/blank/{z}/{x}/{y}.png"
+_TILE_ATTRIBUTION = "地理院タイル（国土地理院）"
 _TILE_UA  = "VoldermortBot/1.0 (earthquake alert; contact: github)"
 _TILE_SZ  = 256
 
@@ -56,12 +69,27 @@ _PREF_CENTERS: dict[str, tuple[float, float]] = {
 }
 
 # マップ上の震度圏塗り色 — Kiwi Monitor V2 準拠
+# 震度の色。気象庁の並びに沿いつつ、暗い地図の上で沈まないよう明度を上げ、
+# 原色のままだと安っぽく見えるので彩度を少し落としてある。
 _MAP_FILL_RGB = {
-    10: (  0,  55, 220), 20: (  0, 130, 230), 30: (  0, 180, 180),
-    40: (220, 200,  10), 45: (230, 150,   0),
-    50: (230, 100,   0), 55: (230,  45,   0),
-    60: (200,   0,   0), 65: (150,   0, 150), 70: ( 95,   0, 115),
+    10: ( 58, 122, 216), 20: ( 46, 158, 214), 30: ( 44, 176, 154),
+    40: (226, 192,  62), 45: (232, 152,  48),
+    50: (233, 119,  43), 55: (226,  78,  44),
+    60: (206,  47,  62), 65: (168,  42, 106), 70: (132,  44, 128),
 }
+
+# 地図の面と線の色（暗い埋め込みに合わせる）。白地図を塗り替えるときに使う。
+_MAP_SEA = (11, 15, 22)
+_MAP_LAND = (38, 47, 62)
+_MAP_LINE = (96, 114, 142)
+
+# 出力の大きさと、描画時の倍率。
+#
+# PIL の ellipse / line はアンチエイリアスしないので、等倍で描くと円も×印も
+# 階段状になる（これが「チープに見える」いちばんの原因だった）。倍で描いて
+# から縮小すると、縮小の平均化がそのままアンチエイリアスになる。
+_MAP_W, _MAP_H = 900, 540
+_MAP_SS = 2
 
 # 凡例・ログ用（全角）
 _SCALE_MAP = {
@@ -257,45 +285,61 @@ def _format_time(time_str: str) -> tuple[str, datetime | None]:
 # ── バッジ画像生成 ─────────────────────────────────────────
 
 def _generate_badge(scale: int) -> io.BytesIO | None:
-    """震度バッジ（160×160）を生成して BytesIO で返す。
-    上部ダークヘッダーに「最大震度」、下部に大きな震度数字。"""
+    """震度バッジを生成して BytesIO で返す。
+
+    以前は等倍で角丸と文字を描いていたため、角が階段状に出て安っぽかった
+    （PIL はアンチエイリアスしない）。倍で描いてから縮めると、縮小の平均化が
+    そのままアンチエイリアスになる。
+    """
     if not _PIL:
         return None
 
-    r, g, b = _SCALE_RGB.get(scale, (100, 100, 100))
-    label   = _SCALE_BADGE_LABEL.get(scale, str(scale))
+    rgb = _MAP_FILL_RGB.get(scale, (120, 130, 150))
+    label = _SCALE_BADGE_LABEL.get(scale, str(scale))
 
-    w, h       = 160, 160
-    header_h   = 38          # ヘッダー帯の高さ
-    radius     = 16
-    header_bg  = (10, 18, 30, 255)
+    ss = 3
+    size = 180
+    w = h = size * ss
+    header_h = 44 * ss
+    radius = 22 * ss
 
-    img  = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # 全体背景（角丸、震度カラー）
-    draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=radius, fill=(r, g, b, 255))
+    # 本体。上から下へわずかに沈ませて、平らな板に見えないようにする。
+    draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=radius, fill=(*rgb, 255))
+    shade = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    shade_draw = ImageDraw.Draw(shade)
+    for row in range(header_h, h):
+        t = (row - header_h) / max(1, h - header_h)
+        shade_draw.line([(0, row), (w, row)], fill=(0, 0, 0, int(46 * t ** 1.4)))
+    mask = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, w - 1, h - 1], radius=radius, fill=255)
+    img.alpha_composite(Image.composite(shade, Image.new("RGBA", (w, h), (0, 0, 0, 0)), mask))
 
-    # ヘッダー帯（上部、角丸はみ出しを矩形で塗りつぶし）
-    draw.rounded_rectangle([0, 0, w - 1, header_h + radius], radius=radius, fill=header_bg)
-    draw.rectangle([0, header_h, w - 1, header_h + radius], fill=header_bg)
+    # 見出しの帯。角丸は上だけなので、下側は四角で埋める。
+    header = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    hd = ImageDraw.Draw(header)
+    hd.rounded_rectangle([0, 0, w - 1, header_h + radius], radius=radius, fill=(9, 13, 21, 255))
+    hd.rectangle([0, header_h, w - 1, header_h + radius], fill=(9, 13, 21, 255))
+    img.alpha_composite(Image.composite(header, Image.new("RGBA", (w, h), (0, 0, 0, 0)), mask))
+    draw.rectangle([0, header_h - ss, w - 1, header_h], fill=(255, 255, 255, 38))
 
-    # ヘッダーと本体の区切り線
-    draw.rectangle([0, header_h, w - 1, header_h + 1], fill=(255, 255, 255, 30))
+    draw.text((w / 2, header_h / 2), "最大震度", font=_get_font(int(21 * ss)),
+              fill=(226, 234, 244, 255), anchor="mm")
 
-    # 「最大震度」テキスト
-    font_hd = _get_font(20)
-    draw.text((w // 2, header_h // 2 + 1), "最大震度",
-              fill=(255, 255, 255, 240), font=font_hd, anchor="mm")
+    # 数字。明るい震度では白が沈むので黒に切り替える。
+    body_cy = header_h + (h - header_h) / 2
+    draw.text((w / 2, body_cy), label,
+              font=_get_font(int(size * ss * (0.50 if len(label) == 1 else 0.34))),
+              fill=_ink_for(rgb), anchor="mm")
 
-    # 震度数字（下部中央）
-    body_cy = header_h + (h - header_h) // 2
-    font_lg = _get_font(88 if len(label) == 1 else 60)
-    draw.text((w // 2, body_cy + 4), label,
-              fill=(255, 255, 255, 255), font=font_lg, anchor="mm")
+    # 縁の光。板の厚みに見せる。
+    draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=radius,
+                           outline=(255, 255, 255, 46), width=max(1, ss))
 
     buf = io.BytesIO()
-    img.save(buf, format="PNG")
+    img.resize((size, size), Image.LANCZOS).save(buf, format="PNG", optimize=True)
     buf.seek(0)
     return buf
 
@@ -320,23 +364,6 @@ def _resolve_point_coord(addr: str, pref: str) -> tuple[float, float] | None:
     return _PREF_CENTERS.get(pref) or _PREF_CENTERS.get(addr)
 
 
-def _auto_zoom(
-    lats: list[float], lons: list[float],
-    img_w: int, img_h: int,
-) -> int:
-    """点群が画像の 65% 以内に収まる最大ズームを返す。"""
-    clat = (max(lats) + min(lats)) / 2
-    span_km = max(
-        (max(lats) - min(lats)) * 111,
-        (max(lons) - min(lons)) * 111 * math.cos(math.radians(clat)),
-    ) * 1.5
-    target = min(img_w, img_h) * 0.65
-    for zoom in range(9, 3, -1):
-        if _km_to_px(max(span_km / 2, 1.0), clat, zoom) <= target / 2:
-            return zoom
-    return 4
-
-
 async def _fetch_tile(session: aiohttp.ClientSession, z: int, x: int, y: int):
     url = _TILE_URL.format(z=z, x=x, y=y)
     try:
@@ -347,50 +374,151 @@ async def _fetch_tile(session: aiohttp.ClientSession, z: int, x: int, y: int):
         ) as resp:
             if resp.status == 200:
                 data = await resp.read()
-                return Image.open(io.BytesIO(data)).convert("RGBA")
+                # 白地図は「白い面に細い黒線」。明るさだけ使うので L で受ける。
+                return Image.open(io.BytesIO(data)).convert("L")
     except Exception as e:
         logger.debug("[earthquake] tile %d/%d/%d fetch error: %s", z, x, y, e)
     return None
 
 
-def _draw_x_marker(draw: "ImageDraw.ImageDraw", cx: int, cy: int, r: int) -> None:
-    """赤い × 印（震源マーカー）を描画。"""
-    d = int(r * 0.78)
-    w = max(3, r // 3)
-    draw.line([cx - d, cy - d, cx + d, cy + d], fill=(110, 0, 0, 255), width=w + 3)
-    draw.line([cx - d, cy + d, cx + d, cy - d], fill=(110, 0, 0, 255), width=w + 3)
-    draw.line([cx - d, cy - d, cx + d, cy + d], fill=(255, 45, 45, 255), width=w)
-    draw.line([cx - d, cy + d, cx + d, cy - d], fill=(255, 45, 45, 255), width=w)
+def _recolour_tile(gray: "Image.Image") -> "Image.Image":
+    """白地図を暗色の地図へ塗り替える。
+
+    白地図は白い面に細い黒線なので、明るさをそのまま「線の濃さ」として読み、
+    陸の色から線の色へ混ぜる。こうすると配信元の見た目に縛られず、埋め込みの
+    暗い背景に合う地図を自前で作れる。
+    """
+    values = np.asarray(gray, dtype=np.float32) / 255.0
+    ink = np.clip(1.0 - values, 0.0, 1.0)[..., None]
+    land = np.array(_MAP_LAND, dtype=np.float32)
+    line = np.array(_MAP_LINE, dtype=np.float32)
+    return Image.fromarray((land * (1 - ink) + line * ink).astype(np.uint8), "RGB")
 
 
-def _draw_point_badge(
-    draw: "ImageDraw.ImageDraw",
-    px: int, py: int,
-    label: str,
-    rgb: tuple[int, int, int],
-) -> None:
-    """各観測点に震度バッジ（暗背景の四角ボックス）を描画。"""
-    font = _get_font(13)
-    pad  = 5
-    try:
-        tw = int(draw.textlength(label, font=font))
-    except AttributeError:
-        tw = len(label) * 8
-    bw, bh = tw + pad * 2, 22
-    x0, y0 = px - bw // 2, py - bh // 2
-    draw.rectangle([x0 - 1, y0 - 1, x0 + bw + 1, y0 + bh + 1], fill=(5, 15, 35, 220))
-    draw.rectangle([x0, y0, x0 + bw, y0 + bh], fill=(*rgb, 235))
-    draw.text((px, py + 1), label, fill=(255, 255, 255, 255), font=font, anchor="mm")
+def _soft_disc(radius: int, rgb: tuple[int, int, int]) -> "Image.Image":
+    """中心が濃く外へ抜ける円。最大震度のあたりに1つだけ敷く。
+
+    平らな円を観測点ごとに重ねると地図が色の海になり、陸の形が読めなくなる
+    （以前は 55km 半径の円を全点に置いていた）。視線を導くための暈として、
+    最大震度の位置に1枚だけ置く。
+    """
+    size = radius * 2
+    yy, xx = np.mgrid[0:size, 0:size]
+    dist = np.hypot(xx - radius + 0.5, yy - radius + 0.5) / radius
+    alpha = np.clip(150 - 150 * dist ** 1.6, 0, 255)
+    alpha[dist > 1.0] = 0
+    layer = Image.new("RGBA", (size, size), (*rgb, 0))
+    layer.putalpha(Image.fromarray(alpha.astype(np.uint8), "L"))
+    return layer
 
 
-def _draw_attribution(img: "Image.Image") -> None:
-    """左下に地図帰属表示。"""
+def _ink_for(rgb: tuple[int, int, int]) -> tuple[int, int, int, int]:
+    """その色の上に置く文字の色。明るい震度では白が沈む。"""
+    luma = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
+    return (16, 20, 26, 255) if luma > 150 else (255, 255, 255, 255)
+
+
+def _scale_dot(scale: int, size: int) -> "Image.Image":
+    """観測点の丸。小さく打つ（気象庁や報道の図と同じ考え方）。"""
+    rgb = _MAP_FILL_RGB.get(scale, (120, 130, 150))
+    pad = size // 2
+    img = Image.new("RGBA", (size + pad * 2, size + pad * 2), (0, 0, 0, 0))
+    shade = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(shade).ellipse(
+        [pad, pad + size // 8, pad + size, pad + size + size // 8], fill=(0, 0, 0, 170))
+    img.alpha_composite(shade.filter(ImageFilter.GaussianBlur(size / 5)))
+    ImageDraw.Draw(img).ellipse([pad, pad, pad + size, pad + size], fill=(*rgb, 255),
+                                outline=(255, 255, 255, 225), width=max(1, size // 7))
+    return img
+
+
+def _scale_pin(scale: int, size: int) -> "Image.Image":
+    """震度の札。丸い座に数字を置き、細い縁と落ち影を付ける。"""
+    rgb = _MAP_FILL_RGB.get(scale, (120, 130, 150))
+    label = _SCALE_BADGE_LABEL.get(scale, str(scale))
+    pad = size // 4
+    img = Image.new("RGBA", (size + pad * 2, size + pad * 2), (0, 0, 0, 0))
+    shade = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(shade).ellipse(
+        [pad, pad + size // 12, pad + size, pad + size + size // 12], fill=(0, 0, 0, 150))
+    img.alpha_composite(shade.filter(ImageFilter.GaussianBlur(size / 9)))
     draw = ImageDraw.Draw(img)
-    font = _get_font(9)
-    text = "© OpenStreetMap contributors"
-    draw.rectangle([0, img.height - 14, len(text) * 6, img.height],
-                   fill=(0, 0, 0, 160))
-    draw.text((2, img.height - 13), text, fill=(180, 180, 180), font=font)
+    draw.ellipse([pad, pad, pad + size, pad + size], fill=(*rgb, 255),
+                 outline=(255, 255, 255, 235), width=max(1, size // 16))
+    font = _get_font(int(size * (0.62 if len(label) == 1 else 0.44)))
+    draw.text((pad + size / 2, pad + size / 2), label, font=font,
+              fill=_ink_for(rgb), anchor="mm")
+    return img
+
+
+def _epicentre_marker(size: int) -> "Image.Image":
+    """震源。二重の輪と十字にして、震度の札と見分けられるようにする。
+
+    以前は赤い × 印だけで、観測点の四角と紛れていた。
+    """
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    centre, radius = size / 2, size / 2 - size // 10
+    for r, width, alpha in ((radius, max(1, size // 12), 255),
+                            (radius * 0.62, max(1, size // 14), 210)):
+        draw.ellipse([centre - r, centre - r, centre + r, centre + r],
+                     outline=(255, 72, 72, alpha), width=width)
+    arm = radius * 1.16
+    for dx, dy in ((1, 0), (0, 1)):
+        draw.line([centre - arm * dx, centre - arm * dy,
+                   centre + arm * dx, centre + arm * dy],
+                  fill=(255, 72, 72, 255), width=max(1, size // 12))
+    return img
+
+
+def _draw_map_chrome(canvas: "Image.Image", title: str, subtitle: str,
+                     scales: list[int]) -> None:
+    """見出しの帯・凡例・出典。画像だけを見ても意味が通るようにする。
+
+    以前は地図と円だけで、色が何の震度を指すのか画像からは分からなかった。
+    """
+    ss = _MAP_SS
+    width, height = canvas.size
+    draw = ImageDraw.Draw(canvas)
+
+    band_h = 74 * ss
+    band = Image.new("RGBA", (width, band_h), (0, 0, 0, 0))
+    band_draw = ImageDraw.Draw(band)
+    for row in range(band_h):
+        band_draw.line([(0, row), (width, row)],
+                       fill=(10, 13, 20, int(215 * (1 - row / band_h) ** 1.3)))
+    canvas.alpha_composite(band, (0, 0))
+    draw.text((22 * ss, 20 * ss), title, font=_get_font(23 * ss), fill=(255, 255, 255, 255))
+    if subtitle:
+        draw.text((22 * ss, 47 * ss), subtitle, font=_get_font(14 * ss),
+                  fill=(178, 192, 210, 255))
+
+    chip, gap, pad = 22 * ss, 7 * ss, 12 * ss
+    box_w = pad * 2 + len(scales) * chip + max(0, len(scales) - 1) * gap
+    box_h = pad * 2 + chip + 15 * ss
+    bx, by = width - box_w - 16 * ss, height - box_h - 16 * ss
+    panel = Image.new("RGBA", (box_w, box_h), (0, 0, 0, 0))
+    ImageDraw.Draw(panel).rounded_rectangle(
+        [0, 0, box_w - 1, box_h - 1], radius=9 * ss,
+        fill=(12, 16, 24, 208), outline=(120, 140, 170, 120), width=max(1, ss))
+    canvas.alpha_composite(panel, (int(bx), int(by)))
+    draw.text((bx + pad, by + pad - ss), "震度", font=_get_font(11 * ss),
+              fill=(170, 186, 206, 255))
+    for index, scale in enumerate(scales):
+        x = bx + pad + index * (chip + gap)
+        y = by + pad + 14 * ss
+        rgb = _MAP_FILL_RGB.get(scale, (120, 130, 150))
+        label = _SCALE_BADGE_LABEL.get(scale, str(scale))
+        draw.rounded_rectangle([x, y, x + chip, y + chip], radius=5 * ss, fill=(*rgb, 255))
+        draw.text((x + chip / 2, y + chip / 2), label,
+                  font=_get_font(int(chip * (0.62 if len(label) == 1 else 0.46))),
+                  fill=_ink_for(rgb), anchor="mm")
+
+    font = _get_font(11 * ss)
+    text_w = int(draw.textlength(_TILE_ATTRIBUTION, font=font))
+    draw.rectangle([0, height - 19 * ss, text_w + 16 * ss, height], fill=(8, 11, 17, 190))
+    draw.text((8 * ss, height - 16 * ss), _TILE_ATTRIBUTION, font=font,
+              fill=(150, 165, 185, 255))
 
 
 async def _generate_intensity_map(
@@ -398,105 +526,149 @@ async def _generate_intensity_map(
     lat: float,
     lon: float,
     points: list[dict],
+    title: str = "震度分布",
+    subtitle: str = "",
 ) -> io.BytesIO | None:
-    """P2PQuake 点震度データを使ったダーク地図を生成し BytesIO で返す。"""
+    """観測点の震度を地図に落として BytesIO で返す。"""
     if not _PIL:
         return None
 
     plot: list[tuple[float, float, int]] = []
-    for p in points:
-        scale = p.get("scale", -1)
+    for point in points:
+        scale = point.get("scale", -1)
         if scale < 10:
             continue
-        coord = _resolve_point_coord(p.get("addr", ""), p.get("pref", ""))
+        coord = _resolve_point_coord(point.get("addr", ""), point.get("pref", ""))
         if coord:
             plot.append((*coord, scale))
 
     if not plot:
         return None
 
-    img_w, img_h = 600, 360
-    all_lats = [p[0] for p in plot] + [lat]
-    all_lons = [p[1] for p in plot] + [lon]
-    zoom = _auto_zoom(all_lats, all_lons, img_w, img_h)
+    # 観測点の座標は県庁所在地に丸めている（_resolve_point_coord）。同じ県の
+    # 観測点は全部ひとつの座標に重なるので、いちばん強い震度だけ残す。
+    # 残さないと、同じ場所に何枚も丸を描いたうえ、札の重なり避けで肝心の
+    # 最大震度が弾かれる。
+    strongest: dict[tuple[float, float], int] = {}
+    for point_lat, point_lon, scale in plot:
+        key = (point_lat, point_lon)
+        if scale > strongest.get(key, -1):
+            strongest[key] = scale
+    plot = [(k[0], k[1], v) for k, v in strongest.items()]
 
-    clat = (max(all_lats) + min(all_lats)) / 2
-    clon = (max(all_lons) + min(all_lons)) / 2
-    cx_f, cy_f = _latlon_to_tile_float(clat, clon, zoom)
-    pad = 2
-    tx0, ty0 = int(cx_f) - pad, int(cy_f) - pad
-    tx1, ty1 = int(cx_f) + pad, int(cy_f) + pad
+    lats = [p[0] for p in plot] + [lat]
+    lons = [p[1] for p in plot] + [lon]
 
+    # 全部が入り、かつ余白が残る一番大きなズームを選ぶ。
+    zoom = 5
+    for candidate in range(11, 4, -1):
+        x0, _ = _latlon_to_tile_float(max(lats), min(lons), candidate)
+        x1, _ = _latlon_to_tile_float(min(lats), max(lons), candidate)
+        _, y0 = _latlon_to_tile_float(max(lats), min(lons), candidate)
+        _, y1 = _latlon_to_tile_float(min(lats), max(lons), candidate)
+        if (abs(x1 - x0) * _TILE_SZ < _MAP_W * 0.80
+                and abs(y1 - y0) * _TILE_SZ < _MAP_H * 0.70):
+            zoom = candidate
+            break
+
+    centre_x, centre_y = _latlon_to_tile_float(
+        (max(lats) + min(lats)) / 2, (max(lons) + min(lons)) / 2, zoom)
+    origin_x = centre_x * _TILE_SZ - _MAP_W / 2
+    origin_y = centre_y * _TILE_SZ - _MAP_H / 2
+
+    tx0, ty0 = int(origin_x // _TILE_SZ), int(origin_y // _TILE_SZ)
+    tx1 = int((origin_x + _MAP_W) // _TILE_SZ)
+    ty1 = int((origin_y + _MAP_H) // _TILE_SZ)
     coords = [(tx, ty) for ty in range(ty0, ty1 + 1) for tx in range(tx0, tx1 + 1)]
-    tile_imgs = await asyncio.gather(
+    tiles = await asyncio.gather(
         *(_fetch_tile(session, zoom, tx, ty) for tx, ty in coords),
         return_exceptions=True,
     )
 
-    # ここから先は PIL の同期処理（合成・描画・PNG の最適化保存）。25枚の
-    # タイルを 1280x1280 に貼って重ね、最後に optimize=True で書き出すので
-    # 数百ミリ秒かかる。直に実行すると、その間 Bot のイベントループ全体が
-    # 止まる——緊急地震速報を全ギルドへ配信しようとしている、まさにその
-    # 瞬間に。余震が続けば短時間に何度も起きる。スレッドへ逃がす。
+    # ここから先は PIL の同期処理（塗り替え・合成・描画・PNG の保存）。倍で
+    # 描いてから縮小するので、直に実行すると Bot のイベントループが数百ミリ秒
+    # 止まる——緊急地震速報を全ギルドへ配信しようとしている、まさにその瞬間に。
+    # 余震が続けば短時間に何度も起きる。スレッドへ逃がす。
     return await asyncio.to_thread(
-        _compose_intensity_map, coords, tile_imgs, tx0, ty0, tx1, ty1,
-        zoom, plot, lat, lon, img_w, img_h,
+        _compose_intensity_map, coords, tiles, origin_x, origin_y,
+        zoom, plot, lat, lon, title, subtitle,
     )
 
 
 def _compose_intensity_map(
     coords: list[tuple[int, int]],
-    tile_imgs: list,
-    tx0: int, ty0: int, tx1: int, ty1: int,
+    tiles: list,
+    origin_x: float, origin_y: float,
     zoom: int,
     plot: list[tuple[float, float, int]],
     lat: float, lon: float,
-    img_w: int, img_h: int,
+    title: str, subtitle: str,
 ) -> io.BytesIO:
     """取り込んだタイルから地図を組み立てる（同期。呼ぶ側がスレッドへ逃がす）。"""
-    map_w = (tx1 - tx0 + 1) * _TILE_SZ
-    map_h = (ty1 - ty0 + 1) * _TILE_SZ
-    base = Image.new("RGBA", (map_w, map_h), (20, 22, 30, 255))
-    for (tx, ty), tile in zip(coords, tile_imgs):
-        if isinstance(tile, Image.Image):
-            base.paste(tile, ((tx - tx0) * _TILE_SZ, (ty - ty0) * _TILE_SZ))
+    ss = _MAP_SS
 
-    overlay = Image.new("RGBA", (map_w, map_h), (0, 0, 0, 0))
-    draw    = ImageDraw.Draw(overlay)
-    circle_r_km = 55.0
-    badge_positions: list[tuple[int, int, str, tuple[int, int, int]]] = []
+    # 地図の面。白地図を暗色へ塗り替えてから貼る。
+    base = Image.new("RGB", (_MAP_W, _MAP_H), _MAP_SEA)
+    for (tx, ty), tile in zip(coords, tiles):
+        if not isinstance(tile, Image.Image):
+            continue
+        base.paste(_recolour_tile(tile),
+                   (int(tx * _TILE_SZ - origin_x), int(ty * _TILE_SZ - origin_y)))
 
-    for pt_lat, pt_lon, scale in sorted(plot, key=lambda x: x[2]):
-        pxf, pyf = _latlon_to_tile_float(pt_lat, pt_lon, zoom)
-        px = int((pxf - tx0) * _TILE_SZ)
-        py = int((pyf - ty0) * _TILE_SZ)
-        rp  = max(20, int(_km_to_px(circle_r_km, pt_lat, zoom)))
-        rgb = _MAP_FILL_RGB.get(scale, (30, 80, 150))
-        draw.ellipse(
-            [px - rp, py - rp, px + rp, py + rp],
-            fill=(*rgb, 185), outline=(*rgb, 255), width=2,
-        )
-        badge_positions.append((px, py, _SCALE_BADGE_LABEL.get(scale, str(scale)), rgb))
+    # 倍に伸ばしてから描き、最後に縮める。PIL は円も線もアンチエイリアス
+    # しないので、これが輪郭のなめらかさをそのまま決める。
+    canvas = base.resize((_MAP_W * ss, _MAP_H * ss), Image.LANCZOS).convert("RGBA")
 
-    epi_xf, epi_yf = _latlon_to_tile_float(lat, lon, zoom)
-    epi_x = int((epi_xf - tx0) * _TILE_SZ)
-    epi_y = int((epi_yf - ty0) * _TILE_SZ)
-    _draw_x_marker(draw, epi_x, epi_y, 14)
+    def to_px(point_lat: float, point_lon: float) -> tuple[float, float]:
+        px, py = _latlon_to_tile_float(point_lat, point_lon, zoom)
+        return ((px * _TILE_SZ - origin_x) * ss, (py * _TILE_SZ - origin_y) * ss)
 
-    composite = Image.alpha_composite(base, overlay)
+    # 最大震度のあたりに、淡い暈をひとつだけ置いて視線を導く
+    top = max(plot, key=lambda p: p[2])
+    hx, hy = to_px(top[0], top[1])
+    halo_r = int(max(60 * ss, _km_to_px(70, top[0], zoom) * ss))
+    canvas.alpha_composite(_soft_disc(halo_r, _MAP_FILL_RGB.get(top[2], (120, 130, 150))),
+                           (int(hx - halo_r), int(hy - halo_r)))
 
-    cx0 = max(0, min(epi_x - img_w // 2, map_w - img_w))
-    cy0 = max(0, min(epi_y - img_h // 2, map_h - img_h))
-    cropped = composite.crop((cx0, cy0, cx0 + img_w, cy0 + img_h))
+    # 観測点。弱い順に置いて、強い方を上に重ねる
+    for point_lat, point_lon, scale in sorted(plot, key=lambda p: p[2]):
+        x, y = to_px(point_lat, point_lon)
+        dot = _scale_dot(scale, 15 * ss)
+        canvas.alpha_composite(dot, (int(x - dot.width / 2), int(y - dot.height / 2)))
 
-    bdraw = ImageDraw.Draw(cropped)
-    for px, py, label, rgb in badge_positions:
-        _draw_point_badge(bdraw, px - cx0, py - cy0, label, rgb)
+    # 札は強い方から数点だけ。全部に付けると重なって読めない。
+    # 震源の位置を先に「置いた場所」として登録しておく。震源は最後に描くので、
+    # ここで避けておかないと最大震度の札が震源に隠れる（実際に隠れた）。
+    ex_pre, ey_pre = to_px(lat, lon)
+    placed: list[tuple[float, float]] = [(ex_pre, ey_pre)]
+    for point_lat, point_lon, scale in sorted(plot, key=lambda p: -p[2])[:6]:
+        x, y = to_px(point_lat, point_lon)
+        # 既定は右上。埋まっていたら左上・右下・左下と順に試す。
+        for dx, dy in ((17, -17), (-17, -17), (17, 17), (-17, 17), (0, -26), (0, 26)):
+            px, py = x + dx * ss, y + dy * ss
+            if not any(math.hypot(px - qx, py - qy) < 44 * ss for qx, qy in placed):
+                break
+        else:
+            continue
+        placed.append((px, py))
+        pin = _scale_pin(scale, 34 * ss)
+        canvas.alpha_composite(pin, (int(px - pin.width / 2), int(py - pin.height / 2)))
 
-    _draw_attribution(cropped)
+    # 震源は最後に。点や札に埋もれないよう、背後に暗い座を敷く
+    ex, ey = to_px(lat, lon)
+    seat_r = 26 * ss
+    seat = Image.new("RGBA", (seat_r * 2, seat_r * 2), (0, 0, 0, 0))
+    ImageDraw.Draw(seat).ellipse([0, 0, seat_r * 2 - 1, seat_r * 2 - 1], fill=(8, 11, 17, 165))
+    canvas.alpha_composite(seat.filter(ImageFilter.GaussianBlur(seat_r / 3)),
+                           (int(ex - seat_r), int(ey - seat_r)))
+    marker = _epicentre_marker(40 * ss)
+    canvas.alpha_composite(marker, (int(ex - marker.width / 2), int(ey - marker.height / 2)))
+
+    _draw_map_chrome(canvas, title, subtitle, sorted({scale for _, _, scale in plot}))
 
     buf = io.BytesIO()
-    cropped.convert("RGB").save(buf, format="PNG", optimize=True)
+    canvas.resize((_MAP_W, _MAP_H), Image.LANCZOS).convert("RGB").save(
+        buf, format="PNG", optimize=True)
     buf.seek(0)
     return buf
 
@@ -1177,9 +1349,24 @@ async def _notify_all_guilds(
     map_buf: io.BytesIO | None = None
     if not is_minor and lat is not None and lon is not None and points:
         try:
+            # 画像だけを見ても意味が通るよう、見出しに震度と震源を入れる。
+            # Discord の埋め込みは本文が折り畳まれることがあり、画像だけが
+            # 目に入る場面がある。
+            eq_info = event.get("earthquake", {})
+            hypo_info = eq_info.get("hypocenter", {})
+            map_title = (f"最大震度 {_SCALE_DISPLAY[max_scale]}"
+                         if max_scale in _SCALE_DISPLAY else "震度分布")
+            time_label, _ = _format_time(eq_info.get("time", ""))
+            mag_label, _ = _parse_magnitude(hypo_info.get("magnitude"))
+            parts = [hypo_info.get("name") or "", mag_label,
+                     _parse_depth(hypo_info.get("depth")),
+                     time_label if time_label != "不明" else ""]
+            map_subtitle = "  ".join(part for part in parts if part)
+
             # タイル取得は専用セッションで実施（WS セッションを汚染しない）
             async with aiohttp.ClientSession() as tile_session:
-                map_buf = await _generate_intensity_map(tile_session, lat, lon, points)
+                map_buf = await _generate_intensity_map(
+                    tile_session, lat, lon, points, map_title, map_subtitle)
         except Exception as e:
             logger.exception("[earthquake] map generation error: %s", e)
 

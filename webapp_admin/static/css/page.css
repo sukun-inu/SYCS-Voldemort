@@ -28,8 +28,8 @@ body.aero-page {
   margin-bottom: 8px;
 }
 .page-brand { width: 30px; height: 30px; border-radius: 8px; }
-.page-title { font-size: 22px; color: #fff; text-shadow: 0 1px 12px rgba(0, 20, 50, 0.6); }
-.page-desc { color: rgba(226, 240, 255, 0.78); font-size: 13.5px; margin-bottom: 28px; }
+.page-title { font-size: var(--text-2xl); color: #fff; text-shadow: 0 1px 12px rgba(0, 20, 50, 0.6); }
+.page-desc { color: rgba(226, 240, 255, 0.78); font-size: var(--text-md); margin-bottom: 28px; }
 .page-desc a { color: #bfe2ff; }
 .page-flash { margin-bottom: 20px; }
 .page-footnote { margin-top: 28px; }
@@ -76,10 +76,10 @@ body.aero-page {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(200, 228, 255, 0.5));
   border: 1px solid rgba(120, 170, 220, 0.5);
   color: #1d6fb8;
-  font-size: 19px;
+  font-size: var(--text-xl);
   font-weight: 600;
 }
-.guild-name { font-size: 14.5px; font-weight: 600; display: block; }
+.guild-name { font-size: var(--text-lg); font-weight: 600; display: block; }
 
 .aero-page .empty {
   background: var(--glass-bg-strong);
@@ -109,12 +109,12 @@ body.aero-page {
 }
 .error-code {
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: var(--text-md);
   letter-spacing: .1em;
   color: var(--danger);
   margin-bottom: 10px;
 }
-.error-message { font-size: 19px; margin-bottom: 8px; }
+.error-message { font-size: var(--text-xl); margin-bottom: 8px; }
 .error-actions { display: flex; gap: 8px; justify-content: center; margin-top: 26px; }
 
 /* ── ログイン ─────────────────────────────────────────────── */
@@ -137,13 +137,13 @@ body.aero-page {
   border-radius: 20px;
   box-shadow: 0 6px 20px rgba(6, 24, 54, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
-.login-title { font-size: 21px; margin: 18px 0 6px; }
-.login-subtitle { color: var(--fg-muted); font-size: 13.5px; line-height: 1.9; }
+.login-title { font-size: var(--text-2xl); margin: 18px 0 6px; }
+.login-subtitle { color: var(--fg-muted); font-size: var(--text-md); line-height: 1.9; }
 .login-flash { margin-top: 20px; text-align: left; }
 .login-actions { display: flex; flex-direction: column; gap: 10px; margin: 26px 0 18px; }
 .login-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
-.login-note { color: var(--fg-subtle); font-size: 12.5px; line-height: 1.9; }
-.login-legal { display: flex; gap: 8px; justify-content: center; margin-top: 20px; font-size: 12.5px; color: var(--fg-subtle); }
+.login-note { color: var(--fg-subtle); font-size: var(--text-md); line-height: 1.9; }
+.login-legal { display: flex; gap: 8px; justify-content: center; margin-top: 20px; font-size: var(--text-md); color: var(--fg-subtle); }
 .login-legal-sep { color: var(--border); }
 
 .btn-discord {
@@ -158,7 +158,7 @@ body.aero-page {
   background-color: #6c78ff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 0 20px rgba(88, 101, 242, 0.65);
 }
-.btn-lg { min-height: 42px; padding: 9px 20px; font-size: 14.5px; }
+.btn-lg { min-height: 42px; padding: 9px 20px; font-size: var(--text-lg); }
 .btn-block { width: 100%; }
 
 /* ── Aero スコープでのボタン・入力欄の質感（ログイン系のページだけ）──

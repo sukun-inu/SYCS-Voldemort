@@ -43,3 +43,6 @@ sample-audio/
 
 # 不具合報告用のスクリーンショット（管理画面の中身が写るので公開しない）
 bug-image/
+
+# Chromium（Playwright の検査）が吐くクラッシュ報告のログ
+debug.log
