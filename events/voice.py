@@ -222,6 +222,54 @@ async def _persist_vc_transition(
         logger.exception("[BOT_SETUP] VC user_state persist error: %s", e)
 
 
+# フィルターロールが見つからないことを既に警告したギルド。
+# guild_id → 警告したロールID。VC の出入りごとに同じ警告を出すと、
+# 通常のイベントでログが埋まって他が読めなくなる。
+_warned_missing_filter_role: dict[int, int] = {}
+
+
+def _passes_vc_notify_filter(guild, is_join: bool, is_move: bool, before_ch, after_ch) -> bool:
+    """VC 通知を出してよいか。
+
+    フィルターロールが設定されているときは、そのロールから view_channel が
+    見える VC の出入りだけを通知する。非公開の VC の出入りを、通知チャンネル
+    経由で全員に漏らさないための設定。
+
+    **ロールが見つからないときは通知しない。** 以前は
+    `if filter_role:` で包んでいたため、設定したロールが削除されていると
+    絞り込みごと素通りし、フィルター無しと同じ＝全部通知される状態になって
+    いた。設定した意図と正反対の方向へ倒れるうえ、漏れた通知は取り消せない。
+    ロールが消えたら黙って全開にするのではなく、閉じて理由をログに残す。
+    """
+    filter_role_id = get_vc_notify_filter_role_id(guild.id)
+    if not filter_role_id:
+        return True
+
+    filter_role = guild.get_role(filter_role_id)
+    if filter_role is None:
+        if _warned_missing_filter_role.get(guild.id) != filter_role_id:
+            _warned_missing_filter_role[guild.id] = filter_role_id
+            logger.warning(
+                "[BOT_SETUP] VC通知のフィルターロール role=%s が guild=%s に見つかりません。"
+                "非公開VCの通知が漏れないよう、見つかるまで通知を止めます。"
+                "ロールを作り直すか、管理画面でフィルターの設定を外してください。",
+                filter_role_id, guild.id,
+            )
+        return False
+    _warned_missing_filter_role.pop(guild.id, None)
+
+    # 移動は移動元と移動先の両方が関係する。以前は is_join 以外を
+    # すべて before_ch で判定していたため、そのロールに見えない VC へ
+    # 移動しても、移動元さえ見えていれば通知が飛んでいた。
+    # 関係するチャンネルのうち1つでも見えるなら通知する。
+    related = [c for c in (before_ch, after_ch) if c is not None] if is_move \
+        else [after_ch if is_join else before_ch]
+    return any(
+        c is not None and c.permissions_for(filter_role).view_channel
+        for c in related
+    )
+
+
 async def _vc_notify_handler(
     member: discord.Member,
     is_join: bool,
@@ -243,23 +291,8 @@ async def _vc_notify_handler(
     if not isinstance(notify_ch, discord.TextChannel):
         return
 
-    # フィルターロールが設定されている場合、そのロールが view_channel を持つ VC のみ通知
-    filter_role_id = get_vc_notify_filter_role_id(member.guild.id)
-    if filter_role_id:
-        filter_role = member.guild.get_role(filter_role_id)
-        if filter_role:
-            # 移動は移動元と移動先の両方が関係する。以前は is_join 以外を
-            # すべて before_ch で判定していたため、そのロールに見えない VC へ
-            # 移動しても、移動元さえ見えていれば通知が飛んでいた。
-            # 関係するチャンネルのうち1つでも見えるなら通知する。
-            related = [c for c in (before_ch, after_ch) if c is not None] if is_move \
-                else [after_ch if is_join else before_ch]
-            visible = [
-                c for c in related
-                if c is not None and c.permissions_for(filter_role).view_channel
-            ]
-            if not visible:
-                return
+    if not _passes_vc_notify_filter(member.guild, is_join, is_move, before_ch, after_ch):
+        return
 
     if is_join:
         eff_action = "join"

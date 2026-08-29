@@ -349,5 +349,92 @@ class FormatStatusTextTests(unittest.TestCase):
         self.assertEqual(text, "Ping: N/A | CPU: 1% | MEM: 2%")
 
 
+class VcNotifyFilterTests(unittest.TestCase):
+    """VC通知のフィルターロールによる絞り込み。
+
+    この設定は「そのロールから見える VC の出入りだけ通知する」ためのもので、
+    非公開の VC の出入りを通知チャンネル経由で全員へ漏らさないために使う。
+    壊れたときに通知が止まるのは直せるが、漏れた通知は取り消せない。
+    """
+
+    def setUp(self):
+        voice._warned_missing_filter_role.clear()
+
+    @staticmethod
+    def _channel(*, visible: bool):
+        return SimpleNamespace(
+            permissions_for=lambda role: SimpleNamespace(view_channel=visible),
+        )
+
+    @staticmethod
+    def _guild(role):
+        return SimpleNamespace(id=1, get_role=lambda role_id: role)
+
+    def test_no_filter_configured_lets_everything_through(self):
+        guild = self._guild(object())
+        with patch.object(voice, "get_vc_notify_filter_role_id", return_value=None):
+            self.assertTrue(voice._passes_vc_notify_filter(
+                guild, True, False, None, self._channel(visible=False)))
+
+    def test_visible_channel_passes(self):
+        guild = self._guild(object())
+        with patch.object(voice, "get_vc_notify_filter_role_id", return_value=77):
+            self.assertTrue(voice._passes_vc_notify_filter(
+                guild, True, False, None, self._channel(visible=True)))
+
+    def test_invisible_channel_is_filtered_out(self):
+        guild = self._guild(object())
+        with patch.object(voice, "get_vc_notify_filter_role_id", return_value=77):
+            self.assertFalse(voice._passes_vc_notify_filter(
+                guild, True, False, None, self._channel(visible=False)))
+
+    def test_move_passes_when_either_side_is_visible(self):
+        """移動は移動元と移動先の両方が関係する。片方でも見えるなら通知する。"""
+        guild = self._guild(object())
+        with patch.object(voice, "get_vc_notify_filter_role_id", return_value=77):
+            self.assertTrue(voice._passes_vc_notify_filter(
+                guild, False, True,
+                self._channel(visible=False), self._channel(visible=True)))
+            self.assertFalse(voice._passes_vc_notify_filter(
+                guild, False, True,
+                self._channel(visible=False), self._channel(visible=False)))
+
+    def test_deleted_filter_role_blocks_instead_of_letting_everything_through(self):
+        """設定したロールが削除されていたら、通知を止める。
+
+        以前は `if filter_role:` で包んでいたため、ロールが見つからないと
+        絞り込みごと素通りし、フィルター無しと同じ＝全 VC の出入りが通知
+        されていた。設定した意図と正反対で、非公開 VC の出入りが漏れる。
+        """
+        guild = self._guild(None)   # ロールが削除済み
+        with patch.object(voice, "get_vc_notify_filter_role_id", return_value=77):
+            self.assertFalse(voice._passes_vc_notify_filter(
+                guild, True, False, None, self._channel(visible=True)))
+
+    def test_missing_role_is_logged_once_not_on_every_event(self):
+        """理由はログに残す。ただし VC の出入りごとに出すとログが埋まる。"""
+        guild = self._guild(None)
+        with patch.object(voice, "get_vc_notify_filter_role_id", return_value=77):
+            with self.assertLogs(voice.logger, level="WARNING") as captured:
+                for _ in range(5):
+                    voice._passes_vc_notify_filter(guild, True, False, None, None)
+        self.assertEqual(len(captured.records), 1)
+        self.assertIn("77", captured.output[0])
+
+    def test_the_warning_returns_after_the_role_comes_back_and_goes_again(self):
+        """一度警告したら黙るが、直って再発したらまた知らせる。"""
+        missing = self._guild(None)
+        restored = self._guild(object())
+        with patch.object(voice, "get_vc_notify_filter_role_id", return_value=77):
+            with self.assertLogs(voice.logger, level="WARNING"):
+                voice._passes_vc_notify_filter(missing, True, False, None, None)
+            # ロールが戻れば通知は再開し、覚えていた警告済みの印も消える
+            self.assertTrue(voice._passes_vc_notify_filter(
+                restored, True, False, None, self._channel(visible=True)))
+            with self.assertLogs(voice.logger, level="WARNING") as again:
+                voice._passes_vc_notify_filter(missing, True, False, None, None)
+        self.assertEqual(len(again.records), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
