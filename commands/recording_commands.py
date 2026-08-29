@@ -14,6 +14,7 @@ from commands.guards import ensure_admin as _ensure_admin
 from commands.interaction_utils import EMBED_FIELD_BUDGET, cap_list_for_message, send_ephemeral
 from services import recording_service as recording
 from services.settings_store import (
+    awrite,
     get_recording_settings,
     set_recording_excluded_users,
     set_recording_settings,
@@ -154,7 +155,7 @@ def register_recording_commands(bot: Bot) -> None:
         patch: dict = {"auto_start": enabled}
         if channel is not None:
             patch["vc_channel_id"] = channel.id
-        set_recording_settings(interaction.guild_id, patch)
+        await awrite(set_recording_settings, interaction.guild_id, patch)
 
         settings = get_recording_settings(interaction.guild_id)
         if not enabled:
@@ -217,7 +218,7 @@ def register_recording_commands(bot: Bot) -> None:
             patch["announce_channel_id"] = announce_channel.id
 
         if patch:
-            set_recording_settings(interaction.guild_id, patch)
+            await awrite(set_recording_settings, interaction.guild_id, patch)
 
         settings = get_recording_settings(interaction.guild_id)
         target_id = recording.preferred_vc_channel_id(interaction.guild_id)
@@ -282,7 +283,7 @@ def register_recording_commands(bot: Bot) -> None:
             excluded.discard(user_id)
             message = "除外を解除した。以後の録音では貴様の声も記録される。"
 
-        set_recording_excluded_users(interaction.guild_id, sorted(excluded))
+        await awrite(set_recording_excluded_users, interaction.guild_id, sorted(excluded))
 
         # 進行中のセッションにも反映する（設定だけ変えて今の録音に効かないと紛らわしい）
         session = recording.get_session(interaction.guild_id)

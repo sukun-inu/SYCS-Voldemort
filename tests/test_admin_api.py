@@ -10,6 +10,7 @@ DB を必要とするユーザー状態監査は services 層を差し替えて�
 import base64
 import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -1512,6 +1513,73 @@ class RecordingClipTests(unittest.TestCase):
         self.assertEqual(whole.status_code, 200)
         # 区間を指定したほうが短いこと（＝実際に切り出されている）
         self.assertLess(len(part.content), len(whole.content))
+
+
+class TextContrastTests(unittest.TestCase):
+    """本文に使う色が、背景に対して読める明るさを保っていること。
+
+    補助テキスト（タイムスタンプ・型名・カテゴリラベル・フッターのリンク）に
+    使っていた淡色トークンが、いずれも WCAG AA の 4.5:1 に届いていなかった
+    （管理画面 3.04:1 / 公開ページ 3.23:1 / PWA 3.06:1）。薄いほど上品に
+    見えるので、目視では気付きにくく、じわじわ薄くなりやすい。
+
+    色は3つの CSS で別々に定義されているので、実際のファイルから読んで測る。
+    """
+
+    ROOT = Path(__file__).resolve().parent.parent
+    MIN_RATIO = 4.5
+
+    # (説明, CSSファイル, トークン名, 想定する背景色) — 背景は同じ CSS の地の色
+    CASES = [
+        ("管理画面 淡色（ライト）", "webapp_admin/static/css/tokens.css",
+         "--fg-subtle", "#ffffff", 0),
+        ("管理画面 淡色（ダーク）", "webapp_admin/static/css/tokens.css",
+         "--fg-subtle", "#0d1117", 1),
+        ("管理画面 中間色（ライト）", "webapp_admin/static/css/tokens.css",
+         "--fg-muted", "#ffffff", 0),
+        ("公開ページ 淡色（ライト）", "webapp_admin/static/css/public.css",
+         "--ink-3", "#ffffff", 0),
+        ("公開ページ 淡色（ダーク）", "webapp_admin/static/css/public.css",
+         "--ink-3", "#000000", 1),
+        ("PWA 淡色（ライト・本文地）", "webapp/static/styles.css",
+         "--ink-soft", "#f7f7f7", 0),
+        ("PWA 淡色（ライト・カード）", "webapp/static/styles.css",
+         "--ink-soft", "#ffffff", 0),
+        ("PWA 中間色（ライト）", "webapp/static/styles.css",
+         "--ink-muted", "#ffffff", 0),
+    ]
+
+    @staticmethod
+    def _luminance(colour: str) -> float:
+        raw = colour.lstrip("#")
+        parts = [int(raw[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+        linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+                  for c in parts]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    @classmethod
+    def _contrast(cls, fore: str, back: str) -> float:
+        a, b = cls._luminance(fore), cls._luminance(back)
+        high, low = max(a, b), min(a, b)
+        return (high + 0.05) / (low + 0.05)
+
+    def _token(self, css_path: str, name: str, occurrence: int) -> str:
+        """CSS から宣言を読む。occurrence 0 がライト、1 がダークの上書き。"""
+        text = (self.ROOT / css_path).read_text(encoding="utf-8")
+        found = re.findall(rf"{re.escape(name)}\s*:\s*(#[0-9a-fA-F]{{6}})", text)
+        self.assertGreater(len(found), occurrence,
+                           f"{css_path} に {name} の宣言が足りません: {found}")
+        return found[occurrence]
+
+    def test_text_tokens_meet_wcag_aa(self):
+        for label, css_path, name, background, occurrence in self.CASES:
+            with self.subTest(label):
+                colour = self._token(css_path, name, occurrence)
+                ratio = self._contrast(colour, background)
+                self.assertGreaterEqual(
+                    round(ratio, 2), self.MIN_RATIO,
+                    f"{label}: {colour} on {background} は {ratio:.2f}:1 で、"
+                    f"本文に必要な {self.MIN_RATIO}:1 に届いていません")
 
 
 class DjaudioLimitTests(unittest.TestCase):

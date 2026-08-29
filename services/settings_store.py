@@ -156,6 +156,29 @@ def _mutate_settings(mutator: Callable[[dict[str, Any]], _T]) -> _T:
         return result
 
 
+async def awrite(func: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
+    """設定を書き換える同期関数を、別スレッドで実行する。
+
+    settings.json の書き込みはファイルロックを取る。ロックが空くのを待つ間は
+    time.sleep(0.05) のポーリングで、既定のタイムアウトは10秒
+    （SETTINGS_LOCK_TIMEOUT_SECONDS）。Bot と管理画面は別プロセスで同じ
+    ファイルを共有しているので、競合は実際に起きる。
+
+    async の中から同期のセッターを直に呼ぶと、待つ側のイベントループ全体が
+    その間止まる。Bot なら Discord のハートビートと全ギルドのイベント処理が、
+    管理画面（既定 workers=1）ならヘルスチェックを含む全 HTTP 応答が固まる。
+
+    そのため、非同期の文脈から設定を書き換えるときは必ずこれを通す。
+
+        await awrite(set_welcome_channel, guild_id, channel.id)
+
+    直呼びが混ざっていないことは tests 側で機械的に確かめている
+    （tests/test_services.py の SettingsWriteOffloadTests）。
+    """
+    import asyncio
+    return await asyncio.to_thread(lambda: func(*args, **kwargs))
+
+
 async def amutate_settings(mutator: Callable[[dict[str, Any]], _T]) -> _T:
     """_mutate_settings を別スレッドで実行する。
 

@@ -61,7 +61,15 @@ export class AppWindow {
         )
       ),
       this.body,
-      el("div", { class: "window-resize", title: "ドラッグでリサイズ" })
+      el("div", {
+        class: "window-resize",
+        title: "ドラッグでリサイズ（矢印キーでも変えられます）",
+        // マウス以外でも大きさを変えられるようにする。最大化・最小化は
+        // ボタンで押せるが、任意の大きさにする手段がドラッグしか無かった。
+        tabindex: "0",
+        role: "slider",
+        "aria-label": "ウィンドウの大きさ",
+      })
     );
 
     layer.append(this.el);
@@ -110,9 +118,32 @@ export class AppWindow {
       this.#startDrag(event);
     });
 
-    this.el.querySelector(".window-resize").addEventListener("pointerdown", (event) => {
+    const grip = this.el.querySelector(".window-resize");
+    grip.addEventListener("pointerdown", (event) => {
       this.#startResize(event);
     });
+    grip.addEventListener("keydown", (event) => this.#resizeByKey(event));
+  }
+
+  /** 矢印キーでの大きさ変更。Shift で粗く動かす。
+   *
+   *  つまみは pointerdown だけで動いていたので、キーボードだけの利用者は
+   *  ウィンドウを任意の大きさにできなかった（最大化・最小化はボタンで
+   *  できる）。フェーダーやパンつまみと同じ扱いに揃える。 */
+  #resizeByKey(event) {
+    const STEP = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    const move = STEP[event.key];
+    if (!move) return;
+    event.preventDefault();
+
+    const amount = event.shiftKey ? 48 : 12;
+    const { w, h } = this.#dragBounds();
+    this.el.style.width =
+      `${clamp(this.el.offsetWidth + move[0] * amount, MIN_W, Math.max(MIN_W, w - this.el.offsetLeft))}px`;
+    this.el.style.height =
+      `${clamp(this.el.offsetHeight + move[1] * amount, MIN_H, Math.max(MIN_H, h - this.el.offsetTop))}px`;
+    this.#remember();
+    this.manager.persist();
   }
 
   #dragBounds() {

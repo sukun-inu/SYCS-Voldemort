@@ -369,6 +369,45 @@ def main():
         check("録音パネルのラベルが入力欄に結び付いている",
               unlabelled == [], f"結び付いていない: {unlabelled}")
 
+        # ── ウィンドウの大きさをキーボードで変えられること ──
+        # つまみは pointerdown だけで動いていたので、マウス以外の利用者は
+        # 任意の大きさにできなかった（最大化・最小化はボタンで押せる）。
+        resized = page.evaluate("""() => {
+          const win = document.querySelector('.window[data-app-id="recording"]');
+          const grip = win.querySelector(".window-resize");
+          const before = { w: win.offsetWidth, h: win.offsetHeight };
+          grip.focus();
+          const focused = document.activeElement === grip;
+          const press = (key, shift) => grip.dispatchEvent(new KeyboardEvent("keydown", {
+            key, shiftKey: !!shift, bubbles: true, cancelable: true,
+          }));
+          // 先に縮める（広げる側は画面の端で頭打ちになるので、
+          // 「増えたぶんがそのまま戻る」とは限らない）
+          press("ArrowLeft", true);
+          press("ArrowUp", true);
+          const shrunk = { w: win.offsetWidth, h: win.offsetHeight };
+          press("ArrowRight", true);
+          press("ArrowDown", true);
+          const grown = { w: win.offsetWidth, h: win.offsetHeight };
+
+          // 端を越えて広がらないこと（何度押しても収まる）
+          for (let i = 0; i < 40; i += 1) { press("ArrowRight", true); press("ArrowDown", true); }
+          const layer = win.parentElement.getBoundingClientRect();
+          const box = win.getBoundingClientRect();
+          const inside = box.right <= layer.right + 1 && box.bottom <= layer.bottom + 1;
+          return { focused, before, shrunk, grown, inside };
+        }""")
+        check("リサイズのつまみに焦点を当てられる", resized["focused"])
+        check("矢印キーでウィンドウが小さくなる",
+              resized["shrunk"]["w"] < resized["before"]["w"]
+              and resized["shrunk"]["h"] < resized["before"]["h"],
+              f"{resized['before']} -> {resized['shrunk']}")
+        check("反対の矢印キーで大きくなる",
+              resized["grown"]["w"] > resized["shrunk"]["w"]
+              and resized["grown"]["h"] > resized["shrunk"]["h"],
+              f"{resized['shrunk']} -> {resized['grown']}")
+        check("押し続けても画面の外まで広がらない", resized["inside"])
+
         # select.value に一覧へ無い値を入れても、ブラウザは黙って無視して空欄にする。
         # そのまま保存すると設定が消える（実際に起きた）。
         picked = page.evaluate(

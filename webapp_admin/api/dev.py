@@ -660,10 +660,10 @@ async def import_guild_settings(
             detail=f"設定が上限（{_MAX_IMPORT_BYTES // 1024} KB）を超えています。",
         )
 
-    from services.settings_store import replace_guild_settings
+    from services.settings_store import awrite, replace_guild_settings
 
     try:
-        replace_guild_settings(int(gid), settings)
+        await awrite(replace_guild_settings, int(gid), settings)
     except Exception as exc:
         logger.exception("ギルド設定のインポートに失敗 guild_id=%s", gid)
         raise HTTPException(status_code=500, detail=f"設定の保存に失敗しました（{exc}）")
