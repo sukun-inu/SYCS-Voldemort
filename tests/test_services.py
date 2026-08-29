@@ -3292,6 +3292,111 @@ class VoiceAnalysisTests(unittest.TestCase):
              str(path)], check=True, timeout=300)
         return path
 
+    # ── 正解の分かる声で、測った値が当たっているかを見る ──────
+
+    def _tube_voice(self, f0, spacing, count=5, seconds=4.0, rate=48000):
+        """一様管に近い声。共鳴を等間隔に置くので、正解の声道長が決まる。
+
+        片側が閉じた管の共鳴は (2k-1)×間隔/2 に並ぶ。声道長は
+        音速 /(2 × 間隔) なので、間隔を決めれば正解が決まる。
+
+        母音を並べる _voice() は「あ」の共鳴（730/1090/2440/3400）で、間隔が
+        360/1350/960 とそろっていない。それは実際の母音の姿だが、
+        「何cmと出るのが正しいか」を測る物差しには使えない。こちらを使う。
+
+        時間領域で1標本ずつ濾すと 48kHz×4秒×5本で遅すぎるので、
+        周波数領域で伝達関数を掛ける（結果は同じ）。
+        """
+        import math
+
+        import numpy as np
+
+        length = int(rate * seconds)
+        source = np.zeros(length)
+        source[np.arange(0, length, rate / f0).astype(int)] = 1.0
+
+        spectrum = np.fft.rfft(source)
+        omega = 2 * np.pi * np.fft.rfftfreq(length, 1.0 / rate) / rate
+        for k in range(1, count + 1):
+            freq = (2 * k - 1) * spacing / 2.0
+            if freq >= rate / 2:
+                break
+            bandwidth = 60.0 + 40.0 * k
+            r = math.exp(-math.pi * bandwidth / rate)
+            theta = 2 * math.pi * freq / rate
+            a1, a2 = 2 * r * math.cos(theta), -r * r
+            z1 = np.exp(-1j * omega)
+            spectrum = spectrum / (1 - a1 * z1 - a2 * z1 * z1)
+
+        wave = np.fft.irfft(spectrum, length)
+        peak = np.abs(wave).max() or 1.0
+        return (wave / peak * 11000).astype("<i2").tobytes()
+
+    def _mono_mp3(self, pcm, name, rate=48000):
+        import subprocess
+        from config import DJAUDIO_FFMPEG_PATH
+        path = Path(tempfile.mkdtemp()) / name
+        subprocess.run(
+            [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-y",
+             "-f", "s16le", "-ar", str(rate), "-ac", "1", "-i", "pipe:0",
+             # 録音の書き出しと同じ設定（-q:a 5）で通す
+             "-c:a", "libmp3lame", "-q:a", "5", str(path)],
+            input=pcm, check=True, timeout=300)
+        return path
+
+    def test_the_vocal_tract_length_is_measured_accurately(self):
+        """体格の違う3人で、声道長が当たること。
+
+        以前の追跡は「連続した3本」を選ぶ保証が無く、1本飛ばした組を選んでも
+        罰が無かった。そのため子どもの声（間隔が広い）で 12.5cm を 8.7cm と
+        測り、地声なのに「加工の形跡あり」と言っていた。飛ばしを罰するように
+        してから、3人とも 1cm 以内で当たる。
+        """
+        cases = [
+            ("成人男性", 100.0, 1000.0, 17.5),   # 音速35000/(2×1000)
+            ("成人女性", 200.0, 1167.0, 15.0),
+            ("子ども", 250.0, 1400.0, 12.5),
+        ]
+        for label, f0, spacing, expected in cases:
+            with self.subTest(label):
+                pcm = self._tube_voice(f0, spacing)
+                result = self.va.analyse(self._mono_mp3(pcm, f"{expected}.mp3"), 4.0)
+                self.assertEqual(result["verdict"], "natural", result.get("reason"))
+                self.assertAlmostEqual(result["vocal_tract_cm"], expected, delta=1.0,
+                                       msg=f"{label}: {result['vocal_tract_cm']}cm")
+                self.assertAlmostEqual(result["f0_hz"], f0, delta=5.0)
+
+    def test_a_skipped_formant_costs_more_than_the_consecutive_one(self):
+        """1本飛ばした組を選んでも損をしない、が元の不具合だった。
+
+        実測では、同じ話者でも区間ごとに 1198/2659/3664 → 512/2206/4392 と
+        選ぶ組が変わり、間隔が 1255〜1923Hz（声道長 9.1〜13.9cm）に散らばって
+        いた。飛ばすと1つの間隔だけが突出して広くなるので、そこを罰する。
+        """
+        # 連続した4本（間隔 1000/1000/1000）と、第3を飛ばした組（1000/2000/1000）
+        poles = [(500.0, 80.0), (1500.0, 80.0), (2500.0, 80.0),
+                 (3500.0, 80.0), (4500.0, 80.0)]
+        consecutive = self.va._emission((0, 1, 2, 3), poles)
+        skipped = self.va._emission((0, 1, 3, 4), poles)
+        self.assertLess(consecutive, skipped)
+
+        # 実際の母音は等間隔ではない（あ = 360/1350/960）。そろえろとは言わない
+        # ——そろえと言うと、正しい組より「たまたま等間隔の誤った組」を選ぶ。
+        vowel = [(730.0, 80.0), (1090.0, 90.0), (2440.0, 140.0), (3400.0, 200.0)]
+        self.assertEqual(self.va._emission((0, 1, 2, 3), vowel),
+                         sum(p[1] for p in vowel) / self.va._MAX_BANDWIDTH_HZ,
+                         "実際の母音の並びに罰が乗っている")
+
+    def test_a_scattered_measurement_is_not_asserted(self):
+        """測り切れていない区間では、どちらとも言わないこと。"""
+        # 正解の分かる声では、幅が中央値の3分の1より十分狭い
+        pcm = self._tube_voice(100.0, 1000.0)
+        result = self.va.analyse(self._mono_mp3(pcm, "tight.mp3"), 4.0)
+        spread = ((result["vocal_tract_high_cm"] - result["vocal_tract_low_cm"])
+                  / result["vocal_tract_cm"])
+        self.assertLess(spread, self.va._MAX_RELATIVE_SPREAD, f"幅の比 {spread:.2f}")
+        self.assertTrue(result["measurement_settled"])
+
     def test_a_natural_voice_is_not_called_processed(self):
         result = self.va.analyse(self._mp3(self._voice(), "plain.mp3"), 6.0)
         self.assertEqual(result["verdict"], "natural", result.get("reason"))
