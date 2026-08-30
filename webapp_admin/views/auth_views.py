@@ -6,7 +6,7 @@ from starlette.responses import RedirectResponse
 
 from webapp_admin.auth import DISCORD_CLIENT_ID, exchange_code, get_admin_guilds, get_oauth_url, get_user_info
 from webapp_admin.extensions import limiter
-from webapp_admin.security import check_csrf, check_login, issue_csrf_token
+from webapp_admin.security import check_csrf, issue_csrf_token
 from webapp_admin.templating import flash, render
 
 router = APIRouter()
@@ -70,7 +70,11 @@ async def callback(request: Request):
 
     admin_guilds = await get_admin_guilds(access_token)
     if not admin_guilds:
-        flash(request, "管理者権限を持つサーバーが見つかりませんでした。Bot が参加しているサーバーで管理者権限が必要です。", "warning")
+        flash(
+            request,
+            "管理者権限を持つサーバーが見つかりませんでした。Bot が参加しているサーバーで管理者権限が必要です。",
+            "warning",
+        )
         return RedirectResponse("/admin/login", status_code=303)
 
     request.session.clear()

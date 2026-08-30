@@ -70,8 +70,7 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
 
     today = datetime.now(JST)
     fx_returns_by_date = {
-        str(key): safe_float(value) or 0.0
-        for key, value in (fx_signal.get("daily_returns_by_date") or {}).items()
+        str(key): safe_float(value) or 0.0 for key, value in (fx_signal.get("daily_returns_by_date") or {}).items()
     }
     forecast: dict[str, Any] = {}
     for metal_key in METAL_COMMANDS.keys():
@@ -196,8 +195,12 @@ def _forecast_payload_from_db(
                 "delta_from_previous": float(row.delta_from_previous) if row.delta_from_previous is not None else None,
                 # 区間列は 0004 で追加したため、それ以前に保存された行では NULL になる。
                 # その場合は None のまま返し、フロントエンドは帯なしで描画する。
-                "lower_price_per_gram": float(row.lower_price_per_gram) if row.lower_price_per_gram is not None else None,
-                "upper_price_per_gram": float(row.upper_price_per_gram) if row.upper_price_per_gram is not None else None,
+                "lower_price_per_gram": (
+                    float(row.lower_price_per_gram) if row.lower_price_per_gram is not None else None
+                ),
+                "upper_price_per_gram": (
+                    float(row.upper_price_per_gram) if row.upper_price_per_gram is not None else None
+                ),
             }
             for row in sorted_rows
         ]
@@ -213,13 +216,19 @@ def _forecast_payload_from_db(
             "implied_daily_return_pct": float(first.implied_daily_return_pct),
             "projected_lower_per_gram": projected_lower,
             "projected_upper_per_gram": projected_upper,
+            # isinstance は型検査を通すために要る。daily の各要素は dict[str, Any]
+            # なので、そこから取り出した値を mypy は object としか見ない。実際の
+            # 中身は上の内包表記で float(...) か None に揃えてあるので、この判定が
+            # 偽になることは無い（＝実行時の振る舞いは変わらない）。
             "projected_lower_change_pct": (
                 round((projected_lower - start_price) / start_price * 100, 3)
-                if projected_lower is not None and start_price > 0 else None
+                if projected_lower is not None and isinstance(projected_lower, float) and start_price > 0
+                else None
             ),
             "projected_upper_change_pct": (
                 round((projected_upper - start_price) / start_price * 100, 3)
-                if projected_upper is not None and start_price > 0 else None
+                if projected_upper is not None and isinstance(projected_upper, float) and start_price > 0
+                else None
             ),
             "interval_prob": float(safe_float(interval_payload.get("prob")) or FORECAST_INTERVAL_PROB),
             "daily": daily,
@@ -227,9 +236,7 @@ def _forecast_payload_from_db(
             "summary": str(summaries_payload.get(metal_key, "")) if isinstance(summaries_payload, dict) else "",
             # 旧キャッシュには driver_breakdowns が無いため、その場合は空リストにして
             # フロントエンドが従来の drivers 箇条書き表示へフォールバックできるようにする。
-            "driver_breakdown": (
-                breakdown_payload.get(metal_key) or [] if isinstance(breakdown_payload, dict) else []
-            ),
+            "driver_breakdown": (breakdown_payload.get(metal_key) or [] if isinstance(breakdown_payload, dict) else []),
         }
 
     if not llm_payload:
@@ -261,7 +268,9 @@ def _forecast_payload_from_db(
                 "available": bool(meta.usd_jpy_available),
                 "source": meta.usd_jpy_source,
                 "latest": float(meta.usd_jpy_latest) if meta.usd_jpy_latest is not None else None,
-                "weekly_change_pct": float(meta.usd_jpy_weekly_change_pct) if meta.usd_jpy_weekly_change_pct is not None else 0.0,
+                "weekly_change_pct": (
+                    float(meta.usd_jpy_weekly_change_pct) if meta.usd_jpy_weekly_change_pct is not None else 0.0
+                ),
             },
             "news": {
                 "available": bool(meta.news_available),
@@ -283,7 +292,7 @@ def _trim_payload_to_days(payload: dict[str, Any], days: int) -> dict[str, Any]:
     if days >= horizon:
         return payload
 
-    trimmed = json_loads(json_dumps(payload), {})
+    trimmed: dict[str, Any] = json_loads(json_dumps(payload), {})
     trimmed["horizon_days"] = days
     for metal_key, item in (trimmed.get("forecast", {}) or {}).items():
         daily = list(item.get("daily", []))[:days]
@@ -299,19 +308,13 @@ def _trim_payload_to_days(payload: dict[str, Any], days: int) -> dict[str, Any]:
 
 
 async def load_stored_weekly_forecast(session: AsyncSession, *, days: int = 7) -> dict[str, Any] | None:
-    meta = (
-        await session.scalars(
-            select(WeeklyForecastMeta).order_by(WeeklyForecastMeta.generated_at.desc())
-        )
-    ).first()
+    meta = (await session.scalars(select(WeeklyForecastMeta).order_by(WeeklyForecastMeta.generated_at.desc()))).first()
     if meta is None:
         return None
 
     rows = list(
         (
-            await session.scalars(
-                select(WeeklyForecastDaily).where(WeeklyForecastDaily.as_of_date == meta.as_of_date)
-            )
+            await session.scalars(select(WeeklyForecastDaily).where(WeeklyForecastDaily.as_of_date == meta.as_of_date))
         ).all()
     )
     if not rows:
@@ -414,7 +417,9 @@ async def store_weekly_forecast(
     meta.generated_at = generated_at
     meta.horizon_days = horizon
     meta.model_name = str(model_data.get("name", "heuristic_fx_news_v1"))
-    meta.model_description = str(model_data.get("description", "直近価格トレンド + USD/JPY + ニュース見出し極性を合成した簡易予測。"))
+    meta.model_description = str(
+        model_data.get("description", "直近価格トレンド + USD/JPY + ニュース見出し極性を合成した簡易予測。")
+    )
     meta.usd_jpy_available = bool(usd_jpy.get("available"))
     meta.usd_jpy_source = str(usd_jpy.get("source", "Stooq"))
     meta.usd_jpy_latest = as_decimal(usd_jpy.get("latest"), Decimal("0.000001"))
@@ -423,37 +428,39 @@ async def store_weekly_forecast(
     meta.news_source = str(news.get("source", "Google News RSS"))
     meta.news_sentiment_json = json_dumps(news.get("sentiment", {}))
     meta.news_article_counts_json = json_dumps(news.get("article_counts", {}))
-    meta.news_headlines_json = json_dumps({
-        "sample_headlines": news.get("sample_headlines", {}),
-        "llm": {
-            "available": bool(llm.get("available")),
-            "source": str(llm.get("source", "Groq")),
-            "model": str(llm.get("model", FORECAST_LLM_MODEL)),
-            "scores": llm.get("scores", {}),
-            "confidences": llm.get("confidences", {}),
-            "rationales": llm.get("rationales", {}),
-            "global_comment": str(llm.get("global_comment", "")),
-        },
-        "interval": {
-            "prob": float(safe_float(interval.get("prob")) or FORECAST_INTERVAL_PROB),
-            "tilt_max_pct_per_day": float(
-                safe_float(interval.get("tilt_max_pct_per_day")) or FORECAST_TILT_MAX_PCT_PER_DAY * 100
-            ),
-        },
-        "accuracy": {
-            "available": bool(accuracy.get("available")),
-            "lookback_days": int(safe_float(accuracy.get("lookback_days")) or 14),
-            "mean_abs_error_pct": accuracy.get("mean_abs_error_pct", {}),
-        },
-        "summaries": {
-            metal_key: str((forecast_map.get(metal_key) or {}).get("summary", ""))
-            for metal_key in METAL_COMMANDS.keys()
-        },
-        "driver_breakdowns": {
-            metal_key: (forecast_map.get(metal_key) or {}).get("driver_breakdown", [])
-            for metal_key in METAL_COMMANDS.keys()
-        },
-    })
+    meta.news_headlines_json = json_dumps(
+        {
+            "sample_headlines": news.get("sample_headlines", {}),
+            "llm": {
+                "available": bool(llm.get("available")),
+                "source": str(llm.get("source", "Groq")),
+                "model": str(llm.get("model", FORECAST_LLM_MODEL)),
+                "scores": llm.get("scores", {}),
+                "confidences": llm.get("confidences", {}),
+                "rationales": llm.get("rationales", {}),
+                "global_comment": str(llm.get("global_comment", "")),
+            },
+            "interval": {
+                "prob": float(safe_float(interval.get("prob")) or FORECAST_INTERVAL_PROB),
+                "tilt_max_pct_per_day": float(
+                    safe_float(interval.get("tilt_max_pct_per_day")) or FORECAST_TILT_MAX_PCT_PER_DAY * 100
+                ),
+            },
+            "accuracy": {
+                "available": bool(accuracy.get("available")),
+                "lookback_days": int(safe_float(accuracy.get("lookback_days")) or 14),
+                "mean_abs_error_pct": accuracy.get("mean_abs_error_pct", {}),
+            },
+            "summaries": {
+                metal_key: str((forecast_map.get(metal_key) or {}).get("summary", ""))
+                for metal_key in METAL_COMMANDS.keys()
+            },
+            "driver_breakdowns": {
+                metal_key: (forecast_map.get(metal_key) or {}).get("driver_breakdown", [])
+                for metal_key in METAL_COMMANDS.keys()
+            },
+        }
+    )
 
     await session.flush()
     await session.execute(delete(WeeklyForecastMeta).where(WeeklyForecastMeta.id != meta.id))

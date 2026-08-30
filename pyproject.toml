@@ -1,0 +1,77 @@
+# lint / formatter / 型検査の設定。
+#
+# 3つとも requirements-dev.txt にだけ入れてある（本番の Docker イメージには
+# 含めない）。CI では .github/workflows/tests.yml が実行する。
+#
+# しきい値は「今より悪くしない」ための歯止めであって、目標値ではない。
+# .coveragerc の fail_under と同じ考え方で、直したぶんだけ締めていくこと。
+
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+# E/W: pycodestyle、F: pyflakes（未使用の import や変数）、C90: 循環的複雑度。
+select = ["E", "F", "W", "C90"]
+
+[tool.ruff.lint.mccabe]
+# 現在の最大は commands/server_commands.py:register_server_commands の 75。
+# ここを 75 にしてあるのは、今あるものを通すための天井にすぎない。長い関数を
+# 割ったら、この数字も下げること（10 が ruff の既定値）。
+max-complexity = 75
+
+[tool.ruff.lint.per-file-ignores]
+# テストは services/* が読み込み時に SETTINGS_DIR を解決する都合上、
+# import より前に環境変数を差し替える必要がある。E402（import が先頭に無い）は
+# その作法と衝突するので、テストだけ免除する。
+"tests/*" = ["E402"]
+# alembic の env.py も、sys.path を通してから webapp.models を import する。
+"migrations/env.py" = ["E402"]
+# 管理画面の app.py は、fastapi などを import する前にログのファイル出力を
+# 設置している。import 時に出るログも同じファイルへ入れるための順番なので、
+# 先頭へ寄せると意味が変わる。
+"webapp_admin/app.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_return_any = true
+no_implicit_optional = true
+strict_optional = true
+show_error_codes = true
+pretty = true
+# 既存3万行に一気に型を付けるのは現実的でないので、注釈の強制は入れない。
+# 新しく書くコードから付けていく方針。
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_decorators = false
+check_untyped_defs = false
+follow_imports = "silent"
+
+# 型情報を持たない外部ライブラリ。ここに挙げたものは import できなくても
+# 型検査を止めない（discord.py などは py.typed を出していない）。
+[[tool.mypy.overrides]]
+module = [
+    "aiohttp.*",
+    "apscheduler.*",
+    "colorthief.*",
+    "discord.*",
+    "groq.*",
+    "imageio_ffmpeg.*",
+    "mutagen.*",
+    "psutil.*",
+    "py_vapid.*",
+    "pywebpush.*",
+    "rcssmin.*",
+    "rjsmin.*",
+    "vt.*",
+    "yt_dlp.*",
+]
+ignore_missing_imports = true

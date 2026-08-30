@@ -22,7 +22,7 @@ from starlette.background import BackgroundTask
 from starlette.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from datetime import datetime, timezone
 
-from config import DJAUDIO_CACHE_DIR, DJAUDIO_FFMPEG_PATH
+from config import DJAUDIO_FFMPEG_PATH
 from services.djaudio_cache import content_type_for, get_meta, payload_path
 
 logger = logging.getLogger(__name__)
@@ -90,20 +90,23 @@ async def file_info(guild_id: str, token: str):
 
     now = datetime.now(timezone.utc).timestamp()
     remaining = max(0, int(meta["expires_at"] - now))
-    return JSONResponse({
-        "token": token,
-        "title": meta.get("title", ""),
-        "filename": meta.get("filename", ""),
-        "expires_at": meta.get("expires_at"),
-        "remaining_seconds": remaining,
-        "remaining_minutes": remaining // 60,
-    })
+    return JSONResponse(
+        {
+            "token": token,
+            "title": meta.get("title", ""),
+            "filename": meta.get("filename", ""),
+            "expires_at": meta.get("expires_at"),
+            "remaining_seconds": remaining,
+            "remaining_minutes": remaining // 60,
+        }
+    )
 
 
 # ── 録音ミキサー用 ───────────────────────────────────────────
 #
 # 管理画面のミキサーは、ZIP を丸ごと落とさずに「索引」と「トラック1本」を
 # 個別に取りに来る。配信の入口は既存の serve_file と同じ（トークン＋ギルド照合）。
+
 
 def _recording_zip(guild_id: str, token: str) -> Path:
     """録音の ZIP を返す。合わないものは 404/410 で弾く。"""
@@ -170,10 +173,7 @@ def _read_manifest(zip_path: Path) -> dict:
             "duration_seconds": 0,
             "bucket_seconds": 0.25,
             "legacy": True,
-            "stems": [
-                {"index": i, "file": n, "name": Path(n).stem, "peaks": []}
-                for i, n in enumerate(sorted(names))
-            ],
+            "stems": [{"index": i, "file": n, "name": Path(n).stem, "peaks": []} for i, n in enumerate(sorted(names))],
         }
     except (OSError, zipfile.BadZipFile, ValueError, UnicodeDecodeError) as e:
         logger.warning("録音の索引を読めませんでした token=%s: %s", zip_path.stem, e)
@@ -192,10 +192,8 @@ async def recording_manifest(guild_id: str, token: str):
     # 再生用の区切り配信が使えるか。使えるなら全トラックを1つの音源として
     # 鳴らせる（時計が1つなので、トラック同士がずれようがない）。
     # 圧縮された古いアーカイブは subfile で読めないので使えない。
-    usable = (
-        0 < len(stems) <= SEGMENT_MAX_TRACKS
-        and all(_stored_member_range(zip_path, str(s.get("file", ""))) is not None
-                for s in stems)
+    usable = 0 < len(stems) <= SEGMENT_MAX_TRACKS and all(
+        _stored_member_range(zip_path, str(s.get("file", ""))) is not None for s in stems
     )
     if usable:
         manifest["segment_url"] = f"/dlaudio/files/{guild_id}/{token}/segment"
@@ -239,7 +237,7 @@ async def recording_stem(guild_id: str, token: str, index: int, request: Request
         if raw_begin:
             begin = int(raw_begin)
             end = int(raw_end) if raw_end else size - 1
-        elif raw_end:                       # bytes=-N（末尾から N バイト）
+        elif raw_end:  # bytes=-N（末尾から N バイト）
             begin = max(0, size - int(raw_end))
         else:
             # "bytes=-" は数字がどちらも無く、範囲として成立しない。
@@ -275,19 +273,20 @@ async def recording_stem(guild_id: str, token: str, index: int, request: Request
     if partial:
         headers["Content-Range"] = f"bytes {begin}-{end}/{size}"
     return StreamingResponse(
-        stream(), status_code=206 if partial else 200,
-        media_type="audio/mpeg", headers=headers,
+        stream(),
+        status_code=206 if partial else 200,
+        media_type="audio/mpeg",
+        headers=headers,
     )
 
 
 # 区間の切り出し。ミキサーで決めたループ区間を、そのまま ZIP で落とせるようにする。
 # 全部落として自分で切るより速く、必要な部分だけを渡せる。
-_CLIP_MAX_SECONDS = 3600 * 2      # 切り出しでも 2 時間を超えたら通しで落としてもらう
+_CLIP_MAX_SECONDS = 3600 * 2  # 切り出しでも 2 時間を超えたら通しで落としてもらう
 _CLIP_MIN_SECONDS = 0.1
 
 
-def _clip_stem(zip_path: Path, member: str, start: float, length: float,
-               source: Path | None = None) -> bytes | None:
+def _clip_stem(zip_path: Path, member: str, start: float, length: float, source: Path | None = None) -> bytes | None:
     """mp3 の一部だけを切り出して返す。
 
     再エンコードはせず（-c copy）フレーム境界で切る。中身に手を触れないので
@@ -305,17 +304,31 @@ def _clip_stem(zip_path: Path, member: str, start: float, length: float,
                 return None
         try:
             result = subprocess.run(
-                [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error",
-                 "-ss", f"{start:.3f}", "-t", f"{length:.3f}",
-                 "-i", str(source), "-c", "copy", "-f", "mp3", "pipe:1"],
-                capture_output=True, timeout=180,
+                [
+                    DJAUDIO_FFMPEG_PATH,
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-ss",
+                    f"{start:.3f}",
+                    "-t",
+                    f"{length:.3f}",
+                    "-i",
+                    str(source),
+                    "-c",
+                    "copy",
+                    "-f",
+                    "mp3",
+                    "pipe:1",
+                ],
+                capture_output=True,
+                timeout=180,
             )
         except (subprocess.SubprocessError, OSError) as e:
             logger.warning("切り出しに失敗 %s: %s", member, e)
             return None
     if result.returncode != 0 or not result.stdout:
-        logger.warning("切り出しに失敗 %s: %s", member,
-                       result.stderr.decode("utf-8", "replace")[:200])
+        logger.warning("切り出しに失敗 %s: %s", member, result.stderr.decode("utf-8", "replace")[:200])
         return None
     return result.stdout
 
@@ -359,8 +372,7 @@ SEGMENT_RATE = 48000
 _SEGMENT_PREROLL = 2.0
 
 
-def _segment_pcm(zip_path: Path, stems: list[dict], start: float, length: float,
-                 destination: Path) -> bool:
+def _segment_pcm(zip_path: Path, stems: list[dict], start: float, length: float, destination: Path) -> bool:
     """全トラックの同じ区間を、1トラック＝1チャンネルの生 PCM にまとめる。
 
     ZIP からの取り出しはしない。無圧縮で入っているので、subfile プロトコルで
@@ -382,11 +394,13 @@ def _segment_pcm(zip_path: Path, stems: list[dict], start: float, length: float,
     for stem in stems:
         found = _stored_member_range(zip_path, str(stem.get("file", "")))
         if found is None:
-            return False              # 圧縮された古いアーカイブ。この経路は使えない
+            return False  # 圧縮された古いアーカイブ。この経路は使えない
         offset, size = found
         inputs += [
-            "-ss", f"{start - preroll:.3f}",
-            "-i", f"subfile,,start,{offset},end,{offset + size},,:{zip_path}",
+            "-ss",
+            f"{start - preroll:.3f}",
+            "-i",
+            f"subfile,,start,{offset},end,{offset + size},,:{zip_path}",
         ]
 
     count = len(stems)
@@ -398,42 +412,57 @@ def _segment_pcm(zip_path: Path, stems: list[dict], start: float, length: float,
 
     try:
         result = subprocess.run(
-            [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-y",
-             *inputs, "-filter_complex", chain, "-map", "[out]",
-             "-ss", f"{preroll:.3f}", "-t", f"{length:.3f}",
-             "-f", "s16le", "-acodec", "pcm_s16le", "-ar", str(SEGMENT_RATE),
-             str(destination)],
-            capture_output=True, timeout=120,
+            [
+                DJAUDIO_FFMPEG_PATH,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                *inputs,
+                "-filter_complex",
+                chain,
+                "-map",
+                "[out]",
+                "-ss",
+                f"{preroll:.3f}",
+                "-t",
+                f"{length:.3f}",
+                "-f",
+                "s16le",
+                "-acodec",
+                "pcm_s16le",
+                "-ar",
+                str(SEGMENT_RATE),
+                str(destination),
+            ],
+            capture_output=True,
+            timeout=120,
         )
     except (subprocess.SubprocessError, OSError) as e:
         logger.warning("区切りの書き出しに失敗: %s", e)
         return False
     if result.returncode != 0 or not destination.exists() or destination.stat().st_size == 0:
-        logger.warning("区切りの書き出しに失敗: %s",
-                       result.stderr.decode("utf-8", "replace")[:200])
+        logger.warning("区切りの書き出しに失敗: %s", result.stderr.decode("utf-8", "replace")[:200])
         return False
     return True
 
 
 @dlaudio_router.get("/files/{guild_id}/{token}/segment")
-async def recording_segment(guild_id: str, token: str,
-                            start: float = 0.0, length: float = 10.0):
+async def recording_segment(guild_id: str, token: str, start: float = 0.0, length: float = 10.0):
     """再生用の区切り。全トラックを1つの多チャンネル WAV にまとめて返す。"""
     zip_path = _recording_zip(guild_id, token)
     stems = _read_manifest(zip_path).get("stems", [])
     if not stems:
         raise HTTPException(status_code=404, detail="トラックがありません。")
     if len(stems) > SEGMENT_MAX_TRACKS:
-        raise HTTPException(
-            status_code=409,
-            detail=f"トラックが多すぎます（{SEGMENT_MAX_TRACKS} まで）。")
+        raise HTTPException(status_code=409, detail=f"トラックが多すぎます（{SEGMENT_MAX_TRACKS} まで）。")
 
     begin = max(0.0, float(start))
     span = float(length)
     if not (_SEGMENT_MIN_SECONDS <= span <= _SEGMENT_MAX_SECONDS):
         raise HTTPException(
-            status_code=400,
-            detail=f"区切りの長さは {_SEGMENT_MIN_SECONDS}〜{_SEGMENT_MAX_SECONDS} 秒です。")
+            status_code=400, detail=f"区切りの長さは {_SEGMENT_MIN_SECONDS}〜{_SEGMENT_MAX_SECONDS} 秒です。"
+        )
 
     work = Path(tempfile.mkdtemp(prefix="segment-"))
     out_path = work / "segment.pcm"
@@ -444,7 +473,8 @@ async def recording_segment(guild_id: str, token: str,
         raise HTTPException(status_code=500, detail="区切りを作れませんでした。")
 
     return FileResponse(
-        out_path, media_type="application/octet-stream",
+        out_path,
+        media_type="application/octet-stream",
         headers={"Cache-Control": "private, max-age=600"},
         background=BackgroundTask(shutil.rmtree, work, ignore_errors=True),
     )
@@ -472,7 +502,8 @@ async def recording_clip(guild_id: str, token: str, start: float = 0.0, end: flo
         raise HTTPException(
             status_code=400,
             detail=f"切り出せるのは {_CLIP_MAX_SECONDS // 3600} 時間までです。"
-                   "これより長い場合は ZIP を丸ごと落としてください。")
+            "これより長い場合は ZIP を丸ごと落としてください。",
+        )
 
     # 出力はディスクへ組み立てて、そのまま流す。BytesIO に作っていたときは、
     # 切り出しの元を全部メモリへ読んだうえ（6時間×8人で 689MB）、完成した ZIP
@@ -500,13 +531,18 @@ async def recording_clip(guild_id: str, token: str, start: float = 0.0, end: flo
         if not written:
             shutil.rmtree(work, ignore_errors=True)
             raise HTTPException(status_code=500, detail="切り出しに失敗しました。")
-        archive.writestr("info.txt", "\n".join([
-            f"元の録音: {manifest.get('channel_name', '')}",
-            f"切り出した区間: {begin:.2f} 秒 〜 {finish:.2f} 秒（{length:.2f} 秒）",
-            f"トラック数: {written}",
-            "",
-            "全トラックを同じ位置で切っているので、重ねれば時間軸は揃います。",
-        ]))
+        archive.writestr(
+            "info.txt",
+            "\n".join(
+                [
+                    f"元の録音: {manifest.get('channel_name', '')}",
+                    f"切り出した区間: {begin:.2f} 秒 〜 {finish:.2f} 秒（{length:.2f} 秒）",
+                    f"トラック数: {written}",
+                    "",
+                    "全トラックを同じ位置で切っているので、重ねれば時間軸は揃います。",
+                ]
+            ),
+        )
 
     stamp = f"{int(begin)}-{int(finish)}"
     return FileResponse(
@@ -596,17 +632,16 @@ def _extract_member(zip_path: Path, member: str, destination: Path) -> bool:
 def _stem_of(guild_id: str, token: str, index: int) -> tuple[Path, dict, dict]:
     zip_path = _recording_zip(guild_id, token)
     manifest = _read_manifest(zip_path)
-    stem = next((s for s in manifest.get("stems", [])
-                 if int(s.get("index", -1)) == index), None)
+    stem = next((s for s in manifest.get("stems", []) if int(s.get("index", -1)) == index), None)
     if stem is None:
         raise HTTPException(status_code=404, detail="そのトラックはありません。")
     return zip_path, manifest, stem
 
 
 @dlaudio_router.get("/files/{guild_id}/{token}/analysis/{index}")
-async def recording_analysis(guild_id: str, token: str, index: int,
-                             start: float | None = None,
-                             end: float | None = None):
+async def recording_analysis(
+    guild_id: str, token: str, index: int, start: float | None = None, end: float | None = None
+):
     """トラック1本の声を調べる。
 
     その場で計算する（書き出し時にやると、全員ぶんで待たされる）。
@@ -625,14 +660,15 @@ async def recording_analysis(guild_id: str, token: str, index: int,
     # 広げると「選んだのに関係ない所の結果が返る」ことになり、しかも
     # 見た目には成功したように見える。理由を返して選び直してもらう。
     if (start is None) != (end is None):
-        raise HTTPException(
-            status_code=400, detail="区間は開始と終了の両方を指定してください。")
+        raise HTTPException(status_code=400, detail="区間は開始と終了の両方を指定してください。")
     if start is not None and voice_analysis.selection_bounds(duration, start, end) is None:
         if end <= start:
             detail = "選択範囲の終わりは始まりより後にしてください。"
         else:
-            detail = (f"選択範囲が短すぎます（{voice_analysis.SELECTION_MIN_SECONDS} 秒以上）。"
-                      "その人が喋っている所を、もう少し広めに選んでください。")
+            detail = (
+                f"選択範囲が短すぎます（{voice_analysis.SELECTION_MIN_SECONDS} 秒以上）。"
+                "その人が喋っている所を、もう少し広めに選んでください。"
+            )
         raise HTTPException(status_code=400, detail=detail)
 
     def _run() -> dict:
@@ -660,16 +696,14 @@ async def recording_analysis(guild_id: str, token: str, index: int,
         raise HTTPException(status_code=500, detail="声を調べられませんでした。")
 
     result["name"] = stem.get("name")
-    result["restore_url"] = (
-        f"/dlaudio/files/{guild_id}/{token}/stem/{index}/restored")
+    result["restore_url"] = f"/dlaudio/files/{guild_id}/{token}/stem/{index}/restored"
     return JSONResponse(result)
 
 
 @dlaudio_router.get("/files/{guild_id}/{token}/stem/{index}/restored")
-async def recording_stem_restored(guild_id: str, token: str, index: int,
-                                  factor: float = 1.0,
-                                  start: float | None = None,
-                                  end: float | None = None):
+async def recording_stem_restored(
+    guild_id: str, token: str, index: int, factor: float = 1.0, start: float | None = None, end: float | None = None
+):
     """変換を打ち消したトラックを返す。
 
     どの倍率を打ち消すかは呼び出し側が決める。本人の地声が分からない以上、
@@ -683,8 +717,8 @@ async def recording_stem_restored(guild_id: str, token: str, index: int,
 
     if not (_RESTORE_MIN_FACTOR <= factor <= _RESTORE_MAX_FACTOR):
         raise HTTPException(
-            status_code=400,
-            detail=f"倍率は {_RESTORE_MIN_FACTOR}〜{_RESTORE_MAX_FACTOR} で指定してください。")
+            status_code=400, detail=f"倍率は {_RESTORE_MIN_FACTOR}〜{_RESTORE_MAX_FACTOR} で指定してください。"
+        )
 
     zip_path, manifest, stem = _stem_of(guild_id, token, index)
     chain = ",".join(voice_analysis.restore_command(factor))
@@ -707,10 +741,25 @@ async def recording_stem_restored(guild_id: str, token: str, index: int,
         if not _extract_member(zip_path, str(stem.get("file", "")), source):
             return None
         return subprocess.run(
-            [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-y",
-             *trim, "-i", str(source), "-af", chain,
-             "-c:a", "libmp3lame", "-q:a", "5", str(out_path)],
-            capture_output=True, timeout=300,
+            [
+                DJAUDIO_FFMPEG_PATH,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                *trim,
+                "-i",
+                str(source),
+                "-af",
+                chain,
+                "-c:a",
+                "libmp3lame",
+                "-q:a",
+                "5",
+                str(out_path),
+            ],
+            capture_output=True,
+            timeout=300,
         )
 
     try:
@@ -727,11 +776,11 @@ async def recording_stem_restored(guild_id: str, token: str, index: int,
         raise HTTPException(status_code=500, detail="トラックを読めませんでした。")
     if result.returncode != 0 or not out_path.exists() or out_path.stat().st_size == 0:
         shutil.rmtree(work, ignore_errors=True)
-        logger.warning("復元に失敗 token=%s index=%s: %s", token, index,
-                       result.stderr.decode("utf-8", "replace")[:200])
+        logger.warning("復元に失敗 token=%s index=%s: %s", token, index, result.stderr.decode("utf-8", "replace")[:200])
         raise HTTPException(status_code=500, detail="復元できませんでした。")
 
     return FileResponse(
-        out_path, media_type="audio/mpeg",
+        out_path,
+        media_type="audio/mpeg",
         background=BackgroundTask(shutil.rmtree, work, ignore_errors=True),
     )

@@ -5,10 +5,14 @@ from pathlib import Path
 from urllib.parse import quote_plus
 
 from sqlalchemy import inspect, text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from envutil import env_int
-from .models import Base
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +37,7 @@ def _build_database_url() -> str:
 
     user = quote_plus(os.getenv("POSTGRES_USER", "postgres"))
     password_raw = (
-        os.getenv("POSTGRES_PASSWORD")
-        or _read_secret_file(os.getenv("POSTGRES_PASSWORD_FILE"))
-        or "postgres"
+        os.getenv("POSTGRES_PASSWORD") or _read_secret_file(os.getenv("POSTGRES_PASSWORD_FILE")) or "postgres"
     )
     password = quote_plus(password_raw)
     host = os.getenv("POSTGRES_HOST", "localhost")
@@ -69,12 +71,8 @@ async def _detect_legacy_db() -> bool:
     alembic_version テーブルがなく、既存テーブルが存在する場合は旧式DB。
     """
     async with engine.connect() as conn:
-        has_alembic = await conn.run_sync(
-            lambda c: inspect(c).has_table("alembic_version")
-        )
-        has_metal = await conn.run_sync(
-            lambda c: inspect(c).has_table("metal_price_daily")
-        )
+        has_alembic = await conn.run_sync(lambda c: inspect(c).has_table("alembic_version"))
+        has_metal = await conn.run_sync(lambda c: inspect(c).has_table("metal_price_daily"))
     return has_metal and not has_alembic
 
 
@@ -110,13 +108,17 @@ DB_MIGRATION_ADVISORY_LOCK_KEY = 721045777
 
 async def init_db() -> None:
     async with engine.connect() as conn:
-        await conn.execute(text("SELECT pg_advisory_lock(:key)"), {"key": DB_MIGRATION_ADVISORY_LOCK_KEY})
+        await conn.execute(
+            text("SELECT pg_advisory_lock(:key)"),
+            {"key": DB_MIGRATION_ADVISORY_LOCK_KEY},
+        )
         try:
             is_legacy = await _detect_legacy_db()
 
             if is_legacy:
                 logger.warning(
-                    "旧式DB（create_all 作成）を検出。Alembic 初期リビジョン(0001)をスタンプ後、head へアップグレードします。"
+                    "旧式DB（create_all 作成）を検出。"
+                    "Alembic 初期リビジョン(0001)をスタンプ後、head へアップグレードします。"
                 )
                 await asyncio.to_thread(_run_alembic_stamp, "0001")
                 await asyncio.to_thread(_run_alembic_upgrade)
@@ -126,7 +128,10 @@ async def init_db() -> None:
                 await asyncio.to_thread(_run_alembic_upgrade)
                 logger.info("マイグレーション完了。")
         finally:
-            await conn.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": DB_MIGRATION_ADVISORY_LOCK_KEY})
+            await conn.execute(
+                text("SELECT pg_advisory_unlock(:key)"),
+                {"key": DB_MIGRATION_ADVISORY_LOCK_KEY},
+            )
 
 
 async def close_db() -> None:

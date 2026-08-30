@@ -13,7 +13,12 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select, text, update
@@ -27,7 +32,10 @@ from services.url_safety import URLSafetyError, validate_public_http_url
 from .cache import TTLCache
 from .asset_version import render_index_html, render_service_worker
 from .db import SessionLocal, close_db, engine, init_db
-from .forecast_accuracy_service import load_recent_forecast_error, reconcile_forecast_accuracy
+from .forecast_accuracy_service import (
+    load_recent_forecast_error,
+    reconcile_forecast_accuracy,
+)
 from .forecast_service import load_stored_weekly_forecast, refresh_weekly_forecast_cache
 from .models import NotificationDispatch, PushSubscription
 from .push_service import (
@@ -59,7 +67,16 @@ STATIC_DIR = BASE_DIR / "static"
 INDEX_FILE = STATIC_DIR / "index.html"
 SW_FILE = STATIC_DIR / "sw.js"
 MANIFEST_FILE = STATIC_DIR / "manifest.webmanifest"
-RESERVED_TOP_LEVEL_PATHS = {"api", "static", "health", "docs", "redoc", "openapi.json", "sw.js", "manifest.webmanifest"}
+RESERVED_TOP_LEVEL_PATHS = {
+    "api",
+    "static",
+    "health",
+    "docs",
+    "redoc",
+    "openapi.json",
+    "sw.js",
+    "manifest.webmanifest",
+}
 API_RESPONSE_CACHE_SECONDS = env_int("API_RESPONSE_CACHE_SECONDS", 20, minimum=1)
 PURITY_OPTIONS_CACHE_SECONDS = env_int("PURITY_OPTIONS_CACHE_SECONDS", 3600, minimum=60)
 PUSH_PUBLIC_KEY_CACHE_SECONDS = env_int("PUSH_PUBLIC_KEY_CACHE_SECONDS", 3600, minimum=300)
@@ -70,9 +87,7 @@ FORECAST_REFRESH_MINUTE_JST = env_int("FORECAST_REFRESH_MINUTE_JST", 5, minimum=
 # 日中はニュース動向を拾う目的でこの時刻にだけ強制リフレッシュする(以前は毎時実行して
 # いたが、Groq/ニュースRSS/為替APIを無駄に24回/日叩いていたため間引いた)。
 FORECAST_REFRESH_EXTRA_HOURS_JST = [
-    hour.strip()
-    for hour in os.getenv("FORECAST_REFRESH_EXTRA_HOURS_JST", "6,12,18").split(",")
-    if hour.strip()
+    hour.strip() for hour in os.getenv("FORECAST_REFRESH_EXTRA_HOURS_JST", "6,12,18").split(",") if hour.strip()
 ]
 PUSH_NOTIFY_HOUR_JST = env_int("PUSH_NOTIFY_HOUR_JST", 11, minimum=0, maximum=23)
 PUSH_NOTIFY_MINUTE_JST = env_int("PUSH_NOTIFY_MINUTE_JST", 0, minimum=0, maximum=59)
@@ -80,9 +95,7 @@ NOTIFY_TOP_DELTA_TYPE = "daily_top_delta"
 APP_PUBLIC_PATH = (os.getenv("APP_PUBLIC_PATH") or os.getenv("APP_ROOT_PATH") or "/").strip() or "/"
 PUSH_MAX_SUBSCRIPTIONS = env_int("PUSH_MAX_SUBSCRIPTIONS", 50000, minimum=100)
 _PUSH_ALLOWED_ENDPOINT_SUFFIXES = tuple(
-    part.strip().lower()
-    for part in os.getenv("PUSH_ALLOWED_ENDPOINT_SUFFIXES", "").split(",")
-    if part.strip()
+    part.strip().lower() for part in os.getenv("PUSH_ALLOWED_ENDPOINT_SUFFIXES", "").split(",") if part.strip()
 )
 
 
@@ -209,7 +222,7 @@ async def _get_latest_prices(session: AsyncSession) -> dict[str, dict[str, str |
         snapshot[metal_key] = {
             "date": row.snapshot_date.isoformat(),
             "price_per_gram": str(row.price_per_gram),
-            "delta_from_previous": str(row.delta_from_previous) if row.delta_from_previous is not None else None,
+            "delta_from_previous": (str(row.delta_from_previous) if row.delta_from_previous is not None else None),
         }
 
     await latest_prices_cache.set(cache_key, snapshot)
@@ -272,11 +285,16 @@ async def _claim_dispatch_slot(session: AsyncSession, *, snapshot_date: date) ->
         .returning(NotificationDispatch.id)
     )
     result = await session.execute(stmt)
+    # 行を取り出してから commit する。順番を入れ替えて commit 後に
+    # result を読むと、結果が確定していない実装では取り出せなくなる。
+    # 衝突して（＝既に配信済みで）行が返らなかったときは、commit せずに
+    # 抜ける。ここは配信の重複を止める関門なので、何もしていないときに
+    # トランザクションを閉じない。
     row = result.fetchone()
     if row is None:
         return None
     await session.commit()
-    return row[0]
+    return int(row[0])
 
 
 async def _send_push_to_subscriptions(
@@ -288,7 +306,10 @@ async def _send_push_to_subscriptions(
     success_count = 0
     for sub in subscriptions:
         ok, should_remove = await send_push(
-            {"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh_key, "auth": sub.auth_key}},
+            {
+                "endpoint": sub.endpoint,
+                "keys": {"p256dh": sub.p256dh_key, "auth": sub.auth_key},
+            },
             payload,
         )
         if ok:
@@ -307,7 +328,10 @@ async def dispatch_top_delta_notification(*, enforce_schedule_time: bool = False
         return
 
     now = datetime.now(JST)
-    if enforce_schedule_time and (now.hour, now.minute) < (PUSH_NOTIFY_HOUR_JST, PUSH_NOTIFY_MINUTE_JST):
+    if enforce_schedule_time and (now.hour, now.minute) < (
+        PUSH_NOTIFY_HOUR_JST,
+        PUSH_NOTIFY_MINUTE_JST,
+    ):
         return
 
     async with SessionLocal() as session:
@@ -324,7 +348,10 @@ async def dispatch_top_delta_notification(*, enforce_schedule_time: bool = False
         snapshot_date_value = datetime.fromisoformat(snapshot_date).date()
         dispatch_id = await _claim_dispatch_slot(session, snapshot_date=snapshot_date_value)
         if dispatch_id is None:
-            logger.info("日次Push通知は別インスタンスで処理中/送信済みのためスキップ。snapshot=%s", snapshot_date)
+            logger.info(
+                "日次Push通知は別インスタンスで処理中/送信済みのためスキップ。snapshot=%s",
+                snapshot_date,
+            )
             return
 
         spec = METAL_COMMANDS[metal_key]
@@ -376,9 +403,7 @@ def _running_in_container() -> bool:
 def _startup_test_enabled() -> bool:
     if not STARTUP_TEST_MODE:
         if STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT or STARTUP_TEST_RUN_PUSH_ON_BOOT:
-            logger.warning(
-                "起動テスト設定を検出したが STARTUP_TEST_MODE=false のため無効化。"
-            )
+            logger.warning("起動テスト設定を検出したが STARTUP_TEST_MODE=false のため無効化。")
         return False
     if STARTUP_TEST_REQUIRE_DOCKER and not _running_in_container():
         logger.warning("起動テストモードをスキップ: コンテナ外で STARTUP_TEST_REQUIRE_DOCKER=true")
@@ -457,7 +482,10 @@ async def collect_daily_snapshot(*, force_refresh: bool = False) -> None:
             try:
                 await store_today_snapshot(session, skip_if_exists=not force_refresh)
                 await _clear_response_caches()
-                logger.info("日次価格スナップショットを保存した。force_refresh=%s", force_refresh)
+                logger.info(
+                    "日次価格スナップショットを保存した。force_refresh=%s",
+                    force_refresh,
+                )
                 return
             except Exception as e:
                 await session.rollback()
@@ -475,11 +503,17 @@ async def collect_weekly_forecast_cache(*, force_refresh: bool = False) -> None:
                 if not force_refresh:
                     existing_payload = await load_stored_weekly_forecast(session, days=7)
                     if existing_payload and existing_payload.get("as_of_date") == today_iso:
-                        logger.info("7日予測データは最新のため更新をスキップした。as_of_date=%s", today_iso)
+                        logger.info(
+                            "7日予測データは最新のため更新をスキップした。as_of_date=%s",
+                            today_iso,
+                        )
                         return
                 await refresh_weekly_forecast_cache(session, horizon_days=7)
                 await forecast_cache.clear()
-                logger.info("7日予測データを更新し、DBに保存した。force_refresh=%s", force_refresh)
+                logger.info(
+                    "7日予測データを更新し、DBに保存した。force_refresh=%s",
+                    force_refresh,
+                )
                 return
             except Exception as e:
                 await session.rollback()
@@ -574,7 +608,10 @@ async def _try_acquire_scheduler_lock() -> bool:
     global _scheduler_lock_conn
     conn = await engine.connect()
     try:
-        result = await conn.execute(text("SELECT pg_try_advisory_lock(:key)"), {"key": SCHEDULER_ADVISORY_LOCK_KEY})
+        result = await conn.execute(
+            text("SELECT pg_try_advisory_lock(:key)"),
+            {"key": SCHEDULER_ADVISORY_LOCK_KEY},
+        )
         acquired = bool(result.scalar())
     except Exception:
         await conn.close()
@@ -593,7 +630,10 @@ async def _release_scheduler_lock() -> None:
     if conn is None:
         return
     try:
-        await conn.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": SCHEDULER_ADVISORY_LOCK_KEY})
+        await conn.execute(
+            text("SELECT pg_advisory_unlock(:key)"),
+            {"key": SCHEDULER_ADVISORY_LOCK_KEY},
+        )
     except Exception:
         logger.exception("[WEB] スケジューラのadvisory lock解放に失敗した。")
     finally:
@@ -613,9 +653,7 @@ async def lifespan(_: FastAPI):
     if WEB_SCHEDULER_ENABLED and has_scheduler_lock:
         await collect_daily_data()
         if METAL_AUTO_REPAIR_ENABLED:
-            await auto_repair_metalprice_data(
-                force_forecast_refresh=METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH
-            )
+            await auto_repair_metalprice_data(force_forecast_refresh=METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH)
         await dispatch_top_delta_notification(enforce_schedule_time=True)
         await _run_startup_test_jobs()
 
@@ -869,11 +907,17 @@ async def weekly_forecast(
     cache_key = f"forecast:{datetime.now(JST).date().isoformat()}:{days}"
     cached = await forecast_cache.get(cache_key)
     if cached is not None:
-        return JSONResponse(cached, headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
+        return JSONResponse(
+            cached,
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+        )
 
     payload = await load_stored_weekly_forecast(session, days=days)
     if payload is None:
-        raise HTTPException(status_code=503, detail="予測データがまだありません。次回の予測更新後に利用できます。")
+        raise HTTPException(
+            status_code=503,
+            detail="予測データがまだありません。次回の予測更新後に利用できます。",
+        )
 
     await forecast_cache.set(cache_key, payload)
     return JSONResponse(
@@ -913,9 +957,7 @@ async def push_subscribe(
         raise HTTPException(status_code=503, detail="Push通知が無効です。VAPID設定を確認してください。")
 
     endpoint = _validate_push_endpoint(payload.endpoint)
-    existing = (
-        await session.scalars(select(PushSubscription).where(PushSubscription.endpoint == endpoint))
-    ).first()
+    existing = (await session.scalars(select(PushSubscription).where(PushSubscription.endpoint == endpoint))).first()
     if existing:
         existing.p256dh_key = payload.keys.p256dh
         existing.auth_key = payload.keys.auth
@@ -946,9 +988,14 @@ async def push_unsubscribe(
     payload: PushUnsubscribeRequest,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, int | bool]:
-    result = await session.execute(delete(PushSubscription).where(PushSubscription.endpoint == payload.endpoint.strip()))
+    result = await session.execute(
+        delete(PushSubscription).where(PushSubscription.endpoint == payload.endpoint.strip())
+    )
     await session.commit()
-    return {"ok": True, "deleted": int(result.rowcount or 0)}
+    # rowcount は返さないドライバがある。or 0 を外すと int(None) で
+    # TypeError になり、購読解除が 500 で落ちる。型検査を黙らせるために
+    # 外してよい保険ではない。
+    return {"ok": True, "deleted": int(result.rowcount or 0)}  # type: ignore[attr-defined]
 
 
 @app.get("/api/prices/calculate")
@@ -960,14 +1007,20 @@ async def calculate_by_purity(
     metal_key = metal.strip().lower()
     spec = METAL_COMMANDS.get(metal_key)
     if spec is None:
-        raise HTTPException(status_code=400, detail="metal は gold/silver/platinum のいずれかを指定してください。")
+        raise HTTPException(
+            status_code=400,
+            detail="metal は gold/silver/platinum のいずれかを指定してください。",
+        )
 
     latest_snapshot = await _get_latest_prices(session)
     latest_row = latest_snapshot.get(metal_key, {})
     snapshot_date = latest_row.get("date")
     price_per_gram_raw = latest_row.get("price_per_gram")
     if snapshot_date is None or price_per_gram_raw is None:
-        raise HTTPException(status_code=503, detail="価格データがまだありません。日次取得完了後に再実行してください。")
+        raise HTTPException(
+            status_code=503,
+            detail="価格データがまだありません。日次取得完了後に再実行してください。",
+        )
 
     grams_decimal = Decimal(str(grams))
     grams_key = f"{grams_decimal:.4f}"
@@ -979,8 +1032,7 @@ async def calculate_by_purity(
     price_per_gram = Decimal(price_per_gram_raw)
     pure_value = int(price_per_gram * grams_decimal)
     by_purity = {
-        grade: int(price_per_gram * grams_decimal * Decimal(str(ratio)))
-        for grade, ratio in spec.purity.items()
+        grade: int(price_per_gram * grams_decimal * Decimal(str(ratio))) for grade, ratio in spec.purity.items()
     }
 
     payload = {
@@ -997,7 +1049,7 @@ async def calculate_by_purity(
 
 
 @app.get("/{page_path:path}", include_in_schema=False)
-async def fallback_page(page_path: str) -> FileResponse:
+async def fallback_page(page_path: str) -> HTMLResponse:
     first = page_path.split("/", 1)[0] if page_path else ""
     if first in RESERVED_TOP_LEVEL_PATHS:
         raise HTTPException(status_code=404, detail="Not Found")

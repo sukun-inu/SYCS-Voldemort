@@ -34,7 +34,6 @@ import sys
 import tempfile
 import threading
 import time
-import zipfile
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -71,6 +70,7 @@ def check(label: str, ok: bool, detail: str = "") -> None:
 
 # ── 録音アーカイブを作る ─────────────────────────────────────
 
+
 def _tone(seconds: float, hz: int, amplitude: int = 12000) -> bytes:
     from services.recording_service import SAMPLE_RATE
 
@@ -83,9 +83,14 @@ def _tone(seconds: float, hz: int, amplitude: int = 12000) -> bytes:
 
 def _session(recording, channel_name: str):
     return recording.RecordingSession(
-        guild_id=GUILD_ID, channel_id=1, channel_name=channel_name,
-        started_by_id=1, started_by_name="検査", started_at=time.monotonic(),
-        max_seconds=0, retention_days=1,
+        guild_id=GUILD_ID,
+        channel_id=1,
+        channel_name=channel_name,
+        started_by_id=1,
+        started_by_name="検査",
+        started_at=time.monotonic(),
+        max_seconds=0,
+        retention_days=1,
     )
 
 
@@ -110,8 +115,10 @@ def build_long_recording() -> str:
     # 途中（60%）で書き込みが止まったトラック。長いほうの縮尺に揃うこと。
     tracks[-1].peaks = [30000] * int(buckets * 0.6)
 
-    with patch.object(recording._TrackWriter, "pad_until", lambda self, *a, **k: None), \
-            patch.object(recording, "measure_voice", return_value=None):
+    with (
+        patch.object(recording._TrackWriter, "pad_until", lambda self, *a, **k: None),
+        patch.object(recording, "measure_voice", return_value=None),
+    ):
         result = recording._finalize(session, duration, "検査")
     return result["token"]
 
@@ -151,8 +158,10 @@ HARNESS = """<!doctype html><meta charset="utf-8">
 def open_mixer(page, token: str):
     url = f"/dlaudio/files/{GUILD_ID}/{token}"
     html = HARNESS.replace("TOKEN_URL", json.dumps(url))
-    page.route(f"{BASE}/__mixer_check__", lambda route: route.fulfill(
-        status=200, content_type="text/html; charset=utf-8", body=html))
+    page.route(
+        f"{BASE}/__mixer_check__",
+        lambda route: route.fulfill(status=200, content_type="text/html; charset=utf-8", body=html),
+    )
     page.goto(f"{BASE}/__mixer_check__")
     page.wait_for_function("window.__ready !== undefined")
     page.evaluate("window.__ready")
@@ -169,7 +178,8 @@ def inked_ratio(page) -> list[float]:
     常に 1.0 になり、検査が何も見ていなかった）。罫線は灰色、波形はトラックの
     色なので、彩度で選り分ける。
     """
-    return page.evaluate("""() => {
+    return page.evaluate(
+        """() => {
       const out = [];
       for (const canvas of document.querySelectorAll(".daw-lane-canvas")) {
         const ctx = canvas.getContext("2d");
@@ -188,18 +198,22 @@ def inked_ratio(page) -> list[float]:
         out.push(inked / width);
       }
       return out;
-    }""")
+    }"""
+    )
 
 
 def scroll_to(page, seconds_fraction: float) -> None:
     """時間軸の指定した割合の位置まで横スクロールする（利用者と同じ操作）。"""
-    page.evaluate("""(fraction) => {
+    page.evaluate(
+        """(fraction) => {
       const scroller = document.querySelector(".daw-scroll");
       const spacer = document.querySelector(".daw-spacer");
       const total = parseFloat(spacer.style.width) || scroller.scrollWidth;
       scroller.scrollLeft = Math.max(0, total * fraction - scroller.clientWidth / 2);
       scroller.dispatchEvent(new Event("scroll"));
-    }""", seconds_fraction)
+    }""",
+        seconds_fraction,
+    )
     page.wait_for_timeout(250)
 
 
@@ -238,26 +252,27 @@ def main() -> int:
                 scroll_to(page, fraction)
                 ratios = inked_ratio(page)
                 full = ratios[:2]
-                check(f"{label}に波形が描かれている（最後まで喋っている2本）",
-                      len(full) == 2 and min(full) > 0.8,
-                      f"塗り={['%.2f' % r for r in ratios]}")
+                check(
+                    f"{label}に波形が描かれている（最後まで喋っている2本）",
+                    len(full) == 2 and min(full) > 0.8,
+                    f"塗り={['%.2f' % r for r in ratios]}",
+                )
 
             # 途中で終わったトラックが、同じ時間軸の上で正しく終わっていること。
             # 縮尺が自分の長さ基準だと、ここが横に引き伸ばされて最後まで
             # 波形が続いてしまう（他のトラックと位置が合わない）。
             scroll_to(page, 0.3)
             early = inked_ratio(page)[2]
-            check("途中で終わったトラックも、終わるまでは同じ位置に描かれる",
-                  early > 0.8, f"30%地点の塗り={early:.2f}")
+            check("途中で終わったトラックも、終わるまでは同じ位置に描かれる", early > 0.8, f"30%地点の塗り={early:.2f}")
             scroll_to(page, 0.95)
             late = inked_ratio(page)[2]
-            check("途中で終わったトラックは、その先が空になる",
-                  late < 0.05, f"95%地点の塗り={late:.2f}")
+            check("途中で終わったトラックは、その先が空になる", late < 0.05, f"95%地点の塗り={late:.2f}")
             page.evaluate("window.__mixer.destroy()")
 
             print("\n== 2. 区切り配信での再生（時計が1つ） ==")
             open_mixer(page, play_token)
-            played = page.evaluate(r"""async () => {
+            played = page.evaluate(
+                r"""async () => {
               const stage = document.getElementById("stage");
               const clockText = () => stage.querySelector(".daw-clock").textContent || "";
               const clock = () => {
@@ -282,14 +297,19 @@ def main() -> int:
               await new Promise((r) => setTimeout(r, 2000));
               return { afterSeek, whilePlaying: clock(), raw: clockText(),
                        audios: document.querySelectorAll("audio").length };
-            }""")
-            check("トラックごとの <audio> を持たない（音源が1つ）",
-                  played["audios"] == 0, f"<audio> が {played['audios']} 本ある")
-            check("頭出しが効く", played["afterSeek"] > 0.5,
-                  f"{played['afterSeek']:.2f} 秒 / 時計={played['raw']}")
-            check("再生位置が進む",
-                  played["whilePlaying"] > played["afterSeek"] + 0.5,
-                  f"{played['afterSeek']:.2f} -> {played['whilePlaying']:.2f} 秒")
+            }"""
+            )
+            check(
+                "トラックごとの <audio> を持たない（音源が1つ）",
+                played["audios"] == 0,
+                f"<audio> が {played['audios']} 本ある",
+            )
+            check("頭出しが効く", played["afterSeek"] > 0.5, f"{played['afterSeek']:.2f} 秒 / 時計={played['raw']}")
+            check(
+                "再生位置が進む",
+                played["whilePlaying"] > played["afterSeek"] + 0.5,
+                f"{played['afterSeek']:.2f} -> {played['whilePlaying']:.2f} 秒",
+            )
             page.evaluate("window.__mixer.destroy()")
 
             print("\n== 3. 従来経路（区切り配信が使えない古いアーカイブ） ==")
@@ -301,8 +321,7 @@ def main() -> int:
             def strip_segment(route):
                 body = route.fetch().json()
                 body.pop("segment_url", None)
-                route.fulfill(status=200, content_type="application/json",
-                              body=json.dumps(body))
+                route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
 
             def slow_first(route):
                 if not slowed["done"]:
@@ -313,7 +332,8 @@ def main() -> int:
             page.route(f"{BASE}/dlaudio/files/{GUILD_ID}/{play_token}/mixer", strip_segment)
             page.route(f"{BASE}/dlaudio/files/{GUILD_ID}/{play_token}/stem/1", slow_first)
             open_mixer(page, play_token)
-            late = page.evaluate("""async () => {
+            late = page.evaluate(
+                """async () => {
               const audios = [...document.querySelectorAll("audio")];
               const stage = document.getElementById("stage");
               const lane = document.querySelector(".daw-lanes");
@@ -326,15 +346,19 @@ def main() -> int:
               await new Promise((r) => setTimeout(r, 2500));
               return { at: audios.map((a) => a.currentTime),
                        paused: audios.map((a) => a.paused) };
-            }""")
-            check("従来経路に落ちている", bool(late["at"]),
-                  f"<audio> が {len(late['at'])} 本")
-            check("遅れて読めたトラックも 0 秒から始まっていない",
-                  bool(late["at"]) and min(late["at"]) > 0.5,
-                  f"位置={['%.2f' % v for v in late['at']]}")
-            check("トラック同士が揃っている",
-                  bool(late["at"]) and max(late["at"]) - min(late["at"]) < 0.15,
-                  f"最大差={max(late['at']) - min(late['at']):.3f} 秒")
+            }"""
+            )
+            check("従来経路に落ちている", bool(late["at"]), f"<audio> が {len(late['at'])} 本")
+            check(
+                "遅れて読めたトラックも 0 秒から始まっていない",
+                bool(late["at"]) and min(late["at"]) > 0.5,
+                f"位置={['%.2f' % v for v in late['at']]}",
+            )
+            check(
+                "トラック同士が揃っている",
+                bool(late["at"]) and max(late["at"]) - min(late["at"]) < 0.15,
+                f"最大差={max(late['at']) - min(late['at']):.3f} 秒",
+            )
             page.evaluate("window.__mixer.destroy()")
             page.unroute(f"{BASE}/dlaudio/files/{GUILD_ID}/{play_token}/mixer")
             page.unroute(f"{BASE}/dlaudio/files/{GUILD_ID}/{play_token}/stem/1")
@@ -344,12 +368,13 @@ def main() -> int:
             # 分ける経路。順序が入れ替わると「別人の声にフェーダーが効く」ので、
             # トラックごとに違う高さの音を入れて、ソロにして確かめる。
             open_mixer(page, play_token)
-            mode = page.evaluate("""() => ({
+            mode = page.evaluate(
+                """() => ({
               segment: document.querySelectorAll('audio').length === 0,
               audios: document.querySelectorAll('audio').length,
-            })""")
-            check("区切り配信の経路が選ばれている", mode["segment"],
-                  f"<audio> が {mode['audios']} 本ある")
+            })"""
+            )
+            check("区切り配信の経路が選ばれている", mode["segment"], f"<audio> が {mode['audios']} 本ある")
 
             if mode["segment"]:
                 # チャンネルの並び自体は、この検査の外で確かめてある
@@ -357,7 +382,8 @@ def main() -> int:
                 #   - 多チャンネル WAV がブラウザで順序を保つこと（8ch で確認）
                 # ここで見るのは「分けたあとが各トラックに配線されているか」。
                 # ソロにしたトラックのメーターだけが振れること。
-                levels = page.evaluate("""async () => {
+                levels = page.evaluate(
+                    """async () => {
                   const stage = document.getElementById("stage");
                   const buttons = [...stage.querySelectorAll("button")];
                   buttons.find((b) => b.textContent.includes("再生")).click();
@@ -391,15 +417,19 @@ def main() -> int:
                     out.push(strips.map((s) => inked(s.querySelector(".daw-meter"))));
                   }
                   return out;
-                }""")
+                }"""
+                )
                 ok = True
                 for i, row in enumerate(levels or []):
                     loud = [j for j, v in enumerate(row) if v > 0]
                     if loud != [i]:
                         ok = False
                     print(f"      トラック{i} をソロ -> 振れているメーター {loud}")
-                check("ソロにしたトラックのメーターだけが振れる",
-                      bool(levels) and ok, "配線がトラックとずれている" if not ok else "")
+                check(
+                    "ソロにしたトラックのメーターだけが振れる",
+                    bool(levels) and ok,
+                    "配線がトラックとずれている" if not ok else "",
+                )
             page.evaluate("window.__mixer.destroy()")
 
             print()
@@ -413,19 +443,25 @@ def main() -> int:
             page.on("request", lambda r: asked.append(r.url) if "/analysis/" in r.url else None)
 
             # 区間を選ばずに押したとき
-            page.evaluate("""() => {
+            page.evaluate(
+                """() => {
               document.querySelector(".daw-head-buttons button[title^='声を調べる']").click();
-            }""")
+            }"""
+            )
             page.wait_for_function(
                 "() => { const p = document.querySelector('.daw-inspect');"
                 " return p && !p.hidden && !p.querySelector('.loading'); }",
-                timeout=15000)
-            check("区間を選ばなければ、これまでどおり全体を見る",
-                  len(asked) == 1 and "start=" not in asked[-1],
-                  asked[-1].split("/analysis/")[-1] if asked else "呼ばれていない")
+                timeout=15000,
+            )
+            check(
+                "区間を選ばなければ、これまでどおり全体を見る",
+                len(asked) == 1 and "start=" not in asked[-1],
+                asked[-1].split("/analysis/")[-1] if asked else "呼ばれていない",
+            )
 
             # 時間目盛りを横にドラッグして区間を決める
-            dragged = page.evaluate("""async () => {
+            dragged = page.evaluate(
+                """async () => {
               const ruler = document.querySelector(".daw-ruler");
               const box = ruler.getBoundingClientRect();
               const at = (fx) => ({
@@ -440,54 +476,69 @@ def main() -> int:
               await new Promise((r) => setTimeout(r, 200));
               const band = document.querySelector(".daw-loop");
               return { shown: !band.hidden, width: band.style.width };
-            }""")
-            check("ドラッグした区間が帯として出る", dragged["shown"],
-                  f"幅={dragged['width']}")
+            }"""
+            )
+            check("ドラッグした区間が帯として出る", dragged["shown"], f"幅={dragged['width']}")
 
-            armed = page.evaluate("""() => {
+            armed = page.evaluate(
+                """() => {
               const b = document.querySelector(".daw-head-buttons button[title$='の声を調べる']");
               return b ? { title: b.title, armed: b.classList.contains("is-armed") } : null;
-            }""")
-            check("押す前に、どの区間を見るかがボタンに出る",
-                  bool(armed) and armed["armed"],
-                  armed["title"] if armed else "説明が変わっていない")
+            }"""
+            )
+            check(
+                "押す前に、どの区間を見るかがボタンに出る",
+                bool(armed) and armed["armed"],
+                armed["title"] if armed else "説明が変わっていない",
+            )
 
-            page.evaluate("""() => {
+            page.evaluate(
+                """() => {
               document.querySelector(".daw-head-buttons button[title$='の声を調べる']").click();
-            }""")
+            }"""
+            )
             # 固定時間で待つと、解析が遅れたときに「まだ読み込み中」の中身を
             # 見て落ちる（実際に一度そうなった）。読み込みが終わるまで待つ。
             page.wait_for_function(
                 "() => { const p = document.querySelector('.daw-inspect');"
                 " return p && !p.hidden && !p.querySelector('.loading'); }",
-                timeout=15000)
+                timeout=15000,
+            )
             last = asked[-1] if asked else ""
-            check("選んだ区間がリクエストに乗る",
-                  len(asked) == 2 and "start=" in last and "end=" in last,
-                  last.split("/analysis/")[-1] if last else "呼ばれていない")
+            check(
+                "選んだ区間がリクエストに乗る",
+                len(asked) == 2 and "start=" in last and "end=" in last,
+                last.split("/analysis/")[-1] if last else "呼ばれていない",
+            )
 
-            shown = page.evaluate("""() => {
+            shown = page.evaluate(
+                """() => {
               const panel = document.querySelector(".daw-inspect");
               return { open: panel && !panel.hidden,
                        text: panel ? panel.innerText.slice(0, 300) : "" };
-            }""")
-            check("結果に「どこを調べたか」が出る",
-                  shown["open"] and "調べた区間" in shown["text"],
-                  shown["text"][:120])
+            }"""
+            )
+            check(
+                "結果に「どこを調べたか」が出る", shown["open"] and "調べた区間" in shown["text"], shown["text"][:120]
+            )
 
             # ミュートとソロが同じ色にならないこと（見出しの並びに「?」を
             # 足したとき、:last-child で色を当てていたソロが赤に化けた）
-            colours = page.evaluate("""async () => {
+            colours = page.evaluate(
+                """async () => {
               const head = document.querySelector(".daw-head-buttons");
               const [mute, solo] = [...head.querySelectorAll("button")];
               mute.click(); solo.click();
               await new Promise((r) => setTimeout(r, 100));
               const bg = (b) => getComputedStyle(b).backgroundColor;
               return { mute: bg(mute), solo: bg(solo) };
-            }""")
-            check("ミュートとソロが違う色で点く",
-                  colours["mute"] != colours["solo"],
-                  f"ミュート={colours['mute']} ソロ={colours['solo']}")
+            }"""
+            )
+            check(
+                "ミュートとソロが違う色で点く",
+                colours["mute"] != colours["solo"],
+                f"ミュート={colours['mute']} ソロ={colours['solo']}",
+            )
 
             page.evaluate("window.__mixer.destroy()")
 

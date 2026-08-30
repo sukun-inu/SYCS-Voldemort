@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import statistics
 import sys
 import urllib.request
@@ -65,9 +64,7 @@ def run(history: dict, *, horizon: int, min_history: int) -> int:
             continue
 
         for cut in range(min_history, len(series) - horizon):
-            window_rows = [
-                {"date": d.isoformat(), "price_per_gram": p} for d, p in series[: cut + 1]
-            ]
+            window_rows = [{"date": d.isoformat(), "price_per_gram": p} for d, p in series[: cut + 1]]
             actual = prices[cut + horizon]
             last = prices[cut]
             result = forecast_for_metal(
@@ -91,17 +88,19 @@ def run(history: dict, *, horizon: int, min_history: int) -> int:
             )
             if result is None:
                 continue
-            records.append({
-                "metal": metal_key,
-                "actual": actual,
-                "last": last,
-                "model": result["projected_price_per_gram"],
-                "naive": last,
-                "trend": daily_trend_baseline(prices[: cut + 1], horizon),
-                "lower": result["projected_lower_per_gram"],
-                "upper": result["projected_upper_per_gram"],
-                "confidence": result["confidence"],
-            })
+            records.append(
+                {
+                    "metal": metal_key,
+                    "actual": actual,
+                    "last": last,
+                    "model": result["projected_price_per_gram"],
+                    "naive": last,
+                    "trend": daily_trend_baseline(prices[: cut + 1], horizon),
+                    "lower": result["projected_lower_per_gram"],
+                    "upper": result["projected_upper_per_gram"],
+                    "confidence": result["confidence"],
+                }
+            )
 
     if not records:
         print("検証できるデータがありませんでした。")
