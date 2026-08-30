@@ -106,3 +106,4 @@ python -m coverage html && start htmlcov/index.html   # 行単位で見たいと
 | [docs/SETUP.ja.md](docs/SETUP.ja.md) | Docker Compose、環境変数、マルチインスタンス運用 |
 | [docs/ADMIN.ja.md](docs/ADMIN.ja.md) | 管理UIの使い方、データの保存先 |
 | [docs/TROUBLESHOOTING.ja.md](docs/TROUBLESHOOTING.ja.md) | よくある詰まりどころ、ディレクトリ概要 |
+| [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) | 手を入れるときの約束ごと。コミットの書き方、テストの検証の仕方、型検査で防御を外さないこと |

@@ -95,5 +95,6 @@ modules nothing ever imports still count as 0%, keeping the number honest.
 | [docs/SETUP.ja.md](docs/SETUP.ja.md) | Docker Compose, environment variables, multi-instance setups |
 | [docs/ADMIN.ja.md](docs/ADMIN.ja.md) | Using the admin panel, where data is stored |
 | [docs/TROUBLESHOOTING.ja.md](docs/TROUBLESHOOTING.ja.md) | Common problems, directory overview |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to work on this repository (summary; full guide in Japanese) |
 
 Detailed documentation is Japanese-only for now.
