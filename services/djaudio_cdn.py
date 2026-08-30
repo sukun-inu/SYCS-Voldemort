@@ -160,7 +160,8 @@ def _read_manifest(zip_path: Path) -> dict:
 
     try:
         with zipfile.ZipFile(zip_path) as archive:
-            return json.loads(archive.read(MANIFEST_NAME).decode("utf-8"))
+            manifest: dict = json.loads(archive.read(MANIFEST_NAME).decode("utf-8"))
+            return manifest
     except KeyError:
         # 索引を入れる前に録った古いアーカイブ。中身から最低限を組み立てる。
         try:
@@ -662,7 +663,11 @@ async def recording_analysis(
     if (start is None) != (end is None):
         raise HTTPException(status_code=400, detail="区間は開始と終了の両方を指定してください。")
     if start is not None and voice_analysis.selection_bounds(duration, start, end) is None:
-        if end <= start:
+        # end は None ではあり得ない。直前の
+        # `(start is None) != (end is None)` チェックにより、start が
+        # None でなければ end も None ではないことが保証されているが、
+        # mypy はこの2変数間の相関までは追えない。
+        if end <= start:  # type: ignore[operator]
             detail = "選択範囲の終わりは始まりより後にしてください。"
         else:
             detail = (

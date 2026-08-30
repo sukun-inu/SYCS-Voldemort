@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from webapp_admin.schema.duration import humanize
-from webapp_admin.schema.types import Collection, Field, Panel, Widget
+from webapp_admin.schema.types_def import Collection, Field, Panel, Widget
 from webapp_admin.security import MAX_STR_LEN, sanitize
 
 _ID_WIDGETS = (Widget.CHANNEL, Widget.VOICE_CHANNEL, Widget.ROLE, Widget.SNOWFLAKE)

@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from webapp_admin.schema.duration import humanize  # noqa: E402
 from webapp_admin.schema.registry import PANELS  # noqa: E402
-from webapp_admin.schema.types import Collection, Field, Panel, Widget  # noqa: E402
+from webapp_admin.schema.types_def import Collection, Field, Panel, Widget  # noqa: E402
 
 DOC_PATH = Path(__file__).resolve().parent.parent / "docs" / "ADMIN.ja.md"
 BEGIN = "<!-- BEGIN generated: settings -->"

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import cast
 
 import discord
 
@@ -29,7 +30,9 @@ try:
     RECEIVE_AVAILABLE = True
     _RECEIVE_UNAVAILABLE_REASON = ""
 except Exception as exc:  # pragma: no cover - 環境依存
-    _voice_recv = None
+    # 読み込めなかった目印。使う側は RECEIVE_AVAILABLE を見るので、
+    # ここが None であること自体は参照されない。
+    _voice_recv = None  # type: ignore[assignment]
     RECEIVE_AVAILABLE = False
     _RECEIVE_UNAVAILABLE_REASON = f"{type(exc).__name__}: {exc}"
     logger.info(
@@ -146,7 +149,9 @@ async def acquire(
             return None
 
         # discord.py 側に既に接続済みの client があれば拾い直す
-        current = guild.voice_client
+        # 型の上では VoiceProtocol だが、接続は voice_client_cls()
+        # （VoiceClient の派生）でしか行わないので実体は必ず VoiceClient。
+        current = cast("discord.VoiceClient | None", guild.voice_client)
         if current is not None and current.is_connected():
             if current.channel and current.channel.id == vc_channel_id:
                 _clients[guild.id] = current
@@ -160,7 +165,7 @@ async def acquire(
             client = await channel.connect(cls=voice_client_cls())
         except discord.ClientException as e:
             if "Already connected" in str(e):
-                current = guild.voice_client
+                current = cast("discord.VoiceClient | None", guild.voice_client)
                 if current is not None and current.is_connected():
                     _clients[guild.id] = current
                     return current

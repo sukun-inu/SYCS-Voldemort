@@ -1,1 +1,0 @@
-- [Deezer ISRC メタデータ取得時の HTTP エラーをログに出すように修正](memory/djaudio_isrc_meta-logging-improvements.md) — 設定読み込み失敗時の黙失敗を解消

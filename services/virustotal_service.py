@@ -94,7 +94,7 @@ async def vt_check_url(url: str) -> Dict[str, Any]:
 
     try:
 
-        def sync():
+        def sync() -> Dict[str, Any]:
             with vt.Client(VIRUSTOTAL_API_KEY) as client:
                 analysis = client.scan_url(url, wait_for_completion=True)
                 stats = analysis.stats
@@ -123,7 +123,7 @@ async def vt_check_file(content: bytes) -> Dict[str, Any]:
 
     try:
 
-        def sync_lookup():
+        def sync_lookup() -> Optional[Dict[str, Any]]:
             with vt.Client(VIRUSTOTAL_API_KEY) as client:
                 try:
                     obj = client.get_object(f"/files/{sha256}")

@@ -112,7 +112,8 @@ def read_shp_polygons(path: Path) -> list[list[list[tuple[float, float]]]]:
     """
     raw = path.read_bytes()
     total = struct.unpack_from(">I", raw, 24)[0] * 2  # 16bit ワード数
-    pos, shapes = 100, []
+    pos: int = 100
+    shapes: list[list[list[tuple[float, float]]]] = []
     while pos < total:
         length = struct.unpack_from(">I", raw, pos + 4)[0] * 2
         body = pos + 8

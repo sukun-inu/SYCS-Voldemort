@@ -20,14 +20,32 @@ MIGRATIONS_DIR = Path(__file__).parent.parent / "migrations"
 
 
 def _read_secret_file(path: str | None) -> str | None:
+    """パスワードファイルを読む。読めなければ None。
+
+    **読めなかったことを黙って握りつぶさない。** 呼び出し元はここが None だと
+    既定値 "postgres" へ倒れるので、マウント忘れや権限不足を握りつぶすと、
+    「認証エラー」ではなく「既定パスワードで接続を試みて失敗する」という
+    追いにくい形になる。ログが無いと、そこへ辿り着く手がかりが残らない。
+
+    既定値へ倒れること自体は変えていない（初回起動時にパスワードを生成する
+    構成なので、無い状態から始まるのが正常な経路でもある）。
+    """
     if not path:
         return None
     try:
         with open(path, "r", encoding="utf-8") as f:
             value = f.read().strip()
-            return value or None
-    except OSError:
+    except OSError as e:
+        logger.error(
+            "パスワードファイル %s を読めませんでした（既定値で接続を試みます）: %s",
+            path,
+            e,
+        )
         return None
+    if not value:
+        logger.error("パスワードファイル %s が空です（既定値で接続を試みます）", path)
+        return None
+    return value
 
 
 def _build_database_url() -> str:

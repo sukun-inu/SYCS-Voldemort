@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from webapp_admin.schema.types import Panel
+from webapp_admin.schema.types_def import Panel
 
 MONITORING = Panel(
     id="monitoring",

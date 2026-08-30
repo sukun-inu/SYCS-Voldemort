@@ -10,7 +10,7 @@ from services.settings_store import (
     set_earthquake_min_scale,
     set_earthquake_notify_types,
 )
-from webapp_admin.schema.types import Choice, Field, Panel, Section, Widget
+from webapp_admin.schema.types_def import Choice, Field, Panel, Section, Widget
 
 # 通知タイプは Bot 側 (services/earthquake_service.py) が参照するキーと一致させること。
 NOTIFY_TYPES: tuple[tuple[str, str], ...] = (

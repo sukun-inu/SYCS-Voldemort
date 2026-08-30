@@ -1,6 +1,6 @@
 import discord
 from datetime import datetime
-from typing import Mapping
+from typing import Mapping, cast
 
 from config import JST as _JST
 
@@ -12,7 +12,7 @@ def _resolve_color(color: str | int | discord.Color) -> discord.Color:
     if isinstance(color, int):
         return discord.Color(color)
     try:
-        return getattr(discord.Color, color)()
+        return cast(discord.Color, getattr(discord.Color, color)())
     except AttributeError:
         return discord.Color.blurple()
 

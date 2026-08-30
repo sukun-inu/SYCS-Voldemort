@@ -111,7 +111,7 @@ async def recording_overview(
     from services.recording_service import preferred_vc_channel_id, read_state
     from services.settings_store import get_recording_settings
     from webapp_admin.schema import choices as choice_resolver
-    from webapp_admin.schema.types import ChoiceSource
+    from webapp_admin.schema.types_def import ChoiceSource
 
     guild_id = _guild_id(request)
     state = read_state()

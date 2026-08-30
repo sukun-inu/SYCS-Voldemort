@@ -12,6 +12,7 @@ import re
 import tempfile
 import time
 from pathlib import Path
+from typing import cast
 from urllib.parse import urlparse
 
 import aiohttp
@@ -81,8 +82,8 @@ def _sync_fetch_sc_client_id_via_ytdlp() -> str | None:
     subprocess バイナリとは別コードパスのため、バイナリが失敗しても成功する可能性がある。
     """
     try:
-        from yt_dlp.extractor.soundcloud import SoundcloudIE  # type: ignore[import]
-        import yt_dlp  # type: ignore[import]
+        from yt_dlp.extractor.soundcloud import SoundcloudIE
+        import yt_dlp
 
         SoundcloudIE._CLIENT_ID = None  # クラスキャッシュをリセット
         with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
@@ -262,7 +263,8 @@ def _load_info_json(mp3_path: Path) -> dict | None:
     if not info_path.exists():
         return None
     try:
-        return json.loads(info_path.read_text(encoding="utf-8"))
+        data: dict = json.loads(info_path.read_text(encoding="utf-8"))
+        return data
     except (json.JSONDecodeError, OSError) as e:
         logger.warning("info.json の読み込みに失敗しました: %s", e)
         return None
@@ -322,7 +324,9 @@ async def _run_ytdlp(url: str, output_dir: str, sc_client_id: str | None = None)
         stderr=asyncio.subprocess.PIPE,
     )
     _, stderr = await proc.communicate()
-    return proc.returncode, stderr.decode("utf-8", errors="replace")
+    # communicate() 完了後はプロセスが終了済みのため returncode は必ず int だが、
+    # 型定義上は Process 生成直後と同じ int | None のまま。
+    return cast(int, proc.returncode), stderr.decode("utf-8", errors="replace")
 
 
 async def _download_as_mp3(url: str, output_dir: str) -> list[Path]:
@@ -486,26 +490,31 @@ async def _process_url(
     url: str,
     settings: DJAudioRuntimeSettings,
 ) -> None:
-    key = (message.guild.id, message.id, url)
+    # 呼び出し元 handle_djaudio_message が guild なしなら既に return 済みだが、
+    # ここは別関数なので mypy 上の絞り込みが引き継がれない。判定内容は同じ。
+    if message.guild is None:
+        return
+    guild_id = message.guild.id
+    key = (guild_id, message.id, url)
     if key in _processing:
         return
     _processing.add(key)
 
     try:
         await _add_reaction_safe(message, "⏳")
-        logger.info("URL検知 guild=%s [%s]: %s", message.guild.id, message.author, url)
+        logger.info("URL検知 guild=%s [%s]: %s", guild_id, message.author, url)
 
         async with _get_semaphore():
             with tempfile.TemporaryDirectory() as tmpdir:
                 results = await asyncio.wait_for(
-                    _download_and_register(url, message.guild.id, tmpdir, settings.cache_ttl),
+                    _download_and_register(url, guild_id, tmpdir, settings.cache_ttl),
                     timeout=DJAUDIO_DL_TIMEOUT,
                 )
 
         await _remove_reaction_safe(message, "⏳", bot)
         await _add_reaction_safe(message, "✅")
 
-        embed = _build_result_embed(results, message.guild.id, settings.cache_ttl)
+        embed = _build_result_embed(results, guild_id, settings.cache_ttl)
         embed.set_footer(text=f"リクエスト: {message.author.display_name}")
 
         output_ch = None
@@ -513,12 +522,15 @@ async def _process_url(
             output_ch = bot.get_channel(settings.output_channel_id)
         if output_ch and output_ch.id != message.channel.id:
             embed.add_field(name="元メッセージ", value=f"[ジャンプ]({message.jump_url})", inline=True)
-            reply_msg = await output_ch.send(embed=embed)
+            # bot.get_channel() の戻り値には send() を持たない
+            # ForumChannel/CategoryChannel/PrivateChannel も型上含まれる。
+            # 実際に来た場合は下の except Exception で捕まり失敗通知される。
+            reply_msg = await output_ch.send(embed=embed)  # type: ignore[union-attr]
         else:
             reply_msg = await message.reply(embed=embed, mention_author=False)
         for _, token in results:
             update_discord_message(token, reply_msg.channel.id, reply_msg.id)
-        logger.info("完了 guild=%s [%s]: %s ファイル", message.guild.id, message.author, len(results))
+        logger.info("完了 guild=%s [%s]: %s ファイル", guild_id, message.author, len(results))
 
     except asyncio.TimeoutError:
         logger.error("タイムアウト [%s]", url)

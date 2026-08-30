@@ -5,7 +5,7 @@ import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, TypeVar, cast
 
 from envutil import env_float, env_path
 
@@ -100,7 +100,7 @@ def _settings_file_lock(timeout_sec: float = _SETTINGS_LOCK_TIMEOUT_SEC):
                 # stat() が失敗するのはファイルが競合相手に削除された直後などで
                 # 一過性のことが多いが、恒久的な原因（権限不足等）なら最終的に
                 # 下の TimeoutError で気づける。理由だけは残しておく。
-                logger.debug("[settings] ロックの経過時間を確認できませんでした: %s", e)
+                logger.warning("[settings] ロックの経過時間を確認できませんでした: %s", e)
             if time.monotonic() >= deadline:
                 raise TimeoutError("settings.json のロック取得がタイムアウトしました。")
             time.sleep(_SETTINGS_LOCK_POLL_SEC)
@@ -143,9 +143,13 @@ def _save_all(data: dict[str, Any]) -> None:
     # アトミック書き込み: クラッシュ時に settings.json が壊れるのを防ぐ。
     tmp = _SETTINGS_FILE.with_suffix(".json.tmp")
     if _ORJSON:
-        tmp.write_bytes(_json.dumps(data, option=_json.OPT_INDENT_2))  # type: ignore[attr-defined]
+        tmp.write_bytes(_json.dumps(data, option=_json.OPT_INDENT_2))
     else:
-        tmp.write_text(_json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        # _json は try/except で orjson か json のどちらかが入る変数だが、mypy は
+        # 代入時の型（orjson側）で固定して見てしまうため、_ORJSON が False の
+        # ときに実際に使われる標準ライブラリ json.dumps の signature
+        # （indent/ensure_ascii を受け取り str を返す）と食い違って誤検知する。
+        tmp.write_text(_json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")  # type: ignore[call-arg,arg-type]
     tmp.replace(_SETTINGS_FILE)
 
     _cache = data
@@ -209,7 +213,7 @@ async def aupdate_news_feed_state(
 
 def get_guild_settings(guild_id: int) -> dict[str, Any]:
     """指定ギルドの設定を取得（存在しない場合は空 dict）。"""
-    guilds: dict[str, Any] = _load_all().get("guilds", {})  # type: ignore[assignment]
+    guilds: dict[str, Any] = _load_all().get("guilds", {})
     return dict(guilds.get(str(guild_id), {}))
 
 
@@ -217,7 +221,7 @@ def update_guild_settings(guild_id: int, updates: dict[str, Any]) -> dict[str, A
     """指定ギルドの設定を更新し、保存してから最新状態を返す。"""
 
     def _mutator(data: dict[str, Any]) -> dict[str, Any]:
-        guilds: dict[str, Any] = data.setdefault("guilds", {})  # type: ignore[assignment]
+        guilds: dict[str, Any] = data.setdefault("guilds", {})
         current = guilds.get(str(guild_id), {})
         if not isinstance(current, dict):
             current = {}
@@ -238,8 +242,8 @@ def replace_guild_settings(guild_id: int, new_settings: dict[str, Any]) -> None:
 
 
 def _get_or_create_guild(data: dict[str, Any], guild_id: int) -> dict[str, Any]:
-    guilds: dict[str, Any] = data.setdefault("guilds", {})  # type: ignore[assignment]
-    current = guilds.get(str(guild_id), {})
+    guilds: dict[str, Any] = data.setdefault("guilds", {})
+    current: dict[str, Any] = guilds.get(str(guild_id), {})
     if not isinstance(current, dict):
         current = {}
     guilds[str(guild_id)] = current
@@ -270,13 +274,23 @@ def _parse_id_list(raw: Any) -> list[int]:
     return result
 
 
-def get_response_channel_id(guild_id: int) -> int:
-    """ChatGPT応答チャンネルIDを取得（未設定なら0を返す）。"""
-    value = get_guild_settings(guild_id).get("response_channel_id")
+def _get_int_setting(guild_id: int, setting_name: str) -> int:
+    """整数型の設定値を取得する。未設定または無効な値の場合は0を返す。"""
+    value = get_guild_settings(guild_id).get(setting_name)
     try:
-        return int(value)
+        return int(cast(Any, value))
     except (TypeError, ValueError):
         return 0
+
+
+def _get_dict_setting(guild_id: int, setting_name: str) -> dict[str, Any]:
+    """辞書型の設定値を取得する。未設定の場合は空の辞書を返す。"""
+    return dict(get_guild_settings(guild_id).get(setting_name, {}))
+
+
+def get_response_channel_id(guild_id: int) -> int:
+    """ChatGPT応答チャンネルIDを取得（未設定なら0を返す）。"""
+    return _get_int_setting(guild_id, "response_channel_id")
 
 
 def set_response_channel_id(guild_id: int, channel_id: int | None) -> dict[str, Any]:
@@ -366,7 +380,7 @@ def remove_bypass_roles(guild_id: int, role_ids: list[int]) -> list[int]:
 
 
 def get_welcome_settings(guild_id: int) -> dict[str, Any]:
-    return dict(get_guild_settings(guild_id).get("welcome", {}))
+    return _get_dict_setting(guild_id, "welcome")
 
 
 def set_welcome_channel(guild_id: int, channel_id: int | None) -> None:
@@ -378,7 +392,7 @@ def set_welcome_message(guild_id: int, message: str | None) -> None:
 
 
 def get_goodbye_settings(guild_id: int) -> dict[str, Any]:
-    return dict(get_guild_settings(guild_id).get("goodbye", {}))
+    return _get_dict_setting(guild_id, "goodbye")
 
 
 def set_goodbye_channel(guild_id: int, channel_id: int | None) -> None:
@@ -395,11 +409,8 @@ def set_goodbye_message(guild_id: int, message: str | None) -> None:
 
 
 def get_vc_notify_channel_id(guild_id: int) -> int:
-    value = get_guild_settings(guild_id).get("vc_notify_channel_id")
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0
+    """VC通知チャンネルIDを取得（未設定なら0を返す）。"""
+    return _get_int_setting(guild_id, "vc_notify_channel_id")
 
 
 def set_vc_notify_channel_id(guild_id: int, channel_id: int | None) -> None:
@@ -408,11 +419,7 @@ def set_vc_notify_channel_id(guild_id: int, channel_id: int | None) -> None:
 
 def get_vc_notify_role_id(guild_id: int) -> int:
     """VC通知時にメンションするロールIDを取得（未設定なら0）。"""
-    value = get_guild_settings(guild_id).get("vc_notify_role_id")
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0
+    return _get_int_setting(guild_id, "vc_notify_role_id")
 
 
 def set_vc_notify_role_id(guild_id: int, role_id: int | None) -> None:
@@ -421,11 +428,7 @@ def set_vc_notify_role_id(guild_id: int, role_id: int | None) -> None:
 
 def get_vc_notify_filter_role_id(guild_id: int) -> int:
     """通知フィルター用ロールIDを取得（未設定なら0＝全VC通知）。"""
-    value = get_guild_settings(guild_id).get("vc_notify_filter_role_id")
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0
+    return _get_int_setting(guild_id, "vc_notify_filter_role_id")
 
 
 def set_vc_notify_filter_role_id(guild_id: int, role_id: int | None) -> None:
@@ -439,7 +442,7 @@ def set_vc_notify_filter_role_id(guild_id: int, role_id: int | None) -> None:
 
 def get_sticky_messages(guild_id: int) -> dict[str, Any]:
     """channel_id(str) → {"content": str, "message_id": int|None}"""
-    return dict(get_guild_settings(guild_id).get("sticky_messages", {}))
+    return _get_dict_setting(guild_id, "sticky_messages")
 
 
 def set_sticky_message(guild_id: int, channel_id: int, content: str) -> None:
@@ -517,7 +520,7 @@ def remove_sticky_message(guild_id: int, channel_id: int) -> None:
 
 def get_reaction_roles(guild_id: int) -> dict[str, Any]:
     """message_id(str) → {emoji(str) → role_id(int)}"""
-    return dict(get_guild_settings(guild_id).get("reaction_roles", {}))
+    return _get_dict_setting(guild_id, "reaction_roles")
 
 
 def add_reaction_role(guild_id: int, message_id: int, emoji: str, role_id: int) -> None:
@@ -578,7 +581,7 @@ def get_all_guild_ids() -> list[int]:
 
 def get_news_feeds(guild_id: int) -> dict[str, Any]:
     """feed_id(str) → {"channel_id": int, "query": str, "interval": int, "last_run": float, "seen_hashes": list}"""
-    return dict(get_guild_settings(guild_id).get("news_feeds", {}))
+    return _get_dict_setting(guild_id, "news_feeds")
 
 
 def add_news_feed(guild_id: int, feed_id: str, channel_id: int, query: str, interval_minutes: int) -> None:
@@ -665,7 +668,7 @@ def update_news_feed_state(guild_id: int, feed_id: str, last_run: float, seen_ha
 
 
 def get_earthquake_settings(guild_id: int) -> dict[str, Any]:
-    return dict(get_guild_settings(guild_id).get("earthquake", {}))
+    return _get_dict_setting(guild_id, "earthquake")
 
 
 def set_earthquake_channel(guild_id: int, channel_id: int | None) -> None:
@@ -699,7 +702,7 @@ _NOTIFY_TYPE_KEYS: tuple[str, ...] = (
 
 def get_earthquake_notify_types(guild_id: int) -> dict[str, bool]:
     """通知タイプ設定を取得。未設定キーはデフォルト True（有効）。"""
-    stored = get_earthquake_settings(guild_id).get("notify_types", {})
+    stored = _get_dict_setting(guild_id, "earthquake").get("notify_types", {})
     return {k: bool(stored.get(k, True)) for k in _NOTIFY_TYPE_KEYS}
 
 
@@ -847,7 +850,7 @@ def get_djaudio_cache_ttl(guild_id: int) -> int:
     """キャッシュ有効期間（秒）を取得。未設定なら環境変数 or デフォルト 600。"""
     stored = get_djaudio_settings(guild_id).get("cache_ttl")
     try:
-        return max(60, int(stored))
+        return max(60, int(cast(Any, stored)))
     except (TypeError, ValueError):
         from config import DJAUDIO_CACHE_TTL
 
@@ -858,7 +861,7 @@ def get_djaudio_cooldown(guild_id: int) -> int:
     """ユーザークールダウン（秒）を取得。未設定なら環境変数 or デフォルト 30。"""
     stored = get_djaudio_settings(guild_id).get("cooldown")
     try:
-        return max(0, int(stored))
+        return max(0, int(cast(Any, stored)))
     except (TypeError, ValueError):
         from config import DJAUDIO_COOLDOWN
 
@@ -869,7 +872,7 @@ def get_djaudio_max_urls(guild_id: int) -> int:
     """1メッセージあたりのURL上限を取得。未設定なら環境変数 or デフォルト 3。"""
     stored = get_djaudio_settings(guild_id).get("max_urls")
     try:
-        return max(1, min(10, int(stored)))
+        return max(1, min(10, int(cast(Any, stored))))
     except (TypeError, ValueError):
         from config import DJAUDIO_MAX_URLS
 
@@ -931,7 +934,7 @@ _RECORDING_DEFAULTS: dict[str, Any] = {
 
 
 def get_recording_settings(guild_id: int) -> dict[str, Any]:
-    stored = get_guild_settings(guild_id).get("recording", {})
+    stored = _get_dict_setting(guild_id, "recording")
     if not isinstance(stored, dict):
         stored = {}
     settings = dict(_RECORDING_DEFAULTS)

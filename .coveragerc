@@ -36,7 +36,8 @@ precision = 2
 #   46.14% のとき 44 → webapp/ のテストを足して 50.09% になったので 48 へ
 #   → user_state / api.sql / server_commands / djaudio へテストを足して
 #     58.34% になったので 56 へ
-fail_under = 56
+#   → webapp / events へテストを足して 66.13% になったので 64 へ
+fail_under = 64
 
 [html]
 directory = htmlcov

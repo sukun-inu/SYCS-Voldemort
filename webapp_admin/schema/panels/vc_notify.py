@@ -10,7 +10,7 @@ from services.settings_store import (
     set_vc_notify_filter_role_id,
     set_vc_notify_role_id,
 )
-from webapp_admin.schema.types import Field, Panel, Section, Widget
+from webapp_admin.schema.types_def import Field, Panel, Section, Widget
 
 
 # getter は未設定を 0 で返すため、スキーマ側で None に寄せる。

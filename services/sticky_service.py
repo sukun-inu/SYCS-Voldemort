@@ -84,12 +84,15 @@ async def handle_sticky(message: discord.Message) -> None:
 
     async with lock:
         _pending[channel_id] = False
-        await _post_latest(message.channel, guild_id)
+        # message.channel は複数チャンネル型の Union だが、スティッキー機能は
+        # テキストチャンネル運用前提。他の型で到達した場合の型不一致は
+        # 実害の検証が別途必要なため、ここでは黙らせるだけに留める。
+        await _post_latest(message.channel, guild_id)  # type: ignore[arg-type]
 
     if _pending.get(channel_id):
         _pending[channel_id] = False
         async with lock:
-            await _post_latest(message.channel, guild_id)
+            await _post_latest(message.channel, guild_id)  # type: ignore[arg-type]
 
 
 async def process_pending_stickies(bot: discord.Client) -> None:

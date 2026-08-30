@@ -1,15 +1,15 @@
 from typing import Any
 
 from services.settings_store import (
+    _get_dict_setting,
     _get_or_create_guild,
     _mutate_settings,
     _update_nested,
-    get_guild_settings,
 )
 
 
 def get_tts_settings(guild_id: int) -> dict[str, Any]:
-    return dict(get_guild_settings(guild_id).get("tts", {}))
+    return _get_dict_setting(guild_id, "tts")
 
 
 def set_tts_enabled(guild_id: int, enabled: bool) -> None:

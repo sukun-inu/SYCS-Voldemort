@@ -88,6 +88,7 @@ import math
 import subprocess
 from itertools import combinations
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -243,7 +244,7 @@ _OCTAVE_GUARD = 0.90
 # ── 取り込み ──────────────────────────────────────────────────
 
 
-def _decode(source: bytes | Path, at: float, length: float) -> list[float]:
+def _decode(source: bytes | Path, at: float, length: float) -> np.ndarray:
     """指定の位置から length 秒を 16kHz モノラルで取り出す。"""
     piped = isinstance(source, bytes)
     command = [
@@ -266,10 +267,17 @@ def _decode(source: bytes | Path, at: float, length: float) -> list[float]:
         "-",
     ]
     try:
-        result = subprocess.run(command, input=source if piped else None, capture_output=True, timeout=120)
+        input_data: bytes | None
+        if piped:
+            # Since we checked with isinstance, source is bytes when piped is True
+            assert isinstance(source, bytes)
+            input_data = source
+        else:
+            input_data = None
+        result = subprocess.run(command, input=input_data, capture_output=True, timeout=120)
     except (subprocess.SubprocessError, OSError) as e:
         logger.warning("[voice] 音の取り出しに失敗: %s", e)
-        return []
+        return np.array([], dtype=np.float64)
     raw = result.stdout
     usable = len(raw) - (len(raw) % 2)
     # 1標本ずつ int.from_bytes で組み立てていたころは、ここだけで 30 秒ぶん
@@ -406,7 +414,7 @@ def _candidates(frame: list[float]) -> list[tuple[float, float]]:
     shaped[1:] -= PRE_EMPHASIS * samples[:-1]
     windowed = shaped * np.hamming(size)
 
-    coeffs = _lpc(windowed, LPC_ORDER)
+    coeffs = _lpc(windowed.tolist(), LPC_ORDER)
     if coeffs is None:
         return []
     try:
@@ -520,19 +528,19 @@ def _track(run: list[list[tuple[float, float]]]) -> list[list[float]]:
         step: dict = {}
         best_costs = {}
         for state in states:
-            best_cost = None
-            best_from = None
             emission = _emission(state, poles)
+            best_cost = float("inf")
+            best_from = None
             for prior, prior_cost in costs.items():
                 total = prior_cost + emission + _transition(prior, state, previous_poles, poles)
-                if best_cost is None or total < best_cost:
+                if total < best_cost:
                     best_cost, best_from = total, prior
             best_costs[state] = best_cost
             step[state] = best_from
         costs = best_costs
         back.append(step)
 
-    state = min(costs, key=costs.get)
+    state = min(costs, key=lambda k: costs[k])
     chosen = [state]
     for index in range(len(frames) - 1, 0, -1):
         state = back[index][state]
@@ -730,14 +738,14 @@ def analyse(source: bytes | Path, duration: float, start: float | None = None, e
     # フレームが違い、「この高さならこの声道長のはず」の突き合わせが別々の音を
     # 見ていた。
     for chunk in chunks:
-        runs, chunk_f0s = _runs(chunk)
+        runs, chunk_f0s = _runs(chunk.tolist())
         f0s.extend(chunk_f0s)
         for run in runs:
             for formants in _track(run):
                 formant_sets.append(formants)
                 spacings.append((formants[-1] - formants[0]) / (len(formants) - 1))
 
-    scope = {
+    scope: dict[str, Any] = {
         "scope": "selection" if bounds else "whole",
         "analysed_seconds": round(analysed, 2),
     }

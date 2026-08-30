@@ -1,0 +1,73 @@
+# Contributing
+
+The full guide is in Japanese: **[CONTRIBUTING.ja.md](CONTRIBUTING.ja.md)**.
+The codebase, its comments and its commit messages are all written in Japanese.
+
+This page is a summary. Where the two disagree, the Japanese one is authoritative.
+
+## Setup, once
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+
+# keep formatting-only commits out of git blame
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
+## Workflow
+
+Branch, commit, then `git merge --no-ff` into `main` and push. Commit messages are
+written in Japanese and follow one order: **what was happening → why it happened →
+how it was fixed → how that was verified.** Do not skip the "why" — it is the part
+that stops the same mistake from coming back.
+
+## Tests
+
+`pytest` is not installed. Use `unittest`:
+
+```bash
+python -m unittest discover -s tests -t .
+```
+
+Every test's docstring explains, in Japanese, *why the test exists* — what breaks in
+the product if this stops holding.
+
+**Verify a new test by breaking what it guards.** A coverage number proves nothing:
+code that is called but never asserted on still counts as covered. Take a copy of the
+production file, change exactly one thing (invert a condition, shift a bound by one,
+delete a guard), confirm that only the intended tests fail, then restore it and check
+`git status`. A test that keeps passing guards nothing — rewrite it or delete it.
+
+Tests must not reach the network or a real database. Everything passes without
+Postgres. Note that `patch()` on a module attribute does **not** affect FastAPI
+`Depends()` — those are bound at import time; use `app.dependency_overrides`.
+
+## Lint, format, types
+
+```bash
+python -m ruff check .
+python -m black .
+python -m mypy -p webapp -p events
+```
+
+CI runs all three and fails on any of them.
+
+**Never remove a runtime guard to satisfy the type checker.** This has actually
+happened here: `int(result.rowcount or 0)` lost its `or 0` while keeping the
+`# type: ignore`, which silenced the checker and dropped the protection at the same
+time. When you need to satisfy mypy, you may only: add an annotation, add
+`# type: ignore[code]` *with a one-line reason*, bind to a narrowed local, or `cast`.
+Never change a condition, a statement order, an exception handler, a default, or a
+signature. When in doubt, choose `# type: ignore` — nothing changes at runtime.
+
+## Thresholds are ceilings, not targets
+
+`fail_under` in `.coveragerc`, `max-complexity` in `pyproject.toml`, and the package
+list passed to mypy all exist to stop things getting worse. Tighten them whenever you
+improve the thing they measure.
+
+## CI must never pass vacuously
+
+A check that is present but silently skips is worse than no check at all. That is why
+`tools/check_admin_ui.py` is not in CI: without playwright installed it fails to
+import, skips, and exits 0 — proving nothing while looking green.

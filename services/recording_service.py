@@ -33,6 +33,7 @@ import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Any, cast
 
 import discord
 
@@ -448,7 +449,9 @@ class _StreamAssembler:
 
     def __init__(self, ssrc: int):
         self.ssrc = ssrc
-        self.decoder = None
+        # discord.opus.Decoder は使うときに初めて作る（読み込み時に opus が
+        # 無い環境でも import は通したいため）。None 始まりなので型を書く。
+        self.decoder: Any | None = None
         # seq -> (受信時刻, RTPタイムスタンプ, opus)
         self._pending: dict[int, tuple[float, int, bytes]] = {}
         self._next_seq: int | None = None
@@ -475,7 +478,9 @@ class _StreamAssembler:
             from discord.opus import Decoder
 
             self.decoder = Decoder()
-        return self.decoder.decode(encoded, fec=False)
+        # opus は型情報を出していないので戻りは Any。bytes を返す約束なので
+        # ここで明示する（実体は bytes）。
+        return cast(bytes, self.decoder.decode(encoded, fec=False))
 
     def offset_for(self, timestamp: int, elapsed: float) -> float:
         """RTP タイムスタンプを、録音開始からの秒数に直す。"""
@@ -535,8 +540,11 @@ class _StreamAssembler:
             # 穴が空いている。少しだけ待ち、それでも来なければ諦めて飛ばす。
             if not self._hold_expired(now):
                 break
-            skipped = min(self._pending, key=lambda k: _wrapped_delta(k, self._next_seq, _SEQ_MOD))
-            gap = _wrapped_delta(skipped, self._next_seq, _SEQ_MOD)
+            # 直上で None を弾いているが、lambda の中までは絞り込みが届かない。
+            next_seq = self._next_seq
+            assert next_seq is not None
+            skipped = min(self._pending, key=lambda k: _wrapped_delta(k, next_seq, _SEQ_MOD))
+            gap = _wrapped_delta(skipped, next_seq, _SEQ_MOD)
             self.lost += gap
             # 欠けたぶんは Opus に「無かった」と伝えて補間させる。
             next_ts = self._pending[skipped][1]
@@ -870,7 +878,7 @@ def _write_state() -> None:
 def read_state() -> dict:
     """管理画面から読む用。Bot 側が書いた状態をそのまま返す。"""
     try:
-        return json.loads(_state_file().read_text(encoding="utf-8"))
+        return cast(dict, json.loads(_state_file().read_text(encoding="utf-8")))
     except (OSError, json.JSONDecodeError):
         return {"updated_at": 0, "sessions": {}}
 
@@ -930,7 +938,9 @@ async def start_recording(
     sink_cls = _make_sink_class()
     session.sink = sink_cls(session)
     try:
-        client.listen(session.sink)
+        # listen は受信拡張（VoiceRecvClient）側の API。discord.py 本体の
+        # 型には無いので、型検査にだけ黙ってもらう。
+        client.listen(session.sink)  # type: ignore[attr-defined]
     except Exception as e:
         shutil.rmtree(session.workdir, ignore_errors=True)
         raise RecordingError(f"録音を開始できませんでした（{e}）。") from e
@@ -1265,7 +1275,9 @@ async def stop_recording(bot, guild_id: int, *, reason: str = "") -> dict:
             logger.debug("[recording] stop_listening: %s", e)
     if session.sink is not None:
         try:
-            session.sink.flush_pending()
+            # flush_pending はこのファイルで定義している Sink の API。
+            # session.sink の型が広いので、型の上では見えない。
+            session.sink.flush_pending()  # type: ignore[attr-defined]
         except Exception:
             logger.exception("[recording] 残りのパケットを書き出せませんでした")
 
@@ -1441,7 +1453,10 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
                     "",
                     "各トラックは同じ時間軸に揃えてあります（そのまま重ねれば同期します）。",
                     "",
-                    *[f"  {t['ファイル']}  {t['名前']}  発話 {t['発話時間(秒)']}秒" for t in info["トラック"]],
+                    *[
+                        f"  {t['ファイル']}  {t['名前']}  発話 {t['発話時間(秒)']}秒"
+                        for t in cast("list[dict[str, Any]]", info["トラック"])
+                    ],
                 ]
             ),
         )
@@ -1472,7 +1487,9 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
         # 声として成立していないトラック。黙って渡すと、落として聞くまで
         # 気づけない。
         "suspect_tracks": [
-            s["name"] for s in stems if s.get("periodicity") is not None and s["periodicity"] < VOICE_PERIODICITY_MIN
+            s["name"]
+            for s in stems
+            if s.get("periodicity") is not None and cast(float, s["periodicity"]) < VOICE_PERIODICITY_MIN
         ],
     }
 

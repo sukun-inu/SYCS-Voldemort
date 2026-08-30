@@ -134,7 +134,7 @@ def get_meta(token: str) -> dict | None:
 
     try:
         with meta_path.open("r", encoding="utf-8") as f:
-            meta = json.load(f)
+            meta: dict = json.load(f)
     except json.JSONDecodeError as e:
         # 書き込み途中を読んだ、または壊れて残った場合にここへ来る。
         # 呼び出し元にはこれまでどおり「期限切れ」として返すが（利用者に

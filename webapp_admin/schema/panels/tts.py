@@ -22,7 +22,7 @@ from services.tts_store import (
     set_tts_read_name,
     set_tts_vc_notify,
 )
-from webapp_admin.schema.types import ChoiceSource, Collection, Field, Panel, Section, Widget
+from webapp_admin.schema.types_def import ChoiceSource, Collection, Field, Panel, Section, Widget
 
 DEFAULT_VOICE = "Kyoko"
 DEFAULT_RATE = 200

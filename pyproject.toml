@@ -19,10 +19,13 @@ target-version = "py311"
 select = ["E", "F", "W", "C90"]
 
 [tool.ruff.lint.mccabe]
-# 現在の最大は commands/server_commands.py:register_server_commands の 75。
-# ここを 75 にしてあるのは、今あるものを通すための天井にすぎない。長い関数を
-# 割ったら、この数字も下げること（10 が ruff の既定値）。
-max-complexity = 75
+# 今あるものを通すための天井であって、目標値ではない。長い関数を割ったら
+# この数字も下げること（10 が ruff の既定値）。
+#
+#   75 → register_server_commands（457行）を commands/server/ 7モジュールへ
+#        分割したので 35 へ。現在の最大は register_logging_commands と
+#        register_recording_commands（どちらも 35）。次はこの2つ。
+max-complexity = 35
 
 [tool.ruff.lint.per-file-ignores]
 # テストは services/* が読み込み時に SETTINGS_DIR を解決する都合上、

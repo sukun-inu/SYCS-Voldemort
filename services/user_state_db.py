@@ -84,8 +84,11 @@ _initialized = False
 
 
 def _create_tables(sync_conn) -> None:
-    UserStateCurrent.__table__.create(bind=sync_conn, checkfirst=True)
-    UserStateEvent.__table__.create(bind=sync_conn, checkfirst=True)
+    # __table__ の静的型は SQLAlchemy の FromClause だが、宣言的モデルの
+    # __table__ は実際には Table インスタンスであり .create() を持つ。
+    # 型定義側がこの実行時の具体型まで表現していないための誤検知。
+    UserStateCurrent.__table__.create(bind=sync_conn, checkfirst=True)  # type: ignore[attr-defined]
+    UserStateEvent.__table__.create(bind=sync_conn, checkfirst=True)  # type: ignore[attr-defined]
 
 
 async def ensure_user_state_db(*, force: bool = False) -> None:

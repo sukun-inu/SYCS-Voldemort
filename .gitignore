@@ -46,3 +46,7 @@ bug-image/
 
 # Chromium（Playwright の検査）が吐くクラッシュ報告のログ
 debug.log
+
+# Claude のメモリは ~/.claude 配下に置く。リポジトリには入れない
+# （過去に2度、ここへ書き込まれてコミットまでされた）
+memory/

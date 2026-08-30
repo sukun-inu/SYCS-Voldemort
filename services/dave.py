@@ -30,7 +30,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 try:  # 入っていない環境でも、録音以外は動かせるようにする
-    import davey  # type: ignore
+    import davey
 
     AVAILABLE = True
     MAX_PROTOCOL_VERSION: int = davey.DAVE_PROTOCOL_VERSION

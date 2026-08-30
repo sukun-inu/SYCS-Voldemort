@@ -7,9 +7,9 @@ import aiohttp
 import discord
 
 try:
-    from colorthief import ColorThief  # type: ignore[import]
+    from colorthief import ColorThief
 except ImportError:  # ライブラリ未導入時は色抽出をスキップ
-    ColorThief = None  # type: ignore[assignment]
+    ColorThief = None
 
 from config import JST as _JST
 from services.settings_store import get_guild_settings, update_guild_settings
@@ -65,7 +65,11 @@ def _level_color(level: str) -> discord.Color:
     if level == "INFO":
         return discord.Color.blue()
     if level == "DEBUG":
-        return discord.Color.dark_gray()
+        # discord.py 側で dark_gray は dark_grey のクラス本体内エイリアス代入
+        # （dark_gray = dark_grey）で、実行時は classmethod として正しく束縛
+        # されるが、mypy はこの代入をインスタンスメソッド扱いしてしまい
+        # cls 引数不足の誤検知をする（discord.py 側の型注釈の既知の癖）。
+        return discord.Color.dark_gray()  # type: ignore[call-arg]
     return discord.Color.light_grey()
 
 
@@ -88,7 +92,7 @@ async def _user_avatar_color(user: Optional[discord.abc.User]) -> Optional[disco
 
     # アバターURLから画像を取得して色抽出
     try:
-        avatar_url = user.display_avatar.url  # type: ignore[attr-defined]
+        avatar_url = user.display_avatar.url
     except Exception:
         return None
 
@@ -102,7 +106,7 @@ async def _user_avatar_color(user: Optional[discord.abc.User]) -> Optional[disco
         return None
 
     try:
-        thief = ColorThief(BytesIO(data))  # type: ignore[operator]
+        thief = ColorThief(BytesIO(data))
         r, g, b = thief.get_color(quality=10)
     except Exception:
         return None
@@ -207,7 +211,7 @@ async def build_log_embed(
 
     if user is not None:
         try:
-            avatar_url = str(user.display_avatar.url)  # type: ignore[attr-defined]
+            avatar_url = str(user.display_avatar.url)
             author_name = str(user)
             if len(author_name) > 256:
                 author_name = author_name[:253] + "..."

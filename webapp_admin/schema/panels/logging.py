@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from services.logging_service import get_log_settings, set_log_channel, set_log_level
 from services.settings_store import get_response_channel_id, set_response_channel_id
-from webapp_admin.schema.types import Choice, Field, Panel, Section, Widget
+from webapp_admin.schema.types_def import Choice, Field, Panel, Section, Widget
 
 LOG_LEVELS = ("NONE", "ERROR", "INFO", "DEBUG")
 

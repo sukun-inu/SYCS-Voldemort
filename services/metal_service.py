@@ -99,13 +99,16 @@ async def fetch_metal_prices_per_gram(metal_codes: Sequence[str]) -> dict[str, f
             if not batch_failed:
                 logger.warning("金属APIのバッチ応答に %s が含まれなかったため個別取得へフォールバックする。", code)
             try:
-                price = await _fetch_metal_prices_live([code])
+                # 変数名を price のままにすると、上のループで float | None と
+                # 推論された同名のローカル変数と mypy 上で型が衝突するため
+                # single_price という別名にする（動作は変えていない）。
+                single_price = await _fetch_metal_prices_live([code])
             except MetalPriceError as exc:
                 logger.error("金属価格の個別取得にも失敗した code=%s err=%s", code, exc)
                 continue
-            if code in price:
-                _price_cache[code] = (price[code], time.monotonic())
-                resolved[code] = price[code]
+            if code in single_price:
+                _price_cache[code] = (single_price[code], time.monotonic())
+                resolved[code] = single_price[code]
 
         if not resolved:
             raise MetalPriceError(f"{','.join(still_missing)} の価格取得に失敗した。")

@@ -89,6 +89,13 @@ def _register():
     welcome/goodbye/quake の "channel" のように同名サブコマンドが複数ある
     ここでは後勝ちで潰れてしまう。親を辿って "greeting welcome channel" の
     ような完全な名前を組み立て、衝突を避ける。
+
+    commands/server_commands.py が commands/server/ 配下のトピック別モジュール
+    (welcome_goodbye.py 等) へ分割されたことで、ここではもう1つの sc モジュール
+    に全設定関数がぶら下がっているわけではない。app_commands.Group は discord.py
+    側のシングルトンモジュール属性なので、ここで1回パッチすれば分割後も
+    全トピックのモジュールへ効く。設定関数側の patch.object は、各テストクラスの
+    setUp が担当トピックのモジュールを個別に import して行う。
     """
     import commands.server_commands as sc
 
@@ -128,16 +135,19 @@ def _register():
         def add_command(self, *a, **k):
             pass
 
-    with patch.object(sc.app_commands, "Group", FakeGroup):
+    with patch.object(discord.app_commands, "Group", FakeGroup):
         sc.register_server_commands(Mock())
-    return sc, registry, autocomplete_registry
+    return registry, autocomplete_registry
 
 
 class WelcomeGoodbyeAdminGuardTests(unittest.TestCase):
     """welcome/goodbye の channel・message は【管理者】限定。"""
 
     def setUp(self):
-        self.sc, self.registry, _ = _register()
+        import commands.server.welcome_goodbye as sc
+
+        self.sc = sc
+        self.registry, _ = _register()
 
     def test_welcome_channel_refuses_non_admin_and_does_not_write(self):
         interaction, calls = make_interaction(administrator=False)
@@ -229,7 +239,10 @@ class VcNotifyAdminGuardTests(unittest.TestCase):
     """vcnotify set/clear は【管理者】限定。"""
 
     def setUp(self):
-        self.sc, self.registry, _ = _register()
+        import commands.server.vcnotify as sc
+
+        self.sc = sc
+        self.registry, _ = _register()
 
     def test_set_refuses_non_admin(self):
         interaction, calls = make_interaction(administrator=False)
@@ -264,7 +277,10 @@ class StickyAdminGuardTests(unittest.TestCase):
     """sticky set/clear は【管理者】限定。list は誰でも見られるがギルド必須。"""
 
     def setUp(self):
-        self.sc, self.registry, _ = _register()
+        import commands.server.sticky as sc
+
+        self.sc = sc
+        self.registry, _ = _register()
 
     def test_set_refuses_non_admin_without_touching_settings(self):
         interaction, calls = make_interaction(administrator=False)
@@ -346,7 +362,10 @@ class ReactionRoleAdminGuardTests(unittest.TestCase):
     """reactionrole add/remove は【管理者】限定。引数検証も併せて確認する。"""
 
     def setUp(self):
-        self.sc, self.registry, self.autocomplete = _register()
+        import commands.server.reactionrole as sc
+
+        self.sc = sc
+        self.registry, self.autocomplete = _register()
 
     def test_add_refuses_non_admin(self):
         interaction, calls = make_interaction(administrator=False)
@@ -479,7 +498,10 @@ class NewsFeedAdminGuardTests(unittest.TestCase):
     """news add/remove は【管理者】限定。間隔・件数の検証も確認する。"""
 
     def setUp(self):
-        self.sc, self.registry, self.autocomplete = _register()
+        import commands.server.news as sc
+
+        self.sc = sc
+        self.registry, self.autocomplete = _register()
 
     def test_add_refuses_non_admin(self):
         interaction, calls = make_interaction(administrator=False)
@@ -610,7 +632,10 @@ class QuakeAdminGuardTests(unittest.TestCase):
     """quake channel/min_scale/type は【管理者】限定。status は誰でも見られる。"""
 
     def setUp(self):
-        self.sc, self.registry, _ = _register()
+        import commands.server.quake as sc
+
+        self.sc = sc
+        self.registry, _ = _register()
 
     def test_channel_refuses_non_admin(self):
         interaction, calls = make_interaction(administrator=False)
@@ -689,7 +714,7 @@ class InfoCommandsTests(unittest.TestCase):
     """info server/user は管理者権限が不要な代わりに、公開応答（ephemeral 無し）であること。"""
 
     def setUp(self):
-        self.sc, self.registry, _ = _register()
+        self.registry, _ = _register()
 
     def _guild(self):
         role_everyone = SimpleNamespace(is_default=lambda: True)
@@ -789,7 +814,7 @@ class NotifyTypeViewTests(unittest.TestCase):
     """地震通知タイプ設定ビュー：本人以外の操作を拒否し、保存が正しいキーへ通ること。"""
 
     def setUp(self):
-        import commands.server_commands as sc
+        import commands.server.quake as sc
 
         self.sc = sc
 
