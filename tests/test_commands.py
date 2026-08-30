@@ -424,7 +424,14 @@ class ServerNewsListTests(unittest.TestCase):
     """/news add のクエリ長・/news list の一覧表示。"""
 
     def _register(self):
-        import commands.server_commands as sc
+        # commands/server_commands.py はトピック別モジュール（commands/server/ 以下）
+        # へ分割済みで、ニュース関連の実処理と get_news_feeds 参照は
+        # commands.server.news 側にある。パッチ対象もそちらに合わせる
+        # （分割の経緯は commands/server/__init__.py を参照）。app_commands.Group
+        # は discord.py 側のシングルトンモジュール属性なので、ここで1回パッチ
+        # すれば分割後のどのトピックモジュールにも効く。
+        import commands.server.news as sc
+        import commands.server_commands as sc_entry
 
         registry = {}
 
@@ -443,8 +450,8 @@ class ServerNewsListTests(unittest.TestCase):
             def add_command(self, *a, **k):
                 pass
 
-        with patch.object(sc.app_commands, "Group", FakeGroup):
-            sc.register_server_commands(Mock())
+        with patch.object(discord.app_commands, "Group", FakeGroup):
+            sc_entry.register_server_commands(Mock())
         return sc, registry
 
     def test_news_query_has_a_length_cap(self):
