@@ -10,7 +10,7 @@ from services.settings_store import (
     set_welcome_channel,
     set_welcome_message,
 )
-from webapp_admin.schema.types import Field, Panel, Section, Widget
+from webapp_admin.schema.types_def import Field, Panel, Section, Widget
 
 _MESSAGE_HELP = (
     "使えるテンプレート変数: {user}=メンション / {username}=ユーザー名 / " "{server}=サーバー名 / {count}=メンバー数"

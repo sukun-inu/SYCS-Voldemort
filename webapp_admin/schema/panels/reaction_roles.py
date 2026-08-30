@@ -13,7 +13,7 @@ from services.settings_store import (
     get_reaction_roles,
     remove_reaction_role,
 )
-from webapp_admin.schema.types import Collection, Field, Panel, Section, Widget
+from webapp_admin.schema.types_def import Collection, Field, Panel, Section, Widget
 
 _ID_SEPARATOR = ":"
 

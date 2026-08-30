@@ -12,7 +12,7 @@ from services.settings_store import (
     remove_bypass_roles,
     remove_trusted_users,
 )
-from webapp_admin.schema.types import Collection, Field, Panel, Section, Widget
+from webapp_admin.schema.types_def import Collection, Field, Panel, Section, Widget
 
 
 def _trusted_list(guild_id: int) -> list[dict[str, Any]]:

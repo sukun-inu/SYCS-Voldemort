@@ -20,7 +20,7 @@ from webapp_admin.schema.panels.sticky import PANEL as STICKY
 from webapp_admin.schema.panels.tts import PANEL as TTS
 from webapp_admin.schema.panels.vc_notify import PANEL as VC_NOTIFY
 from webapp_admin.schema.panels.welcome import PANEL as WELCOME
-from webapp_admin.schema.types import Panel, Widget
+from webapp_admin.schema.types_def import Panel, Widget
 
 PANELS: tuple[Panel, ...] = (
     MONITORING,

@@ -32,7 +32,7 @@ os.environ.setdefault("ADMIN_FLASK_SECRET_KEY", "x" * 64)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from webapp_admin.schema.registry import PANELS, validate  # noqa: E402
-from webapp_admin.schema.types import Field, Panel, Widget  # noqa: E402
+from webapp_admin.schema.types_def import Field, Panel, Widget  # noqa: E402
 
 GUILD_ID = 999_999_999_999_999_999
 SAMPLE_ID = "123456789012345678"

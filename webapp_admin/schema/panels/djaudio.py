@@ -13,7 +13,7 @@ from services.settings_store import (
     set_djaudio_settings,
     set_djaudio_watch_channel,
 )
-from webapp_admin.schema.types import Field, Panel, Section, Widget
+from webapp_admin.schema.types_def import Field, Panel, Section, Widget
 
 # 上下限は保存側（services/settings_store.py）の表をそのまま使う。
 # 別々に書いていると、片方だけ変えたときに画面の検証は通るのに保存される値が

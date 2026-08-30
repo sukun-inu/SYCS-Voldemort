@@ -919,6 +919,45 @@ class SettingsStoreTests(unittest.TestCase):
         self.assertEqual(row["last_run"], 9.0)
         self.assertEqual(row["seen_hashes"], ["a"])
 
+    def test_missing_or_broken_int_setting_falls_back_to_zero(self):
+        """整数の設定は「未設定なら 0」。0 は「無効」として全体で読まれている。
+
+        通知チャンネル・メンションロール・フィルターロールの取得は、どれも
+        この 1 つのヘルパー（_get_int_setting）に集約されている。既定値が
+        0 以外に変わると、未設定のギルドが「ID 0 のチャンネルが設定済み」
+        として扱われ、全ギルドの分岐が一斉にずれる。集約した以上、その
+        既定値はここで押さえておく。
+        """
+        fresh = self.guild_id + 7
+        self.assertEqual(store.get_vc_notify_channel_id(fresh), 0)
+        self.assertEqual(store.get_vc_notify_role_id(fresh), 0)
+        self.assertEqual(store.get_vc_notify_filter_role_id(fresh), 0)
+        self.assertEqual(store.get_response_channel_id(fresh), 0)
+
+        # 数値にできない値が入っていても 0 に倒す（例外を投げない）
+        store.update_guild_settings(fresh, {"vc_notify_channel_id": "ちゃんねる"})
+        self.assertEqual(store.get_vc_notify_channel_id(fresh), 0)
+
+    def test_int_setting_reads_the_saved_value(self):
+        """0 に倒す挙動が、保存済みの値まで潰していないこと。"""
+        fresh = self.guild_id + 8
+        store.set_vc_notify_channel_id(fresh, 123456)
+        self.assertEqual(store.get_vc_notify_channel_id(fresh), 123456)
+
+    def test_missing_dict_setting_returns_an_empty_dict_copy(self):
+        """辞書の設定は「未設定なら空 dict」。返すのは複製であること。
+
+        _get_dict_setting も複数の設定で共有している。呼び出し側が受け取った
+        dict を書き換えても、保存済みの設定が道連れにならないことが前提。
+        """
+        fresh = self.guild_id + 9
+        self.assertEqual(store.get_welcome_settings(fresh), {})
+
+        store.update_guild_settings(fresh, {"welcome": {"channel_id": 1}})
+        got = store.get_welcome_settings(fresh)
+        got["channel_id"] = 999
+        self.assertEqual(store.get_welcome_settings(fresh)["channel_id"], 1)
+
 
 class SettingsLockLoggingTests(unittest.TestCase):
     """settings.json のファイルロック。永続化に関わるので、握りつぶさず

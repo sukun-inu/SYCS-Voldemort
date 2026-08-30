@@ -14,7 +14,7 @@ import logging
 from typing import Any, Awaitable, Callable, Iterable
 
 from webapp_admin.auth import get_guild_channels, get_guild_roles, get_guild_voice_channels
-from webapp_admin.schema.types import ChoiceSource
+from webapp_admin.schema.types_def import ChoiceSource
 
 logger = logging.getLogger(__name__)
 

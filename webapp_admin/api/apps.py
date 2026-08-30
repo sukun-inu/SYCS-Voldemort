@@ -18,7 +18,7 @@ from webapp_admin.api.jsonsafe import SafeJSONResponse as JSONResponse
 
 from webapp_admin.schema import choices as choice_resolver
 from webapp_admin.schema.registry import PANEL_BY_ID, app_groups
-from webapp_admin.schema.types import Collection, Panel
+from webapp_admin.schema.types_def import Collection, Panel
 from webapp_admin.schema.validation import validate_item, validate_values
 from webapp_admin.security import check_csrf, check_guild, is_dev_user
 

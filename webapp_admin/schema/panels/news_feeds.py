@@ -11,7 +11,7 @@ from services.settings_store import (
     remove_news_feed,
     update_news_feed,
 )
-from webapp_admin.schema.types import Collection, Field, Panel, Section, Widget
+from webapp_admin.schema.types_def import Collection, Field, Panel, Section, Widget
 
 MAX_FEEDS = 10
 

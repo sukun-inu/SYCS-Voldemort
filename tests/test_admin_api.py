@@ -35,7 +35,7 @@ from starlette.testclient import TestClient  # noqa: E402
 
 from webapp_admin.app import app  # noqa: E402
 from webapp_admin.schema.registry import PANEL_BY_ID  # noqa: E402
-from webapp_admin.schema.types import Field, Widget  # noqa: E402
+from webapp_admin.schema.types_def import Field, Widget  # noqa: E402
 
 SECRET = "x" * 64
 CSRF = "t" * 64

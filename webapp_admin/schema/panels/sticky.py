@@ -12,7 +12,7 @@ from services.settings_store import (
     mark_sticky_pending_delete,
     set_sticky_message,
 )
-from webapp_admin.schema.types import Collection, Field, Panel, Section, Widget
+from webapp_admin.schema.types_def import Collection, Field, Panel, Section, Widget
 
 
 def _list(guild_id: int) -> list[dict[str, Any]]:
