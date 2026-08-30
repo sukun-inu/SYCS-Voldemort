@@ -186,7 +186,7 @@ async def _on_member_join(bot: Bot, member: discord.Member) -> None:
                 "ユーザーID": str(member.id),
                 "アカウント作成日": created_at,
                 "参加日時": joined_at,
-                "メンバー数": str(member.guild.member_count),
+                "メンバー数": str(member.guild.member_count or 0),
             },
         ),
         "on_member_join log_action",
@@ -245,7 +245,7 @@ async def _on_member_remove(bot: Bot, member: discord.Member) -> None:
             fields={
                 "ユーザーID": str(member.id),
                 "保有ロール": " ".join(roles) if roles else "なし",
-                "メンバー数": str(member.guild.member_count),
+                "メンバー数": str(member.guild.member_count or 0),
             },
         ),
         "on_member_remove log_action",

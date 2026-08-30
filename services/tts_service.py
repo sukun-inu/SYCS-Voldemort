@@ -58,7 +58,7 @@ def _clean_text(text: str, max_len: int) -> str:
 
 
 @lru_cache(maxsize=64)
-def _dictionary_pattern(words: tuple[str, ...]):
+def _dictionary_pattern(words: tuple[str, ...]) -> re.Pattern[str]:
     """辞書の見出し語をまとめた1つのパターン。長い語を先に当てる。
 
     ギルドごとに辞書は数十語で、読み上げのたびに組み直すのは無駄なので

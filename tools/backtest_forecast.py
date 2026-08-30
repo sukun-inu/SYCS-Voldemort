@@ -25,6 +25,7 @@ import statistics
 import sys
 import urllib.request
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -40,10 +41,11 @@ COVERAGE_MAX = 0.90
 
 def load_history(url: str | None, path: str | None) -> dict:
     if path:
-        return json.loads(Path(path).read_text(encoding="utf-8"))
-    endpoint = f"{url.rstrip('/')}/api/prices/history?all=true"
+        return dict(json.loads(Path(path).read_text(encoding="utf-8")))
+    assert url is not None
+    endpoint = f"{url.rstrip("/")}/api/prices/history?all=true"
     with urllib.request.urlopen(endpoint, timeout=30) as response:  # noqa: S310 - 運用者が指定したURL
-        return json.loads(response.read().decode("utf-8"))
+        return dict(json.loads(response.read().decode("utf-8")))
 
 
 def daily_trend_baseline(prices: list[float], horizon: int) -> float:
@@ -106,8 +108,8 @@ def run(history: dict, *, horizon: int, min_history: int) -> int:
         print("検証できるデータがありませんでした。")
         return 1
 
-    def mae(key: str, rows: list[dict]) -> float:
-        return statistics.mean(abs(r[key] - r["actual"]) / r["actual"] * 100 for r in rows)
+    def mae(key: str, rows: list[dict[str, Any]]) -> float:
+        return statistics.mean(abs(float(r[key]) - float(r["actual"])) / float(r["actual"]) * 100 for r in rows)
 
     def coverage(rows: list[dict]) -> float:
         return sum(r["lower"] <= r["actual"] <= r["upper"] for r in rows) / len(rows)

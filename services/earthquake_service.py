@@ -9,6 +9,7 @@ import time
 from collections import deque
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Union, cast
 
 import aiohttp
 import discord
@@ -260,7 +261,10 @@ _BOLD_FONT_SEARCH_PATHS = [
     "C:/Windows/Fonts/YuGothB.ttc",
 ]
 _FONT_PATHS: dict[bool, str | None] = {}  # bold → 見つかった実体（1つも無ければ None）
-_FONT_CACHE: dict[tuple[int, bool], "ImageFont.ImageFont"] = {}
+# truetype は FreeTypeFont、load_default は ImageFont を返す。描画側は
+# どちらも同じ扱いで使うので、両方を受ける型にしておく。
+_AnyFont = Union["ImageFont.FreeTypeFont", "ImageFont.ImageFont"]
+_FONT_CACHE: dict[tuple[int, bool], _AnyFont] = {}
 
 
 def _font_path(bold: bool) -> str | None:
@@ -288,13 +292,13 @@ def _has_cjk_font() -> bool:
     return _font_path(False) is not None
 
 
-def _get_font(size: int, bold: bool = False) -> "ImageFont.ImageFont":
+def _get_font(size: int, bold: bool = False) -> _AnyFont:
     key = (size, bold)
     if key in _FONT_CACHE:
         return _FONT_CACHE[key]
 
     path = _font_path(bold)
-    font = None
+    font: _AnyFont | None = None
     if path:
         try:
             font = ImageFont.truetype(path, size)
@@ -330,7 +334,7 @@ def _max_scale(event: dict) -> int:
         return max((a.get("scaleTo", a.get("scaleFrom", -1)) for a in areas), default=-1)
     eq_scale = event.get("earthquake", {}).get("maxScale", -1)
     if eq_scale >= 0:
-        return eq_scale
+        return int(eq_scale)
     # 保険: 上記のどれにも当てはまらない別形式のペイロード用
     to_str = event.get("intensity", {}).get("forecastMaxInt", {}).get("to", "")
     return _FORECAST_INT_TO_SCALE.get(to_str, -1)
@@ -477,7 +481,7 @@ def _draw_tracked(
     draw: "ImageDraw.ImageDraw",
     centre: tuple[float, float],
     text: str,
-    font: "ImageFont.ImageFont",
+    font: _AnyFont,
     fill: tuple[int, int, int, int],
     tracking: float,
 ) -> None:
@@ -498,8 +502,8 @@ def _draw_intensity(
     centre: tuple[float, float],
     numeral: str,
     suffix: str,
-    numeral_font: "ImageFont.ImageFont",
-    suffix_font: "ImageFont.ImageFont",
+    numeral_font: _AnyFont,
+    suffix_font: _AnyFont,
     gap: float,
     on_baseline: bool,
     fill: tuple[int, int, int, int],
@@ -595,7 +599,7 @@ def _generate_badge(scale: int) -> io.BytesIO | None:
     img.alpha_composite(over)
 
     buf = io.BytesIO()
-    img.resize((size, size), Image.LANCZOS).save(buf, format="PNG", optimize=True)
+    img.resize((size, size), Image.LANCZOS).save(buf, format="PNG", optimize=True)  # type: ignore[attr-defined]
     buf.seek(0)
     return buf
 
@@ -1002,7 +1006,7 @@ def _compose_intensity_map(
     origin_x: float,
     origin_y: float,
     zoom: int,
-    plot: list[tuple[float, float, int]],
+    plot: list[tuple[float, float, int, str]],
     lat: float,
     lon: float,
     title: str,
@@ -1020,7 +1024,7 @@ def _compose_intensity_map(
 
     # 倍に伸ばしてから描き、最後に縮める。PIL は円も線もアンチエイリアス
     # しないので、これが輪郭のなめらかさをそのまま決める。
-    canvas = base.resize((_MAP_W * ss, _MAP_H * ss), Image.LANCZOS).convert("RGBA")
+    canvas = base.resize((_MAP_W * ss, _MAP_H * ss), Image.LANCZOS).convert("RGBA")  # type: ignore[attr-defined]
 
     def to_px(point_lat: float, point_lon: float) -> tuple[float, float]:
         px, py = _latlon_to_tile_float(point_lat, point_lon, zoom)
@@ -1129,7 +1133,9 @@ def _compose_intensity_map(
     _draw_map_chrome(canvas, title, subtitle, sorted({point[2] for point in plot}))
 
     buf = io.BytesIO()
-    canvas.resize((_MAP_W, _MAP_H), Image.LANCZOS).convert("RGB").save(buf, format="PNG", optimize=True)
+    canvas.resize((_MAP_W, _MAP_H), Image.LANCZOS).convert("RGB").save(  # type: ignore[attr-defined]
+        buf, format="PNG", optimize=True
+    )
     buf.seek(0)
     return buf
 
@@ -1290,7 +1296,7 @@ def _build_tsunami_embed(event: dict) -> discord.Embed:
         max(
             areas,
             key=lambda a: _TSUNAMI_GRADE_ORDER.get(a.get("grade", "Unknown"), 0),
-            default={},
+            default=cast("dict[str, Any]", {}),
         ).get("grade", "Unknown")
         if areas
         else "Unknown"

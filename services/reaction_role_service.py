@@ -46,7 +46,7 @@ def _emoji_key(emoji: discord.PartialEmoji | str) -> str:
     return emoji_key(emoji)
 
 
-def _role_id_for(mapping: dict, emoji) -> str | int | None:
+def _role_id_for(mapping: dict[str, str | int], emoji) -> str | int | None:
     """このリアクションに割り当てられたロール。
 
     保存済みのキーも同じ規則に通してから比べる。過去に `<:name:123>` の形で

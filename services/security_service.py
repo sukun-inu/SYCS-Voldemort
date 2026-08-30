@@ -311,6 +311,25 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     if message.author.bot or message.guild is None:
         return
 
+    if not isinstance(message.author, discord.Member):
+        # 型を絞り込むために要る。以下でロールや参加日時（Member にしか無い）を
+        # 見るため、User のままだと AttributeError になる。
+        #
+        # ここへ来ることは通常無い。on_message で投稿しているのだから、その人は
+        # まだギルドに居る。ただし discord.py は「ギルドを抜けたあとの投稿」など
+        # いくつかの場合に User を返す仕様なので、絶対に来ないとは言い切れない。
+        #
+        # **黙って戻らないこと。** ここは危険な投稿を見つけるための関数で、
+        # 素通りしたことに気づけないのがいちばん困る。
+        logger.warning(
+            "[security] author が Member ではないため検査を飛ばします " "guild=%s channel=%s author=%s(%s)",
+            message.guild.id,
+            getattr(message.channel, "id", None),
+            message.author,
+            type(message.author).__name__,
+        )
+        return
+
     member = message.author
     content = message.content or ""
     links = extract_links(content)
@@ -374,8 +393,8 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
         reason_flags.append("NEW_MEMBER")
         logs.append("新規メンバー")
 
-    if message.author.voice and message.author.voice.channel:
-        channel_id = message.author.voice.channel.id
+    if member.voice and member.voice.channel:
+        channel_id = member.voice.channel.id
         if check_vc_raid(member, channel_id):
             danger = True
             reason_flags.append("VC_RAID")

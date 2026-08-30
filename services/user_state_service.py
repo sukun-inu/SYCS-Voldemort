@@ -97,10 +97,10 @@ def _extract_user_fields(user: Any | None) -> dict[str, Any]:
 
     avatar_url: str | None = None
     try:
-        avatar_url = str(user.display_avatar.url)[:512]  # type: ignore[attr-defined]
+        avatar_url = str(user.display_avatar.url)[:512]
     except Exception:
         try:
-            avatar_url = str(user.avatar.url)[:512]  # type: ignore[attr-defined]
+            avatar_url = str(user.avatar.url)[:512]
         except Exception:
             avatar_url = None
 
@@ -477,13 +477,16 @@ def _apply_state_filter(stmt, guild_id: int, query: str | None):
     )
 
 
-async def list_recent_user_states(
+async def list_recent_user_states(  # type: ignore[return]
     guild_id: int,
     *,
     query: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
+    # for attempt in range(2): の全分岐が return するため実際には
+    # 関数末尾へ到達しないが、mypy はループが必ず実行されるとまでは
+    # 検証できず「return 文が無い」と誤検知する。
     await ensure_user_state_db()
     safe_limit = max(1, min(200, int(limit)))
     safe_offset = max(0, int(offset))
@@ -510,8 +513,10 @@ async def list_recent_user_states(
                 return []
 
 
-async def count_user_states(guild_id: int, *, query: str | None = None) -> int:
+async def count_user_states(guild_id: int, *, query: str | None = None) -> int:  # type: ignore[return]
     """絞り込み条件に一致する件数。ページ送りの総数表示に使う。"""
+    # for attempt in range(2): の全分岐が return するため実際には
+    # 関数末尾へ到達しないが、mypy はそこまで検証できず誤検知する。
     await ensure_user_state_db()
     for attempt in range(2):
         async with SessionLocal() as session:
@@ -525,12 +530,14 @@ async def count_user_states(guild_id: int, *, query: str | None = None) -> int:
                 return 0
 
 
-async def get_user_state_detail(
+async def get_user_state_detail(  # type: ignore[return]
     guild_id: int,
     user_id: int,
     *,
     event_limit: int = 200,
 ) -> dict[str, Any] | None:
+    # for attempt in range(2): の全分岐が return するため実際には
+    # 関数末尾へ到達しないが、mypy はそこまで検証できず誤検知する。
     await ensure_user_state_db()
     safe_limit = max(1, min(500, int(event_limit)))
     for attempt in range(2):

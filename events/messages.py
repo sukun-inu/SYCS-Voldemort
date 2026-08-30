@@ -84,12 +84,20 @@ def register(bot: Bot) -> None:
             attachment_urls = "\n".join(a.url for a in message.attachments)
             fields["添付ファイル"] = attachment_urls[:1024] + ("... (省略)" if len(attachment_urls) > 1024 else "")
 
+        # author が無いときの逃げ道を、本文にも用意する。上の fields は既に
+        # 「不明」へ倒しているのに、本文だけ無条件で .mention を読んでいた。
+        #
+        # しかもここは _safe() では守れない。_safe(coro, name) へ渡すコルーチンは
+        # 引数を組み立ててから渡されるので、ここで AttributeError が出ると
+        # _safe の中へ入る前に飛ぶ。削除ログが出ないうえ、握りつぶされもしない。
+        who = message.author.mention if message.author else "(不明なユーザー)"
+
         await _safe(
             log_action(
                 bot,
                 message.guild.id,
                 "INFO",
-                f"{message.author.mention} のメッセージが削除されました。",
+                f"{who} のメッセージが削除されました。",
                 user=message.author,
                 fields=fields,
             ),
