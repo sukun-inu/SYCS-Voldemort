@@ -92,9 +92,9 @@ def _field_rows(fields: tuple[Field, ...]) -> list[str]:
 def _collection_block(collection: Collection) -> list[str]:
     limit = f"（最大 {collection.max_items} 件）" if collection.max_items else ""
     actions = [
-        name for name, enabled in (
-            ("追加", collection.add), ("編集", collection.update), ("削除", collection.remove)
-        ) if enabled
+        name
+        for name, enabled in (("追加", collection.add), ("編集", collection.update), ("削除", collection.remove))
+        if enabled
     ]
     lines = [
         "",

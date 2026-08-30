@@ -66,11 +66,13 @@ def bot_with(guild, guild_id: int = 1):
 
 
 QUAKE_551 = {
-    "code": 551, "id": "q1",
+    "code": 551,
+    "id": "q1",
     "earthquake": {
-        "time": "2026/08/24 12:54:41", "maxScale": 40, "domesticTsunami": "None",
-        "hypocenter": {"name": "茨城県沖", "latitude": 36.5, "longitude": 141.0,
-                       "depth": 40, "magnitude": 5.2},
+        "time": "2026/08/24 12:54:41",
+        "maxScale": 40,
+        "domesticTsunami": "None",
+        "hypocenter": {"name": "茨城県沖", "latitude": 36.5, "longitude": 141.0, "depth": 40, "magnitude": 5.2},
     },
     "issue": {"type": "DetailScale", "time": "2026/08/24 12:57:23"},
     "points": [{"addr": "水戸市", "pref": "茨城県", "scale": 40}],
@@ -78,9 +80,13 @@ QUAKE_551 = {
 
 # 遠地地震。points も areas も maxScale も無く、震度が決まらない。
 QUAKE_FOREIGN = {
-    "code": 551, "id": "q2",
-    "earthquake": {"time": "2026/08/24 13:00:00", "domesticTsunami": "None",
-                   "hypocenter": {"name": "南太平洋", "magnitude": 7.1, "depth": 10}},
+    "code": 551,
+    "id": "q2",
+    "earthquake": {
+        "time": "2026/08/24 13:00:00",
+        "domesticTsunami": "None",
+        "hypocenter": {"name": "南太平洋", "magnitude": 7.1, "depth": 10},
+    },
     "issue": {"type": "Foreign", "time": "2026/08/24 13:02:00"},
 }
 
@@ -97,8 +103,7 @@ class MaxScaleTests(unittest.TestCase):
         以前は intensity.forecastMaxInt を見ており、実データにその形が
         現れないため 556 の予想最大震度が常に不明になっていた。
         """
-        event = {"code": 556, "areas": [{"scaleFrom": 30, "scaleTo": 45},
-                                        {"scaleFrom": 20, "scaleTo": 30}]}
+        event = {"code": 556, "areas": [{"scaleFrom": 30, "scaleTo": 45}, {"scaleFrom": 20, "scaleTo": 30}]}
         self.assertEqual(eq._max_scale(event), 45)
 
     def test_areas_fall_back_to_scale_from(self):
@@ -127,8 +132,7 @@ class ScaleLabelTests(unittest.TestCase):
     """
 
     # 配信元の仕様そのまま。ここを実装に合わせて書き換えないこと。
-    SPEC = {10: "1", 20: "2", 30: "3", 40: "4", 45: "5弱",
-            50: "5強", 55: "6弱", 60: "6強", 70: "7"}
+    SPEC = {10: "1", 20: "2", 30: "3", 40: "4", 45: "5弱", 50: "5強", 55: "6弱", 60: "6強", 70: "7"}
 
     def test_the_labels_match_the_upstream_spec(self):
         from config import SCALE_LABELS
@@ -152,10 +156,8 @@ class ScaleLabelTests(unittest.TestCase):
         }
         for name, table in tables.items():
             with self.subTest(name):
-                self.assertEqual(sorted(table), sorted(self.SPEC),
-                                 f"{name} の階級が仕様と違う")
-        self.assertEqual(sorted(VALID_SCALES), sorted(self.SPEC),
-                         "設定画面で選べる震度が仕様と違う")
+                self.assertEqual(sorted(table), sorted(self.SPEC), f"{name} の階級が仕様と違う")
+        self.assertEqual(sorted(VALID_SCALES), sorted(self.SPEC), "設定画面で選べる震度が仕様と違う")
 
     def test_the_forecast_notation_maps_to_the_same_levels(self):
         """緊急地震速報の表記（5- など）と、地震情報の数値が同じ階級を指すこと。
@@ -164,8 +166,7 @@ class ScaleLabelTests(unittest.TestCase):
         同じ震度5弱でも経路によって内部の数値が違い、通知する最小震度の
         判定が経路ごとにずれていた。
         """
-        pairs = {"1": 10, "2": 20, "3": 30, "4": 40,
-                 "5-": 45, "5+": 50, "6-": 55, "6+": 60, "7": 70}
+        pairs = {"1": 10, "2": 20, "3": 30, "4": 40, "5-": 45, "5+": 50, "6-": 55, "6+": 60, "7": 70}
         self.assertEqual(dict(eq._FORECAST_INT_TO_SCALE), pairs)
         # 表記 → 数値 → 表示 が元の表記へ戻ること
         for text, value in pairs.items():
@@ -200,7 +201,6 @@ class BadgeTests(unittest.TestCase):
         self.assertEqual(eq._ink_for(light)[:3], (16, 20, 26))
         self.assertEqual(eq._ink_for(dark)[:3], (255, 255, 255))
 
-
     def test_notify_does_not_build_a_badge_for_unknown_scale(self):
         """震度不明のまま作ると「最大震度 -1」と大書きした画像になる。"""
         made = []
@@ -210,15 +210,17 @@ class BadgeTests(unittest.TestCase):
         async def no_jma(event, scale):
             return "https://example.invalid/jma"
 
-        with patch.object(eq, "_resolve_jma_detail_url", no_jma), \
-             patch.object(eq, "_generate_badge", lambda s: made.append(s)), \
-             patch.object(eq, "get_all_guild_ids", lambda: [1]), \
-             patch.object(eq, "get_earthquake_settings",
-                          lambda g: {"channel_id": 555, "min_scale": -1}), \
-             patch.object(eq, "get_earthquake_notify_types", lambda g: {}):
+        with (
+            patch.object(eq, "_resolve_jma_detail_url", no_jma),
+            patch.object(eq, "_generate_badge", lambda s: made.append(s)),
+            patch.object(eq, "get_all_guild_ids", lambda: [1]),
+            patch.object(eq, "get_earthquake_settings", lambda g: {"channel_id": 555, "min_scale": -1}),
+            patch.object(eq, "get_earthquake_notify_types", lambda g: {}),
+        ):
             asyncio.run(eq._notify_all_guilds(bot, QUAKE_FOREIGN))
 
         self.assertEqual(made, [])
+
 
 class IntensityMapTests(unittest.TestCase):
     """地図の組み立て。タイルは取りに行かず、描画の道筋だけを見る。"""
@@ -235,8 +237,8 @@ class IntensityMapTests(unittest.TestCase):
     def test_a_white_map_is_repainted_dark(self):
         from PIL import Image
 
-        tile = Image.new("L", (4, 4), 255)      # 白＝面
-        tile.putpixel((0, 0), 0)                # 黒＝線
+        tile = Image.new("L", (4, 4), 255)  # 白＝面
+        tile.putpixel((0, 0), 0)  # 黒＝線
         out = eq._recolour_tile(tile)
         self.assertEqual(out.getpixel((1, 1)), eq._MAP_LAND)
         self.assertEqual(out.getpixel((0, 0)), eq._MAP_LINE)
@@ -246,11 +248,10 @@ class IntensityMapTests(unittest.TestCase):
         from PIL import Image
 
         # (緯度, 経度, 震度, 地名)
-        plot = [(38.7, 141.0, 60, "宮城県"), (37.7, 140.4, 40, "福島県"),
-                (35.6, 139.7, 10, "東京都")]
+        plot = [(38.7, 141.0, 60, "宮城県"), (37.7, 140.4, 40, "福島県"), (35.6, 139.7, 10, "東京都")]
         buf = eq._compose_intensity_map(
-            [(0, 0)], [None], 0.0, 0.0, 7, plot, 38.7, 141.0,
-            "最大震度 6弱", "宮城県沖  M6.8")
+            [(0, 0)], [None], 0.0, 0.0, 7, plot, 38.7, 141.0, "最大震度 6弱", "宮城県沖  M6.8"
+        )
         image = Image.open(buf)
         self.assertEqual(image.size, (eq._MAP_W, eq._MAP_H))
 
@@ -268,8 +269,8 @@ class IntensityMapTests(unittest.TestCase):
         origin_x = px * eq._TILE_SZ - eq._MAP_W / 2
         origin_y = py * eq._TILE_SZ - eq._MAP_H / 2
         buf = eq._compose_intensity_map(
-            [(0, 0)], [None], origin_x, origin_y, zoom, plot, lat, lon,
-            "最大震度", "検査用")
+            [(0, 0)], [None], origin_x, origin_y, zoom, plot, lat, lon, "最大震度", "検査用"
+        )
 
         def to_px(point_lat, point_lon):
             tx, ty = eq._latlon_to_tile_float(point_lat, point_lon, zoom)
@@ -285,7 +286,8 @@ class IntensityMapTests(unittest.TestCase):
         x, y = at
         box = image.crop((int(x - span), int(y - span), int(x + span), int(y + span)))
         return sum(
-            1 for r, g, b in box.getdata()
+            1
+            for r, g, b in box.getdata()
             if abs(r - rgb[0]) <= tol and abs(g - rgb[1]) <= tol and abs(b - rgb[2]) <= tol
         )
 
@@ -322,10 +324,8 @@ class IntensityMapTests(unittest.TestCase):
         rgb = eq._MAP_FILL_RGB[50]
         # 塗られていれば、地の色（暗い青灰）より赤が強くなる。
         reds = [r for r, g, b in patch.getdata()]
-        self.assertGreater(sum(reds) / len(reds), eq._MAP_LAND[0] + 25,
-                           "揺れた県が塗られていない")
-        self.assertLess(sum(reds) / len(reds), rgb[0],
-                        "塗りが濃すぎて札より目立っている")
+        self.assertGreater(sum(reds) / len(reds), eq._MAP_LAND[0] + 25, "揺れた県が塗られていない")
+        self.assertLess(sum(reds) / len(reds), rgb[0], "塗りが濃すぎて札より目立っている")
 
     def test_the_map_does_not_repeat_the_max_intensity_badge(self):
         """最大震度の札を地図の中に持たない。
@@ -340,9 +340,11 @@ class IntensityMapTests(unittest.TestCase):
         # 右上（凡例も出典も無い側）に、その震度の色の面が無いこと。
         corner = image.crop((image.width - 150, 0, image.width, 90))
         rgb = eq._MAP_FILL_RGB[40]
-        hits = sum(1 for r, g, b in corner.getdata()
-                   if abs(r - rgb[0]) <= 26 and abs(g - rgb[1]) <= 26
-                   and abs(b - rgb[2]) <= 26)
+        hits = sum(
+            1
+            for r, g, b in corner.getdata()
+            if abs(r - rgb[0]) <= 26 and abs(g - rgb[1]) <= 26 and abs(b - rgb[2]) <= 26
+        )
         self.assertLess(hits, 60, "地図の中に最大震度の札が戻っている")
 
     def test_the_epicentre_shadow_fades_without_a_hard_edge(self):
@@ -360,11 +362,9 @@ class IntensityMapTests(unittest.TestCase):
         plot = [(36.341, 140.447, 40, "茨城県")]
         image, to_px = self._render(plot, 36.55, 140.30, zoom=8)
         ex, ey = to_px(36.55, 140.30)
-        walk = [sum(image.getpixel((int(ex + d), int(ey + d))))
-                for d in (19, 21, 23, 25, 27)]
+        walk = [sum(image.getpixel((int(ex + d), int(ey + d)))) for d in (19, 21, 23, 25, 27)]
         steps = [abs(b - a) for a, b in zip(walk, walk[1:])]
-        self.assertLess(max(steps), 15,
-                        f"影が縁で切れている（斜めの明るさ {walk}）")
+        self.assertLess(max(steps), 15, f"影が縁で切れている（斜めの明るさ {walk}）")
 
     def test_the_map_credits_the_outline_source(self):
         """輪郭は国土地理院のデータ。出典と、加工した旨を画像に載せる（PDL1.0）。"""
@@ -381,7 +381,7 @@ class IntensityMapTests(unittest.TestCase):
         隠れた。速報として最初に読む値なので、どちらでも消えてはいけない。
         """
         plot = [(32.80, 130.71, 60, "熊本県"), (33.59, 130.40, 30, "福岡県")]
-        image, to_px = self._render(plot, 32.80, 130.71)   # 震央＝最大震度の点
+        image, to_px = self._render(plot, 32.80, 130.71)  # 震央＝最大震度の点
         area = self._badge_area(image, to_px(32.80, 130.71), eq._MAP_FILL_RGB[60])
         self.assertGreater(area, 400, "最大震度の札が震源印に消されている")
 
@@ -397,8 +397,9 @@ class IntensityMapTests(unittest.TestCase):
         x, y = to_px(38.70, 141.00)
         core = image.crop((int(x - 5), int(y - 5), int(x + 5), int(y + 5)))
         rgb = eq._MAP_FILL_RGB[40]
-        ink = sum(1 for r, g, b in core.getdata()
-                  if abs(r - rgb[0]) > 40 or abs(g - rgb[1]) > 40 or abs(b - rgb[2]) > 40)
+        ink = sum(
+            1 for r, g, b in core.getdata() if abs(r - rgb[0]) > 40 or abs(g - rgb[1]) > 40 or abs(b - rgb[2]) > 40
+        )
         self.assertGreater(ink, 12, "札の中心に数字が入っていない")
 
     def test_a_weaker_badge_is_dropped_before_a_stronger_one(self):
@@ -406,11 +407,12 @@ class IntensityMapTests(unittest.TestCase):
         # ほぼ同じ場所に 6強 と 1。片方しか置けない。
         plot = [(38.700, 141.000, 60, "A"), (38.702, 141.002, 10, "B")]
         image, to_px = self._render(plot, 40.0, 143.0, zoom=9, centre=(38.70, 141.00))
-        self.assertGreater(
-            self._badge_area(image, to_px(38.700, 141.000), eq._MAP_FILL_RGB[60]), 400)
+        self.assertGreater(self._badge_area(image, to_px(38.700, 141.000), eq._MAP_FILL_RGB[60]), 400)
         self.assertLess(
-            self._badge_area(image, to_px(38.702, 141.002), eq._MAP_FILL_RGB[10]), 40,
-            "弱い方が残って強い方を押しのけている")
+            self._badge_area(image, to_px(38.702, 141.002), eq._MAP_FILL_RGB[10]),
+            40,
+            "弱い方が残って強い方を押しのけている",
+        )
 
     def test_points_in_the_same_prefecture_keep_the_strongest(self):
         """観測点の座標は県庁所在地に丸めている。
@@ -425,6 +427,7 @@ class IntensityMapTests(unittest.TestCase):
         def fake_compose(coords, tiles, ox, oy, zoom, plot, lat, lon, title, sub):
             captured["plot"] = plot
             import io as _io
+
             return _io.BytesIO(b"x")
 
         async def no_tile(session, z, x, y):
@@ -435,22 +438,28 @@ class IntensityMapTests(unittest.TestCase):
             {"addr": "宮城県登米市", "pref": "宮城県", "scale": 55},
             {"addr": "岩手県一関市", "pref": "岩手県", "scale": 50},
         ]
-        with patch.object(eq, "_compose_intensity_map", fake_compose),              patch.object(eq, "_fetch_tile", no_tile):
+        with patch.object(eq, "_compose_intensity_map", fake_compose), patch.object(eq, "_fetch_tile", no_tile):
             asyncio.run(eq._generate_intensity_map(None, 38.7, 141.0, points))
 
         scales = sorted(point[2] for point in captured["plot"])
         self.assertEqual(scales, [50, 60], "同じ県の点がまとまっていない")
+
 
 class EvaluateGuildTests(unittest.TestCase):
     """対象判定。ここが地震・津波・EEW・診断の唯一の判定元。"""
 
     def evaluate(self, settings, notify_types, *, max_scale=40, guild=None, **kw):
         bot = bot_with(guild) if guild is not None else bot_with(None)
-        with patch.object(eq, "get_earthquake_settings", lambda g: settings), \
-             patch.object(eq, "get_earthquake_notify_types", lambda g: notify_types):
+        with (
+            patch.object(eq, "get_earthquake_settings", lambda g: settings),
+            patch.object(eq, "get_earthquake_notify_types", lambda g: notify_types),
+        ):
             return eq._evaluate_guild(
-                bot, 1, notify_type=kw.get("notify_type", "quake_info"),
-                max_scale=max_scale, apply_min_scale=kw.get("apply_min_scale", True),
+                bot,
+                1,
+                notify_type=kw.get("notify_type", "quake_info"),
+                max_scale=max_scale,
+                apply_min_scale=kw.get("apply_min_scale", True),
             )
 
     def test_missing_channel_is_the_first_reason(self):
@@ -464,8 +473,7 @@ class EvaluateGuildTests(unittest.TestCase):
         self.assertIn("40", reason)
 
     def test_notify_type_off_uses_a_japanese_label(self):
-        _, reason = self.evaluate({"channel_id": 555, "min_scale": 10},
-                                  {"quake_info": False})
+        _, reason = self.evaluate({"channel_id": 555, "min_scale": 10}, {"quake_info": False})
         self.assertIn("地震情報", reason)
         self.assertIn("オフ", reason)
 
@@ -475,30 +483,32 @@ class EvaluateGuildTests(unittest.TestCase):
 
     def test_channel_of_wrong_type_is_reported(self):
         voice = Mock(spec=discord.VoiceChannel)
-        _, reason = self.evaluate({"channel_id": 555, "min_scale": 10}, {},
-                                  guild=guild_with(voice))
+        _, reason = self.evaluate({"channel_id": 555, "min_scale": 10}, {}, guild=guild_with(voice))
         self.assertIn("テキストチャンネル", reason)
 
     def test_eligible_guild_returns_the_channel(self):
         channel = text_channel()
-        got, reason = self.evaluate({"channel_id": 555, "min_scale": 10}, {},
-                                    guild=guild_with(channel))
+        got, reason = self.evaluate({"channel_id": 555, "min_scale": 10}, {}, guild=guild_with(channel))
         self.assertIs(got, channel)
         self.assertEqual(reason, "")
 
     def test_broken_min_scale_falls_back_to_the_default(self):
         """設定が壊れていても例外にせず、既定の閾値で判定する。"""
         channel = text_channel()
-        got, _ = self.evaluate({"channel_id": 555, "min_scale": "こわれた"}, {},
-                               guild=guild_with(channel))
+        got, _ = self.evaluate({"channel_id": 555, "min_scale": "こわれた"}, {}, guild=guild_with(channel))
         self.assertIs(got, channel)
 
     def test_min_scale_can_be_skipped(self):
         """津波は震度を持たないので閾値を当てない。"""
         channel = text_channel()
-        got, _ = self.evaluate({"channel_id": 555, "min_scale": 70}, {},
-                               max_scale=-1, apply_min_scale=False,
-                               notify_type="tsunami", guild=guild_with(channel))
+        got, _ = self.evaluate(
+            {"channel_id": 555, "min_scale": 70},
+            {},
+            max_scale=-1,
+            apply_min_scale=False,
+            notify_type="tsunami",
+            guild=guild_with(channel),
+        )
         self.assertIs(got, channel)
 
 
@@ -507,12 +517,12 @@ class DiagnoseTests(unittest.TestCase):
         """説明用に条件を書き写すと実際のフィルタとずれて嘘の理由が出る。"""
         bot = bot_with(None)
         settings = {"channel_id": 555, "min_scale": 50}
-        with patch.object(eq, "get_earthquake_settings", lambda g: settings), \
-             patch.object(eq, "get_earthquake_notify_types", lambda g: {}):
-            _, reason = eq._evaluate_guild(bot, 1, notify_type="quake_info",
-                                           max_scale=40, apply_min_scale=True)
-            diagnosed = eq._diagnose_no_target(bot, 1, notify_type="quake_info",
-                                               max_scale=40)
+        with (
+            patch.object(eq, "get_earthquake_settings", lambda g: settings),
+            patch.object(eq, "get_earthquake_notify_types", lambda g: {}),
+        ):
+            _, reason = eq._evaluate_guild(bot, 1, notify_type="quake_info", max_scale=40, apply_min_scale=True)
+            diagnosed = eq._diagnose_no_target(bot, 1, notify_type="quake_info", max_scale=40)
         self.assertEqual(reason, diagnosed)
 
     def test_settings_failure_does_not_crash_the_diagnosis(self):
@@ -520,8 +530,7 @@ class DiagnoseTests(unittest.TestCase):
             raise RuntimeError("設定が読めない")
 
         with patch.object(eq, "get_earthquake_settings", boom):
-            reason = eq._diagnose_no_target(bot_with(None), 1,
-                                            notify_type="quake_info", max_scale=40)
+            reason = eq._diagnose_no_target(bot_with(None), 1, notify_type="quake_info", max_scale=40)
         self.assertIn("読み取りに失敗", reason)
 
 
@@ -539,10 +548,12 @@ class CollectTargetsTests(unittest.TestCase):
 
         bot = Mock()
         bot.get_guild.side_effect = lambda g: guild
-        with patch.object(eq, "get_all_guild_ids", lambda: [1, 2, 3]), \
-             patch.object(eq, "get_earthquake_settings", settings), \
-             patch.object(eq, "get_earthquake_notify_types", lambda g: {}), \
-             self.assertLogs(eq.logger, level="ERROR") as captured:
+        with (
+            patch.object(eq, "get_all_guild_ids", lambda: [1, 2, 3]),
+            patch.object(eq, "get_earthquake_settings", settings),
+            patch.object(eq, "get_earthquake_notify_types", lambda g: {}),
+            self.assertLogs(eq.logger, level="ERROR") as captured,
+        ):
             targets = eq._collect_targets(bot, notify_type="quake_info", max_scale=40)
 
         self.assertEqual([g for g, _ in targets], [1, 3])
@@ -551,12 +562,12 @@ class CollectTargetsTests(unittest.TestCase):
     def test_only_guild_id_narrows_to_one(self):
         channel = text_channel()
         bot = bot_with(guild_with(channel), guild_id=2)
-        with patch.object(eq, "get_all_guild_ids", lambda: [1, 2, 3]), \
-             patch.object(eq, "get_earthquake_settings",
-                          lambda g: {"channel_id": 555, "min_scale": 10}), \
-             patch.object(eq, "get_earthquake_notify_types", lambda g: {}):
-            targets = eq._collect_targets(bot, notify_type="quake_info",
-                                          max_scale=40, only_guild_id=2)
+        with (
+            patch.object(eq, "get_all_guild_ids", lambda: [1, 2, 3]),
+            patch.object(eq, "get_earthquake_settings", lambda g: {"channel_id": 555, "min_scale": 10}),
+            patch.object(eq, "get_earthquake_notify_types", lambda g: {}),
+        ):
+            targets = eq._collect_targets(bot, notify_type="quake_info", max_scale=40, only_guild_id=2)
         self.assertEqual([g for g, _ in targets], [2])
 
 
@@ -591,8 +602,7 @@ class DispatchTests(unittest.TestCase):
 
         channel.send = boom
         with self.assertLogs(eq.logger, level="ERROR") as captured:
-            ok = asyncio.run(eq._dispatch([(1, channel)], tag="earthquake",
-                                          embed=discord.Embed(title="t")))
+            ok = asyncio.run(eq._dispatch([(1, channel)], tag="earthquake", embed=discord.Embed(title="t")))
         self.assertEqual(ok, 0)
         self.assertEqual(len(captured.records), 1)
         record = captured.records[0]
@@ -605,8 +615,9 @@ class DispatchTests(unittest.TestCase):
             channel = text_channel(i)
             channel.send = Mock(return_value=asyncio.sleep(0))
             channels.append(channel)
-        ok = asyncio.run(eq._dispatch([(i, c) for i, c in enumerate(channels)],
-                                      tag="earthquake", embed=discord.Embed(title="t")))
+        ok = asyncio.run(
+            eq._dispatch([(i, c) for i, c in enumerate(channels)], tag="earthquake", embed=discord.Embed(title="t"))
+        )
         self.assertEqual(ok, 3)
 
     def test_each_channel_gets_its_own_file_object(self):
@@ -622,9 +633,9 @@ class DispatchTests(unittest.TestCase):
             channel = text_channel(i)
             channel.send = make
             channels.append((i, channel))
-        asyncio.run(eq._dispatch(channels, tag="earthquake",
-                                 embed=discord.Embed(title="t"),
-                                 attachments=[("a.png", b"xyz")]))
+        asyncio.run(
+            eq._dispatch(channels, tag="earthquake", embed=discord.Embed(title="t"), attachments=[("a.png", b"xyz")])
+        )
         self.assertEqual(len(seen), 2)
         self.assertIsNot(seen[0][0], seen[1][0])
 
@@ -639,16 +650,15 @@ class DedupTests(unittest.TestCase):
             while len(order) > eq._SEEN_ID_LIMIT:
                 seen.discard(order.popleft())
         self.assertEqual(len(seen), eq._SEEN_ID_LIMIT)
-        self.assertIn(eq._SEEN_ID_LIMIT + 9, seen)   # 直近は残る
-        self.assertNotIn(0, seen)                    # 最古は落ちる
+        self.assertIn(eq._SEEN_ID_LIMIT + 9, seen)  # 直近は残る
+        self.assertNotIn(0, seen)  # 最古は落ちる
 
 
 class DetailUrlTests(unittest.TestCase):
     def test_eid_becomes_a_human_readable_page(self):
         """以前は list.json の "json"（生データのファイル名）に当たり、
         ブラウザで開くとパーサーの値が出るだけのページになっていた。"""
-        url = eq._item_detail_url({"eid": "20260824125441",
-                                   "json": "20260824125723_..._VXSE5k_1.json"})
+        url = eq._item_detail_url({"eid": "20260824125441", "json": "20260824125723_..._VXSE5k_1.json"})
         self.assertIsNotNone(url)
         self.assertIn("map.html", url)
         self.assertIn("20260824125441", url)
@@ -661,9 +671,7 @@ class DetailUrlTests(unittest.TestCase):
 class EmbedTests(unittest.TestCase):
     def test_unknown_values_are_omitted_not_written_as_unknown(self):
         embed = eq._build_embed(QUAKE_FOREIGN, -1)
-        rendered = embed.description + "".join(
-            f.name + str(f.value) for f in embed.fields
-        )
+        rendered = embed.description + "".join(f.name + str(f.value) for f in embed.fields)
         self.assertNotIn("不明", rendered)
         self.assertIn("地震がありました", embed.description)
 
@@ -676,8 +684,9 @@ class EmbedTests(unittest.TestCase):
 
     def test_eew_cancellation_is_announced(self):
         """取り消しを黙って捨てると、外れた警報を訂正できない。"""
-        embed = eq._build_eew_embed({"code": 556, "cancelled": True,
-                                     "earthquake": {"hypocenter": {"name": "茨城県沖"}}})
+        embed = eq._build_eew_embed(
+            {"code": 556, "cancelled": True, "earthquake": {"hypocenter": {"name": "茨城県沖"}}}
+        )
         self.assertIn("取り消", embed.title)
 
     def test_detection_only_event_does_not_invent_fields(self):
@@ -687,11 +696,16 @@ class EmbedTests(unittest.TestCase):
         self.assertEqual(embed.fields, [])
 
     def test_serial_comes_from_issue(self):
-        embed = eq._build_eew_embed({
-            "code": 556, "issue": {"serial": 3},
-            "earthquake": {"originTime": "2026/08/24 12:00:00",
-                           "hypocenter": {"name": "茨城県沖", "magnitude": 5.0}},
-        })
+        embed = eq._build_eew_embed(
+            {
+                "code": 556,
+                "issue": {"serial": 3},
+                "earthquake": {
+                    "originTime": "2026/08/24 12:00:00",
+                    "hypocenter": {"name": "茨城県沖", "magnitude": 5.0},
+                },
+            }
+        )
         self.assertIn("第3報", embed.title)
 
 
@@ -700,6 +714,7 @@ class DevTestNotifyTests(unittest.TestCase):
 
     def setUp(self):
         from services import dev_test_notify
+
         self.dt = dev_test_notify
         self.sent = []
 
@@ -746,15 +761,18 @@ class DevTestNotifyTests(unittest.TestCase):
         for kind in self.dt.KINDS:
             with self.subTest(kind=kind):
                 self.sent.clear()
-                with self.empty, patch("services.tts_store.get_tts_settings",
-                                       return_value={}):
+                with self.empty, patch("services.tts_store.get_tts_settings", return_value={}):
                     asyncio.run(self.dt.run_test(self.bot, kind, 1, 555))
                 self.assertTrue(self.sent, f"{kind} が何も送っていない")
 
     def test_every_kind_reports_one_reason_when_unconfigured(self):
         for kind in self.dt.KINDS:
             with self.subTest(kind=kind):
-                with self.empty,                      patch("services.logging_service.get_log_settings", return_value={}),                      self.assertLogs(self.dt.logger, level="WARNING") as captured:
+                with (
+                    self.empty,
+                    patch("services.logging_service.get_log_settings", return_value={}),
+                    self.assertLogs(self.dt.logger, level="WARNING") as captured,
+                ):
                     asyncio.run(self.dt.run_test(self.bot, kind, 1, None))
                 reasons = [m for m in captured.output if "送れませんでした" in m]
                 self.assertEqual(len(reasons), 1)
@@ -766,8 +784,7 @@ class DevTestNotifyTests(unittest.TestCase):
         self.assertIn("去っていった", self.sent[0]["content"])
 
     def test_logging_reuses_the_production_embed(self):
-        with patch("services.logging_service.get_log_settings",
-                   return_value={"log_level": "WARNING"}):
+        with patch("services.logging_service.get_log_settings", return_value={"log_level": "WARNING"}):
             asyncio.run(self.dt.run_test(self.bot, "logging", 1, 555))
         embed = self.sent[0]["embed"]
         self.assertIn("ボットログ", embed.title)
@@ -787,7 +804,10 @@ class DevTestNotifyTests(unittest.TestCase):
             called.append((channel.id, guild_id))
 
         entry = {"555": {"content": "固定文", "message_id": None}}
-        with patch("services.settings_store.get_sticky_messages", return_value=entry),              patch("services.sticky_service.post_sticky", fake_post):
+        with (
+            patch("services.settings_store.get_sticky_messages", return_value=entry),
+            patch("services.sticky_service.post_sticky", fake_post),
+        ):
             asyncio.run(self.dt.run_test(self.bot, "sticky", 1, 555))
         self.assertEqual(called, [(555, 1)])
 
@@ -801,8 +821,10 @@ class DevTestNotifyTests(unittest.TestCase):
         async def fake_enqueue(bot, guild, member, text):
             received["bot"] = bot
 
-        with patch("services.tts_store.get_tts_settings",
-                   return_value={"enabled": True, "vc_channel_id": 999}),              patch("services.tts_service.enqueue_message", fake_enqueue):
+        with (
+            patch("services.tts_store.get_tts_settings", return_value={"enabled": True, "vc_channel_id": 999}),
+            patch("services.tts_service.enqueue_message", fake_enqueue),
+        ):
             asyncio.run(self.dt.run_test(self.bot, "tts", 1, 555))
 
         self.assertIs(received.get("bot"), self.bot)
@@ -823,6 +845,7 @@ class TtsDictionaryTests(unittest.TestCase):
 
     def setUp(self):
         from services.tts_service import _apply_dictionary
+
         self.apply = _apply_dictionary
 
     def test_a_reading_is_not_replaced_again(self):
@@ -882,7 +905,6 @@ class SettingsStoreTests(unittest.TestCase):
         self.assertFalse(saved["quake_info"])
         self.assertNotIn("nope", saved)
 
-
     def test_news_feed_state_keeps_only_recent_hashes(self):
         store.add_news_feed(self.guild_id, "feed1", 100, "クエリ", 60)
         store.update_news_feed_state(self.guild_id, "feed1", 1.0, [str(i) for i in range(150)])
@@ -926,7 +948,7 @@ class SettingsLockLoggingTests(unittest.TestCase):
                 raise OSError("boom")
             return real_stat(self, *args, **kwargs)
 
-        with patch.object(Path, "stat", fake_stat),              self.assertLogs(store.logger, level="DEBUG") as captured:
+        with patch.object(Path, "stat", fake_stat), self.assertLogs(store.logger, level="DEBUG") as captured:
             with self.assertRaises(TimeoutError):
                 with store._settings_file_lock(timeout_sec=0.05):
                     pass
@@ -941,7 +963,10 @@ class SettingsLockLoggingTests(unittest.TestCase):
                 raise OSError("boom")
             return real_read_text(self, *args, **kwargs)
 
-        with patch.object(Path, "read_text", fake_read_text),              self.assertLogs(store.logger, level="WARNING") as captured:
+        with (
+            patch.object(Path, "read_text", fake_read_text),
+            self.assertLogs(store.logger, level="WARNING") as captured,
+        ):
             with store._settings_file_lock(timeout_sec=1.0):
                 pass
         self.assertTrue(any("所有者を確認できません" in m for m in captured.output), captured.output)
@@ -955,7 +980,7 @@ class SettingsLockLoggingTests(unittest.TestCase):
                 raise OSError("boom")
             return real_unlink(self, *args, **kwargs)
 
-        with patch.object(Path, "unlink", fake_unlink),              self.assertLogs(store.logger, level="WARNING") as captured:
+        with patch.object(Path, "unlink", fake_unlink), self.assertLogs(store.logger, level="WARNING") as captured:
             with store._settings_file_lock(timeout_sec=1.0):
                 pass
         self.assertTrue(any("削除できません" in m for m in captured.output), captured.output)
@@ -965,13 +990,11 @@ class WelcomeTemplateTests(unittest.TestCase):
     """開発者パネルのテスト送信と本番が同じ描画を使うこと。"""
 
     def test_placeholders_are_replaced(self):
-        out = render_template("{user}/{username}/{server}/{count}",
-                              user="U", username="N", server="S", count=3)
+        out = render_template("{user}/{username}/{server}/{count}", user="U", username="N", server="S", count=3)
         self.assertEqual(out, "U/N/S/3")
 
     def test_missing_member_count_does_not_render_none(self):
-        self.assertEqual(
-            render_template("{count}", user="", username="", server="", count=None), "0")
+        self.assertEqual(render_template("{count}", user="", username="", server="", count=None), "0")
 
     def test_defaults_are_shared(self):
         self.assertIn("{user}", DEFAULT_WELCOME)
@@ -983,8 +1006,14 @@ class UrlSafetyTests(unittest.TestCase):
         validate_public_http_url("https://example.com/path")
 
     def test_private_and_loopback_are_blocked(self):
-        for url in ("http://127.0.0.1/", "http://10.0.0.5/", "http://192.168.1.1/",
-                    "http://169.254.169.254/", "http://localhost/", "http://[::1]/"):
+        for url in (
+            "http://127.0.0.1/",
+            "http://10.0.0.5/",
+            "http://192.168.1.1/",
+            "http://169.254.169.254/",
+            "http://localhost/",
+            "http://[::1]/",
+        ):
             with self.subTest(url=url), self.assertRaises(URLSafetyError):
                 validate_public_http_url(url)
 
@@ -1022,6 +1051,7 @@ class UserStateDbSecretFileTests(unittest.TestCase):
 
     def setUp(self):
         import services.user_state_db as user_state_db
+
         self.udb = user_state_db
 
     def test_missing_file_is_logged_not_silent(self):
@@ -1046,8 +1076,7 @@ class UserStateDbSecretFileTests(unittest.TestCase):
         try:
             with self.assertRaises(AssertionError):
                 with self.assertLogs(envutil.logger, level="WARNING"):
-                    self.udb._pooled_int(
-                        "_TEST_PRIMARY_POOL", "_TEST_FALLBACK_POOL", 5, minimum=1)
+                    self.udb._pooled_int("_TEST_PRIMARY_POOL", "_TEST_FALLBACK_POOL", 5, minimum=1)
             self.assertEqual(
                 self.udb._pooled_int("_TEST_PRIMARY_POOL", "_TEST_FALLBACK_POOL", 5, minimum=1),
                 20,
@@ -1067,6 +1096,7 @@ class DjaudioCacheAtomicWriteTests(unittest.TestCase):
 
     def setUp(self):
         import services.djaudio_cache as djaudio_cache
+
         self.dc = djaudio_cache
 
     def _register(self) -> str:
@@ -1122,6 +1152,7 @@ class DjaudioCacheAtomicWriteTests(unittest.TestCase):
 class DjaudioSiteDetectionTests(unittest.TestCase):
     def setUp(self):
         import services.djaudio_site_detection as sd
+
         self.sd = sd
 
     def test_allowed_host_passes(self):
@@ -1145,6 +1176,7 @@ class DjaudioReactionSafeTests(unittest.TestCase):
 
     def setUp(self):
         import services.djaudio_service as djaudio
+
         self.dj = djaudio
 
     def test_add_reaction_failure_is_logged(self):
@@ -1185,6 +1217,7 @@ class VoiceSessionTests(unittest.TestCase):
 
     def setUp(self):
         from services import voice_session
+
         self.vs = voice_session
         self.vs._clients.clear()
         self.vs._holds.clear()
@@ -1230,6 +1263,7 @@ class VoiceSessionTests(unittest.TestCase):
     def test_release_logs_when_disconnect_fails(self):
         """切断失敗を黙って握りつぶすと、_clients からは既に消えているのに
         実際の接続だけ生き残る（bot が VC に居座る）ことに誰も気づけない。"""
+
         async def boom(force=True):
             raise RuntimeError("ネットワークが死んでいる")
 
@@ -1294,6 +1328,7 @@ class RecordingTests(unittest.TestCase):
 
     def setUp(self):
         import services.recording_service as recording
+
         self.rec = recording
         self.work = Path(tempfile.mkdtemp(prefix="rectest-"))
         self._encode_log = ""
@@ -1302,6 +1337,7 @@ class RecordingTests(unittest.TestCase):
     def _tone(self, seconds: float, freq: float = 440.0) -> bytes:
         import math
         import struct
+
         out = bytearray()
         for i in range(int(self.rec.SAMPLE_RATE * seconds)):
             v = int(12000 * math.sin(2 * math.pi * freq * i / self.rec.SAMPLE_RATE))
@@ -1325,9 +1361,12 @@ class RecordingTests(unittest.TestCase):
         import re
         import subprocess
         from config import DJAUDIO_FFMPEG_PATH
+
         out = subprocess.run(
             [DJAUDIO_FFMPEG_PATH, "-i", str(path), "-f", "null", "-"],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         self._last_probe_stderr = out.stderr
         matches = re.findall(r"time=(\d+):(\d+):(\d+\.\d+)", out.stderr)
@@ -1355,6 +1394,7 @@ class RecordingTests(unittest.TestCase):
     @staticmethod
     def _ffmpeg_path() -> str:
         from config import DJAUDIO_FFMPEG_PATH
+
         return DJAUDIO_FFMPEG_PATH
 
     @staticmethod
@@ -1370,6 +1410,7 @@ class RecordingTests(unittest.TestCase):
         テストからは見えない。落ちたときにいちばん効く情報なので拾っておく。
         """
         import logging
+
         collected: list[str] = []
         handler = logging.Handler()
         handler.emit = lambda record: collected.append(record.getMessage())
@@ -1394,18 +1435,16 @@ class RecordingTests(unittest.TestCase):
             early = self.rec._TrackWriter(1, "A", self.work / "01-A.mp3", started)
             late = self.rec._TrackWriter(2, "B", self.work / "02-B.mp3", started)
 
-            early.write(self._tone(0.5), 0.0)   # A は冒頭で発話
-            late.write(self._tone(0.5), 3.0)    # B は3秒後に発話
+            early.write(self._tone(0.5), 0.0)  # A は冒頭で発話
+            late.write(self._tone(0.5), 3.0)  # B は3秒後に発話
             early.close(5.0)
             late.close(5.0)
         self._encode_log = "\n".join(log)
 
         a = self._duration(self.work / "01-A.mp3")
-        self.assertAlmostEqual(a, 5.0, delta=0.3,
-                               msg=self._track_report(early, self.work / "01-A.mp3"))
+        self.assertAlmostEqual(a, 5.0, delta=0.3, msg=self._track_report(early, self.work / "01-A.mp3"))
         b = self._duration(self.work / "02-B.mp3")
-        self.assertAlmostEqual(b, 5.0, delta=0.3,
-                               msg=self._track_report(late, self.work / "02-B.mp3"))
+        self.assertAlmostEqual(b, 5.0, delta=0.3, msg=self._track_report(late, self.work / "02-B.mp3"))
         self.assertAlmostEqual(a, b, delta=0.3)
 
     def test_voiced_time_excludes_the_padding(self):
@@ -1418,9 +1457,14 @@ class RecordingTests(unittest.TestCase):
 
     def _session(self, **kwargs):
         defaults = dict(
-            guild_id=999, channel_id=555, channel_name="雑談",
-            started_by_id=1, started_by_name="すずき",
-            started_at=time.monotonic(), max_seconds=3600, retention_days=7,
+            guild_id=999,
+            channel_id=555,
+            channel_name="雑談",
+            started_by_id=1,
+            started_by_name="すずき",
+            started_at=time.monotonic(),
+            max_seconds=3600,
+            retention_days=7,
         )
         defaults.update(kwargs)
         return self.rec.RecordingSession(**defaults)
@@ -1441,6 +1485,7 @@ class RecordingTests(unittest.TestCase):
         self.assertEqual(result["track_count"], 2)
 
         from services.djaudio_cache import get_meta, payload_path
+
         meta = get_meta(result["token"])
         self.assertEqual(meta["kind"], "recording")
         self.assertEqual(meta["extension"], ".zip")
@@ -1460,14 +1505,14 @@ class RecordingTests(unittest.TestCase):
         """
         started = time.monotonic()
         track = self.rec._TrackWriter(1, "A", self.work / "a.mp3", started)
-        track.write(self._tone(1.0), 0.0)   # 0〜1秒だけ発話
-        track.pad_until(4.0)                # 残りは無音で埋まる
+        track.write(self._tone(1.0), 0.0)  # 0〜1秒だけ発話
+        track.pad_until(4.0)  # 残りは無音で埋まる
 
         series = track.peak_series()
         bucket = self.rec.PEAK_BUCKET_SECONDS
         self.assertAlmostEqual(len(series) * bucket, 4.0, delta=bucket)
-        voiced = series[:int(1.0 / bucket)]
-        silent = series[int(1.5 / bucket):]
+        voiced = series[: int(1.0 / bucket)]
+        silent = series[int(1.5 / bucket) :]
         self.assertTrue(all(v > 0.2 for v in voiced), series[:6])
         self.assertTrue(all(v == 0 for v in silent), series)
         track.close(4.0)
@@ -1482,7 +1527,7 @@ class RecordingTests(unittest.TestCase):
         track.peaks = [32767] * 20000
         series = track.peak_series(group=10, points=2000)
         self.assertEqual(len(series), 2000)
-        self.assertTrue(all(v == 1.0 for v in series))   # 間引いても山は残る
+        self.assertTrue(all(v == 1.0 for v in series))  # 間引いても山は残る
 
         # 短いトラックは末尾を無音で埋めて、長いものと同じ点数に揃える。
         track.peaks = [32767] * 50
@@ -1499,6 +1544,7 @@ class RecordingTests(unittest.TestCase):
         result = self.rec._finalize(session, 2.0, "テスト")
 
         from services.djaudio_cache import get_meta, payload_path
+
         meta = get_meta(result["token"])
         with zipfile.ZipFile(payload_path(result["token"], meta)) as archive:
             manifest = json.loads(archive.read(self.rec.MANIFEST_NAME).decode("utf-8"))
@@ -1533,18 +1579,21 @@ class RecordingTests(unittest.TestCase):
         # 6時間ぶんを本当に書くと、末尾の穴埋めだけで1トラック 4GB を ffmpeg へ
         # 流すことになる。ここで見たいのは目盛りの縮尺だけなので、穴埋めと
         # 声の判定は省く（mp3 の書き出し自体は通す）。
-        with patch.object(self.rec._TrackWriter, "pad_until", lambda self, *a, **k: None), \
-                patch.object(self.rec, "measure_voice", return_value=None):
+        with (
+            patch.object(self.rec._TrackWriter, "pad_until", lambda self, *a, **k: None),
+            patch.object(self.rec, "measure_voice", return_value=None),
+        ):
             result = self.rec._finalize(session, duration, "テスト")
 
         from services.djaudio_cache import get_meta, payload_path
+
         meta = get_meta(result["token"])
         with zipfile.ZipFile(payload_path(result["token"], meta)) as archive:
             manifest = json.loads(archive.read(self.rec.MANIFEST_NAME).decode("utf-8"))
 
         stems = manifest["stems"]
         bucket = manifest["bucket_seconds"]
-        self.assertGreater(bucket, self.rec.PEAK_BUCKET_SECONDS)   # 間引かれている
+        self.assertGreater(bucket, self.rec.PEAK_BUCKET_SECONDS)  # 間引かれている
         lengths = {len(s["peaks"]) for s in stems}
         self.assertEqual(len(lengths), 1, "トラックごとに点数が違うと縮尺がずれる")
         points = lengths.pop()
@@ -1561,6 +1610,7 @@ class RecordingTests(unittest.TestCase):
         result = self.rec._finalize(session, 1.0, "テスト")
 
         from services.djaudio_cache import get_meta, payload_path
+
         meta = get_meta(result["token"])
         with zipfile.ZipFile(payload_path(result["token"], meta)) as archive:
             stored = {i.filename: i.compress_type for i in archive.infolist()}
@@ -1575,6 +1625,7 @@ class RecordingTests(unittest.TestCase):
         """
         import random
         import struct
+
         rng = random.Random(5)
         noise = bytearray()
         for _ in range(int(self.rec.SAMPLE_RATE * 1.0)):
@@ -1586,18 +1637,18 @@ class RecordingTests(unittest.TestCase):
         session.feed(Mock(id=2, display_name="たなか"), bytes(noise))
         result = self.rec._finalize(session, 2.0, "テスト")
 
-        self.assertEqual(result["suspect_tracks"], ["たなか"],
-                         f"周期性の判定が効いていない: {result['suspect_tracks']}")
+        self.assertEqual(
+            result["suspect_tracks"], ["たなか"], f"周期性の判定が効いていない: {result['suspect_tracks']}"
+        )
 
         from services.djaudio_cache import get_meta, payload_path
+
         meta = get_meta(result["token"])
         with zipfile.ZipFile(payload_path(result["token"], meta)) as archive:
             manifest = json.loads(archive.read(self.rec.MANIFEST_NAME).decode("utf-8"))
         by_name = {s["name"]: s for s in manifest["stems"]}
-        self.assertLess(by_name["たなか"]["periodicity"],
-                        manifest["periodicity_min"], by_name["たなか"])
-        self.assertGreaterEqual(by_name["すずき"]["periodicity"],
-                                manifest["periodicity_min"], by_name["すずき"])
+        self.assertLess(by_name["たなか"]["periodicity"], manifest["periodicity_min"], by_name["たなか"])
+        self.assertGreaterEqual(by_name["すずき"]["periodicity"], manifest["periodicity_min"], by_name["すずき"])
 
     def test_a_silent_track_is_not_called_broken(self):
         """無音しか入っていないトラックは、良し悪しを判定できない。
@@ -1615,6 +1666,7 @@ class RecordingTests(unittest.TestCase):
         result = self.rec._finalize(session, 1.0, "テスト")
 
         from services.djaudio_cache import get_meta
+
         remaining = get_meta(result["token"])["expires_at"] - time.time()
         self.assertAlmostEqual(remaining, 3 * 24 * 3600, delta=60)
 
@@ -1649,20 +1701,26 @@ class RecordingTests(unittest.TestCase):
     def test_start_refuses_without_the_receive_extension(self):
         """受信拡張が無い環境では、黙って失敗せず理由を返すこと。"""
         from services import voice_session
+
         guild = Mock()
         guild.id = 999
         with patch.object(voice_session, "RECEIVE_AVAILABLE", False):
             with self.assertRaises(self.rec.RecordingError) as caught:
-                asyncio.run(self.rec.start_recording(
-                    Mock(), guild, Mock(spec=discord.VoiceChannel), started_by=Mock(),
-                ))
+                asyncio.run(
+                    self.rec.start_recording(
+                        Mock(),
+                        guild,
+                        Mock(spec=discord.VoiceChannel),
+                        started_by=Mock(),
+                    )
+                )
         self.assertIn("受信", str(caught.exception))
 
 
 class RecordingSettingsTests(unittest.TestCase):
     def test_defaults_match_the_agreed_limits(self):
         settings = store.get_recording_settings(4243)
-        self.assertEqual(settings["max_minutes"], 360)   # 6時間
+        self.assertEqual(settings["max_minutes"], 360)  # 6時間
         self.assertEqual(settings["retention_days"], 7)
         self.assertEqual(settings["excluded_user_ids"], [])
 
@@ -1683,12 +1741,12 @@ class DurationWidgetTests(unittest.TestCase):
     def setUp(self):
         from webapp_admin.schema import duration
         from webapp_admin.schema.registry import PANEL_BY_ID
+
         self.duration = duration
         self.field = PANEL_BY_ID["djaudio"].field("cache_ttl")
 
     def test_largest_whole_unit_is_used(self):
-        cases = {60: "1分", 600: "10分", 3600: "1時間",
-                 86400: "1日", 2592000: "30日", 90: "90秒", 5400: "90分"}
+        cases = {60: "1分", 600: "10分", 3600: "1時間", 86400: "1日", 2592000: "30日", 90: "90秒", 5400: "90分"}
         for seconds, expected in cases.items():
             with self.subTest(seconds=seconds):
                 self.assertEqual(self.duration.humanize(seconds), expected)
@@ -1723,8 +1781,7 @@ class DurationWidgetTests(unittest.TestCase):
         読んで min/max を作るので、ずれようがない。表の側が壊れていない
         ことを見る。
         """
-        self.assertEqual(store.DJAUDIO_LIMITS["cache_ttl"],
-                         (self.field.min, self.field.max))
+        self.assertEqual(store.DJAUDIO_LIMITS["cache_ttl"], (self.field.min, self.field.max))
 
     def test_thirty_days_survives_a_save_and_reread(self):
         store.set_djaudio_settings(4244, {"cache_ttl": 30 * 86400})
@@ -1753,13 +1810,19 @@ class UnlimitedRecordingTests(unittest.TestCase):
 
     def setUp(self):
         import services.recording_service as recording
+
         self.rec = recording
 
     def _session(self, max_seconds):
         return self.rec.RecordingSession(
-            guild_id=999, channel_id=555, channel_name="雑談VC",
-            started_by_id=1, started_by_name="すずき",
-            started_at=time.monotonic(), max_seconds=max_seconds, retention_days=7,
+            guild_id=999,
+            channel_id=555,
+            channel_name="雑談VC",
+            started_by_id=1,
+            started_by_name="すずき",
+            started_at=time.monotonic(),
+            max_seconds=max_seconds,
+            retention_days=7,
         )
 
     def test_zero_means_unlimited(self):
@@ -1786,8 +1849,13 @@ class UnlimitedRecordingTests(unittest.TestCase):
         robot = Mock()
         robot.bot = True
 
-        for members, expected in ((None, False), ([], True), ([robot], True),
-                                  ([human], False), ([human, robot], False)):
+        for members, expected in (
+            (None, False),
+            ([], True),
+            ([robot], True),
+            ([human], False),
+            ([human, robot], False),
+        ):
             with self.subTest(members=members):
                 channel = Mock()
                 channel.members = members
@@ -1814,10 +1882,14 @@ class _FakeResponse:
     def __init__(self, status=200, retry_after=None, payload=None):
         self.status = status
         self.headers = {"Retry-After": retry_after} if retry_after else {}
-        self._payload = payload if payload is not None else [
-            {"id": "1", "name": "general", "type": 0, "position": 0},
-            {"id": "2", "name": "雑談VC", "type": 2, "position": 1},
-        ]
+        self._payload = (
+            payload
+            if payload is not None
+            else [
+                {"id": "1", "name": "general", "type": 0, "position": 0},
+                {"id": "2", "name": "雑談VC", "type": 2, "position": 1},
+            ]
+        )
 
     async def __aenter__(self):
         return self
@@ -1842,6 +1914,7 @@ class GuildChannelCacheTests(unittest.TestCase):
 
     def setUp(self):
         import webapp_admin.auth as auth
+
         self.auth = auth
         auth._guild_channels_cache.clear()
         auth._guild_channels_cooldown.clear()
@@ -1870,7 +1943,10 @@ class GuildChannelCacheTests(unittest.TestCase):
                 return _FakeResponse(**response_kwargs)
 
         return patch.object(
-            self.auth.aiohttp, "ClientSession", Session, create=False,
+            self.auth.aiohttp,
+            "ClientSession",
+            Session,
+            create=False,
         )
 
     def test_text_and_voice_share_one_request(self):
@@ -1923,7 +1999,7 @@ class GuildChannelCacheTests(unittest.TestCase):
             self.assertEqual(asyncio.run(self.auth.get_guild_channels(1)), [])
 
     def test_cooldown_is_cleared_after_a_success(self):
-        self.auth._guild_channels_cooldown[1] = 0.0   # 期限切れのクールダウン
+        self.auth._guild_channels_cooldown[1] = 0.0  # 期限切れのクールダウン
         with self._patch_session():
             asyncio.run(self.auth.get_guild_channels(1))
         self.assertNotIn(1, self.auth._guild_channels_cooldown)
@@ -1944,6 +2020,7 @@ class StreamAssemblerTests(unittest.TestCase):
 
     def setUp(self):
         import services.recording_service as recording
+
         self.rec = recording
         self.stream = recording._StreamAssembler(18295)
 
@@ -1965,7 +2042,7 @@ class StreamAssemblerTests(unittest.TestCase):
             self._push(seq)
         got = self._seqs(self.stream.flush())
         self.assertEqual(got[0], 5482)
-        self.assertEqual(sorted(got), got, got)     # 昇順であること
+        self.assertEqual(sorted(got), got, got)  # 昇順であること
 
     def test_nothing_is_emitted_before_the_hold_window(self):
         """先に届いたものから出すと、あとから届く若い番号を全部捨てることになる。"""
@@ -2005,7 +2082,7 @@ class StreamAssemblerTests(unittest.TestCase):
     def test_lost_frames_are_concealed_not_skipped(self):
         """飛ばしたままだとデコーダの状態がずれて継ぎ目が濁る。"""
         self._push(1, now=0.0)
-        self._push(5, now=0.0)          # 2〜4 は来なかった
+        self._push(5, now=0.0)  # 2〜4 は来なかった
         drained = self.stream.drain(1.0)
         concealed = [payload for _ts, payload, _at in drained if payload is None]
         self.assertEqual(len(concealed), 3, drained)
@@ -2030,22 +2107,26 @@ class StreamAssemblerTests(unittest.TestCase):
         中身は無音なので、時間軸の穴埋めに任せて数えるだけにする。
         """
         session = self.rec.RecordingSession(
-            guild_id=999, channel_id=555, channel_name="雑談VC",
-            started_by_id=1, started_by_name="すずき",
-            started_at=time.monotonic(), max_seconds=0, retention_days=7,
+            guild_id=999,
+            channel_id=555,
+            channel_name="雑談VC",
+            started_by_id=1,
+            started_by_name="すずき",
+            started_at=time.monotonic(),
+            max_seconds=0,
+            retention_days=7,
         )
         sink = self.rec._make_sink_class()(session)
         user = Mock(id=1, display_name="すずき")
 
         def send(sequence, timestamp, payload):
-            data = SimpleNamespace(
-                packet=SimpleNamespace(ssrc=1, sequence=sequence, timestamp=timestamp),
-                opus=payload)
+            data = SimpleNamespace(packet=SimpleNamespace(ssrc=1, sequence=sequence, timestamp=timestamp), opus=payload)
             sink.write(user, data)
 
         from discord.ext.voice_recv.rtp import OPUS_SILENCE
-        send(-1, 5_000_000, OPUS_SILENCE)          # 発話の切れ目
-        send(27700, 5_000_000, bytes(20))       # そのあとの本物
+
+        send(-1, 5_000_000, OPUS_SILENCE)  # 発話の切れ目
+        send(27700, 5_000_000, bytes(20))  # そのあとの本物
 
         stream = sink._streams[1]
         self.assertEqual(stream.silence, 1)
@@ -2055,7 +2136,7 @@ class StreamAssemblerTests(unittest.TestCase):
         """到着時刻ではなく RTP タイムスタンプで位置を決めること。"""
         base = 1_000_000
         first = self.stream.offset_for(base, 10.0)
-        later = self.stream.offset_for(base + 48000 * 3, 10.05)   # 音は3秒ぶん先
+        later = self.stream.offset_for(base + 48000 * 3, 10.05)  # 音は3秒ぶん先
         self.assertAlmostEqual(first, 10.0, delta=0.001)
         self.assertAlmostEqual(later, 13.0, delta=0.001)
 
@@ -2082,13 +2163,19 @@ class StreamAssemblerTests(unittest.TestCase):
         clock = {"t": 0.0}
         placed: list[tuple[int, float]] = []
 
-        with patch.object(self.rec.time, "monotonic", lambda: clock["t"]), \
-                patch.object(self.rec._StreamAssembler, "decode",
-                             lambda self, encoded: frame):
+        with (
+            patch.object(self.rec.time, "monotonic", lambda: clock["t"]),
+            patch.object(self.rec._StreamAssembler, "decode", lambda self, encoded: frame),
+        ):
             session = self.rec.RecordingSession(
-                guild_id=999, channel_id=555, channel_name="雑談VC",
-                started_by_id=1, started_by_name="すずき",
-                started_at=0.0, max_seconds=0, retention_days=7,
+                guild_id=999,
+                channel_id=555,
+                channel_name="雑談VC",
+                started_by_id=1,
+                started_by_name="すずき",
+                started_at=0.0,
+                max_seconds=0,
+                retention_days=7,
             )
             session.feed = lambda user, pcm, at=None: placed.append((int(user.id), at))
             sink = self.rec._make_sink_class()(session)
@@ -2097,10 +2184,13 @@ class StreamAssemblerTests(unittest.TestCase):
                 user = Mock(id=user_id, display_name=f"u{user_id}")
                 for i in range(5):
                     clock["t"] = at + i * 0.02
-                    sink.write(user, SimpleNamespace(
-                        packet=SimpleNamespace(ssrc=ssrc, sequence=i,
-                                               timestamp=timestamp + i * 960),
-                        opus=b"\x01" * 20))
+                    sink.write(
+                        user,
+                        SimpleNamespace(
+                            packet=SimpleNamespace(ssrc=ssrc, sequence=i, timestamp=timestamp + i * 960),
+                            opus=b"\x01" * 20,
+                        ),
+                    )
 
             # それぞれ一言ずつ、間隔をばらばらにする
             speak(1, 101, at=5.0, timestamp=1_000_000)
@@ -2114,9 +2204,11 @@ class StreamAssemblerTests(unittest.TestCase):
         self.assertEqual(set(first), {1, 2, 3}, placed)
         for user_id, spoke_at in ((1, 5.0), (2, 20.0), (3, 95.0)):
             self.assertAlmostEqual(
-                first[user_id], spoke_at, delta=0.05,
-                msg=f"user{user_id} の声が {first[user_id]:.2f} 秒に置かれた"
-                    f"（発話は {spoke_at:.2f} 秒）")
+                first[user_id],
+                spoke_at,
+                delta=0.05,
+                msg=f"user{user_id} の声が {first[user_id]:.2f} 秒に置かれた" f"（発話は {spoke_at:.2f} 秒）",
+            )
 
 
 class OpusResilienceTests(unittest.TestCase):
@@ -2128,11 +2220,12 @@ class OpusResilienceTests(unittest.TestCase):
     こちらでデコードして、そのパケットだけ捨てる。
     """
 
-    CORRUPT = b"\xff" * 40   # opus_decode が corrupted stream を返す並び
+    CORRUPT = b"\xff" * 40  # opus_decode が corrupted stream を返す並び
 
     def setUp(self):
         import discord.opus as opus
         import services.recording_service as recording
+
         # discord.py の opus は遅延読み込み。生成を試みるまで is_loaded() は False。
         if not opus.is_loaded():
             try:
@@ -2144,9 +2237,14 @@ class OpusResilienceTests(unittest.TestCase):
         self.opus = opus
         self.rec = recording
         self.session = recording.RecordingSession(
-            guild_id=999, channel_id=555, channel_name="雑談VC",
-            started_by_id=1, started_by_name="すずき",
-            started_at=time.monotonic(), max_seconds=0, retention_days=7,
+            guild_id=999,
+            channel_id=555,
+            channel_name="雑談VC",
+            started_by_id=1,
+            started_by_name="すずき",
+            started_at=time.monotonic(),
+            max_seconds=0,
+            retention_days=7,
         )
         self.sink = recording._make_sink_class()(self.session)
         self.user = Mock(id=1, display_name="すずき")
@@ -2154,8 +2252,9 @@ class OpusResilienceTests(unittest.TestCase):
     def _frame(self, freq=440.0):
         import math
         import struct
+
         pcm = bytearray()
-        for i in range(960):   # 20ms
+        for i in range(960):  # 20ms
             v = int(12000 * math.sin(2 * math.pi * freq * i / self.rec.SAMPLE_RATE))
             pcm += struct.pack("<hh", v, v)
         return self.opus.Encoder().encode(bytes(pcm), 960)
@@ -2166,8 +2265,7 @@ class OpusResilienceTests(unittest.TestCase):
         並べ直しはこの3つを見て動くので、Mock で済ませると素通りしてしまう。
         """
         self._seq = getattr(self, "_seq", 1000) + 1
-        packet = SimpleNamespace(ssrc=ssrc, sequence=self._seq % 65536,
-                                 timestamp=(self._seq * 960) % (2 ** 32))
+        packet = SimpleNamespace(ssrc=ssrc, sequence=self._seq % 65536, timestamp=(self._seq * 960) % (2**32))
         return SimpleNamespace(opus=payload, packet=packet)
 
     def _drain(self):
@@ -2185,7 +2283,7 @@ class OpusResilienceTests(unittest.TestCase):
 
     def test_corrupt_packet_is_skipped_not_raised(self):
         self.sink.write(self.user, self._packet(self._frame()))
-        self.sink.write(self.user, self._packet(self.CORRUPT))   # 例外が出たら失敗
+        self.sink.write(self.user, self._packet(self.CORRUPT))  # 例外が出たら失敗
         self._drain()
         self.assertEqual(self.session.dropped_packets, 1)
 
@@ -2228,9 +2326,16 @@ class OpusResilienceTests(unittest.TestCase):
 
     def test_result_embed_warns_only_when_something_was_lost(self):
         base = {
-            "token": "t" * 32, "title": "x", "track_count": 1, "duration_seconds": 60,
-            "size_bytes": 1024, "retention_days": 7, "channel_id": 1,
-            "channel_name": "雑談VC", "reason": "手動停止", "speakers": ["A"],
+            "token": "t" * 32,
+            "title": "x",
+            "track_count": 1,
+            "duration_seconds": 60,
+            "size_bytes": 1024,
+            "retention_days": 7,
+            "channel_id": 1,
+            "channel_name": "雑談VC",
+            "reason": "手動停止",
+            "speakers": ["A"],
         }
         quiet = self.rec.build_result_embed(1, {**base, "dropped_packets": 0})
         noisy = self.rec.build_result_embed(1, {**base, "dropped_packets": 42})
@@ -2249,6 +2354,7 @@ class ReceiverHealthTests(unittest.TestCase):
     def setUp(self):
         import services.recording_service as recording
         from services import voice_session
+
         self.rec = recording
         self.vs = voice_session
         self.vs._clients.clear()
@@ -2273,7 +2379,7 @@ class ReceiverHealthTests(unittest.TestCase):
 
     def test_client_without_the_method_is_left_alone(self):
         """判断できないものを「止まっている」と決めつけて録音を切らないこと。"""
-        client = Mock(spec=discord.VoiceClient)   # is_listening を持たない
+        client = Mock(spec=discord.VoiceClient)  # is_listening を持たない
         self.vs._clients[1] = client
         self.assertTrue(self.rec._is_receiving(1))
 
@@ -2300,15 +2406,22 @@ class AutoRecordingTests(unittest.TestCase):
 
     def setUp(self):
         import services.recording_service as recording
+
         self.rec = recording
-        store.set_recording_settings(self.GUILD, {
-            "enabled": True, "auto_start": False, "vc_channel_id": None,
-        })
+        store.set_recording_settings(
+            self.GUILD,
+            {
+                "enabled": True,
+                "auto_start": False,
+                "vc_channel_id": None,
+            },
+        )
 
     def _target(self, tts_vc=TTS_VC):
-        with patch("services.tts_service.get_effective_vc_watch",
-                   lambda gid, settings: (tts_vc, [])), \
-             patch("services.tts_store.get_tts_settings", lambda g: {}):
+        with (
+            patch("services.tts_service.get_effective_vc_watch", lambda gid, settings: (tts_vc, [])),
+            patch("services.tts_store.get_tts_settings", lambda g: {}),
+        ):
             return self.rec.auto_start_channel_id(self.GUILD)
 
     def test_off_by_default(self):
@@ -2322,46 +2435,64 @@ class AutoRecordingTests(unittest.TestCase):
         self.assertEqual(self._target(), self.TTS_VC)
 
     def test_explicit_channel_wins(self):
-        store.set_recording_settings(self.GUILD, {
-            "auto_start": True, "vc_channel_id": self.REC_VC,
-        })
+        store.set_recording_settings(
+            self.GUILD,
+            {
+                "auto_start": True,
+                "vc_channel_id": self.REC_VC,
+            },
+        )
         self.assertEqual(self._target(), self.REC_VC)
 
     def test_disabled_switch_overrides_auto(self):
         """録音そのものを切ったら、自動録音も走らない。"""
-        store.set_recording_settings(self.GUILD, {
-            "enabled": False, "auto_start": True, "vc_channel_id": self.REC_VC,
-        })
+        store.set_recording_settings(
+            self.GUILD,
+            {
+                "enabled": False,
+                "auto_start": True,
+                "vc_channel_id": self.REC_VC,
+            },
+        )
         self.assertIsNone(self._target())
 
     def test_no_target_when_neither_is_configured(self):
         store.set_recording_settings(self.GUILD, {"auto_start": True})
         self.assertIsNone(self._target(tts_vc=None))
 
-
     def test_preferred_vc_ignores_the_auto_switch(self):
         """手動で始めるときの初期値。自動録音のオン/オフとは無関係に返す。
 
         以前は「録音するVC」の欄が常に空で、毎回選び直す必要があった。
         """
-        store.set_recording_settings(self.GUILD, {
-            "auto_start": False, "vc_channel_id": self.REC_VC,
-        })
-        with patch("services.tts_service.get_effective_vc_watch",
-                   lambda gid, settings: (self.TTS_VC, [])),              patch("services.tts_store.get_tts_settings", lambda g: {}):
+        store.set_recording_settings(
+            self.GUILD,
+            {
+                "auto_start": False,
+                "vc_channel_id": self.REC_VC,
+            },
+        )
+        with (
+            patch("services.tts_service.get_effective_vc_watch", lambda gid, settings: (self.TTS_VC, [])),
+            patch("services.tts_store.get_tts_settings", lambda g: {}),
+        ):
             self.assertEqual(self.rec.preferred_vc_channel_id(self.GUILD), self.REC_VC)
             self.assertIsNone(self.rec.auto_start_channel_id(self.GUILD))
 
     def test_preferred_vc_falls_back_to_the_tts_channel(self):
         store.set_recording_settings(self.GUILD, {"vc_channel_id": None})
-        with patch("services.tts_service.get_effective_vc_watch",
-                   lambda gid, settings: (self.TTS_VC, [])),              patch("services.tts_store.get_tts_settings", lambda g: {}):
+        with (
+            patch("services.tts_service.get_effective_vc_watch", lambda gid, settings: (self.TTS_VC, [])),
+            patch("services.tts_store.get_tts_settings", lambda g: {}),
+        ):
             self.assertEqual(self.rec.preferred_vc_channel_id(self.GUILD), self.TTS_VC)
 
     def test_preferred_vc_is_none_when_nothing_is_configured(self):
         store.set_recording_settings(self.GUILD, {"vc_channel_id": None})
-        with patch("services.tts_service.get_effective_vc_watch",
-                   lambda gid, settings: (None, [])),              patch("services.tts_store.get_tts_settings", lambda g: {}):
+        with (
+            patch("services.tts_service.get_effective_vc_watch", lambda gid, settings: (None, [])),
+            patch("services.tts_store.get_tts_settings", lambda g: {}),
+        ):
             self.assertIsNone(self.rec.preferred_vc_channel_id(self.GUILD))
 
     # ── 入室したときの挙動 ──────────────────────────────────
@@ -2387,14 +2518,14 @@ class AutoRecordingTests(unittest.TestCase):
             started.append((guild.id, ch.id))
             return Mock()
 
-        with patch.object(self.rec, "start_recording", start or fake_start), \
-             patch.object(voice_session, "RECEIVE_AVAILABLE", receive), \
-             patch("services.tts_service.get_effective_vc_watch",
-                   lambda gid, settings: (self.TTS_VC, [])), \
-             patch("services.tts_store.get_tts_settings", lambda g: {}):
+        with (
+            patch.object(self.rec, "start_recording", start or fake_start),
+            patch.object(voice_session, "RECEIVE_AVAILABLE", receive),
+            patch("services.tts_service.get_effective_vc_watch", lambda gid, settings: (self.TTS_VC, [])),
+            patch("services.tts_store.get_tts_settings", lambda g: {}),
+        ):
             asyncio.run(self.rec.maybe_auto_start(Mock(), member, channel))
         return started
-
 
     def _voice_channel(self, channel_id, members=None):
         channel = Mock(spec=discord.VoiceChannel)
@@ -2420,8 +2551,12 @@ class AutoRecordingTests(unittest.TestCase):
         guild.id = self.GUILD
         guild.me = Mock()
 
-        with patch.object(self.rec, "start_recording", fake_start),              patch.object(voice_session, "RECEIVE_AVAILABLE", receive),              patch("services.tts_service.get_effective_vc_watch",
-                   lambda gid, settings: (self.TTS_VC, [])),              patch("services.tts_store.get_tts_settings", lambda g: {}):
+        with (
+            patch.object(self.rec, "start_recording", fake_start),
+            patch.object(voice_session, "RECEIVE_AVAILABLE", receive),
+            patch("services.tts_service.get_effective_vc_watch", lambda gid, settings: (self.TTS_VC, [])),
+            patch("services.tts_store.get_tts_settings", lambda g: {}),
+        ):
             asyncio.run(self.rec.maybe_start_for_channel(Mock(), guild, channel))
         return started
 
@@ -2431,50 +2566,70 @@ class AutoRecordingTests(unittest.TestCase):
         入室イベントだけを入口にしていると、既に人がいる VC へ手動で
         参加させたときに録音が始まらない。
         """
-        store.set_recording_settings(self.GUILD, {
-            "auto_start": True, "vc_channel_id": self.REC_VC,
-        })
-        self.assertEqual(self._run_for_channel(self._voice_channel(self.REC_VC)),
-                         [self.REC_VC])
+        store.set_recording_settings(
+            self.GUILD,
+            {
+                "auto_start": True,
+                "vc_channel_id": self.REC_VC,
+            },
+        )
+        self.assertEqual(self._run_for_channel(self._voice_channel(self.REC_VC)), [self.REC_VC])
 
     def test_an_empty_channel_is_not_recorded(self):
         """bot だけが入っている VC を録りに行かない。"""
         robot = Mock()
         robot.bot = True
-        store.set_recording_settings(self.GUILD, {
-            "auto_start": True, "vc_channel_id": self.REC_VC,
-        })
-        self.assertEqual(
-            self._run_for_channel(self._voice_channel(self.REC_VC, members=[robot])), [])
-        self.assertEqual(
-            self._run_for_channel(self._voice_channel(self.REC_VC, members=[])), [])
+        store.set_recording_settings(
+            self.GUILD,
+            {
+                "auto_start": True,
+                "vc_channel_id": self.REC_VC,
+            },
+        )
+        self.assertEqual(self._run_for_channel(self._voice_channel(self.REC_VC, members=[robot])), [])
+        self.assertEqual(self._run_for_channel(self._voice_channel(self.REC_VC, members=[])), [])
 
     def test_join_to_the_target_starts_recording(self):
-        store.set_recording_settings(self.GUILD, {
-            "auto_start": True, "vc_channel_id": self.REC_VC,
-        })
+        store.set_recording_settings(
+            self.GUILD,
+            {
+                "auto_start": True,
+                "vc_channel_id": self.REC_VC,
+            },
+        )
         self.assertEqual(
             self._run_join(self._member(), self._channel(self.REC_VC)),
             [(self.GUILD, self.REC_VC)],
         )
 
     def test_other_channels_are_ignored(self):
-        store.set_recording_settings(self.GUILD, {
-            "auto_start": True, "vc_channel_id": self.REC_VC,
-        })
+        store.set_recording_settings(
+            self.GUILD,
+            {
+                "auto_start": True,
+                "vc_channel_id": self.REC_VC,
+            },
+        )
         self.assertEqual(self._run_join(self._member(), self._channel(999)), [])
 
     def test_bots_do_not_trigger_recording(self):
-        store.set_recording_settings(self.GUILD, {
-            "auto_start": True, "vc_channel_id": self.REC_VC,
-        })
-        self.assertEqual(
-            self._run_join(self._member(is_bot=True), self._channel(self.REC_VC)), [])
+        store.set_recording_settings(
+            self.GUILD,
+            {
+                "auto_start": True,
+                "vc_channel_id": self.REC_VC,
+            },
+        )
+        self.assertEqual(self._run_join(self._member(is_bot=True), self._channel(self.REC_VC)), [])
 
     def test_does_not_start_twice(self):
-        store.set_recording_settings(self.GUILD, {
-            "auto_start": True, "vc_channel_id": self.REC_VC,
-        })
+        store.set_recording_settings(
+            self.GUILD,
+            {
+                "auto_start": True,
+                "vc_channel_id": self.REC_VC,
+            },
+        )
         self.rec._sessions[self.GUILD] = Mock()
         try:
             started = self._run_join(self._member(), self._channel(self.REC_VC))
@@ -2483,24 +2638,30 @@ class AutoRecordingTests(unittest.TestCase):
         self.assertEqual(started, [])
 
     def test_nothing_happens_without_the_receive_extension(self):
-        store.set_recording_settings(self.GUILD, {
-            "auto_start": True, "vc_channel_id": self.REC_VC,
-        })
-        self.assertEqual(
-            self._run_join(self._member(), self._channel(self.REC_VC), receive=False), [])
+        store.set_recording_settings(
+            self.GUILD,
+            {
+                "auto_start": True,
+                "vc_channel_id": self.REC_VC,
+            },
+        )
+        self.assertEqual(self._run_join(self._member(), self._channel(self.REC_VC), receive=False), [])
 
     def test_a_failed_start_does_not_escape(self):
         """自動で走る経路なので、失敗しても入室処理を巻き込まない。"""
-        store.set_recording_settings(self.GUILD, {
-            "auto_start": True, "vc_channel_id": self.REC_VC,
-        })
+        store.set_recording_settings(
+            self.GUILD,
+            {
+                "auto_start": True,
+                "vc_channel_id": self.REC_VC,
+            },
+        )
 
         async def boom(*args, **kwargs):
             raise self.rec.RecordingError("テスト用の失敗")
 
         with self.assertLogs(self.rec.logger, level="WARNING"):
-            started = self._run_join(
-                self._member(), self._channel(self.REC_VC), start=boom)
+            started = self._run_join(self._member(), self._channel(self.REC_VC), start=boom)
         self.assertEqual(started, [])
 
 
@@ -2517,6 +2678,7 @@ class ReleaseAfterRecordingTests(unittest.TestCase):
     def setUp(self):
         import services.recording_service as recording
         from services import voice_session
+
         self.rec = recording
         self.vs = voice_session
         self.vs._clients.clear()
@@ -2544,9 +2706,10 @@ class ReleaseAfterRecordingTests(unittest.TestCase):
 
     def _release(self, *, tts_enabled, tts_vc, holds=()):
         disconnected = self._connect(holds)
-        with patch("services.tts_store.get_tts_settings",
-                   lambda g: {"enabled": tts_enabled, "vc_channel_id": tts_vc}),              patch("services.tts_service.get_effective_vc_watch",
-                   lambda g, s: (tts_vc, [])):
+        with (
+            patch("services.tts_store.get_tts_settings", lambda g: {"enabled": tts_enabled, "vc_channel_id": tts_vc}),
+            patch("services.tts_service.get_effective_vc_watch", lambda g, s: (tts_vc, [])),
+        ):
             asyncio.run(self.rec._release_if_unused(self.GUILD))
         return bool(disconnected)
 
@@ -2563,8 +2726,7 @@ class ReleaseAfterRecordingTests(unittest.TestCase):
         self.assertTrue(self._release(tts_enabled=True, tts_vc=None))
 
     def test_stays_while_something_else_holds_the_connection(self):
-        self.assertFalse(
-            self._release(tts_enabled=False, tts_vc=self.VC, holds=("something",)))
+        self.assertFalse(self._release(tts_enabled=False, tts_vc=self.VC, holds=("something",)))
 
 
 class RecordingLimitConstantsTests(unittest.TestCase):
@@ -2576,11 +2738,13 @@ class RecordingLimitConstantsTests(unittest.TestCase):
 
     def setUp(self):
         import services.recording_service as recording
+
         self.rec = recording
 
     def test_api_uses_the_shared_constants(self):
         import inspect
         import webapp_admin.api.recording as api
+
         source = inspect.getsource(api)
         self.assertIn("MAX_MINUTES_LIMIT", source)
         self.assertIn("RETENTION_DAYS_MAX", source)
@@ -2588,6 +2752,7 @@ class RecordingLimitConstantsTests(unittest.TestCase):
     def test_commands_use_the_shared_constants(self):
         import inspect
         import commands.recording_commands as cmds
+
         source = inspect.getsource(cmds)
         self.assertIn("MAX_MINUTES_LIMIT", source)
         self.assertIn("RETENTION_DAYS_MAX", source)
@@ -2643,6 +2808,7 @@ class AnnounceChannelTests(unittest.TestCase):
 
     def setUp(self):
         import services.recording_service as recording
+
         self.rec = recording
         self.sent = []
         store.set_recording_settings(self.GUILD, {"announce_channel_id": None})
@@ -2681,30 +2847,29 @@ class AnnounceChannelTests(unittest.TestCase):
 
     def _session(self):
         return self.rec.RecordingSession(
-            guild_id=self.GUILD, channel_id=800, channel_name="雑談VC",
-            started_by_id=1, started_by_name="すずき",
-            started_at=0.0, max_seconds=0, retention_days=7,
+            guild_id=self.GUILD,
+            channel_id=800,
+            channel_name="雑談VC",
+            started_by_id=1,
+            started_by_name="すずき",
+            started_at=0.0,
+            max_seconds=0,
+            retention_days=7,
         )
 
     def _announce(self, *, configured, announce_to, notice_exists=True):
-        store.set_recording_settings(
-            self.GUILD, {"announce_channel_id": configured})
+        store.set_recording_settings(self.GUILD, {"announce_channel_id": configured})
         guild = self._guild(notice_exists=notice_exists)
-        asyncio.run(self.rec._announce_start(
-            self._voice(guild), self._session(), announce_to))
+        asyncio.run(self.rec._announce_start(self._voice(guild), self._session(), announce_to))
         return self.sent
 
     def test_configured_channel_wins(self):
         command_channel = self._messageable(900, "コマンド実行ch")
-        self.assertEqual(
-            self._announce(configured=self.NOTICE, announce_to=command_channel),
-            ["通知ch"])
+        self.assertEqual(self._announce(configured=self.NOTICE, announce_to=command_channel), ["通知ch"])
 
     def test_falls_back_to_the_command_channel(self):
         command_channel = self._messageable(900, "コマンド実行ch")
-        self.assertEqual(
-            self._announce(configured=None, announce_to=command_channel),
-            ["コマンド実行ch"])
+        self.assertEqual(self._announce(configured=None, announce_to=command_channel), ["コマンド実行ch"])
 
     def test_falls_back_to_the_voice_chat(self):
         self.assertEqual(self._announce(configured=None, announce_to=None), ["VCチャット"])
@@ -2713,15 +2878,12 @@ class AnnounceChannelTests(unittest.TestCase):
         """設定先が消えていても、黙って告知しないのは避ける。"""
         command_channel = self._messageable(900, "コマンド実行ch")
         with self.assertLogs(self.rec.logger, level="WARNING"):
-            sent = self._announce(configured=999, announce_to=command_channel,
-                                  notice_exists=False)
+            sent = self._announce(configured=999, announce_to=command_channel, notice_exists=False)
         self.assertEqual(sent, ["コマンド実行ch"])
 
     def test_resolver_returns_the_fallback_without_a_setting(self):
         fallback = self._messageable(123, "代替")
-        self.assertIs(
-            self.rec.resolve_announce_channel(self._guild(), fallback=fallback),
-            fallback)
+        self.assertIs(self.rec.resolve_announce_channel(self._guild(), fallback=fallback), fallback)
 
     def test_resolver_handles_a_missing_guild(self):
         self.assertIsNone(self.rec.resolve_announce_channel(None))
@@ -2745,24 +2907,28 @@ class RecordingPrivilegeTests(unittest.TestCase):
 
     def test_is_admin_distinguishes_the_two(self):
         from commands.guards import is_admin
+
         self.assertTrue(is_admin(self._interaction(admin=True)))
         self.assertFalse(is_admin(self._interaction(admin=False)))
 
     def test_is_admin_is_false_outside_a_guild(self):
         from commands.guards import is_admin
+
         self.assertFalse(is_admin(self._interaction(admin=True, in_guild=False)))
 
     def test_is_admin_is_false_when_permissions_are_unavailable(self):
         from commands.guards import is_admin
+
         interaction = Mock()
         interaction.guild = Mock()
-        interaction.user = Mock(spec=[])       # guild_permissions を持たない
+        interaction.user = Mock(spec=[])  # guild_permissions を持たない
         self.assertFalse(is_admin(interaction))
 
     def test_tts_join_gates_the_recording_side_effect(self):
         """一般利用者の /tts join で録音が始まらないこと。"""
         import inspect
         import commands.tts_commands as cmds
+
         source = inspect.getsource(cmds.tts_join.callback)
         self.assertIn("is_admin(interaction)", source)
         # 録音開始がガードの内側にあること
@@ -2773,6 +2939,7 @@ class RecordingPrivilegeTests(unittest.TestCase):
     def test_tts_leave_gates_stopping_the_recording(self):
         import inspect
         import commands.tts_commands as cmds
+
         source = inspect.getsource(cmds.tts_leave.callback)
         self.assertIn("is_admin(interaction)", source)
         guard_at = source.index("is_admin(interaction)")
@@ -2783,11 +2950,12 @@ class RecordingPrivilegeTests(unittest.TestCase):
         """/record の管理系サブコマンドが素通りしないこと。"""
         import inspect
         import commands.recording_commands as cmds
+
         source = inspect.getsource(cmds)
         for name in ("record_start", "record_stop", "record_auto", "record_config"):
             with self.subTest(command=name):
-                body = source[source.index(f"async def {name}("):]
-                body = body[:body.index("@group.command") if "@group.command" in body else len(body)]
+                body = source[source.index(f"async def {name}(") :]
+                body = body[: body.index("@group.command") if "@group.command" in body else len(body)]
                 self.assertIn("_ensure_admin(interaction)", body)
 
 
@@ -2800,6 +2968,7 @@ class TTLCacheTests(unittest.TestCase):
 
     def setUp(self):
         from services.ttl_cache import TTLCache
+
         self.TTLCache = TTLCache
 
     def test_entries_expire_on_read(self):
@@ -2820,10 +2989,10 @@ class TTLCacheTests(unittest.TestCase):
         cache = self.TTLCache(ttl=60, max_entries=3)
         for i in range(3):
             cache.set(i, i)
-        cache.get(0)             # 0 を使う
-        cache.set(99, 99)        # あふれさせる
+        cache.get(0)  # 0 を使う
+        cache.set(99, 99)  # あふれさせる
         self.assertIsNotNone(cache.get(0))
-        self.assertIsNone(cache.get(1))   # 一番使われていないものが落ちる
+        self.assertIsNone(cache.get(1))  # 一番使われていないものが落ちる
 
     def test_pop_and_clear(self):
         cache = self.TTLCache(ttl=60, max_entries=10)
@@ -2871,6 +3040,7 @@ class SecurityFailSafeTests(unittest.TestCase):
 
     def setUp(self):
         import services.security_service as security
+
         self.sec = security
 
     def _member(self):
@@ -2897,24 +3067,33 @@ class SecurityFailSafeTests(unittest.TestCase):
     # ── 判定の3状態 ──────────────────────────────────────────
 
     def test_trusted_user_is_bypassed(self):
-        with patch.object(self.sec, "get_trusted_user_ids", lambda g: [5]),              patch.object(self.sec, "get_bypass_role_ids", lambda g: []):
+        with (
+            patch.object(self.sec, "get_trusted_user_ids", lambda g: [5]),
+            patch.object(self.sec, "get_bypass_role_ids", lambda g: []),
+        ):
             result = self.sec.is_security_bypassed(self._member())
         self.assertTrue(result.bypassed)
         self.assertEqual(result.reason, "trusted_user")
         self.assertFalse(result.check_failed)
 
     def test_ordinary_user_is_not_bypassed(self):
-        with patch.object(self.sec, "get_trusted_user_ids", lambda g: []),              patch.object(self.sec, "get_bypass_role_ids", lambda g: []):
+        with (
+            patch.object(self.sec, "get_trusted_user_ids", lambda g: []),
+            patch.object(self.sec, "get_bypass_role_ids", lambda g: []),
+        ):
             result = self.sec.is_security_bypassed(self._member())
         self.assertFalse(result.bypassed)
         self.assertFalse(result.check_failed)
 
     def test_a_failed_check_is_distinguishable(self):
         """「判定できなかった」を「バイパスなし」と同じ扱いにしない。"""
-        with patch.object(self.sec, "get_trusted_user_ids", self._boom),              self.assertLogs(self.sec.logger, level="ERROR"):
+        with (
+            patch.object(self.sec, "get_trusted_user_ids", self._boom),
+            self.assertLogs(self.sec.logger, level="ERROR"),
+        ):
             result = self.sec.is_security_bypassed(self._member())
-        self.assertFalse(result.bypassed)      # 検査自体は続ける
-        self.assertTrue(result.check_failed)   # ただし強制措置には進ませない
+        self.assertFalse(result.bypassed)  # 検査自体は続ける
+        self.assertTrue(result.check_failed)  # ただし強制措置には進ませない
 
     # ── VC レイド時の措置 ────────────────────────────────────
 
@@ -2934,9 +3113,15 @@ class SecurityFailSafeTests(unittest.TestCase):
         after = Mock()
         after.channel = self._voice_channel()
 
-        with patch.object(self.sec, "get_trusted_user_ids", trusted),              patch.object(self.sec, "get_bypass_role_ids", lambda g: []),              patch.object(self.sec, "check_vc_raid", lambda m, c: raid),              patch.object(self.sec, "strip_roles", fake_strip),              patch.object(self.sec, "log_action", fake_log),              patch.object(self.sec.logger, "error"):
-            asyncio.run(self.sec.handle_security_for_voice_join(
-                Mock(), self._member(), before, after))
+        with (
+            patch.object(self.sec, "get_trusted_user_ids", trusted),
+            patch.object(self.sec, "get_bypass_role_ids", lambda g: []),
+            patch.object(self.sec, "check_vc_raid", lambda m, c: raid),
+            patch.object(self.sec, "strip_roles", fake_strip),
+            patch.object(self.sec, "log_action", fake_log),
+            patch.object(self.sec.logger, "error"),
+        ):
+            asyncio.run(self.sec.handle_security_for_voice_join(Mock(), self._member(), before, after))
         return stripped, logged
 
     def test_raid_strips_roles_when_the_check_worked(self):
@@ -2957,11 +3142,11 @@ class SecurityFailSafeTests(unittest.TestCase):
 
     def test_message_path_guards_the_destructive_branch(self):
         import inspect
+
         source = inspect.getsource(self.sec.handle_security_for_message)
         self.assertIn("if danger and bypass.check_failed:", source)
         # 見送りの分岐が、削除・剥奪より前に置かれていること
-        self.assertLess(source.index("if danger and bypass.check_failed:"),
-                        source.index("await message.delete()"))
+        self.assertLess(source.index("if danger and bypass.check_failed:"), source.index("await message.delete()"))
         self.assertIn("要確認", source)
 
 
@@ -2971,6 +3156,7 @@ class GptUnknownReportingTests(unittest.TestCase):
 
     def setUp(self):
         import services.security_service as security
+
         self.sec = security
 
     def test_gpt_icon_treats_unknown_as_a_warning_not_safe(self):
@@ -2997,12 +3183,14 @@ class TrackCloseTests(unittest.TestCase):
 
     def setUp(self):
         import services.recording_service as recording
+
         self.rec = recording
         self.work = Path(tempfile.mkdtemp(prefix="closetest-"))
 
     def _tone(self, seconds=0.2):
         import math
         import struct
+
         out = bytearray()
         for i in range(int(self.rec.SAMPLE_RATE * seconds)):
             v = int(12000 * math.sin(2 * math.pi * 440 * i / self.rec.SAMPLE_RATE))
@@ -3028,6 +3216,7 @@ class TrackCloseTests(unittest.TestCase):
 
     def test_close_does_not_call_stdin_close(self):
         import inspect
+
         source = inspect.getsource(self.rec._TrackWriter.close)
         self.assertNotIn("stdin.close()", source)
 
@@ -3038,7 +3227,7 @@ class TrackCloseTests(unittest.TestCase):
         track._process.stdin.close()
 
         with patch.object(self.rec.logger, "warning"):
-            track.close(0.5)          # 例外が出たら失敗
+            track.close(0.5)  # 例外が出たら失敗
         self.assertTrue(track.failed)
 
     def test_writing_to_a_closed_pipe_is_caught(self):
@@ -3047,7 +3236,7 @@ class TrackCloseTests(unittest.TestCase):
         track._process.stdin.close()
 
         with patch.object(self.rec.logger, "warning"):
-            track.write(self._tone(), 0.0)   # 例外が出たら失敗
+            track.write(self._tone(), 0.0)  # 例外が出たら失敗
         self.assertTrue(track.failed)
         track.close(0.5)
 
@@ -3065,12 +3254,14 @@ class WaveformTests(unittest.TestCase):
 
     def setUp(self):
         import services.recording_service as recording
+
         self.rec = recording
         self.work = Path(tempfile.mkdtemp(prefix="peaktest-"))
 
     def _tone(self, seconds, amplitude=12000):
         import math
         import struct
+
         out = bytearray()
         for i in range(int(self.rec.SAMPLE_RATE * seconds)):
             v = int(amplitude * math.sin(2 * math.pi * 440 * i / self.rec.SAMPLE_RATE))
@@ -3079,15 +3270,15 @@ class WaveformTests(unittest.TestCase):
 
     def test_peaks_follow_the_timeline(self):
         track = self.rec._TrackWriter(1, "A", self.work / "a.mp3", time.monotonic())
-        track.write(self._tone(0.5), 0.0)                  # 0.0〜0.5 に音
-        track.write(self._tone(0.5, 30000), 2.0)           # 2.0〜2.5 に大きい音
+        track.write(self._tone(0.5), 0.0)  # 0.0〜0.5 に音
+        track.write(self._tone(0.5, 30000), 2.0)  # 2.0〜2.5 に大きい音
         track.close(4.0)
 
         peaks = track.peak_series()
         self.assertEqual(len(peaks), int(4.0 / self.rec.PEAK_BUCKET_SECONDS))
-        self.assertGreater(peaks[0], 0.2)          # 冒頭は鳴っている
-        self.assertEqual(peaks[4], 0.0)            # 1.0秒地点は無音
-        self.assertGreater(peaks[8], peaks[0])     # 2.0秒地点のほうが大きい
+        self.assertGreater(peaks[0], 0.2)  # 冒頭は鳴っている
+        self.assertEqual(peaks[4], 0.0)  # 1.0秒地点は無音
+        self.assertGreater(peaks[8], peaks[0])  # 2.0秒地点のほうが大きい
 
     def test_silence_only_track_is_flat(self):
         track = self.rec._TrackWriter(2, "B", self.work / "b.mp3", time.monotonic())
@@ -3096,7 +3287,7 @@ class WaveformTests(unittest.TestCase):
 
     def test_long_recordings_are_downsampled(self):
         track = self.rec._TrackWriter(3, "C", self.work / "c.mp3", time.monotonic())
-        track.peaks = [1000] * 90_000            # 6時間ぶん相当
+        track.peaks = [1000] * 90_000  # 6時間ぶん相当
         group = 30
         series = track.peak_series(group=group, points=3000)
         self.assertLessEqual(len(series), self.rec.PEAK_MAX_POINTS)
@@ -3110,6 +3301,7 @@ class WaveformTests(unittest.TestCase):
         loud = self.rec._peak_of(self._tone(0.05, 32000))
         quiet = self.rec._peak_of(self._tone(0.05, 1000))
         self.assertGreater(loud, quiet)
+
 
 if __name__ == "__main__":
     logging.disable(logging.CRITICAL)
@@ -3129,13 +3321,14 @@ class EndToEndEncryptionTests(unittest.TestCase):
 
     def setUp(self):
         import services.recording_service as recording
+
         self.rec = recording
 
     def test_the_frames_seen_in_production_are_recognised(self):
         """本番のログに出た末尾をそのまま判定させる。
 
-            末尾=c8db040cfafa      長さ 0x0c=12 = タグ8 + nonce1 + 長さ1 + マーカー2
-            末尾=010dfafa0202      末尾は RTP パディング（voice_recv は剥がさない）
+        末尾=c8db040cfafa      長さ 0x0c=12 = タグ8 + nonce1 + 長さ1 + マーカー2
+        末尾=010dfafa0202      末尾は RTP パディング（voice_recv は剥がさない）
         """
         first = bytes(87) + bytes.fromhex("c8db040cfafa")
         self.assertTrue(self.rec.is_dave_frame(first), first[-6:].hex())
@@ -3145,6 +3338,7 @@ class EndToEndEncryptionTests(unittest.TestCase):
 
     def test_ordinary_opus_is_not_mistaken_for_encrypted(self):
         import discord.opus as opus
+
         if not opus.is_loaded():
             try:
                 opus._load_default()
@@ -3152,6 +3346,7 @@ class EndToEndEncryptionTests(unittest.TestCase):
                 self.skipTest("libopus が読み込めない環境です")
         import math
         import struct
+
         pcm = bytearray()
         for i in range(960):
             v = int(12000 * math.sin(2 * math.pi * 440 * i / self.rec.SAMPLE_RATE))
@@ -3164,7 +3359,7 @@ class EndToEndEncryptionTests(unittest.TestCase):
 
         補助データ長が筋の通る値かどうかまで見る。
         """
-        bogus = bytes(40) + bytes.fromhex("0000fafa")   # 長さバイトが 0
+        bogus = bytes(40) + bytes.fromhex("0000fafa")  # 長さバイトが 0
         self.assertFalse(self.rec.is_dave_frame(bogus))
         self.assertFalse(self.rec.is_dave_frame(b""))
         self.assertFalse(self.rec.is_dave_frame(None))
@@ -3172,9 +3367,14 @@ class EndToEndEncryptionTests(unittest.TestCase):
     def test_a_session_is_only_judged_after_enough_frames(self):
         """切り替わりの途中で数フレームだけ暗号化されていることがある。"""
         session = self.rec.RecordingSession(
-            guild_id=999, channel_id=1, channel_name="VC",
-            started_by_id=1, started_by_name="t",
-            started_at=time.monotonic(), max_seconds=0, retention_days=1,
+            guild_id=999,
+            channel_id=1,
+            channel_name="VC",
+            started_by_id=1,
+            started_by_name="t",
+            started_at=time.monotonic(),
+            max_seconds=0,
+            retention_days=1,
         )
         for _ in range(5):
             session.note_encrypted()
@@ -3187,16 +3387,19 @@ class EndToEndEncryptionTests(unittest.TestCase):
     def test_encrypted_frames_never_reach_a_track(self):
         """暗号文が音として書き込まれないこと。"""
         session = self.rec.RecordingSession(
-            guild_id=999, channel_id=1, channel_name="VC",
-            started_by_id=1, started_by_name="t",
-            started_at=time.monotonic(), max_seconds=0, retention_days=1,
+            guild_id=999,
+            channel_id=1,
+            channel_name="VC",
+            started_by_id=1,
+            started_by_name="t",
+            started_at=time.monotonic(),
+            max_seconds=0,
+            retention_days=1,
         )
         sink = self.rec._make_sink_class()(session)
         user = Mock(id=1, display_name="すずき")
         payload = bytes(87) + bytes.fromhex("c8db040cfafa")
-        data = SimpleNamespace(
-            packet=SimpleNamespace(ssrc=1, sequence=100, timestamp=48000, payload=120),
-            opus=payload)
+        data = SimpleNamespace(packet=SimpleNamespace(ssrc=1, sequence=100, timestamp=48000, payload=120), opus=payload)
         for _ in range(10):
             sink.write(user, data)
         sink.flush_pending()
@@ -3214,6 +3417,7 @@ class DaveDecryptionTests(unittest.TestCase):
 
     def setUp(self):
         from services import dave
+
         self.dave = dave
 
     def test_davey_is_installed(self):
@@ -3224,11 +3428,13 @@ class DaveDecryptionTests(unittest.TestCase):
     def test_discord_py_picks_up_davey(self):
         """discord.py が davey を見つけていないと、版 0 を申告してしまう。"""
         import discord.voice_state as voice_state
+
         self.assertTrue(voice_state.has_dave)
 
     def test_a_session_is_ignored_until_the_keys_are_shared(self):
         """鍵が揃う前に復号を試すと例外になる。ready を見て避ける。"""
         import davey
+
         session = davey.DaveSession(davey.DAVE_PROTOCOL_VERSION, 111, 222)
         self.assertFalse(session.ready)
 
@@ -3252,15 +3458,22 @@ class DaveDecryptionTests(unittest.TestCase):
     def test_decryption_is_attempted_before_giving_up(self):
         """復号できるなら、平文として録れること。"""
         import services.recording_service as recording
+
         session = recording.RecordingSession(
-            guild_id=999, channel_id=1, channel_name="VC",
-            started_by_id=1, started_by_name="t",
-            started_at=time.monotonic(), max_seconds=0, retention_days=1,
+            guild_id=999,
+            channel_id=1,
+            channel_name="VC",
+            started_by_id=1,
+            started_by_name="t",
+            started_at=time.monotonic(),
+            max_seconds=0,
+            retention_days=1,
         )
         sink = recording._make_sink_class()(session)
         user = Mock(id=1, display_name="すずき")
 
         import discord.opus as opus
+
         if not opus.is_loaded():
             try:
                 opus._load_default()
@@ -3268,6 +3481,7 @@ class DaveDecryptionTests(unittest.TestCase):
                 self.skipTest("libopus が読み込めない環境です")
         import math
         import struct
+
         pcm = bytearray()
         for i in range(960):
             v = int(12000 * math.sin(2 * math.pi * 440 * i / recording.SAMPLE_RATE))
@@ -3276,8 +3490,8 @@ class DaveDecryptionTests(unittest.TestCase):
         encrypted = bytes(87) + bytes.fromhex("c8db040cfafa")
 
         data = SimpleNamespace(
-            packet=SimpleNamespace(ssrc=1, sequence=100, timestamp=48000, payload=120),
-            opus=encrypted)
+            packet=SimpleNamespace(ssrc=1, sequence=100, timestamp=48000, payload=120), opus=encrypted
+        )
         with patch.object(recording.dave, "decrypt_opus", return_value=plain):
             for i in range(5):
                 data.packet.sequence = 100 + i
@@ -3308,18 +3522,18 @@ class RtpPaddingTests(unittest.TestCase):
 
     def setUp(self):
         import services.recording_service as recording
+
         self.rec = recording
 
     def _packet(self, padding=True):
-        return SimpleNamespace(ssrc=1, sequence=1, timestamp=0, payload=120,
-                               padding=padding)
+        return SimpleNamespace(ssrc=1, sequence=1, timestamp=0, payload=120, padding=padding)
 
     def test_the_probe_packets_seen_in_production_are_dropped(self):
         for size in (247, 255):
             payload = bytes([size]) * size
             self.assertIsNone(
-                self.rec.strip_rtp_padding(self._packet(), payload),
-                f"{size} バイトの詰め物を音声として扱っている")
+                self.rec.strip_rtp_padding(self._packet(), payload), f"{size} バイトの詰め物を音声として扱っている"
+            )
 
     def test_they_are_dropped_even_without_the_header_bit(self):
         """ヘッダのビットが立っていない実装もある。長さで判断できる。"""
@@ -3338,6 +3552,7 @@ class RtpPaddingTests(unittest.TestCase):
 
     def test_ordinary_opus_is_untouched(self):
         import discord.opus as opus
+
         if not opus.is_loaded():
             try:
                 opus._load_default()
@@ -3345,25 +3560,30 @@ class RtpPaddingTests(unittest.TestCase):
                 self.skipTest("libopus が読み込めない環境です")
         import math
         import struct
+
         pcm = bytearray()
         for i in range(960):
             v = int(12000 * math.sin(2 * math.pi * 440 * i / self.rec.SAMPLE_RATE))
             pcm += struct.pack("<hh", v, v)
         frame = opus.Encoder().encode(bytes(pcm), 960)
-        self.assertEqual(
-            self.rec.strip_rtp_padding(self._packet(padding=False), frame), frame)
+        self.assertEqual(self.rec.strip_rtp_padding(self._packet(padding=False), frame), frame)
 
     def test_a_broken_length_is_left_alone(self):
         """壊れた値で音を削らない。"""
-        payload = bytes(20) + bytes([200])       # 長さより大きいパディング長
+        payload = bytes(20) + bytes([200])  # 長さより大きいパディング長
         self.assertEqual(self.rec.strip_rtp_padding(self._packet(), payload), payload)
         self.assertEqual(self.rec.strip_rtp_padding(self._packet(), b""), b"")
 
     def test_probe_packets_never_reach_a_track(self):
         session = self.rec.RecordingSession(
-            guild_id=999, channel_id=1, channel_name="VC",
-            started_by_id=1, started_by_name="t",
-            started_at=time.monotonic(), max_seconds=0, retention_days=1,
+            guild_id=999,
+            channel_id=1,
+            channel_name="VC",
+            started_by_id=1,
+            started_by_name="t",
+            started_at=time.monotonic(),
+            max_seconds=0,
+            retention_days=1,
         )
         sink = self.rec._make_sink_class()(session)
         user = Mock(id=1, display_name="すずき")
@@ -3406,8 +3626,7 @@ class SettingsWriteOffloadTests(unittest.TestCase):
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 calls_of[node.name] = {
-                    n.func.id for n in ast.walk(node)
-                    if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                    n.func.id for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
                 }
                 if isinstance(node, ast.AsyncFunctionDef):
                     async_names.add(node.name)
@@ -3441,9 +3660,12 @@ class SettingsWriteOffloadTests(unittest.TestCase):
                 if isinstance(child, (ast.FunctionDef, ast.Lambda)):
                     scan(child, False)
                     continue
-                if (inside_async and isinstance(child, ast.Call)
-                        and isinstance(child.func, ast.Name)
-                        and child.func.id in names):
+                if (
+                    inside_async
+                    and isinstance(child, ast.Call)
+                    and isinstance(child.func, ast.Name)
+                    and child.func.id in names
+                ):
                     found.append((child.lineno, child.func.id))
                 scan(child, inside_async)
 
@@ -3474,11 +3696,11 @@ class SettingsWriteOffloadTests(unittest.TestCase):
                     ticks += 1
 
             task = asyncio.ensure_future(ticker())
-            await asyncio.sleep(0.02)          # 先に動かしておく
+            await asyncio.sleep(0.02)  # 先に動かしておく
             if offload:
                 await settings_store.awrite(slow_write, 1)
             else:
-                slow_write(1)                  # 直呼び（比較用）
+                slow_write(1)  # 直呼び（比較用）
             task.cancel()
             try:
                 await task
@@ -3489,10 +3711,8 @@ class SettingsWriteOffloadTests(unittest.TestCase):
         offloaded = asyncio.run(count_ticks(True))
         blocking = asyncio.run(count_ticks(False))
 
-        self.assertGreater(offloaded, 5,
-                           f"awrite でもループが止まっている（{offloaded} 回）")
-        self.assertLess(blocking, 5,
-                        f"直呼びが止めていない。比較にならない（{blocking} 回）")
+        self.assertGreater(offloaded, 5, f"awrite でもループが止まっている（{offloaded} 回）")
+        self.assertLess(blocking, 5, f"直呼びが止めていない。比較にならない（{blocking} 回）")
 
     def test_the_writer_list_is_actually_found(self):
         """探し方が壊れていたら、この検査は何も見なくなる。"""
@@ -3520,9 +3740,10 @@ class SettingsWriteOffloadTests(unittest.TestCase):
 
         joined = chr(10).join(offenders)
         self.assertEqual(
-            offenders, [],
-            "async から設定を直接書いています。"
-            "await awrite(関数, 引数...) を通してください:" + chr(10) + joined)
+            offenders,
+            [],
+            "async から設定を直接書いています。" "await awrite(関数, 引数...) を通してください:" + chr(10) + joined,
+        )
 
 
 class ReactionRoleEmojiTests(unittest.TestCase):
@@ -3541,13 +3762,11 @@ class ReactionRoleEmojiTests(unittest.TestCase):
         self.rr = reaction_role_service
 
     def test_every_way_of_writing_a_custom_emoji_lands_on_the_same_key(self):
-        same = ["<:kusa:123456789012345678>", "kusa:123456789012345678",
-                "123456789012345678"]
+        same = ["<:kusa:123456789012345678>", "kusa:123456789012345678", "123456789012345678"]
         keys = {self.rr.emoji_key(v) for v in same}
         self.assertEqual(keys, {"123456789012345678"})
         # アニメーション絵文字（<a:...>）も同じ規則で読む
-        self.assertEqual(self.rr.emoji_key("<a:spin:987654321098765432>"),
-                         "987654321098765432")
+        self.assertEqual(self.rr.emoji_key("<a:spin:987654321098765432>"), "987654321098765432")
 
     def test_a_unicode_emoji_is_left_alone(self):
         self.assertEqual(self.rr.emoji_key("👍"), "👍")
@@ -3593,21 +3812,23 @@ class VoiceAnalysisTests(unittest.TestCase):
     # 一貫しているが実際とは違う組」に落ち着くことがある。変化のある発話が
     # 一定量必要、というのは解析側の性質でもある。
     VOWELS = [
-        [(730, 80), (1090, 90), (2440, 140), (3400, 200)],    # あ
-        [(270, 60), (2290, 100), (3010, 160), (3700, 220)],   # い
-        [(300, 60), (870, 90), (2240, 140), (3300, 200)],     # う
-        [(530, 70), (1840, 100), (2480, 150), (3500, 210)],   # え
-        [(570, 70), (840, 90), (2410, 140), (3300, 200)],     # お
-        [(730, 80), (1090, 90), (2440, 140), (3400, 200)],    # あ
+        [(730, 80), (1090, 90), (2440, 140), (3400, 200)],  # あ
+        [(270, 60), (2290, 100), (3010, 160), (3700, 220)],  # い
+        [(300, 60), (870, 90), (2240, 140), (3300, 200)],  # う
+        [(530, 70), (1840, 100), (2480, 150), (3500, 210)],  # え
+        [(570, 70), (840, 90), (2410, 140), (3300, 200)],  # お
+        [(730, 80), (1090, 90), (2440, 140), (3400, 200)],  # あ
     ]
 
     def setUp(self):
         from services import voice_analysis
+
         self.va = voice_analysis
 
     def _voice(self, seconds=6.0, f0=120.0, scale=1.0, rate=48000):
         import array
         import math
+
         out = array.array("h")
         piece = seconds / len(self.VOWELS)
         for index, formants in enumerate(self.VOWELS):
@@ -3644,23 +3865,61 @@ class VoiceAnalysisTests(unittest.TestCase):
     def _mp3(self, pcm, name):
         import subprocess
         from config import DJAUDIO_FFMPEG_PATH
+
         path = Path(tempfile.mkdtemp()) / name
         subprocess.run(
-            [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-y",
-             "-f", "s16le", "-ar", "48000", "-ac", "2", "-i", "pipe:0",
-             "-c:a", "libmp3lame", "-q:a", "4", str(path)],
-            input=pcm, check=True, timeout=300)
+            [
+                DJAUDIO_FFMPEG_PATH,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "s16le",
+                "-ar",
+                "48000",
+                "-ac",
+                "2",
+                "-i",
+                "pipe:0",
+                "-c:a",
+                "libmp3lame",
+                "-q:a",
+                "4",
+                str(path),
+            ],
+            input=pcm,
+            check=True,
+            timeout=300,
+        )
         return path
 
     def _shift(self, source, factor, name):
         import subprocess
         from config import DJAUDIO_FFMPEG_PATH
+
         path = source.parent / name
         chain = f"asetrate={int(48000 * factor)},aresample=48000,atempo={1/factor:.6f}"
         subprocess.run(
-            [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-y",
-             "-i", str(source), "-af", chain, "-c:a", "libmp3lame", "-q:a", "4",
-             str(path)], check=True, timeout=300)
+            [
+                DJAUDIO_FFMPEG_PATH,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                str(source),
+                "-af",
+                chain,
+                "-c:a",
+                "libmp3lame",
+                "-q:a",
+                "4",
+                str(path),
+            ],
+            check=True,
+            timeout=300,
+        )
         return path
 
     # ── 正解の分かる声で、測った値が当たっているかを見る ──────
@@ -3706,13 +3965,34 @@ class VoiceAnalysisTests(unittest.TestCase):
     def _mono_mp3(self, pcm, name, rate=48000):
         import subprocess
         from config import DJAUDIO_FFMPEG_PATH
+
         path = Path(tempfile.mkdtemp()) / name
         subprocess.run(
-            [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-y",
-             "-f", "s16le", "-ar", str(rate), "-ac", "1", "-i", "pipe:0",
-             # 録音の書き出しと同じ設定（-q:a 5）で通す
-             "-c:a", "libmp3lame", "-q:a", "5", str(path)],
-            input=pcm, check=True, timeout=300)
+            [
+                DJAUDIO_FFMPEG_PATH,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "s16le",
+                "-ar",
+                str(rate),
+                "-ac",
+                "1",
+                "-i",
+                "pipe:0",
+                # 録音の書き出しと同じ設定（-q:a 5）で通す
+                "-c:a",
+                "libmp3lame",
+                "-q:a",
+                "5",
+                str(path),
+            ],
+            input=pcm,
+            check=True,
+            timeout=300,
+        )
         return path
 
     def test_the_vocal_tract_length_is_measured_accurately(self):
@@ -3724,7 +4004,7 @@ class VoiceAnalysisTests(unittest.TestCase):
         してから、3人とも 1cm 以内で当たる。
         """
         cases = [
-            ("成人男性", 100.0, 1000.0, 17.5),   # 音速35000/(2×1000)
+            ("成人男性", 100.0, 1000.0, 17.5),  # 音速35000/(2×1000)
             ("成人女性", 200.0, 1167.0, 15.0),
             ("子ども", 250.0, 1400.0, 12.5),
         ]
@@ -3733,8 +4013,9 @@ class VoiceAnalysisTests(unittest.TestCase):
                 pcm = self._tube_voice(f0, spacing)
                 result = self.va.analyse(self._mono_mp3(pcm, f"{expected}.mp3"), 4.0)
                 self.assertEqual(result["verdict"], "natural", result.get("reason"))
-                self.assertAlmostEqual(result["vocal_tract_cm"], expected, delta=1.0,
-                                       msg=f"{label}: {result['vocal_tract_cm']}cm")
+                self.assertAlmostEqual(
+                    result["vocal_tract_cm"], expected, delta=1.0, msg=f"{label}: {result['vocal_tract_cm']}cm"
+                )
                 self.assertAlmostEqual(result["f0_hz"], f0, delta=5.0)
 
     def test_a_skipped_formant_costs_more_than_the_consecutive_one(self):
@@ -3745,8 +4026,7 @@ class VoiceAnalysisTests(unittest.TestCase):
         いた。飛ばすと1つの間隔だけが突出して広くなるので、そこを罰する。
         """
         # 連続した4本（間隔 1000/1000/1000）と、第3を飛ばした組（1000/2000/1000）
-        poles = [(500.0, 80.0), (1500.0, 80.0), (2500.0, 80.0),
-                 (3500.0, 80.0), (4500.0, 80.0)]
+        poles = [(500.0, 80.0), (1500.0, 80.0), (2500.0, 80.0), (3500.0, 80.0), (4500.0, 80.0)]
         consecutive = self.va._emission((0, 1, 2, 3), poles)
         skipped = self.va._emission((0, 1, 3, 4), poles)
         self.assertLess(consecutive, skipped)
@@ -3754,25 +4034,25 @@ class VoiceAnalysisTests(unittest.TestCase):
         # 実際の母音は等間隔ではない（あ = 360/1350/960）。そろえろとは言わない
         # ——そろえと言うと、正しい組より「たまたま等間隔の誤った組」を選ぶ。
         vowel = [(730.0, 80.0), (1090.0, 90.0), (2440.0, 140.0), (3400.0, 200.0)]
-        self.assertEqual(self.va._emission((0, 1, 2, 3), vowel),
-                         sum(p[1] for p in vowel) / self.va._MAX_BANDWIDTH_HZ,
-                         "実際の母音の並びに罰が乗っている")
+        self.assertEqual(
+            self.va._emission((0, 1, 2, 3), vowel),
+            sum(p[1] for p in vowel) / self.va._MAX_BANDWIDTH_HZ,
+            "実際の母音の並びに罰が乗っている",
+        )
 
     def test_a_scattered_measurement_is_not_asserted(self):
         """測り切れていない区間では、どちらとも言わないこと。"""
         # 正解の分かる声では、幅が中央値の3分の1より十分狭い
         pcm = self._tube_voice(100.0, 1000.0)
         result = self.va.analyse(self._mono_mp3(pcm, "tight.mp3"), 4.0)
-        spread = ((result["vocal_tract_high_cm"] - result["vocal_tract_low_cm"])
-                  / result["vocal_tract_cm"])
+        spread = (result["vocal_tract_high_cm"] - result["vocal_tract_low_cm"]) / result["vocal_tract_cm"]
         self.assertLess(spread, self.va._MAX_RELATIVE_SPREAD, f"幅の比 {spread:.2f}")
         self.assertTrue(result["measurement_settled"])
 
     def test_a_natural_voice_is_not_called_processed(self):
         result = self.va.analyse(self._mp3(self._voice(), "plain.mp3"), 6.0)
         self.assertEqual(result["verdict"], "natural", result.get("reason"))
-        self.assertTrue(10.0 <= result["vocal_tract_cm"] <= 19.0,
-                        result["vocal_tract_cm"])
+        self.assertTrue(10.0 <= result["vocal_tract_cm"] <= 19.0, result["vocal_tract_cm"])
 
     def test_individual_differences_are_not_called_processed(self):
         """地声の個人差で加工扱いすると、警告が信用されなくなる。"""
@@ -3785,8 +4065,7 @@ class VoiceAnalysisTests(unittest.TestCase):
         for factor in (0.6, 0.72):
             shifted = self._shift(plain, factor, f"shift{factor}.mp3")
             result = self.va.analyse(shifted, 6.0)
-            self.assertEqual(result["verdict"], "suspect",
-                             f"{factor}: {result.get('reason')}")
+            self.assertEqual(result["verdict"], "suspect", f"{factor}: {result.get('reason')}")
 
     def test_the_shift_factor_is_measured(self):
         plain = self._mp3(self._voice(), "plain.mp3")
@@ -3795,8 +4074,7 @@ class VoiceAnalysisTests(unittest.TestCase):
             shifted = self._shift(plain, factor, f"m{factor}.mp3")
             moved = self.va.analyse(shifted, 6.0)["formant_spacing_hz"]
             measured = moved / base
-            self.assertLess(abs(measured - factor), factor * 0.2,
-                            f"倍率 {factor} を {measured:.2f} と測った")
+            self.assertLess(abs(measured - factor), factor * 0.2, f"倍率 {factor} を {measured:.2f} と測った")
 
     def test_a_moderate_shift_that_lands_in_range_is_not_asserted(self):
         """人の範囲に着地する変換は、断定できないのが正しい。
@@ -3812,6 +4090,7 @@ class VoiceAnalysisTests(unittest.TestCase):
     def test_a_known_shift_can_be_undone(self):
         import subprocess
         from config import DJAUDIO_FFMPEG_PATH
+
         plain = self._mp3(self._voice(), "plain.mp3")
         base = self.va.analyse(plain, 6.0)["formant_spacing_hz"]
         shifted = self._shift(plain, 1.5, "up.mp3")
@@ -3819,9 +4098,25 @@ class VoiceAnalysisTests(unittest.TestCase):
         restored = shifted.parent / "back.mp3"
         chain = ",".join(self.va.restore_command(1.5))
         subprocess.run(
-            [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-y",
-             "-i", str(shifted), "-af", chain, "-c:a", "libmp3lame", "-q:a", "4",
-             str(restored)], check=True, timeout=300)
+            [
+                DJAUDIO_FFMPEG_PATH,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                str(shifted),
+                "-af",
+                chain,
+                "-c:a",
+                "libmp3lame",
+                "-q:a",
+                "4",
+                str(restored),
+            ],
+            check=True,
+            timeout=300,
+        )
 
         after = self.va.analyse(restored, 6.0)["formant_spacing_hz"]
         self.assertLess(abs(after - base), base * 0.12, f"{after} vs {base}")
@@ -3845,6 +4140,7 @@ class VoiceAnalysisTests(unittest.TestCase):
 
     def _tone_chunk(self, hz, seconds=1.0, amp=8000.0, harmonics=(1,)):
         import math
+
         rate = self.va.RATE
         return [
             amp * sum(math.sin(2 * math.pi * hz * k * i / rate) / k for k in harmonics)
@@ -3854,6 +4150,7 @@ class VoiceAnalysisTests(unittest.TestCase):
     def _voice_chunk(self, f0, seconds=1.0):
         """声門パルス列を共鳴器に通した 16kHz の生波形（解析が受け取る形）。"""
         import math
+
         rate = self.va.RATE
         length = int(rate * seconds)
         wave = [0.0] * length
@@ -3891,11 +4188,12 @@ class VoiceAnalysisTests(unittest.TestCase):
         基音の倍音が実際に並んでいるかまで確かめる。
         """
         import random
+
         rng = random.Random(3)
 
         # 純音は周期性が満点でも、倍音が無いので使わない
         tone = self._tone_chunk(200)
-        _f0, periodicity = self.va._f0_and_periodicity(tone[:int(self.va.RATE * self.va.FRAME_SECONDS)])
+        _f0, periodicity = self.va._f0_and_periodicity(tone[: int(self.va.RATE * self.va.FRAME_SECONDS)])
         self.assertGreater(periodicity, 0.9, "純音は周期性では落とせない（前提の確認）")
         self.assertEqual(self._accepted_ratio(tone), 0.0)
 
@@ -3921,7 +4219,7 @@ class VoiceAnalysisTests(unittest.TestCase):
 
     def _voice_between_silence(self, lead=8.0, tail=8.0):
         """前後を無音で挟んだ声。ミキサーで区間を選ぶ状況を作る。"""
-        quiet = bytes(int(48000 * lead) * 4)          # 2ch × 2byte
+        quiet = bytes(int(48000 * lead) * 4)  # 2ch × 2byte
         after = bytes(int(48000 * tail) * 4)
         return quiet + self._voice() + after
 
@@ -3952,9 +4250,9 @@ class VoiceAnalysisTests(unittest.TestCase):
         self.assertNotIn("range", result)
 
     def test_a_range_that_cannot_be_used_falls_back_to_the_whole_track(self):
-        self.assertIsNone(self.va.selection_bounds(100.0, 10.0, 10.2))   # 短すぎる
-        self.assertIsNone(self.va.selection_bounds(100.0, None, 20.0))   # 片方だけ
-        self.assertIsNone(self.va.selection_bounds(100.0, 30.0, 10.0))   # 逆順
+        self.assertIsNone(self.va.selection_bounds(100.0, 10.0, 10.2))  # 短すぎる
+        self.assertIsNone(self.va.selection_bounds(100.0, None, 20.0))  # 片方だけ
+        self.assertIsNone(self.va.selection_bounds(100.0, 30.0, 10.0))  # 逆順
         self.assertEqual(self.va.selection_bounds(100.0, -5.0, 500.0), (0.0, 100.0))
 
     def test_a_long_selection_stays_bounded(self):
@@ -3970,8 +4268,7 @@ class VoiceAnalysisTests(unittest.TestCase):
         with patch.object(self.va, "_decode", fake_decode):
             self.va._probe(Path("x"), 3600.0, 100.0, 1000.0)
 
-        self.assertLessEqual(sum(length for _, length in calls),
-                             self.va.SELECTION_MAX_SECONDS + 0.01)
+        self.assertLessEqual(sum(length for _, length in calls), self.va.SELECTION_MAX_SECONDS + 0.01)
         # 選ばれた範囲の外は見ない
         self.assertTrue(all(100.0 <= at <= 1000.0 for at, _ in calls))
 

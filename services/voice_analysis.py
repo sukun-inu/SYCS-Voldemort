@@ -99,7 +99,7 @@ logger = logging.getLogger(__name__)
 RATE = 16000
 FRAME_SECONDS = 0.032
 HOP_SECONDS = 0.016
-LPC_ORDER = 16                 # 16kHz なら 2 + 標本化周波数/1000 が目安
+LPC_ORDER = 16  # 16kHz なら 2 + 標本化周波数/1000 が目安
 PRE_EMPHASIS = 0.97
 
 # 範囲を指定されなかったときに抜き出す箇所と長さ。録音の長さに依らず
@@ -136,9 +136,9 @@ _MIN_FRAMES = 25
 #
 # 人の有声音は声帯の準周期パルスを声道が濾したものなので、基音 F0 とその
 # 整数倍に確かに山が並ぶ。そこを直接確かめる。
-_HARMONIC_COUNT = 8            # 見る倍音の本数（F0 の 1〜8 倍）
-_HARMONIC_MIN_RESOLVED = 3     # このうち何本が立っていれば声とみなすか
-_HARMONIC_TOLERANCE = 0.25     # 山を探す幅（F0 に対する割合）
+_HARMONIC_COUNT = 8  # 見る倍音の本数（F0 の 1〜8 倍）
+_HARMONIC_MIN_RESOLVED = 3  # このうち何本が立っていれば声とみなすか
+_HARMONIC_TOLERANCE = 0.25  # 山を探す幅（F0 に対する割合）
 # 倍音の山が、倍音と倍音のあいだ（谷）に対して何倍あれば「立っている」か。
 _HARMONIC_MIN_PROMINENCE = 2.0
 # 山が「いちばん強い倍音」に対して最低これだけの大きさを持つこと。
@@ -147,7 +147,7 @@ _HARMONIC_MIN_PROMINENCE = 2.0
 # 窓の漏れ（数値的な裾）どうしの比が条件を満たしてしまう。実際これで純音と
 # 電源ハムが「声」として通った。分母が小さいときの比は意味を持たないので、
 # 絶対量の下限を併せて課す。
-_HARMONIC_MIN_LEVEL = 0.02     # 最大の倍音に対して -34dB
+_HARMONIC_MIN_LEVEL = 0.02  # 最大の倍音に対して -34dB
 
 # 倍音を見るときだけ使う窓の長さ。
 #
@@ -203,13 +203,13 @@ _CONTINUITY_WEIGHT = 8.0
 #   1本飛ばした組       間隔 900/1800/900 → 真ん中 900、最大 1800 → 2.00 倍
 # 比で測るので、声全体に倍率が掛かっても値は変わらない（加工された声を不利に
 # しない、というこのファイルの方針を守る）。
-_SKIP_RATIO = 1.6         # ここを超えた分だけ罰する
+_SKIP_RATIO = 1.6  # ここを超えた分だけ罰する
 _SKIP_WEIGHT = 8.0
 
 # 人の声の範囲
 F0_MIN_HZ, F0_MAX_HZ = 60.0, 400.0
-SPEED_OF_SOUND_CM = 35000.0    # 体温の気道でおよそ 350 m/s
-VTL_NATURAL = (10.0, 19.0)     # 子どもから大人まで
+SPEED_OF_SOUND_CM = 35000.0  # 体温の気道でおよそ 350 m/s
+VTL_NATURAL = (10.0, 19.0)  # 子どもから大人まで
 VTL_IMPLAUSIBLE = (8.5, 22.0)  # ここを外れたら人の声道ではありえない
 REFERENCE_SPACING_HZ = 1075.0  # 倍率を推す基準（大人の平均的な間隔）
 
@@ -242,18 +242,31 @@ _OCTAVE_GUARD = 0.90
 
 # ── 取り込み ──────────────────────────────────────────────────
 
+
 def _decode(source: bytes | Path, at: float, length: float) -> list[float]:
     """指定の位置から length 秒を 16kHz モノラルで取り出す。"""
     piped = isinstance(source, bytes)
     command = [
-        DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error",
-        "-ss", f"{at:.3f}", "-t", f"{length:.3f}",
-        "-i", "pipe:0" if piped else str(source),
-        "-f", "s16le", "-ar", str(RATE), "-ac", "1", "-",
+        DJAUDIO_FFMPEG_PATH,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-ss",
+        f"{at:.3f}",
+        "-t",
+        f"{length:.3f}",
+        "-i",
+        "pipe:0" if piped else str(source),
+        "-f",
+        "s16le",
+        "-ar",
+        str(RATE),
+        "-ac",
+        "1",
+        "-",
     ]
     try:
-        result = subprocess.run(command, input=source if piped else None,
-                                capture_output=True, timeout=120)
+        result = subprocess.run(command, input=source if piped else None, capture_output=True, timeout=120)
     except (subprocess.SubprocessError, OSError) as e:
         logger.warning("[voice] 音の取り出しに失敗: %s", e)
         return []
@@ -265,8 +278,7 @@ def _decode(source: bytes | Path, at: float, length: float) -> list[float]:
     return np.frombuffer(raw[:usable], dtype="<i2").astype(np.float64)
 
 
-def _spread(source: bytes | Path, begin: float, span: float,
-            slices: int, seconds: float) -> list[np.ndarray]:
+def _spread(source: bytes | Path, begin: float, span: float, slices: int, seconds: float) -> list[np.ndarray]:
     """begin から span 秒のあいだに、seconds 秒を slices 回ぶん散らして取る。"""
     room = max(span - seconds, 0.0)
     out: list[np.ndarray] = []
@@ -278,8 +290,9 @@ def _spread(source: bytes | Path, begin: float, span: float,
     return out
 
 
-def _probe(source: bytes | Path, duration: float,
-           start: float | None = None, end: float | None = None) -> list[np.ndarray]:
+def _probe(
+    source: bytes | Path, duration: float, start: float | None = None, end: float | None = None
+) -> list[np.ndarray]:
     """調べる音を取り出す。
 
     範囲を渡されたら、そこだけを続けて読む（散らさない）。渡されなければ
@@ -301,6 +314,7 @@ def _probe(source: bytes | Path, duration: float,
 
 
 # ── 基本周波数 ────────────────────────────────────────────────
+
 
 def _f0_and_periodicity(frame: list[float]) -> tuple[float, float]:
     """自己相関で基本周波数と、山の高さ（0〜1）を求める。
@@ -324,7 +338,7 @@ def _f0_and_periodicity(frame: list[float]) -> tuple[float, float]:
     for index, lag in enumerate(range(low, high)):
         count = size - lag
         a = samples[0:count:2]
-        b = samples[lag:lag + count:2]
+        b = samples[lag : lag + count : 2]
         denominator = math.sqrt(float(a @ a) * float(b @ b)) or 1.0
         scores[index] = float(a @ b) / denominator
 
@@ -346,13 +360,14 @@ def _f0_and_periodicity(frame: list[float]) -> tuple[float, float]:
 
 # ── フォルマントの候補 ────────────────────────────────────────
 
+
 def _lpc(frame: list[float], order: int) -> list[float] | None:
     """線形予測係数（Levinson-Durbin）。"""
     samples = np.asarray(frame, dtype=np.float64)
     size = samples.size
     if size <= order:
         return None
-    auto = [float(samples[:size - lag] @ samples[lag:]) for lag in range(order + 1)]
+    auto = [float(samples[: size - lag] @ samples[lag:]) for lag in range(order + 1)]
     if auto[0] <= 0:
         return None
 
@@ -371,7 +386,7 @@ def _lpc(frame: list[float], order: int) -> list[float] | None:
             updated[i] = a[i] + k * a[m - i]
         updated[m] = k
         a = updated
-        error *= (1.0 - k * k)
+        error *= 1.0 - k * k
         if error <= 0:
             return None
     return a
@@ -402,10 +417,10 @@ def _candidates(frame: list[float]) -> list[tuple[float, float]]:
     found = []
     for root in roots:
         if root.imag <= 0:
-            continue                       # 共役の片方だけを見る
+            continue  # 共役の片方だけを見る
         magnitude = abs(root)
         if not 0.0 < magnitude < 1.0:
-            continue                       # 単位円の外は不安定な極
+            continue  # 単位円の外は不安定な極
         freq = math.atan2(root.imag, root.real) * RATE / (2 * math.pi)
         bandwidth = -math.log(magnitude) * RATE / math.pi
         if not (_MIN_FORMANT_HZ < freq < _MAX_FORMANT_HZ):
@@ -419,6 +434,7 @@ def _candidates(frame: list[float]) -> list[tuple[float, float]]:
 
 
 # ── 追跡 ──────────────────────────────────────────────────────
+
 
 def _states(count: int, size: int = _TRACK_COUNT) -> list[tuple[int, ...]]:
     """そのフレームで選びうる組み合わせ。"""
@@ -459,8 +475,9 @@ def _emission(state: tuple[int, ...], poles: list[tuple[float, float]]) -> float
     return cost
 
 
-def _transition(before: tuple[int, ...], after: tuple[int, ...],
-                left: list[tuple[float, float]], right: list[tuple[float, float]]) -> float:
+def _transition(
+    before: tuple[int, ...], after: tuple[int, ...], left: list[tuple[float, float]], right: list[tuple[float, float]]
+) -> float:
     """フレーム間の飛び具合。
 
     比で測る（対数距離）。こうしておくと、全体が一定倍率でずれていても
@@ -507,8 +524,7 @@ def _track(run: list[list[tuple[float, float]]]) -> list[list[float]]:
             best_from = None
             emission = _emission(state, poles)
             for prior, prior_cost in costs.items():
-                total = (prior_cost + emission
-                         + _transition(prior, state, previous_poles, poles))
+                total = prior_cost + emission + _transition(prior, state, previous_poles, poles)
                 if best_cost is None or total < best_cost:
                     best_cost, best_from = total, prior
             best_costs[state] = best_cost
@@ -528,6 +544,7 @@ def _track(run: list[list[tuple[float, float]]]) -> list[list[float]]:
 
 # ── まとめ ────────────────────────────────────────────────────
 
+
 def _median(values: list[float], trim: float = 0.2) -> float:
     """外れ値を落としてから中央値を採る。"""
     ordered = sorted(values)
@@ -535,7 +552,7 @@ def _median(values: list[float], trim: float = 0.2) -> float:
         return 0.0
     cut = int(len(ordered) * trim / 2)
     if cut and len(ordered) - 2 * cut >= 3:
-        ordered = ordered[cut:len(ordered) - cut]
+        ordered = ordered[cut : len(ordered) - cut]
     middle = len(ordered) // 2
     if len(ordered) % 2:
         return ordered[middle]
@@ -576,7 +593,7 @@ def harmonic_prominence(frame: list[float], f0: float) -> tuple[int, float]:
         if centre >= nyquist:
             break
         peaks.append(band_max(centre))
-        middle = centre + f0 / 2.0        # 倍音と倍音のあいだ
+        middle = centre + f0 / 2.0  # 倍音と倍音のあいだ
         if middle < nyquist:
             valleys.append(band_max(middle))
 
@@ -586,9 +603,7 @@ def harmonic_prominence(frame: list[float], f0: float) -> tuple[int, float]:
     floor = float(np.median(valleys)) or 1e-9
     strongest = max(peaks) or 1e-9
     resolved = sum(
-        1 for peak in peaks
-        if peak >= floor * _HARMONIC_MIN_PROMINENCE
-        and peak >= strongest * _HARMONIC_MIN_LEVEL
+        1 for peak in peaks if peak >= floor * _HARMONIC_MIN_PROMINENCE and peak >= strongest * _HARMONIC_MIN_LEVEL
     )
     ratio = float(np.median(peaks)) / floor
     return resolved, ratio
@@ -647,11 +662,11 @@ def _runs(chunk: list[float]) -> tuple[list[list[list[tuple[float, float]]]], li
     current: list = []
     f0s: list[float] = []
     for start in range(0, len(chunk) - frame_size, hop):
-        frame = chunk[start:start + frame_size]
+        frame = chunk[start : start + frame_size]
         # 倍音を見るための窓。フレームを中心に前後へ広げる（端では寄せる）。
         centre = start + frame_size // 2
         begin = max(0, min(centre - window // 2, len(chunk) - window))
-        context = chunk[begin:begin + window]
+        context = chunk[begin : begin + window]
         f0 = voiced_f0(frame, context if len(context) >= frame_size else None)
         if f0 is None:
             if current:
@@ -665,8 +680,7 @@ def _runs(chunk: list[float]) -> tuple[list[list[list[tuple[float, float]]]], li
     return runs, f0s
 
 
-def selection_bounds(duration: float, start: float | None,
-                     end: float | None) -> tuple[float, float] | None:
+def selection_bounds(duration: float, start: float | None, end: float | None) -> tuple[float, float] | None:
     """指定された範囲を、この録音の中に収まる形へ整える。
 
     範囲として成立しないものは None を返し、呼び出し側は録音全体を見る形に
@@ -688,8 +702,7 @@ def selection_bounds(duration: float, start: float | None,
     return begin, finish
 
 
-def analyse(source: bytes | Path, duration: float,
-            start: float | None = None, end: float | None = None) -> dict:
+def analyse(source: bytes | Path, duration: float, start: float | None = None, end: float | None = None) -> dict:
     """1トラックを調べる。
 
     start / end を渡すと、その区間だけを見る。渡さなければ録音の各所から
@@ -841,18 +854,15 @@ def _judge(vtl: float, f0: float, expected_vtl: float) -> tuple[str, list[str]]:
     if f0 and not (F0_MIN_HZ <= f0 <= F0_MAX_HZ):
         reasons.append(f"基本周波数が人の声の範囲外です（{f0:.0f} Hz）。")
     if vtl and not (VTL_IMPLAUSIBLE[0] <= vtl <= VTL_IMPLAUSIBLE[1]):
-        reasons.append(
-            f"フォルマントの間隔から求めた声道長が {vtl:.1f} cm で、"
-            "人の声道としてありえない値です。")
+        reasons.append(f"フォルマントの間隔から求めた声道長が {vtl:.1f} cm で、" "人の声道としてありえない値です。")
     elif vtl and not (VTL_NATURAL[0] <= vtl <= VTL_NATURAL[1]):
-        reasons.append(
-            f"フォルマントの間隔から求めた声道長が {vtl:.1f} cm で、"
-            "人の範囲の外側寄りです。")
+        reasons.append(f"フォルマントの間隔から求めた声道長が {vtl:.1f} cm で、" "人の範囲の外側寄りです。")
     elif expected_vtl and vtl and abs(vtl - expected_vtl) > _VTL_F0_TOLERANCE_CM:
         # 声の高さと体格が食い違う。地声ではこうならない。
         reasons.append(
             f"声の高さ（{f0:.0f} Hz）に対して声道長 {vtl:.1f} cm は食い違います"
-            f"（この高さなら {expected_vtl:.1f} cm 前後）。")
+            f"（この高さなら {expected_vtl:.1f} cm 前後）。"
+        )
     return ("suspect" if reasons else "natural"), reasons
 
 
@@ -869,8 +879,7 @@ def _vtl_band(spacings: list[float]) -> tuple[float, float]:
     return SPEED_OF_SOUND_CM / (2 * q3), SPEED_OF_SOUND_CM / (2 * q1)
 
 
-def _is_settled(verdict: str, low_vtl: float, high_vtl: float,
-                f0: float, expected_vtl: float) -> bool:
+def _is_settled(verdict: str, low_vtl: float, high_vtl: float, f0: float, expected_vtl: float) -> bool:
     """「加工の形跡あり」と言い切ってよいだけ、値が落ち着いているか。
 
     実際の録音で測ると、6秒の中でも声道長が 9.8〜18.5cm に散らばることが
@@ -891,10 +900,7 @@ def _is_settled(verdict: str, low_vtl: float, high_vtl: float,
         return True
     if not (low_vtl and high_vtl):
         return False
-    return all(
-        _judge(edge, f0, expected_vtl)[0] == "suspect"
-        for edge in (low_vtl, high_vtl)
-    )
+    return all(_judge(edge, f0, expected_vtl)[0] == "suspect" for edge in (low_vtl, high_vtl))
 
 
 def _median_formants(sets: list[list[float]]) -> list[float]:
@@ -944,9 +950,9 @@ def restore_command(factor: float, rate: int = RESTORE_RATE) -> list[str]:
     tempos.append(remaining)
 
     chain = [
-        f"aresample={rate}",                  # 入力の周波数を揃える
-        f"asetrate={int(rate / factor)}",     # 逆向きにずらす（長さも変わる）
+        f"aresample={rate}",  # 入力の周波数を揃える
+        f"asetrate={int(rate / factor)}",  # 逆向きにずらす（長さも変わる）
         f"aresample={rate}",
     ]
-    chain += [f"atempo={t:.6f}" for t in tempos]   # 長さを戻す
+    chain += [f"atempo={t:.6f}" for t in tempos]  # 長さを戻す
     return chain

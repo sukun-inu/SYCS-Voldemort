@@ -60,7 +60,9 @@ def env_bool(key: str, default: bool) -> bool:
         return False
     logger.warning(
         "環境変数 %s の値 %r を真偽値として解釈できません。既定値 %r を使います。",
-        key, raw, default,
+        key,
+        raw,
+        default,
     )
     return default
 
@@ -86,7 +88,9 @@ def env_int(
     except ValueError:
         logger.warning(
             "環境変数 %s の値 %r を整数として解釈できません。既定値 %r を使います。",
-            key, raw, default,
+            key,
+            raw,
+            default,
         )
         return _clamp_int(key, default, minimum, maximum, from_default=True)
     return _clamp_int(key, value, minimum, maximum, from_default=False)
@@ -108,14 +112,18 @@ def env_float(
     except ValueError:
         logger.warning(
             "環境変数 %s の値 %r を数値として解釈できません。既定値 %r を使います。",
-            key, raw, default,
+            key,
+            raw,
+            default,
         )
         return _clamp_float(key, default, minimum, maximum, from_default=True)
     if value != value or value in (float("inf"), float("-inf")):
         # NaN / inf は範囲チェックをすり抜けて後段を壊すため、ここで弾く
         logger.warning(
             "環境変数 %s の値 %r は有限の数値ではありません。既定値 %r を使います。",
-            key, raw, default,
+            key,
+            raw,
+            default,
         )
         return _clamp_float(key, default, minimum, maximum, from_default=True)
     return _clamp_float(key, value, minimum, maximum, from_default=False)
@@ -133,9 +141,7 @@ def env_path(key: str, default: Path) -> Path:
     return Path(raw)
 
 
-def _clamp_int(
-    key: str, value: int, minimum: Optional[int], maximum: Optional[int], *, from_default: bool
-) -> int:
+def _clamp_int(key: str, value: int, minimum: Optional[int], maximum: Optional[int], *, from_default: bool) -> int:
     clamped = value
     if minimum is not None and clamped < minimum:
         clamped = minimum
@@ -173,10 +179,18 @@ def _log_clamp(key, value, clamped, minimum, maximum, *, from_default: bool) -> 
             "環境変数 %s は未設定のため既定値 %r を使う想定でしたが、"
             "許容範囲(%s〜%s、他の設定値に連動している場合あり)に収まらないため "
             "%r に丸めました。",
-            key, value, lo, hi, clamped,
+            key,
+            value,
+            lo,
+            hi,
+            clamped,
         )
     else:
         logger.warning(
             "環境変数 %s の値 %r は許容範囲外です。%r に丸めました（許容: %s〜%s）。",
-            key, value, clamped, lo, hi,
+            key,
+            value,
+            clamped,
+            lo,
+            hi,
         )

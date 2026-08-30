@@ -65,7 +65,7 @@ def is_dave_frame(payload: bytes | None) -> bool:
         end = len(payload) - back
         if end < 2:
             break
-        if payload[end - 2:end] == DAVE_MAGIC and _supplemental_ok(payload, end):
+        if payload[end - 2 : end] == DAVE_MAGIC and _supplemental_ok(payload, end):
             return True
     return False
 
@@ -108,7 +108,4 @@ def unavailable_reason() -> str:
             "この通話は端から端まで暗号化（E2EE / DAVE）されていますが、"
             "復号に必要な davey が入っていないため録音できません"
         )
-    return (
-        "この通話は端から端まで暗号化（E2EE / DAVE）されており、"
-        "鍵の共有ができていないため録音できません"
-    )
+    return "この通話は端から端まで暗号化（E2EE / DAVE）されており、" "鍵の共有ができていないため録音できません"

@@ -82,15 +82,16 @@ def _peak_of(pcm: bytes) -> int:
         return 0
     return max(max(picked), -min(picked))
 
+
 # max_minutes に 0 を指定すると「時間では止めない」。VC が無人になるまで録り続ける。
 UNLIMITED = 0
 # 設定の許容範囲。管理画面・スラッシュコマンドの両方がここを見る
 # （片方だけ古いと、入れられた値が黙って弾かれたり丸められたりする）。
-MAX_MINUTES_LIMIT = 720          # 12時間
+MAX_MINUTES_LIMIT = 720  # 12時間
 RETENTION_DAYS_MIN = 1
 RETENTION_DAYS_MAX = 30
 _GUARD_INTERVAL_SEC = 15.0
-_EMPTY_GRACE_SEC = 20.0   # 開始直後は参加者のキャッシュが揃っていないことがある
+_EMPTY_GRACE_SEC = 20.0  # 開始直後は参加者のキャッシュが揃っていないことがある
 
 # guild_id -> RecordingSession
 _sessions: dict[int, "RecordingSession"] = {}
@@ -102,6 +103,7 @@ class RecordingError(RuntimeError):
 
 # ── トラック1本 ───────────────────────────────────────────────
 
+
 class _TrackWriter:
     """1ユーザー分の音声を、無音で位置合わせしながら mp3 へ書く。"""
 
@@ -111,15 +113,27 @@ class _TrackWriter:
         self.out_path = out_path
         self.started_at = started_at
         self.written_bytes = 0
-        self.voiced_bytes = 0          # 実際に声が入っていた分（無音埋めを除く）
-        self.peaks: list[int] = []     # 波形表示用（目盛りごとの最大振幅）
+        self.voiced_bytes = 0  # 実際に声が入っていた分（無音埋めを除く）
+        self.peaks: list[int] = []  # 波形表示用（目盛りごとの最大振幅）
         self.failed = False
         self._process = subprocess.Popen(
             [
-                DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error",
-                "-f", "s16le", "-ar", str(SAMPLE_RATE), "-ac", str(CHANNELS),
-                "-i", "pipe:0",
-                "-c:a", "libmp3lame", "-q:a", "5",
+                DJAUDIO_FFMPEG_PATH,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "s16le",
+                "-ar",
+                str(SAMPLE_RATE),
+                "-ac",
+                str(CHANNELS),
+                "-i",
+                "pipe:0",
+                "-c:a",
+                "libmp3lame",
+                "-q:a",
+                "5",
                 str(out_path),
             ],
             stdin=subprocess.PIPE,
@@ -156,7 +170,7 @@ class _TrackWriter:
             while len(self.peaks) <= bucket:
                 self.peaks.append(0)
             if not silence:
-                piece = payload[position - self.written_bytes:stop - self.written_bytes]
+                piece = payload[position - self.written_bytes : stop - self.written_bytes]
                 value = _peak_of(piece)
                 if value > self.peaks[bucket]:
                     self.peaks[bucket] = value
@@ -174,7 +188,7 @@ class _TrackWriter:
         """
         peaks = self.peaks
         if group > 1:
-            peaks = [max(peaks[i:i + group]) for i in range(0, len(peaks), group)]
+            peaks = [max(peaks[i : i + group]) for i in range(0, len(peaks), group)]
         series = [round(min(1.0, value / 32767.0), 4) for value in peaks]
         if points is not None:
             # 書き込みに失敗して途中で終わったトラックは短い。末尾を無音で
@@ -223,7 +237,9 @@ class _TrackWriter:
             if self._process.returncode not in (0, None) and stderr:
                 logger.warning(
                     "[recording] ffmpeg 終了コード %s user=%s: %s",
-                    self._process.returncode, self.user_id, stderr.decode("utf-8", "replace")[:300],
+                    self._process.returncode,
+                    self.user_id,
+                    stderr.decode("utf-8", "replace")[:300],
                 )
         except subprocess.TimeoutExpired:
             logger.warning("[recording] ffmpeg が終了しないため強制終了 user=%s", self.user_id)
@@ -246,12 +262,12 @@ class _TrackWriter:
 # スペクトル平坦度も試したが、mp3 のローパスに支配されて白色雑音でも 0.065
 # にしかならず、声と区別できなかったので使っていない。
 VOICE_PERIODICITY_MIN = 0.30
-_VOICE_RATE = 8000            # 声の高さは 60〜400Hz。これで足りる。
+_VOICE_RATE = 8000  # 声の高さは 60〜400Hz。これで足りる。
 _VOICE_WINDOW = 0.04
-_VOICE_PROBES = 8             # 何箇所から抜き出すか（長さに依らず一定にする）
+_VOICE_PROBES = 8  # 何箇所から抜き出すか（長さに依らず一定にする）
 _VOICE_PROBE_SECONDS = 0.5
 _VOICE_MAX_WINDOWS = 16
-_VOICE_FLOOR = 900            # これを下回る窓は無音とみなす
+_VOICE_FLOOR = 900  # これを下回る窓は無音とみなす
 
 
 def _probe_samples(path: Path, duration: float) -> array.array:
@@ -265,15 +281,33 @@ def _probe_samples(path: Path, duration: float) -> array.array:
         at = 0.0 if _VOICE_PROBES == 1 else span * i / (_VOICE_PROBES - 1)
         try:
             result = subprocess.run(
-                [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error",
-                 "-ss", f"{at:.3f}", "-t", str(_VOICE_PROBE_SECONDS), "-i", str(path),
-                 "-f", "s16le", "-ar", str(_VOICE_RATE), "-ac", "1", "-"],
-                capture_output=True, timeout=60)
+                [
+                    DJAUDIO_FFMPEG_PATH,
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-ss",
+                    f"{at:.3f}",
+                    "-t",
+                    str(_VOICE_PROBE_SECONDS),
+                    "-i",
+                    str(path),
+                    "-f",
+                    "s16le",
+                    "-ar",
+                    str(_VOICE_RATE),
+                    "-ac",
+                    "1",
+                    "-",
+                ],
+                capture_output=True,
+                timeout=60,
+            )
         except (subprocess.SubprocessError, OSError) as e:
             logger.warning("[recording] 音の抜き出しに失敗 %s: %s", path.name, e)
             continue
         raw = result.stdout
-        samples.frombytes(raw[:len(raw) - len(raw) % 2])
+        samples.frombytes(raw[: len(raw) - len(raw) % 2])
     return samples
 
 
@@ -285,18 +319,19 @@ def _periodicity(samples: array.array) -> float | None:
     low = _VOICE_RATE // 400
     high = min(_VOICE_RATE // 60, size - 1)
     loud = [
-        i for i in range(0, len(samples) - size, size)
-        if sum(v * v for v in samples[i:i + size]) >= size * (_VOICE_FLOOR ** 2)
+        i
+        for i in range(0, len(samples) - size, size)
+        if sum(v * v for v in samples[i : i + size]) >= size * (_VOICE_FLOOR**2)
     ]
     if not loud:
-        return None                      # 全部無音。良し悪しは判定できない。
+        return None  # 全部無音。良し悪しは判定できない。
     if len(loud) > _VOICE_MAX_WINDOWS:
         step = len(loud) / _VOICE_MAX_WINDOWS
         loud = [loud[int(i * step)] for i in range(_VOICE_MAX_WINDOWS)]
 
     scores = []
     for start in loud:
-        seg = samples[start:start + size]
+        seg = samples[start : start + size]
         best = 0.0
         for lag in range(low, high):
             count = size - lag
@@ -341,6 +376,7 @@ is_dave_frame = dave.is_dave_frame
 
 # ── RTP のパディング ──────────────────────────────────────────
 
+
 def strip_rtp_padding(packet, payload: bytes | None) -> bytes | None:
     """RTP のパディングを取り除く。中身が全部パディングなら None。
 
@@ -366,9 +402,9 @@ def strip_rtp_padding(packet, payload: bytes | None) -> bytes | None:
     if not flagged and count != len(payload):
         return payload
     if count <= 0 or count > len(payload):
-        return payload          # 壊れた値。触らないでおく。
+        return payload  # 壊れた値。触らないでおく。
     if count == len(payload):
-        return None             # 中身はパディングだけ
+        return None  # 中身はパディングだけ
     return payload[:-count]
 
 
@@ -378,13 +414,13 @@ def strip_rtp_padding(packet, payload: bytes | None) -> bytes | None:
 _REORDER_HOLD_SEC = 0.2
 # 一度に抱える上限（異常時に無制限へ膨らませない）
 _REORDER_MAX = 100
-_FRAME_SAMPLES = 960        # 20ms ぶんのサンプル数（RTP タイムスタンプの刻み）
+_FRAME_SAMPLES = 960  # 20ms ぶんのサンプル数（RTP タイムスタンプの刻み）
 # 欠けたぶんを Opus の欠落補間で埋める上限。これを超える穴は無音のままにする。
 _PLC_MAX_FRAMES = 5
 # デコード失敗の中身をログに残す件数（ストリームごと）。全部出すと洪水になる。
 _FAILURE_SAMPLES = 3
-_SEQ_MOD = 1 << 16          # RTP シーケンス番号は 16bit
-_TS_MOD = 1 << 32           # RTP タイムスタンプは 32bit（48kHz 刻み）
+_SEQ_MOD = 1 << 16  # RTP シーケンス番号は 16bit
+_TS_MOD = 1 << 32  # RTP タイムスタンプは 32bit（48kHz 刻み）
 
 
 def _wrapped_delta(a: int, b: int, mod: int) -> int:
@@ -416,18 +452,18 @@ class _StreamAssembler:
         # seq -> (受信時刻, RTPタイムスタンプ, opus)
         self._pending: dict[int, tuple[float, int, bytes]] = {}
         self._next_seq: int | None = None
-        self._anchor_ts: int | None = None      # 最初のパケットの RTP タイムスタンプ
-        self._anchor_elapsed: float = 0.0       # そのときの録音経過秒
-        self.lost = 0        # 待っても来なかったパケット数
-        self.late = 0        # 出したあとに届いた／溢れて捨てたパケット数
-        self.silence = 0     # 発話の切れ目に来る無音パケット（並べ直しには入れない）
-        self.failed = 0      # デコードできなかったパケット
-        self.decoded = 0     # デコードできたパケット（失敗数だけでは割合が分からない）
-        self.encrypted = 0   # E2EE（DAVE）で、復号できなかったフレーム
-        self.decrypted = 0   # E2EE（DAVE）を復号できたフレーム
-        self.padding_only = 0   # 中身がパディングだけのパケット（音声ではない）
-        self.received = 0    # 受け取った音声フレームの総数
-        self.payload_types: dict[int, int] = {}   # RTP のペイロードタイプ別の数
+        self._anchor_ts: int | None = None  # 最初のパケットの RTP タイムスタンプ
+        self._anchor_elapsed: float = 0.0  # そのときの録音経過秒
+        self.lost = 0  # 待っても来なかったパケット数
+        self.late = 0  # 出したあとに届いた／溢れて捨てたパケット数
+        self.silence = 0  # 発話の切れ目に来る無音パケット（並べ直しには入れない）
+        self.failed = 0  # デコードできなかったパケット
+        self.decoded = 0  # デコードできたパケット（失敗数だけでは割合が分からない）
+        self.encrypted = 0  # E2EE（DAVE）で、復号できなかったフレーム
+        self.decrypted = 0  # E2EE（DAVE）を復号できたフレーム
+        self.padding_only = 0  # 中身がパディングだけのパケット（音声ではない）
+        self.received = 0  # 受け取った音声フレームの総数
+        self.payload_types: dict[int, int] = {}  # RTP のペイロードタイプ別の数
 
     def decode(self, encoded: bytes | None) -> bytes:
         """encoded が None のときは欠落補間（PLC）。
@@ -437,6 +473,7 @@ class _StreamAssembler:
         """
         if self.decoder is None:
             from discord.opus import Decoder
+
             self.decoder = Decoder()
         return self.decoder.decode(encoded, fec=False)
 
@@ -445,12 +482,10 @@ class _StreamAssembler:
         if self._anchor_ts is None:
             self._anchor_ts = timestamp
             self._anchor_elapsed = elapsed
-        offset = (self._anchor_elapsed
-                  + _wrapped_delta(timestamp, self._anchor_ts, _TS_MOD) / SAMPLE_RATE)
+        offset = self._anchor_elapsed + _wrapped_delta(timestamp, self._anchor_ts, _TS_MOD) / SAMPLE_RATE
         # 相手側の時計が飛んだときに、何時間ぶんもの無音を書かないようにする。
         if offset < 0 or offset > elapsed + 60.0:
-            logger.warning(
-                "[recording] ssrc=%s タイムスタンプが飛んだので現在時刻に合わせ直します", self.ssrc)
+            logger.warning("[recording] ssrc=%s タイムスタンプが飛んだので現在時刻に合わせ直します", self.ssrc)
             self._anchor_ts = timestamp
             self._anchor_elapsed = elapsed
             offset = elapsed
@@ -458,7 +493,7 @@ class _StreamAssembler:
 
     def push(self, sequence: int, timestamp: int, encoded: bytes, now: float) -> None:
         if self._next_seq is not None and _wrapped_delta(sequence, self._next_seq, _SEQ_MOD) < 0:
-            self.late += 1      # 既に出したところより後ろ。今さら差し込めない。
+            self.late += 1  # 既に出したところより後ろ。今さら差し込めない。
             return
         self._pending[sequence] = (now, timestamp, encoded)
 
@@ -500,8 +535,7 @@ class _StreamAssembler:
             # 穴が空いている。少しだけ待ち、それでも来なければ諦めて飛ばす。
             if not self._hold_expired(now):
                 break
-            skipped = min(
-                self._pending, key=lambda k: _wrapped_delta(k, self._next_seq, _SEQ_MOD))
+            skipped = min(self._pending, key=lambda k: _wrapped_delta(k, self._next_seq, _SEQ_MOD))
             gap = _wrapped_delta(skipped, self._next_seq, _SEQ_MOD)
             self.lost += gap
             # 欠けたぶんは Opus に「無かった」と伝えて補間させる。
@@ -538,7 +572,7 @@ def _make_sink_class():
             super().__init__()
             self.session = session
             self._streams: dict[int, _StreamAssembler] = {}
-            self._users: dict[int, object] = {}      # ssrc -> 直近の話者
+            self._users: dict[int, object] = {}  # ssrc -> 直近の話者
 
         def wants_opus(self) -> bool:
             return True
@@ -641,11 +675,15 @@ def _make_sink_class():
                         logger.warning(
                             "[recording] デコード失敗 ssrc=%s %s: %s / %d バイト "
                             "先頭=%s 末尾=%s ここまで成功=%d 失敗=%d 種別=%s",
-                            ssrc, type(e).__name__, e,
+                            ssrc,
+                            type(e).__name__,
+                            e,
                             0 if encoded is None else len(encoded),
                             "（欠落補間）" if encoded is None else encoded[:12].hex(),
                             "-" if encoded is None else encoded[-6:].hex(),
-                            stream.decoded, stream.failed, stream.payload_types,
+                            stream.decoded,
+                            stream.failed,
+                            stream.payload_types,
                         )
                     continue
                 stream.decoded += 1
@@ -667,9 +705,18 @@ def _make_sink_class():
                     "[recording] ssrc=%s (%s) 受信=%d 成功=%d 失敗=%d "
                     "E2EE復号=%d E2EE不可=%d 詰め物=%d 欠落=%d 手遅れ=%d 無音=%d "
                     "RTP種別=%s",
-                    ssrc, name, stream.received, stream.decoded, stream.failed,
-                    stream.decrypted, stream.encrypted, stream.padding_only,
-                    stream.lost, stream.late, stream.silence, stream.payload_types,
+                    ssrc,
+                    name,
+                    stream.received,
+                    stream.decoded,
+                    stream.failed,
+                    stream.decrypted,
+                    stream.encrypted,
+                    stream.padding_only,
+                    stream.lost,
+                    stream.late,
+                    stream.silence,
+                    stream.payload_types,
                 )
 
         def cleanup(self) -> None:
@@ -680,6 +727,7 @@ def _make_sink_class():
 
 
 # ── セッション ────────────────────────────────────────────────
+
 
 @dataclass
 class RecordingSession:
@@ -695,11 +743,11 @@ class RecordingSession:
     workdir: Path = field(default_factory=lambda: Path(tempfile.mkdtemp(prefix="rec-")))
     tracks: dict[int, _TrackWriter] = field(default_factory=dict)
     stopping: bool = False
-    dropped_packets: int = 0     # デコードできず捨てたパケット数
-    encrypted_frames: int = 0    # E2EE（DAVE）で復号できなかったフレーム数
-    voice_frames: int = 0        # 受け取った音声フレームの総数
+    dropped_packets: int = 0  # デコードできず捨てたパケット数
+    encrypted_frames: int = 0  # E2EE（DAVE）で復号できなかったフレーム数
+    voice_frames: int = 0  # 受け取った音声フレームの総数
     announce_message: discord.Message | None = None
-    sink: object | None = None      # 停止時に、並べ直し待ちのパケットを書き出す
+    sink: object | None = None  # 停止時に、並べ直し待ちのパケットを書き出す
     _guard_task: asyncio.Task | None = None
 
     @property
@@ -737,8 +785,7 @@ class RecordingSession:
         まだ数が少ないうちは判断しない（切り替わりの途中で数フレームだけ
         暗号化されていることがあるため）。
         """
-        return (self.voice_frames >= _DAVE_MIN_SAMPLES
-                and self.encrypted_frames >= self.voice_frames * _DAVE_RATIO)
+        return self.voice_frames >= _DAVE_MIN_SAMPLES and self.encrypted_frames >= self.voice_frames * _DAVE_RATIO
 
     def feed(self, user, pcm: bytes, at: float | None = None) -> None:
         """PCM を書く。at は録音開始からの秒数（None なら現在時刻）。
@@ -780,8 +827,7 @@ class RecordingSession:
             "max_seconds": self.max_seconds,
             "unlimited": self.is_unlimited,
             "speakers": [
-                {"user_id": t.user_id, "name": t.display_name,
-                 "voiced_seconds": round(t.voiced_seconds, 1)}
+                {"user_id": t.user_id, "name": t.display_name, "voiced_seconds": round(t.voiced_seconds, 1)}
                 for t in self.tracks.values()
             ],
             "output_bytes": self.output_bytes,
@@ -791,6 +837,7 @@ class RecordingSession:
 
 
 # ── 開始 / 停止 ───────────────────────────────────────────────
+
 
 # 管理画面は Bot とは別プロセスなので、メモリ上の状態が見えない。
 # 開始・停止のたびに共有ディレクトリへ書き出して、そちらから読めるようにする
@@ -897,7 +944,10 @@ async def start_recording(
     session._guard_task = asyncio.create_task(_guard(bot, guild.id))
     logger.info(
         "[recording] guild=%s ch=%s 開始（上限 %d 分 / %s）",
-        guild.id, channel.id, session.max_seconds // 60, session.started_by_name,
+        guild.id,
+        channel.id,
+        session.max_seconds // 60,
+        session.started_by_name,
     )
     return session
 
@@ -956,7 +1006,7 @@ async def maybe_start_for_channel(bot, guild, channel, *, trigger: str = "自動
     if guild is None or channel is None:
         return
     if guild.id in _sessions:
-        return                       # すでに録音中
+        return  # すでに録音中
     if not voice_session.RECEIVE_AVAILABLE:
         return
     if auto_start_channel_id(guild.id) != channel.id:
@@ -975,7 +1025,9 @@ async def maybe_start_for_channel(bot, guild, channel, *, trigger: str = "自動
         await start_recording(bot, guild, channel, started_by=guild.me or bot.user)
         logger.info(
             "[recording] guild=%s ch=%s 自動録音を開始しました（きっかけ: %s）",
-            guild.id, channel.id, trigger,
+            guild.id,
+            channel.id,
+            trigger,
         )
     except RecordingError as e:
         # 自動で走る経路なので、失敗しても呼び出し元の処理は妨げない。
@@ -987,7 +1039,10 @@ async def maybe_auto_start(bot, member, channel) -> None:
     if getattr(member, "bot", False):
         return
     await maybe_start_for_channel(
-        bot, getattr(member, "guild", None), channel, trigger="入室",
+        bot,
+        getattr(member, "guild", None),
+        channel,
+        trigger="入室",
     )
 
 
@@ -1013,8 +1068,9 @@ def resolve_announce_channel(guild, *, fallback=None):
     channel = guild.get_channel(int(channel_id))
     if channel is None or not isinstance(channel, discord.abc.Messageable):
         logger.warning(
-            "[recording] guild=%s 通知チャンネル（%s）が見つからないか送信できません。"
-            "既定の送信先を使います", guild.id, channel_id,
+            "[recording] guild=%s 通知チャンネル（%s）が見つからないか送信できません。" "既定の送信先を使います",
+            guild.id,
+            channel_id,
         )
         return fallback
     return channel
@@ -1065,7 +1121,7 @@ def _is_receiving(guild_id: int) -> bool:
         return False
     is_listening = getattr(client, "is_listening", None)
     if is_listening is None:
-        return True          # 判断できないなら止めない
+        return True  # 判断できないなら止めない
     try:
         return bool(is_listening())
     except Exception as e:
@@ -1112,7 +1168,8 @@ async def _announce_stop(bot, session: "RecordingSession", result: dict) -> None
             logger.debug("[recording] 停止通知を送れませんでした: %s", e)
     logger.warning(
         "[recording] guild=%s 停止結果を知らせる先がありませんでした（token=%s）",
-        session.guild_id, result.get("token"),
+        session.guild_id,
+        result.get("token"),
     )
 
 
@@ -1151,7 +1208,9 @@ async def _guard(bot, guild_id: int) -> None:
                 logger.warning(
                     "[recording] guild=%s この通話は端から端まで暗号化されている"
                     "（DAVE）ため録音できません。%d/%d フレームが暗号化されていました",
-                    guild_id, session.encrypted_frames, session.voice_frames,
+                    guild_id,
+                    session.encrypted_frames,
+                    session.voice_frames,
                 )
                 await _guard_stop(bot, guild_id, session, dave.unavailable_reason())
                 return
@@ -1162,7 +1221,8 @@ async def _guard(bot, guild_id: int) -> None:
             # 録れたように見えてしまうので、気づいた時点で書き出す。
             if not _is_receiving(guild_id):
                 logger.warning(
-                    "[recording] guild=%s 音声の受信が止まっていたので書き出します", guild_id,
+                    "[recording] guild=%s 音声の受信が止まっていたので書き出します",
+                    guild_id,
                 )
                 await _guard_stop(bot, guild_id, session, "音声の受信が止まりました")
                 return
@@ -1225,8 +1285,7 @@ async def stop_recording(bot, guild_id: int, *, reason: str = "") -> dict:
     # guard は stop_recording() の直後に return するだけなので、自分自身を
     # キャンセルする意味はそもそもない。他のタスク（コマンド／管理画面）から
     # 呼ばれた場合だけ、まだ回っている guard ループを止める。
-    if (session._guard_task and not session._guard_task.done()
-            and session._guard_task is not asyncio.current_task()):
+    if session._guard_task and not session._guard_task.done() and session._guard_task is not asyncio.current_task():
         session._guard_task.cancel()
 
     voice_session.unhold(guild_id, "recording")
@@ -1239,18 +1298,21 @@ async def stop_recording(bot, guild_id: int, *, reason: str = "") -> dict:
         # ここで作業ディレクトリを消すと、録れていた音まで道連れになる。
         # 書き出しの手前までは成功しているかもしれないので、場所を残して知らせる。
         logger.exception(
-            "[recording] guild=%s 書き出しに失敗: %s。"
-            "録れた音は %s に残してあります（手動で回収できます）",
-            guild_id, e, session.workdir,
+            "[recording] guild=%s 書き出しに失敗: %s。" "録れた音は %s に残してあります（手動で回収できます）",
+            guild_id,
+            e,
+            session.workdir,
         )
         raise RecordingError(
-            f"録音の書き出しに失敗しました（{e}）。"
-            f"録れた音はサーバー上の {session.workdir} に残してあります。"
+            f"録音の書き出しに失敗しました（{e}）。" f"録れた音はサーバー上の {session.workdir} に残してあります。"
         ) from e
 
     logger.info(
         "[recording] guild=%s 停止（%s / %d トラック / %.1f 分 / 取りこぼし %d パケット）",
-        guild_id, result["token"], result["track_count"], total_elapsed / 60,
+        guild_id,
+        result["token"],
+        result["track_count"],
+        total_elapsed / 60,
         session.dropped_packets,
     )
     return result
@@ -1298,8 +1360,7 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
         "停止理由": reason or "手動停止",
         "取りこぼしたパケット": session.dropped_packets,
         "トラック": [
-            {"ファイル": t.out_path.name, "名前": t.display_name,
-             "発話時間(秒)": round(t.voiced_seconds, 1)}
+            {"ファイル": t.out_path.name, "名前": t.display_name, "発話時間(秒)": round(t.voiced_seconds, 1)}
             for t in session.tracks.values()
         ],
     }
@@ -1313,8 +1374,7 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
     # 先頭へ圧縮され（6時間なら全体が先頭12.4分ぶんに潰れる）、長さの違う
     # トラック同士でも縮尺が食い違っていた。
     peak_buckets = max(
-        [len(t.peaks) for t in session.tracks.values()]
-        + [math.ceil(max(total_elapsed, 0.0) / PEAK_BUCKET_SECONDS)]
+        [len(t.peaks) for t in session.tracks.values()] + [math.ceil(max(total_elapsed, 0.0) / PEAK_BUCKET_SECONDS)]
     )
     peak_group = max(1, math.ceil(peak_buckets / PEAK_MAX_POINTS))
     peak_points = math.ceil(peak_buckets / peak_group)
@@ -1327,22 +1387,27 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
         voice = measure_voice(track.out_path, total_elapsed)
         if voice is not None and voice < VOICE_PERIODICITY_MIN:
             logger.warning(
-                "[recording] guild=%s %s のトラックが声として成立していない可能性"
-                "（周期性 %.3f < %.2f）", session.guild_id, track.display_name,
-                voice, VOICE_PERIODICITY_MIN)
-        stems.append({
-            "index": index,
-            "periodicity": voice,
-            "file": track.out_path.name,
-            "name": track.display_name,
-            "user_id": track.user_id,
-            "voiced_seconds": round(track.voiced_seconds, 2),
-            "size_bytes": track.out_path.stat().st_size,
-            "peaks": track.peak_series(group=peak_group, points=peak_points),
-            # 1点が何秒ぶんか。索引全体の bucket_seconds と同じ値だが、
-            # トラック単位で読めるほうが読み手が迷わない。
-            "bucket_seconds": peak_seconds,
-        })
+                "[recording] guild=%s %s のトラックが声として成立していない可能性" "（周期性 %.3f < %.2f）",
+                session.guild_id,
+                track.display_name,
+                voice,
+                VOICE_PERIODICITY_MIN,
+            )
+        stems.append(
+            {
+                "index": index,
+                "periodicity": voice,
+                "file": track.out_path.name,
+                "name": track.display_name,
+                "user_id": track.user_id,
+                "voiced_seconds": round(track.voiced_seconds, 2),
+                "size_bytes": track.out_path.stat().st_size,
+                "peaks": track.peak_series(group=peak_group, points=peak_points),
+                # 1点が何秒ぶんか。索引全体の bucket_seconds と同じ値だが、
+                # トラック単位で読めるほうが読み手が迷わない。
+                "bucket_seconds": peak_seconds,
+            }
+        )
     manifest = {
         "version": 1,
         "channel_name": session.channel_name,
@@ -1361,24 +1426,24 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
                 # mp3 は既に圧縮済みなので縮まない。無圧縮で入れておくと、
                 # ZIP の中の1本を「その位置から何バイト」で直接読めるようになり、
                 # ミキサーの頭出し（Range リクエスト）が素直に通る。
-                archive.write(track.out_path, arcname=track.out_path.name,
-                              compress_type=zipfile.ZIP_STORED)
+                archive.write(track.out_path, arcname=track.out_path.name, compress_type=zipfile.ZIP_STORED)
         archive.writestr(MANIFEST_NAME, json.dumps(manifest, ensure_ascii=False))
         archive.writestr("info.json", json.dumps(info, ensure_ascii=False, indent=2))
         archive.writestr(
             "info.txt",
-            "\n".join([
-                f"チャンネル: {session.channel_name}",
-                f"開始した人: {session.started_by_name}",
-                f"書き出し: {info['書き出し日時']}",
-                f"長さ: {info['長さ']}",
-                f"停止理由: {info['停止理由']}",
-                "",
-                "各トラックは同じ時間軸に揃えてあります（そのまま重ねれば同期します）。",
-                "",
-                *[f"  {t['ファイル']}  {t['名前']}  発話 {t['発話時間(秒)']}秒"
-                  for t in info["トラック"]],
-            ]),
+            "\n".join(
+                [
+                    f"チャンネル: {session.channel_name}",
+                    f"開始した人: {session.started_by_name}",
+                    f"書き出し: {info['書き出し日時']}",
+                    f"長さ: {info['長さ']}",
+                    f"停止理由: {info['停止理由']}",
+                    "",
+                    "各トラックは同じ時間軸に揃えてあります（そのまま重ねれば同期します）。",
+                    "",
+                    *[f"  {t['ファイル']}  {t['名前']}  発話 {t['発話時間(秒)']}秒" for t in info["トラック"]],
+                ]
+            ),
         )
 
     size_bytes = zip_path.stat().st_size
@@ -1407,15 +1472,14 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
         # 声として成立していないトラック。黙って渡すと、落として聞くまで
         # 気づけない。
         "suspect_tracks": [
-            s["name"] for s in stems
-            if s.get("periodicity") is not None
-            and s["periodicity"] < VOICE_PERIODICITY_MIN
+            s["name"] for s in stems if s.get("periodicity") is not None and s["periodicity"] < VOICE_PERIODICITY_MIN
         ],
     }
 
 
 def download_url(guild_id: int, token: str) -> str:
     from config import DJAUDIO_BASE_URL
+
     return f"{DJAUDIO_BASE_URL}/dlaudio/files/{guild_id}/{token}"
 
 
@@ -1443,9 +1507,11 @@ def build_result_embed(guild_id: int, result: dict) -> discord.Embed:
     if suspects:
         embed.add_field(
             name="⚠️ 音が壊れている可能性",
-            value=("次のトラックが声として成立していません（雑音の疑い）:\n"
-                   + "、".join(suspects[:10])
-                   + "\n管理画面のミキサーで波形を確認してください。"),
+            value=(
+                "次のトラックが声として成立していません（雑音の疑い）:\n"
+                + "、".join(suspects[:10])
+                + "\n管理画面のミキサーで波形を確認してください。"
+            ),
             inline=False,
         )
     url = download_url(guild_id, result["token"])

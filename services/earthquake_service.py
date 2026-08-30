@@ -19,6 +19,7 @@ try:
     # numpy は requirements にあり、PIL と同じく画像生成にだけ要る。
     import numpy as np
     from PIL import Image, ImageDraw, ImageFilter, ImageFont
+
     _PIL = True
 except ImportError:
     _PIL = False
@@ -33,7 +34,7 @@ from services.settings_store import (
 
 logger = logging.getLogger(__name__)
 
-_WS_URL  = "wss://api.p2pquake.net/v2/ws"
+_WS_URL = "wss://api.p2pquake.net/v2/ws"
 _SEEN_ID_LIMIT = 500  # 重複排除で覚えておくイベントIDの数
 # 地図のタイル。
 #
@@ -46,37 +47,73 @@ _SEEN_ID_LIMIT = 500  # 重複排除で覚えておくイベントIDの数
 # 暗色へ塗り替えられる。1枚 13KB と軽い（標準地図は 117KB）。
 _TILE_URL = "https://cyberjapandata.gsi.go.jp/xyz/blank/{z}/{x}/{y}.png"
 _TILE_ATTRIBUTION = "地理院タイル・地球地図日本（国土地理院）を加工して作成"
-_TILE_UA  = "VoldermortBot/1.0 (earthquake alert; contact: github)"
-_TILE_SZ  = 256
+_TILE_UA = "VoldermortBot/1.0 (earthquake alert; contact: github)"
+_TILE_SZ = 256
 
 # 都道府県中心座標（エリア座標APIが存在しないため都道府県単位でフォールバック）
 _PREF_CENTERS: dict[str, tuple[float, float]] = {
-    "北海道": (43.064, 141.347), "青森県": (40.824, 140.740), "岩手県": (39.703, 141.153),
-    "宮城県": (38.268, 140.872), "秋田県": (39.718, 140.102), "山形県": (38.240, 140.363),
-    "福島県": (37.750, 140.468), "茨城県": (36.341, 140.447), "栃木県": (36.565, 139.883),
-    "群馬県": (36.391, 139.060), "埼玉県": (35.857, 139.649), "千葉県": (35.605, 140.123),
-    "東京都": (35.689, 139.692), "神奈川県": (35.447, 139.642), "新潟県": (37.902, 139.023),
-    "富山県": (36.695, 137.211), "石川県": (36.594, 136.626), "福井県": (36.065, 136.222),
-    "山梨県": (35.664, 138.568), "長野県": (36.651, 138.181), "岐阜県": (35.391, 136.722),
-    "静岡県": (34.977, 138.383), "愛知県": (35.180, 136.906), "三重県": (34.730, 136.509),
-    "滋賀県": (35.004, 135.869), "京都府": (35.021, 135.756), "大阪府": (34.686, 135.520),
-    "兵庫県": (34.691, 135.183), "奈良県": (34.685, 135.833), "和歌山県": (34.226, 135.167),
-    "鳥取県": (35.503, 134.238), "島根県": (35.472, 133.051), "岡山県": (34.661, 133.934),
-    "広島県": (34.396, 132.460), "山口県": (34.186, 131.471), "徳島県": (34.066, 134.559),
-    "香川県": (34.340, 134.043), "愛媛県": (33.842, 132.766), "高知県": (33.560, 133.531),
-    "福岡県": (33.606, 130.418), "佐賀県": (33.249, 130.299), "長崎県": (32.745, 129.874),
-    "熊本県": (32.789, 130.742), "大分県": (33.238, 131.613), "宮崎県": (31.911, 131.424),
-    "鹿児島県": (31.560, 130.558), "沖縄県": (26.212, 127.681),
+    "北海道": (43.064, 141.347),
+    "青森県": (40.824, 140.740),
+    "岩手県": (39.703, 141.153),
+    "宮城県": (38.268, 140.872),
+    "秋田県": (39.718, 140.102),
+    "山形県": (38.240, 140.363),
+    "福島県": (37.750, 140.468),
+    "茨城県": (36.341, 140.447),
+    "栃木県": (36.565, 139.883),
+    "群馬県": (36.391, 139.060),
+    "埼玉県": (35.857, 139.649),
+    "千葉県": (35.605, 140.123),
+    "東京都": (35.689, 139.692),
+    "神奈川県": (35.447, 139.642),
+    "新潟県": (37.902, 139.023),
+    "富山県": (36.695, 137.211),
+    "石川県": (36.594, 136.626),
+    "福井県": (36.065, 136.222),
+    "山梨県": (35.664, 138.568),
+    "長野県": (36.651, 138.181),
+    "岐阜県": (35.391, 136.722),
+    "静岡県": (34.977, 138.383),
+    "愛知県": (35.180, 136.906),
+    "三重県": (34.730, 136.509),
+    "滋賀県": (35.004, 135.869),
+    "京都府": (35.021, 135.756),
+    "大阪府": (34.686, 135.520),
+    "兵庫県": (34.691, 135.183),
+    "奈良県": (34.685, 135.833),
+    "和歌山県": (34.226, 135.167),
+    "鳥取県": (35.503, 134.238),
+    "島根県": (35.472, 133.051),
+    "岡山県": (34.661, 133.934),
+    "広島県": (34.396, 132.460),
+    "山口県": (34.186, 131.471),
+    "徳島県": (34.066, 134.559),
+    "香川県": (34.340, 134.043),
+    "愛媛県": (33.842, 132.766),
+    "高知県": (33.560, 133.531),
+    "福岡県": (33.606, 130.418),
+    "佐賀県": (33.249, 130.299),
+    "長崎県": (32.745, 129.874),
+    "熊本県": (32.789, 130.742),
+    "大分県": (33.238, 131.613),
+    "宮崎県": (31.911, 131.424),
+    "鹿児島県": (31.560, 130.558),
+    "沖縄県": (26.212, 127.681),
 }
 
 # マップ上の震度圏塗り色 — Kiwi Monitor V2 準拠
 # 震度の色。気象庁の並びに沿いつつ、暗い地図の上で沈まないよう明度を上げ、
 # 原色のままだと安っぽく見えるので彩度を少し落としてある。
 _MAP_FILL_RGB = {
-    10: ( 58, 122, 216), 20: ( 46, 158, 214), 30: ( 44, 176, 154),
-    40: (226, 192,  62), 45: (232, 152,  48),
-    50: (233, 119,  43), 55: (226,  78,  44),
-    60: (206,  47,  62), 70: (132,  44, 128),
+    10: (58, 122, 216),
+    20: (46, 158, 214),
+    30: (44, 176, 154),
+    40: (226, 192, 62),
+    45: (232, 152, 48),
+    50: (233, 119, 43),
+    55: (226, 78, 44),
+    60: (206, 47, 62),
+    70: (132, 44, 128),
 }
 
 # 地図の面と線の色（暗い埋め込みに合わせる）。白地図を塗り替えるときに使う。
@@ -97,67 +134,101 @@ _MAP_SS = 2
 # 凡例・ログ用（全角）
 # 全角表記（凡例・ログ用）。対応は config.SCALE_LABELS と同じ仕様に従う。
 _SCALE_MAP = {
-    10: "１", 20: "２", 30: "３", 40: "４", 45: "５弱",
-    50: "５強", 55: "６弱", 60: "６強", 70: "７",
+    10: "１",
+    20: "２",
+    30: "３",
+    40: "４",
+    45: "５弱",
+    50: "５強",
+    55: "６弱",
+    60: "６強",
+    70: "７",
 }
 
 # バッジ画像用（ASCII のみ・CJK フォント不要）
 _SCALE_BADGE_LABEL = {
-    10: "1", 20: "2", 30: "3", 40: "4", 45: "5-",
-    50: "5+", 55: "6-", 60: "6+", 70: "7",
+    10: "1",
+    20: "2",
+    30: "3",
+    40: "4",
+    45: "5-",
+    50: "5+",
+    55: "6-",
+    60: "6+",
+    70: "7",
 }
 
 # EEW予報 (556) の forecastMaxInt 文字列 → 内部スケール値
 _FORECAST_INT_TO_SCALE: dict[str, int] = {
-    "1": 10, "2": 20, "3": 30, "4": 40,
-    "5-": 45, "5+": 50, "6-": 55, "6+": 60, "7": 70,
+    "1": 10,
+    "2": 20,
+    "3": 30,
+    "4": 40,
+    "5-": 45,
+    "5+": 50,
+    "6-": 55,
+    "6+": 60,
+    "7": 70,
 }
 
 # 震度別 RGB — Kiwi Monitor カラースキーム 第2版
 _SCALE_RGB = {
-    10: (  0,  64, 255), 20: (  0, 148, 255), 30: (  0, 200, 200),
-    40: (250, 230,  20), 45: (255, 175,   0),
-    50: (255, 120,   0), 55: (255,  60,   0),
-    60: (220,   0,   0), 70: (110,   0, 130),
+    10: (0, 64, 255),
+    20: (0, 148, 255),
+    30: (0, 200, 200),
+    40: (250, 230, 20),
+    45: (255, 175, 0),
+    50: (255, 120, 0),
+    55: (255, 60, 0),
+    60: (220, 0, 0),
+    70: (110, 0, 130),
 }
 
 _SCALE_COLORS = {k: discord.Color.from_rgb(*v) for k, v in _SCALE_RGB.items()}
 
 # タイトル絵文字（震度別）
 _SCALE_TITLE_EMOJI = {
-    10: "🔵", 20: "🔵", 30: "🔵",
-    40: "🟡", 45: "🟠",
-    50: "🟠", 55: "🔴",
-    60: "🔴", 70: "🔴",
+    10: "🔵",
+    20: "🔵",
+    30: "🔵",
+    40: "🟡",
+    45: "🟠",
+    50: "🟠",
+    55: "🔴",
+    60: "🔴",
+    70: "🔴",
 }
 
 _TSUNAMI_TEXT = {
-    "None":         "この地震による津波の心配はありません。",
-    "Unknown":      "津波の有無を調査中です。",
-    "Checking":     "津波の有無を調査中です。",
+    "None": "この地震による津波の心配はありません。",
+    "Unknown": "津波の有無を調査中です。",
+    "Checking": "津波の有無を調査中です。",
     "NonEffective": "この地震による津波の心配はありません。",
-    "Watch":        "⚠️ 津波注意報が発令されています。",
-    "Warning":      "🚨 津波警報が発令されています！",
+    "Watch": "⚠️ 津波注意報が発令されています。",
+    "Warning": "🚨 津波警報が発令されています！",
 }
 
 _TSUNAMI_GRADE_LABELS: dict[str, str] = {
     "MajorWarning": "🔴 大津波警報",
-    "Warning":      "🟠 津波警報",
-    "Watch":        "🟡 津波注意報",
-    "Unknown":      "❓ 不明",
+    "Warning": "🟠 津波警報",
+    "Watch": "🟡 津波注意報",
+    "Unknown": "❓ 不明",
 }
 
 _TSUNAMI_GRADE_ORDER: dict[str, int] = {
-    "MajorWarning": 3, "Warning": 2, "Watch": 1, "Unknown": 0,
+    "MajorWarning": 3,
+    "Warning": 2,
+    "Watch": 1,
+    "Unknown": 0,
 }
 
 _ISSUE_LABELS = {
-    "ScalePrompt":         "気象庁 震度速報",
-    "Destination":         "気象庁 震源に関する情報",
+    "ScalePrompt": "気象庁 震度速報",
+    "Destination": "気象庁 震源に関する情報",
     "ScaleAndDestination": "気象庁 震度・震源に関する情報",
-    "DetailScale":         "気象庁 各地の震度に関する情報",
-    "Foreign":             "気象庁 遠地地震に関する情報",
-    "Other":               "気象庁",
+    "DetailScale": "気象庁 各地の震度に関する情報",
+    "Foreign": "気象庁 遠地地震に関する情報",
+    "Other": "気象庁",
 }
 
 
@@ -188,7 +259,7 @@ _BOLD_FONT_SEARCH_PATHS = [
     "C:/Windows/Fonts/meiryob.ttc",
     "C:/Windows/Fonts/YuGothB.ttc",
 ]
-_FONT_PATHS: dict[bool, str | None] = {}   # bold → 見つかった実体（1つも無ければ None）
+_FONT_PATHS: dict[bool, str | None] = {}  # bold → 見つかった実体（1つも無ければ None）
 _FONT_CACHE: dict[tuple[int, bool], "ImageFont.ImageFont"] = {}
 
 
@@ -244,6 +315,7 @@ def _get_font(size: int, bold: bool = False) -> "ImageFont.ImageFont":
 
 
 # ── データ解析ヘルパー ─────────────────────────────────────
+
 
 def _max_scale(event: dict) -> int:
     points = event.get("points", [])
@@ -322,6 +394,7 @@ def _format_time(time_str: str) -> tuple[str, datetime | None]:
 
 # ── バッジ画像生成 ─────────────────────────────────────────
 
+
 def _badge_glyphs(scale: int) -> tuple[str, str, bool] | None:
     """札に置く「数字」「添え字」と、添え字をベースラインに載せるか。
     知らない震度には None。
@@ -349,8 +422,8 @@ def _badge_glyphs(scale: int) -> tuple[str, str, bool] | None:
 #
 # 辺ごと超楕円にする手もあるが（|x|^n + |y|^n = 1）、それだと辺が外へ
 # 膨らんで、四角ではなく座布団に見える。角の外だけを超楕円で測る。
-_SQUIRCLE_R = 0.45   # 角の大きさ。辺の半分に対する割合（＝一辺の 22.5%、iOS と同じ）
-_SQUIRCLE_P = 4.2    # 角の曲がり方。2 でただの円弧、上げるほど直線からなだらかに入る
+_SQUIRCLE_R = 0.45  # 角の大きさ。辺の半分に対する割合（＝一辺の 22.5%、iOS と同じ）
+_SQUIRCLE_P = 4.2  # 角の曲がり方。2 でただの円弧、上げるほど直線からなだらかに入る
 
 
 def _squircle(w: int, h: int, inset: float = 0.0) -> "np.ndarray":
@@ -364,8 +437,8 @@ def _squircle(w: int, h: int, inset: float = 0.0) -> "np.ndarray":
     qx = np.clip(xs - (1.0 - _SQUIRCLE_R), 0.0, None)
     qy = np.clip(ys - (1.0 - _SQUIRCLE_R), 0.0, None)
     # 辺の上ではどちらかが 0 になるので、そこはまっすぐな縁が残る。
-    dist = (qx ** _SQUIRCLE_P + qy ** _SQUIRCLE_P) ** (1.0 / _SQUIRCLE_P) - _SQUIRCLE_R
-    px = 2.0 / w                      # 画素1つ分（正規化した座標での長さ）
+    dist = (qx**_SQUIRCLE_P + qy**_SQUIRCLE_P) ** (1.0 / _SQUIRCLE_P) - _SQUIRCLE_R
+    px = 2.0 / w  # 画素1つ分（正規化した座標での長さ）
     return np.clip(-dist / px - inset + 0.5, 0.0, 1.0)
 
 
@@ -376,7 +449,7 @@ def _badge_ground(w: int, h: int, rgb: tuple[int, int, int]) -> "Image.Image":
     色が濁るので、震度の色そのものを明暗させる。
     """
     ramp = (1.09 - 0.23 * np.linspace(0.0, 1.0, h, dtype=np.float32))[:, None, None]
-    column = np.asarray(rgb, dtype=np.float32) * ramp          # (h, 1, 3)
+    column = np.asarray(rgb, dtype=np.float32) * ramp  # (h, 1, 3)
     field = np.clip(np.broadcast_to(column, (h, w, 3)), 0, 255).astype(np.uint8)
     return Image.fromarray(field, "RGB").convert("RGBA")
 
@@ -400,9 +473,14 @@ def _badge_rim(w: int, h: int, mask: "np.ndarray") -> "Image.Image":
     return Image.fromarray(layer.astype(np.uint8), "RGBA")
 
 
-def _draw_tracked(draw: "ImageDraw.ImageDraw", centre: tuple[float, float], text: str,
-                  font: "ImageFont.ImageFont", fill: tuple[int, int, int, int],
-                  tracking: float) -> None:
+def _draw_tracked(
+    draw: "ImageDraw.ImageDraw",
+    centre: tuple[float, float],
+    text: str,
+    font: "ImageFont.ImageFont",
+    fill: tuple[int, int, int, int],
+    tracking: float,
+) -> None:
     """字間を空けて、中央揃えで1行置く。
 
     PIL に字送りの指定は無いので1文字ずつ置く。小さな見出しは、詰めたままだと
@@ -415,10 +493,17 @@ def _draw_tracked(draw: "ImageDraw.ImageDraw", centre: tuple[float, float], text
         x += width + tracking
 
 
-def _draw_intensity(draw: "ImageDraw.ImageDraw", centre: tuple[float, float],
-                    numeral: str, suffix: str, numeral_font: "ImageFont.ImageFont",
-                    suffix_font: "ImageFont.ImageFont", gap: float,
-                    on_baseline: bool, fill: tuple[int, int, int, int]) -> None:
+def _draw_intensity(
+    draw: "ImageDraw.ImageDraw",
+    centre: tuple[float, float],
+    numeral: str,
+    suffix: str,
+    numeral_font: "ImageFont.ImageFont",
+    suffix_font: "ImageFont.ImageFont",
+    gap: float,
+    on_baseline: bool,
+    fill: tuple[int, int, int, int],
+) -> None:
     """数字と添え字を、ひとかたまりとして中央へ置く。
 
     数字はどの震度でも同じ大きさにする。2文字だからと数字ごと縮めると、
@@ -430,8 +515,7 @@ def _draw_intensity(draw: "ImageDraw.ImageDraw", centre: tuple[float, float],
     left, top, right, bottom = draw.textbbox((0, 0), numeral, font=numeral_font, anchor="ls")
     placed = [(numeral, numeral_font, 0.0, 0.0)]
     if suffix:
-        s_left, s_top, s_right, s_bottom = draw.textbbox(
-            (0, 0), suffix, font=suffix_font, anchor="ls")
+        s_left, s_top, s_right, s_bottom = draw.textbbox((0, 0), suffix, font=suffix_font, anchor="ls")
         rise = 0.0 if on_baseline else (top + bottom) / 2 - (s_top + s_bottom) / 2
         offset = right + gap - s_left
         placed.append((suffix, suffix_font, offset, rise))
@@ -491,14 +575,22 @@ def _generate_badge(scale: int) -> io.BytesIO | None:
     # 見出し。和字が出せないときだけ欧文へ落とす。
     caption, ratio = ("最大震度", 0.098) if _has_cjk_font() else ("MAX INTENSITY", 0.060)
     caption_px = int(size * ratio * ss)
-    _draw_tracked(draw, (w / 2, h * 0.225), caption, _get_font(caption_px, bold=True),
-                  (*ink, 170), tracking=caption_px * 0.16)
+    _draw_tracked(
+        draw, (w / 2, h * 0.225), caption, _get_font(caption_px, bold=True), (*ink, 170), tracking=caption_px * 0.16
+    )
 
     numeral_px = int(size * 0.56 * ss)
-    _draw_intensity(draw, (w / 2, h * 0.600), numeral, suffix,
-                    _get_font(numeral_px, bold=True),
-                    _get_font(int(numeral_px * 0.42), bold=True),
-                    gap=numeral_px * 0.10, on_baseline=on_baseline, fill=(*ink, 255))
+    _draw_intensity(
+        draw,
+        (w / 2, h * 0.600),
+        numeral,
+        suffix,
+        _get_font(numeral_px, bold=True),
+        _get_font(int(numeral_px * 0.42), bold=True),
+        gap=numeral_px * 0.10,
+        on_baseline=on_baseline,
+        fill=(*ink, 255),
+    )
 
     img.alpha_composite(over)
 
@@ -510,13 +602,13 @@ def _generate_badge(scale: int) -> io.BytesIO | None:
 
 # ── 地図生成ヘルパー ───────────────────────────────────────
 
+
 def _latlon_to_tile_float(lat: float, lon: float, zoom: int) -> tuple[float, float]:
-    n = 2 ** zoom
+    n = 2**zoom
     tx = (lon + 180) / 360 * n
     lat_r = math.radians(lat)
     ty = (1 - math.asinh(math.tan(lat_r)) / math.pi) / 2 * n
     return tx, ty
-
 
 
 # 都道府県の輪郭。tools/build_pref_polygons.py が作る。
@@ -561,7 +653,7 @@ def _project(points: "np.ndarray", zoom: int) -> "np.ndarray":
     配信しようとしているまさにその瞬間に数百ミリ秒使うことになるので、
     まとめて計算する。
     """
-    n = 2 ** zoom
+    n = 2**zoom
     lon, lat = points[:, 0], points[:, 1]
     tx = (lon + 180.0) / 360.0 * n
     ty = (1 - np.arcsinh(np.tan(np.radians(lat))) / np.pi) / 2 * n
@@ -604,7 +696,6 @@ def _recolour_tile(gray: "Image.Image") -> "Image.Image":
     return Image.fromarray((land * (1 - ink) + line * ink).astype(np.uint8), "RGB")
 
 
-
 def _ink_for(rgb: tuple[int, int, int]) -> tuple[int, int, int, int]:
     """その色の上に置く文字の色。明るい震度では白が沈む。"""
     luma = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
@@ -620,8 +711,14 @@ def _fill_alpha(scale: int) -> int:
     return 84 + int(min(scale, 70) / 70 * 96)
 
 
-def _fill_prefectures(canvas: "Image.Image", plot: list[tuple[float, float, int, str]],
-                      zoom: int, origin_x: float, origin_y: float, ss: int) -> None:
+def _fill_prefectures(
+    canvas: "Image.Image",
+    plot: list[tuple[float, float, int, str]],
+    zoom: int,
+    origin_x: float,
+    origin_y: float,
+    ss: int,
+) -> None:
     """揺れた県を、その震度の色で塗る。
 
     札（点）だけだと「その県のどこか1点が揺れた」ようにしか見えず、揺れの
@@ -647,8 +744,7 @@ def _fill_prefectures(canvas: "Image.Image", plot: list[tuple[float, float, int,
         for ring in rings:
             px = (_project(ring, zoom) - (origin_x, origin_y)) * ss
             # 画面の外に出ている輪は描かない（沖縄まで含む地震では大半が外）。
-            if (px[:, 0].max() < 0 or px[:, 0].min() > width
-                    or px[:, 1].max() < 0 or px[:, 1].min() > height):
+            if px[:, 0].max() < 0 or px[:, 0].min() > width or px[:, 1].max() < 0 or px[:, 1].min() > height:
                 continue
             draw.polygon([(x, y) for x, y in px], fill=paint)
     canvas.alpha_composite(layer)
@@ -660,15 +756,15 @@ def _badge_size(scale: int) -> int:
     全部同じ大きさにすると、震度1の海のなかから震度5弱を探すことになる。
     大小を付けておくと、色が読めなくても視線が強い方へ落ちる。
     """
-    if scale >= 55:      # 6弱以上
+    if scale >= 55:  # 6弱以上
         return 34
-    if scale >= 45:      # 5弱・5強
+    if scale >= 45:  # 5弱・5強
         return 30
-    if scale >= 40:      # 4
+    if scale >= 40:  # 4
         return 26
-    if scale >= 30:      # 3
+    if scale >= 30:  # 3
         return 22
-    return 18            # 1・2
+    return 18  # 1・2
 
 
 def _scale_badge(scale: int, size: int) -> "Image.Image":
@@ -686,18 +782,21 @@ def _scale_badge(scale: int, size: int) -> "Image.Image":
     # 落ち影。暗い地図の上で札の縁が溶けないよう、下に薄く敷く。
     shade = Image.new("RGBA", img.size, (0, 0, 0, 0))
     ImageDraw.Draw(shade).rounded_rectangle(
-        [pad, pad + size // 10, pad + size, pad + size + size // 10],
-        radius=size // 4, fill=(0, 0, 0, 165))
+        [pad, pad + size // 10, pad + size, pad + size + size // 10], radius=size // 4, fill=(0, 0, 0, 165)
+    )
     img.alpha_composite(shade.filter(ImageFilter.GaussianBlur(size / 8)))
 
     draw = ImageDraw.Draw(img)
-    draw.rounded_rectangle([pad, pad, pad + size, pad + size], radius=size // 4,
-                           fill=(*rgb, 255), outline=(255, 255, 255, 210),
-                           width=max(1, size // 14))
+    draw.rounded_rectangle(
+        [pad, pad, pad + size, pad + size],
+        radius=size // 4,
+        fill=(*rgb, 255),
+        outline=(255, 255, 255, 210),
+        width=max(1, size // 14),
+    )
     # 「5-」のような2文字は1文字より小さく組む。同じ字送りだと札からはみ出す。
     font = _get_font(int(size * (0.60 if len(label) == 1 else 0.44)))
-    draw.text((pad + size / 2, pad + size / 2 + size // 28), label, font=font,
-              fill=_ink_for(rgb), anchor="mm")
+    draw.text((pad + size / 2, pad + size / 2 + size // 28), label, font=font, fill=_ink_for(rgb), anchor="mm")
     return img
 
 
@@ -709,15 +808,15 @@ def _epicentre_marker(size: int) -> "Image.Image":
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     centre, radius = size / 2, size / 2 - size // 10
-    for r, width, alpha in ((radius, max(1, size // 12), 255),
-                            (radius * 0.62, max(1, size // 14), 210)):
-        draw.ellipse([centre - r, centre - r, centre + r, centre + r],
-                     outline=(255, 72, 72, alpha), width=width)
+    for r, width, alpha in ((radius, max(1, size // 12), 255), (radius * 0.62, max(1, size // 14), 210)):
+        draw.ellipse([centre - r, centre - r, centre + r, centre + r], outline=(255, 72, 72, alpha), width=width)
     arm = radius * 1.16
     for dx, dy in ((1, 0), (0, 1)):
-        draw.line([centre - arm * dx, centre - arm * dy,
-                   centre + arm * dx, centre + arm * dy],
-                  fill=(255, 72, 72, 255), width=max(1, size // 12))
+        draw.line(
+            [centre - arm * dx, centre - arm * dy, centre + arm * dx, centre + arm * dy],
+            fill=(255, 72, 72, 255),
+            width=max(1, size // 12),
+        )
     return img
 
 
@@ -738,15 +837,19 @@ def _draw_place_label(canvas: "Image.Image", left: float, top: float, text: str)
     width, height = _label_box(canvas, text)
     box = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     ImageDraw.Draw(box).rounded_rectangle(
-        [0, 0, width - 1, height - 1], radius=5 * ss,
-        fill=(10, 14, 21, 214), outline=(120, 140, 170, 110), width=max(1, ss // 2))
+        [0, 0, width - 1, height - 1],
+        radius=5 * ss,
+        fill=(10, 14, 21, 214),
+        outline=(120, 140, 170, 110),
+        width=max(1, ss // 2),
+    )
     canvas.alpha_composite(box, (int(left), int(top)))
-    ImageDraw.Draw(canvas).text((left + 6 * ss, top + height / 2), text,
-                                font=_get_font(13 * ss), fill=(232, 238, 246, 255), anchor="lm")
+    ImageDraw.Draw(canvas).text(
+        (left + 6 * ss, top + height / 2), text, font=_get_font(13 * ss), fill=(232, 238, 246, 255), anchor="lm"
+    )
 
 
-def _draw_map_chrome(canvas: "Image.Image", title: str, subtitle: str,
-                     scales: list[int]) -> None:
+def _draw_map_chrome(canvas: "Image.Image", title: str, subtitle: str, scales: list[int]) -> None:
     """見出しの帯・凡例・出典。画像だけを見ても意味が通るようにする。
 
     以前は地図と円だけで、色が何の震度を指すのか画像からは分からなかった。
@@ -759,13 +862,11 @@ def _draw_map_chrome(canvas: "Image.Image", title: str, subtitle: str,
     band = Image.new("RGBA", (width, band_h), (0, 0, 0, 0))
     band_draw = ImageDraw.Draw(band)
     for row in range(band_h):
-        band_draw.line([(0, row), (width, row)],
-                       fill=(10, 13, 20, int(215 * (1 - row / band_h) ** 1.3)))
+        band_draw.line([(0, row), (width, row)], fill=(10, 13, 20, int(215 * (1 - row / band_h) ** 1.3)))
     canvas.alpha_composite(band, (0, 0))
     draw.text((22 * ss, 20 * ss), title, font=_get_font(23 * ss), fill=(255, 255, 255, 255))
     if subtitle:
-        draw.text((22 * ss, 47 * ss), subtitle, font=_get_font(14 * ss),
-                  fill=(178, 192, 210, 255))
+        draw.text((22 * ss, 47 * ss), subtitle, font=_get_font(14 * ss), fill=(178, 192, 210, 255))
 
     # 最大震度は地図の中には出さない。
     #
@@ -780,26 +881,32 @@ def _draw_map_chrome(canvas: "Image.Image", title: str, subtitle: str,
     bx, by = width - box_w - 16 * ss, height - box_h - 16 * ss
     panel = Image.new("RGBA", (box_w, box_h), (0, 0, 0, 0))
     ImageDraw.Draw(panel).rounded_rectangle(
-        [0, 0, box_w - 1, box_h - 1], radius=9 * ss,
-        fill=(12, 16, 24, 208), outline=(120, 140, 170, 120), width=max(1, ss))
+        [0, 0, box_w - 1, box_h - 1],
+        radius=9 * ss,
+        fill=(12, 16, 24, 208),
+        outline=(120, 140, 170, 120),
+        width=max(1, ss),
+    )
     canvas.alpha_composite(panel, (int(bx), int(by)))
-    draw.text((bx + pad, by + pad - ss), "震度", font=_get_font(11 * ss),
-              fill=(170, 186, 206, 255))
+    draw.text((bx + pad, by + pad - ss), "震度", font=_get_font(11 * ss), fill=(170, 186, 206, 255))
     for index, scale in enumerate(scales):
         x = bx + pad + index * (chip + gap)
         y = by + pad + 14 * ss
         rgb = _MAP_FILL_RGB.get(scale, (120, 130, 150))
         label = _SCALE_BADGE_LABEL.get(scale, str(scale))
         draw.rounded_rectangle([x, y, x + chip, y + chip], radius=5 * ss, fill=(*rgb, 255))
-        draw.text((x + chip / 2, y + chip / 2), label,
-                  font=_get_font(int(chip * (0.62 if len(label) == 1 else 0.46))),
-                  fill=_ink_for(rgb), anchor="mm")
+        draw.text(
+            (x + chip / 2, y + chip / 2),
+            label,
+            font=_get_font(int(chip * (0.62 if len(label) == 1 else 0.46))),
+            fill=_ink_for(rgb),
+            anchor="mm",
+        )
 
     font = _get_font(11 * ss)
     text_w = int(draw.textlength(_TILE_ATTRIBUTION, font=font))
     draw.rectangle([0, height - 19 * ss, text_w + 16 * ss, height], fill=(8, 11, 17, 190))
-    draw.text((8 * ss, height - 16 * ss), _TILE_ATTRIBUTION, font=font,
-              fill=(150, 165, 185, 255))
+    draw.text((8 * ss, height - 16 * ss), _TILE_ATTRIBUTION, font=font, fill=(150, 165, 185, 255))
 
 
 async def _generate_intensity_map(
@@ -853,13 +960,11 @@ async def _generate_intensity_map(
         # 収まる範囲でできるだけ大きく。0.80/0.70 のころは海ばかりが写り、
         # 肝心の札が画面の 1/3 に押し込められていた。上の帯と凡例の分だけ
         # 縦を控えめにする。
-        if (abs(x1 - x0) * _TILE_SZ < _MAP_W * 0.92
-                and abs(y1 - y0) * _TILE_SZ < _MAP_H * 0.84):
+        if abs(x1 - x0) * _TILE_SZ < _MAP_W * 0.92 and abs(y1 - y0) * _TILE_SZ < _MAP_H * 0.84:
             zoom = candidate
             break
 
-    centre_x, centre_y = _latlon_to_tile_float(
-        (max(lats) + min(lats)) / 2, (max(lons) + min(lons)) / 2, zoom)
+    centre_x, centre_y = _latlon_to_tile_float((max(lats) + min(lats)) / 2, (max(lons) + min(lons)) / 2, zoom)
     origin_x = centre_x * _TILE_SZ - _MAP_W / 2
     origin_y = centre_y * _TILE_SZ - _MAP_H / 2
 
@@ -877,19 +982,31 @@ async def _generate_intensity_map(
     # 止まる——緊急地震速報を全ギルドへ配信しようとしている、まさにその瞬間に。
     # 余震が続けば短時間に何度も起きる。スレッドへ逃がす。
     return await asyncio.to_thread(
-        _compose_intensity_map, coords, tiles, origin_x, origin_y,
-        zoom, plot, lat, lon, title, subtitle,
+        _compose_intensity_map,
+        coords,
+        tiles,
+        origin_x,
+        origin_y,
+        zoom,
+        plot,
+        lat,
+        lon,
+        title,
+        subtitle,
     )
 
 
 def _compose_intensity_map(
     coords: list[tuple[int, int]],
     tiles: list,
-    origin_x: float, origin_y: float,
+    origin_x: float,
+    origin_y: float,
     zoom: int,
     plot: list[tuple[float, float, int]],
-    lat: float, lon: float,
-    title: str, subtitle: str,
+    lat: float,
+    lon: float,
+    title: str,
+    subtitle: str,
 ) -> io.BytesIO:
     """取り込んだタイルから地図を組み立てる（同期。呼ぶ側がスレッドへ逃がす）。"""
     ss = _MAP_SS
@@ -899,8 +1016,7 @@ def _compose_intensity_map(
     for (tx, ty), tile in zip(coords, tiles):
         if not isinstance(tile, Image.Image):
             continue
-        base.paste(_recolour_tile(tile),
-                   (int(tx * _TILE_SZ - origin_x), int(ty * _TILE_SZ - origin_y)))
+        base.paste(_recolour_tile(tile), (int(tx * _TILE_SZ - origin_x), int(ty * _TILE_SZ - origin_y)))
 
     # 倍に伸ばしてから描き、最後に縮める。PIL は円も線もアンチエイリアス
     # しないので、これが輪郭のなめらかさをそのまま決める。
@@ -913,10 +1029,8 @@ def _compose_intensity_map(
     # 暈（最大震度のまわりの淡い円）は置かない。
     # 札が色だけの丸だったころは視線を導く役に立っていたが、札に数字と大小が
     # 入った今は、最大震度の札そのものを赤くにじませて読みにくくするだけ。
-    def overlaps(box: tuple[float, float, float, float],
-                 rects: list[tuple[float, float, float, float]]) -> bool:
-        return any(not (box[2] <= r[0] or box[0] >= r[2]
-                        or box[3] <= r[1] or box[1] >= r[3]) for r in rects)
+    def overlaps(box: tuple[float, float, float, float], rects: list[tuple[float, float, float, float]]) -> bool:
+        return any(not (box[2] <= r[0] or box[0] >= r[2] or box[3] <= r[1] or box[1] >= r[3]) for r in rects)
 
     # 先に県の面を塗る。札はその上。
     _fill_prefectures(canvas, plot, zoom, origin_x, origin_y, ss)
@@ -939,8 +1053,7 @@ def _compose_intensity_map(
     taken: list[tuple[float, float, float, float]] = []
     badges: list[tuple[float, float, int]] = []
     placed_at: set[tuple[float, float]] = set()
-    for index, (point_lat, point_lon, scale, _name) in enumerate(
-            sorted(plot, key=lambda p: -p[2])):
+    for index, (point_lat, point_lon, scale, _name) in enumerate(sorted(plot, key=lambda p: -p[2])):
         x, y = to_px(point_lat, point_lon)
         half = _badge_size(scale) * ss / 2
         box = (x - half, y - half, x + half, y + half)
@@ -967,7 +1080,7 @@ def _compose_intensity_map(
     # 丸い影ではなく、角の取れた四角い影が震源印の後ろに出ていた。
     # 中心からの距離で直接アルファを作れば、切れる縁がそもそも無い。
     seat_r = 30 * ss
-    yy, xx = np.mgrid[0:seat_r * 2, 0:seat_r * 2]
+    yy, xx = np.mgrid[0 : seat_r * 2, 0 : seat_r * 2]
     dist = np.hypot(xx - seat_r + 0.5, yy - seat_r + 0.5) / seat_r
     # 累乗の前に 0〜1 へ丸める。外側は 1 - dist が負になり、負数の小数乗は
     # NaN になる（uint8 へ落とすと値が化ける。実際、影が丸ごと消えていた）。
@@ -1000,9 +1113,12 @@ def _compose_intensity_map(
         label_w, label_h = _label_box(canvas, name)
         # 右→左→上→下の順に空きを探す。左右だけを見ていたころは、震源印の
         # そばにある最大震度の地名がどちらにも置けず、名前なしで出ていた。
-        for dx, dy in ((half + 5 * ss, 0), (-half - 5 * ss - label_w, 0),
-                       (-label_w / 2, -half - label_h / 2 - 3 * ss),
-                       (-label_w / 2, half + label_h / 2 + 3 * ss)):
+        for dx, dy in (
+            (half + 5 * ss, 0),
+            (-half - 5 * ss - label_w, 0),
+            (-label_w / 2, -half - label_h / 2 - 3 * ss),
+            (-label_w / 2, half + label_h / 2 + 3 * ss),
+        ):
             lx, ly = x + dx, y + dy - label_h / 2
             label = (lx, ly, lx + label_w, ly + label_h)
             if 0 <= label[0] and label[2] <= canvas.width and not overlaps(label, taken):
@@ -1013,27 +1129,27 @@ def _compose_intensity_map(
     _draw_map_chrome(canvas, title, subtitle, sorted({point[2] for point in plot}))
 
     buf = io.BytesIO()
-    canvas.resize((_MAP_W, _MAP_H), Image.LANCZOS).convert("RGB").save(
-        buf, format="PNG", optimize=True)
+    canvas.resize((_MAP_W, _MAP_H), Image.LANCZOS).convert("RGB").save(buf, format="PNG", optimize=True)
     buf.seek(0)
     return buf
 
 
 # ── Embed 生成 ────────────────────────────────────────────
 
+
 def _build_embed(event: dict, max_scale: int, has_badge: bool = False) -> discord.Embed:
-    eq    = event.get("earthquake", {})
-    hypo  = eq.get("hypocenter", {})
+    eq = event.get("earthquake", {})
+    hypo = eq.get("hypocenter", {})
     issue = event.get("issue", {})
 
-    time_label, _  = _format_time(eq.get("time", ""))
-    _, issue_dt    = _format_time(issue.get("time", ""))
-    tsunami_text   = _TSUNAMI_TEXT.get(eq.get("domesticTsunami", "None"), "津波情報は不明です。")
-    footer_label   = _ISSUE_LABELS.get(issue.get("type", ""), "気象庁")
-    color          = _SCALE_COLORS.get(max_scale, discord.Color.red())
+    time_label, _ = _format_time(eq.get("time", ""))
+    _, issue_dt = _format_time(issue.get("time", ""))
+    tsunami_text = _TSUNAMI_TEXT.get(eq.get("domesticTsunami", "None"), "津波情報は不明です。")
+    footer_label = _ISSUE_LABELS.get(issue.get("type", ""), "気象庁")
+    color = _SCALE_COLORS.get(max_scale, discord.Color.red())
 
-    name      = hypo.get("name") or "不明"
-    mag_str,_ = _parse_magnitude(hypo.get("magnitude"))
+    name = hypo.get("name") or "不明"
+    mag_str, _ = _parse_magnitude(hypo.get("magnitude"))
     depth_str = _parse_depth(hypo.get("depth"))
 
     emoji = _SCALE_TITLE_EMOJI.get(max_scale, "⚪")
@@ -1055,9 +1171,9 @@ def _build_embed(event: dict, max_scale: int, has_badge: bool = False) -> discor
         timestamp=issue_dt,
     )
     if name != "不明":
-        embed.add_field(name="震源", value=name,      inline=True)
+        embed.add_field(name="震源", value=name, inline=True)
     if mag_str != "不明":
-        embed.add_field(name="規模", value=mag_str,   inline=True)
+        embed.add_field(name="規模", value=mag_str, inline=True)
     if depth_str != "不明":
         embed.add_field(name="深さ", value=depth_str, inline=True)
     embed.set_footer(text=footer_label, icon_url=BOT_ICON_URL)
@@ -1082,11 +1198,11 @@ def _build_eew_embed(event: dict) -> discord.Embed:
     WS 側で cancelled を丸ごと弾いていたため、取り消しが来ても誰にも
     伝わらなかった（最初の警報だけ届いて、外れだったことは分からないまま）。
     """
-    code      = event.get("code", 554)
+    code = event.get("code", 554)
     is_forecast = code == 556
     cancelled = bool(event.get("cancelled"))
 
-    eq   = event.get("earthquake", {})
+    eq = event.get("earthquake", {})
     hypo = eq.get("hypocenter", {})
     has_quake_data = bool(hypo.get("name"))
 
@@ -1101,8 +1217,8 @@ def _build_eew_embed(event: dict) -> discord.Embed:
             title="✅ 緊急地震速報は取り消されました",
             description=(
                 f"**{hypo.get('name')}** 付近を震源とする緊急地震速報は取り消されました。"
-                if has_quake_data else
-                "直前の緊急地震速報は取り消されました。"
+                if has_quake_data
+                else "直前の緊急地震速報は取り消されました。"
             ),
             color=discord.Color.green(),
         )
@@ -1121,13 +1237,13 @@ def _build_eew_embed(event: dict) -> discord.Embed:
 
     title_base = "⚠️ 緊急地震速報（予報）" if is_forecast else "🚨 緊急地震速報（警報）"
     # has_quake_data の時点判定により、ここでは name は必ず実在の文字列。
-    name       = hypo.get("name") or "不明"
+    name = hypo.get("name") or "不明"
     # 556 は originTime、554 は time を使用
-    time_raw   = eq.get("originTime") or eq.get("time", "")
+    time_raw = eq.get("originTime") or eq.get("time", "")
     time_label, ts = _format_time(time_raw)
     mag_str, _ = _parse_magnitude(hypo.get("magnitude"))
-    max_scale  = _max_scale(event)
-    color      = _SCALE_COLORS.get(max_scale, discord.Color.orange())
+    max_scale = _max_scale(event)
+    color = _SCALE_COLORS.get(max_scale, discord.Color.orange())
 
     # 震源はあっても震度だけ分からない（areas が空 等）ことがあるので、
     # その行だけ出さない。「不明」と書くより、無いなら黙って省く。
@@ -1145,7 +1261,7 @@ def _build_eew_embed(event: dict) -> discord.Embed:
         timestamp=ts,
     )
     if name != "不明":
-        embed.add_field(name="予想震源", value=name,    inline=True)
+        embed.add_field(name="予想震源", value=name, inline=True)
     if mag_str != "不明":
         embed.add_field(name="予想規模", value=mag_str, inline=True)
     footer = "気象庁 緊急地震速報（予報）" if is_forecast else "気象庁 緊急地震速報（警報）"
@@ -1155,8 +1271,8 @@ def _build_eew_embed(event: dict) -> discord.Embed:
 
 def _build_tsunami_embed(event: dict) -> discord.Embed:
     """P2PQuake code 552 津波予報データから Discord Embed を生成。"""
-    areas     = event.get("areas", [])
-    issue     = event.get("issue", {})
+    areas = event.get("areas", [])
+    issue = event.get("issue", {})
     cancelled = event.get("cancelled", False)
     _, issue_dt = _format_time(issue.get("time", ""))
 
@@ -1170,16 +1286,25 @@ def _build_tsunami_embed(event: dict) -> discord.Embed:
         embed.set_footer(text="気象庁 津波情報", icon_url=BOT_ICON_URL)
         return embed
 
-    max_grade = max(
-        areas,
-        key=lambda a: _TSUNAMI_GRADE_ORDER.get(a.get("grade", "Unknown"), 0),
-        default={},
-    ).get("grade", "Unknown") if areas else "Unknown"
+    max_grade = (
+        max(
+            areas,
+            key=lambda a: _TSUNAMI_GRADE_ORDER.get(a.get("grade", "Unknown"), 0),
+            default={},
+        ).get("grade", "Unknown")
+        if areas
+        else "Unknown"
+    )
 
-    color       = discord.Color.red() if max_grade == "MajorWarning" else (
-                  discord.Color.orange() if max_grade == "Warning" else
-                  discord.Color.yellow() if max_grade == "Watch" else
-                  discord.Color.greyple())
+    color = (
+        discord.Color.red()
+        if max_grade == "MajorWarning"
+        else (
+            discord.Color.orange()
+            if max_grade == "Warning"
+            else discord.Color.yellow() if max_grade == "Watch" else discord.Color.greyple()
+        )
+    )
     grade_label = _TSUNAMI_GRADE_LABELS.get(max_grade, "津波情報")
 
     embed = discord.Embed(
@@ -1192,14 +1317,14 @@ def _build_tsunami_embed(event: dict) -> discord.Embed:
     by_grade: dict[str, list[str]] = {}
     for area in areas:
         grade = area.get("grade", "Unknown")
-        name  = area.get("name", "不明")
+        name = area.get("name", "不明")
         by_grade.setdefault(grade, []).append(name)
 
     for grade in ("MajorWarning", "Warning", "Watch", "Unknown"):
         if grade not in by_grade:
             continue
-        label   = _TSUNAMI_GRADE_LABELS.get(grade, grade)
-        names   = by_grade[grade]
+        label = _TSUNAMI_GRADE_LABELS.get(grade, grade)
+        names = by_grade[grade]
         regions = "、".join(names[:10])
         if len(names) > 10:
             regions += f" 他{len(names) - 10}地域"
@@ -1211,14 +1336,17 @@ def _build_tsunami_embed(event: dict) -> discord.Embed:
 
 # ── 詳細リンクボタン ──────────────────────────────────────
 
+
 class _EqView(discord.ui.View):
     def __init__(self, url: str):
         super().__init__(timeout=None)
-        self.add_item(discord.ui.Button(
-            label="詳細（気象庁）",
-            url=url,
-            style=discord.ButtonStyle.link,
-        ))
+        self.add_item(
+            discord.ui.Button(
+                label="詳細（気象庁）",
+                url=url,
+                style=discord.ButtonStyle.link,
+            )
+        )
 
 
 # ── JMA URL ヘルパー ──────────────────────────────────────
@@ -1235,7 +1363,8 @@ _JMA_DETAIL_CACHE_TTL_SEC = 3600.0
 _jma_list_cache: tuple[list[dict], float] | None = None
 # 地震1件ごとに鍵が増えるので、件数にも上限を置く（従来は追い出しが無かった）
 _jma_detail_url_cache: TTLCache[str, str] = TTLCache(
-    ttl=_JMA_DETAIL_CACHE_TTL_SEC, max_entries=500,
+    ttl=_JMA_DETAIL_CACHE_TTL_SEC,
+    max_entries=500,
 )
 _jma_list_lock = asyncio.Lock()
 
@@ -1337,12 +1466,14 @@ def _cache_key_for_event(event: dict, max_scale: int) -> str:
     eq = event.get("earthquake", {})
     hypo = eq.get("hypocenter", {})
     eq_time = eq.get("originTime") or eq.get("time", "")
-    return "|".join([
-        str(event.get("code", "")),
-        str(eq_time),
-        str(max_scale),
-        str(hypo.get("name", "")),
-    ])
+    return "|".join(
+        [
+            str(event.get("code", "")),
+            str(eq_time),
+            str(max_scale),
+            str(hypo.get("name", "")),
+        ]
+    )
 
 
 def _score_jma_item(
@@ -1456,9 +1587,9 @@ async def _resolve_jma_detail_url(event: dict, max_scale: int) -> str:
 # ── 通知送信（確定地震情報 551） ──────────────────────────
 
 _NOTIFY_TYPE_LABELS: dict[str, str] = {
-    "quake_info":   "地震情報",
-    "tsunami":      "津波情報",
-    "eew_warning":  "緊急地震速報（警報）",
+    "quake_info": "地震情報",
+    "tsunami": "津波情報",
+    "eew_warning": "緊急地震速報（警報）",
     "eew_forecast": "緊急地震速報（予報）",
 }
 
@@ -1528,8 +1659,11 @@ def _collect_targets(
     for guild_id in guild_ids:
         try:
             channel, _ = _evaluate_guild(
-                bot, guild_id,
-                notify_type=notify_type, max_scale=max_scale, apply_min_scale=apply_min_scale,
+                bot,
+                guild_id,
+                notify_type=notify_type,
+                max_scale=max_scale,
+                apply_min_scale=apply_min_scale,
             )
             if channel is not None:
                 targets.append((guild_id, channel))
@@ -1553,8 +1687,11 @@ def _diagnose_no_target(
     """
     try:
         _, reason = _evaluate_guild(
-            bot, guild_id,
-            notify_type=notify_type, max_scale=max_scale, apply_min_scale=apply_min_scale,
+            bot,
+            guild_id,
+            notify_type=notify_type,
+            max_scale=max_scale,
+            apply_min_scale=apply_min_scale,
         )
     except Exception as exc:
         return f"設定の読み取りに失敗しました（{exc}）"
@@ -1562,7 +1699,9 @@ def _diagnose_no_target(
 
 
 def _override_target(
-    bot: Bot, guild_id: int, channel_id: int,
+    bot: Bot,
+    guild_id: int,
+    channel_id: int,
 ) -> list[tuple[int, discord.TextChannel]]:
     """DEV専用: 地震アラート設定を一切見ず、指定チャンネルへ直接送る。
 
@@ -1572,15 +1711,16 @@ def _override_target(
     guild = bot.get_guild(guild_id)
     if guild is None:
         logger.warning(
-            "[earthquake] guild=%s: bot がこのギルドをまだキャッシュしていません"
-            "（未参加、または再起動直後）", guild_id,
+            "[earthquake] guild=%s: bot がこのギルドをまだキャッシュしていません" "（未参加、または再起動直後）",
+            guild_id,
         )
         return []
     channel = guild.get_channel(int(channel_id))
     if not isinstance(channel, discord.TextChannel):
         logger.warning(
-            "[earthquake] guild=%s: 指定チャンネル（%s）が見つからないか、"
-            "テキストチャンネルではありません", guild_id, channel_id,
+            "[earthquake] guild=%s: 指定チャンネル（%s）が見つからないか、" "テキストチャンネルではありません",
+            guild_id,
+            channel_id,
         )
         return []
     return [(guild_id, channel)]
@@ -1599,6 +1739,7 @@ async def _dispatch(
     discord.File は送信で消費されるため使い回せない。チャンネルごとに bytes から
     作り直す。
     """
+
     async def _send(channel: discord.TextChannel) -> None:
         files = [discord.File(io.BytesIO(data), filename=name) for name, data in (attachments or [])]
         await channel.send(
@@ -1616,7 +1757,11 @@ async def _dispatch(
             # トレースが "NoneType: None" になり、どこで落ちたか残らない。
             logger.error(
                 "[%s] send error guild=%s ch=%s: %s",
-                tag, guild_id, channel.id, result, exc_info=result,
+                tag,
+                guild_id,
+                channel.id,
+                result,
+                exc_info=result,
             )
         else:
             ok_count += 1
@@ -1653,7 +1798,10 @@ async def _notify_all_guilds(
         targets = _override_target(bot, only_guild_id, override_channel_id)
     else:
         targets = _collect_targets(
-            bot, notify_type="quake_info", max_scale=max_scale, only_guild_id=only_guild_id,
+            bot,
+            notify_type="quake_info",
+            max_scale=max_scale,
+            only_guild_id=only_guild_id,
         )
         # only_guild_id 指定（開発者パネルのリプレイ）で 0 件だと、押した側は
         # 「受信・完了」のログしか見えず、何も届かない理由が分からない。
@@ -1671,10 +1819,10 @@ async def _notify_all_guilds(
         return 0
 
     points = event.get("points", [])
-    eq     = event.get("earthquake", {})
-    hypo   = eq.get("hypocenter", {})
-    lat    = _parse_coord(hypo.get("latitude"))
-    lon    = _parse_coord(hypo.get("longitude"))
+    eq = event.get("earthquake", {})
+    hypo = eq.get("hypocenter", {})
+    lat = _parse_coord(hypo.get("latitude"))
+    lon = _parse_coord(hypo.get("longitude"))
 
     detail_url = await _resolve_jma_detail_url(event, max_scale)
 
@@ -1700,19 +1848,20 @@ async def _notify_all_guilds(
             # 目に入る場面がある。
             eq_info = event.get("earthquake", {})
             hypo_info = eq_info.get("hypocenter", {})
-            map_title = (f"最大震度 {_SCALE_DISPLAY[max_scale]}"
-                         if max_scale in _SCALE_DISPLAY else "震度分布")
+            map_title = f"最大震度 {_SCALE_DISPLAY[max_scale]}" if max_scale in _SCALE_DISPLAY else "震度分布"
             time_label, _ = _format_time(eq_info.get("time", ""))
             mag_label, _ = _parse_magnitude(hypo_info.get("magnitude"))
-            parts = [hypo_info.get("name") or "", mag_label,
-                     _parse_depth(hypo_info.get("depth")),
-                     time_label if time_label != "不明" else ""]
+            parts = [
+                hypo_info.get("name") or "",
+                mag_label,
+                _parse_depth(hypo_info.get("depth")),
+                time_label if time_label != "不明" else "",
+            ]
             map_subtitle = "  ".join(part for part in parts if part)
 
             # タイル取得は専用セッションで実施（WS セッションを汚染しない）
             async with aiohttp.ClientSession() as tile_session:
-                map_buf = await _generate_intensity_map(
-                    tile_session, lat, lon, points, map_title, map_subtitle)
+                map_buf = await _generate_intensity_map(tile_session, lat, lon, points, map_title, map_subtitle)
         except Exception as e:
             logger.exception("[earthquake] map generation error: %s", e)
 
@@ -1727,12 +1876,16 @@ async def _notify_all_guilds(
         attachments.append(("earthquake_map.png", map_buf.getvalue()))
 
     return await _dispatch(
-        targets, tag="earthquake", embed=embed,
-        view=_EqView(detail_url), attachments=attachments,
+        targets,
+        tag="earthquake",
+        embed=embed,
+        view=_EqView(detail_url),
+        attachments=attachments,
     )
 
 
 # ── 津波情報通知（552） ───────────────────────────────────
+
 
 async def _notify_tsunami_guilds(bot: Bot, event: dict) -> int:
     """津波情報 (code 552) を全対象ギルドへ送信。
@@ -1740,7 +1893,10 @@ async def _notify_tsunami_guilds(bot: Bot, event: dict) -> int:
     津波は震度を持たないので、最小震度のしきい値は適用しない。
     """
     targets = _collect_targets(
-        bot, notify_type="tsunami", max_scale=-1, apply_min_scale=False,
+        bot,
+        notify_type="tsunami",
+        max_scale=-1,
+        apply_min_scale=False,
     )
     if not targets:
         return 0
@@ -1748,6 +1904,7 @@ async def _notify_tsunami_guilds(bot: Bot, event: dict) -> int:
 
 
 # ── EEW 通知（554 警報 / 556 予報） ──────────────────────
+
 
 async def _notify_eew_guilds(bot: Bot, event: dict, notify_type: str) -> int:
     """EEW を全対象ギルドへ送信。notify_type: 'eew_warning' or 'eew_forecast'"""
@@ -1757,7 +1914,10 @@ async def _notify_eew_guilds(bot: Bot, event: dict, notify_type: str) -> int:
     # 震度が分からない（554 の検出通知・取り消し）ときは、閾値で弾かず必ず
     # 届ける。EEW は安全に倒すほうが良いという判断。
     targets = _collect_targets(
-        bot, notify_type=notify_type, max_scale=max_scale, apply_min_scale=max_scale >= 0,
+        bot,
+        notify_type=notify_type,
+        max_scale=max_scale,
+        apply_min_scale=max_scale >= 0,
     )
     if not targets:
         return 0
@@ -1782,8 +1942,11 @@ async def _notify_eew_guilds(bot: Bot, event: dict, notify_type: str) -> int:
 
     attachments = [("intensity_badge.png", badge_buf.getvalue())] if badge_buf else []
     return await _dispatch(
-        targets, tag="eew", embed=embed,
-        view=_EqView(detail_url), attachments=attachments,
+        targets,
+        tag="eew",
+        embed=embed,
+        view=_EqView(detail_url),
+        attachments=attachments,
     )
 
 

@@ -1,7 +1,18 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, Boolean, Date, DateTime, Index, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -58,7 +69,11 @@ class PushSubscription(Base):
 class NotificationDispatch(Base):
     __tablename__ = "notification_dispatch"
     __table_args__ = (
-        UniqueConstraint("notification_type", "snapshot_date", name="uq_notification_dispatch_type_date"),
+        UniqueConstraint(
+            "notification_type",
+            "snapshot_date",
+            name="uq_notification_dispatch_type_date",
+        ),
         Index("ix_notification_dispatch_created_at", "created_at"),
     )
 
@@ -75,9 +90,7 @@ class NotificationDispatch(Base):
 
 class WeeklyForecastMeta(Base):
     __tablename__ = "weekly_forecast_meta"
-    __table_args__ = (
-        Index("ix_weekly_forecast_meta_as_of_date", "as_of_date"),
-    )
+    __table_args__ = (Index("ix_weekly_forecast_meta_as_of_date", "as_of_date"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -150,7 +163,12 @@ class ForecastAccuracyLog(Base):
 
     __tablename__ = "forecast_accuracy_log"
     __table_args__ = (
-        UniqueConstraint("metal_key", "as_of_date", "forecast_date", name="uq_forecast_accuracy_key_asof_date"),
+        UniqueConstraint(
+            "metal_key",
+            "as_of_date",
+            "forecast_date",
+            name="uq_forecast_accuracy_key_asof_date",
+        ),
         Index("ix_forecast_accuracy_forecast_date", "forecast_date"),
         Index("ix_forecast_accuracy_metal_forecast_date", "metal_key", "forecast_date"),
     )
@@ -236,7 +254,12 @@ class UserStateEvent(Base):
     __tablename__ = "user_state_event"
     __table_args__ = (
         Index("ix_user_state_event_guild_user_event_at", "guild_id", "user_id", "event_at"),
-        Index("ix_user_state_event_guild_event_type_event_at", "guild_id", "event_type", "event_at"),
+        Index(
+            "ix_user_state_event_guild_event_type_event_at",
+            "guild_id",
+            "event_type",
+            "event_at",
+        ),
         Index("ix_user_state_event_event_at", "event_at"),
     )
 

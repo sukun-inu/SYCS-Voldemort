@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -21,7 +20,6 @@ from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse, RedirectResponse
 
-from webapp_admin.schema.registry import PATH_TO_ID
 from webapp_admin.extensions import limiter
 from webapp_admin.metrics import (
     record_error_response,
@@ -61,11 +59,13 @@ def _compact_admin_guilds(value):
         except (TypeError, ValueError):
             continue
         icon = guild.get("icon")
-        compact.append({
-            "id": guild_id,
-            "name": str(guild.get("name") or "Unknown"),
-            "icon": icon if isinstance(icon, str) else None,
-        })
+        compact.append(
+            {
+                "id": guild_id,
+                "name": str(guild.get("name") or "Unknown"),
+                "icon": icon if isinstance(icon, str) else None,
+            }
+        )
     return compact
 
 
@@ -225,10 +225,17 @@ def create_app() -> FastAPI:
         # API は JSON で返す。HTML のエラーページを返すと、fetch する側は本文を
         # 読めず「HTTP 502」としか言えない。detail に入れた理由をそのまま渡す。
         if _is_api(request):
-            return JSONResponse({"detail": detail or msg}, status_code=exc.status_code,
-                                headers=getattr(exc, "headers", None))
-        return render(request, "error.html", status_code=exc.status_code,
-                      code=exc.status_code, message=msg, description=description)
+            return JSONResponse(
+                {"detail": detail or msg}, status_code=exc.status_code, headers=getattr(exc, "headers", None)
+            )
+        return render(
+            request,
+            "error.html",
+            status_code=exc.status_code,
+            code=exc.status_code,
+            message=msg,
+            description=description,
+        )
 
     @app.exception_handler(ExceptionGroup)
     async def exception_group_handler(request: Request, exc: ExceptionGroup):
@@ -250,15 +257,16 @@ def create_app() -> FastAPI:
             exc_info=exc,
         )
         return render(
-            request, "error.html", status_code=500,
-            code=500, message="サーバーエラーが発生しました。",
+            request,
+            "error.html",
+            status_code=500,
+            code=500,
+            message="サーバーエラーが発生しました。",
         )
 
     @app.middleware("http")
     async def metrics_middleware(request: Request, call_next):
-        client_ip = request.headers.get("CF-Connecting-IP") or (
-            request.client.host if request.client else "unknown"
-        )
+        client_ip = request.headers.get("CF-Connecting-IP") or (request.client.host if request.client else "unknown")
         snap = {"method": request.method, "path": request.url.path, "endpoint": None, "remote_addr": client_ip}
         try:
             response = await call_next(request)

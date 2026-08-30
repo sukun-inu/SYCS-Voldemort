@@ -70,9 +70,7 @@ class _EntityPickerView(discord.ui.View):
         self.select_item.callback = self._on_select
         self.add_item(self.select_item)
 
-        self.confirm_button = discord.ui.Button(
-            label="確定", style=discord.ButtonStyle.primary, disabled=True
-        )
+        self.confirm_button = discord.ui.Button(label="確定", style=discord.ButtonStyle.primary, disabled=True)
         self.confirm_button.callback = self._on_confirm
         self.add_item(self.confirm_button)
 
@@ -105,16 +103,11 @@ class _EntityPickerView(discord.ui.View):
 def register_logging_commands(bot: Bot) -> None:
     # 平坦な名前を並べると /（スラッシュ）の一覧が長くなり、関連するものが
     # 隣り合う保証も無い。同じ話題はグループにまとめる。
-    log_group = app_commands.Group(
-        name="log", description="ログの送信先とレベル", guild_only=True)
-    chat_group = app_commands.Group(
-        name="chat", description="AI応答チャンネルの設定", guild_only=True)
-    trusted_group = app_commands.Group(
-        name="trusted", description="信頼済みユーザー（検出の対象外）", guild_only=True)
-    bypass_group = app_commands.Group(
-        name="bypass", description="バイパスロール（検出の対象外）", guild_only=True)
-    bot_group = app_commands.Group(
-        name="bot", description="Bot の設定とヘルプ", guild_only=True)
+    log_group = app_commands.Group(name="log", description="ログの送信先とレベル", guild_only=True)
+    chat_group = app_commands.Group(name="chat", description="AI応答チャンネルの設定", guild_only=True)
+    trusted_group = app_commands.Group(name="trusted", description="信頼済みユーザー（検出の対象外）", guild_only=True)
+    bypass_group = app_commands.Group(name="bypass", description="バイパスロール（検出の対象外）", guild_only=True)
+    bot_group = app_commands.Group(name="bot", description="Bot の設定とヘルプ", guild_only=True)
 
     @log_group.command(name="channel", description="【管理者】ログ送信チャンネルを設定します")
     @app_commands.describe(channel="ログを投稿するテキストチャンネル")
@@ -131,12 +124,14 @@ def register_logging_commands(bot: Bot) -> None:
 
     @log_group.command(name="level", description="【管理者】ログレベルを設定します")
     @app_commands.describe(level="記録するログの詳細さ")
-    @app_commands.choices(level=[
-        app_commands.Choice(name="NONE（ログを記録しない）", value="NONE"),
-        app_commands.Choice(name="ERROR（エラーのみ）", value="ERROR"),
-        app_commands.Choice(name="INFO（通常運用向け・推奨）", value="INFO"),
-        app_commands.Choice(name="DEBUG（詳細・調査向け）", value="DEBUG"),
-    ])
+    @app_commands.choices(
+        level=[
+            app_commands.Choice(name="NONE（ログを記録しない）", value="NONE"),
+            app_commands.Choice(name="ERROR（エラーのみ）", value="ERROR"),
+            app_commands.Choice(name="INFO（通常運用向け・推奨）", value="INFO"),
+            app_commands.Choice(name="DEBUG（詳細・調査向け）", value="DEBUG"),
+        ]
+    )
     async def set_log_level_cmd(interaction: discord.Interaction, level: str):
         if not await _ensure_admin_in_guild(interaction):
             return
@@ -302,7 +297,11 @@ def register_logging_commands(bot: Bot) -> None:
             mentions = [f"<@{uid}>" for uid in trusted_ids]
             # embedのfield value（メッセージ本文ではない）なので上限は1024文字。
             trusted_text = cap_list_for_message(
-                mentions, budget=EMBED_FIELD_BUDGET, limit=15, omitted_unit="名", joiner=", ",
+                mentions,
+                budget=EMBED_FIELD_BUDGET,
+                limit=15,
+                omitted_unit="名",
+                joiner=", ",
             )
 
         bypass_ids = get_bypass_role_ids(guild_id)
@@ -311,7 +310,11 @@ def register_logging_commands(bot: Bot) -> None:
         else:
             mentions = [f"<@&{rid}>" for rid in bypass_ids]
             bypass_text = cap_list_for_message(
-                mentions, budget=EMBED_FIELD_BUDGET, limit=15, omitted_unit="個", joiner=", ",
+                mentions,
+                budget=EMBED_FIELD_BUDGET,
+                limit=15,
+                omitted_unit="個",
+                joiner=", ",
             )
 
         embed = discord.Embed(
@@ -364,9 +367,7 @@ def register_logging_commands(bot: Bot) -> None:
             )
             embeds.append(embed)
 
-        await interaction.response.send_message(
-            embeds=embeds, ephemeral=True, view=admin_site_view()
-        )
+        await interaction.response.send_message(embeds=embeds, ephemeral=True, view=admin_site_view())
 
     for group in (log_group, chat_group, trusted_group, bypass_group, bot_group):
         bot.tree.add_command(group)

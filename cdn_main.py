@@ -75,6 +75,7 @@ def create_cdn_app() -> FastAPI:
     app = FastAPI(docs_url=None, redoc_url=None)
 
     from services.djaudio_cdn import dlaudio_router
+
     app.include_router(dlaudio_router, prefix="/dlaudio")
 
     @app.exception_handler(StarletteHTTPException)

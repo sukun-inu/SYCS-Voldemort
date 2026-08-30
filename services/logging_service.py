@@ -159,7 +159,11 @@ async def log_action(
         return
 
     embed = await build_log_embed(
-        level, message, user=user, fields=fields, embed_color=embed_color,
+        level,
+        message,
+        user=user,
+        fields=fields,
+        embed_color=embed_color,
     )
     await channel.send(embed=embed)
 
@@ -190,11 +194,11 @@ async def build_log_embed(
     title = f"[{level}] ボットログ"
     if len(title) > 256:
         title = title[:256]
-    
+
     description = message
     if len(description) > 4096:
         description = description[:4093] + "..."
-    
+
     embed = discord.Embed(
         title=title,
         description=description,

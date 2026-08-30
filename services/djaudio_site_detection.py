@@ -6,28 +6,32 @@ from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_SITES: frozenset[str] = frozenset({
-    "youtube",
-    "soundcloud",
-    "bandcamp",
-    "nicovideo",
-    "tiktok",
-})
+SUPPORTED_SITES: frozenset[str] = frozenset(
+    {
+        "youtube",
+        "soundcloud",
+        "bandcamp",
+        "nicovideo",
+        "tiktok",
+    }
+)
 
 # DJ-Audio が処理を受け付けるドメインの許可リスト
-_DJAUDIO_ALLOWED_HOSTS: frozenset[str] = frozenset({
-    "youtube.com",
-    "youtu.be",
-    "music.youtube.com",
-    "soundcloud.com",
-    "on.soundcloud.com",
-    "nicovideo.jp",
-    "nico.ms",
-    "tiktok.com",
-    "vm.tiktok.com",
-    "vt.tiktok.com",
-    "bandcamp.com",
-})
+_DJAUDIO_ALLOWED_HOSTS: frozenset[str] = frozenset(
+    {
+        "youtube.com",
+        "youtu.be",
+        "music.youtube.com",
+        "soundcloud.com",
+        "on.soundcloud.com",
+        "nicovideo.jp",
+        "nico.ms",
+        "tiktok.com",
+        "vm.tiktok.com",
+        "vt.tiktok.com",
+        "bandcamp.com",
+    }
+)
 
 
 def is_djaudio_allowed_url(url: str) -> bool:
@@ -52,8 +56,7 @@ def is_djaudio_allowed_url(url: str) -> bool:
 _UNSUPPORTED_URL_RULES: list[tuple[re.Pattern, str]] = [
     (
         re.compile(r"open\.spotify\.com", re.IGNORECASE),
-        "Spotify は著作権保護のため音声をダウンロードできません。"
-        "YouTube Music などの代替 URL をお試しください。",
+        "Spotify は著作権保護のため音声をダウンロードできません。" "YouTube Music などの代替 URL をお試しください。",
     ),
     (
         re.compile(r"music\.apple\.com", re.IGNORECASE),

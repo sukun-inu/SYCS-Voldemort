@@ -112,9 +112,7 @@ def validate() -> list[str]:
                 problems.append(f"{where}: 追加・更新・削除のいずれも定義されていない")
             for field in collection.item_fields:
                 if field.get is not None or field.set is not None:
-                    problems.append(
-                        f"{where}.{field.key}: コレクションの入力欄に get/set は不要"
-                    )
+                    problems.append(f"{where}.{field.key}: コレクションの入力欄に get/set は不要")
             id_field = collection.id_key
             if id_field != "id" and id_field not in {f.key for f in collection.item_fields}:
                 problems.append(f"{where}: id_key {id_field} に対応する入力欄がない")

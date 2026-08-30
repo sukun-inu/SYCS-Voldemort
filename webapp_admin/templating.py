@@ -1,7 +1,6 @@
 import json as _json
 import os
 import re as _re
-import secrets
 from pathlib import Path
 
 from markupsafe import Markup
@@ -87,6 +86,7 @@ def _get_csrf_token(request: Request) -> str:
     # 発行そのものは security 側に持たせる（ログイン確定時と HTML 描画時の
     # 両方から同じ関数を使うため）。
     from webapp_admin.security import issue_csrf_token
+
     return issue_csrf_token(request)
 
 
@@ -102,13 +102,15 @@ def render(request: Request, template_name: str, status_code: int = 200, **ctx):
     # Sec-Fetch-Dest はそのiframeナビゲーションが続く限りリダイレクト後も維持されるため頑丈。
     is_embedded = request.headers.get("sec-fetch-dest", "").lower() == "iframe"
     ctx.setdefault("is_embedded", is_embedded)
-    ctx.update({
-        "request": request,
-        "session": request.session,
-        "messages": messages,
-        "csrf_token": csrf_token,
-        "url_for": _url_for,
-    })
+    ctx.update(
+        {
+            "request": request,
+            "session": request.session,
+            "messages": messages,
+            "csrf_token": csrf_token,
+            "url_for": _url_for,
+        }
+    )
     # Starlette のバージョン差分:
     # - 新: TemplateResponse(request=..., name=..., context=...)
     # - 旧: TemplateResponse(name, context, ...)

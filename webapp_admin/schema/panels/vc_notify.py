@@ -38,13 +38,19 @@ PANEL = Panel(
             "通知先",
             fields=(
                 Field(
-                    "vc_notify_channel_id", "通知を送るチャンネル", Widget.CHANNEL,
-                    get=_channel, set=set_vc_notify_channel_id,
+                    "vc_notify_channel_id",
+                    "通知を送るチャンネル",
+                    Widget.CHANNEL,
+                    get=_channel,
+                    set=set_vc_notify_channel_id,
                     help="未設定にすると VC の参加・退出を通知しません。",
                 ),
                 Field(
-                    "vc_notify_role_id", "メンションするロール", Widget.ROLE,
-                    get=_role, set=set_vc_notify_role_id,
+                    "vc_notify_role_id",
+                    "メンションするロール",
+                    Widget.ROLE,
+                    get=_role,
+                    set=set_vc_notify_role_id,
                     help="未設定ならメンションなしで通知します。",
                 ),
             ),
@@ -53,8 +59,11 @@ PANEL = Panel(
             "通知の絞り込み",
             fields=(
                 Field(
-                    "vc_notify_filter_role_id", "通知対象のロール", Widget.ROLE,
-                    get=_filter_role, set=set_vc_notify_filter_role_id,
+                    "vc_notify_filter_role_id",
+                    "通知対象のロール",
+                    Widget.ROLE,
+                    get=_filter_role,
+                    set=set_vc_notify_filter_role_id,
                     help="指定するとそのロールを持つ人の入退室だけを通知します。未設定なら全員が対象です。",
                 ),
             ),

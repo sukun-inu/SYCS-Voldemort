@@ -53,9 +53,7 @@ async def select_guild(request: Request, _=Depends(check_login), _csrf=Depends(c
         user_id = int((request.session.get("user") or {}).get("id", 0))
         still_admin = await user_still_admin(guild_id, user_id)
         if still_admin is False:
-            request.session["admin_guilds"] = [
-                g for g in admin_guilds if int(g["id"]) != guild_id
-            ]
+            request.session["admin_guilds"] = [g for g in admin_guilds if int(g["id"]) != guild_id]
             request.session.pop("guild_id", None)
             flash(request, "このサーバーの管理者権限がなくなっています。", "danger")
             return RedirectResponse("/admin/guilds", status_code=303)

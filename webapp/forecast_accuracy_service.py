@@ -134,7 +134,11 @@ async def reconcile_forecast_accuracy(session: AsyncSession, *, max_rows: int = 
         matched += 1
 
     await session.commit()
-    return {"checked": len(pending_rows), "matched": matched, "unmatched": len(pending_rows) - matched}
+    return {
+        "checked": len(pending_rows),
+        "matched": matched,
+        "unmatched": len(pending_rows) - matched,
+    }
 
 
 async def load_recent_forecast_error(session: AsyncSession, *, lookback_days: int = 14) -> dict[str, Any]:
@@ -198,9 +202,7 @@ async def load_recent_forecast_error(session: AsyncSession, *, lookback_days: in
     coverage_rows = (await session.execute(coverage_stmt)).all()
 
     mean_abs_error_pct = {metal_key: float(mae) for metal_key, mae in legacy_rows if mae is not None}
-    baseline_mean_abs_error_pct = {
-        metal_key: float(base) for metal_key, _, base, _ in mae_rows if base is not None
-    }
+    baseline_mean_abs_error_pct = {metal_key: float(base) for metal_key, _, base, _ in mae_rows if base is not None}
     # 傾きがベースラインをどれだけ改善したか(プラスなら改善、マイナスなら悪化)。
     tilt_improvement_pct = {}
     for metal_key, mae, base, count in mae_rows:
@@ -218,9 +220,5 @@ async def load_recent_forecast_error(session: AsyncSession, *, lookback_days: in
         "mean_abs_error_pct": mean_abs_error_pct,
         "baseline_mean_abs_error_pct": baseline_mean_abs_error_pct,
         "tilt_effect": tilt_improvement_pct,
-        "coverage": {
-            metal_key: float(hits) / float(total)
-            for metal_key, total, hits in coverage_rows
-            if total
-        },
+        "coverage": {metal_key: float(hits) / float(total) for metal_key, total, hits in coverage_rows if total},
     }

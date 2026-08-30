@@ -25,7 +25,7 @@ class Widget(str, Enum):
     TEXT = "text"
     TEXTAREA = "textarea"
     INT = "int"
-    DURATION = "duration"   # 値は秒。入力と表示だけ単位を付ける
+    DURATION = "duration"  # 値は秒。入力と表示だけ単位を付ける
     BOOL = "bool"
     SELECT = "select"
     CHANNEL = "channel"

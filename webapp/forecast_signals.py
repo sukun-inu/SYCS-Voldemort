@@ -67,14 +67,42 @@ NEWS_QUERY_BY_METAL = {
 # support/upgrade/breakdown 等の無関係な語に部分一致してしまうため、_news_score側で
 # 正規表現の単語境界(\b)マッチに統一している。
 POSITIVE_TOKENS = (
-    "surge", "rise", "rises", "up", "gain", "gains", "record high", "bullish",
-    "safe haven", "demand jumps", "demand grows", "weaker dollar", "dollar weakens",
-    "rate cut", "rate cuts", "cuts rates", "inflation fears", "recession fears",
+    "surge",
+    "rise",
+    "rises",
+    "up",
+    "gain",
+    "gains",
+    "record high",
+    "bullish",
+    "safe haven",
+    "demand jumps",
+    "demand grows",
+    "weaker dollar",
+    "dollar weakens",
+    "rate cut",
+    "rate cuts",
+    "cuts rates",
+    "inflation fears",
+    "recession fears",
 )
 
 NEGATIVE_TOKENS = (
-    "fall", "falls", "drop", "drops", "down", "loss", "losses", "bearish", "selloff",
-    "strong dollar", "dollar strengthens", "yields rise", "yields rising", "rate hike", "rate hikes",
+    "fall",
+    "falls",
+    "drop",
+    "drops",
+    "down",
+    "loss",
+    "losses",
+    "bearish",
+    "selloff",
+    "strong dollar",
+    "dollar strengthens",
+    "yields rise",
+    "yields rising",
+    "rate hike",
+    "rate hikes",
 )
 
 
@@ -190,7 +218,12 @@ async def _fetch_news_for_query(
     try:
         root = ElementTree.fromstring(body)
     except ElementTree.ParseError as exc:
-        logger.warning("ニュースRSSパースに失敗 query=%s err=%s body_head=%r", query, exc, body[:300])
+        logger.warning(
+            "ニュースRSSパースに失敗 query=%s err=%s body_head=%r",
+            query,
+            exc,
+            body[:300],
+        )
         return [], 0.0
 
     titles: list[str] = []
@@ -264,14 +297,14 @@ async def fetch_llm_signal(
         recent_error = (recent_accuracy or {}).get(metal_key)
         metal_input[metal_key] = {
             "latest_price_per_gram": round(prices[-1], 2) if prices else None,
-            "trend_14d_pct_per_day": round(daily_trend(prices) * 100, 4) if prices else 0.0,
-            "volatility_14d_pct": round(daily_volatility(prices) * 100, 4) if prices else 0.0,
+            "trend_14d_pct_per_day": (round(daily_trend(prices) * 100, 4) if prices else 0.0),
+            "volatility_14d_pct": (round(daily_volatility(prices) * 100, 4) if prices else 0.0),
             "news_sentiment": float((news_signal.get("sentiment", {}) or {}).get(metal_key, 0.0)),
             "news_article_count": int((news_signal.get("article_counts", {}) or {}).get(metal_key, 0)),
             "headlines": [clip_text(item, 140) for item in headlines],
             # 直近の自分自身の予測誤差(平均絶対誤差%)。過去の判断がどれだけ外れて
             # いたかを踏まえて確信度を調整させるためのフィードバック信号。
-            "recent_forecast_mean_abs_error_pct": round(recent_error, 3) if recent_error is not None else None,
+            "recent_forecast_mean_abs_error_pct": (round(recent_error, 3) if recent_error is not None else None),
         }
 
     user_payload = {
@@ -298,11 +331,11 @@ async def fetch_llm_signal(
         f"{json_dumps(user_payload)}\n"
         "Return JSON schema:\n"
         "{"
-        "\"global_comment\":\"...\","
-        "\"metals\":{"
-        "\"gold\":{\"score\":0.0,\"confidence\":0.0,\"rationale\":\"...\"},"
-        "\"silver\":{\"score\":0.0,\"confidence\":0.0,\"rationale\":\"...\"},"
-        "\"platinum\":{\"score\":0.0,\"confidence\":0.0,\"rationale\":\"...\"}"
+        '"global_comment":"...",'
+        '"metals":{'
+        '"gold":{"score":0.0,"confidence":0.0,"rationale":"..."},'
+        '"silver":{"score":0.0,"confidence":0.0,"rationale":"..."},'
+        '"platinum":{"score":0.0,"confidence":0.0,"rationale":"..."}'
         "}"
         "}"
     )
@@ -364,8 +397,26 @@ async def fetch_llm_signal(
 FORECAST_FLAT_THRESHOLD_PCT = 0.3
 
 # 要約文がレンジと矛盾していないかを検査するための語彙。
-_UP_WORDS = ("値上がり", "上昇", "上向き", "上振れ", "高くなる", "上がる", "強含み", "反発")
-_DOWN_WORDS = ("値下がり", "下落", "下向き", "下振れ", "安くなる", "下がる", "弱含み", "反落")
+_UP_WORDS = (
+    "値上がり",
+    "上昇",
+    "上向き",
+    "上振れ",
+    "高くなる",
+    "上がる",
+    "強含み",
+    "反発",
+)
+_DOWN_WORDS = (
+    "値下がり",
+    "下落",
+    "下向き",
+    "下振れ",
+    "安くなる",
+    "下がる",
+    "弱含み",
+    "反落",
+)
 
 
 def _range_direction(lower_pct: float, upper_pct: float) -> str:
@@ -474,7 +525,7 @@ async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str
         "Inputs JSON:\n"
         f"{json_dumps({'metals': metals_input})}\n"
         "Return JSON schema:\n"
-        "{\"summaries\":{\"gold\":\"...\",\"silver\":\"...\",\"platinum\":\"...\"}}\n"
+        '{"summaries":{"gold":"...","silver":"...","platinum":"..."}}\n'
         "Omit keys for metals not present in the input."
     )
 

@@ -44,4 +44,3 @@ class TTLCache(Generic[T]):
     async def clear(self) -> None:
         async with self._lock:
             self._data.clear()
-

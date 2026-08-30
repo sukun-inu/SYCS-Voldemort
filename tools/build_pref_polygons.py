@@ -34,13 +34,53 @@ _MIN_BOX = 0.0009
 
 # JIS の都道府県コード順。services/earthquake_service.py の _PREF_CENTERS と同じ並び。
 _PREFS = [
-    "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
-    "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
-    "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県",
-    "静岡県", "愛知県", "三重県", "滋賀県", "京都府", "大阪府", "兵庫県",
-    "奈良県", "和歌山県", "鳥取県", "島根県", "岡山県", "広島県", "山口県",
-    "徳島県", "香川県", "愛媛県", "高知県", "福岡県", "佐賀県", "長崎県",
-    "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県",
+    "北海道",
+    "青森県",
+    "岩手県",
+    "宮城県",
+    "秋田県",
+    "山形県",
+    "福島県",
+    "茨城県",
+    "栃木県",
+    "群馬県",
+    "埼玉県",
+    "千葉県",
+    "東京都",
+    "神奈川県",
+    "新潟県",
+    "富山県",
+    "石川県",
+    "福井県",
+    "山梨県",
+    "長野県",
+    "岐阜県",
+    "静岡県",
+    "愛知県",
+    "三重県",
+    "滋賀県",
+    "京都府",
+    "大阪府",
+    "兵庫県",
+    "奈良県",
+    "和歌山県",
+    "鳥取県",
+    "島根県",
+    "岡山県",
+    "広島県",
+    "山口県",
+    "徳島県",
+    "香川県",
+    "愛媛県",
+    "高知県",
+    "福岡県",
+    "佐賀県",
+    "長崎県",
+    "熊本県",
+    "大分県",
+    "宮崎県",
+    "鹿児島県",
+    "沖縄県",
 ]
 
 
@@ -50,15 +90,15 @@ def read_dbf(path: Path, encoding: str = "cp932") -> list[dict]:
     count, header_len, record_len = struct.unpack_from("<IHH", raw, 4)
     fields, off = [], 32
     while raw[off] != 0x0D:
-        name = raw[off:off + 11].split(b"\x00")[0].decode("ascii")
+        name = raw[off : off + 11].split(b"\x00")[0].decode("ascii")
         fields.append((name, raw[off + 16]))
         off += 32
     rows = []
     for index in range(count):
-        pos = header_len + index * record_len + 1   # 先頭 1 バイトは削除フラグ
+        pos = header_len + index * record_len + 1  # 先頭 1 バイトは削除フラグ
         row = {}
         for name, size in fields:
-            row[name] = raw[pos:pos + size].decode(encoding, "replace").strip()
+            row[name] = raw[pos : pos + size].decode(encoding, "replace").strip()
             pos += size
         rows.append(row)
     return rows
@@ -71,13 +111,13 @@ def read_shp_polygons(path: Path) -> list[list[list[tuple[float, float]]]]:
     ヘッダ100バイトのあと、レコードは「番号(BE) 長さ(BE) 中身」の繰り返し。
     """
     raw = path.read_bytes()
-    total = struct.unpack_from(">I", raw, 24)[0] * 2   # 16bit ワード数
+    total = struct.unpack_from(">I", raw, 24)[0] * 2  # 16bit ワード数
     pos, shapes = 100, []
     while pos < total:
         length = struct.unpack_from(">I", raw, pos + 4)[0] * 2
         body = pos + 8
         shape_type = struct.unpack_from("<i", raw, body)[0]
-        if shape_type != 5:            # 5 = Polygon
+        if shape_type != 5:  # 5 = Polygon
             shapes.append([])
             pos = body + length
             continue
@@ -177,8 +217,7 @@ def main(source: Path) -> None:
         raise SystemExit(f"輪郭が1つも残らなかった県があります: {empty}")
 
     payload = {
-        "source": "地球地図日本 第2.1版 行政界（国土地理院） "
-                  "https://www.gsi.go.jp/kankyochiri/gm_jpn.html",
+        "source": "地球地図日本 第2.1版 行政界（国土地理院） " "https://www.gsi.go.jp/kankyochiri/gm_jpn.html",
         "licence": "公共データ利用規約（PDL1.0）",
         "note": f"市区町村ポリゴンを都道府県ごとにまとめ、{_TOLERANCE}度で間引いて作成",
         "unit": _UNIT,
@@ -189,11 +228,9 @@ def main(source: Path) -> None:
     # 配るアセットなので assets/ に置く。
     target = Path(__file__).resolve().parent.parent / "assets" / "jp_prefectures.json"
     target.parent.mkdir(exist_ok=True)
-    target.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
-                      encoding="utf-8")
+    target.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     points = sum(len(r) // 2 for rings in out.values() for r in rings)
-    print(f"{target}: 輪 {kept}（捨てた {dropped}）/ 点 {points} / "
-          f"{target.stat().st_size / 1024:.0f}KB")
+    print(f"{target}: 輪 {kept}（捨てた {dropped}）/ 点 {points} / " f"{target.stat().st_size / 1024:.0f}KB")
 
 
 if __name__ == "__main__":

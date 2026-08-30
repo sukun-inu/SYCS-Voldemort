@@ -11,9 +11,11 @@ from envutil import env_float, env_path
 
 try:
     import orjson as _json
+
     _ORJSON = True
 except ImportError:
     import json as _json  # type: ignore
+
     _ORJSON = False
 
 logger = logging.getLogger(__name__)
@@ -29,7 +31,9 @@ _SETTINGS_FILE = _SETTINGS_DIR / "settings.json"
 _SETTINGS_LOCK_FILE = _SETTINGS_DIR / "settings.json.lock"
 _SETTINGS_LOCK_TIMEOUT_SEC = env_float("SETTINGS_LOCK_TIMEOUT_SECONDS", 10.0, minimum=0.2)
 _SETTINGS_LOCK_STALE_SEC = env_float(
-    "SETTINGS_LOCK_STALE_SECONDS", 30.0, minimum=_SETTINGS_LOCK_TIMEOUT_SEC,
+    "SETTINGS_LOCK_STALE_SECONDS",
+    30.0,
+    minimum=_SETTINGS_LOCK_TIMEOUT_SEC,
 )
 _SETTINGS_LOCK_POLL_SEC = 0.05
 
@@ -176,6 +180,7 @@ async def awrite(func: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
     （tests/test_services.py の SettingsWriteOffloadTests）。
     """
     import asyncio
+
     return await asyncio.to_thread(lambda: func(*args, **kwargs))
 
 
@@ -188,11 +193,15 @@ async def amutate_settings(mutator: Callable[[dict[str, Any]], _T]) -> _T:
     非同期の文脈からはこちらを使う。
     """
     import asyncio
+
     return await asyncio.to_thread(_mutate_settings, mutator)
 
 
 async def aupdate_news_feed_state(
-    guild_id: int, feed_id: str, last_run: float, seen_hashes: list,
+    guild_id: int,
+    feed_id: str,
+    last_run: float,
+    seen_hashes: list,
 ) -> None:
     """update_news_feed_state の非同期版（ニュースループから使う）。"""
     await amutate_settings(_news_feed_state_mutator(guild_id, feed_id, last_run, seen_hashes))
@@ -206,6 +215,7 @@ def get_guild_settings(guild_id: int) -> dict[str, Any]:
 
 def update_guild_settings(guild_id: int, updates: dict[str, Any]) -> dict[str, Any]:
     """指定ギルドの設定を更新し、保存してから最新状態を返す。"""
+
     def _mutator(data: dict[str, Any]) -> dict[str, Any]:
         guilds: dict[str, Any] = data.setdefault("guilds", {})  # type: ignore[assignment]
         current = guilds.get(str(guild_id), {})
@@ -220,6 +230,7 @@ def update_guild_settings(guild_id: int, updates: dict[str, Any]) -> dict[str, A
 
 def replace_guild_settings(guild_id: int, new_settings: dict[str, Any]) -> None:
     """指定ギルドの設定を丸ごと置換して保存する（インポート用）。"""
+
     def _mutator(data: dict[str, Any]) -> None:
         data.setdefault("guilds", {})[str(guild_id)] = dict(new_settings)
 
@@ -277,9 +288,9 @@ def get_trusted_user_ids(guild_id: int) -> list[int]:
     return _parse_id_list(get_guild_settings(guild_id).get("trusted_user_ids"))
 
 
-
 def add_trusted_users(guild_id: int, user_ids: list[int]) -> list[int]:
     """信頼済みユーザーに追加して、最新のリストを返す。"""
+
     def _mutator(data: dict[str, Any]) -> list[int]:
         current = _get_or_create_guild(data, guild_id)
         trusted = set(_parse_id_list(current.get("trusted_user_ids")))
@@ -296,6 +307,7 @@ def add_trusted_users(guild_id: int, user_ids: list[int]) -> list[int]:
 
 def remove_trusted_users(guild_id: int, user_ids: list[int]) -> list[int]:
     """信頼済みユーザーから削除して、最新のリストを返す。"""
+
     def _mutator(data: dict[str, Any]) -> list[int]:
         current = _get_or_create_guild(data, guild_id)
         trusted = set(_parse_id_list(current.get("trusted_user_ids")))
@@ -314,9 +326,9 @@ def get_bypass_role_ids(guild_id: int) -> list[int]:
     return _parse_id_list(get_guild_settings(guild_id).get("bypass_role_ids"))
 
 
-
 def add_bypass_roles(guild_id: int, role_ids: list[int]) -> list[int]:
     """バイパス対象ロールに追加し、最新のリストを返す。"""
+
     def _mutator(data: dict[str, Any]) -> list[int]:
         current = _get_or_create_guild(data, guild_id)
         bypass = set(_parse_id_list(current.get("bypass_role_ids")))
@@ -333,6 +345,7 @@ def add_bypass_roles(guild_id: int, role_ids: list[int]) -> list[int]:
 
 def remove_bypass_roles(guild_id: int, role_ids: list[int]) -> list[int]:
     """バイパス対象ロールから削除し、最新のリストを返す。"""
+
     def _mutator(data: dict[str, Any]) -> list[int]:
         current = _get_or_create_guild(data, guild_id)
         bypass = set(_parse_id_list(current.get("bypass_role_ids")))
@@ -350,6 +363,7 @@ def remove_bypass_roles(guild_id: int, role_ids: list[int]) -> list[int]:
 # ──────────────────────────────────────────────
 # ウェルカム / グッバイ
 # ──────────────────────────────────────────────
+
 
 def get_welcome_settings(guild_id: int) -> dict[str, Any]:
     return dict(get_guild_settings(guild_id).get("welcome", {}))
@@ -378,6 +392,7 @@ def set_goodbye_message(guild_id: int, message: str | None) -> None:
 # ──────────────────────────────────────────────
 # VC 通知チャンネル
 # ──────────────────────────────────────────────
+
 
 def get_vc_notify_channel_id(guild_id: int) -> int:
     value = get_guild_settings(guild_id).get("vc_notify_channel_id")
@@ -420,6 +435,7 @@ def set_vc_notify_filter_role_id(guild_id: int, role_id: int | None) -> None:
 # ──────────────────────────────────────────────
 # スティッキーメッセージ
 # ──────────────────────────────────────────────
+
 
 def get_sticky_messages(guild_id: int) -> dict[str, Any]:
     """channel_id(str) → {"content": str, "message_id": int|None}"""
@@ -498,6 +514,7 @@ def remove_sticky_message(guild_id: int, channel_id: int) -> None:
 # リアクションロール
 # ──────────────────────────────────────────────
 
+
 def get_reaction_roles(guild_id: int) -> dict[str, Any]:
     """message_id(str) → {emoji(str) → role_id(int)}"""
     return dict(get_guild_settings(guild_id).get("reaction_roles", {}))
@@ -546,6 +563,7 @@ def remove_reaction_role(guild_id: int, message_id: int, emoji: str) -> bool:
 # ──────────────────────────────────────────────
 # ニュースフィード
 # ──────────────────────────────────────────────
+
 
 def get_all_guild_ids() -> list[int]:
     guilds: dict[str, Any] = _load_all().get("guilds", {})
@@ -596,6 +614,7 @@ def remove_news_feed(guild_id: int, feed_id: str) -> bool:
 
 def update_news_feed(guild_id: int, feed_id: str, channel_id: int, query: str, interval_minutes: int) -> bool:
     """フィードの設定（チャンネル・クエリ・間隔）を更新する。seen_hashes と last_run は保持する。"""
+
     def _mutator(data: dict[str, Any]) -> bool:
         current = _get_or_create_guild(data, guild_id)
         feeds = current.get("news_feeds", {})
@@ -613,9 +632,13 @@ def update_news_feed(guild_id: int, feed_id: str, channel_id: int, query: str, i
 
 
 def _news_feed_state_mutator(
-    guild_id: int, feed_id: str, last_run: float, seen_hashes: list,
+    guild_id: int,
+    feed_id: str,
+    last_run: float,
+    seen_hashes: list,
 ) -> Callable[[dict[str, Any]], None]:
     """同期版・非同期版の両方から使う mutator。"""
+
     def _mutator(data: dict[str, Any]) -> None:
         current = _get_or_create_guild(data, guild_id)
         feeds = current.get("news_feeds", {})
@@ -639,6 +662,7 @@ def update_news_feed_state(guild_id: int, feed_id: str, last_run: float, seen_ha
 # ──────────────────────────────────────────────
 # 地震アラート
 # ──────────────────────────────────────────────
+
 
 def get_earthquake_settings(guild_id: int) -> dict[str, Any]:
     return dict(get_guild_settings(guild_id).get("earthquake", {}))
@@ -665,7 +689,11 @@ def set_earthquake_min_scale(guild_id: int, scale: int) -> None:
 # 並びが違うだけで「変更あり」と誤検知し続け、保存しても保存しても
 # 未保存のまま、という不具合になっていた。
 _NOTIFY_TYPE_KEYS: tuple[str, ...] = (
-    "eew_forecast", "eew_warning", "tsunami", "quake_info", "bot_news",
+    "eew_forecast",
+    "eew_warning",
+    "tsunami",
+    "quake_info",
+    "bot_news",
 )
 
 
@@ -684,6 +712,7 @@ def set_earthquake_notify_types(guild_id: int, types: dict[str, bool]) -> None:
 # ──────────────────────────────────────────────
 # DJAudio-DL 監視チャンネル
 # ──────────────────────────────────────────────
+
 
 @dataclass(frozen=True)
 class DJAudioRuntimeSettings:
@@ -729,6 +758,7 @@ def get_djaudio_watch_channel(guild_id: int) -> int:
 
 def set_djaudio_watch_channel(guild_id: int, channel_id: int | None) -> None:
     """URL監視チャンネルIDを設定/解除。"""
+
     def _mutator(data: dict[str, Any]) -> None:
         current = _get_or_create_guild(data, guild_id)
         nested = current.get("djaudio", {})
@@ -773,7 +803,7 @@ def get_djaudio_settings(guild_id: int) -> dict[str, Any]:
 # 片方だけ変えると、画面の検証は通るのに保存される値は黙って丸められる。
 # 表を1つにして、ずれようがない形にする。
 DJAUDIO_LIMITS: dict[str, tuple[int, int]] = {
-    "cache_ttl": (60, 30 * 24 * 3600),   # 1分 〜 30日
+    "cache_ttl": (60, 30 * 24 * 3600),  # 1分 〜 30日
     "cooldown": (0, 3600),
     "max_urls": (1, 10),
 }
@@ -807,9 +837,9 @@ def set_djaudio_settings(guild_id: int, patch: dict[str, Any]) -> None:
 
 
 _DJAUDIO_DEFAULTS: dict[str, int] = {
-    "cache_ttl":  600,
-    "cooldown":   30,
-    "max_urls":   3,
+    "cache_ttl": 600,
+    "cooldown": 30,
+    "max_urls": 3,
 }
 
 
@@ -820,6 +850,7 @@ def get_djaudio_cache_ttl(guild_id: int) -> int:
         return max(60, int(stored))
     except (TypeError, ValueError):
         from config import DJAUDIO_CACHE_TTL
+
         return DJAUDIO_CACHE_TTL
 
 
@@ -830,6 +861,7 @@ def get_djaudio_cooldown(guild_id: int) -> int:
         return max(0, int(stored))
     except (TypeError, ValueError):
         from config import DJAUDIO_COOLDOWN
+
         return DJAUDIO_COOLDOWN
 
 
@@ -840,6 +872,7 @@ def get_djaudio_max_urls(guild_id: int) -> int:
         return max(1, min(10, int(stored)))
     except (TypeError, ValueError):
         from config import DJAUDIO_MAX_URLS
+
         return DJAUDIO_MAX_URLS
 
 
@@ -856,6 +889,7 @@ def get_djaudio_output_channel(guild_id: int) -> int | None:
 
 def set_djaudio_output_channel(guild_id: int, channel_id: int | None) -> None:
     """結果送信チャンネルIDを設定/解除。"""
+
     def _mutator(data: dict[str, Any]) -> None:
         current = _get_or_create_guild(data, guild_id)
         nested = current.get("djaudio", {})
@@ -889,10 +923,10 @@ _RECORDING_DEFAULTS: dict[str, Any] = {
     "auto_start": False,
     # 自動録音の対象VC。未設定なら TTS の対象VCに従う（同じ接続を共有するため）。
     "vc_channel_id": None,
-    "max_minutes": 360,        # 6時間で自動停止。0 なら時間では止めない
-    "retention_days": 7,       # ダウンロードリンクの有効期間
+    "max_minutes": 360,  # 6時間で自動停止。0 なら時間では止めない
+    "retention_days": 7,  # ダウンロードリンクの有効期間
     "announce_channel_id": None,  # 開始・完了の通知先（未設定ならVCのチャット欄）
-    "excluded_user_ids": [],   # 録音しないユーザー（本人希望の除外）
+    "excluded_user_ids": [],  # 録音しないユーザー（本人希望の除外）
 }
 
 

@@ -41,8 +41,16 @@ _ID_PATTERN = re.compile(r"\d+")
 _MESSAGE_URL_PATTERN = re.compile(r"https?://discord(?:app)?\.com/channels/\d+/(\d+)/(\d+)")
 
 SCALE_LABELS: dict[int, str] = {
-    10: "震度1", 20: "震度2", 30: "震度3", 40: "震度4", 45: "震度4強",
-    50: "震度5弱", 55: "震度5強", 60: "震度6弱", 65: "震度6強", 70: "震度7",
+    10: "震度1",
+    20: "震度2",
+    30: "震度3",
+    40: "震度4",
+    45: "震度4強",
+    50: "震度5弱",
+    55: "震度5強",
+    60: "震度6弱",
+    65: "震度6強",
+    70: "震度7",
 }
 
 VALID_TASKS: dict[str, str] = {
@@ -113,6 +121,7 @@ _CONFIG_ENV_ATTRS: dict[str, str] = {
 
 # ── 認可 ─────────────────────────────────────────────────────
 
+
 def check_dev(request: Request) -> dict:
     """DEV_USER_ID と一致する開発者だけを通す。未設定なら存在しない扱い。
 
@@ -132,6 +141,7 @@ def check_dev(request: Request) -> dict:
 
 
 # ── 内部ヘルパー ─────────────────────────────────────────────
+
 
 def describe_exception(exc: BaseException, *, timeout: float | None = None) -> str:
     """外部呼び出しの失敗理由を、ログにも画面にも出せる一文にする。
@@ -165,14 +175,14 @@ async def _discord(method: str, path: str, **kwargs) -> Any:
             ) as resp:
                 if resp.status >= 400:
                     body = (await resp.text())[:200]
-                    logger.warning(
-                        "Discord API が %s を返しました %s %s: %s", resp.status, method, path, body
-                    )
+                    logger.warning("Discord API が %s を返しました %s %s: %s", resp.status, method, path, body)
                     return None
                 return await resp.json()
     except Exception as exc:
         logger.warning(
-            "Discord API 呼び出しに失敗 %s %s: %s", method, path,
+            "Discord API 呼び出しに失敗 %s %s: %s",
+            method,
+            path,
             describe_exception(exc, timeout=_TIMEOUT.total),
         )
         return None
@@ -181,6 +191,7 @@ async def _discord(method: str, path: str, **kwargs) -> Any:
 def _all_settings() -> dict:
     try:
         from services.settings_store import _load_all_from_disk
+
         return _load_all_from_disk()
     except Exception:
         return {"guilds": {}}
@@ -198,14 +209,16 @@ def _cache_entries() -> list[dict]:
         try:
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
             mp3_path = DJAUDIO_CACHE_DIR / f"{meta_path.stem}.mp3"
-            entries.append({
-                "token": meta_path.stem,
-                "title": meta.get("title") or meta.get("url") or meta_path.stem,
-                "guild_id": str(meta.get("guild_id") or ""),
-                "size_mb": round(mp3_path.stat().st_size / 1024 / 1024, 2) if mp3_path.exists() else 0,
-                "expires_at": meta.get("expires_at"),
-                "expired": now > float(meta.get("expires_at") or 0),
-            })
+            entries.append(
+                {
+                    "token": meta_path.stem,
+                    "title": meta.get("title") or meta.get("url") or meta_path.stem,
+                    "guild_id": str(meta.get("guild_id") or ""),
+                    "size_mb": round(mp3_path.stat().st_size / 1024 / 1024, 2) if mp3_path.exists() else 0,
+                    "expires_at": meta.get("expires_at"),
+                    "expired": now > float(meta.get("expires_at") or 0),
+                }
+            )
         except (OSError, ValueError, json.JSONDecodeError):
             continue
     return entries
@@ -239,6 +252,7 @@ def _resolve_env_value(key: str, cfg: object | None) -> str | None:
 def _env_rows() -> list[dict]:
     try:
         import config as cfg
+
         defaults = {
             "DJAUDIO_BASE_URL": str(cfg.DJAUDIO_BASE_URL),
             "DJAUDIO_CACHE_DIR": str(cfg.DJAUDIO_CACHE_DIR),
@@ -255,7 +269,8 @@ def _env_rows() -> list[dict]:
         value = _resolve_env_value(key, cfg)
         if value is not None:
             display = (
-                f"{value[:4]}{'*' * min(len(value) - 4, 20)}" if secret and len(value) > 4
+                f"{value[:4]}{'*' * min(len(value) - 4, 20)}"
+                if secret and len(value) > 4
                 else ("****" if secret else value)
             )
             status = "set"
@@ -277,13 +292,15 @@ def _all_stickies() -> list[dict]:
         for channel_id, sticky in (guild_data.get("sticky_messages") or {}).items():
             if not isinstance(sticky, dict):
                 continue
-            rows.append({
-                "guild_id": str(guild_id),
-                "channel_id": str(channel_id),
-                "content": sticky.get("content", ""),
-                "message_id": sticky.get("message_id"),
-                "pending_delete": bool(sticky.get("pending_delete")),
-            })
+            rows.append(
+                {
+                    "guild_id": str(guild_id),
+                    "channel_id": str(channel_id),
+                    "content": sticky.get("content", ""),
+                    "message_id": sticky.get("message_id"),
+                    "pending_delete": bool(sticky.get("pending_delete")),
+                }
+            )
     return sorted(rows, key=lambda row: row["guild_id"])
 
 
@@ -318,6 +335,7 @@ def _ok(message: str, **extra) -> JSONResponse:
 
 # ── 概要 ─────────────────────────────────────────────────────
 
+
 @router.get("/overview")
 async def overview(request: Request, _=Depends(check_dev)):
     guilds, bot_user = await asyncio.gather(
@@ -343,8 +361,7 @@ async def overview(request: Request, _=Depends(check_dev)):
     payload: dict[str, Any] = {
         "bot_user": bot_user or {},
         "guilds": [
-            {"id": str(g.get("id")), "name": g.get("name") or "Unknown", "icon": g.get("icon")}
-            for g in guild_list
+            {"id": str(g.get("id")), "name": g.get("name") or "Unknown", "icon": g.get("icon")} for g in guild_list
         ],
         "settings_guild_ids": sorted(str(gid) for gid in settings.get("guilds", {})),
         "cache": {
@@ -386,18 +403,21 @@ async def earthquakes(request: Request, _=Depends(check_dev), limit: int = Query
         quake = item.get("earthquake") or {}
         hypocenter = quake.get("hypocenter") or {}
         scale = quake.get("maxScale")
-        events.append({
-            "time": quake.get("time") or item.get("time"),
-            "place": hypocenter.get("name") or "不明",
-            "magnitude": hypocenter.get("magnitude"),
-            "scale": scale,
-            "scale_label": SCALE_LABELS.get(scale, "不明"),
-            "json": json.dumps(item, ensure_ascii=False),
-        })
+        events.append(
+            {
+                "time": quake.get("time") or item.get("time"),
+                "place": hypocenter.get("name") or "不明",
+                "magnitude": hypocenter.get("magnitude"),
+                "scale": scale,
+                "scale_label": SCALE_LABELS.get(scale, "不明"),
+                "json": json.dumps(item, ensure_ascii=False),
+            }
+        )
     return JSONResponse({"events": events, "error": error})
 
 
 # ── 送信系 ───────────────────────────────────────────────────
+
 
 @router.post("/send-message")
 @limiter.limit("10/minute")
@@ -477,14 +497,17 @@ async def news_send(request: Request, _=Depends(check_dev), _csrf=Depends(check_
 
 # ── Bot へのシグナル ─────────────────────────────────────────
 
+
 @router.post("/signal/{task_name}")
 @limiter.limit("10/minute")
 async def trigger_signal(task_name: str, request: Request, _=Depends(check_dev), _csrf=Depends(check_csrf)):
     if task_name not in VALID_TASKS:
         raise HTTPException(status_code=404, detail="不明なタスクです。")
     _write_signal(task_name, {"task": task_name, "created_at": datetime.now(timezone.utc).isoformat()})
-    return _ok(f"「{VALID_TASKS[task_name]}」をキューに追加しました。数十秒以内に実行されます。",
-               pending_signals=_pending_signals())
+    return _ok(
+        f"「{VALID_TASKS[task_name]}」をキューに追加しました。数十秒以内に実行されます。",
+        pending_signals=_pending_signals(),
+    )
 
 
 @router.post("/test-notify/{kind}")
@@ -506,10 +529,15 @@ async def test_notify(kind: str, request: Request, _=Depends(check_dev), _csrf=D
 
     # 対象のギルドは payload の中にしかない。用途名だけのファイル名にすると、
     # Bot が拾う前に別のギルド宛で上書きされて消える（per_guild=True）。
-    _write_signal(f"test_{kind}", {
-        "guild_id": guild_id, "channel_id": channel_id,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }, per_guild=True)
+    _write_signal(
+        f"test_{kind}",
+        {
+            "guild_id": guild_id,
+            "channel_id": channel_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        },
+        per_guild=True,
+    )
     target = f"ギルド {guild_id} のチャンネル {channel_id}（設定は無視）" if channel_id else f"ギルド {guild_id}"
     return _ok(
         f"「{kind_label(kind)}」のテストをキューに追加しました。（送信先: {target}）",
@@ -548,20 +576,21 @@ async def earthquake_replay(request: Request, _=Depends(check_dev), _csrf=Depend
     channel_id = int(_require_id(raw_channel_id, "チャンネルID")) if raw_channel_id else None
 
     # 送信先が payload の中にしかないので、1件ずつ別のファイルにする。
-    _write_signal("eq_replay",
-                  {"event": data, "guild_id": guild_id, "channel_id": channel_id},
-                  per_guild=True)
+    _write_signal("eq_replay", {"event": data, "guild_id": guild_id, "channel_id": channel_id}, per_guild=True)
     if channel_id:
         target = f"ギルド {guild_id} のチャンネル {channel_id}（地震アラート設定は無視）"
     elif guild_id:
         target = f"ギルド {guild_id}"
     else:
         target = "全サーバー"
-    return _ok(f"地震速報をリプレイキューに追加しました（送信先: {target}）。数十秒以内に通知が送信されます。",
-               pending_signals=_pending_signals())
+    return _ok(
+        f"地震速報をリプレイキューに追加しました（送信先: {target}）。数十秒以内に通知が送信されます。",
+        pending_signals=_pending_signals(),
+    )
 
 
 # ── 参照系 ───────────────────────────────────────────────────
+
 
 @router.get("/channels")
 @limiter.limit("30/minute")
@@ -577,7 +606,7 @@ async def channels(request: Request, guild_id: str = Query(...), _=Depends(check
         return JSONResponse({"channels": [], "voice_channels": []})
 
     text_types = {0, 5, 10, 11, 12, 15}  # GUILD_TEXT / ANNOUNCEMENT / THREAD / FORUM 等
-    voice_types = {2, 13}                # GUILD_VOICE / STAGE_VOICE
+    voice_types = {2, 13}  # GUILD_VOICE / STAGE_VOICE
 
     def pick(types: set[int]) -> list[dict]:
         return sorted(
@@ -604,18 +633,18 @@ async def user_lookup(request: Request, user_id: str = Query(...), _=Depends(che
     # Discord のIDは生成時刻を含む（Discord epoch: 2015-01-01）
     created_ms = (int(uid) >> 22) + 1420070400000
     avatar = data.get("avatar")
-    return JSONResponse({
-        "id": str(data.get("id")),
-        "username": data.get("username"),
-        "global_name": data.get("global_name"),
-        "bot": bool(data.get("bot")),
-        "avatar_url": (
-            f"https://cdn.discordapp.com/avatars/{uid}/{avatar}.webp?size=128" if avatar else None
-        ),
-        "created_at": datetime.fromtimestamp(created_ms / 1000, tz=timezone.utc)
-        .astimezone()
-        .strftime("%Y/%m/%d %H:%M:%S"),
-    })
+    return JSONResponse(
+        {
+            "id": str(data.get("id")),
+            "username": data.get("username"),
+            "global_name": data.get("global_name"),
+            "bot": bool(data.get("bot")),
+            "avatar_url": (f"https://cdn.discordapp.com/avatars/{uid}/{avatar}.webp?size=128" if avatar else None),
+            "created_at": datetime.fromtimestamp(created_ms / 1000, tz=timezone.utc)
+            .astimezone()
+            .strftime("%Y/%m/%d %H:%M:%S"),
+        }
+    )
 
 
 @router.get("/logs")
@@ -632,6 +661,7 @@ async def logs(
 
 # ── ギルド設定の書き出し / 取り込み ─────────────────────────
 
+
 @router.get("/settings/{guild_id}")
 @limiter.limit("20/minute")
 async def guild_settings(guild_id: str, request: Request, _=Depends(check_dev)):
@@ -644,9 +674,7 @@ async def guild_settings(guild_id: str, request: Request, _=Depends(check_dev)):
 
 @router.post("/settings/{guild_id}/import")
 @limiter.limit("5/minute")
-async def import_guild_settings(
-    guild_id: str, request: Request, _=Depends(check_dev), _csrf=Depends(check_csrf)
-):
+async def import_guild_settings(guild_id: str, request: Request, _=Depends(check_dev), _csrf=Depends(check_csrf)):
     gid = _require_id(guild_id, "ギルドID")
     body = await _json_body(request)
     settings = body.get("settings")
@@ -671,6 +699,7 @@ async def import_guild_settings(
 
 
 # ── DJAudio キャッシュ ───────────────────────────────────────
+
 
 @router.delete("/cache/{token}")
 @limiter.limit("20/minute")

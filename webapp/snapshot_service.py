@@ -84,7 +84,9 @@ async def _latest_rows_before(session: AsyncSession, snapshot_date: date) -> dic
     return {row.metal_key: row for row in rows}
 
 
-async def store_snapshot(session: AsyncSession, snapshot_date: date, *, skip_if_exists: bool = True) -> list[MetalPriceDaily]:
+async def store_snapshot(
+    session: AsyncSession, snapshot_date: date, *, skip_if_exists: bool = True
+) -> list[MetalPriceDaily]:
     existing_rows = await _rows_for_date(session, snapshot_date)
     if skip_if_exists and len(existing_rows) >= len(TRACKED_METALS):
         return sorted(existing_rows.values(), key=lambda row: row.metal_key)
@@ -143,7 +145,10 @@ async def load_history(
             MetalPriceDaily.price_per_gram,
             MetalPriceDaily.delta_from_previous,
         )
-        .where(MetalPriceDaily.snapshot_date >= start_date, MetalPriceDaily.snapshot_date <= end)
+        .where(
+            MetalPriceDaily.snapshot_date >= start_date,
+            MetalPriceDaily.snapshot_date <= end,
+        )
         .order_by(MetalPriceDaily.snapshot_date.asc())
     )
     rows = (await session.execute(stmt)).all()
@@ -154,7 +159,7 @@ async def load_history(
             {
                 "date": snapshot_date.isoformat(),
                 "price_per_gram": float(price_per_gram),
-                "delta_from_previous": float(delta_from_previous) if delta_from_previous is not None else None,
+                "delta_from_previous": (float(delta_from_previous) if delta_from_previous is not None else None),
             }
         )
     return history
@@ -180,7 +185,9 @@ async def load_latest_rows(session: AsyncSession) -> dict[str, MetalPriceDaily]:
     return {row.metal_key: row for row in rows}
 
 
-async def load_latest(session: AsyncSession) -> dict[str, dict[str, float | str | None]]:
+async def load_latest(
+    session: AsyncSession,
+) -> dict[str, dict[str, float | str | None]]:
     latest_rows = await load_latest_rows(session)
     latest: dict[str, dict[str, float | str | None]] = {}
 
@@ -196,7 +203,7 @@ async def load_latest(session: AsyncSession) -> dict[str, dict[str, float | str 
         latest[metal.key] = {
             "date": row.snapshot_date.isoformat(),
             "price_per_gram": float(row.price_per_gram),
-            "delta_from_previous": float(row.delta_from_previous) if row.delta_from_previous is not None else None,
+            "delta_from_previous": (float(row.delta_from_previous) if row.delta_from_previous is not None else None),
         }
 
     return latest

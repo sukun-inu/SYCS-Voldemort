@@ -58,6 +58,7 @@ MAX_RUNNING = 32
 
 # ── 接続先 ───────────────────────────────────────────────────
 
+
 def _sources() -> list[tuple[str, str]]:
     """アプリが持っている DSN。(用途のラベル, DSN)
 
@@ -132,6 +133,7 @@ async def _connect(server: dict[str, Any], database: str | None, *, timeout_ms: 
 
 
 # ── 値の変換 ─────────────────────────────────────────────────
+
 
 def _cell(value: Any) -> Any:
     """1セルを JSON にできる形にする。数値は精度を落とさないよう文字列で返す。"""
@@ -251,6 +253,7 @@ def split_statements(script: str) -> list[str]:
 
 # ── 実行 ─────────────────────────────────────────────────────
 
+
 def _error_payload(exc: asyncpg.PostgresError) -> dict[str, Any]:
     """Postgres のエラーを、画面でそのまま出せる形にする。"""
     return {
@@ -312,7 +315,7 @@ def _timeout_error(timeout: int, index: int) -> dict[str, Any]:
 
 
 def _affected(status: str | None) -> int:
-    """"UPDATE 3" のような状態メッセージから件数を取り出す。"""
+    """ "UPDATE 3" のような状態メッセージから件数を取り出す。"""
     if not status:
         return 0
     tail = status.rsplit(" ", 1)[-1]
@@ -361,6 +364,7 @@ def _clamp(value: Any, low: int, high: int, fallback: int) -> int:
 
 # ── エンドポイント ───────────────────────────────────────────
 
+
 @router.get("/servers")
 @limiter.limit("30/minute")
 async def list_servers(request: Request, _=Depends(check_dev)):
@@ -397,9 +401,7 @@ async def list_servers(request: Request, _=Depends(check_dev)):
                 """,
                 timeout=10,
             )
-            entry["databases"] = [
-                {"name": r["name"], "bytes": int(r["bytes"] or 0), "owner": r["owner"]} for r in rows
-            ]
+            entry["databases"] = [{"name": r["name"], "bytes": int(r["bytes"] or 0), "owner": r["owner"]} for r in rows]
             entry["version"] = await conn.fetchval("SHOW server_version", timeout=5)
         except asyncpg.PostgresError as exc:
             entry["error"] = str(exc)
@@ -471,29 +473,35 @@ async def list_objects(
 
     by_table: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for row in columns:
-        by_table.setdefault((row["schema"], row["table"]), []).append({
-            "name": row["name"],
-            "type": row["type"],
-            "notNull": row["not_null"],
-            "pk": row["is_pk"],
-            "default": row["default_value"],
-        })
+        by_table.setdefault((row["schema"], row["table"]), []).append(
+            {
+                "name": row["name"],
+                "type": row["type"],
+                "notNull": row["not_null"],
+                "pk": row["is_pk"],
+                "default": row["default_value"],
+            }
+        )
 
     schemas: dict[str, list[dict[str, Any]]] = {}
     for row in tables:
-        schemas.setdefault(row["schema"], []).append({
-            "name": row["name"],
-            "kind": row["kind"],
-            "approxRows": max(int(row["approx_rows"] or 0), 0),
-            "bytes": int(row["bytes"] or 0),
-            "comment": row["comment"],
-            "columns": by_table.get((row["schema"], row["name"]), []),
-        })
+        schemas.setdefault(row["schema"], []).append(
+            {
+                "name": row["name"],
+                "kind": row["kind"],
+                "approxRows": max(int(row["approx_rows"] or 0), 0),
+                "bytes": int(row["bytes"] or 0),
+                "comment": row["comment"],
+                "columns": by_table.get((row["schema"], row["name"]), []),
+            }
+        )
 
-    return JSONResponse({
-        "database": database,
-        "schemas": [{"name": name, "tables": schemas[name]} for name in sorted(schemas)],
-    })
+    return JSONResponse(
+        {
+            "database": database,
+            "schemas": [{"name": name, "tables": schemas[name]} for name in sorted(schemas)],
+        }
+    )
 
 
 @router.get("/ddl")
@@ -523,7 +531,9 @@ async def table_ddl(
              WHERE n.nspname = $1 AND c.relname = $2 AND a.attnum > 0 AND NOT a.attisdropped
              ORDER BY a.attnum
             """,
-            schema, table, timeout=10,
+            schema,
+            table,
+            timeout=10,
         )
         if not columns:
             raise HTTPException(status_code=404, detail="そのテーブルは見つかりませんでした。")
@@ -536,7 +546,9 @@ async def table_ddl(
              WHERE n.nspname = $1 AND c.relname = $2
              ORDER BY con.contype, con.conname
             """,
-            schema, table, timeout=10,
+            schema,
+            table,
+            timeout=10,
         )
         indexes = await conn.fetch(
             """
@@ -545,14 +557,16 @@ async def table_ddl(
              WHERE schemaname = $1 AND tablename = $2
              ORDER BY indexname
             """,
-            schema, table, timeout=10,
+            schema,
+            table,
+            timeout=10,
         )
     except asyncpg.PostgresError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     finally:
         await conn.close()
 
-    lines = [f'CREATE TABLE {_quote_ident(schema)}.{_quote_ident(table)} (']
+    lines = [f"CREATE TABLE {_quote_ident(schema)}.{_quote_ident(table)} ("]
     body = []
     for column in columns:
         piece = f'    {_quote_ident(column["name"])} {column["type"]}'
@@ -609,7 +623,12 @@ async def run_query(request: Request, _dev=Depends(check_dev), _csrf=Depends(che
     user = request.session.get("user") or {}
     logger.warning(
         "SQL実行 user=%s db=%s/%s mode=%s statements=%d sql=%.500s",
-        user.get("id"), server_id, database, "write" if write else "read", len(statements), script,
+        user.get("id"),
+        server_id,
+        database,
+        "write" if write else "read",
+        len(statements),
+        script,
     )
 
     conn = await _connect(target, database, timeout_ms=timeout * 1000)
@@ -624,11 +643,17 @@ async def run_query(request: Request, _dev=Depends(check_dev), _csrf=Depends(che
         try:
             begun = time.perf_counter()
             status = await conn.execute(statements[0], timeout=float(timeout))
-            results.append({
-                "columns": [], "rows": [], "rowCount": _affected(status), "truncated": False,
-                "status": status or "OK", "elapsedMs": round((time.perf_counter() - begun) * 1000, 1),
-                "sql": statements[0],
-            })
+            results.append(
+                {
+                    "columns": [],
+                    "rows": [],
+                    "rowCount": _affected(status),
+                    "truncated": False,
+                    "status": status or "OK",
+                    "elapsedMs": round((time.perf_counter() - begun) * 1000, 1),
+                    "sql": statements[0],
+                }
+            )
             error = None
         except asyncpg.PostgresError as exc:
             error = {**_error_payload(exc), "statementIndex": 0}
@@ -637,13 +662,15 @@ async def run_query(request: Request, _dev=Depends(check_dev), _csrf=Depends(che
         finally:
             _RUNNING.pop(token, None)
             await conn.close()
-        return JSONResponse({
-            "results": results,
-            "error": error,
-            "committed": error is None,
-            "outsideTransaction": True,
-            "elapsedMs": round((time.perf_counter() - started) * 1000, 1),
-        })
+        return JSONResponse(
+            {
+                "results": results,
+                "error": error,
+                "committed": error is None,
+                "outsideTransaction": True,
+                "elapsedMs": round((time.perf_counter() - started) * 1000, 1),
+            }
+        )
 
     transaction = conn.transaction(readonly=not write)
     try:
@@ -664,12 +691,14 @@ async def run_query(request: Request, _dev=Depends(check_dev), _csrf=Depends(che
             )
         except asyncio.TimeoutError:
             await transaction.rollback()
-            return JSONResponse({
-                "results": results,
-                "error": _timeout_error(timeout, len(results)),
-                "committed": False,
-                "elapsedMs": round((time.perf_counter() - started) * 1000, 1),
-            })
+            return JSONResponse(
+                {
+                    "results": results,
+                    "error": _timeout_error(timeout, len(results)),
+                    "committed": False,
+                    "elapsedMs": round((time.perf_counter() - started) * 1000, 1),
+                }
+            )
 
         if write:
             await transaction.commit()
@@ -679,12 +708,14 @@ async def run_query(request: Request, _dev=Depends(check_dev), _csrf=Depends(che
         _RUNNING.pop(token, None)
         await conn.close()
 
-    return JSONResponse({
-        "results": results,
-        "error": None,
-        "committed": write,
-        "elapsedMs": round((time.perf_counter() - started) * 1000, 1),
-    })
+    return JSONResponse(
+        {
+            "results": results,
+            "error": None,
+            "committed": write,
+            "elapsedMs": round((time.perf_counter() - started) * 1000, 1),
+        }
+    )
 
 
 @router.post("/cancel")
@@ -706,7 +737,9 @@ async def cancel_query(request: Request, _dev=Depends(check_dev), _csrf=Depends(
         raise HTTPException(status_code=400, detail=str(exc))
     finally:
         await conn.close()
-    return JSONResponse({
-        "cancelled": bool(cancelled),
-        "message": "クエリを止めました。" if cancelled else "すでに終わっていました。",
-    })
+    return JSONResponse(
+        {
+            "cancelled": bool(cancelled),
+            "message": "クエリを止めました。" if cancelled else "すでに終わっていました。",
+        }
+    )

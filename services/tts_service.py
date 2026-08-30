@@ -14,13 +14,15 @@ from services import voice_session
 logger = logging.getLogger(__name__)
 
 if "localhost" in TTS_BASE_URL:
-    logger.warning("[TTS] TTS_BASE_URL=%s (デフォルト値。本番では TTS_BASE_URL 環境変数を設定してください)", TTS_BASE_URL)
+    logger.warning(
+        "[TTS] TTS_BASE_URL=%s (デフォルト値。本番では TTS_BASE_URL 環境変数を設定してください)", TTS_BASE_URL
+    )
 
 _DEFAULT_VOICE = "Kyoko"
 _DEFAULT_RATE = 200
 _MAX_TEXT_LEN = 100
 _IDLE_TIMEOUT_SEC = None  # アイドルタイムアウト無効（手動退出のみ）
-_RECONNECT_RETRIES = 3    # ハンドシェイク切断後の再接続試行回数
+_RECONNECT_RETRIES = 3  # ハンドシェイク切断後の再接続試行回数
 _RECONNECT_DELAY_SEC = 2.0  # 再接続間隔（秒）
 
 # ギルドごとの状態
@@ -102,9 +104,7 @@ async def _synthesize(text: str, voice: str, rate: int) -> Optional[str]:
         return None
 
 
-async def _connect_or_move(
-    guild: discord.Guild, vc_channel_id: int
-) -> discord.VoiceClient | None:
+async def _connect_or_move(guild: discord.Guild, vc_channel_id: int) -> discord.VoiceClient | None:
     """VCに接続。既に別チャンネルに接続中なら移動。
 
     接続そのものの管理は services/voice_session.py に持たせている。読み上げと
@@ -150,7 +150,9 @@ async def _player_loop(bot: Bot, guild_id: int) -> None:
                 logger.info("[TTS] reconnect attempt %d/%d guild=%s", _attempt + 1, _RECONNECT_RETRIES, guild_id)
                 await asyncio.sleep(_RECONNECT_DELAY_SEC)
         if vc is None:
-            logger.error("[TTS] failed to connect after %d attempts, dropping item guild=%s", _RECONNECT_RETRIES + 1, guild_id)
+            logger.error(
+                "[TTS] failed to connect after %d attempts, dropping item guild=%s", _RECONNECT_RETRIES + 1, guild_id
+            )
             queue.task_done()
             continue
 

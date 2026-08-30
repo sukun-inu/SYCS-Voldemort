@@ -25,7 +25,7 @@ from services.settings_store import (
 logger = logging.getLogger(__name__)
 
 _RSS_BASE = "https://news.google.com/rss/search?q={query}&hl=ja&gl=JP&ceid=JP:ja"
-_HEADERS  = {"User-Agent": "Mozilla/5.0 (compatible; DiscordBot/1.0)"}
+_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; DiscordBot/1.0)"}
 # 記事本文へのサムネイル画像は取れない。Google News RSS の <link> は
 # 実際の配信元へは直接飛ばず（HTTP のリダイレクトではなく、Google 側の
 # JS で解決する中間ページ止まり）、5件のリンクを実際に fetch して確認した
@@ -40,7 +40,8 @@ _GROQ_BUCKET = "news_summary"
 
 # 記事1本ごとに鍵が増えるので、件数にも上限を置く（従来は追い出しが無かった）
 _summary_cache: TTLCache[str, str] = TTLCache(
-    ttl=_NEWS_SUMMARY_CACHE_TTL_SEC, max_entries=1000,
+    ttl=_NEWS_SUMMARY_CACHE_TTL_SEC,
+    max_entries=1000,
 )
 
 
@@ -80,7 +81,7 @@ def _normalize_summary_text(text: str, max_len: int = _NEWS_SUMMARY_MAX_CHARS) -
     clean = re.sub(r"^要約[:：]\s*", "", clean)
     if len(clean) <= max_len:
         return clean
-    return clean[:max_len - 1].rstrip() + "…"
+    return clean[: max_len - 1].rstrip() + "…"
 
 
 async def _summarize_article(article: dict) -> str:
@@ -155,18 +156,18 @@ async def _fetch_articles(session: aiohttp.ClientSession, query: str) -> list[di
 
     articles: list[dict] = []
     try:
-        root    = ET.fromstring(text)
+        root = ET.fromstring(text)
         channel = root.find("channel")
         if channel is None:
             return []
         for item in channel.findall("item"):
             title_el = item.find("title")
-            link_el  = item.find("link")
+            link_el = item.find("link")
             if title_el is None or link_el is None:
                 continue
 
-            pub_el    = item.find("pubDate")
-            desc_el   = item.find("description")
+            pub_el = item.find("pubDate")
+            desc_el = item.find("description")
             source_el = item.find("source")
 
             # タイトルに " - 配信元" が含まれることがあるため分割して保持
@@ -181,20 +182,22 @@ async def _fetch_articles(session: aiohttp.ClientSession, query: str) -> list[di
             # （favicon を引くのに使う。記事本文へのリンクとは別物）。
             source_url = (source_el.get("url") or "").strip() if source_el is not None else ""
 
-            desc_raw  = desc_el.text if desc_el is not None else ""
+            desc_raw = desc_el.text if desc_el is not None else ""
             desc_text = _strip_html(desc_raw or "")
             # タイトルと重複する場合は除去
             if desc_text.lower().startswith(article_title.lower()[:30]):
                 desc_text = ""
 
-            articles.append({
-                "title":     article_title,
-                "link":      (link_el.text or "").strip(),
-                "pubDate":   (pub_el.text or "") if pub_el is not None else "",
-                "desc":      desc_text,
-                "source":    source,
-                "sourceUrl": source_url,
-            })
+            articles.append(
+                {
+                    "title": article_title,
+                    "link": (link_el.text or "").strip(),
+                    "pubDate": (pub_el.text or "") if pub_el is not None else "",
+                    "desc": desc_text,
+                    "source": source,
+                    "sourceUrl": source_url,
+                }
+            )
     except ET.ParseError as e:
         logger.exception("[news_service] RSS parse error: %s", e)
 
@@ -211,9 +214,9 @@ async def run_news_feeds(bot: Bot) -> None:
                 if now - float(feed.get("last_run", 0)) < interval_sec:
                     continue
 
-                query:      str       = feed.get("query", "")
-                channel_id: int       = int(feed.get("channel_id", 0))
-                seen:       list[str] = list(feed.get("seen_hashes", []))
+                query: str = feed.get("query", "")
+                channel_id: int = int(feed.get("channel_id", 0))
+                seen: list[str] = list(feed.get("seen_hashes", []))
 
                 if not query or not channel_id:
                     continue
@@ -225,7 +228,7 @@ async def run_news_feeds(bot: Bot) -> None:
                 if not isinstance(channel, discord.TextChannel):
                     continue
 
-                articles    = await _fetch_articles(session, query)
+                articles = await _fetch_articles(session, query)
                 new_articles = [a for a in articles if _url_hash(a["link"]) not in seen]
 
                 for article in reversed(new_articles[:5]):

@@ -1,6 +1,6 @@
 import discord
 from datetime import datetime
-from typing import Mapping, Sequence
+from typing import Mapping
 
 from config import JST as _JST
 
@@ -43,5 +43,5 @@ async def send_large_message(channel: discord.TextChannel, text: str) -> None:
             split_at = chunk.rfind("\n")
             if split_at > 1000:
                 chunk = chunk[:split_at]
-        remaining = remaining[len(chunk):].lstrip("\n")
+        remaining = remaining[len(chunk) :].lstrip("\n")
         await channel.send(chunk)

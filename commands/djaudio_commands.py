@@ -19,7 +19,8 @@ def _base_url_is_local() -> bool:
 
 def register_djaudio_commands(bot: Bot) -> None:
     group = app_commands.Group(
-        name="djaudio", description="DJAudio（URL の自動MP3変換）の設定",
+        name="djaudio",
+        description="DJAudio（URL の自動MP3変換）の設定",
         guild_only=True,
     )
 
@@ -60,7 +61,7 @@ def register_djaudio_commands(bot: Bot) -> None:
             embed.add_field(
                 name="⚠️ 注意",
                 value="配信 URL ベースが `localhost` のままだ。このままではサーバー外の者はリンクを開けぬ。"
-                      "管理者は `DJAUDIO_BASE_URL` 環境変数を外部から到達可能な URL に設定せよ。",
+                "管理者は `DJAUDIO_BASE_URL` 環境変数を外部から到達可能な URL に設定せよ。",
                 inline=False,
             )
         await interaction.response.send_message(embed=embed, ephemeral=True, view=admin_site_view())
@@ -122,7 +123,12 @@ def register_djaudio_commands(bot: Bot) -> None:
 
         embed = discord.Embed(title="🎵 DJAudio 設定", color=discord.Color.blurple())
         embed.add_field(name="監視チャンネル", value=_ch_text(runtime.watch_channel_id), inline=True)
-        embed.add_field(name="出力チャンネル", value=_ch_text(runtime.output_channel_id) + ("" if runtime.output_channel_id else "（監視チャンネルに返信）"), inline=True)
+        embed.add_field(
+            name="出力チャンネル",
+            value=_ch_text(runtime.output_channel_id)
+            + ("" if runtime.output_channel_id else "（監視チャンネルに返信）"),
+            inline=True,
+        )
         embed.add_field(name="配信 URL ベース", value=f"`{DJAUDIO_BASE_URL}`", inline=False)
         embed.add_field(name="キャッシュ有効期間", value=f"{runtime.cache_ttl // 60}分", inline=True)
         embed.add_field(name="クールダウン", value=f"{runtime.cooldown}秒", inline=True)

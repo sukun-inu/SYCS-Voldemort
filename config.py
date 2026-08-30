@@ -11,8 +11,7 @@ JST = timezone(timedelta(hours=9))
 logger = logging.getLogger(__name__)
 
 BOT_ICON_URL = (
-    "https://cdn.discordapp.com/avatars/1350672236612288633"
-    "/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"
+    "https://cdn.discordapp.com/avatars/1350672236612288633" "/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"
 )
 
 # 震度の階級。数値は P2PQuake の JSON API v2 が使う値で、対応は同 API の
@@ -26,8 +25,15 @@ BOT_ICON_URL = (
 # 震度6強を「震度6弱」と、実際より1段低く伝えていた。災害速報として
 # 致命的な誤りなので、仕様の値をそのまま持ち、tests で仕様と突き合わせる。
 SCALE_LABELS: Dict[int, str] = {
-    10: "1", 20: "2", 30: "3", 40: "4", 45: "5弱",
-    50: "5強", 55: "6弱", 60: "6強", 70: "7",
+    10: "1",
+    20: "2",
+    30: "3",
+    40: "4",
+    45: "5弱",
+    50: "5強",
+    55: "6弱",
+    60: "6強",
+    70: "7",
 }
 
 
@@ -147,22 +153,23 @@ def _resolve_ffmpeg_path() -> str:
 
     return "ffmpeg"
 
-DJAUDIO_BASE_URL       = (env_raw("DJAUDIO_BASE_URL") or "http://localhost:5001").rstrip("/")
-TTS_BASE_URL           = (env_raw("TTS_BASE_URL") or "http://localhost:8080").rstrip("/")
+
+DJAUDIO_BASE_URL = (env_raw("DJAUDIO_BASE_URL") or "http://localhost:5001").rstrip("/")
+TTS_BASE_URL = (env_raw("TTS_BASE_URL") or "http://localhost:8080").rstrip("/")
 
 METALS_SITE_URL = (env_raw("METALS_SITE_URL") or "https://metals.kawasaki-n3t.f5.si/").rstrip("/") + "/"
-ADMIN_SITE_URL  = (env_raw("ADMIN_SITE_URL")  or "https://vol.kawasaki-n3t.f5.si/admin/login")
-DJAUDIO_CACHE_TTL        = env_int("DJAUDIO_CACHE_TTL_SECONDS", 600, minimum=0)
-DJAUDIO_CACHE_DIR        = env_path("DJAUDIO_CACHE_DIR", _default_djaudio_cache)
-DJAUDIO_COOLDOWN         = env_int("DJAUDIO_COOLDOWN_SECONDS", 30, minimum=0)
-DJAUDIO_MAX_URLS         = env_int("DJAUDIO_MAX_URLS_PER_MSG", 3, minimum=1)
-DJAUDIO_DL_CONCURRENCY   = env_int("DJAUDIO_DL_CONCURRENCY", 3, minimum=1)
-DJAUDIO_DL_TIMEOUT       = env_int("DJAUDIO_DL_TIMEOUT_SECONDS", 120, minimum=1)
-DJAUDIO_FFMPEG_PATH      = _resolve_ffmpeg_path()
+ADMIN_SITE_URL = env_raw("ADMIN_SITE_URL") or "https://vol.kawasaki-n3t.f5.si/admin/login"
+DJAUDIO_CACHE_TTL = env_int("DJAUDIO_CACHE_TTL_SECONDS", 600, minimum=0)
+DJAUDIO_CACHE_DIR = env_path("DJAUDIO_CACHE_DIR", _default_djaudio_cache)
+DJAUDIO_COOLDOWN = env_int("DJAUDIO_COOLDOWN_SECONDS", 30, minimum=0)
+DJAUDIO_MAX_URLS = env_int("DJAUDIO_MAX_URLS_PER_MSG", 3, minimum=1)
+DJAUDIO_DL_CONCURRENCY = env_int("DJAUDIO_DL_CONCURRENCY", 3, minimum=1)
+DJAUDIO_DL_TIMEOUT = env_int("DJAUDIO_DL_TIMEOUT_SECONDS", 120, minimum=1)
+DJAUDIO_FFMPEG_PATH = _resolve_ffmpeg_path()
 # SoundCloudはサーバーIPをbotと判定して空レスポンスを返すため動的取得が不可能。
 # ブラウザの DevTools (Network タブ) で api-v2.soundcloud.com へのリクエストURLから
 # client_id=XXXX を見つけてこの環境変数に設定すること。
-SOUNDCLOUD_CLIENT_ID     = env_raw("SOUNDCLOUD_CLIENT_ID") or ""
+SOUNDCLOUD_CLIENT_ID = env_raw("SOUNDCLOUD_CLIENT_ID") or ""
 
 # ChatGPTシステムメッセージ
 CHATGPT_SYSTEM_MESSAGE = (

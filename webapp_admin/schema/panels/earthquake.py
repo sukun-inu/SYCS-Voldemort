@@ -60,18 +60,22 @@ PANEL = Panel(
             "通知先と条件",
             fields=(
                 Field(
-                    "channel_id", "アラートを送るチャンネル", Widget.CHANNEL,
-                    get=_channel, set=set_earthquake_channel,
+                    "channel_id",
+                    "アラートを送るチャンネル",
+                    Widget.CHANNEL,
+                    get=_channel,
+                    set=set_earthquake_channel,
                     help="未設定にすると地震アラートを送りません。",
                 ),
                 Field(
-                    "min_scale", "通知する最小震度", Widget.SELECT,
-                    get=_min_scale, set=_set_min_scale,
-                    default=30, nullable=False,
-                    choices=tuple(
-                        Choice(str(scale), SCALE_LABELS.get(scale, str(scale)))
-                        for scale in VALID_SCALES
-                    ),
+                    "min_scale",
+                    "通知する最小震度",
+                    Widget.SELECT,
+                    get=_min_scale,
+                    set=_set_min_scale,
+                    default=30,
+                    nullable=False,
+                    choices=tuple(Choice(str(scale), SCALE_LABELS.get(scale, str(scale))) for scale in VALID_SCALES),
                     help="この震度以上の地震だけを通知します。",
                 ),
             ),
@@ -80,8 +84,12 @@ PANEL = Panel(
             "通知タイプ",
             fields=(
                 Field(
-                    "notify_types", "通知する情報の種類", Widget.CHECKLIST,
-                    get=_notify_types, set=_set_notify_types, nullable=False,
+                    "notify_types",
+                    "通知する情報の種類",
+                    Widget.CHECKLIST,
+                    get=_notify_types,
+                    set=_set_notify_types,
+                    nullable=False,
                     choices=tuple(Choice(key, label) for key, label in NOTIFY_TYPES),
                 ),
             ),

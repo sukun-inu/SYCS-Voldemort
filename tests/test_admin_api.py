@@ -96,11 +96,7 @@ class AppListTests(unittest.TestCase):
         )
 
     def test_developer_panel_is_hidden_from_normal_users(self):
-        ids = [
-            app_["id"]
-            for group in make_client().get("/admin/api/apps").json()["groups"]
-            for app_ in group["apps"]
-        ]
+        ids = [app_["id"] for group in make_client().get("/admin/api/apps").json()["groups"] for app_ in group["apps"]]
         self.assertNotIn("dev", ids)
         self.assertEqual(make_client().get("/admin/api/apps/dev").status_code, 404)
 
@@ -519,6 +515,7 @@ class DevApiTests(unittest.TestCase):
         # 残ると、後続のテストが無関係に 429 で落ちる。テストごとに
         # クリアして、レート制限そのものの動作は別のテストで確認する。
         from webapp_admin.extensions import limiter
+
         limiter.reset()
 
     def test_non_developer_is_forbidden(self):
@@ -561,8 +558,10 @@ class DevApiTests(unittest.TestCase):
             def request(self, *args, **kwargs):
                 raise _asyncio.TimeoutError()
 
-        with patch("webapp_admin.api.dev.DISCORD_BOT_TOKEN", "test-token"), \
-             patch("webapp_admin.api.dev.aiohttp.ClientSession", _FailingSession):
+        with (
+            patch("webapp_admin.api.dev.DISCORD_BOT_TOKEN", "test-token"),
+            patch("webapp_admin.api.dev.aiohttp.ClientSession", _FailingSession),
+        ):
             payload = self.dev.get("/admin/api/dev/overview").json()
 
         self.assertEqual(payload["guilds"], [])
@@ -598,8 +597,10 @@ class DevApiTests(unittest.TestCase):
                     return _FakeResponse([{"id": "1", "name": "Sample", "icon": None}])
                 return _FakeResponse({"id": "42", "username": "bot"})
 
-        with patch("webapp_admin.api.dev.DISCORD_BOT_TOKEN", "test-token"), \
-             patch("webapp_admin.api.dev.aiohttp.ClientSession", _WorkingSession):
+        with (
+            patch("webapp_admin.api.dev.DISCORD_BOT_TOKEN", "test-token"),
+            patch("webapp_admin.api.dev.aiohttp.ClientSession", _WorkingSession),
+        ):
             payload = self.dev.get("/admin/api/dev/overview").json()
 
         self.assertNotIn("discord_error", payload)
@@ -618,11 +619,11 @@ class DevApiTests(unittest.TestCase):
         self.assertEqual(self.dev.post("/admin/api/dev/signal/sticky", json={}).status_code, 403)
 
     def test_notify_test_requires_a_numeric_guild_id(self):
-        ok = self.dev.post("/admin/api/dev/test-notify/welcome",
-                           json={"guild_id": "123456789012345678"}, headers=CSRF_HEADER)
+        ok = self.dev.post(
+            "/admin/api/dev/test-notify/welcome", json={"guild_id": "123456789012345678"}, headers=CSRF_HEADER
+        )
         self.assertEqual(ok.status_code, 200)
-        bad = self.dev.post("/admin/api/dev/test-notify/welcome",
-                            json={"guild_id": "abc"}, headers=CSRF_HEADER)
+        bad = self.dev.post("/admin/api/dev/test-notify/welcome", json={"guild_id": "abc"}, headers=CSRF_HEADER)
         self.assertEqual(bad.status_code, 400)
 
     def test_notify_test_can_override_the_channel(self):
@@ -634,13 +635,15 @@ class DevApiTests(unittest.TestCase):
 
         bad_channel = self.dev.post(
             "/admin/api/dev/test-notify/welcome",
-            json={"guild_id": str(GUILD_ID), "channel_id": "xyz"}, headers=CSRF_HEADER,
+            json={"guild_id": str(GUILD_ID), "channel_id": "xyz"},
+            headers=CSRF_HEADER,
         )
         self.assertEqual(bad_channel.status_code, 400)
 
         ok = self.dev.post(
             "/admin/api/dev/test-notify/vc",
-            json={"guild_id": str(GUILD_ID), "channel_id": "555"}, headers=CSRF_HEADER,
+            json={"guild_id": str(GUILD_ID), "channel_id": "555"},
+            headers=CSRF_HEADER,
         )
         self.assertEqual(ok.status_code, 200)
         self.assertIn("555", ok.json()["message"])
@@ -651,20 +654,19 @@ class DevApiTests(unittest.TestCase):
         # チャンネル省略時は None（設定済みのチャンネルを使う、が既定のまま）
         no_channel = self.dev.post(
             "/admin/api/dev/test-notify/welcome",
-            json={"guild_id": str(GUILD_ID)}, headers=CSRF_HEADER,
+            json={"guild_id": str(GUILD_ID)},
+            headers=CSRF_HEADER,
         )
         self.assertEqual(no_channel.status_code, 200)
         signal2 = json.loads(latest_signal("test_welcome").read_text(encoding="utf-8"))
         self.assertIsNone(signal2["channel_id"])
 
     def test_earthquake_replay_validates_the_payload(self):
-        bad = self.dev.post("/admin/api/dev/earthquake-replay",
-                            json={"event_json": "{}"}, headers=CSRF_HEADER)
+        bad = self.dev.post("/admin/api/dev/earthquake-replay", json={"event_json": "{}"}, headers=CSRF_HEADER)
         self.assertEqual(bad.status_code, 400)
 
         event = json.dumps({"earthquake": {"hypocenter": {"name": "テスト沖"}}})
-        ok = self.dev.post("/admin/api/dev/earthquake-replay",
-                           json={"event_json": event}, headers=CSRF_HEADER)
+        ok = self.dev.post("/admin/api/dev/earthquake-replay", json={"event_json": event}, headers=CSRF_HEADER)
         self.assertEqual(ok.status_code, 200)
         self.assertIn("eq_replay", ok.json()["pending_signals"])
 
@@ -678,12 +680,16 @@ class DevApiTests(unittest.TestCase):
 
         event = json.dumps({"earthquake": {"hypocenter": {"name": "テスト沖"}}})
 
-        bad = self.dev.post("/admin/api/dev/earthquake-replay",
-                            json={"event_json": event, "guild_id": "abc"}, headers=CSRF_HEADER)
+        bad = self.dev.post(
+            "/admin/api/dev/earthquake-replay", json={"event_json": event, "guild_id": "abc"}, headers=CSRF_HEADER
+        )
         self.assertEqual(bad.status_code, 400)
 
-        ok = self.dev.post("/admin/api/dev/earthquake-replay",
-                           json={"event_json": event, "guild_id": str(GUILD_ID)}, headers=CSRF_HEADER)
+        ok = self.dev.post(
+            "/admin/api/dev/earthquake-replay",
+            json={"event_json": event, "guild_id": str(GUILD_ID)},
+            headers=CSRF_HEADER,
+        )
         self.assertEqual(ok.status_code, 200)
         self.assertIn(str(GUILD_ID), ok.json()["message"])
         signal = json.loads(latest_signal("eq_replay").read_text(encoding="utf-8"))
@@ -691,8 +697,7 @@ class DevApiTests(unittest.TestCase):
         self.assertIn("earthquake", signal["event"])
 
         # guild_id 省略時は全サーバー扱い（null）のまま、明示的に選べる状態を保つ
-        all_guilds = self.dev.post("/admin/api/dev/earthquake-replay",
-                                   json={"event_json": event}, headers=CSRF_HEADER)
+        all_guilds = self.dev.post("/admin/api/dev/earthquake-replay", json={"event_json": event}, headers=CSRF_HEADER)
         self.assertEqual(all_guilds.status_code, 200)
         signal2 = json.loads(latest_signal("eq_replay").read_text(encoding="utf-8"))
         self.assertIsNone(signal2["guild_id"])
@@ -707,7 +712,8 @@ class DevApiTests(unittest.TestCase):
         # （どのギルドのチャンネルか定まらない）
         no_guild = self.dev.post(
             "/admin/api/dev/earthquake-replay",
-            json={"event_json": event, "channel_id": "555"}, headers=CSRF_HEADER,
+            json={"event_json": event, "channel_id": "555"},
+            headers=CSRF_HEADER,
         )
         self.assertEqual(no_guild.status_code, 400)
 
@@ -732,7 +738,8 @@ class DevApiTests(unittest.TestCase):
         # チャンネル省略時は None（地震アラート設定のチャンネルを使う、が既定のまま）
         no_channel = self.dev.post(
             "/admin/api/dev/earthquake-replay",
-            json={"event_json": event, "guild_id": str(GUILD_ID)}, headers=CSRF_HEADER,
+            json={"event_json": event, "guild_id": str(GUILD_ID)},
+            headers=CSRF_HEADER,
         )
         self.assertEqual(no_channel.status_code, 200)
         signal2 = json.loads(latest_signal("eq_replay").read_text(encoding="utf-8"))
@@ -754,12 +761,12 @@ class DevApiTests(unittest.TestCase):
         for guild_id in ("111", "222"):
             response = self.dev.post(
                 "/admin/api/dev/earthquake-replay",
-                json={"event_json": event, "guild_id": guild_id}, headers=CSRF_HEADER,
+                json={"event_json": event, "guild_id": guild_id},
+                headers=CSRF_HEADER,
             )
             self.assertEqual(response.status_code, 200)
 
-        signals = [p for p in dev_signals.collect()
-                   if dev_signals.task_name_of(p) == "eq_replay"]
+        signals = [p for p in dev_signals.collect() if dev_signals.task_name_of(p) == "eq_replay"]
         self.assertEqual(len(signals), 2, "2回押したぶんが残っていない")
         sent = [json.loads(p.read_text(encoding="utf-8"))["guild_id"] for p in signals]
         self.assertEqual(sorted(sent), [111, 222])
@@ -777,8 +784,7 @@ class DevApiTests(unittest.TestCase):
             response = self.dev.post("/admin/api/dev/signal/news_feeds", headers=CSRF_HEADER)
             self.assertEqual(response.status_code, 200)
 
-        signals = [p for p in dev_signals.collect()
-                   if dev_signals.task_name_of(p) == "news_feeds"]
+        signals = [p for p in dev_signals.collect() if dev_signals.task_name_of(p) == "news_feeds"]
         self.assertEqual(len(signals), 1)
 
     def test_lookup_endpoints_reject_non_numeric_ids(self):
@@ -899,9 +905,7 @@ class LegacyUrlTests(unittest.TestCase):
 
     def test_legacy_settings_pages_are_gone(self):
         # POST を受け付けていた旧エンドポイントは残っていない
-        response = make_client().post(
-            "/admin/settings/logging", data={"csrf_token": CSRF, "action": "set_log"}
-        )
+        response = make_client().post("/admin/settings/logging", data={"csrf_token": CSRF, "action": "set_log"})
         self.assertEqual(response.status_code, 405)
 
 
@@ -915,18 +919,14 @@ class IconTests(unittest.TestCase):
         import re
 
         sprite = (
-            Path(__file__).resolve().parent.parent
-            / "webapp_admin" / "static" / "icons" / "sprite.svg"
+            Path(__file__).resolve().parent.parent / "webapp_admin" / "static" / "icons" / "sprite.svg"
         ).read_text(encoding="utf-8")
         self.available = set(re.findall(r'<symbol[^>]*id="([^"]+)"', sprite))
 
     def test_panel_icons_exist(self):
         from webapp_admin.schema.registry import PANELS
 
-        missing = [
-            panel.id for panel in PANELS
-            if panel.icon.removeprefix("bi-") not in self.available
-        ]
+        missing = [panel.id for panel in PANELS if panel.icon.removeprefix("bi-") not in self.available]
         self.assertEqual(missing, [], f"スプライトに無いアイコンを指すパネル: {missing}")
 
     def test_referenced_icons_exist(self):
@@ -937,7 +937,8 @@ class IconTests(unittest.TestCase):
 
         missing = sorted(set(used_icon_names()) - self.available)
         self.assertEqual(
-            missing, [],
+            missing,
+            [],
             f"参照しているのにスプライトに無いアイコン: {missing}"
             " — python tools/build_icon_sprite.py を実行してください。",
         )
@@ -955,8 +956,8 @@ class MetricToneTests(unittest.TestCase):
 
         self.assertEqual(load_tone(5, 90), "success")
         self.assertEqual(load_tone(71, 90), "success")
-        self.assertEqual(load_tone(72, 90), "warning")   # しきい値の8割
-        self.assertEqual(load_tone(90, 90), "danger")    # アラートを記録する値
+        self.assertEqual(load_tone(72, 90), "warning")  # しきい値の8割
+        self.assertEqual(load_tone(90, 90), "danger")  # アラートを記録する値
         self.assertEqual(load_tone(100, 90), "danger")
 
     def test_sla_tone(self):
@@ -973,8 +974,9 @@ class MetricToneTests(unittest.TestCase):
 
         from webapp_admin.metrics import load_tone, sla_tone
 
-        css = (Path(__file__).resolve().parent.parent / "webapp_admin" / "static" / "css"
-               / "components.css").read_text(encoding="utf-8")
+        css = (Path(__file__).resolve().parent.parent / "webapp_admin" / "static" / "css" / "components.css").read_text(
+            encoding="utf-8"
+        )
         defined = set(re.findall(r"\.metric\.tone-([\w-]+)", css))
         used = {load_tone(v, 90) for v in (0, 80, 95)} | {sla_tone(v) for v in (100, 99.5, 0)}
         self.assertEqual(used - defined, set(), f"CSS に無い tone: {used - defined}")
@@ -1003,14 +1005,8 @@ class StylesheetTests(unittest.TestCase):
     def test_no_undefined_classes_in_templates(self):
         import re
 
-        css = " ".join(
-            path.read_text(encoding="utf-8")
-            for path in (self.ADMIN / "static" / "css").glob("*.css")
-        )
-        js = " ".join(
-            path.read_text(encoding="utf-8")
-            for path in (self.ADMIN / "static" / "js").rglob("*.js")
-        )
+        css = " ".join(path.read_text(encoding="utf-8") for path in (self.ADMIN / "static" / "css").glob("*.css"))
+        js = " ".join(path.read_text(encoding="utf-8") for path in (self.ADMIN / "static" / "js").rglob("*.js"))
         defined = set(re.findall(r"\.([A-Za-z][\w-]*)", css))
 
         unknown: dict[str, set[str]] = {}
@@ -1024,7 +1020,8 @@ class StylesheetTests(unittest.TestCase):
                 unknown.setdefault(name, set()).add(path.name)
 
         self.assertEqual(
-            unknown, {},
+            unknown,
+            {},
             "CSS にもJSにも無い class がテンプレートに残っています: "
             + ", ".join(f"{name}({'/'.join(sorted(files))})" for name, files in sorted(unknown.items())),
         )
@@ -1040,14 +1037,13 @@ class StylesheetTests(unittest.TestCase):
         css_dir = self.ADMIN / "static" / "css"
         shared = set()
         for name in ("base.css", "components.css"):
-            for selector in re.findall(r"^\s*\.([A-Za-z][\w-]*)\s*[,{]", (css_dir / name).read_text(encoding="utf-8"), re.M):
+            for selector in re.findall(
+                r"^\s*\.([A-Za-z][\w-]*)\s*[,{]", (css_dir / name).read_text(encoding="utf-8"), re.M
+            ):
                 shared.add(selector)
 
         public = (css_dir / "public.css").read_text(encoding="utf-8")
-        clashes = sorted(
-            name for name in re.findall(r"^\s*\.([A-Za-z][\w-]*)\s*[,{]", public, re.M)
-            if name in shared
-        )
+        clashes = sorted(name for name in re.findall(r"^\s*\.([A-Za-z][\w-]*)\s*[,{]", public, re.M) if name in shared)
         self.assertEqual(clashes, [], f"共通クラスを公開ページ CSS が上書きしています: {clashes}")
 
 
@@ -1066,9 +1062,11 @@ class DocsTests(unittest.TestCase):
             errors="replace",
         )
         self.assertEqual(
-            result.returncode, 0,
+            result.returncode,
+            0,
             "docs/ADMIN.ja.md が古くなっています。python tools/generate_admin_docs.py を実行してください。"
-            + (result.stdout or "") + (result.stderr or ""),
+            + (result.stdout or "")
+            + (result.stderr or ""),
         )
 
 
@@ -1092,9 +1090,14 @@ class RecordingMixerApiTests(unittest.TestCase):
             return bytes(out)
 
         session = recording.RecordingSession(
-            guild_id=GUILD_ID, channel_id=555, channel_name="雑談VC",
-            started_by_id=1, started_by_name="すずき",
-            started_at=_time.monotonic(), max_seconds=0, retention_days=7,
+            guild_id=GUILD_ID,
+            channel_id=555,
+            channel_name="雑談VC",
+            started_by_id=1,
+            started_by_name="すずき",
+            started_at=_time.monotonic(),
+            max_seconds=0,
+            retention_days=7,
         )
         session.feed(Mock(id=1, display_name="すずき"), tone(0.4))
         session.feed(Mock(id=2, display_name="たなか"), tone(0.4, 660))
@@ -1133,8 +1136,7 @@ class RecordingMixerApiTests(unittest.TestCase):
         partial = self.client.get(url, headers={"Range": "bytes=100-199"})
         self.assertEqual(partial.status_code, 206)
         self.assertEqual(partial.content, whole[100:200])
-        self.assertEqual(partial.headers.get("content-range"),
-                         f"bytes 100-199/{len(whole)}")
+        self.assertEqual(partial.headers.get("content-range"), f"bytes 100-199/{len(whole)}")
 
         suffix = self.client.get(url, headers={"Range": "bytes=-50"})
         self.assertEqual(suffix.status_code, 206)
@@ -1203,36 +1205,42 @@ class SnowflakeJsonTests(unittest.TestCase):
     def test_javascript_really_loses_these_digits(self):
         """前提の確認。桁が落ちないなら、この対策は要らない。"""
         self.assertNotEqual(int(float(self.VC_ID)), self.VC_ID)
-        self.assertGreater(self.VC_ID, 2 ** 53 - 1)
+        self.assertGreater(self.VC_ID, 2**53 - 1)
 
     def test_big_integers_become_strings(self):
         from webapp_admin.api.jsonsafe import stringify_big_ints
+
         self.assertEqual(stringify_big_ints(self.VC_ID), str(self.VC_ID))
 
     def test_ordinary_numbers_are_left_alone(self):
         from webapp_admin.api.jsonsafe import stringify_big_ints
-        for value in (0, 1, -1, 42, 2 ** 53 - 1, 3.14):
+
+        for value in (0, 1, -1, 42, 2**53 - 1, 3.14):
             self.assertEqual(stringify_big_ints(value), value, value)
 
     def test_booleans_stay_booleans(self):
         """bool は int の仲間。先に外さないと True が "1" になる。"""
         from webapp_admin.api.jsonsafe import stringify_big_ints
+
         self.assertIs(stringify_big_ints(True), True)
         self.assertIs(stringify_big_ints(False), False)
 
     def test_nested_values_are_converted(self):
         from webapp_admin.api.jsonsafe import stringify_big_ints
-        got = stringify_big_ints(
-            {"a": [{"id": self.VC_ID}], "b": (self.VC_ID, 1), "c": "x"})
-        self.assertEqual(got, {"a": [{"id": str(self.VC_ID)}],
-                               "b": [str(self.VC_ID), 1], "c": "x"})
+
+        got = stringify_big_ints({"a": [{"id": self.VC_ID}], "b": (self.VC_ID, 1), "c": "x"})
+        self.assertEqual(got, {"a": [{"id": str(self.VC_ID)}], "b": [str(self.VC_ID), 1], "c": "x"})
 
     def test_the_recording_api_sends_ids_as_strings(self):
         from services import settings_store as store
-        store.set_recording_settings(GUILD_ID, {
-            "vc_channel_id": self.VC_ID,
-            "announce_channel_id": self.VC_ID,
-        })
+
+        store.set_recording_settings(
+            GUILD_ID,
+            {
+                "vc_channel_id": self.VC_ID,
+                "announce_channel_id": self.VC_ID,
+            },
+        )
         client = make_client()
         body = client.get("/admin/api/recording?include_channels=0").text
         self.assertIn(f'"{self.VC_ID}"', body, body[:400])
@@ -1260,9 +1268,14 @@ class RecordingClipTests(unittest.TestCase):
             return bytes(out)
 
         session = recording.RecordingSession(
-            guild_id=GUILD_ID, channel_id=555, channel_name="雑談VC",
-            started_by_id=1, started_by_name="すずき",
-            started_at=_time.monotonic(), max_seconds=0, retention_days=7,
+            guild_id=GUILD_ID,
+            channel_id=555,
+            channel_name="雑談VC",
+            started_by_id=1,
+            started_by_name="すずき",
+            started_at=_time.monotonic(),
+            max_seconds=0,
+            retention_days=7,
         )
         session.feed(Mock(id=1, display_name="すずき"), tone(2.0))
         session.feed(Mock(id=2, display_name="たなか"), tone(2.0, 660))
@@ -1270,12 +1283,12 @@ class RecordingClipTests(unittest.TestCase):
         cls.token = cls.result["token"]
 
     def _url(self, start, end, guild_id=GUILD_ID, token=None):
-        return (f"/dlaudio/files/{guild_id}/{token or self.token}/clip"
-                f"?start={start}&end={end}")
+        return f"/dlaudio/files/{guild_id}/{token or self.token}/clip" f"?start={start}&end={end}"
 
     def test_a_region_comes_back_as_a_zip_of_every_track(self):
         import io
         import zipfile
+
         response = TestClient(app).get(self._url(0.5, 1.5))
         self.assertEqual(response.status_code, 200, response.text[:200])
         self.assertEqual(response.headers["content-type"], "application/zip")
@@ -1290,8 +1303,7 @@ class RecordingClipTests(unittest.TestCase):
         client = TestClient(app)
         clip = client.get(self._url(0.5, 1.0)).content
         whole = client.get(f"/dlaudio/files/{GUILD_ID}/{self.token}/stem/0").content
-        self.assertLess(len(clip), len(whole) * 2,
-                        "全部入っている（切り出せていない）")
+        self.assertLess(len(clip), len(whole) * 2, "全部入っている（切り出せていない）")
 
     def test_a_backwards_or_tiny_region_is_refused(self):
         client = TestClient(app)
@@ -1306,13 +1318,11 @@ class RecordingClipTests(unittest.TestCase):
         # 断った理由が本文に出ること（「不正なリクエストです」で終わらせない）
         self.assertIn("時間", response.text)
         # fetch する側（JSON を求める相手）には JSON で理由を返すこと
-        as_json = client.get(self._url(0, 3600 * 3),
-                             headers={"Accept": "application/json"})
+        as_json = client.get(self._url(0, 3600 * 3), headers={"Accept": "application/json"})
         self.assertIn("時間", as_json.json()["detail"])
 
     def test_other_guilds_cannot_clip(self):
-        self.assertEqual(
-            TestClient(app).get(self._url(0.5, 1.5, guild_id=111)).status_code, 403)
+        self.assertEqual(TestClient(app).get(self._url(0.5, 1.5, guild_id=111)).status_code, 403)
 
     def test_nothing_reads_a_whole_track_into_memory(self):
         """トラックを丸ごとメモリへ読まないこと。
@@ -1338,8 +1348,7 @@ class RecordingClipTests(unittest.TestCase):
 
         self.assertEqual(destination.stat().st_size if destination.exists() else size, size)
         # 読み取り単位ぶんの上振れは許す。トラックの大きさには比例しないこと。
-        self.assertLess(peak, cdn._MEMBER_CHUNK * 4,
-                        f"{peak} バイト確保している（トラックは {size} バイト）")
+        self.assertLess(peak, cdn._MEMBER_CHUNK * 4, f"{peak} バイト確保している（トラックは {size} バイト）")
 
     def test_the_segment_carries_one_channel_per_track(self):
         """再生用の区切りは「1トラック＝1チャンネル」の生 PCM で返すこと。
@@ -1353,13 +1362,16 @@ class RecordingClipTests(unittest.TestCase):
         生の PCM なら並びは書いた順そのもの。
         """
         client = TestClient(app)
-        manifest = client.get(
-            f"/dlaudio/files/{GUILD_ID}/{self.token}/mixer").json()
+        manifest = client.get(f"/dlaudio/files/{GUILD_ID}/{self.token}/mixer").json()
         self.assertIn("/segment", manifest["segment_url"])
-        self.assertEqual(manifest["segment_format"], {
-            "encoding": "s16le", "sample_rate": 48000,
-            "channels": len(manifest["stems"]),
-        })
+        self.assertEqual(
+            manifest["segment_format"],
+            {
+                "encoding": "s16le",
+                "sample_rate": 48000,
+                "channels": len(manifest["stems"]),
+            },
+        )
 
         response = client.get(f"{manifest['segment_url']}?start=1&length=1")
         self.assertEqual(response.status_code, 200, response.text[:200])
@@ -1369,13 +1381,13 @@ class RecordingClipTests(unittest.TestCase):
 
         # チャンネルごとに中身が違うこと（全部同じなら混ざっている）
         import array
+
         samples = array.array("h")
-        samples.frombytes(response.content[:len(response.content) // 2 * 2])
+        samples.frombytes(response.content[: len(response.content) // 2 * 2])
         per_channel = [samples[c::channels] for c in range(channels)]
         energies = [sum(abs(v) for v in ch[:4000]) for ch in per_channel]
         self.assertTrue(all(e > 0 for e in energies), energies)
-        self.assertNotEqual(per_channel[0][:200], per_channel[1][:200],
-                            "チャンネルが同じ中身になっている")
+        self.assertNotEqual(per_channel[0][:200], per_channel[1][:200], "チャンネルが同じ中身になっている")
 
     def test_the_segment_starts_exactly_where_it_was_asked_to(self):
         """区切りの先頭がずれないこと。
@@ -1404,12 +1416,16 @@ class RecordingClipTests(unittest.TestCase):
             pcm += struct.pack("<hh", value, value)
 
         session = recording.RecordingSession(
-            guild_id=GUILD_ID, channel_id=555, channel_name="目印",
-            started_by_id=1, started_by_name="すずき",
-            started_at=_time.monotonic(), max_seconds=0, retention_days=7,
+            guild_id=GUILD_ID,
+            channel_id=555,
+            channel_name="目印",
+            started_by_id=1,
+            started_by_name="すずき",
+            started_at=_time.monotonic(),
+            max_seconds=0,
+            retention_days=7,
         )
-        track = recording._TrackWriter(1, "すずき", Path(session.workdir) / "01-a.mp3",
-                                       session.started_at)
+        track = recording._TrackWriter(1, "すずき", Path(session.workdir) / "01-a.mp3", session.started_at)
         session.tracks[1] = track
         track.write(bytes(pcm), 0.0)
         with patch.object(recording, "measure_voice", return_value=None):
@@ -1425,23 +1441,20 @@ class RecordingClipTests(unittest.TestCase):
                 samples.frombytes(out.read_bytes())
                 first = next((i for i, v in enumerate(samples) if abs(v) > 500), None)
                 self.assertIsNotNone(first, f"{start} 秒の区切りに音が無い")
-                self.assertLess(first / 48000, 0.01,
-                                f"{start} 秒を要求したのに先頭が "
-                                f"{first / 48000 * 1000:.1f} ms ずれている")
+                self.assertLess(
+                    first / 48000, 0.01, f"{start} 秒を要求したのに先頭が " f"{first / 48000 * 1000:.1f} ms ずれている"
+                )
 
     def test_the_segment_rejects_impossible_requests(self):
         client = TestClient(app)
         base = f"/dlaudio/files/{GUILD_ID}/{self.token}/segment"
         self.assertEqual(client.get(f"{base}?start=0&length=0").status_code, 400)
         self.assertEqual(client.get(f"{base}?start=0&length=999").status_code, 400)
-        self.assertEqual(
-            client.get(f"/dlaudio/files/111/{self.token}/segment?start=0&length=1").status_code,
-            403)
+        self.assertEqual(client.get(f"/dlaudio/files/111/{self.token}/segment?start=0&length=1").status_code, 403)
 
     def test_the_voice_analysis_endpoint_answers(self):
         """解析の入出力をファイル経由に変えたので、通ることを確かめる。"""
-        response = TestClient(app).get(
-            f"/dlaudio/files/{GUILD_ID}/{self.token}/analysis/0")
+        response = TestClient(app).get(f"/dlaudio/files/{GUILD_ID}/{self.token}/analysis/0")
         self.assertEqual(response.status_code, 200, response.text[:200])
         payload = response.json()
         # テストの音は 440Hz の純音なので unknown で正しい（倍音が無いため、
@@ -1488,9 +1501,7 @@ class RecordingClipTests(unittest.TestCase):
         # 結果が返る」うえ、見た目には成功したように見える。
         # 断る理由は、ミキサーと同じ Accept を送って JSON で受け取れること。
         json_headers = {"Accept": "application/json"}
-        for query, wanted in (("?start=5&end=1", "後にして"),
-                              ("?start=1&end=1.1", "短すぎます"),
-                              ("?start=1", "両方")):
+        for query, wanted in (("?start=5&end=1", "後にして"), ("?start=1&end=1.1", "短すぎます"), ("?start=1", "両方")):
             with self.subTest(query=query):
                 refused = client.get(url + query, headers=json_headers)
                 self.assertEqual(refused.status_code, 400)
@@ -1531,30 +1542,21 @@ class TextContrastTests(unittest.TestCase):
 
     # (説明, CSSファイル, トークン名, 想定する背景色) — 背景は同じ CSS の地の色
     CASES = [
-        ("管理画面 淡色（ライト）", "webapp_admin/static/css/tokens.css",
-         "--fg-subtle", "#ffffff", 0),
-        ("管理画面 淡色（ダーク）", "webapp_admin/static/css/tokens.css",
-         "--fg-subtle", "#0d1117", 1),
-        ("管理画面 中間色（ライト）", "webapp_admin/static/css/tokens.css",
-         "--fg-muted", "#ffffff", 0),
-        ("公開ページ 淡色（ライト）", "webapp_admin/static/css/public.css",
-         "--ink-3", "#ffffff", 0),
-        ("公開ページ 淡色（ダーク）", "webapp_admin/static/css/public.css",
-         "--ink-3", "#000000", 1),
-        ("PWA 淡色（ライト・本文地）", "webapp/static/styles.css",
-         "--ink-soft", "#f7f7f7", 0),
-        ("PWA 淡色（ライト・カード）", "webapp/static/styles.css",
-         "--ink-soft", "#ffffff", 0),
-        ("PWA 中間色（ライト）", "webapp/static/styles.css",
-         "--ink-muted", "#ffffff", 0),
+        ("管理画面 淡色（ライト）", "webapp_admin/static/css/tokens.css", "--fg-subtle", "#ffffff", 0),
+        ("管理画面 淡色（ダーク）", "webapp_admin/static/css/tokens.css", "--fg-subtle", "#0d1117", 1),
+        ("管理画面 中間色（ライト）", "webapp_admin/static/css/tokens.css", "--fg-muted", "#ffffff", 0),
+        ("公開ページ 淡色（ライト）", "webapp_admin/static/css/public.css", "--ink-3", "#ffffff", 0),
+        ("公開ページ 淡色（ダーク）", "webapp_admin/static/css/public.css", "--ink-3", "#000000", 1),
+        ("PWA 淡色（ライト・本文地）", "webapp/static/styles.css", "--ink-soft", "#f7f7f7", 0),
+        ("PWA 淡色（ライト・カード）", "webapp/static/styles.css", "--ink-soft", "#ffffff", 0),
+        ("PWA 中間色（ライト）", "webapp/static/styles.css", "--ink-muted", "#ffffff", 0),
     ]
 
     @staticmethod
     def _luminance(colour: str) -> float:
         raw = colour.lstrip("#")
-        parts = [int(raw[i:i + 2], 16) / 255 for i in (0, 2, 4)]
-        linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
-                  for c in parts]
+        parts = [int(raw[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+        linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in parts]
         return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
 
     @classmethod
@@ -1567,8 +1569,7 @@ class TextContrastTests(unittest.TestCase):
         """CSS から宣言を読む。occurrence 0 がライト、1 がダークの上書き。"""
         text = (self.ROOT / css_path).read_text(encoding="utf-8")
         found = re.findall(rf"{re.escape(name)}\s*:\s*(#[0-9a-fA-F]{{6}})", text)
-        self.assertGreater(len(found), occurrence,
-                           f"{css_path} に {name} の宣言が足りません: {found}")
+        self.assertGreater(len(found), occurrence, f"{css_path} に {name} の宣言が足りません: {found}")
         return found[occurrence]
 
     def test_text_tokens_meet_wcag_aa(self):
@@ -1577,9 +1578,11 @@ class TextContrastTests(unittest.TestCase):
                 colour = self._token(css_path, name, occurrence)
                 ratio = self._contrast(colour, background)
                 self.assertGreaterEqual(
-                    round(ratio, 2), self.MIN_RATIO,
+                    round(ratio, 2),
+                    self.MIN_RATIO,
                     f"{label}: {colour} on {background} は {ratio:.2f}:1 で、"
-                    f"本文に必要な {self.MIN_RATIO}:1 に届いていません")
+                    f"本文に必要な {self.MIN_RATIO}:1 に届いていません",
+                )
 
 
 class SpacingScaleTests(unittest.TestCase):
@@ -1626,19 +1629,20 @@ class SpacingScaleTests(unittest.TestCase):
                     continue
                 for value in re.findall(r"gap\s*:\s*(\d+)px", block.group(2)):
                     offenders.append(f"{name}.css: {selector[:40]} → gap {value}px")
-        self.assertEqual(offenders, [],
-                         "アイコンと文字の間に生の値が残っています（--gap-icon を使う）:"
-                         + chr(10) + chr(10).join(offenders))
+        self.assertEqual(
+            offenders,
+            [],
+            "アイコンと文字の間に生の値が残っています（--gap-icon を使う）:" + chr(10) + chr(10).join(offenders),
+        )
 
     def test_font_sizes_are_whole_pixels(self):
         """0.5px 刻みを使わない（端末で丸め方が違い、行の高さが揃わない）。"""
         css_dir = self.ROOT / "webapp_admin/static/css"
         offenders = []
         for path in css_dir.glob("*.css"):
-            if path.name == "public.css":     # 読み物ページは別の尺度
+            if path.name == "public.css":  # 読み物ページは別の尺度
                 continue
-            for value in re.findall(r"font-size:\s*([0-9]+\.[0-9]+)px",
-                                    path.read_text(encoding="utf-8")):
+            for value in re.findall(r"font-size:\s*([0-9]+\.[0-9]+)px", path.read_text(encoding="utf-8")):
                 offenders.append(f"{path.name}: {value}px")
         self.assertEqual(offenders, [], f"小数の字の大きさ: {offenders}")
 
@@ -1664,8 +1668,7 @@ class ElevationAndMotionTests(unittest.TestCase):
         text = (self.CSS / "tokens.css").read_text(encoding="utf-8")
         for name in ("--shadow-1", "--shadow-2"):
             found = re.findall(re.escape(name) + r"\s*:", text)
-            self.assertEqual(len(found), 2,
-                             f"{name} はライトとダークの両方に要る（いま {len(found)} 箇所）")
+            self.assertEqual(len(found), 2, f"{name} はライトとダークの両方に要る（いま {len(found)} 箇所）")
         for name in ("--glow-soft", "--glow-strong", "--dur-0", "--dur-1", "--dur-2", "--dur-3"):
             self.assertIn(name, text, f"{name} が tokens.css に無い")
 
@@ -1678,7 +1681,7 @@ class ElevationAndMotionTests(unittest.TestCase):
         """
         offenders = []
         for path in sorted(self.CSS.glob("*.css")):
-            if path.name == "public.css":      # 読み物ページは別体系
+            if path.name == "public.css":  # 読み物ページは別体系
                 continue
             text = path.read_text(encoding="utf-8")
             for line_no, line in enumerate(text.split(chr(10)), 1):
@@ -1688,9 +1691,9 @@ class ElevationAndMotionTests(unittest.TestCase):
                     continue
                 for raw in re.findall(r"(?<![\w.-])(\.?\d+(?:\.\d+)?m?s)(?![\w.-])", line):
                     offenders.append(f"{path.name}:{line_no} {raw}")
-        self.assertEqual(offenders, [],
-                         "生の時間が残っています（var(--dur-*) を使う）:"
-                         + chr(10) + chr(10).join(offenders))
+        self.assertEqual(
+            offenders, [], "生の時間が残っています（var(--dur-*) を使う）:" + chr(10) + chr(10).join(offenders)
+        )
 
     def test_the_glow_has_only_two_strengths(self):
         """光りの強さが半端に散っていないこと。
@@ -1706,15 +1709,16 @@ class ElevationAndMotionTests(unittest.TestCase):
             # rgb(88,101,242) のように、色そのものに意味がある光りは別。
             # 「0 0 0 3px」はフォーカスリング（広がり付き）で、光りではない。
             # 直前が "0 0 " のものは除く。
-            pattern = (r"(?:^|[:,])\s*0 0 \d+px rgba\(\s*"
-                       r"(\d+),\s*(\d+),\s*(\d+)")
+            pattern = r"(?:^|[:,])\s*0 0 \d+px rgba\(\s*" r"(\d+),\s*(\d+),\s*(\d+)"
             for match in re.findall(pattern, text):
                 r, g, b = (int(v) for v in match)
                 if b > 230 and g > 160 and r < 160:
                     offenders.append(f"{name}.css: rgb({r},{g},{b})")
-        self.assertEqual(offenders, [],
-                         "アクセントの光りに生の値が残っています"
-                         "（--glow-soft / --glow-strong を使う）: " + str(offenders))
+        self.assertEqual(
+            offenders,
+            [],
+            "アクセントの光りに生の値が残っています" "（--glow-soft / --glow-strong を使う）: " + str(offenders),
+        )
 
 
 class DjaudioLimitTests(unittest.TestCase):
@@ -1745,9 +1749,7 @@ class DjaudioLimitTests(unittest.TestCase):
 
         client = make_client()
         _low, high = DJAUDIO_LIMITS["cooldown"]
-        response = client.put("/admin/api/apps/djaudio",
-                              json={"values": {"cooldown": high + 1}},
-                              headers=CSRF_HEADER)
+        response = client.put("/admin/api/apps/djaudio", json={"values": {"cooldown": high + 1}}, headers=CSRF_HEADER)
         self.assertEqual(response.status_code, 422)
         self.assertIn("cooldown", response.json()["errors"])
 
@@ -1774,8 +1776,7 @@ class CdnErrorShapeTests(unittest.TestCase):
         self.assertIn("detail", response.json())
 
     def test_a_browser_still_gets_the_guidance_page(self):
-        response = self.client.get(
-            self.url, headers={"Accept": "text/html,application/xhtml+xml"})
+        response = self.client.get(self.url, headers={"Accept": "text/html,application/xhtml+xml"})
         self.assertIn("text/html", response.headers["content-type"])
 
 
@@ -1830,8 +1831,24 @@ class EnvBoolConsolidationTests(unittest.TestCase):
 
     # None は未設定（環境変数を削除）を表す。
     BOOL_CASES = [
-        None, "", " ", "1", "0", "true", "True", "TRUE", " true ", "yes", "no",
-        "on", "off", "banana", "2", "-1", "tru", "FALSE",
+        None,
+        "",
+        " ",
+        "1",
+        "0",
+        "true",
+        "True",
+        "TRUE",
+        " true ",
+        "yes",
+        "no",
+        "on",
+        "off",
+        "banana",
+        "2",
+        "-1",
+        "tru",
+        "FALSE",
     ]
 
     def _set_env(self, name: str, raw: str | None) -> None:
@@ -1853,7 +1870,8 @@ class EnvBoolConsolidationTests(unittest.TestCase):
                     expected = env_bool(name, default)
                     actual = read_env_bool(name, default)
                     self.assertEqual(
-                        actual, expected,
+                        actual,
+                        expected,
                         f"webapp.security.read_env_bool が envutil.env_bool と食い違った "
                         f"raw={raw!r} default={default!r}",
                     )
@@ -1875,9 +1893,9 @@ class EnvBoolConsolidationTests(unittest.TestCase):
                     expected = env_bool(name, True)
                     actual = getattr(forecast_signals_module, name)
                     self.assertEqual(
-                        actual, expected,
-                        f"webapp.forecast_signals.{name} が envutil.env_bool と食い違った "
-                        f"raw={raw!r}",
+                        actual,
+                        expected,
+                        f"webapp.forecast_signals.{name} が envutil.env_bool と食い違った " f"raw={raw!r}",
                     )
             finally:
                 self._set_env(name, original)
@@ -1899,14 +1917,15 @@ class EnvBoolConsolidationTests(unittest.TestCase):
                 self._set_env(name, raw)
                 expected = env_bool(name, True)
                 with patch.object(
-                    vapid_service_module, "_ensure_generated_keys",
+                    vapid_service_module,
+                    "_ensure_generated_keys",
                     return_value=("dummy-public", "dummy-private"),
                 ) as mock_ensure:
                     config = vapid_service_module.load_vapid_config()
                 self.assertEqual(
-                    mock_ensure.called, expected,
-                    f"webapp.vapid_service の自動生成分岐が envutil.env_bool と食い違った "
-                    f"raw={raw!r}",
+                    mock_ensure.called,
+                    expected,
+                    f"webapp.vapid_service の自動生成分岐が envutil.env_bool と食い違った " f"raw={raw!r}",
                 )
                 if not expected:
                     self.assertIsNone(config.public_key)
@@ -1960,9 +1979,7 @@ class ConfigReadingConsistencyTests(unittest.TestCase):
         """app.py に `== "true"` 形式の手書き真偽判定が残っていないこと。"""
         from pathlib import Path
 
-        source = (
-            Path(__file__).resolve().parent.parent / "webapp_admin" / "app.py"
-        ).read_text(encoding="utf-8")
+        source = (Path(__file__).resolve().parent.parent / "webapp_admin" / "app.py").read_text(encoding="utf-8")
         self.assertNotIn('.lower() == "true"', source)
 
     def test_dev_user_id_is_read_from_one_place(self):
@@ -1992,8 +2009,8 @@ class ConfigReadingConsistencyTests(unittest.TestCase):
             else:
                 os.environ["DEV_USER_ID"] = original
 
-        source = (
-            Path(__file__).resolve().parent.parent / "webapp_admin" / "api" / "dev.py"
-        ).read_text(encoding="utf-8")
+        source = (Path(__file__).resolve().parent.parent / "webapp_admin" / "api" / "dev.py").read_text(
+            encoding="utf-8"
+        )
         self.assertNotIn('os.getenv("DEV_USER_ID")', source)
         self.assertNotIn('os.environ.get("DEV_USER_ID"', source)

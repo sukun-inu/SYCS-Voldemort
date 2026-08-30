@@ -25,9 +25,17 @@ import discord  # noqa: E402
 def make_interaction(*, administrator: bool = True, guild: bool = True):
     """応答の呼ばれ方を記録する Interaction。"""
     calls: list[str] = []
-    interaction = Mock(spec_set=[
-        "guild", "guild_id", "user", "client", "channel", "response", "followup",
-    ])
+    interaction = Mock(
+        spec_set=[
+            "guild",
+            "guild_id",
+            "user",
+            "client",
+            "channel",
+            "response",
+            "followup",
+        ]
+    )
     interaction.guild = Mock(id=999) if guild else None
     interaction.guild_id = 999 if guild else None
     interaction.user = Mock(id=1, display_name="tester")
@@ -42,6 +50,7 @@ def make_interaction(*, administrator: bool = True, guild: bool = True):
     async def _defer(*a, **k):
         calls.append("defer")
         done["value"] = True
+
     async def _send(*a, **k):
         calls.append("response.send_message")
         done["value"] = True
@@ -52,6 +61,7 @@ def make_interaction(*, administrator: bool = True, guild: bool = True):
 
     async def _followup(*a, **k):
         calls.append("followup.send")
+
     interaction.followup = Mock()
     interaction.followup.send = _followup
     return interaction, calls
@@ -67,6 +77,7 @@ class MetalDeferTests(unittest.TestCase):
     def setUp(self):
         import commands.metal_commands as metal
         from config import METAL_COMMANDS
+
         self.metal = metal
         self.spec = next(iter(METAL_COMMANDS.values()))
 
@@ -74,12 +85,14 @@ class MetalDeferTests(unittest.TestCase):
         seen = []
 
         async def slow_price(*args, **kwargs):
-            seen.append(list(self.calls))      # 呼ばれた時点の応答状況
+            seen.append(list(self.calls))  # 呼ばれた時点の応答状況
             return {"買取価格": 1000}
 
         interaction, self.calls = make_interaction()
-        with patch.object(self.metal, "calculate_metal_value", slow_price), \
-             patch.object(self.metal, "log_action", AsyncMock()):
+        with (
+            patch.object(self.metal, "calculate_metal_value", slow_price),
+            patch.object(self.metal, "log_action", AsyncMock()),
+        ):
             asyncio.run(self.metal._handle_single_metal(interaction, 1.0, self.spec))
 
         self.assertTrue(seen, "価格取得が呼ばれていない")
@@ -87,9 +100,10 @@ class MetalDeferTests(unittest.TestCase):
 
     def test_the_result_is_sent_after_deferring(self):
         interaction, calls = make_interaction()
-        with patch.object(self.metal, "calculate_metal_value",
-                          AsyncMock(return_value={"買取価格": 1000})), \
-             patch.object(self.metal, "log_action", AsyncMock()):
+        with (
+            patch.object(self.metal, "calculate_metal_value", AsyncMock(return_value={"買取価格": 1000})),
+            patch.object(self.metal, "log_action", AsyncMock()),
+        ):
             asyncio.run(self.metal._handle_single_metal(interaction, 1.0, self.spec))
         # defer 済みなので、結果は followup で送られる
         self.assertEqual(calls, ["defer", "followup.send"], str(calls))
@@ -108,12 +122,14 @@ class MetalDeferTests(unittest.TestCase):
 
         async def boom(*a, **k):
             raise discord.HTTPException(Mock(status=500), "boom")
+
         interaction.response.defer = boom
 
-        with patch.object(self.metal, "calculate_metal_value",
-                          AsyncMock(return_value={"買取価格": 1000})), \
-             patch.object(self.metal, "log_action", AsyncMock()), \
-             self.assertLogs("commands.metal_commands", level="WARNING"):
+        with (
+            patch.object(self.metal, "calculate_metal_value", AsyncMock(return_value={"買取価格": 1000})),
+            patch.object(self.metal, "log_action", AsyncMock()),
+            self.assertLogs("commands.metal_commands", level="WARNING"),
+        ):
             asyncio.run(self.metal._handle_single_metal(interaction, 1.0, self.spec))
         self.assertIn("response.send_message", calls, str(calls))
 
@@ -131,16 +147,19 @@ class AdminGuardTests(unittest.TestCase):
         class FakeGroup:
             def __init__(self, **kwargs):
                 self.kwargs = kwargs
+
             def command(self, *, name, description=""):
                 def wrap(fn):
                     registry[name] = fn
                     return fn
+
                 return wrap
 
         return registry, FakeGroup
 
     def test_record_status_refuses_non_admins(self):
         import commands.recording_commands as rc
+
         registry, FakeGroup = self._tree()
         with patch.object(rc.app_commands, "Group", FakeGroup):
             rc.register_recording_commands(Mock())
@@ -153,6 +172,7 @@ class AdminGuardTests(unittest.TestCase):
 
     def test_record_status_answers_admins(self):
         import commands.recording_commands as rc
+
         registry, FakeGroup = self._tree()
         with patch.object(rc.app_commands, "Group", FakeGroup):
             rc.register_recording_commands(Mock())
@@ -164,6 +184,7 @@ class AdminGuardTests(unittest.TestCase):
 
     def test_tts_status_refuses_non_admins(self):
         import commands.tts_commands as tc
+
         interaction, calls = make_interaction(administrator=False)
         with patch.object(tc, "get_tts_settings", Mock()) as settings:
             asyncio.run(tc.tts_status.callback(interaction))
@@ -174,11 +195,13 @@ class AdminGuardTests(unittest.TestCase):
 class GuardHelperTests(unittest.TestCase):
     def test_is_admin_is_false_outside_a_guild(self):
         from commands.guards import is_admin
+
         interaction, _ = make_interaction(guild=False)
         self.assertFalse(is_admin(interaction))
 
     def test_ensure_admin_explains_why_it_refused(self):
         from commands.guards import ensure_admin
+
         interaction, calls = make_interaction(administrator=False)
         self.assertFalse(asyncio.run(ensure_admin(interaction)))
         self.assertTrue(calls, "断った理由を返していない")
@@ -193,16 +216,20 @@ class MetalAllControlFlowTests(unittest.TestCase):
 
     def _register(self):
         import commands.metal_commands as metal
+
         registry = {}
 
         class FakeGroup:
             def __init__(self, **kwargs):
                 pass
+
             def command(self, *, name, description=""):
                 def wrap(fn):
                     registry[name] = fn
                     return fn
+
                 return wrap
+
             def add_command(self, *a, **k):
                 pass
 
@@ -213,10 +240,11 @@ class MetalAllControlFlowTests(unittest.TestCase):
     def test_success_does_not_send_the_error_message(self):
         metal, registry = self._register()
         interaction, calls = make_interaction()
-        with patch.object(metal, "calculate_metal_value",
-                          AsyncMock(return_value={"買取価格": 1000})), \
-             patch.object(metal, "log_action", AsyncMock()), \
-             patch.object(metal, "_respond_error", AsyncMock()) as respond_error:
+        with (
+            patch.object(metal, "calculate_metal_value", AsyncMock(return_value={"買取価格": 1000})),
+            patch.object(metal, "log_action", AsyncMock()),
+            patch.object(metal, "_respond_error", AsyncMock()) as respond_error,
+        ):
             asyncio.run(registry["all"](interaction, 1.0))
         respond_error.assert_not_called()
 
@@ -224,10 +252,11 @@ class MetalAllControlFlowTests(unittest.TestCase):
         """一人称は「余」で統一。「俺」「俺様」は使わない（config.py の口調ルール）。"""
         metal, registry = self._register()
         interaction, calls = make_interaction()
-        with patch.object(metal, "calculate_metal_value",
-                          AsyncMock(side_effect=RuntimeError("boom"))), \
-             patch.object(metal, "log_action", AsyncMock()), \
-             patch.object(metal, "_respond_error", AsyncMock()) as respond_error:
+        with (
+            patch.object(metal, "calculate_metal_value", AsyncMock(side_effect=RuntimeError("boom"))),
+            patch.object(metal, "log_action", AsyncMock()),
+            patch.object(metal, "_respond_error", AsyncMock()) as respond_error,
+        ):
             asyncio.run(registry["all"](interaction, 1.0))
         respond_error.assert_called_once()
         message = respond_error.call_args.args[1]
@@ -237,12 +266,14 @@ class MetalAllControlFlowTests(unittest.TestCase):
     def test_single_metal_error_message_uses_the_bot_persona(self):
         from config import METAL_COMMANDS
         import commands.metal_commands as metal
+
         spec = next(iter(METAL_COMMANDS.values()))
         interaction, calls = make_interaction()
-        with patch.object(metal, "calculate_metal_value",
-                          AsyncMock(side_effect=metal.MetalPriceError("boom"))), \
-             patch.object(metal, "log_action", AsyncMock()), \
-             patch.object(metal, "_respond_error", AsyncMock()) as respond_error:
+        with (
+            patch.object(metal, "calculate_metal_value", AsyncMock(side_effect=metal.MetalPriceError("boom"))),
+            patch.object(metal, "log_action", AsyncMock()),
+            patch.object(metal, "_respond_error", AsyncMock()) as respond_error,
+        ):
             asyncio.run(metal._handle_single_metal(interaction, 1.0, spec))
         respond_error.assert_called_once()
         message = respond_error.call_args.args[1]
@@ -260,6 +291,7 @@ class TtsValidationTests(unittest.TestCase):
 
     def test_dict_add_rejects_whitespace_only_word(self):
         import commands.tts_commands as tc
+
         interaction, calls = make_interaction()
         with patch.object(tc, "add_tts_dictionary_entry") as add_entry:
             asyncio.run(tc.dict_add.callback(interaction, "   ", "reading"))
@@ -268,6 +300,7 @@ class TtsValidationTests(unittest.TestCase):
 
     def test_dict_add_accepts_a_normal_entry_and_strips_it(self):
         import commands.tts_commands as tc
+
         interaction, calls = make_interaction()
         with patch.object(tc, "add_tts_dictionary_entry") as add_entry:
             asyncio.run(tc.dict_add.callback(interaction, " 単語 ", " たんご "))
@@ -275,6 +308,7 @@ class TtsValidationTests(unittest.TestCase):
 
     def test_default_voice_rejects_whitespace_only(self):
         import commands.tts_commands as tc
+
         interaction, calls = make_interaction(administrator=True)
         with patch.object(tc, "set_tts_default_voice") as set_voice:
             asyncio.run(tc.tts_default_voice_cmd.callback(interaction, "   "))
@@ -282,6 +316,7 @@ class TtsValidationTests(unittest.TestCase):
 
     def test_voice_set_treats_whitespace_only_voice_as_unspecified(self):
         import commands.tts_commands as tc
+
         interaction, calls = make_interaction()
         with patch.object(tc, "set_user_tts_settings") as set_settings:
             asyncio.run(tc.voice_set.callback(interaction, "   ", None))
@@ -290,6 +325,7 @@ class TtsValidationTests(unittest.TestCase):
 
     def test_voice_set_still_accepts_and_strips_a_real_voice(self):
         import commands.tts_commands as tc
+
         interaction, calls = make_interaction()
         with patch.object(tc, "set_user_tts_settings") as set_settings:
             asyncio.run(tc.voice_set.callback(interaction, " Kyoko ", None))
@@ -306,15 +342,18 @@ class TtsJoinDeferTests(unittest.TestCase):
 
     def test_defer_happens_before_the_vc_connect(self):
         import commands.tts_commands as tc
+
         interaction, calls = make_interaction()
         seen_before_join = []
 
         async def slow_join(*a, **k):
             seen_before_join.append(list(calls))
 
-        with patch.object(tc, "get_tts_settings", Mock(return_value={"enabled": True})), \
-             patch.object(tc.tts_service, "temp_join", slow_join), \
-             patch.object(tc, "is_admin", Mock(return_value=False)):
+        with (
+            patch.object(tc, "get_tts_settings", Mock(return_value={"enabled": True})),
+            patch.object(tc.tts_service, "temp_join", slow_join),
+            patch.object(tc, "is_admin", Mock(return_value=False)),
+        ):
             asyncio.run(tc.tts_join.callback(interaction, Mock(mention="#vc")))
 
         self.assertTrue(seen_before_join, "temp_join が呼ばれていない")
@@ -327,16 +366,20 @@ class RecordingListCapTests(unittest.TestCase):
 
     def _register(self):
         import commands.recording_commands as rc
+
         registry = {}
 
         class FakeGroup:
             def __init__(self, **kwargs):
                 pass
+
             def command(self, *, name, description=""):
                 def wrap(fn):
                     registry[name] = fn
                     return fn
+
                 return wrap
+
             def add_command(self, *a, **k):
                 pass
 
@@ -351,13 +394,26 @@ class RecordingListCapTests(unittest.TestCase):
 
         async def fake_send(*a, **k):
             sent["embed"] = k.get("embed")
+
         interaction.response.send_message = fake_send
 
         excluded_ids = list(range(30))
-        with patch.object(rc, "get_recording_settings", Mock(return_value={
-            "enabled": True, "auto_start": False, "max_minutes": 60,
-            "retention_days": 7, "excluded_user_ids": excluded_ids,
-        })), patch.object(rc.recording, "preferred_vc_channel_id", Mock(return_value=None)):
+        with (
+            patch.object(
+                rc,
+                "get_recording_settings",
+                Mock(
+                    return_value={
+                        "enabled": True,
+                        "auto_start": False,
+                        "max_minutes": 60,
+                        "retention_days": 7,
+                        "excluded_user_ids": excluded_ids,
+                    }
+                ),
+            ),
+            patch.object(rc.recording, "preferred_vc_channel_id", Mock(return_value=None)),
+        ):
             asyncio.run(registry["config"](interaction))
 
         field = next(f for f in sent["embed"].fields if f.name == "録音しない人")
@@ -369,17 +425,21 @@ class ServerNewsListTests(unittest.TestCase):
 
     def _register(self):
         import commands.server_commands as sc
+
         registry = {}
 
         class FakeGroup:
             def __init__(self, **kwargs):
                 pass
+
             def command(self, *, name, description=""):
                 def wrap(fn):
                     fn.autocomplete = lambda param: (lambda g: g)
                     registry[name] = fn
                     return fn
+
                 return wrap
+
             def add_command(self, *a, **k):
                 pass
 
@@ -391,6 +451,7 @@ class ServerNewsListTests(unittest.TestCase):
         """クエリの長さが無制限だと、フィード数を10件までに絞っても
         /news list の一覧だけでメッセージ上限(2000文字)を超えうる。"""
         import inspect
+
         _, registry = self._register()
         annotation = inspect.signature(registry["add"]).parameters["query"].annotation
         self.assertEqual(getattr(annotation, "max_value", None), 100)
@@ -405,6 +466,7 @@ class ServerNewsListTests(unittest.TestCase):
 
         async def fake_send(content, **k):
             sent["content"] = content
+
         interaction.response.send_message = fake_send
 
         # Range上限(100文字)導入前に登録されたデータを想定し、あえて長くする。
@@ -419,16 +481,20 @@ class LoggingSettingsListDedupTests(unittest.TestCase):
 
     def test_settings_shows_the_omitted_count_via_the_shared_helper(self):
         import commands.logging_commands as lc
+
         registry = {}
 
         class FakeGroup:
             def __init__(self, **kwargs):
                 pass
+
             def command(self, *, name, description=""):
                 def wrap(fn):
                     registry[name] = fn
                     return fn
+
                 return wrap
+
             def add_command(self, *a, **k):
                 pass
 
@@ -440,12 +506,15 @@ class LoggingSettingsListDedupTests(unittest.TestCase):
 
         async def fake_send(*a, **k):
             sent["embed"] = k.get("embed")
+
         interaction.response.send_message = fake_send
 
-        with patch.object(lc, "get_log_settings", Mock(return_value={})), \
-             patch.object(lc, "get_response_channel_id", Mock(return_value=None)), \
-             patch.object(lc, "get_trusted_user_ids", Mock(return_value=list(range(20)))), \
-             patch.object(lc, "get_bypass_role_ids", Mock(return_value=[])):
+        with (
+            patch.object(lc, "get_log_settings", Mock(return_value={})),
+            patch.object(lc, "get_response_channel_id", Mock(return_value=None)),
+            patch.object(lc, "get_trusted_user_ids", Mock(return_value=list(range(20)))),
+            patch.object(lc, "get_bypass_role_ids", Mock(return_value=[])),
+        ):
             asyncio.run(registry["settings"](interaction))
 
         field = next(f for f in sent["embed"].fields if "信頼済みユーザー" in f.name)
@@ -475,11 +544,7 @@ class CommandTreeTests(unittest.TestCase):
         cls.app_commands = app_commands
         cls.tree = bot.tree
         cls.top = list(bot.tree.get_commands())
-        cls.leaves = {
-            c.qualified_name: c
-            for c in bot.tree.walk_commands()
-            if not isinstance(c, app_commands.Group)
-        }
+        cls.leaves = {c.qualified_name: c for c in bot.tree.walk_commands() if not isinstance(c, app_commands.Group)}
 
     def test_every_command_lives_under_a_group(self):
         """平坦な名前を並べると、/ の一覧が長くなり関連するものが離れる。"""
@@ -498,6 +563,7 @@ class CommandTreeTests(unittest.TestCase):
     def test_names_are_valid_for_discord(self):
         """英小文字・数字・アンダースコア・ハイフンのみ、32文字まで。"""
         import re
+
         pattern = re.compile(r"^[a-z0-9_-]{1,32}$")
         for cmd in self.tree.walk_commands():
             self.assertRegex(cmd.name, pattern, f"/{cmd.qualified_name}")
@@ -509,25 +575,19 @@ class CommandTreeTests(unittest.TestCase):
     def test_the_docs_list_exactly_what_is_registered(self):
         """ドキュメントと実装のずれは、読んだ人の理解と挙動のずれになる。"""
         import re
-        doc = (Path(__file__).resolve().parent.parent
-               / "docs" / "COMMANDS.ja.md").read_text(encoding="utf-8")
+
+        doc = (Path(__file__).resolve().parent.parent / "docs" / "COMMANDS.ja.md").read_text(encoding="utf-8")
         # <details> の中は旧名からの対応表。いまのコマンドではないので外す。
         doc = re.sub(r"<details>.*?</details>", "", doc, flags=re.S)
 
         # `/dict add word` の "word" は引数。コマンド名の切れ目は引数と
         # 区別がつかないので、登録されている名前の側から探しにいく。
-        missing = sorted(
-            name for name in self.leaves
-            if not re.search(rf"`/{re.escape(name)}(?=[ `\[<])", doc)
-        )
+        missing = sorted(name for name in self.leaves if not re.search(rf"`/{re.escape(name)}(?=[ `\[<])", doc))
         self.assertEqual(missing, [], f"実装にあるがドキュメントに無い: {missing}")
 
         known = {c.qualified_name for c in self.tree.walk_commands()}
         mentioned = re.findall(r"`/([a-z0-9_]+(?: [a-z0-9_]+)*)", doc)
-        stale = sorted({
-            m for m in mentioned
-            if not any(m == k or m.startswith(k + " ") for k in known)
-        })
+        stale = sorted({m for m in mentioned if not any(m == k or m.startswith(k + " ") for k in known)})
         self.assertEqual(stale, [], f"ドキュメントにあるが実装に無い: {stale}")
 
     def test_the_help_command_shows_the_full_path(self):
@@ -560,20 +620,37 @@ class CapListBudgetTests(unittest.TestCase):
 
         cases = [
             # /sticky list: 1行 = "<#"+19桁+">: "+content[:50]。チャンネル数に上限が無い
-            ("sticky", [f"<#{'9' * 19}>: {'あ' * 50}" for _ in range(500)],
-             MESSAGE_BUDGET, "**スティッキー一覧**\n", 25, "件", "\n"),
+            (
+                "sticky",
+                [f"<#{'9' * 19}>: {'あ' * 50}" for _ in range(500)],
+                MESSAGE_BUDGET,
+                "**スティッキー一覧**\n",
+                25,
+                "件",
+                "\n",
+            ),
             # /record status: 表示名は最大32文字。embed field なので上限は 1024
-            ("speakers", [f"・{'名' * 32}（発話 1時間23分45秒）" for _ in range(200)],
-             EMBED_FIELD_BUDGET, "", 20, "人", "\n"),
+            (
+                "speakers",
+                [f"・{'名' * 32}（発話 1時間23分45秒）" for _ in range(200)],
+                EMBED_FIELD_BUDGET,
+                "",
+                20,
+                "人",
+                "\n",
+            ),
             # /log settings: embed field に読点区切りで並べる
-            ("trusted", [f"<@{'9' * 19}>" for _ in range(300)],
-             EMBED_FIELD_BUDGET, "", 15, "名", ", "),
+            ("trusted", [f"<@{'9' * 19}>" for _ in range(300)], EMBED_FIELD_BUDGET, "", 15, "名", ", "),
         ]
         for label, items, budget, header, limit, unit, joiner in cases:
             with self.subTest(label):
                 body = cap_list_for_message(
-                    items, budget=budget, header=header,
-                    limit=limit, omitted_unit=unit, joiner=joiner,
+                    items,
+                    budget=budget,
+                    header=header,
+                    limit=limit,
+                    omitted_unit=unit,
+                    joiner=joiner,
                 )
                 self.assertLessEqual(len(header) + len(body), budget)
 
@@ -586,7 +663,8 @@ class CapListBudgetTests(unittest.TestCase):
 
         body = cap_list_for_message(
             [f"<@{'9' * 19}>" for _ in range(1500)],
-            budget=MESSAGE_BUDGET, omitted_unit="名",
+            budget=MESSAGE_BUDGET,
+            omitted_unit="名",
         )
         self.assertLessEqual(len(body), MESSAGE_BUDGET)
         self.assertRegex(body, r"…他\d+名$")
@@ -597,7 +675,10 @@ class CapListBudgetTests(unittest.TestCase):
 
         header = "H" * 40
         body = cap_list_for_message(
-            ["abc"] * 50, budget=60, header=header, omitted_unit="件",
+            ["abc"] * 50,
+            budget=60,
+            header=header,
+            omitted_unit="件",
         )
         self.assertLessEqual(len(header) + len(body), 60)
 
@@ -609,7 +690,8 @@ class CapListBudgetTests(unittest.TestCase):
             "a\nb",
         )
         self.assertEqual(
-            cap_list_for_message([], budget=MESSAGE_BUDGET, omitted_unit="件"), "",
+            cap_list_for_message([], budget=MESSAGE_BUDGET, omitted_unit="件"),
+            "",
         )
 
     def test_every_call_site_passes_a_budget(self):

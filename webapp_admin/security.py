@@ -1,4 +1,3 @@
-import os
 import secrets
 
 from fastapi import HTTPException, Request
@@ -102,7 +101,7 @@ def validate_channel_id(value) -> int:
         raise HTTPException(status_code=400)
 
 
-def validate_int(value, min_val: int = 0, max_val: int = 2 ** 63) -> int:
+def validate_int(value, min_val: int = 0, max_val: int = 2**63) -> int:
     try:
         v = int(value)
         if not (min_val <= v <= max_val):

@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import re
 from pathlib import Path
+from typing import Callable
 
 # index.html 内の `static/app.js?v=...` / `static/styles.css?v=...` を書き換えるための
 # パターン。クエリが無い記述にも対応できるよう `?v=...` 部分を任意扱いにしている。
@@ -27,9 +28,9 @@ _CACHE_NAME_PATTERN = re.compile(r'(const\s+CACHE_NAME\s*=\s*")[^"]*(")')
 _render_cache: dict[str, tuple[object, str]] = {}
 
 
-def _stat_stamp(paths: list[Path]) -> tuple:
+def _stat_stamp(paths: list[Path]) -> tuple[tuple[str, int | None, int | None], ...]:
     """内容ハッシュを再計算すべきかを判断するための軽量な指紋。"""
-    stamp = []
+    stamp: list[tuple[str, int | None, int | None]] = []
     for path in paths:
         try:
             st = path.stat()
@@ -52,7 +53,7 @@ def _content_hash(paths: list[Path]) -> str:
     return digest.hexdigest()[:12]
 
 
-def _render(key: str, source: Path, deps: list[Path], transform) -> str:
+def _render(key: str, source: Path, deps: list[Path], transform: Callable[[str, str], str]) -> str:
     """source を transform で書き換えた結果を返す。deps または source が
     変化していない限りは前回の結果を再利用する。"""
     stamp = _stat_stamp([source, *deps])

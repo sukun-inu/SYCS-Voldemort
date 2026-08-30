@@ -41,6 +41,7 @@ async def main():
             # 録音中に落ちると、そこまで録った分がまるごと消える。
             # 終了時は必ず書き出してからにする。
             from services.recording_service import stop_all
+
             await stop_all(bot, reason="bot 停止")
 
 

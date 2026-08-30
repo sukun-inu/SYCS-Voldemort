@@ -20,12 +20,14 @@ def _list(guild_id: int) -> list[dict[str, Any]]:
     for channel_id, entry in get_sticky_messages(guild_id).items():
         if not isinstance(entry, dict):
             continue
-        rows.append({
-            "id": str(channel_id),
-            "channel_id": str(channel_id),
-            "content": entry.get("content", ""),
-            "message_id": entry.get("message_id"),
-        })
+        rows.append(
+            {
+                "id": str(channel_id),
+                "channel_id": str(channel_id),
+                "content": entry.get("content", ""),
+                "message_id": entry.get("message_id"),
+            }
+        )
     return rows
 
 
@@ -69,10 +71,8 @@ PANEL = Panel(
                     remove=_remove,
                     help="チャンネルに新しい投稿があるたび、最後に貼り直されます。",
                     item_fields=(
-                        Field("channel_id", "チャンネル", Widget.CHANNEL,
-                              required=True, nullable=False),
-                        Field("content", "本文", Widget.TEXTAREA,
-                              required=True, nullable=False, max_len=1000),
+                        Field("channel_id", "チャンネル", Widget.CHANNEL, required=True, nullable=False),
+                        Field("content", "本文", Widget.TEXTAREA, required=True, nullable=False, max_len=1000),
                     ),
                 ),
             ),

@@ -100,6 +100,7 @@ async def _choices_for_keys(panel: Panel, keys, guild_id: int) -> dict[str, list
 
 # ── 読み取り ──────────────────────────────────────────────────
 
+
 @router.get("/apps")
 async def list_apps(request: Request, _=Depends(check_guild)):
     """スタートメニュー用のタイル一覧。"""
@@ -131,6 +132,7 @@ async def get_app(app_id: str, request: Request, _=Depends(check_guild)):
 
 
 # ── 明示保存 ──────────────────────────────────────────────────
+
 
 @router.put("/apps/{app_id}")
 async def save_app(
@@ -185,6 +187,7 @@ async def save_app(
 
 # ── コレクション操作（追加・更新・削除は即時反映） ─────────────
 
+
 @router.post("/apps/{app_id}/collections/{key}")
 async def add_item(
     app_id: str,
@@ -206,8 +209,10 @@ async def add_item(
 
     if collection.max_items is not None and len(collection.list(guild_id)) >= collection.max_items:
         return JSONResponse(
-            {"errors": {"__all__": f"登録できるのは {collection.max_items} 件までです。"},
-             "items": collection.list(guild_id)},
+            {
+                "errors": {"__all__": f"登録できるのは {collection.max_items} 件までです。"},
+                "items": collection.list(guild_id),
+            },
             status_code=422,
         )
 
@@ -223,13 +228,11 @@ async def add_item(
     except Exception as exc:
         logger.exception("一覧への追加に失敗 panel=%s collection=%s", panel.id, key)
         return JSONResponse(
-            {"errors": {"__all__": f"追加できませんでした（{exc}）"},
-             "items": collection.list(guild_id)},
+            {"errors": {"__all__": f"追加できませんでした（{exc}）"}, "items": collection.list(guild_id)},
             status_code=422,
         )
 
-    return JSONResponse({"id": None if item_id is None else str(item_id),
-                         "items": collection.list(guild_id)})
+    return JSONResponse({"id": None if item_id is None else str(item_id), "items": collection.list(guild_id)})
 
 
 @router.put("/apps/{app_id}/collections/{key}/{item_id}")
@@ -264,8 +267,7 @@ async def update_item(
     except Exception as exc:
         logger.exception("一覧の更新に失敗 panel=%s collection=%s", panel.id, key)
         return JSONResponse(
-            {"errors": {"__all__": f"更新できませんでした（{exc}）"},
-             "items": collection.list(guild_id)},
+            {"errors": {"__all__": f"更新できませんでした（{exc}）"}, "items": collection.list(guild_id)},
             status_code=422,
         )
 
@@ -292,8 +294,7 @@ async def remove_item(
     except Exception as exc:
         logger.exception("一覧からの削除に失敗 panel=%s collection=%s", panel.id, key)
         return JSONResponse(
-            {"errors": {"__all__": f"削除できませんでした（{exc}）"},
-             "items": collection.list(guild_id)},
+            {"errors": {"__all__": f"削除できませんでした（{exc}）"}, "items": collection.list(guild_id)},
             status_code=422,
         )
 

@@ -31,6 +31,9 @@ def register(bot: Bot) -> None:
     async def on_message(message: discord.Message):
         if message.guild is None or message.author.bot:
             return
+        # ローカルへ束ねる。下の _tts_handler は入れ子なので、この None 判定を
+        # そのままでは持ち込めない（型検査が「まだ None かもしれない」と見る）。
+        guild = message.guild
 
         logger.debug(
             "[BOT_SETUP] on_message guild=%s ch=%s author=%s",
@@ -42,11 +45,12 @@ def register(bot: Bot) -> None:
         async def _tts_handler() -> None:
             from services.tts_service import enqueue_message as _tts_enqueue, get_effective_vc_watch as _get_vc_watch
             from services.tts_store import get_tts_settings as _get_tts_settings
-            settings = _get_tts_settings(message.guild.id)
-            effective_vc_id, watch_ids = _get_vc_watch(message.guild.id, settings)
+
+            settings = _get_tts_settings(guild.id)
+            effective_vc_id, watch_ids = _get_vc_watch(guild.id, settings)
             in_vc_text = effective_vc_id is not None and message.channel.id == effective_vc_id
             if (message.channel.id in watch_ids or in_vc_text) and isinstance(message.author, discord.Member):
-                await _tts_enqueue(bot, message.guild, message.author, message.content)
+                await _tts_enqueue(bot, guild, message.author, message.content)
 
         # 各ハンドラーは互いに独立しているため並列実行（VT スキャンが DJAudio をブロックしない）
         await asyncio.gather(
@@ -68,8 +72,9 @@ def register(bot: Bot) -> None:
             return
 
         fields = {
-            "送信日時": message.created_at.astimezone(_JST).strftime("%Y/%m/%d %H:%M")
-            if message.created_at else "(不明)",
+            "送信日時": (
+                message.created_at.astimezone(_JST).strftime("%Y/%m/%d %H:%M") if message.created_at else "(不明)"
+            ),
             "内容": (message.content or "(内容なし)")[:1024],
             "ユーザーID": str(message.author.id) if message.author else "不明",
             "メッセージID": str(message.id),
@@ -101,7 +106,9 @@ def register(bot: Bot) -> None:
         if before.content == after.content:
             return
 
-        ch_mention = before.channel.mention
+        # guild を確認済みなので、ここのチャンネルは必ずギルドのチャンネル。
+        # 型の上では DM/グループも混ざった共用体のままで、その関係が表せない。
+        ch_mention = before.channel.mention  # type: ignore[union-attr]
 
         await _safe(
             log_action(

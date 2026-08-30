@@ -26,20 +26,30 @@ logger = logging.getLogger(__name__)
 _USER_STATE_SYNC_ON_READY = env_bool("USER_STATE_SYNC_ON_READY", True)
 _USER_STATE_SYNC_DELAY_SECONDS = env_int("USER_STATE_SYNC_DELAY_SECONDS", 20, minimum=0)
 _USER_STATE_SYNC_GUILD_PAUSE_SECONDS = env_float(
-    "USER_STATE_SYNC_GUILD_PAUSE_SECONDS", 1.0, minimum=0.0,
+    "USER_STATE_SYNC_GUILD_PAUSE_SECONDS",
+    1.0,
+    minimum=0.0,
 )
 _USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD = env_int(
-    "USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD", 0, minimum=0,
+    "USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD",
+    0,
+    minimum=0,
 )
 _USER_STATE_AUTO_REPAIR_ENABLED = env_bool("USER_STATE_AUTO_REPAIR_ENABLED", True)
 _USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS = env_int(
-    "USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS", 1800, minimum=300,
+    "USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS",
+    1800,
+    minimum=300,
 )
 _USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS = env_int(
-    "USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS", 180, minimum=0,
+    "USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS",
+    180,
+    minimum=0,
 )
 _USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD = env_int(
-    "USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD", 50000, minimum=100,
+    "USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD",
+    50000,
+    minimum=100,
 )
 _USER_STATE_AUTO_REPAIR_WRITE_EVENTS = env_bool("USER_STATE_AUTO_REPAIR_WRITE_EVENTS", False)
 
@@ -185,7 +195,9 @@ async def _sync_user_state_all_guilds(
                     total_repair_fixed += repair_stats.get("rows_fixed", 0)
 
                 logger.info(
-                    "[BOT_SETUP] user_state sync guild=%s source=%s members=%s bans=%s created=%s updated=%s left=%s events=%s fetched_all=%s repaired_rows=%s repaired_fixed=%s",
+                    "[BOT_SETUP] user_state sync guild=%s source=%s members=%s bans=%s "
+                    "created=%s updated=%s left=%s events=%s fetched_all=%s "
+                    "repaired_rows=%s repaired_fixed=%s",
                     guild.id,
                     source,
                     stats.get("members_seen", 0),
@@ -210,7 +222,8 @@ async def _sync_user_state_all_guilds(
                 await asyncio.sleep(_USER_STATE_SYNC_GUILD_PAUSE_SECONDS)
 
         logger.info(
-            "[BOT_SETUP] user_state sync completed source=%s members=%s bans=%s created=%s updated=%s left=%s events=%s repaired_rows=%s repaired_fixed=%s",
+            "[BOT_SETUP] user_state sync completed source=%s members=%s bans=%s "
+            "created=%s updated=%s left=%s events=%s repaired_rows=%s repaired_fixed=%s",
             source,
             total_members,
             total_bans,

@@ -46,10 +46,7 @@ def used_icon_names() -> list[str]:
             text = path.read_text(encoding="utf-8")
             names.update(_ICON_REF.findall(text))
             # icon('house-fill') のように接頭辞なしで書かれている呼び出しも拾う
-            names.update(
-                name.removeprefix("bi-")
-                for name in re.findall(r"""icon\(\s*['"]([a-z0-9-]+)['"]""", text)
-            )
+            names.update(name.removeprefix("bi-") for name in re.findall(r"""icon\(\s*['"]([a-z0-9-]+)['"]""", text))
     return sorted(names)
 
 

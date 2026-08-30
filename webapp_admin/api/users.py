@@ -108,7 +108,7 @@ def event_label(value: str | None) -> str:
         return EVENT_LABELS[value]
     for prefix, base in SYNC_PREFIX_LABELS.items():
         if value.startswith(prefix):
-            source = value[len(prefix):]
+            source = value[len(prefix) :]
             return f"{base}（{SYNC_SOURCE_LABELS.get(source, source)}）"
     return value
 
@@ -176,15 +176,17 @@ async def list_states(
     rows = await list_recent_user_states(guild_id, query=keyword, limit=limit, offset=offset)
     total = await count_user_states(guild_id, query=keyword)
 
-    return JSONResponse({
-        "rows": [_row(state) for state in rows],
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-        # 行が返らなかったページの先に「次へ」を出さない。
-        # total は別クエリなので、削除直後などに食い違うことがある。
-        "has_more": bool(rows) and offset + len(rows) < total,
-    })
+    return JSONResponse(
+        {
+            "rows": [_row(state) for state in rows],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            # 行が返らなかったページの先に「次へ」を出さない。
+            # total は別クエリなので、削除直後などに食い違うことがある。
+            "has_more": bool(rows) and offset + len(rows) < total,
+        }
+    )
 
 
 @router.get("/users/state/{user_id}")
@@ -220,17 +222,19 @@ async def user_detail(
         if not isinstance(event, dict):
             continue
         payload_data = event.get("payload")
-        events.append({
-            "id": event.get("id"),
-            "event_label": event_label(event.get("event_type")),
-            "event_type": event.get("event_type"),
-            "event_at": format_jst(event.get("event_at")),
-            "status_after_label": status_label(event.get("status_after")),
-            "status_after_tone": status_tone(event.get("status_after")),
-            "actor_name": event.get("actor_name"),
-            "reason": event.get("reason"),
-            "payload": payload_data if isinstance(payload_data, dict) else {},
-        })
+        events.append(
+            {
+                "id": event.get("id"),
+                "event_label": event_label(event.get("event_type")),
+                "event_type": event.get("event_type"),
+                "event_at": format_jst(event.get("event_at")),
+                "status_after_label": status_label(event.get("status_after")),
+                "status_after_tone": status_tone(event.get("status_after")),
+                "actor_name": event.get("actor_name"),
+                "reason": event.get("reason"),
+                "payload": payload_data if isinstance(payload_data, dict) else {},
+            }
+        )
     payload["events"] = events
 
     return JSONResponse(payload)

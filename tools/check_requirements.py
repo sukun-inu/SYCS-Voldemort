@@ -47,15 +47,17 @@ def target_python() -> str:
 
 def environment(python_version: str) -> dict[str, str]:
     env = dict(default_environment())
-    env.update({
-        "python_version": python_version,
-        "python_full_version": f"{python_version}.0",
-        "sys_platform": "linux",
-        "platform_system": "Linux",
-        "platform_machine": "x86_64",
-        "os_name": "posix",
-        "implementation_name": "cpython",
-    })
+    env.update(
+        {
+            "python_version": python_version,
+            "python_full_version": f"{python_version}.0",
+            "sys_platform": "linux",
+            "platform_system": "Linux",
+            "platform_machine": "x86_64",
+            "os_name": "posix",
+            "implementation_name": "cpython",
+        }
+    )
     return env
 
 
@@ -96,11 +98,7 @@ def main() -> int:
     python_version = target_python()
     env = environment(python_version)
     requirements = parse_requirements()
-    pinned = {
-        r.name.lower().replace("_", "-"): v
-        for r in requirements
-        if (v := pinned_version(r))
-    }
+    pinned = {r.name.lower().replace("_", "-"): v for r in requirements if (v := pinned_version(r))}
 
     print(f"対象: Python {python_version} / linux（Dockerfile より）")
     print(f"固定済み {len(pinned)} / 総数 {len(requirements)}\n")
@@ -126,14 +124,14 @@ def main() -> int:
                 )
 
         extras = set(requirement.extras)
-        for raw_dep in (meta.get("requires_dist") or []):
+        for raw_dep in meta.get("requires_dist") or []:
             try:
                 dep = Requirement(raw_dep)
             except Exception:
                 continue
             if dep.marker is not None:
                 applies = False
-                for extra in (extras | {""}):
+                for extra in extras | {""}:
                     probe_env = dict(env, extra=extra)
                     try:
                         if dep.marker.evaluate(probe_env):

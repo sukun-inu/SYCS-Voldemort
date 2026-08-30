@@ -84,9 +84,11 @@ def is_security_bypassed(member: discord.Member) -> BypassResult:
         # 信頼済みかどうかが分からない状態。ここで「バイパスなし」と答えると、
         # 設定の読み取りに失敗しただけの管理者からロールを剥がしかねない。
         logger.error(
-            "[SECURITY] バイパス判定に失敗しました guild=%s user=%s: %s"
-            "（この検査では強制措置を行いません）",
-            member.guild.id, member.id, e, exc_info=True,
+            "[SECURITY] バイパス判定に失敗しました guild=%s user=%s: %s" "（この検査では強制措置を行いません）",
+            member.guild.id,
+            member.id,
+            e,
+            exc_info=True,
         )
         return BypassResult(False, "check_failed", True)
 
@@ -194,7 +196,10 @@ def build_final_embed(
         icon = vt_icon(r.get("malicious", 0), r.get("suspicious", 0), r.get("status"))
         embed.add_field(
             name=f"{icon} ターゲット {idx} ({r.get('type')})",
-            value=f"Status: `{r.get('status')}` | Malicious: `{r.get('malicious')}` | Suspicious: `{r.get('suspicious')}`",
+            value=(
+                f"Status: `{r.get('status')}` | Malicious: `{r.get('malicious')}` | "
+                f"Suspicious: `{r.get('suspicious')}`"
+            ),
             inline=False,
         )
 
@@ -327,8 +332,12 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
         logs.append(f"バイパス適用: {bypass.reason}")
         try:
             await log_action(
-                bot, message.guild.id, "INFO", "セキュリティ検査スキップ",
-                user=member, fields={"理由": bypass.reason or "bypass"},
+                bot,
+                message.guild.id,
+                "INFO",
+                "セキュリティ検査スキップ",
+                user=member,
+                fields={"理由": bypass.reason or "bypass"},
             )
         except Exception:
             logger.debug("log_action failed", exc_info=True)
@@ -344,15 +353,14 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
     if "SPAM" in reason_flags:
         danger = True
 
-    vt_results, progress_msg, vt_flags, vt_danger = await _run_vt_scans(
-        bot, message.guild.id, links, attachments, logs
-    )
+    vt_results, progress_msg, vt_flags, vt_danger = await _run_vt_scans(bot, message.guild.id, links, attachments, logs)
     reason_flags.extend(vt_flags)
     if vt_danger:
         danger = True
 
     gpt_result = await gpt_assess(
-        content, vt_results,
+        content,
+        vt_results,
         spam_count=spam_count,
         min_interval=min_interval,
         is_new_member=member_is_new,
@@ -380,11 +388,15 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
         logger.error(
             "[SECURITY] guild=%s user=%s 危険と判定しましたが、バイパス判定に失敗している"
             "ため強制措置（メッセージ削除・ロール剥奪）を見送りました。手動で確認してください。",
-            message.guild.id, member.id,
+            message.guild.id,
+            member.id,
         )
         try:
             await log_action(
-                bot, message.guild.id, "ERROR", "⚠️ 要確認: 強制措置を見送りました",
+                bot,
+                message.guild.id,
+                "ERROR",
+                "⚠️ 要確認: 強制措置を見送りました",
                 user=member,
                 fields={
                     "理由": "バイパス判定に失敗（設定を読めませんでした）",
@@ -418,7 +430,8 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
 
     try:
         await log_action(
-            bot, message.guild.id,
+            bot,
+            message.guild.id,
             "ERROR" if danger else "INFO",
             "メッセージセキュリティ検査",
             user=member,
@@ -462,11 +475,15 @@ async def handle_security_for_voice_join(
             logger.error(
                 "[SECURITY] guild=%s user=%s VCレイドを検出しましたが、バイパス判定に"
                 "失敗しているためロール剥奪を見送りました。手動で確認してください。",
-                member.guild.id, member.id,
+                member.guild.id,
+                member.id,
             )
             try:
                 await log_action(
-                    bot, member.guild.id, "ERROR", "⚠️ 要確認: VCレイドの措置を見送りました",
+                    bot,
+                    member.guild.id,
+                    "ERROR",
+                    "⚠️ 要確認: VCレイドの措置を見送りました",
                     user=member,
                     fields={
                         "チャンネル": channel.mention,
@@ -479,13 +496,16 @@ async def handle_security_for_voice_join(
                 logger.debug("log_action failed on VC raid", exc_info=True)
             return
 
-        logs = [f"[{now_jst()}] VCレイド検出", f"チャンネル: {channel.name}"]
         await strip_roles(member)
 
         try:
             await log_action(
-                bot, member.guild.id, "ERROR", "VCレイド検出",
-                user=member, fields={"チャンネル": channel.mention},
+                bot,
+                member.guild.id,
+                "ERROR",
+                "VCレイド検出",
+                user=member,
+                fields={"チャンネル": channel.mention},
                 embed_color=discord.Color.red(),
             )
         except Exception:

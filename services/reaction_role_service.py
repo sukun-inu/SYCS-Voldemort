@@ -78,14 +78,17 @@ async def handle_reaction_add(bot: Bot, payload: discord.RawReactionActionEvent)
     if role_id is None:
         logger.debug(
             "[reaction_role] 割り当ての無い絵文字 message=%s key=%s 登録=%s",
-            payload.message_id, emoji_key(payload.emoji), list(mapping))
+            payload.message_id,
+            emoji_key(payload.emoji),
+            list(mapping),
+        )
         return
 
     role = guild.get_role(int(role_id))
     if role is None:
         logger.warning(
-            "[reaction_role] 設定されたロールが見つかりません guild=%s role_id=%s",
-            payload.guild_id, role_id)
+            "[reaction_role] 設定されたロールが見つかりません guild=%s role_id=%s", payload.guild_id, role_id
+        )
         return
 
     try:
@@ -116,14 +119,17 @@ async def handle_reaction_remove(bot: Bot, payload: discord.RawReactionActionEve
     if role_id is None:
         logger.debug(
             "[reaction_role] 割り当ての無い絵文字 message=%s key=%s 登録=%s",
-            payload.message_id, emoji_key(payload.emoji), list(mapping))
+            payload.message_id,
+            emoji_key(payload.emoji),
+            list(mapping),
+        )
         return
 
     role = guild.get_role(int(role_id))
     if role is None:
         logger.warning(
-            "[reaction_role] 設定されたロールが見つかりません guild=%s role_id=%s",
-            payload.guild_id, role_id)
+            "[reaction_role] 設定されたロールが見つかりません guild=%s role_id=%s", payload.guild_id, role_id
+        )
         return
 
     try:

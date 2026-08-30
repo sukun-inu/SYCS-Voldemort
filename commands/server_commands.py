@@ -19,7 +19,6 @@ from services.settings_store import (
     get_news_feeds,
     get_reaction_roles,
     get_sticky_messages,
-    get_vc_notify_channel_id,
     get_welcome_settings,
     remove_news_feed,
     remove_reaction_role,
@@ -36,10 +35,10 @@ from services.settings_store import (
 
 _NOTIFY_TYPE_LABELS: dict[str, str] = {
     "eew_forecast": "緊急地震速報（予報）",
-    "eew_warning":  "緊急地震速報（警報）",
-    "tsunami":      "津波情報",
-    "quake_info":   "地震情報",
-    "bot_news":     "ボットに関するお知らせ",
+    "eew_warning": "緊急地震速報（警報）",
+    "tsunami": "津波情報",
+    "quake_info": "地震情報",
+    "bot_news": "ボットに関するお知らせ",
 }
 
 
@@ -85,16 +84,16 @@ class _SaveButton(discord.ui.Button):
 class _NotifyTypeView(discord.ui.View):
     def __init__(self, guild_id: int, author_id: int, types: dict[str, bool]):
         super().__init__(timeout=180)
-        self.guild_id  = guild_id
+        self.guild_id = guild_id
         self.author_id = author_id
-        self.types     = dict(types)
+        self.types = dict(types)
         self._rebuild()
 
     def _rebuild(self) -> None:
         self.clear_items()
         keys = list(_NOTIFY_TYPE_LABELS.keys())
         for i, key in enumerate(keys):
-            label   = _NOTIFY_TYPE_LABELS[key]
+            label = _NOTIFY_TYPE_LABELS[key]
             enabled = self.types.get(key, True)
             self.add_item(_ToggleButton(key, label, enabled, row=i // 2))
         self.add_item(_SaveButton(row=len(keys) // 2 + 1))
@@ -110,9 +109,7 @@ class _NotifyTypeView(discord.ui.View):
             return
         self.types[key] = not self.types.get(key, True)
         self._rebuild()
-        await interaction.response.edit_message(
-            embed=_build_notify_type_embed(self.types), view=self
-        )
+        await interaction.response.edit_message(embed=_build_notify_type_embed(self.types), view=self)
 
     async def handle_save(self, interaction: discord.Interaction) -> None:
         if not await self._check_author(interaction):
@@ -135,23 +132,20 @@ def register_server_commands(bot: Bot) -> None:
     # 両方をまとめて出す。別々のグループにすると status の置き場所が無くなる
     # ので、greeting の下に welcome / goodbye を置く二段構えにする。
     greeting_group = app_commands.Group(
-        name="greeting", description="入退室のあいさつ（ウェルカム / グッバイ）", guild_only=True)
-    welcome_group = app_commands.Group(
-        name="welcome", description="入室時のあいさつ", parent=greeting_group)
-    goodbye_group = app_commands.Group(
-        name="goodbye", description="退室時のあいさつ", parent=greeting_group)
-    vcnotify_group = app_commands.Group(
-        name="vcnotify", description="VC の入退室通知", guild_only=True)
+        name="greeting", description="入退室のあいさつ（ウェルカム / グッバイ）", guild_only=True
+    )
+    welcome_group = app_commands.Group(name="welcome", description="入室時のあいさつ", parent=greeting_group)
+    goodbye_group = app_commands.Group(name="goodbye", description="退室時のあいさつ", parent=greeting_group)
+    vcnotify_group = app_commands.Group(name="vcnotify", description="VC の入退室通知", guild_only=True)
     sticky_group = app_commands.Group(
-        name="sticky", description="チャンネル最下部に貼り付けるメッセージ", guild_only=True)
+        name="sticky", description="チャンネル最下部に貼り付けるメッセージ", guild_only=True
+    )
     reactionrole_group = app_commands.Group(
-        name="reactionrole", description="リアクションでロールを付与する設定", guild_only=True)
-    news_group = app_commands.Group(
-        name="news", description="ニュースフィードの配信設定", guild_only=True)
-    quake_group = app_commands.Group(
-        name="quake", description="地震アラートの設定", guild_only=True)
-    info_group = app_commands.Group(
-        name="info", description="サーバーとユーザーの情報", guild_only=True)
+        name="reactionrole", description="リアクションでロールを付与する設定", guild_only=True
+    )
+    news_group = app_commands.Group(name="news", description="ニュースフィードの配信設定", guild_only=True)
+    quake_group = app_commands.Group(name="quake", description="地震アラートの設定", guild_only=True)
+    info_group = app_commands.Group(name="info", description="サーバーとユーザーの情報", guild_only=True)
 
     # ──────────────────────────────────────────────
     # ウェルカム / グッバイ
@@ -236,8 +230,7 @@ def register_server_commands(bot: Bot) -> None:
         if not isinstance(interaction.channel, discord.TextChannel):
             await interaction.response.send_message("テキストチャンネルでのみ使えるぞ。", ephemeral=True)
             return
-        await awrite(set_sticky_message, interaction.guild.id, interaction.channel.id,
-                     content.replace("\\n", "\n"))
+        await awrite(set_sticky_message, interaction.guild.id, interaction.channel.id, content.replace("\\n", "\n"))
         await interaction.response.send_message("スティッキーメッセージを刻んだ。", ephemeral=True)
         await post_sticky(interaction.channel, interaction.guild.id)
 
@@ -342,8 +335,8 @@ def register_server_commands(bot: Bot) -> None:
         selected_mid = str(getattr(interaction.namespace, "message_id", "") or "")
         mapping = rr.get(selected_mid, {}) if selected_mid else {}
         # message_id未選択時は全メッセージ分の絵文字から候補を出す
-        source = mapping.items() if mapping else (
-            (emoji, role_id) for mp in rr.values() for emoji, role_id in mp.items()
+        source = (
+            mapping.items() if mapping else ((emoji, role_id) for mp in rr.values() for emoji, role_id in mp.items())
         )
         choices = []
         for emoji, role_id in source:
@@ -406,7 +399,8 @@ def register_server_commands(bot: Bot) -> None:
         feed_id = uuid.uuid4().hex[:8]
         await awrite(add_news_feed, interaction.guild.id, feed_id, channel.id, query, interval)
         await interaction.response.send_message(
-            f"ニュースフィードを加えた。\nID: `{feed_id}` | クエリ: `{query}` | チャンネル: {channel.mention} | 間隔: {interval}分",
+            f"ニュースフィードを加えた。\nID: `{feed_id}` | クエリ: `{query}` | "
+            f"チャンネル: {channel.mention} | 間隔: {interval}分",
             ephemeral=True,
         )
 
@@ -476,10 +470,9 @@ def register_server_commands(bot: Bot) -> None:
 
     @quake_group.command(name="min_scale", description="【管理者】地震通知の最小震度を設定します")
     @app_commands.describe(scale="通知する最小震度")
-    @app_commands.choices(scale=[
-        app_commands.Choice(name=f"震度 {label} 以上", value=code)
-        for code, label in SCALE_LABELS.items()
-    ])
+    @app_commands.choices(
+        scale=[app_commands.Choice(name=f"震度 {label} 以上", value=code) for code, label in SCALE_LABELS.items()]
+    )
     async def set_eq_scale(interaction: discord.Interaction, scale: int):
         if not await _ensure_admin(interaction):
             return
@@ -512,10 +505,8 @@ def register_server_commands(bot: Bot) -> None:
         if not await _ensure_admin(interaction):
             return
         types = get_earthquake_notify_types(interaction.guild.id)
-        view  = _NotifyTypeView(interaction.guild.id, interaction.user.id, types)
-        await interaction.response.send_message(
-            embed=_build_notify_type_embed(types), view=view, ephemeral=True
-        )
+        view = _NotifyTypeView(interaction.guild.id, interaction.user.id, types)
+        await interaction.response.send_message(embed=_build_notify_type_embed(types), view=view, ephemeral=True)
 
     # ──────────────────────────────────────────────
     # サーバー情報 / ユーザー情報
@@ -581,6 +572,13 @@ def register_server_commands(bot: Bot) -> None:
         await interaction.response.send_message(embed=embed)
 
     # greeting の子（welcome / goodbye）は parent 指定で既に繋がっている。
-    for group in (greeting_group, vcnotify_group, sticky_group,
-                  reactionrole_group, news_group, quake_group, info_group):
+    for group in (
+        greeting_group,
+        vcnotify_group,
+        sticky_group,
+        reactionrole_group,
+        news_group,
+        quake_group,
+        info_group,
+    ):
         bot.tree.add_command(group)
