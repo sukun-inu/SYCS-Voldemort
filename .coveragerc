@@ -34,7 +34,9 @@ precision = 2
 # 入れ替わり、数字が 0.4 ポイントほど動くため。
 #
 #   46.14% のとき 44 → webapp/ のテストを足して 50.09% になったので 48 へ
-fail_under = 48
+#   → user_state / api.sql / server_commands / djaudio へテストを足して
+#     58.34% になったので 56 へ
+fail_under = 56
 
 [html]
 directory = htmlcov
