@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 # Discord側の各種文字数上限。呼び出し側が「ここは field だから1024」のように
 # その場の数字を書くと、書き間違いや context 違い（メッセージ用の値を embed
 # field に流用する等）に気づけない。名前を付けてここに集約する。
-MESSAGE_BUDGET = 2000           # メッセージ本文
+MESSAGE_BUDGET = 2000  # メッセージ本文
 EMBED_DESCRIPTION_BUDGET = 4096  # embed の description
-EMBED_FIELD_BUDGET = 1024        # embed の 1 field の value
+EMBED_FIELD_BUDGET = 1024  # embed の 1 field の value
 
 
 def cap_list_for_message(
@@ -75,21 +75,25 @@ def cap_list_for_message(
 
 def metals_site_view() -> discord.ui.View:
     view = discord.ui.View()
-    view.add_item(discord.ui.Button(
-        style=discord.ButtonStyle.link,
-        label="📊 貴金属トラッカーを開く",
-        url=METALS_SITE_URL,
-    ))
+    view.add_item(
+        discord.ui.Button(
+            style=discord.ButtonStyle.link,
+            label="📊 貴金属トラッカーを開く",
+            url=METALS_SITE_URL,
+        )
+    )
     return view
 
 
 def admin_site_view() -> discord.ui.View:
     view = discord.ui.View()
-    view.add_item(discord.ui.Button(
-        style=discord.ButtonStyle.link,
-        label="⚙️ Web管理画面を開く",
-        url=ADMIN_SITE_URL,
-    ))
+    view.add_item(
+        discord.ui.Button(
+            style=discord.ButtonStyle.link,
+            label="⚙️ Web管理画面を開く",
+            url=ADMIN_SITE_URL,
+        )
+    )
     return view
 
 

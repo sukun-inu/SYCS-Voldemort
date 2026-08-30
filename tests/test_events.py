@@ -44,9 +44,11 @@ def _async_gen_from(items):
     はどれも async generator を返す API なので、テスト用の guild にも
     同じ形（呼び出し可能で、呼ぶと async for できるもの）を持たせる。
     """
+
     async def gen(*_args, **_kwargs):
         for it in items:
             yield it
+
     return gen
 
 
@@ -57,9 +59,11 @@ def _raising_agen(exc: Exception):
     分からない）ので、関数呼び出し自体ではなく最初の __anext__ で例外を
     出す必要がある。
     """
+
     async def gen(*_args, **_kwargs):
         raise exc
         yield  # pragma: no cover - 型を async generator にするためだけの到達不能コード
+
     return gen
 
 
@@ -81,40 +85,60 @@ class FindRecentAuditEntryTests(unittest.TestCase):
     def test_guild_me_is_none_returns_none_without_calling_the_api(self):
         def _must_not_call(*_a, **_kw):
             raise AssertionError("me が無い時点で audit_logs は呼ばれてはいけない")
+
         guild = SimpleNamespace(me=None, audit_logs=_must_not_call)
-        result = asyncio.run(uss._find_recent_audit_entry(
-            guild, action=discord.AuditLogAction.kick, target_user_id=1,
-        ))
+        result = asyncio.run(
+            uss._find_recent_audit_entry(
+                guild,
+                action=discord.AuditLogAction.kick,
+                target_user_id=1,
+            )
+        )
         self.assertIsNone(result)
 
     def test_no_view_audit_log_permission_returns_none_without_calling_the_api(self):
         def _must_not_call(*_a, **_kw):
             raise AssertionError("権限が無い時点で audit_logs は呼ばれてはいけない")
+
         guild = SimpleNamespace(
             me=SimpleNamespace(guild_permissions=SimpleNamespace(view_audit_log=False)),
             audit_logs=_must_not_call,
         )
-        result = asyncio.run(uss._find_recent_audit_entry(
-            guild, action=discord.AuditLogAction.kick, target_user_id=1,
-        ))
+        result = asyncio.run(
+            uss._find_recent_audit_entry(
+                guild,
+                action=discord.AuditLogAction.kick,
+                target_user_id=1,
+            )
+        )
         self.assertIsNone(result)
 
     def test_matching_recent_entry_is_returned(self):
         now = discord.utils.utcnow()
         entry = self._entry(user_id=42, created_at=now - timedelta(seconds=3))
         guild = self._guild(entries=[entry])
-        result = asyncio.run(uss._find_recent_audit_entry(
-            guild, action=discord.AuditLogAction.kick, target_user_id=42, retries=0,
-        ))
+        result = asyncio.run(
+            uss._find_recent_audit_entry(
+                guild,
+                action=discord.AuditLogAction.kick,
+                target_user_id=42,
+                retries=0,
+            )
+        )
         self.assertIs(result, entry)
 
     def test_entry_for_a_different_user_is_ignored(self):
         now = discord.utils.utcnow()
         entry = self._entry(user_id=999, created_at=now - timedelta(seconds=3))
         guild = self._guild(entries=[entry])
-        result = asyncio.run(uss._find_recent_audit_entry(
-            guild, action=discord.AuditLogAction.kick, target_user_id=42, retries=0,
-        ))
+        result = asyncio.run(
+            uss._find_recent_audit_entry(
+                guild,
+                action=discord.AuditLogAction.kick,
+                target_user_id=42,
+                retries=0,
+            )
+        )
         self.assertIsNone(result)
 
     def test_entry_outside_the_time_window_is_ignored(self):
@@ -122,10 +146,15 @@ class FindRecentAuditEntryTests(unittest.TestCase):
         now = discord.utils.utcnow()
         entry = self._entry(user_id=42, created_at=now - timedelta(seconds=120))
         guild = self._guild(entries=[entry])
-        result = asyncio.run(uss._find_recent_audit_entry(
-            guild, action=discord.AuditLogAction.kick, target_user_id=42,
-            window_seconds=20, retries=0,
-        ))
+        result = asyncio.run(
+            uss._find_recent_audit_entry(
+                guild,
+                action=discord.AuditLogAction.kick,
+                target_user_id=42,
+                window_seconds=20,
+                retries=0,
+            )
+        )
         self.assertIsNone(result)
 
 
@@ -191,16 +220,27 @@ class SyncUserStateAllGuildsTests(unittest.TestCase):
         async def _fake_sync(**kwargs):
             calls.append(kwargs)
             return {
-                "members_seen": len(kwargs["members"]), "bans_seen": len(kwargs["banned_users"]),
-                "created": 0, "updated": 0, "left_reconciled": 0, "events_written": 0,
+                "members_seen": len(kwargs["members"]),
+                "bans_seen": len(kwargs["banned_users"]),
+                "created": 0,
+                "updated": 0,
+                "left_reconciled": 0,
+                "events_written": 0,
             }
 
-        with patch("events.user_state_sync.sync_guild_user_states", side_effect=_fake_sync), \
-             patch("events.user_state_sync._USER_STATE_SYNC_GUILD_PAUSE_SECONDS", 0):
-            asyncio.run(uss._sync_user_state_all_guilds(
-                bot, source="test", write_events_on_sync=False,
-                run_integrity_repair=False, lock=asyncio.Lock(),
-            ))
+        with (
+            patch("events.user_state_sync.sync_guild_user_states", side_effect=_fake_sync),
+            patch("events.user_state_sync._USER_STATE_SYNC_GUILD_PAUSE_SECONDS", 0),
+        ):
+            asyncio.run(
+                uss._sync_user_state_all_guilds(
+                    bot,
+                    source="test",
+                    write_events_on_sync=False,
+                    run_integrity_repair=False,
+                    lock=asyncio.Lock(),
+                )
+            )
 
         self.assertEqual([c["guild_id"] for c in calls], [1, 2])
         self.assertEqual(len(calls[0]["members"]), 1)
@@ -223,16 +263,27 @@ class SyncUserStateAllGuildsTests(unittest.TestCase):
                 raise RuntimeError("boom")
             seen_guild_ids.append(kwargs["guild_id"])
             return {
-                "members_seen": 0, "bans_seen": 0, "created": 0,
-                "updated": 0, "left_reconciled": 0, "events_written": 0,
+                "members_seen": 0,
+                "bans_seen": 0,
+                "created": 0,
+                "updated": 0,
+                "left_reconciled": 0,
+                "events_written": 0,
             }
 
-        with patch("events.user_state_sync.sync_guild_user_states", side_effect=_fake_sync), \
-             patch("events.user_state_sync._USER_STATE_SYNC_GUILD_PAUSE_SECONDS", 0):
-            asyncio.run(uss._sync_user_state_all_guilds(
-                bot, source="test", write_events_on_sync=False,
-                run_integrity_repair=False, lock=asyncio.Lock(),
-            ))
+        with (
+            patch("events.user_state_sync.sync_guild_user_states", side_effect=_fake_sync),
+            patch("events.user_state_sync._USER_STATE_SYNC_GUILD_PAUSE_SECONDS", 0),
+        ):
+            asyncio.run(
+                uss._sync_user_state_all_guilds(
+                    bot,
+                    source="test",
+                    write_events_on_sync=False,
+                    run_integrity_repair=False,
+                    lock=asyncio.Lock(),
+                )
+            )
 
         self.assertEqual(seen_guild_ids, [2])
 
@@ -249,20 +300,26 @@ class TtsVcBecameEmptyTests(unittest.TestCase):
 
     def test_channel_not_watched_is_false(self):
         channel = SimpleNamespace(id=555, members=[])
-        with patch("services.tts_store.get_tts_settings", return_value={}), \
-             patch("services.tts_service.get_effective_vc_watch", return_value=(999, [])):
+        with (
+            patch("services.tts_store.get_tts_settings", return_value={}),
+            patch("services.tts_service.get_effective_vc_watch", return_value=(999, [])),
+        ):
             self.assertFalse(voice._tts_vc_became_empty(1, channel))
 
     def test_watched_channel_with_only_bots_is_true(self):
         channel = SimpleNamespace(id=555, members=[SimpleNamespace(bot=True)])
-        with patch("services.tts_store.get_tts_settings", return_value={}), \
-             patch("services.tts_service.get_effective_vc_watch", return_value=(555, [])):
+        with (
+            patch("services.tts_store.get_tts_settings", return_value={}),
+            patch("services.tts_service.get_effective_vc_watch", return_value=(555, [])),
+        ):
             self.assertTrue(voice._tts_vc_became_empty(1, channel))
 
     def test_watched_channel_with_a_human_present_is_false(self):
         channel = SimpleNamespace(id=555, members=[SimpleNamespace(bot=False)])
-        with patch("services.tts_store.get_tts_settings", return_value={}), \
-             patch("services.tts_service.get_effective_vc_watch", return_value=(555, [])):
+        with (
+            patch("services.tts_store.get_tts_settings", return_value={}),
+            patch("services.tts_service.get_effective_vc_watch", return_value=(555, [])),
+        ):
             self.assertFalse(voice._tts_vc_became_empty(1, channel))
 
 
@@ -277,7 +334,11 @@ class ComputeVcTransitionTests(unittest.TestCase):
         times: dict = {}
         ch = SimpleNamespace(id=1)
         is_join, is_leave, is_move, dur_s, dur_str = voice._compute_vc_transition(
-            (1, 2), 1000.0, None, ch, times,
+            (1, 2),
+            1000.0,
+            None,
+            ch,
+            times,
         )
         self.assertTrue(is_join)
         self.assertFalse(is_leave or is_move)
@@ -289,7 +350,11 @@ class ComputeVcTransitionTests(unittest.TestCase):
         times = {(1, 2): 1000.0}
         ch = SimpleNamespace(id=1)
         is_join, is_leave, is_move, dur_s, dur_str = voice._compute_vc_transition(
-            (1, 2), 1000.0 + 3661, ch, None, times,
+            (1, 2),
+            1000.0 + 3661,
+            ch,
+            None,
+            times,
         )
         self.assertTrue(is_leave)
         self.assertEqual(dur_s, 3661)
@@ -301,7 +366,11 @@ class ComputeVcTransitionTests(unittest.TestCase):
         times: dict = {}
         ch = SimpleNamespace(id=1)
         _, is_leave, _, dur_s, dur_str = voice._compute_vc_transition(
-            (1, 2), 1000.0, ch, None, times,
+            (1, 2),
+            1000.0,
+            ch,
+            None,
+            times,
         )
         self.assertTrue(is_leave)
         self.assertIsNone(dur_s)
@@ -311,7 +380,11 @@ class ComputeVcTransitionTests(unittest.TestCase):
         times: dict = {}
         ch1, ch2 = SimpleNamespace(id=1), SimpleNamespace(id=2)
         is_join, is_leave, is_move, _, _ = voice._compute_vc_transition(
-            (1, 2), 1000.0, ch1, ch2, times,
+            (1, 2),
+            1000.0,
+            ch1,
+            ch2,
+            times,
         )
         self.assertTrue(is_move)
         self.assertFalse(is_join or is_leave)
@@ -373,31 +446,32 @@ class VcNotifyFilterTests(unittest.TestCase):
     def test_no_filter_configured_lets_everything_through(self):
         guild = self._guild(object())
         with patch.object(voice, "get_vc_notify_filter_role_id", return_value=None):
-            self.assertTrue(voice._passes_vc_notify_filter(
-                guild, True, False, None, self._channel(visible=False)))
+            self.assertTrue(voice._passes_vc_notify_filter(guild, True, False, None, self._channel(visible=False)))
 
     def test_visible_channel_passes(self):
         guild = self._guild(object())
         with patch.object(voice, "get_vc_notify_filter_role_id", return_value=77):
-            self.assertTrue(voice._passes_vc_notify_filter(
-                guild, True, False, None, self._channel(visible=True)))
+            self.assertTrue(voice._passes_vc_notify_filter(guild, True, False, None, self._channel(visible=True)))
 
     def test_invisible_channel_is_filtered_out(self):
         guild = self._guild(object())
         with patch.object(voice, "get_vc_notify_filter_role_id", return_value=77):
-            self.assertFalse(voice._passes_vc_notify_filter(
-                guild, True, False, None, self._channel(visible=False)))
+            self.assertFalse(voice._passes_vc_notify_filter(guild, True, False, None, self._channel(visible=False)))
 
     def test_move_passes_when_either_side_is_visible(self):
         """移動は移動元と移動先の両方が関係する。片方でも見えるなら通知する。"""
         guild = self._guild(object())
         with patch.object(voice, "get_vc_notify_filter_role_id", return_value=77):
-            self.assertTrue(voice._passes_vc_notify_filter(
-                guild, False, True,
-                self._channel(visible=False), self._channel(visible=True)))
-            self.assertFalse(voice._passes_vc_notify_filter(
-                guild, False, True,
-                self._channel(visible=False), self._channel(visible=False)))
+            self.assertTrue(
+                voice._passes_vc_notify_filter(
+                    guild, False, True, self._channel(visible=False), self._channel(visible=True)
+                )
+            )
+            self.assertFalse(
+                voice._passes_vc_notify_filter(
+                    guild, False, True, self._channel(visible=False), self._channel(visible=False)
+                )
+            )
 
     def test_deleted_filter_role_blocks_instead_of_letting_everything_through(self):
         """設定したロールが削除されていたら、通知を止める。
@@ -406,10 +480,9 @@ class VcNotifyFilterTests(unittest.TestCase):
         絞り込みごと素通りし、フィルター無しと同じ＝全 VC の出入りが通知
         されていた。設定した意図と正反対で、非公開 VC の出入りが漏れる。
         """
-        guild = self._guild(None)   # ロールが削除済み
+        guild = self._guild(None)  # ロールが削除済み
         with patch.object(voice, "get_vc_notify_filter_role_id", return_value=77):
-            self.assertFalse(voice._passes_vc_notify_filter(
-                guild, True, False, None, self._channel(visible=True)))
+            self.assertFalse(voice._passes_vc_notify_filter(guild, True, False, None, self._channel(visible=True)))
 
     def test_missing_role_is_logged_once_not_on_every_event(self):
         """理由はログに残す。ただし VC の出入りごとに出すとログが埋まる。"""
@@ -429,8 +502,7 @@ class VcNotifyFilterTests(unittest.TestCase):
             with self.assertLogs(voice.logger, level="WARNING"):
                 voice._passes_vc_notify_filter(missing, True, False, None, None)
             # ロールが戻れば通知は再開し、覚えていた警告済みの印も消える
-            self.assertTrue(voice._passes_vc_notify_filter(
-                restored, True, False, None, self._channel(visible=True)))
+            self.assertTrue(voice._passes_vc_notify_filter(restored, True, False, None, self._channel(visible=True)))
             with self.assertLogs(voice.logger, level="WARNING") as again:
                 voice._passes_vc_notify_filter(missing, True, False, None, None)
         self.assertEqual(len(again.records), 1)

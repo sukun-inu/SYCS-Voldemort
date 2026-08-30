@@ -58,7 +58,9 @@ def register_recording_commands(bot: Bot) -> None:
         await interaction.response.defer(ephemeral=True, thinking=True)
         try:
             session = await recording.start_recording(
-                bot, interaction.guild, target,
+                bot,
+                interaction.guild,
+                target,
                 started_by=interaction.user,
                 announce_to=interaction.channel,
             )
@@ -66,12 +68,13 @@ def register_recording_commands(bot: Bot) -> None:
             await interaction.followup.send(str(e), ephemeral=True)
             return
 
-        stops = ("VC から全員が退出したときに止まる。"
-                 if session.is_unlimited
-                 else f"{session.max_seconds // 60} 分で自動的に止まる。")
+        stops = (
+            "VC から全員が退出したときに止まる。"
+            if session.is_unlimited
+            else f"{session.max_seconds // 60} 分で自動的に止まる。"
+        )
         await interaction.followup.send(
-            f"🔴 **{target.name}** の録音を始めた。{stops}"
-            "止めるときは `/record stop` を使え。",
+            f"🔴 **{target.name}** の録音を始めた。{stops}" "止めるときは `/record stop` を使え。",
             ephemeral=True,
         )
 
@@ -121,17 +124,17 @@ def register_recording_commands(bot: Bot) -> None:
                 inline=True,
             )
         if status["speakers"]:
-            speaker_lines = [
-                f"・{s['name']}（発話 {_duration(s['voiced_seconds'])}）"
-                for s in status["speakers"]
-            ]
+            speaker_lines = [f"・{s['name']}（発話 {_duration(s['voiced_seconds'])}）" for s in status["speakers"]]
             # 大人数のVCでは全員分を出すとembedのfield上限を超えうる。表示名は
             # 最大32文字あるため件数だけでは守れない。件数だけ隠れて減って
             # 見えないよう、省いた分は明示する。
             embed.add_field(
                 name="録音中の参加者",
                 value=cap_list_for_message(
-                    speaker_lines, budget=EMBED_FIELD_BUDGET, limit=20, omitted_unit="人",
+                    speaker_lines,
+                    budget=EMBED_FIELD_BUDGET,
+                    limit=20,
+                    omitted_unit="人",
                 ),
                 inline=False,
             )
@@ -168,10 +171,7 @@ def register_recording_commands(bot: Bot) -> None:
         elif target_id:
             where = f"対象は <#{target_id}> だ。人が入った時点で録り始める。"
         else:
-            where = (
-                "ただし対象のVCが定まっておらぬ。"
-                "channel を指定するか、読み上げの対象VCを設定せよ。"
-            )
+            where = "ただし対象のVCが定まっておらぬ。" "channel を指定するか、読み上げの対象VCを設定せよ。"
         await send_ephemeral(interaction, f"自動録音を入れた。{where}")
 
     @group.command(
@@ -182,7 +182,7 @@ def register_recording_commands(bot: Bot) -> None:
         enabled="録音機能そのもののオン／オフ",
         limit_minutes=f"自動停止までの分数（0 で無制限・最大 {recording.MAX_MINUTES_LIMIT}）",
         retention_days=f"ダウンロードリンクの保存日数"
-                       f"（{recording.RETENTION_DAYS_MIN}〜{recording.RETENTION_DAYS_MAX}）",
+        f"（{recording.RETENTION_DAYS_MIN}〜{recording.RETENTION_DAYS_MAX}）",
         announce_channel="開始・完了の通知先（未指定ならVCのチャット欄）",
     )
     async def record_config(
@@ -227,10 +227,8 @@ def register_recording_commands(bot: Bot) -> None:
             title="🎙️ 録音の設定" + ("（更新した）" if patch else ""),
             color=discord.Color.blurple(),
         )
-        embed.add_field(name="録音機能",
-                        value="✅ 有効" if settings["enabled"] else "❌ 無効", inline=True)
-        embed.add_field(name="自動録音",
-                        value="✅ オン" if settings["auto_start"] else "❌ オフ", inline=True)
+        embed.add_field(name="録音機能", value="✅ 有効" if settings["enabled"] else "❌ 無効", inline=True)
+        embed.add_field(name="自動録音", value="✅ オン" if settings["auto_start"] else "❌ オフ", inline=True)
         embed.add_field(
             name="対象VC",
             value=f"<#{target_id}>" if target_id else "未設定",
@@ -238,8 +236,11 @@ def register_recording_commands(bot: Bot) -> None:
         )
         embed.add_field(
             name="自動停止",
-            value=("全員が退出したとき" if settings["max_minutes"] == recording.UNLIMITED
-                   else f"{settings['max_minutes']} 分後"),
+            value=(
+                "全員が退出したとき"
+                if settings["max_minutes"] == recording.UNLIMITED
+                else f"{settings['max_minutes']} 分後"
+            ),
             inline=True,
         )
         embed.add_field(name="保存期間", value=f"{settings['retention_days']} 日", inline=True)
@@ -253,9 +254,13 @@ def register_recording_commands(bot: Bot) -> None:
         excluded_text = (
             cap_list_for_message(
                 [f"<@{u}>" for u in excluded],
-                budget=EMBED_FIELD_BUDGET, limit=20, omitted_unit="人", joiner="、",
+                budget=EMBED_FIELD_BUDGET,
+                limit=20,
+                omitted_unit="人",
+                joiner="、",
             )
-            if excluded else "なし"
+            if excluded
+            else "なし"
         )
         embed.add_field(name="録音しない人", value=excluded_text, inline=False)
         if not settings["enabled"] and settings["auto_start"]:
@@ -275,10 +280,7 @@ def register_recording_commands(bot: Bot) -> None:
 
         if exclude:
             excluded.add(user_id)
-            message = (
-                "以後、このサーバーの録音では貴様の声は記録されぬ。"
-                "\n※ 進行中の録音にも即時反映される。"
-            )
+            message = "以後、このサーバーの録音では貴様の声は記録されぬ。" "\n※ 進行中の録音にも即時反映される。"
         else:
             excluded.discard(user_id)
             message = "除外を解除した。以後の録音では貴様の声も記録される。"

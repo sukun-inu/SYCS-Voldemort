@@ -42,6 +42,7 @@ def _tts_vc_became_empty(guild_id: int, channel) -> bool:
         return False
     from services.tts_service import get_effective_vc_watch as _get_vc_watch
     from services.tts_store import get_tts_settings as _get_tts_settings
+
     watched_id, _ = _get_vc_watch(guild_id, _get_tts_settings(guild_id))
     if not watched_id or int(watched_id) != channel.id:
         return False
@@ -97,14 +98,15 @@ async def _tts_vc_announce(bot: Bot, member: discord.Member, before, after) -> N
     try:
         _bch = before.channel
         _ach = after.channel
-        _ev = (
-            "join"  if _bch is None and _ach is not None else
-            "leave" if _bch is not None and _ach is None else
-            None
-        )
+        _ev = "join" if _bch is None and _ach is not None else "leave" if _bch is not None and _ach is None else None
         if _ev:
-            from services.tts_service import enqueue_vc_event as _tts_vc_event, get_effective_vc_watch as _get_vc_watch, disconnect as _tts_disconnect
+            from services.tts_service import (
+                enqueue_vc_event as _tts_vc_event,
+                get_effective_vc_watch as _get_vc_watch,
+                disconnect as _tts_disconnect,
+            )
             from services.tts_store import get_tts_settings as _get_tts_settings
+
             _cfg = _get_tts_settings(member.guild.id)
             _vid, _ = _get_vc_watch(member.guild.id, _cfg)
             # 全員退出: 監視VCがBot以外0人になったらTTSを切断（再接続防止）。
@@ -120,27 +122,39 @@ async def _tts_vc_announce(bot: Bot, member: discord.Member, before, after) -> N
 
 
 async def _log_vc_transition(
-    bot: Bot, member: discord.Member, is_join: bool, is_leave: bool, is_move: bool, before_ch, after_ch,
+    bot: Bot,
+    member: discord.Member,
+    is_join: bool,
+    is_leave: bool,
+    is_move: bool,
+    before_ch,
+    after_ch,
 ) -> None:
     """VC 参加 / 退出 / 移動 をログチャンネルへ。"""
     try:
         if is_join:
             await log_action(
-                bot, member.guild.id, "INFO",
+                bot,
+                member.guild.id,
+                "INFO",
                 f"{member.mention} が VC に参加しました。",
                 user=member,
                 fields={"チャンネル": after_ch.mention},
             )
         elif is_leave:
             await log_action(
-                bot, member.guild.id, "INFO",
+                bot,
+                member.guild.id,
+                "INFO",
                 f"{member.mention} が VC から退出しました。",
                 user=member,
                 fields={"チャンネル": before_ch.mention},
             )
         elif is_move:
             await log_action(
-                bot, member.guild.id, "INFO",
+                bot,
+                member.guild.id,
+                "INFO",
                 f"{member.mention} が VC を移動しました。",
                 user=member,
                 fields={
@@ -253,7 +267,8 @@ def _passes_vc_notify_filter(guild, is_join: bool, is_move: bool, before_ch, aft
                 "[BOT_SETUP] VC通知のフィルターロール role=%s が guild=%s に見つかりません。"
                 "非公開VCの通知が漏れないよう、見つかるまで通知を止めます。"
                 "ロールを作り直すか、管理画面でフィルターの設定を外してください。",
-                filter_role_id, guild.id,
+                filter_role_id,
+                guild.id,
             )
         return False
     _warned_missing_filter_role.pop(guild.id, None)
@@ -262,12 +277,8 @@ def _passes_vc_notify_filter(guild, is_join: bool, is_move: bool, before_ch, aft
     # すべて before_ch で判定していたため、そのロールに見えない VC へ
     # 移動しても、移動元さえ見えていれば通知が飛んでいた。
     # 関係するチャンネルのうち1つでも見えるなら通知する。
-    related = [c for c in (before_ch, after_ch) if c is not None] if is_move \
-        else [after_ch if is_join else before_ch]
-    return any(
-        c is not None and c.permissions_for(filter_role).view_channel
-        for c in related
-    )
+    related = [c for c in (before_ch, after_ch) if c is not None] if is_move else [after_ch if is_join else before_ch]
+    return any(c is not None and c.permissions_for(filter_role).view_channel for c in related)
 
 
 async def _vc_notify_handler(
@@ -301,7 +312,7 @@ async def _vc_notify_handler(
     else:
         eff_action = "move"
 
-    now_jst  = datetime.fromtimestamp(now_ts, tz=_JST)
+    now_jst = datetime.fromtimestamp(now_ts, tz=_JST)
     time_str = (
         f"{now_jst.year}年{now_jst.month}月{now_jst.day}日 "
         f"{_WDAYS[now_jst.weekday()]} "
@@ -309,20 +320,20 @@ async def _vc_notify_handler(
     )
 
     if eff_action == "join":
-        title       = "VCに参加しました"
+        title = "VCに参加しました"
         description = f"🔊 **{after_ch.name}** に参加しました\n\n{time_str}"
-        color       = discord.Color.green()
+        color = discord.Color.green()
     elif eff_action == "leave":
-        title       = "VCから切断しました"
-        desc_parts  = [f"🔊 **{before_ch.name}** から退出しました", "", time_str]
+        title = "VCから切断しました"
+        desc_parts = [f"🔊 **{before_ch.name}** から退出しました", "", time_str]
         if duration_str:
             desc_parts.append(f"通話時間: {duration_str}")
         description = "\n".join(desc_parts)
-        color       = discord.Color.red()
+        color = discord.Color.red()
     else:
-        title       = "VCを移動しました"
+        title = "VCを移動しました"
         description = f"🔊 **{before_ch.name}** → **{after_ch.name}**\n\n{time_str}"
-        color       = discord.Color.blurple()
+        color = discord.Color.blurple()
 
     embed = discord.Embed(
         title=title,
@@ -372,8 +383,7 @@ async def _stop_recording_if_vc_empty(bot: Bot, guild: discord.Guild, channel) -
             return
         except Exception as e:
             logger.debug("[BOT_SETUP] 録音結果を送れませんでした: %s", e)
-    logger.warning("[BOT_SETUP] guild=%s 録音結果の通知先がありませんでした（token=%s）",
-                   guild.id, result["token"])
+    logger.warning("[BOT_SETUP] guild=%s 録音結果の通知先がありませんでした（token=%s）", guild.id, result["token"])
 
 
 def register(bot: Bot) -> None:
@@ -396,21 +406,40 @@ def register(bot: Bot) -> None:
 
         # チャンネル参照を一度だけ取得（プロパティ再ルックアップによる None 化を防ぐ）
         before_ch = before.channel
-        after_ch  = after.channel
+        after_ch = after.channel
 
         key = (member.guild.id, member.id)
         now_ts = time.time()
         is_join, is_leave, is_move, duration_seconds, duration_str = _compute_vc_transition(
-            key, now_ts, before_ch, after_ch, _vc_join_times,
+            key,
+            now_ts,
+            before_ch,
+            after_ch,
+            _vc_join_times,
         )
 
         await _log_vc_transition(bot, member, is_join, is_leave, is_move, before_ch, after_ch)
         await _persist_vc_transition(
-            member, is_join, is_leave, is_move, before_ch, after_ch, duration_seconds, duration_str,
+            member,
+            is_join,
+            is_leave,
+            is_move,
+            before_ch,
+            after_ch,
+            duration_seconds,
+            duration_str,
         )
         await _safe(
             _vc_notify_handler(
-                member, is_join, is_leave, is_move, before_ch, after_ch, now_ts, duration_str, _vc_last_mention,
+                member,
+                is_join,
+                is_leave,
+                is_move,
+                before_ch,
+                after_ch,
+                now_ts,
+                duration_str,
+                _vc_last_mention,
             ),
             "VC notify",
         )
@@ -419,6 +448,7 @@ def register(bot: Bot) -> None:
         # スイッチで、両方オンなら同じ接続で両方動く。
         if is_join and after_ch is not None:
             from services import recording_service as recording
+
             await _safe(
                 recording.maybe_auto_start(bot, member, after_ch),
                 "録音の自動開始",
@@ -429,6 +459,7 @@ def register(bot: Bot) -> None:
             if is_join and after_ch is not None:
                 from services.tts_service import auto_join as _tts_auto_join, has_temp_override as _has_temp
                 from services.tts_store import get_tts_settings as _get_tts_settings
+
                 _tts_cfg = _get_tts_settings(member.guild.id)
                 _tts_vc_id = _tts_cfg.get("vc_channel_id")
                 if _tts_cfg.get("enabled") and _tts_vc_id and int(_tts_vc_id) == after_ch.id:
@@ -437,8 +468,12 @@ def register(bot: Bot) -> None:
                         # 読み上げが入った VC でも録音の条件を見る（入室側の
                         # 判定と入口が違うだけで、狙いは同じ）
                         from services import recording_service as _recording
+
                         await _recording.maybe_start_for_channel(
-                            bot, member.guild, after_ch, trigger="TTS参加",
+                            bot,
+                            member.guild,
+                            after_ch,
+                            trigger="TTS参加",
                         )
         except Exception as e:
             logger.exception("[BOT_SETUP] TTS auto_join error: %s", e)
@@ -452,6 +487,7 @@ def register(bot: Bot) -> None:
         try:
             if (is_leave or is_move) and _tts_vc_became_empty(member.guild.id, before_ch):
                 from services.tts_service import disconnect as _tts_disconnect
+
                 await _tts_disconnect(member.guild.id)
         except Exception as e:
             logger.exception("[BOT_SETUP] TTS auto_leave error: %s", e)

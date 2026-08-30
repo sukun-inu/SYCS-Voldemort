@@ -95,12 +95,10 @@ async def _handle_role_change(bot: Bot, before: discord.Member, after: discord.M
             timed_out_until=after.timed_out_until,
             payload={
                 "added_roles": [
-                    {"id": int(r.id), "name": str(r.name), "position": int(r.position)}
-                    for r in added_roles
+                    {"id": int(r.id), "name": str(r.name), "position": int(r.position)} for r in added_roles
                 ],
                 "removed_roles": [
-                    {"id": int(r.id), "name": str(r.name), "position": int(r.position)}
-                    for r in removed_roles
+                    {"id": int(r.id), "name": str(r.name), "position": int(r.position)} for r in removed_roles
                 ],
             },
         ),
@@ -395,6 +393,7 @@ def register(bot: Bot) -> None:
     （@bot.event は関数の __name__ を見て bot.on_member_join 等へ
     setattr するため、ラッパー自体は on_member_join という名前で無いといけない）。
     """
+
     @bot.event
     async def on_member_join(member: discord.Member):
         await _on_member_join(bot, member)

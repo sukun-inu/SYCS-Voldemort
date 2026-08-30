@@ -56,8 +56,7 @@ async def _handle_single_metal(interaction: discord.Interaction, grams: float, s
             spec.color,
             footer_text="Powered by MetalpriceAPI Free",
         )
-        await send_interaction(interaction, embed=embed, view=metals_site_view(),
-                               ephemeral=False)
+        await send_interaction(interaction, embed=embed, view=metals_site_view(), ephemeral=False)
     except (ValueError, MetalPriceError) as e:
         if interaction.guild is not None:
             await log_action(
@@ -91,7 +90,11 @@ def register_metal_commands(bot: discord.Client) -> None:
                     f"/metal {spec.key} 実行",
                     user=interaction.user,
                     fields={
-                        "チャンネル": interaction.channel.mention if hasattr(interaction.channel, "mention") else str(interaction.channel),
+                        "チャンネル": (
+                            interaction.channel.mention
+                            if hasattr(interaction.channel, "mention")
+                            else str(interaction.channel)
+                        ),
                         "グラム数": str(g),
                     },
                 )
@@ -130,8 +133,7 @@ def register_metal_commands(bot: discord.Client) -> None:
                 discord.Color.gold(),
                 footer_text="Powered by MetalpriceAPI Free",
             )
-            await send_interaction(interaction, embed=embed, view=metals_site_view(),
-                                   ephemeral=False)
+            await send_interaction(interaction, embed=embed, view=metals_site_view(), ephemeral=False)
 
             if interaction.guild is not None:
                 await log_action(
@@ -153,6 +155,8 @@ def register_metal_commands(bot: discord.Client) -> None:
                     fields={"エラー内容": str(e)},
                 )
             # 一人称は「余」で統一している（「俺」「俺様」はこのbotの口調ルール違反）。
-            await _respond_error(interaction, "エラーだ。余の力をもってしても処理できなかった。しばらく待ってから試せ。")
+            await _respond_error(
+                interaction, "エラーだ。余の力をもってしても処理できなかった。しばらく待ってから試せ。"
+            )
 
     bot.tree.add_command(group)

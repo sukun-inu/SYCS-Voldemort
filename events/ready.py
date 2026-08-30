@@ -51,18 +51,14 @@ def register(bot: Bot, state: EventState, loops: BackgroundLoops) -> None:
             # 多重起動を防ぎ、参照も保持する（保持しないと実行中に GC で
             # タスクごと消えることがある）。
             if state.djaudio_cleanup_task is None or state.djaudio_cleanup_task.done():
-                state.djaudio_cleanup_task = asyncio.create_task(
-                    djaudio_cache_cleanup(bot=bot, interval=60)
-                )
+                state.djaudio_cleanup_task = asyncio.create_task(djaudio_cache_cleanup(bot=bot, interval=60))
             logger.info("[BOT] background worker enabled: periodic jobs are active")
         else:
             logger.info("[BOT] BOT_BACKGROUND_WORKER=false: periodic background jobs are disabled")
 
         if _USER_STATE_SYNC_ON_READY and not state.user_state_sync_started:
             state.user_state_sync_started = True
-            state.user_state_sync_task = asyncio.create_task(
-                _sync_user_state_on_ready(bot, state.user_state_sync_lock)
-            )
+            state.user_state_sync_task = asyncio.create_task(_sync_user_state_on_ready(bot, state.user_state_sync_lock))
             logger.info(
                 "[BOT] USER_STATE_SYNC_ON_READY=true: background sync task started (delay=%ss)",
                 _USER_STATE_SYNC_DELAY_SECONDS,

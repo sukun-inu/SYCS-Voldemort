@@ -22,13 +22,15 @@ def _list(guild_id: int) -> list[dict[str, Any]]:
     for feed_id, feed in feeds.items():
         if not isinstance(feed, dict):
             continue
-        rows.append({
-            "id": str(feed_id),
-            "channel_id": str(feed.get("channel_id") or ""),
-            "query": feed.get("query", ""),
-            "interval": int(feed.get("interval") or 60),
-            "last_run": feed.get("last_run"),
-        })
+        rows.append(
+            {
+                "id": str(feed_id),
+                "channel_id": str(feed.get("channel_id") or ""),
+                "query": feed.get("query", ""),
+                "interval": int(feed.get("interval") or 60),
+                "last_run": feed.get("last_run"),
+            }
+        )
     return rows
 
 
@@ -77,12 +79,9 @@ PANEL = Panel(
                     remove=remove_news_feed,
                     help=f"最大 {MAX_FEEDS} 件まで登録できます。",
                     item_fields=(
-                        Field("channel_id", "送信先チャンネル", Widget.CHANNEL,
-                              required=True, nullable=False),
-                        Field("query", "検索クエリ", Widget.TEXT,
-                              required=True, nullable=False, max_len=200),
-                        Field("interval", "取得間隔（分）", Widget.INT,
-                              default=60, min=5, max=1440, nullable=False),
+                        Field("channel_id", "送信先チャンネル", Widget.CHANNEL, required=True, nullable=False),
+                        Field("query", "検索クエリ", Widget.TEXT, required=True, nullable=False, max_len=200),
+                        Field("interval", "取得間隔（分）", Widget.INT, default=60, min=5, max=1440, nullable=False),
                     ),
                 ),
             ),

@@ -19,10 +19,7 @@ _ID_SEPARATOR = ":"
 
 
 def _count(guild_id: int) -> int:
-    return sum(
-        len(entries) for entries in get_reaction_roles(guild_id).values()
-        if isinstance(entries, dict)
-    )
+    return sum(len(entries) for entries in get_reaction_roles(guild_id).values() if isinstance(entries, dict))
 
 
 def _list(guild_id: int) -> list[dict[str, Any]]:
@@ -31,12 +28,14 @@ def _list(guild_id: int) -> list[dict[str, Any]]:
         if not isinstance(entries, dict):
             continue
         for emoji, role_id in entries.items():
-            rows.append({
-                "id": f"{message_id}{_ID_SEPARATOR}{emoji}",
-                "message_id": str(message_id),
-                "emoji": emoji,
-                "role_id": str(role_id),
-            })
+            rows.append(
+                {
+                    "id": f"{message_id}{_ID_SEPARATOR}{emoji}",
+                    "message_id": str(message_id),
+                    "emoji": emoji,
+                    "role_id": str(role_id),
+                }
+            )
     return rows
 
 
@@ -73,13 +72,17 @@ PANEL = Panel(
                     remove=_remove,
                     help="対象メッセージに指定の絵文字が付くと、ロールを付与・剥奪します。",
                     item_fields=(
-                        Field("message_id", "メッセージID", Widget.SNOWFLAKE,
-                              required=True, nullable=False, max_len=20,
-                              help="Discord で対象メッセージを右クリック →「IDをコピー」で取得できます。"),
-                        Field("emoji", "絵文字", Widget.TEXT,
-                              required=True, nullable=False, max_len=50),
-                        Field("role_id", "付与するロール", Widget.ROLE,
-                              required=True, nullable=False),
+                        Field(
+                            "message_id",
+                            "メッセージID",
+                            Widget.SNOWFLAKE,
+                            required=True,
+                            nullable=False,
+                            max_len=20,
+                            help="Discord で対象メッセージを右クリック →「IDをコピー」で取得できます。",
+                        ),
+                        Field("emoji", "絵文字", Widget.TEXT, required=True, nullable=False, max_len=50),
+                        Field("role_id", "付与するロール", Widget.ROLE, required=True, nullable=False),
                     ),
                 ),
             ),

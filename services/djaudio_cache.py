@@ -69,11 +69,11 @@ def register_file(
     拡張子は元のファイルのものを引き継ぐ（録音の ZIP など mp3 以外も扱う）。
     引数名が mp3_path なのは既存の呼び出しとの互換のため。
     """
-    token     = uuid.uuid4().hex
+    token = uuid.uuid4().hex
     extension = mp3_path.suffix.lower() or ".mp3"
     if extension not in _CONTENT_TYPES:
         raise ValueError(f"配信できない拡張子です: {extension}")
-    dest      = DJAUDIO_CACHE_DIR / f"{token}{extension}"
+    dest = DJAUDIO_CACHE_DIR / f"{token}{extension}"
     meta_path = DJAUDIO_CACHE_DIR / f"{token}.json"
 
     shutil.move(str(mp3_path), dest)
@@ -82,13 +82,13 @@ def register_file(
     safe_title = _sanitize_filename(title, fallback=token)
     expires_at = datetime.now(timezone.utc).timestamp() + effective_ttl
     meta = {
-        "token":      token,
-        "guild_id":   str(guild_id),
-        "title":      title,
+        "token": token,
+        "guild_id": str(guild_id),
+        "title": title,
         "source_url": source_url,
-        "filename":   f"{safe_title}{extension}",
-        "extension":  extension,
-        "kind":       kind,
+        "filename": f"{safe_title}{extension}",
+        "extension": extension,
+        "kind": kind,
         "size_bytes": dest.stat().st_size,
         "expires_at": expires_at,
     }

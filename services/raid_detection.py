@@ -20,7 +20,8 @@ def _maybe_cleanup() -> None:
     _cleanup_counter = 0
     now = time.time()
     stale = [
-        cid for cid, history in list(_vc_join_history.items())
+        cid
+        for cid, history in list(_vc_join_history.items())
         if not any(now - h[0] < VC_RAID_WINDOW_SEC for h in history)
     ]
     for cid in stale:

@@ -175,8 +175,12 @@ async def tts_join(
     extra = ""
     if is_admin(interaction):
         from services import recording_service as recording
+
         await recording.maybe_start_for_channel(
-            interaction.client, interaction.guild, channel, trigger="/tts join",
+            interaction.client,
+            interaction.guild,
+            channel,
+            trigger="/tts join",
         )
         if recording.is_recording(interaction.guild.id):
             extra = "録音も始めた。"
@@ -209,7 +213,9 @@ async def tts_leave(interaction: discord.Interaction) -> None:
     await interaction.response.defer(thinking=True)
     try:
         result = await recording.stop_recording(
-            interaction.client, interaction.guild.id, reason="/tts leave で退出",
+            interaction.client,
+            interaction.guild.id,
+            reason="/tts leave で退出",
         )
     except recording.RecordingError as e:
         await tts_service.disconnect(interaction.guild.id)
@@ -248,19 +254,17 @@ async def _voice_autocomplete(
     current: str,
 ) -> list[app_commands.Choice[str]]:
     voices = await tts_service.fetch_voices()
-    return [
-        app_commands.Choice(name=v, value=v)
-        for v in voices
-        if current.lower() in v.lower()
-    ][:25]
+    return [app_commands.Choice(name=v, value=v) for v in voices if current.lower() in v.lower()][:25]
 
 
 @tts_group.command(name="read_name", description="メッセージ読み上げ時に発言者名を読み上げるか設定する")
 @app_commands.describe(enabled="on で名前あり、off で名前なし")
-@app_commands.choices(enabled=[
-    app_commands.Choice(name="on（名前を読み上げる）", value="on"),
-    app_commands.Choice(name="off（名前を読み上げない）", value="off"),
-])
+@app_commands.choices(
+    enabled=[
+        app_commands.Choice(name="on（名前を読み上げる）", value="on"),
+        app_commands.Choice(name="off（名前を読み上げない）", value="off"),
+    ]
+)
 async def tts_read_name_cmd(
     interaction: discord.Interaction,
     enabled: str,
@@ -336,11 +340,7 @@ async def _voice_set_autocomplete(
     current: str,
 ) -> list[app_commands.Choice[str]]:
     voices = await tts_service.fetch_voices()
-    return [
-        app_commands.Choice(name=v, value=v)
-        for v in voices
-        if current.lower() in v.lower()
-    ][:25]
+    return [app_commands.Choice(name=v, value=v) for v in voices if current.lower() in v.lower()][:25]
 
 
 @voice_group.command(name="reset", description="自分の読み上げ設定をデフォルトに戻す")

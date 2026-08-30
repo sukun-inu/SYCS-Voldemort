@@ -74,6 +74,7 @@ def channel_id(guild_id: int) -> int | None:
 
 # ── 占有 ─────────────────────────────────────────────────────
 
+
 def hold(guild_id: int, holder: str) -> None:
     """接続を掴む。掴んでいるあいだ release() は切断しない。"""
     _holds.setdefault(guild_id, set()).add(holder)
@@ -98,8 +99,12 @@ def is_held(guild_id: int) -> bool:
 
 # ── 接続 ─────────────────────────────────────────────────────
 
+
 async def acquire(
-    guild: discord.Guild, vc_channel_id: int, *, purpose: str = "tts",
+    guild: discord.Guild,
+    vc_channel_id: int,
+    *,
+    purpose: str = "tts",
 ) -> discord.VoiceClient | None:
     """VCに接続する。既に別チャンネルに繋がっていれば移動する。
 
@@ -116,7 +121,9 @@ async def acquire(
             if is_held(guild.id):
                 logger.info(
                     "[voice] guild=%s は %s が使用中のため移動しません（要求元: %s）",
-                    guild.id, "・".join(sorted(holders(guild.id))), purpose,
+                    guild.id,
+                    "・".join(sorted(holders(guild.id))),
+                    purpose,
                 )
                 return existing
             channel = guild.get_channel(vc_channel_id)
@@ -188,7 +195,8 @@ async def release(guild_id: int, *, force: bool = False) -> bool:
     if not force and is_held(guild_id):
         logger.debug(
             "[voice] guild=%s は %s が使用中のため切断を見送りました",
-            guild_id, "・".join(sorted(holders(guild_id))),
+            guild_id,
+            "・".join(sorted(holders(guild_id))),
         )
         return False
 
@@ -211,6 +219,7 @@ async def release(guild_id: int, *, force: bool = False) -> bool:
         # 拾い直すまで誰も気づけない）。黙って握りつぶさず理由を残す。
         logger.warning(
             "[voice] guild=%s 切断に失敗しました（管理外の接続が残っている可能性）: %s",
-            guild_id, e,
+            guild_id,
+            e,
         )
     return True

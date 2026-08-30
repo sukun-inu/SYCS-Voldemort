@@ -107,9 +107,7 @@ async def _scrape_sc_client_id_via_aiohttp() -> str | None:
     )
     try:
         timeout = aiohttp.ClientTimeout(total=30)
-        async with aiohttp.ClientSession(
-            headers={"User-Agent": _UA}, timeout=timeout
-        ) as session:
+        async with aiohttp.ClientSession(headers={"User-Agent": _UA}, timeout=timeout) as session:
             try:
                 async with session.get("https://soundcloud.com") as resp:
                     html = await resp.text()
@@ -168,9 +166,7 @@ async def _fetch_soundcloud_client_id(*, force: bool = False) -> str | None:
         logger.info("SoundCloud client_id を動的取得中 (force=%s)...", force)
 
         # Method 1: yt-dlp Python ライブラリ（subprocess バイナリとは別コード）
-        cid = await asyncio.get_event_loop().run_in_executor(
-            None, _sync_fetch_sc_client_id_via_ytdlp
-        )
+        cid = await asyncio.get_event_loop().run_in_executor(None, _sync_fetch_sc_client_id_via_ytdlp)
 
         # Method 2: aiohttp スクレイパー
         if not cid:
@@ -193,6 +189,7 @@ async def _fetch_soundcloud_client_id(*, force: bool = False) -> str | None:
 # yt-dlp / URL ユーティリティ
 # ──────────────────────────────────────────────
 
+
 def _extract_urls(content: str, max_urls: int) -> list[str]:
     urls: list[str] = []
     seen: set[str] = set()
@@ -212,14 +209,11 @@ def _normalize_text(value: str | None) -> str:
 
 
 def _format_title_from_metadata(meta: dict) -> str:
-    title  = _normalize_text(meta.get("title"))
+    title = _normalize_text(meta.get("title"))
     artist = _normalize_text(
-        meta.get("artist") or meta.get("album_artist")
-        or meta.get("creator") or meta.get("uploader")
+        meta.get("artist") or meta.get("album_artist") or meta.get("creator") or meta.get("uploader")
     )
-    track = _normalize_text(
-        meta.get("track") or meta.get("alt_title") or meta.get("release_title")
-    )
+    track = _normalize_text(meta.get("track") or meta.get("alt_title") or meta.get("release_title"))
     site = detect_site(meta)
 
     def _with_artist(first: str, second: str) -> str:
@@ -284,23 +278,36 @@ async def _run_ytdlp(url: str, output_dir: str, sc_client_id: str | None = None)
     cmd = [
         "yt-dlp",
         "-x",
-        "--audio-format", "mp3",
-        "--audio-quality", "0",
-        "-f", "bestaudio/best",
-        "--format-sort", "asr,abr,acodec:opus",
-        "--postprocessor-args", "ffmpeg:-q:a 0",
+        "--audio-format",
+        "mp3",
+        "--audio-quality",
+        "0",
+        "-f",
+        "bestaudio/best",
+        "--format-sort",
+        "asr,abr,acodec:opus",
+        "--postprocessor-args",
+        "ffmpeg:-q:a 0",
         "--write-info-json",
         "--embed-thumbnail",
-        "--convert-thumbnails", "jpg",
+        "--convert-thumbnails",
+        "jpg",
         "--embed-metadata",
-        "--concurrent-fragments", "4",
-        "--buffer-size", "1M",
-        "--http-chunk-size", "10M",
-        "--retries", "5",
-        "--socket-timeout", "30",
+        "--concurrent-fragments",
+        "4",
+        "--buffer-size",
+        "1M",
+        "--http-chunk-size",
+        "10M",
+        "--retries",
+        "5",
+        "--socket-timeout",
+        "30",
         "--no-playlist",
-        "-o", template,
-        "--ffmpeg-location", DJAUDIO_FFMPEG_PATH,
+        "-o",
+        template,
+        "--ffmpeg-location",
+        DJAUDIO_FFMPEG_PATH,
         "--no-warnings",
     ]
     if sc_client_id:
@@ -414,6 +421,7 @@ async def _remove_reaction_safe(message: discord.Message, emoji: str, bot: Bot) 
 # メッセージハンドラ（bot_setup から呼び出す）
 # ──────────────────────────────────────────────
 
+
 async def handle_djaudio_message(bot: Bot, message: discord.Message) -> None:
     """on_message から呼ばれる DJAudio URL 監視ハンドラ。"""
     if not message.guild:
@@ -429,7 +437,7 @@ async def handle_djaudio_message(bot: Bot, message: discord.Message) -> None:
         return
 
     supported_urls: list[str] = []
-    djaudio_rejected: list[str] = []   # DJ-Audio 非対応プラットフォーム・ドメイン
+    djaudio_rejected: list[str] = []  # DJ-Audio 非対応プラットフォーム・ドメイン
     security_rejected: list[str] = []  # セキュリティ上の理由でブロック
 
     for url in urls:

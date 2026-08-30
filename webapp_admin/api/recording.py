@@ -82,15 +82,17 @@ def _recordings(guild_id: int) -> list[dict]:
         expires_at = float(meta.get("expires_at") or 0)
         if now > expires_at:
             continue
-        rows.append({
-            "token": meta.get("token"),
-            "title": meta.get("title", ""),
-            "filename": meta.get("filename", ""),
-            "size_mb": round(int(meta.get("size_bytes") or 0) / 1024 / 1024, 1),
-            "expires_at": expires_at,
-            "remaining_hours": max(0, int((expires_at - now) // 3600)),
-            "url": f"/dlaudio/files/{guild_id}/{meta.get('token')}",
-        })
+        rows.append(
+            {
+                "token": meta.get("token"),
+                "title": meta.get("title", ""),
+                "filename": meta.get("filename", ""),
+                "size_mb": round(int(meta.get("size_bytes") or 0) / 1024 / 1024, 1),
+                "expires_at": expires_at,
+                "remaining_hours": max(0, int((expires_at - now) // 3600)),
+                "url": f"/dlaudio/files/{guild_id}/{meta.get('token')}",
+            }
+        )
     return rows
 
 
@@ -129,7 +131,8 @@ async def recording_overview(
         # チャンネルは ID を手打ちさせず選ばせたいので、状況と一緒に返す。
         # 取得に失敗した供給元は空リストで返る（画面側は手入力へ切り替える）。
         picks = await choice_resolver.resolve(
-            {ChoiceSource.CHANNELS, ChoiceSource.VOICE_CHANNELS}, guild_id,
+            {ChoiceSource.CHANNELS, ChoiceSource.VOICE_CHANNELS},
+            guild_id,
         )
         payload["channels"] = picks.get(ChoiceSource.CHANNELS.value, [])
         payload["voice_channels"] = picks.get(ChoiceSource.VOICE_CHANNELS.value, [])
@@ -144,16 +147,21 @@ async def recording_start(request: Request, _=Depends(check_guild), _csrf=Depend
     body = await _json_body(request)
     channel_id = _require_id(body.get("channel_id"), "VCのチャンネルID")
 
-    _write_signal("recording_start", {
-        "guild_id": guild_id,
-        "channel_id": channel_id,
-        "started_by": (request.session.get("user") or {}).get("global_name")
-                      or (request.session.get("user") or {}).get("username")
-                      or "管理画面",
-    })
-    return JSONResponse({
-        "message": "録音の開始をキューに追加しました。数十秒以内に開始され、VCへ通知が出ます。",
-    })
+    _write_signal(
+        "recording_start",
+        {
+            "guild_id": guild_id,
+            "channel_id": channel_id,
+            "started_by": (request.session.get("user") or {}).get("global_name")
+            or (request.session.get("user") or {}).get("username")
+            or "管理画面",
+        },
+    )
+    return JSONResponse(
+        {
+            "message": "録音の開始をキューに追加しました。数十秒以内に開始され、VCへ通知が出ます。",
+        }
+    )
 
 
 @router.post("/recording/stop")
@@ -161,9 +169,11 @@ async def recording_start(request: Request, _=Depends(check_guild), _csrf=Depend
 async def recording_stop(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
     guild_id = _guild_id(request)
     _write_signal("recording_stop", {"guild_id": guild_id})
-    return JSONResponse({
-        "message": "録音の停止をキューに追加しました。書き出しが終わるとリンクが出ます。",
-    })
+    return JSONResponse(
+        {
+            "message": "録音の停止をキューに追加しました。書き出しが終わるとリンクが出ます。",
+        }
+    )
 
 
 @router.put("/recording/settings")
@@ -228,7 +238,9 @@ async def recording_settings(request: Request, _=Depends(check_guild), _csrf=Dep
         raise HTTPException(status_code=400, detail="変更する項目がありません。")
 
     await awrite(set_recording_settings, guild_id, patch)
-    return JSONResponse({
-        "message": "録音の設定を保存しました。",
-        "settings": get_recording_settings(guild_id),
-    })
+    return JSONResponse(
+        {
+            "message": "録音の設定を保存しました。",
+            "settings": get_recording_settings(guild_id),
+        }
+    )

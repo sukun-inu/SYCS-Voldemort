@@ -19,7 +19,7 @@ from typing import Any
 from starlette.responses import JSONResponse
 
 # JavaScript の Number.MAX_SAFE_INTEGER
-JS_SAFE_MAX = 2 ** 53 - 1
+JS_SAFE_MAX = 2**53 - 1
 
 
 def stringify_big_ints(value: Any) -> Any:

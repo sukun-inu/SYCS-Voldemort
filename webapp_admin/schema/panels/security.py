@@ -69,8 +69,7 @@ PANEL = Panel(
                     remove=_trusted_remove,
                     help="スパム・レイド検出の対象から外します。",
                     item_fields=(
-                        Field("user_id", "ユーザーID", Widget.SNOWFLAKE,
-                              required=True, nullable=False, max_len=20),
+                        Field("user_id", "ユーザーID", Widget.SNOWFLAKE, required=True, nullable=False, max_len=20),
                     ),
                 ),
             ),
@@ -87,10 +86,7 @@ PANEL = Panel(
                     add=_bypass_add,
                     remove=_bypass_remove,
                     help="このロールを持つ人は検出の対象外になります。",
-                    item_fields=(
-                        Field("role_id", "ロール", Widget.ROLE,
-                              required=True, nullable=False),
-                    ),
+                    item_fields=(Field("role_id", "ロール", Widget.ROLE, required=True, nullable=False),),
                 ),
             ),
         ),

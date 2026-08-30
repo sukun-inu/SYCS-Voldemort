@@ -6,7 +6,9 @@ from services.settings_store import get_goodbye_settings, get_welcome_settings
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_WELCOME = "新たなる者よ、{user} がこの地に降り立った。**{server}** へようこそ… 余の治める場所へ。（現在 {count} 名）"
+DEFAULT_WELCOME = (
+    "新たなる者よ、{user} がこの地に降り立った。**{server}** へようこそ… 余の治める場所へ。（現在 {count} 名）"
+)
 DEFAULT_GOODBYE = "{username} が去っていった。余の名を知りながら逃げるとは… 嘆かわしい。"
 
 # 後方互換（旧名を参照している箇所があっても壊れないように）
@@ -29,8 +31,7 @@ def render_template(
     確かめる」ためのテストが本番と違う文面を出していた。
     """
     return (
-        template
-        .replace("{user}", user)
+        template.replace("{user}", user)
         .replace("{username}", username)
         .replace("{server}", server)
         .replace("{count}", str(count if count is not None else 0))

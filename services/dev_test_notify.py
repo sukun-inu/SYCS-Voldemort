@@ -24,13 +24,13 @@ logger = logging.getLogger(__name__)
 # kind → (人が読む名前, その機能の本番用チャンネルIDを引く関数)
 # 「本番ではどこへ送るのか」をここに一覧化しておく。
 _TEST_KINDS: dict[str, str] = {
-    "welcome":        "ウェルカム",
-    "goodbye":        "お別れ",
-    "vc":             "VC通知",
-    "logging":        "ログ出力",
-    "sticky":         "スティッキー",
+    "welcome": "ウェルカム",
+    "goodbye": "お別れ",
+    "vc": "VC通知",
+    "logging": "ログ出力",
+    "sticky": "スティッキー",
     "reaction_roles": "リアクションロール",
-    "tts":            "読み上げ",
+    "tts": "読み上げ",
 }
 
 KINDS = tuple(_TEST_KINDS)
@@ -58,6 +58,7 @@ def _configured_channel_id(kind: str, guild_id: int) -> int | None:
         return _as_id(get_vc_notify_channel_id(guild_id))
     if kind == "logging":
         from services.logging_service import get_log_settings
+
         return _as_id(get_log_settings(guild_id).get("log_channel_id"))
     if kind == "sticky":
         # スティッキーはチャンネルごとの設定。最初の1つを既定の送信先にする。
@@ -81,7 +82,10 @@ def _as_id(value) -> int | None:
 
 
 def resolve_channel(
-    bot: Bot, kind: str, guild_id: int, override_channel_id: int | None,
+    bot: Bot,
+    kind: str,
+    guild_id: int,
+    override_channel_id: int | None,
 ) -> tuple[discord.TextChannel | None, str]:
     """送信先を決める。決まらなければ理由を1文で返す。
 
@@ -100,10 +104,7 @@ def resolve_channel(
 
     channel_id = _configured_channel_id(kind, guild_id)
     if channel_id is None:
-        return None, (
-            f"「{kind_label(kind)}」のチャンネルが未設定です"
-            "（送信先チャンネルIDの指定もありません）"
-        )
+        return None, (f"「{kind_label(kind)}」のチャンネルが未設定です" "（送信先チャンネルIDの指定もありません）")
 
     channel = guild.get_channel(channel_id)
     if not isinstance(channel, discord.TextChannel):
@@ -113,10 +114,13 @@ def resolve_channel(
 
 # ── 各テストの中身 ───────────────────────────────────────────
 
+
 async def _send_welcome_like(channel, guild, *, goodbye: bool) -> str:
     from services.settings_store import get_goodbye_settings, get_welcome_settings
     from services.welcome_service import (
-        DEFAULT_GOODBYE, DEFAULT_WELCOME, render_template,
+        DEFAULT_GOODBYE,
+        DEFAULT_WELCOME,
+        render_template,
     )
 
     settings = get_goodbye_settings(guild.id) if goodbye else get_welcome_settings(guild.id)
@@ -191,8 +195,7 @@ async def _send_reaction_roles(channel, guild) -> str:
     mappings = get_reaction_roles(guild.id)
     if not mappings:
         await channel.send(
-            "🧪 **[テスト送信 — リアクションロール]**\n"
-            "このサーバーにはリアクションロールが設定されていません。"
+            "🧪 **[テスト送信 — リアクションロール]**\n" "このサーバーにはリアクションロールが設定されていません。"
         )
         return "リアクションロール未設定であることを通知しました"
 
@@ -208,8 +211,7 @@ async def _send_reaction_roles(channel, guild) -> str:
 
     message = await channel.send(
         "🧪 **[テスト送信 — リアクションロール]**\n"
-        "設定されている組み合わせです（このメッセージのリアクションではロールは付きません）。\n"
-        + "\n".join(lines[:20])
+        "設定されている組み合わせです（このメッセージのリアクションではロールは付きません）。\n" + "\n".join(lines[:20])
     )
 
     added, failed = 0, []
@@ -249,25 +251,26 @@ async def _send_tts(channel, guild, bot: Bot) -> str:
     # 再生されない）。ここは「キューに入れました」と成功を返した直後に
     # 本番と違う理由で無音になる、という一番気づきにくい壊れ方だった。
     await enqueue_message(bot, guild, speaker, "これは読み上げのテストです。")
-    await channel.send(
-        f"🧪 **[テスト送信 — 読み上げ]**\n<#{vc_id}> で読み上げをキューに入れました。"
-    )
+    await channel.send(f"🧪 **[テスト送信 — 読み上げ]**\n<#{vc_id}> で読み上げをキューに入れました。")
     return f"VC {vc_id} への読み上げをキューに入れました"
 
 
 _SENDERS = {
-    "welcome":        lambda ch, g, bot: _send_welcome_like(ch, g, goodbye=False),
-    "goodbye":        lambda ch, g, bot: _send_welcome_like(ch, g, goodbye=True),
-    "vc":             lambda ch, g, bot: _send_vc(ch, g),
-    "logging":        lambda ch, g, bot: _send_logging(ch, g),
-    "sticky":         lambda ch, g, bot: _send_sticky(ch, g),
+    "welcome": lambda ch, g, bot: _send_welcome_like(ch, g, goodbye=False),
+    "goodbye": lambda ch, g, bot: _send_welcome_like(ch, g, goodbye=True),
+    "vc": lambda ch, g, bot: _send_vc(ch, g),
+    "logging": lambda ch, g, bot: _send_logging(ch, g),
+    "sticky": lambda ch, g, bot: _send_sticky(ch, g),
     "reaction_roles": lambda ch, g, bot: _send_reaction_roles(ch, g),
-    "tts":            _send_tts,
+    "tts": _send_tts,
 }
 
 
 async def run_test(
-    bot: Bot, kind: str, guild_id: int, override_channel_id: int | None = None,
+    bot: Bot,
+    kind: str,
+    guild_id: int,
+    override_channel_id: int | None = None,
 ) -> None:
     """1件のテスト送信を実行し、結果をログに残す。"""
     if kind not in _SENDERS:
@@ -278,12 +281,18 @@ async def run_test(
     if channel is None:
         logger.warning(
             "[DEV] test_notify(%s): guild=%s へ送れませんでした（理由: %s）",
-            kind, guild_id, reason,
+            kind,
+            guild_id,
+            reason,
         )
         return
 
     guild = bot.get_guild(guild_id)
     result = await _SENDERS[kind](channel, guild, bot)
     logger.info(
-        "[DEV] test_notify(%s): guild=%s ch=%s %s", kind, guild_id, channel.id, result,
+        "[DEV] test_notify(%s): guild=%s ch=%s %s",
+        kind,
+        guild_id,
+        channel.id,
+        result,
     )

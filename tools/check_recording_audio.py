@@ -48,12 +48,12 @@ import services.recording_service as rec  # noqa: E402
 from config import DJAUDIO_FFMPEG_PATH  # noqa: E402
 
 SR = rec.SAMPLE_RATE
-FRAME_SAMPLES = 960                      # 20ms
-VOICE_LIMIT = 0.30                       # これを下回ったら声として成立していない
+FRAME_SAMPLES = 960  # 20ms
+VOICE_LIMIT = 0.30  # これを下回ったら声として成立していない
 WINDOW_SECONDS = 0.04
-PITCH_LOW_HZ, PITCH_HIGH_HZ = 60, 400    # 人の声の高さ
-_MAX_WINDOWS = 40                        # 全部見ると遅い。散らして拾う。
-_STRIDE = 4                              # 自己相関を間引く
+PITCH_LOW_HZ, PITCH_HIGH_HZ = 60, 400  # 人の声の高さ
+_MAX_WINDOWS = 40  # 全部見ると遅い。散らして拾う。
+_STRIDE = 4  # 自己相関を間引く
 
 failures: list[str] = []
 
@@ -66,13 +66,29 @@ def check(label: str, condition: bool, extra: str = "") -> None:
 
 # ── 測る ──────────────────────────────────────────────────────
 
+
 def to_mono(path: Path) -> array.array:
     result = subprocess.run(
-        [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-i", str(path),
-         "-f", "s16le", "-ar", str(SR), "-ac", "1", "-"],
-        capture_output=True, timeout=300)
+        [
+            DJAUDIO_FFMPEG_PATH,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            str(path),
+            "-f",
+            "s16le",
+            "-ar",
+            str(SR),
+            "-ac",
+            "1",
+            "-",
+        ],
+        capture_output=True,
+        timeout=300,
+    )
     samples = array.array("h")
-    samples.frombytes(result.stdout[:len(result.stdout) - len(result.stdout) % 2])
+    samples.frombytes(result.stdout[: len(result.stdout) - len(result.stdout) % 2])
     return samples
 
 
@@ -86,18 +102,18 @@ def periodicity(samples: array.array) -> float:
     starts = [s for s in range(0, max(1, len(samples) - size), size)]
     loud = []
     for start in starts:
-        seg = samples[start:start + size]
-        if sum(v * v for v in seg) >= size * (900 ** 2):
+        seg = samples[start : start + size]
+        if sum(v * v for v in seg) >= size * (900**2):
             loud.append(start)
     if not loud:
         return float("nan")
-    if len(loud) > _MAX_WINDOWS:                 # 全体に散らして間引く
+    if len(loud) > _MAX_WINDOWS:  # 全体に散らして間引く
         step = len(loud) / _MAX_WINDOWS
         loud = [loud[int(i * step)] for i in range(_MAX_WINDOWS)]
 
     scores = []
     for start in loud:
-        seg = samples[start:start + size]
+        seg = samples[start : start + size]
         best = 0.0
         for lag in range(low, high):
             span = range(0, size - lag, _STRIDE)
@@ -111,6 +127,7 @@ def periodicity(samples: array.array) -> float:
 
 
 # ── 通す ──────────────────────────────────────────────────────
+
 
 def speech_like(seconds: float = 5.0) -> bytes:
     """声に近い信号。倍音列にフォルマントの山谷があり、基本周波数が揺れる。
@@ -143,8 +160,7 @@ def speech_like(seconds: float = 5.0) -> bytes:
 def encode(pcm: bytes) -> list[bytes]:
     encoder = opus.Encoder()
     step = FRAME_SAMPLES * 4
-    return [encoder.encode(pcm[o:o + step], FRAME_SAMPLES)
-            for o in range(0, len(pcm) - step + 1, step)]
+    return [encoder.encode(pcm[o : o + step], FRAME_SAMPLES) for o in range(0, len(pcm) - step + 1, step)]
 
 
 def delivery_order(count: int, rng: random.Random) -> list[int]:
@@ -179,9 +195,14 @@ def record(frames: list[bytes], order: list[int]) -> tuple[Path, dict]:
     from discord.ext.voice_recv.rtp import OPUS_SILENCE
 
     session = rec.RecordingSession(
-        guild_id=999, channel_id=1, channel_name="VC",
-        started_by_id=1, started_by_name="t",
-        started_at=time.monotonic(), max_seconds=0, retention_days=1,
+        guild_id=999,
+        channel_id=1,
+        channel_name="VC",
+        started_by_id=1,
+        started_by_name="t",
+        started_at=time.monotonic(),
+        max_seconds=0,
+        retention_days=1,
     )
     session.workdir = Path(tempfile.mkdtemp(prefix="recaudio-work-"))
     sink = rec._make_sink_class()(session)
@@ -191,8 +212,7 @@ def record(frames: list[bytes], order: list[int]) -> tuple[Path, dict]:
     ssrc, base_seq, base_ts = 24233, 27000, 5_000_000
 
     for n, idx in enumerate(order):
-        packet = _Packet(ssrc, (base_seq + idx) % 65536,
-                         (base_ts + idx * FRAME_SAMPLES) % (2 ** 32))
+        packet = _Packet(ssrc, (base_seq + idx) % 65536, (base_ts + idx * FRAME_SAMPLES) % (2**32))
         data = Mock()
         data.packet = packet
         data.opus = frames[idx]
@@ -200,8 +220,7 @@ def record(frames: list[bytes], order: list[int]) -> tuple[Path, dict]:
         if n % 37 == 36:
             # 発話の切れ目に来る無音パケット（sequence は常に -1）
             for _ in range(5):
-                silence = _Packet(ssrc, -1,
-                                  (base_ts + idx * FRAME_SAMPLES) % (2 ** 32))
+                silence = _Packet(ssrc, -1, (base_ts + idx * FRAME_SAMPLES) % (2**32))
                 sdata = Mock()
                 sdata.packet = silence
                 sdata.opus = OPUS_SILENCE
@@ -221,19 +240,28 @@ def record(frames: list[bytes], order: list[int]) -> tuple[Path, dict]:
 
 def spectrogram(src: Path, dest: Path) -> Path:
     subprocess.run(
-        [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-y", "-i", str(src),
-         "-lavfi",
-         "showspectrumpic=s=860x340:mode=combined:color=intensity:scale=log:legend=1",
-         str(dest)], check=True, timeout=300)
+        [
+            DJAUDIO_FFMPEG_PATH,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(src),
+            "-lavfi",
+            "showspectrumpic=s=860x340:mode=combined:color=intensity:scale=log:legend=1",
+            str(dest),
+        ],
+        check=True,
+        timeout=300,
+    )
     return dest
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("audio", nargs="?",
-                        help="実物の録音を測る（省略すると合成した声で通す）")
-    parser.add_argument("--images", action="store_true",
-                        help="スペクトログラムも書き出す")
+    parser.add_argument("audio", nargs="?", help="実物の録音を測る（省略すると合成した声で通す）")
+    parser.add_argument("--images", action="store_true", help="スペクトログラムも書き出す")
     args = parser.parse_args()
 
     tmp = Path(tempfile.gettempdir())
@@ -246,8 +274,7 @@ def main() -> int:
             return 1
         score = periodicity(to_mono(path))
         print(f"{path.name}: 周期性 {score:.3f}")
-        check("人の声として成立している", score >= VOICE_LIMIT,
-              f"{score:.3f}（下限 {VOICE_LIMIT}）")
+        check("人の声として成立している", score >= VOICE_LIMIT, f"{score:.3f}（下限 {VOICE_LIMIT}）")
         if args.images:
             print("  スペクトログラム:", spectrogram(path, tmp / "recaudio-real.png"))
         print()
@@ -267,26 +294,43 @@ def main() -> int:
     print(f"入力 {len(frames)} フレーム（5秒）/ 届く順序は本番ログと同じ乱れ方\n")
 
     out_mp3, counters = record(frames, order)
-    print(f"  デコード失敗 {counters['failed']} / 欠落 {counters['lost']} / "
-          f"手遅れ {counters['late']} / 無音 {counters['silence']}\n")
+    print(
+        f"  デコード失敗 {counters['failed']} / 欠落 {counters['lost']} / "
+        f"手遅れ {counters['late']} / 無音 {counters['silence']}\n"
+    )
 
     source_wav = tmp / "recaudio-input.wav"
     subprocess.run(
-        [DJAUDIO_FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-y",
-         "-f", "s16le", "-ar", str(SR), "-ac", "2", "-i", "pipe:0", str(source_wav)],
-        input=source, check=True, timeout=300)
+        [
+            DJAUDIO_FFMPEG_PATH,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "s16le",
+            "-ar",
+            str(SR),
+            "-ac",
+            "2",
+            "-i",
+            "pipe:0",
+            str(source_wav),
+        ],
+        input=source,
+        check=True,
+        timeout=300,
+    )
 
     before = periodicity(to_mono(source_wav))
     after = periodicity(to_mono(out_mp3))
 
-    check("元の信号が声として成立している（前提の確認）", before >= VOICE_LIMIT,
-          f"周期性 {before:.3f}")
-    check("録音した音が雑音になっていない", after >= VOICE_LIMIT,
-          f"周期性 {after:.3f}（下限 {VOICE_LIMIT}）")
-    check("元の信号から大きく崩れていない", after >= before * 0.6,
-          f"入力 {before:.3f} → 出力 {after:.3f}")
-    check("欠落が入力の3割を超えていない", counters["lost"] <= len(frames) * 0.30,
-          f"{counters['lost']} / {len(frames)}")
+    check("元の信号が声として成立している（前提の確認）", before >= VOICE_LIMIT, f"周期性 {before:.3f}")
+    check("録音した音が雑音になっていない", after >= VOICE_LIMIT, f"周期性 {after:.3f}（下限 {VOICE_LIMIT}）")
+    check("元の信号から大きく崩れていない", after >= before * 0.6, f"入力 {before:.3f} → 出力 {after:.3f}")
+    check(
+        "欠落が入力の3割を超えていない", counters["lost"] <= len(frames) * 0.30, f"{counters['lost']} / {len(frames)}"
+    )
     check("デコードに失敗していない", counters["failed"] == 0, str(counters["failed"]))
 
     if args.images:
@@ -295,8 +339,7 @@ def main() -> int:
         print("  出力:", spectrogram(out_mp3, tmp / "recaudio-out.png"))
 
     print()
-    print("RESULT:", "all passed" if not failures
-          else f"{len(failures)} 件失敗: {failures}")
+    print("RESULT:", "all passed" if not failures else f"{len(failures)} 件失敗: {failures}")
     return 1 if failures else 0
 
 

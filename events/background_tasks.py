@@ -125,6 +125,7 @@ def register(bot: Bot, state: EventState) -> BackgroundLoops:
                     await process_pending_stickies(bot)
                 elif task_name == "djaudio_cache":
                     from services.djaudio_cache import _cleanup_expired
+
                     await _cleanup_expired(bot=bot)
                 elif task_name == "earthquake_reconnect":
                     if state.ws_task and not state.ws_task.done():
@@ -140,6 +141,7 @@ def register(bot: Bot, state: EventState) -> BackgroundLoops:
                     )
                 elif task_name == "eq_replay":
                     from services.earthquake_service import _notify_all_guilds
+
                     payload = json.loads(sig_content)
                     # 新形式は {"event": ..., "guild_id": ...|None, "channel_id": ...|None}。
                     # ロールアウト中に旧形式（イベント本体を直接書いた文字列）が
@@ -154,7 +156,10 @@ def register(bot: Bot, state: EventState) -> BackgroundLoops:
                         only_guild_id = None
                         override_channel_id = None
                     sent = await _notify_all_guilds(
-                        bot, event, only_guild_id=only_guild_id, override_channel_id=override_channel_id,
+                        bot,
+                        event,
+                        only_guild_id=only_guild_id,
+                        override_channel_id=override_channel_id,
                     )
                     # 0 件のときの理由は _notify_all_guilds 側が warning ログを出す。
                     # ここでは「シグナル完了」ログだけでは何が起きたか分からない、
@@ -163,13 +168,15 @@ def register(bot: Bot, state: EventState) -> BackgroundLoops:
                 elif task_name in ("recording_start", "recording_stop"):
                     # 管理画面は別プロセスなので、録音の開始・停止はここで受ける。
                     from services import recording_service as recording
+
                     payload = json.loads(sig_content)
                     guild_id = int(payload.get("guild_id", 0))
                     guild = bot.get_guild(guild_id)
                     if guild is None:
                         logger.warning(
-                            "[DEV] %s: guild_id=%s が見つかりません"
-                            "（bot が未参加、またはキャッシュ未反映）", task_name, guild_id,
+                            "[DEV] %s: guild_id=%s が見つかりません" "（bot が未参加、またはキャッシュ未反映）",
+                            task_name,
+                            guild_id,
                         )
                     elif task_name == "recording_start":
                         channel = guild.get_channel(int(payload.get("channel_id", 0)))
@@ -182,7 +189,10 @@ def register(bot: Bot, state: EventState) -> BackgroundLoops:
                             starter = guild.me or bot.user
                             try:
                                 await recording.start_recording(
-                                    bot, guild, channel, started_by=starter,
+                                    bot,
+                                    guild,
+                                    channel,
+                                    started_by=starter,
                                 )
                                 logger.info("[DEV] recording_start: guild=%s ch=%s", guild_id, channel.id)
                             except recording.RecordingError as e:
@@ -192,14 +202,16 @@ def register(bot: Bot, state: EventState) -> BackgroundLoops:
                             result = await recording.stop_recording(bot, guild_id, reason="管理画面から停止")
                             embed = recording.build_result_embed(guild_id, result)
                             target = recording.resolve_announce_channel(
-                                guild, fallback=guild.get_channel(result["channel_id"]),
+                                guild,
+                                fallback=guild.get_channel(result["channel_id"]),
                             )
                             if isinstance(target, discord.abc.Messageable):
                                 await target.send(embed=embed)
                             else:
                                 logger.warning(
                                     "[DEV] recording_stop: guild=%s 結果の送信先がありません（token=%s）",
-                                    guild_id, result["token"],
+                                    guild_id,
+                                    result["token"],
                                 )
                             logger.info("[DEV] recording_stop: guild=%s token=%s", guild_id, result["token"])
                         except recording.RecordingError as e:
@@ -209,7 +221,8 @@ def register(bot: Bot, state: EventState) -> BackgroundLoops:
                     # 「本番と同じ関数を使う」「channel_id 指定なら本番の
                     # チャンネル設定を見ずに直接送る」をそちらで一括して守る。
                     from services.dev_test_notify import KINDS, run_test
-                    kind = task_name[len("test_"):]
+
+                    kind = task_name[len("test_") :]
                     if kind not in KINDS:
                         logger.warning("[DEV] 未知の通知テストです: %s", kind)
                     else:
@@ -225,7 +238,8 @@ def register(bot: Bot, state: EventState) -> BackgroundLoops:
                     # ログが残り、何も実行されないまま成功に見える。名前の打ち間違いや
                     # 実装漏れが静かに埋もれるので、必ず声を上げる。
                     logger.warning(
-                        "[DEV] 未知のシグナルなので何もしませんでした: %s", task_name,
+                        "[DEV] 未知のシグナルなので何もしませんでした: %s",
+                        task_name,
                     )
                     continue
                 logger.info("[DEV] シグナル完了: %s", task_name)

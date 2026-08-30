@@ -21,7 +21,9 @@ logger = logging.getLogger(__name__)
 # 伸ばす方向（3650日超）だけを env で受け付ける。
 USER_STATE_RETENTION_DAYS = env_int("USER_STATE_RETENTION_DAYS", 3650, minimum=3650)
 USER_STATE_CLEANUP_INTERVAL_SECONDS = env_int(
-    "USER_STATE_CLEANUP_INTERVAL_SECONDS", 21600, minimum=300,
+    "USER_STATE_CLEANUP_INTERVAL_SECONDS",
+    21600,
+    minimum=300,
 )
 
 _last_cleanup_at: datetime | None = None
@@ -199,9 +201,7 @@ async def _cleanup_old_events_if_needed(now: datetime) -> None:
     for attempt in range(2):
         async with SessionLocal() as session:
             try:
-                await session.execute(
-                    delete(UserStateEvent).where(UserStateEvent.event_at < cutoff)
-                )
+                await session.execute(delete(UserStateEvent).where(UserStateEvent.event_at < cutoff))
                 await session.commit()
                 _last_cleanup_at = now
                 return
@@ -462,11 +462,15 @@ async def list_recent_user_states(
         async with SessionLocal() as session:
             try:
                 stmt = _apply_state_filter(select(UserStateCurrent), guild_id, query)
-                stmt = stmt.order_by(
-                    UserStateCurrent.last_event_at.desc().nullslast(),
-                    UserStateCurrent.updated_at.desc().nullslast(),
-                    UserStateCurrent.id.desc(),
-                ).limit(safe_limit).offset(safe_offset)
+                stmt = (
+                    stmt.order_by(
+                        UserStateCurrent.last_event_at.desc().nullslast(),
+                        UserStateCurrent.updated_at.desc().nullslast(),
+                        UserStateCurrent.id.desc(),
+                    )
+                    .limit(safe_limit)
+                    .offset(safe_offset)
+                )
 
                 rows = (await session.scalars(stmt)).all()
                 return [_row_to_state_payload(r) for r in rows]
@@ -707,13 +711,9 @@ async def sync_guild_user_states(
         async with SessionLocal() as session:
             try:
                 existing_rows = (
-                    await session.scalars(
-                        select(UserStateCurrent).where(UserStateCurrent.guild_id == safe_guild_id)
-                    )
+                    await session.scalars(select(UserStateCurrent).where(UserStateCurrent.guild_id == safe_guild_id))
                 ).all()
-                rows_by_user_id: dict[int, UserStateCurrent] = {
-                    int(row.user_id): row for row in existing_rows
-                }
+                rows_by_user_id: dict[int, UserStateCurrent] = {int(row.user_id): row for row in existing_rows}
 
                 present_member_ids: set[int] = set()
                 banned_user_ids: set[int] = set()
@@ -818,11 +818,7 @@ async def sync_guild_user_states(
                         ability_snapshot=None,
                     )
 
-                    if write_events_on_sync and (
-                        created
-                        or before_status != "banned"
-                        or before_banned is False
-                    ):
+                    if write_events_on_sync and (created or before_status != "banned" or before_banned is False):
                         session.add(
                             _build_state_event(
                                 guild_id=safe_guild_id,

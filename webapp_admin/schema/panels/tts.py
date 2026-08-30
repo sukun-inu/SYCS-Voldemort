@@ -102,6 +102,7 @@ def _set_rate(guild_id: int, value) -> None:
 
 # ── コレクション: 読み上げ対象チャンネル ──────────────────────
 
+
 def _watch_list(guild_id: int) -> list[dict[str, Any]]:
     return [{"id": str(cid), "channel_id": str(cid)} for cid in _watch_ids(guild_id)]
 
@@ -123,11 +124,9 @@ def _watch_remove(guild_id: int, item_id: str) -> None:
 
 # ── コレクション: 読み上げ辞書 ────────────────────────────────
 
+
 def _dict_list(guild_id: int) -> list[dict[str, Any]]:
-    return [
-        {"id": word, "word": word, "reading": reading}
-        for word, reading in get_tts_dictionary(guild_id).items()
-    ]
+    return [{"id": word, "word": word, "reading": reading} for word, reading in get_tts_dictionary(guild_id).items()]
 
 
 def _dict_add(guild_id: int, data: dict[str, Any]) -> str:
@@ -142,17 +141,20 @@ def _dict_remove(guild_id: int, item_id: str) -> bool:
 
 # ── コレクション: ユーザー個別設定（閲覧とリセットのみ） ───────
 
+
 def _user_list(guild_id: int) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for user_id, cfg in (get_tts_settings(guild_id).get("user_settings") or {}).items():
         if not isinstance(cfg, dict) or not cfg:
             continue
-        rows.append({
-            "id": str(user_id),
-            "user_id": str(user_id),
-            "voice": cfg.get("voice"),
-            "rate": cfg.get("rate"),
-        })
+        rows.append(
+            {
+                "id": str(user_id),
+                "user_id": str(user_id),
+                "voice": cfg.get("voice"),
+                "rate": cfg.get("rate"),
+            }
+        )
     return rows
 
 
@@ -171,19 +173,39 @@ PANEL = Panel(
         Section(
             "有効化",
             fields=(
-                Field("enabled", "TTS 読み上げを有効にする", Widget.BOOL,
-                      get=_enabled, set=set_tts_enabled, default=False, nullable=False),
-                Field("vc_notify", "VC の参加・退出をアナウンスする", Widget.BOOL,
-                      get=_vc_notify, set=set_tts_vc_notify, default=False, nullable=False,
-                      enabled_when="enabled"),
+                Field(
+                    "enabled",
+                    "TTS 読み上げを有効にする",
+                    Widget.BOOL,
+                    get=_enabled,
+                    set=set_tts_enabled,
+                    default=False,
+                    nullable=False,
+                ),
+                Field(
+                    "vc_notify",
+                    "VC の参加・退出をアナウンスする",
+                    Widget.BOOL,
+                    get=_vc_notify,
+                    set=set_tts_vc_notify,
+                    default=False,
+                    nullable=False,
+                    enabled_when="enabled",
+                ),
             ),
         ),
         Section(
             "接続先 VC",
             fields=(
-                Field("vc_channel_id", "読み上げを流すボイスチャンネル", Widget.VOICE_CHANNEL,
-                      get=_vc_channel, set=_set_vc_channel, enabled_when="enabled",
-                      help="未設定の場合は自動参加しません。"),
+                Field(
+                    "vc_channel_id",
+                    "読み上げを流すボイスチャンネル",
+                    Widget.VOICE_CHANNEL,
+                    get=_vc_channel,
+                    set=_set_vc_channel,
+                    enabled_when="enabled",
+                    help="未設定の場合は自動参加しません。",
+                ),
             ),
         ),
         Section(
@@ -198,33 +220,69 @@ PANEL = Panel(
                     add=_watch_add,
                     remove=_watch_remove,
                     help="ここに追加したテキストチャンネルの投稿を読み上げます。",
-                    item_fields=(
-                        Field("channel_id", "チャンネル", Widget.CHANNEL,
-                              required=True, nullable=False),
-                    ),
+                    item_fields=(Field("channel_id", "チャンネル", Widget.CHANNEL, required=True, nullable=False),),
                 ),
             ),
         ),
         Section(
             "デフォルト声設定",
             fields=(
-                Field("default_voice", "声", Widget.SELECT,
-                      get=_voice, set=_set_voice, default=DEFAULT_VOICE, nullable=False,
-                      choices=ChoiceSource.TTS_VOICES, free_text=True,
-                      help="TTS API に接続できないときは声の名前を直接入力できます。"),
-                Field("default_rate", "読み上げ速度（語/分）", Widget.INT,
-                      get=_int_setting("default_rate", DEFAULT_RATE), set=_set_rate,
-                      default=DEFAULT_RATE, min=100, max=400, nullable=False),
-                Field("max_length", "メッセージ字数制限", Widget.INT,
-                      get=_max_length, set=_set_max_length,
-                      default=DEFAULT_MAX_LENGTH, min=10, max=500, nullable=False,
-                      help="本文の読み上げ上限。超過分は「以下省略」と読まれます。"),
-                Field("speak_max_length", "読み上げ最大文字数", Widget.INT,
-                      get=_speak_max_length, set=_set_speak_max_length,
-                      default=DEFAULT_SPEAK_MAX_LENGTH, min=10, max=500, nullable=False,
-                      help="「名前。本文」全体の上限です。"),
-                Field("read_name", "発言者名を読み上げる", Widget.BOOL,
-                      get=_read_name, set=set_tts_read_name, default=True, nullable=False),
+                Field(
+                    "default_voice",
+                    "声",
+                    Widget.SELECT,
+                    get=_voice,
+                    set=_set_voice,
+                    default=DEFAULT_VOICE,
+                    nullable=False,
+                    choices=ChoiceSource.TTS_VOICES,
+                    free_text=True,
+                    help="TTS API に接続できないときは声の名前を直接入力できます。",
+                ),
+                Field(
+                    "default_rate",
+                    "読み上げ速度（語/分）",
+                    Widget.INT,
+                    get=_int_setting("default_rate", DEFAULT_RATE),
+                    set=_set_rate,
+                    default=DEFAULT_RATE,
+                    min=100,
+                    max=400,
+                    nullable=False,
+                ),
+                Field(
+                    "max_length",
+                    "メッセージ字数制限",
+                    Widget.INT,
+                    get=_max_length,
+                    set=_set_max_length,
+                    default=DEFAULT_MAX_LENGTH,
+                    min=10,
+                    max=500,
+                    nullable=False,
+                    help="本文の読み上げ上限。超過分は「以下省略」と読まれます。",
+                ),
+                Field(
+                    "speak_max_length",
+                    "読み上げ最大文字数",
+                    Widget.INT,
+                    get=_speak_max_length,
+                    set=_set_speak_max_length,
+                    default=DEFAULT_SPEAK_MAX_LENGTH,
+                    min=10,
+                    max=500,
+                    nullable=False,
+                    help="「名前。本文」全体の上限です。",
+                ),
+                Field(
+                    "read_name",
+                    "発言者名を読み上げる",
+                    Widget.BOOL,
+                    get=_read_name,
+                    set=set_tts_read_name,
+                    default=True,
+                    nullable=False,
+                ),
             ),
         ),
         Section(
@@ -240,10 +298,8 @@ PANEL = Panel(
                     remove=_dict_remove,
                     help="登録した単語は読み上げ時に置き換えられます。",
                     item_fields=(
-                        Field("word", "単語", Widget.TEXT,
-                              required=True, nullable=False, max_len=50),
-                        Field("reading", "読み", Widget.TEXT,
-                              required=True, nullable=False, max_len=100),
+                        Field("word", "単語", Widget.TEXT, required=True, nullable=False, max_len=50),
+                        Field("reading", "読み", Widget.TEXT, required=True, nullable=False, max_len=100),
                     ),
                 ),
             ),

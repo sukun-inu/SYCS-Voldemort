@@ -59,9 +59,7 @@ def collect_route_paths(routes, prefix: str = "") -> set[str]:
     for route in routes:
         context = getattr(route, "include_context", None)
         if context is not None:
-            found |= collect_route_paths(
-                context.included_router.routes, prefix + (context.prefix or "")
-            )
+            found |= collect_route_paths(context.included_router.routes, prefix + (context.prefix or ""))
             continue
         path = getattr(route, "path", None)
         if path is not None:

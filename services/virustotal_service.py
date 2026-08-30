@@ -93,6 +93,7 @@ async def vt_check_url(url: str) -> Dict[str, Any]:
         return {"status": "skip", "type": "url", "reason": "no_api_key", "malicious": 0, "suspicious": 0}
 
     try:
+
         def sync():
             with vt.Client(VIRUSTOTAL_API_KEY) as client:
                 analysis = client.scan_url(url, wait_for_completion=True)
@@ -121,6 +122,7 @@ async def vt_check_file(content: bytes) -> Dict[str, Any]:
     tmp_path = None
 
     try:
+
         def sync_lookup():
             with vt.Client(VIRUSTOTAL_API_KEY) as client:
                 try:
@@ -165,6 +167,7 @@ async def vt_check_file(content: bytes) -> Dict[str, Any]:
 
     except vt.error.ConflictError:
         try:
+
             def sync_fallback():
                 with vt.Client(VIRUSTOTAL_API_KEY) as client:
                     obj = client.get_object(f"/files/{sha256}")

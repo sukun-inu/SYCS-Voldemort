@@ -11,6 +11,7 @@ Create Date: 2026-08-20
 
 これは同時に「予測が何もしないより良いか」を本番で常時測ることにもなる。
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa

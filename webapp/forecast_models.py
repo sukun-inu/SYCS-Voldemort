@@ -171,7 +171,7 @@ def coverage_confidence_adjustment(coverage: float | None, *, nominal: float) ->
 def daily_trend(prices: list[float], *, window: int = 14) -> float:
     if len(prices) < 2:
         return 0.0
-    sampled = prices[-min(window, len(prices)):]
+    sampled = prices[-min(window, len(prices)) :]
     first, last = sampled[0], sampled[-1]
     if first <= 0:
         return 0.0
@@ -184,12 +184,8 @@ def daily_trend(prices: list[float], *, window: int = 14) -> float:
 def daily_volatility(prices: list[float], *, window: int = 14) -> float:
     if len(prices) < 3:
         return 0.004
-    sampled = prices[-min(window, len(prices)):]
-    returns = [
-        (current - previous) / previous
-        for previous, current in zip(sampled, sampled[1:])
-        if previous > 0
-    ]
+    sampled = prices[-min(window, len(prices)) :]
+    returns = [(current - previous) / previous for previous, current in zip(sampled, sampled[1:]) if previous > 0]
     if not returns:
         return 0.004
     return float(pstdev(returns))
@@ -260,13 +256,15 @@ def forecast_for_metal(
         center = start_price * math.exp(tilt * offset)
         lower = center * math.exp(lower_log * scale)
         upper = center * math.exp(upper_log * scale)
-        daily.append({
-            "date": (today + timedelta(days=offset)).date().isoformat(),
-            "price_per_gram": round(center, 2),
-            "delta_from_previous": round(center - previous_center, 2),
-            "lower_price_per_gram": round(lower, 2),
-            "upper_price_per_gram": round(upper, 2),
-        })
+        daily.append(
+            {
+                "date": (today + timedelta(days=offset)).date().isoformat(),
+                "price_per_gram": round(center, 2),
+                "delta_from_previous": round(center - previous_center, 2),
+                "lower_price_per_gram": round(lower, 2),
+                "upper_price_per_gram": round(upper, 2),
+            }
+        )
         previous_center = center
 
     final = daily[-1]
@@ -361,68 +359,85 @@ def forecast_for_metal(
     breakdown.extend(signal_rows)
 
     if abs(raw_tilt) > FORECAST_TILT_MAX_PCT_PER_DAY:
-        breakdown.append({
-            "label": "傾きの上限",
-            "value_pct_per_day": round(tilt * 100, 3),
-            "role": "reference",
-            "detail": (
-                f"シグナル合計 {raw_tilt * 100:+.3f}%/日 は上限"
-                f"±{FORECAST_TILT_MAX_PCT_PER_DAY * 100:.2f}%/日 に丸めています"
-            ),
-        })
+        breakdown.append(
+            {
+                "label": "傾きの上限",
+                "value_pct_per_day": round(tilt * 100, 3),
+                "role": "reference",
+                "detail": (
+                    f"シグナル合計 {raw_tilt * 100:+.3f}%/日 は上限"
+                    f"±{FORECAST_TILT_MAX_PCT_PER_DAY * 100:.2f}%/日 に丸めています"
+                ),
+            }
+        )
 
     if gaps:
-        breakdown.append({
-            "label": "データ欠損",
-            "value_pct_per_day": None,
-            "role": "reference",
-            "detail": f"履歴に{gaps}箇所の欠損あり。該当区間は1日あたりへ正規化して扱っています",
-        })
+        breakdown.append(
+            {
+                "label": "データ欠損",
+                "value_pct_per_day": None,
+                "role": "reference",
+                "detail": f"履歴に{gaps}箇所の欠損あり。該当区間は1日あたりへ正規化して扱っています",
+            }
+        )
 
     if recent_coverage is not None:
-        breakdown.append({
-            "label": "直近の的中(区間内に収まった割合)",
-            "value_pct_per_day": None,
-            "role": "reference",
-            "detail": f"{recent_coverage:.0%}(名目 {FORECAST_INTERVAL_PROB:.0%} / 信頼度を {coverage_adjustment:+.2f} 補正)",
-        })
+        breakdown.append(
+            {
+                "label": "直近の的中(区間内に収まった割合)",
+                "value_pct_per_day": None,
+                "role": "reference",
+                "detail": (
+                    f"{recent_coverage:.0%}(名目 {FORECAST_INTERVAL_PROB:.0%} / "
+                    f"信頼度を {coverage_adjustment:+.2f} 補正)"
+                ),
+            }
+        )
     if recent_mae_pct is not None:
-        breakdown.append({
-            "label": "直近14日の平均誤差",
-            "value_pct_per_day": None,
-            "role": "reference",
-            "detail": f"{recent_mae_pct:.2f}%(信頼度を {accuracy_adjustment:+.2f} 補正)",
-        })
+        breakdown.append(
+            {
+                "label": "直近14日の平均誤差",
+                "value_pct_per_day": None,
+                "role": "reference",
+                "detail": f"{recent_mae_pct:.2f}%(信頼度を {accuracy_adjustment:+.2f} 補正)",
+            }
+        )
     if recent_mae_pct is None and recent_coverage is None:
-        breakdown.append({
-            "label": "答え合わせ実績",
-            "value_pct_per_day": None,
-            "role": "reference",
-            "detail": f"まだ無し(信頼度の上限を {FORECAST_CONFIDENCE_CAP_WITHOUT_ACCURACY:.0%} に制限)",
-        })
+        breakdown.append(
+            {
+                "label": "答え合わせ実績",
+                "value_pct_per_day": None,
+                "role": "reference",
+                "detail": f"まだ無し(信頼度の上限を {FORECAST_CONFIDENCE_CAP_WITHOUT_ACCURACY:.0%} に制限)",
+            }
+        )
 
     if tilt_effect:
         improvement = safe_float(tilt_effect.get("improvement_pct"))
         samples = int(safe_float(tilt_effect.get("samples")) or 0)
         if improvement is not None and samples:
             verdict = "改善" if improvement > 0 else ("悪化" if improvement < 0 else "変化なし")
-            breakdown.append({
-                "label": "シグナルの実績(何もしない場合との比較)",
-                "value_pct_per_day": None,
-                "role": "reference",
-                "detail": (
-                    f"直近{samples}件で誤差 {safe_float(tilt_effect.get('baseline_mae_pct')):.2f}% → "
-                    f"{safe_float(tilt_effect.get('model_mae_pct')):.2f}%({improvement:+.1f}% {verdict})"
-                ),
-            })
+            breakdown.append(
+                {
+                    "label": "シグナルの実績(何もしない場合との比較)",
+                    "value_pct_per_day": None,
+                    "role": "reference",
+                    "detail": (
+                        f"直近{samples}件で誤差 {safe_float(tilt_effect.get('baseline_mae_pct')):.2f}% → "
+                        f"{safe_float(tilt_effect.get('model_mae_pct')):.2f}%({improvement:+.1f}% {verdict})"
+                    ),
+                }
+            )
 
     if llm_rationale:
-        breakdown.append({
-            "label": "AI判定所見",
-            "value_pct_per_day": None,
-            "role": "reference",
-            "detail": llm_rationale,
-        })
+        breakdown.append(
+            {
+                "label": "AI判定所見",
+                "value_pct_per_day": None,
+                "role": "reference",
+                "detail": llm_rationale,
+            }
+        )
 
     drivers: list[str] = []
     for row in breakdown:

@@ -36,13 +36,9 @@ async def gpt_assess(
 
     context_lines: list[str] = []
     if spam_count >= 4:
-        context_lines.append(
-            f"【スパム警告】このユーザーは直近15秒間に{spam_count}回メッセージを送信しています。"
-        )
+        context_lines.append(f"【スパム警告】このユーザーは直近15秒間に{spam_count}回メッセージを送信しています。")
     if min_interval != float("inf") and min_interval < 2.0:
-        context_lines.append(
-            f"【高頻度】メッセージ送信間隔が最短{min_interval:.1f}秒と非常に短いです。"
-        )
+        context_lines.append(f"【高頻度】メッセージ送信間隔が最短{min_interval:.1f}秒と非常に短いです。")
     if is_new_member:
         context_lines.append("【新規】このユーザーはサーバー参加から7日未満の新規メンバーです。")
 
@@ -65,7 +61,12 @@ async def gpt_assess(
             bucket=_GROQ_BUCKET,
             model="openai/gpt-oss-20b",
             messages=[
-                {"role": "system", "content": "You are a security moderation AI. Reply with only one word: DANGEROUS, SUSPICIOUS, or SAFE."},
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a security moderation AI. " "Reply with only one word: DANGEROUS, SUSPICIOUS, or SAFE."
+                    ),
+                },
                 {"role": "user", "content": prompt},
             ],
         )

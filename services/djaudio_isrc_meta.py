@@ -20,11 +20,11 @@ from services.djaudio_site_detection import detect_site
 
 logger = logging.getLogger(__name__)
 
-_DEEZER_ISRC   = "https://api.deezer.com/track/isrc:{}"
+_DEEZER_ISRC = "https://api.deezer.com/track/isrc:{}"
 _DEEZER_SEARCH = "https://api.deezer.com/search"
 
 _HIGH_SCORE = 0.80
-_MIN_SCORE  = 0.45
+_MIN_SCORE = 0.45
 
 _NOISE_BRACKET = re.compile(
     r"""
@@ -56,9 +56,9 @@ _NOISE_BRACKET = re.compile(
     re.IGNORECASE | re.VERBOSE,
 )
 
-_FEAT_BARE    = re.compile(r"\s+(?:feat|ft)\.?\s+.+$", re.IGNORECASE)
+_FEAT_BARE = re.compile(r"\s+(?:feat|ft)\.?\s+.+$", re.IGNORECASE)
 _TOPIC_SUFFIX = re.compile(r"\s*[-/]\s*Topic\s*$", re.IGNORECASE)
-_DASH_SPLIT   = re.compile(r"\s+[-－—–]\s+")
+_DASH_SPLIT = re.compile(r"\s+[-－—–]\s+")
 
 
 def _clean_title(title: str) -> str:
@@ -86,7 +86,7 @@ def _similarity(a: str, b: str) -> float:
 
 
 def _score_result(item: dict, ref_title: str, ref_artist: str | None) -> float:
-    dz_title  = item.get("title") or ""
+    dz_title = item.get("title") or ""
     dz_artist = (item.get("artist") or {}).get("name") or ""
     title_sim = _similarity(ref_title, dz_title)
     if ref_artist:
@@ -130,7 +130,7 @@ def _build_search_queries(title: str, artist: str | None, site: str, info: dict)
         queries.append(f'track:"{clean}"')
 
     elif site == "tiktok":
-        music_title  = str(info.get("music_title") or "").strip()
+        music_title = str(info.get("music_title") or "").strip()
         music_artist = str(info.get("music_author") or "").strip()
         if music_artist and music_title:
             queries.append(f'artist:"{music_artist}" track:"{music_title}"')
@@ -189,16 +189,16 @@ async def _fetch_by_search(
     info: dict | None = None,
 ) -> dict | None:
     clean = _clean_title(title)
-    ref_title  = clean
+    ref_title = clean
     ref_artist = artist
     if _DASH_SPLIT.search(clean):
         parts = _DASH_SPLIT.split(clean, maxsplit=1)
         ref_artist = ref_artist or parts[0].strip()
-        ref_title  = parts[1].strip()
+        ref_title = parts[1].strip()
 
     queries = _build_search_queries(title, artist, site, info or {})
-    best_item:  dict | None = None
-    best_score: float       = 0.0
+    best_item: dict | None = None
+    best_score: float = 0.0
 
     for q in queries:
         try:
@@ -209,14 +209,14 @@ async def _fetch_by_search(
             ) as resp:
                 if resp.status != 200:
                     continue
-                data  = await resp.json(content_type=None)
+                data = await resp.json(content_type=None)
                 items = data.get("data") or []
 
             for item in items:
                 score = _score_result(item, ref_title, ref_artist)
                 if score > best_score:
                     best_score = score
-                    best_item  = item
+                    best_item = item
                 if score >= _HIGH_SCORE:
                     logger.info("Deezer 高精度ヒット (score=%.2f): q=%r → %r", score, q, item.get("title"))
                     return item
@@ -275,14 +275,9 @@ async def enrich_metadata(mp3_path: Path, info: dict) -> bool:
     Deezer からメタデータを取得して MP3 タグを上書きする。
     成功したら True、スキップ・失敗なら False を返す。
     """
-    isrc   = info.get("isrc")
-    title  = info.get("track") or info.get("title") or info.get("alt_title")
-    artist = (
-        info.get("artist")
-        or info.get("album_artist")
-        or info.get("creator")
-        or info.get("uploader")
-    )
+    isrc = info.get("isrc")
+    title = info.get("track") or info.get("title") or info.get("alt_title")
+    artist = info.get("artist") or info.get("album_artist") or info.get("creator") or info.get("uploader")
     site = detect_site(info)
 
     if not isrc and not title:

@@ -11,6 +11,7 @@ forecast_accuracy_log の within_interval は「実勢価格が予測区間に�
 区間予測にとって被覆率は最も本質的な品質指標(名目80%なら実測も80%であるべき)で、
 これが無いと精度を評価できない。
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa

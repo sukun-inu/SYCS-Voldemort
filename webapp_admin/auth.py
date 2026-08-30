@@ -142,6 +142,7 @@ async def get_bot_guild_count() -> int:
         if count == 0:
             try:
                 from services.settings_store import get_all_guild_ids
+
                 count = len(get_all_guild_ids())
             except Exception as e:
                 logger.warning("get_bot_guild_count: settings_store フォールバックも失敗: %s", e)
@@ -162,11 +163,13 @@ async def get_admin_guilds(access_token: str) -> list[dict]:
             guild_id = int(g["id"])
             if (int(g.get("permissions", 0)) & _ADMINISTRATOR_BIT) and guild_id in bot_ids:
                 icon = g.get("icon")
-                result.append({
-                    "id": str(guild_id),
-                    "name": str(g.get("name") or "Unknown"),
-                    "icon": icon if isinstance(icon, str) else None,
-                })
+                result.append(
+                    {
+                        "id": str(guild_id),
+                        "name": str(g.get("name") or "Unknown"),
+                        "icon": icon if isinstance(icon, str) else None,
+                    }
+                )
         except (TypeError, ValueError):
             continue
     return result
@@ -229,7 +232,8 @@ async def _fetch_guild_channels(guild_id: int) -> list[dict]:
                         _guild_channels_cooldown[guild_id] = time.time() + wait
                         logger.warning(
                             "チャンネル一覧がレート制限されました guild_id=%s: %.0f秒待ちます",
-                            guild_id, wait,
+                            guild_id,
+                            wait,
                         )
                         return cached[0] if cached else []
                     resp.raise_for_status()
@@ -240,7 +244,8 @@ async def _fetch_guild_channels(guild_id: int) -> list[dict]:
             from webapp_admin.api.dev import describe_exception
 
             logger.warning(
-                "チャンネル一覧の取得に失敗 guild_id=%s: %s", guild_id,
+                "チャンネル一覧の取得に失敗 guild_id=%s: %s",
+                guild_id,
                 describe_exception(exc, timeout=_TIMEOUT.total),
             )
             return cached[0] if cached else []
@@ -271,10 +276,11 @@ async def get_guild_voice_channels(guild_id: int) -> list[dict]:
 _USER_INFO_CACHE_TTL = 600
 # 利用者1人ごとに鍵が増えるので、件数にも上限を置く（従来は追い出しが無かった）
 _user_info_cache: TTLCache[int, Optional[dict]] = TTLCache(
-    ttl=_USER_INFO_CACHE_TTL, max_entries=2000,
+    ttl=_USER_INFO_CACHE_TTL,
+    max_entries=2000,
 )
 _user_info_cache_lock = asyncio.Lock()
-_USER_INFO_MISS = object()   # 「取得できなかった」も覚えて叩き直しを防ぐ
+_USER_INFO_MISS = object()  # 「取得できなかった」も覚えて叩き直しを防ぐ
 
 
 async def get_discord_user(user_id: int) -> Optional[dict]:
@@ -341,7 +347,8 @@ async def get_guild_roles(guild_id: int) -> list[dict]:
         from webapp_admin.api.dev import describe_exception
 
         logger.warning(
-            "ロール一覧の取得に失敗 guild_id=%s: %s", guild_id,
+            "ロール一覧の取得に失敗 guild_id=%s: %s",
+            guild_id,
             describe_exception(exc, timeout=_TIMEOUT.total),
         )
         return []
@@ -373,15 +380,13 @@ async def user_still_admin(guild_id: int, user_id: int) -> bool | None:
         async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
             async with session.get(f"{_API}/guilds/{guild_id}", headers=headers) as resp:
                 if resp.status == 404:
-                    return False          # Bot が抜けている / ギルドが消えた
+                    return False  # Bot が抜けている / ギルドが消えた
                 resp.raise_for_status()
                 guild = await resp.json()
 
-            async with session.get(
-                f"{_API}/guilds/{guild_id}/members/{user_id}", headers=headers
-            ) as resp:
+            async with session.get(f"{_API}/guilds/{guild_id}/members/{user_id}", headers=headers) as resp:
                 if resp.status == 404:
-                    return False          # もうそのサーバーにいない
+                    return False  # もうそのサーバーにいない
                 resp.raise_for_status()
                 member = await resp.json()
     except Exception as e:

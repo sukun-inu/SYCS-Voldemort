@@ -20,24 +20,15 @@ logger = logging.getLogger(__name__)
 
 
 async def _channels(guild_id: int) -> list[dict[str, str]]:
-    return [
-        {"value": str(c["id"]), "label": f"# {c['name']}"}
-        for c in await get_guild_channels(guild_id)
-    ]
+    return [{"value": str(c["id"]), "label": f"# {c['name']}"} for c in await get_guild_channels(guild_id)]
 
 
 async def _voice_channels(guild_id: int) -> list[dict[str, str]]:
-    return [
-        {"value": str(c["id"]), "label": c["name"]}
-        for c in await get_guild_voice_channels(guild_id)
-    ]
+    return [{"value": str(c["id"]), "label": c["name"]} for c in await get_guild_voice_channels(guild_id)]
 
 
 async def _roles(guild_id: int) -> list[dict[str, str]]:
-    return [
-        {"value": str(r["id"]), "label": r["name"]}
-        for r in await get_guild_roles(guild_id)
-    ]
+    return [{"value": str(r["id"]), "label": r["name"]} for r in await get_guild_roles(guild_id)]
 
 
 # 声一覧は画面を開くたびに取りに行く。応答が返らない相手だと、その間ずっと
@@ -79,7 +70,9 @@ async def resolve(sources: Iterable[ChoiceSource], guild_id: int) -> dict[str, l
 
             logger.warning(
                 "選択肢の取得に失敗しました source=%s guild=%s: %s",
-                source.value, guild_id, describe_exception(result),
+                source.value,
+                guild_id,
+                describe_exception(result),
             )
             resolved[source.value] = []
         else:

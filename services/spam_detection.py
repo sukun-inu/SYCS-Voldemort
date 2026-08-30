@@ -17,8 +17,7 @@ def _maybe_cleanup() -> None:
     _cleanup_counter = 0
     now = time.time()
     stale = [
-        key for key, times in list(_user_message_times.items())
-        if not any(now - t < SPAM_TIME_WINDOW for t in times)
+        key for key, times in list(_user_message_times.items()) if not any(now - t < SPAM_TIME_WINDOW for t in times)
     ]
     for key in stale:
         _user_message_times.pop(key, None)
@@ -36,11 +35,8 @@ def check_spam(guild_id: int, user_id: int) -> Tuple[bool, int, float]:
 
     if len(history) >= 2:
         sorted_times = sorted(history)
-        min_interval = min(
-            sorted_times[i + 1] - sorted_times[i] for i in range(len(sorted_times) - 1)
-        )
+        min_interval = min(sorted_times[i + 1] - sorted_times[i] for i in range(len(sorted_times) - 1))
     else:
         min_interval = float("inf")
 
     return count >= SPAM_REPEAT_THRESHOLD, count, min_interval
-

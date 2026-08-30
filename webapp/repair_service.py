@@ -13,7 +13,14 @@ from envutil import env_int
 
 from .forecast_service import load_stored_weekly_forecast, refresh_weekly_forecast_cache
 from .models import MetalPriceDaily
-from .snapshot_service import JST, PRICE_SCALE, TRACKED_METALS, jst_today, load_latest_rows, store_snapshot
+from .snapshot_service import (
+    JST,
+    PRICE_SCALE,
+    TRACKED_METALS,
+    jst_today,
+    load_latest_rows,
+    store_snapshot,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +29,7 @@ _TRACKED_KEYS = {m.key for m in TRACKED_METALS}
 # MetalpriceAPIが無料枠(月100回)のため、本日データ欠損時のAPI再取得を無条件で繰り返すと
 # (このジョブ自体が既定30分おきに実行される)、API失敗→欠損継続→再試行…の無限ループで
 # 枠を食いつぶしてしまう。ここにクールダウンを設け、一定時間は再取得を試みないようにする。
-MISSING_DATA_REPAIR_COOLDOWN = timedelta(
-    hours=env_int("METAL_REPAIR_RETRY_COOLDOWN_HOURS", 6, minimum=1)
-)
+MISSING_DATA_REPAIR_COOLDOWN = timedelta(hours=env_int("METAL_REPAIR_RETRY_COOLDOWN_HOURS", 6, minimum=1))
 _last_missing_data_repair_attempt: datetime | None = None
 
 
@@ -160,4 +165,3 @@ async def repair_metalprice_integrity(
 
     await session.commit()
     return stats
-
