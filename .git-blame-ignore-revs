@@ -1,0 +1,12 @@
+# git blame から除外するコミット。
+#
+# 整形だけのコミットをここに書いておくと、blame がその行の「本当に書き換えた
+# コミット」を指したままになる。GitHub の blame は自動でこのファイルを読む。
+# 手元では一度だけ設定すること:
+#
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# 追加してよいのは、意味のある変更が1つも入っていないコミットだけ。
+
+# style: black を全ファイルへ適用する（整形のみ・動作は不変）
+c4f725e194cbdc5d8782e058128ff68ee6045453

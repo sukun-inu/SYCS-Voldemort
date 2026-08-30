@@ -44,6 +44,21 @@ jobs:
       - name: 依存関係をインストール
         run: pip install -r requirements.txt -r requirements-dev.txt
 
+      - name: lint（ruff）
+        # 設定は pyproject.toml。複雑度の上限は「今より悪くしない」ための
+        # 天井であって目標値ではない（詳細はそちらのコメント）。
+        run: python -m ruff check .
+
+      - name: 整形の確認（black）
+        # 整形し直す差分が出たら落とす。手元では python -m black . を実行する。
+        run: python -m black --check --diff .
+
+      - name: 型検査（mypy）
+        # まだ webapp と events だけ。services / commands / webapp_admin には
+        # 合計 200 件強の指摘が残っており、通せる範囲から順に広げていく。
+        # ここに足す前に、そのパッケージの指摘を 0 にすること。
+        run: python -m mypy -p webapp -p events
+
       - name: 依存の固定が Docker と同じ条件で解けるか確認
         run: python tools/check_requirements.py
 
