@@ -138,6 +138,41 @@ def _extract_role_snapshot(member: Any | None) -> list[dict[str, Any]]:
     return rows
 
 
+# 設定の読み出しに失敗したことを既に知らせたギルド。(guild_id, 種類) で覚える。
+# 下の関数は同期のたびにメンバー1人ずつ呼ばれるので、毎回警告を出すと、
+# 数千人のギルドでは同じ行でログが埋まって他が読めなくなる。
+_warned_ability_lookup: set[tuple[int, str]] = set()
+
+
+def _lookup_ability_ids(getter: Any, guild_id: int, what: str) -> set[int]:
+    """設定ストアから ID の集合を読む。読めなければ空集合を返す。
+
+    以前はここだけ例外を無言で握りつぶしていた。このファイルの他の場所
+    （自己修復や保持期間の掃除の失敗）は必ず理由をログに残すのに、ここが
+    失敗しても「信頼ユーザーやバイパスロールの扱いが外れた状態で記録が残る」
+    だけで、設定ストアが恒常的に壊れていても誰も気づけない構造だった。
+
+    空集合へ落とすこと自体は変えていない。ここで例外を上へ投げると、
+    ユーザー状態の記録そのものが止まってしまう。
+    """
+    key = (guild_id, what)
+    try:
+        ids = {int(value) for value in getter(guild_id)}
+    except Exception:
+        if key not in _warned_ability_lookup:
+            _warned_ability_lookup.add(key)
+            logger.warning(
+                "[user_state_service] %s の設定を読めませんでした guild_id=%s。"
+                "読めるようになるまで、その扱いが外れた状態で記録します。",
+                what,
+                guild_id,
+                exc_info=True,
+            )
+        return set()
+    _warned_ability_lookup.discard(key)
+    return ids
+
+
 def _extract_ability_snapshot(member: Any | None, guild_id: int) -> dict[str, Any]:
     abilities: dict[str, Any] = {}
     if member is None:
@@ -157,14 +192,8 @@ def _extract_ability_snapshot(member: Any | None, guild_id: int) -> dict[str, An
             }
         )
 
-    try:
-        trusted_ids = set(get_trusted_user_ids(guild_id))
-    except Exception:
-        trusted_ids = set()
-    try:
-        bypass_ids = set(get_bypass_role_ids(guild_id))
-    except Exception:
-        bypass_ids = set()
+    trusted_ids = _lookup_ability_ids(get_trusted_user_ids, guild_id, "信頼ユーザー")
+    bypass_ids = _lookup_ability_ids(get_bypass_role_ids, guild_id, "バイパスロール")
 
     roles = getattr(member, "roles", None)
     has_bypass_role = False
@@ -876,6 +905,12 @@ async def sync_guild_user_states(
                 if attempt == 0 and await _try_db_self_heal(context="sync_guild_user_states", exc=e):
                     continue
                 logger.exception("[user_state_service] sync_guild_user_states failed guild_id=%s", guild_id)
-                return stats
+                # 0 を返す。stats はループの中で加算していくので、ここまで来ると
+                # 「作成 1 件」などが入っている。しかし直前で rollback しており
+                # DB には1行も残っていない。加算済みの値を返すと、呼び出し元
+                # （events/user_state_sync.py の全ギルド同期）がそれを成功件数と
+                # してログや監視に出し、まるごと失敗した同期が「一部成功」に
+                # 見えてしまう。
+                return dict(empty_stats)
 
     return stats

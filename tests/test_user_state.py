@@ -343,7 +343,14 @@ class ExtractAbilitySnapshotTests(unittest.TestCase):
         self.assertTrue(abilities["bypass_role"])
 
     def test_settings_store_exceptions_are_swallowed_as_no_special_role(self):
+        """設定を読めなくても記録そのものは続ける。
+
+        ここで例外を上へ投げると、ユーザー状態の記録が丸ごと止まる。扱いが
+        外れるだけに留めるのが正しい。ただし黙って倒れるのではないことは
+        下のテストで確認する。
+        """
         member = _member(id=1)
+        uss._warned_ability_lookup.clear()
         with (
             patch.object(uss, "get_trusted_user_ids", side_effect=RuntimeError("boom")),
             patch.object(uss, "get_bypass_role_ids", side_effect=RuntimeError("boom")),
@@ -351,6 +358,54 @@ class ExtractAbilitySnapshotTests(unittest.TestCase):
             abilities = uss._extract_ability_snapshot(member, guild_id=1)
         self.assertFalse(abilities["trusted_user"])
         self.assertFalse(abilities["bypass_role"])
+
+    def test_settings_store_failure_is_logged_with_the_reason(self):
+        """読めなかった理由をログに残す。
+
+        以前はこの2つの例外だけ無言で握りつぶしていた。同じファイルの他の
+        失敗（自己修復・保持期間の掃除）は必ず理由を残す方針なのに、ここだけ
+        設定ストアが恒常的に壊れていても誰も気づけない構造だった。
+        """
+        member = _member(id=1)
+        uss._warned_ability_lookup.clear()
+        with (
+            patch.object(uss, "get_trusted_user_ids", side_effect=RuntimeError("boom")),
+            patch.object(uss, "get_bypass_role_ids", side_effect=RuntimeError("boom")),
+        ):
+            with self.assertLogs(uss.logger, level="WARNING") as captured:
+                uss._extract_ability_snapshot(member, guild_id=1)
+        self.assertEqual(len(captured.records), 2)  # 信頼ユーザーとバイパスロールで1件ずつ
+        self.assertTrue(any("信頼ユーザー" in line for line in captured.output))
+        self.assertTrue(any("バイパスロール" in line for line in captured.output))
+
+    def test_the_failure_is_logged_once_not_for_every_member(self):
+        """同期はメンバー1人ずつこの関数を呼ぶ。毎回出すとログが埋まる。"""
+        uss._warned_ability_lookup.clear()
+        with (
+            patch.object(uss, "get_trusted_user_ids", side_effect=RuntimeError("boom")),
+            patch.object(uss, "get_bypass_role_ids", side_effect=RuntimeError("boom")),
+        ):
+            with self.assertLogs(uss.logger, level="WARNING") as captured:
+                for user_id in range(5):
+                    uss._extract_ability_snapshot(_member(id=user_id), guild_id=1)
+        self.assertEqual(len(captured.records), 2)  # 5人ぶん回しても最初の1周ぶんだけ
+
+    def test_the_warning_returns_after_the_setting_recovers_and_breaks_again(self):
+        """一度知らせたら黙るが、直って再発したらまた知らせる。"""
+        member = _member(id=1)
+        uss._warned_ability_lookup.clear()
+        broken = {"side_effect": RuntimeError("boom")}
+        with patch.object(uss, "get_bypass_role_ids", return_value=[]):
+            with patch.object(uss, "get_trusted_user_ids", **broken):
+                with self.assertLogs(uss.logger, level="WARNING"):
+                    uss._extract_ability_snapshot(member, guild_id=1)
+            # 読めるようになれば覚えていた印が消える
+            with patch.object(uss, "get_trusted_user_ids", return_value=[]):
+                uss._extract_ability_snapshot(member, guild_id=1)
+            with patch.object(uss, "get_trusted_user_ids", **broken):
+                with self.assertLogs(uss.logger, level="WARNING") as again:
+                    uss._extract_ability_snapshot(member, guild_id=1)
+        self.assertEqual(len(again.records), 1)
 
 
 class ToAwareUtcTests(unittest.TestCase):
@@ -738,12 +793,11 @@ class SyncGuildUserStatesTests(_DbBackedTestCase):
         events/user_state_sync 側はギルドごとにこの関数を呼び出しており、
         ここで例外が漏れると他ギルドの同期まで巻き込んで止めてしまう。
 
-        注意（バグ報告）: 戻り値の stats はループ中に加算した値を
-        そのまま返す実装になっており、最終試行の commit が失敗して
-        ロールバックされた場合でも stats["created"] 等は 0 に戻らない。
-        つまり stats を見ると「作成できた」ように見えるが、実際には
-        DB には1行も残らない（下の list_recent_user_states の空の結果が
-        その証拠）。本番コードは直さず、ここでは実際の挙動として固定する。
+        あわせて、戻り値の件数が 0 になることも確認する。stats はループの中で
+        加算していくので、失敗して rollback したときに加算済みの値をそのまま
+        返すと、DB には1行も無いのに created: 1 が返る。呼び出し元がこれを
+        成功件数としてログや監視へ出すと、まるごと失敗した同期が「一部成功」
+        に見えてしまう。
         """
         controller = _FailureController(fail_times=99)
         member = _member(id=1, name="a")
@@ -759,9 +813,21 @@ class SyncGuildUserStatesTests(_DbBackedTestCase):
 
         # 例外は外へ漏れず、stats は返る（＝呼び出し元の継続は保証されている）。
         self.assertIsInstance(stats, dict)
-        # しかし実際には何も保存されていない。
+        # 何も保存されていない。
         rows = _run(uss.list_recent_user_states(1))
         self.assertEqual(rows, [])
+        # 件数も 0。保存できていないものを「作成した」と数えない。
+        self.assertEqual(
+            stats,
+            {
+                "members_seen": 0,
+                "bans_seen": 0,
+                "created": 0,
+                "updated": 0,
+                "left_reconciled": 0,
+                "events_written": 0,
+            },
+        )
 
     def test_transient_db_failure_is_retried_after_self_heal(self):
         controller = _FailureController(fail_times=1)
