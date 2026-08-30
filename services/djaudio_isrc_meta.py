@@ -11,6 +11,7 @@ import re
 import unicodedata
 from difflib import SequenceMatcher
 from pathlib import Path
+from typing import cast
 
 import aiohttp
 from mutagen.id3 import APIC, ID3, TALB, TDRC, TIT2, TPOS, TPE1, TRCK
@@ -170,8 +171,9 @@ async def _fetch_by_isrc(isrc: str, session: aiohttp.ClientSession) -> dict | No
             timeout=aiohttp.ClientTimeout(total=10),
         ) as resp:
             if resp.status != 200:
+                logger.warning("Deezer: ISRC=%s の検索で HTTP %d エラー", isrc, resp.status)
                 return None
-            data = await resp.json(content_type=None)
+            data: dict = await resp.json(content_type=None)
             if "error" in data:
                 logger.info("Deezer: ISRC=%s 未登録", isrc)
                 return None
@@ -208,9 +210,10 @@ async def _fetch_by_search(
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
                 if resp.status != 200:
+                    logger.warning("Deezer テキスト検索 HTTP %d エラー (q=%r)", resp.status, q)
                     continue
                 data = await resp.json(content_type=None)
-                items = data.get("data") or []
+                items: list[dict] = data.get("data") or []
 
             for item in items:
                 score = _score_result(item, ref_title, ref_artist)
@@ -234,8 +237,9 @@ async def _download_bytes(url: str, session: aiohttp.ClientSession) -> bytes | N
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
             if resp.status == 200:
                 return await resp.read()
+            logger.warning("カバー画像取得エラー: URL=%s, HTTP %d", url, resp.status)
     except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-        logger.warning("カバー画像取得エラー: %s", e)
+        logger.warning("カバー画像取得エラー: URL=%s, %s", url, e)
     return None
 
 
@@ -243,7 +247,7 @@ def _write_tags(mp3_path: Path, data: dict, cover: bytes | None) -> None:
     audio = MP3(mp3_path, ID3=ID3)
     if audio.tags is None:
         audio.add_tags()
-    tags = audio.tags
+    tags = cast(ID3, audio.tags)
 
     if title := data.get("title"):
         tags["TIT2"] = TIT2(encoding=3, text=title)
@@ -292,7 +296,8 @@ async def enrich_metadata(mp3_path: Path, info: dict) -> bool:
         if not data:
             logger.info("Deezer: 該当なし (%s)", mp3_path.name)
             return False
-        cover = await _download_bytes(_cover_url(data), session) if _cover_url(data) else None
+        cover_url = _cover_url(data)
+        cover = await _download_bytes(cover_url, session) if cover_url else None
 
     try:
         await asyncio.to_thread(_write_tags, mp3_path, data, cover)
