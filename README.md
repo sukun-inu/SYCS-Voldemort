@@ -98,3 +98,13 @@ modules nothing ever imports still count as 0%, keeping the number honest.
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to work on this repository (summary; full guide in Japanese) |
 
 Detailed documentation is Japanese-only for now.
+
+## License
+
+The original code and documentation in this repository are licensed under the
+[MIT License](LICENSE). Copyright (c) 2026 Hibiki Suzuki.
+
+This repository also includes third-party assets and uses third-party runtime
+dependencies under their respective licenses. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before redistributing a built
+image or executable.

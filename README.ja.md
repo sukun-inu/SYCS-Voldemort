@@ -11,6 +11,8 @@ Discord サーバーの運営を楽にするための Bot と、その管理画�
 
 English: [README.md](README.md)
 
+ライセンス: [MIT License](LICENSE)（Copyright (c) 2026 Hibiki Suzuki）。第三者資産・依存ライブラリについては [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照してください。
+
 ## 入っている機能
 
 - 貴金属（金・銀・プラチナ）の価格照会
