@@ -65,11 +65,13 @@ def _level_color(level: str) -> discord.Color:
     if level == "INFO":
         return discord.Color.blue()
     if level == "DEBUG":
-        # discord.py 側で dark_gray は dark_grey のクラス本体内エイリアス代入
-        # （dark_gray = dark_grey）で、実行時は classmethod として正しく束縛
-        # されるが、mypy はこの代入をインスタンスメソッド扱いしてしまい
-        # cls 引数不足の誤検知をする（discord.py 側の型注釈の既知の癖）。
-        return discord.Color.dark_gray()  # type: ignore[call-arg]
+        # dark_gray ではなく dark_grey を呼ぶ。値は同じ（どちらも 0x607d8b）で、
+        # dark_gray は discord.py のクラス本体での別名代入（dark_gray = dark_grey）。
+        # mypy はこの代入を classmethod と見なせず誤検知するうえ、**その
+        # エラーコードが mypy や Python のバージョンで変わる**（手元の 3.13 では
+        # call-arg、CI の 3.11 では misc）。type: ignore で押さえると環境ごとに
+        # 書き分けが要るので、素直に正規の綴りを呼ぶ。下の light_grey とも揃う。
+        return discord.Color.dark_grey()
     return discord.Color.light_grey()
 
 

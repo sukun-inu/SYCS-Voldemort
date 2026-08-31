@@ -60,6 +60,11 @@ time. When you need to satisfy mypy, you may only: add an annotation, add
 Never change a condition, a statement order, an exception handler, a default, or a
 signature. When in doubt, choose `# type: ignore` — nothing changes at runtime.
 
+Before reaching for `# type: ignore`, look for an equivalent spelling that is not
+flagged at all. **Error codes differ between environments** — a `[call-arg]` locally
+(Python 3.13) can surface as `[misc]` in CI (3.11), and that has already broken a
+build here. A local `Success` from mypy is not proof that CI will pass.
+
 ## Thresholds are ceilings, not targets
 
 `fail_under` in `.coveragerc`, `max-complexity` in `pyproject.toml`, and the package

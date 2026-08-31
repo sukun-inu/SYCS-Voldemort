@@ -35,7 +35,8 @@ try:  # 入っていない環境でも、録音以外は動かせるようにす
     AVAILABLE = True
     MAX_PROTOCOL_VERSION: int = davey.DAVE_PROTOCOL_VERSION
 except ImportError:  # pragma: no cover - 導入済みの環境では通らない
-    davey = None  # type: ignore
+    # davey が入っていないときの目印。使う側は AVAILABLE を見る。
+    davey = None  # type: ignore[assignment]
     AVAILABLE = False
     MAX_PROTOCOL_VERSION = 0
 

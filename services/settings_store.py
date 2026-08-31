@@ -14,7 +14,8 @@ try:
 
     _ORJSON = True
 except ImportError:
-    import json as _json  # type: ignore
+    # orjson が無いときは標準の json を同じ名前で使う（片方しか入らない）。
+    import json as _json  # type: ignore[no-redef]
 
     _ORJSON = False
 
