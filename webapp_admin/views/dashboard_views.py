@@ -5,7 +5,6 @@
 """
 
 import time
-from typing import cast
 
 from fastapi import APIRouter, Depends, Request
 from starlette.responses import JSONResponse, RedirectResponse
@@ -33,12 +32,14 @@ async def guild_select(request: Request, _=Depends(check_login)):
 @router.post("/guilds/select")
 async def select_guild(request: Request, _=Depends(check_login), _csrf=Depends(check_csrf)):
     form = await request.form()
-    # FormData.get() の型は str | UploadFile。この項目は常にテキスト入力
-    # （<select name="guild_id">）として送られてくる前提のまま、絞り込みだけ足す。
-    guild_id_str = cast(str, form.get("guild_id", ""))
+    # FormData.get() は str だけでなく UploadFile を返しうる。guild_id という
+    # 名前でファイルパートを送られると int(UploadFile) は ValueError ではなく
+    # TypeError になり、except ValueError では捕まらず 500 に落ちる。
+    # 本来は「無効なサーバーIDです」で済む入力なので、両方を捕まえる。
+    guild_id_str = form.get("guild_id", "")
     try:
-        guild_id = int(guild_id_str)
-    except ValueError:
+        guild_id = int(guild_id_str)  # type: ignore[arg-type]  # UploadFile は下の TypeError で弾く
+    except (TypeError, ValueError):
         flash(request, "無効なサーバーIDです。", "danger")
         return RedirectResponse("/admin/guilds", status_code=303)
 
