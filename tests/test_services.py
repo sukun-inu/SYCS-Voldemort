@@ -45,6 +45,27 @@ from services.welcome_service import DEFAULT_GOODBYE, DEFAULT_WELCOME, render_te
 from webapp_admin.schema.validation import InvalidValue, validate_field  # noqa: E402
 
 
+def _record_command_source() -> str:
+    """/record のコマンド定義の原文をひと続きで返す。
+
+    commands/recording_commands.py は register_recording_commands の分割で
+    29行のディスパッチャになり、コマンドの実体は commands/record/ 以下へ
+    移った（経緯は commands/record/__init__.py を参照）。ディスパッチャ側の
+    原文を読んでも、管理者チェックも共有定数も、もうそこには無い。
+
+    ここを「分割後もディスパッチャを読む」ままにすると、管理者チェックを
+    全部外しても素通りで緑になる。読む先は必ず実体側に合わせること。
+    連結順は register_recording_commands が register() を呼ぶ順と同じで、
+    分割前のファイル内の記述順（start → stop → status → auto → config →
+    exclude）に一致する。
+    """
+    import inspect
+
+    from commands.record import config, exclude, session
+
+    return "\n".join(inspect.getsource(m) for m in (session, config, exclude))
+
+
 def text_channel(channel_id: int = 555):
     channel = Mock(spec=discord.TextChannel)
     channel.id = channel_id
@@ -2789,10 +2810,7 @@ class RecordingLimitConstantsTests(unittest.TestCase):
         self.assertIn("RETENTION_DAYS_MAX", source)
 
     def test_commands_use_the_shared_constants(self):
-        import inspect
-        import commands.recording_commands as cmds
-
-        source = inspect.getsource(cmds)
+        source = _record_command_source()
         self.assertIn("MAX_MINUTES_LIMIT", source)
         self.assertIn("RETENTION_DAYS_MAX", source)
 
@@ -2987,10 +3005,7 @@ class RecordingPrivilegeTests(unittest.TestCase):
 
     def test_record_commands_require_admin(self):
         """/record の管理系サブコマンドが素通りしないこと。"""
-        import inspect
-        import commands.recording_commands as cmds
-
-        source = inspect.getsource(cmds)
+        source = _record_command_source()
         for name in ("record_start", "record_stop", "record_auto", "record_config"):
             with self.subTest(command=name):
                 body = source[source.index(f"async def {name}(") :]
