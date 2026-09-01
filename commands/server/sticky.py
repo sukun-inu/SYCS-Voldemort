@@ -4,6 +4,8 @@ register_server_commands() 分割前の commands/server_commands.py から
 そのまま切り出した（経緯は commands/server/__init__.py を参照）。
 """
 
+from typing import cast
+
 import discord
 from discord import app_commands
 from discord.ext.commands import Bot
@@ -27,9 +29,11 @@ def register(bot: Bot) -> None:
         if not isinstance(interaction.channel, discord.TextChannel):
             await interaction.response.send_message("テキストチャンネルでのみ使えるぞ。", ephemeral=True)
             return
-        await awrite(set_sticky_message, interaction.guild.id, interaction.channel.id, content.replace("\\n", "\n"))
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
+        await awrite(set_sticky_message, guild.id, interaction.channel.id, content.replace("\\n", "\n"))
         await interaction.response.send_message("スティッキーメッセージを刻んだ。", ephemeral=True)
-        await post_sticky(interaction.channel, interaction.guild.id)
+        await post_sticky(interaction.channel, guild.id)
 
     @sticky_group.command(name="clear", description="【管理者】このチャンネルのスティッキーを解除します")
     async def unsticky_cmd(interaction: discord.Interaction):
@@ -38,8 +42,10 @@ def register(bot: Bot) -> None:
         if not isinstance(interaction.channel, discord.TextChannel):
             await interaction.response.send_message("テキストチャンネルでのみ使えるぞ。", ephemeral=True)
             return
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
         await interaction.response.send_message("スティッキーメッセージを取り除いた。", ephemeral=True)
-        await delete_sticky(interaction.channel, interaction.guild.id)
+        await delete_sticky(interaction.channel, guild.id)
 
     @sticky_group.command(name="list", description="スティッキー設定一覧を表示します")
     async def list_stickies_cmd(interaction: discord.Interaction):

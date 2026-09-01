@@ -4,6 +4,8 @@ register_logging_commands() 分割前の commands/logging_commands.py から
 そのまま切り出した（経緯は commands/settings/__init__.py を参照）。
 """
 
+from typing import cast
+
 import discord
 from discord import app_commands
 
@@ -18,8 +20,10 @@ def register(log_group: app_commands.Group) -> None:
         if not await _ensure_admin_in_guild(interaction):
             return
 
-        set_log_channel(interaction.guild.id, channel.id)
-        settings = get_log_settings(interaction.guild.id)
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
+        set_log_channel(guild.id, channel.id)
+        settings = get_log_settings(guild.id)
         await interaction.response.send_message(
             f"{channel.mention} を余のログチャンネルと定めた。ログレベル: {settings.get('level', 'INFO')}",
             ephemeral=True,
@@ -39,13 +43,15 @@ def register(log_group: app_commands.Group) -> None:
         if not await _ensure_admin_in_guild(interaction):
             return
 
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
         try:
-            set_log_level(interaction.guild.id, level)
+            set_log_level(guild.id, level)
         except ValueError as e:
             await interaction.response.send_message(str(e), ephemeral=True)
             return
 
-        settings = get_log_settings(interaction.guild.id)
+        settings = get_log_settings(guild.id)
         channel_id = settings.get("channel_id")
         ch_text = f"<#{channel_id}>" if channel_id else "未設定"
         await interaction.response.send_message(

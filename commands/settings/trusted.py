@@ -4,7 +4,7 @@ register_logging_commands() 分割前の commands/logging_commands.py から
 そのまま切り出した（経緯は commands/settings/__init__.py を参照）。
 """
 
-from typing import List
+from typing import Any, List, cast
 
 import discord
 from discord import app_commands
@@ -20,7 +20,7 @@ def register(trusted_group: app_commands.Group) -> None:
     async def add_trusted_members_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
-        select = discord.ui.UserSelect(
+        select: discord.ui.UserSelect[Any] = discord.ui.UserSelect(
             placeholder="追加するユーザーを選択（複数選択可・最大25人）", min_values=1, max_values=25
         )
         view = EntityPickerView(
@@ -34,7 +34,7 @@ def register(trusted_group: app_commands.Group) -> None:
     async def remove_trusted_members_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
-        select = discord.ui.UserSelect(
+        select: discord.ui.UserSelect[Any] = discord.ui.UserSelect(
             placeholder="削除するユーザーを選択（複数選択可・最大25人）", min_values=1, max_values=25
         )
         view = EntityPickerView(
@@ -49,14 +49,16 @@ def register(trusted_group: app_commands.Group) -> None:
         if not await _ensure_admin_in_guild(interaction):
             return
 
-        ids = get_trusted_user_ids(interaction.guild.id)
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
+        ids = get_trusted_user_ids(guild.id)
         if not ids:
             await interaction.response.send_message("まだ誰も余の信頼を勝ち取っていない。", ephemeral=True)
             return
 
         members: List[str] = []
         for uid in ids:
-            m = interaction.guild.get_member(uid)
+            m = guild.get_member(uid)
             members.append(m.mention if m else f"<@{uid}>")
 
         # 件数が多いとDiscordのメッセージ上限(2000文字)を超えて送信自体が失敗する。

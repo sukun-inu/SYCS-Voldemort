@@ -119,9 +119,11 @@ async def send_interaction(
         kwargs["view"] = view
 
     if interaction.response.is_done():
-        await interaction.followup.send(**kwargs)
+        # kwargs は dict[str, object] で動的に組み立てるため、mypy がどのオーバーロードか解決できない。
+        await interaction.followup.send(**kwargs)  # type: ignore[call-overload]
     else:
-        await interaction.response.send_message(**kwargs)
+        # 同上。
+        await interaction.response.send_message(**kwargs)  # type: ignore[call-overload]
 
 
 async def send_ephemeral(interaction: discord.Interaction, message: str) -> None:

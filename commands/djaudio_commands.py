@@ -1,3 +1,5 @@
+from typing import cast
+
 import discord
 from discord import app_commands
 from discord.ext.commands import Bot
@@ -36,10 +38,12 @@ def register_djaudio_commands(bot: Bot) -> None:
     ):
         if not await _ensure_admin(interaction):
             return
-        runtime = get_djaudio_runtime_settings(interaction.guild_id)
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild_id = cast(int, interaction.guild_id)
+        runtime = get_djaudio_runtime_settings(guild_id)
 
         if channel is None:
-            await awrite(set_djaudio_watch_channel, interaction.guild_id, None)
+            await awrite(set_djaudio_watch_channel, guild_id, None)
             embed = discord.Embed(
                 title="✅ DJAudio 監視チャンネル解除",
                 description="URL の自動 MP3 変換を無効にした。",
@@ -48,7 +52,7 @@ def register_djaudio_commands(bot: Bot) -> None:
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
-        await awrite(set_djaudio_watch_channel, interaction.guild_id, channel.id)
+        await awrite(set_djaudio_watch_channel, guild_id, channel.id)
         embed = discord.Embed(title="✅ DJAudio チャンネル設定完了", color=discord.Color.green())
         embed.description = (
             f"{channel.mention} を監視チャンネルと定めた。\n"
@@ -113,12 +117,18 @@ def register_djaudio_commands(bot: Bot) -> None:
         if interaction.guild is None:
             await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return
-        runtime = get_djaudio_runtime_settings(interaction.guild_id)
+        # guild_id は guild とは別属性で、上のチェックでは絞り込みが効かない。
+        # guild が非 None である以上、guild_id も必ず非 None。
+        guild_id = cast(int, interaction.guild_id)
+        runtime = get_djaudio_runtime_settings(guild_id)
 
         def _ch_text(ch_id: int | None) -> str:
             if not ch_id:
                 return "未設定"
-            ch = interaction.guild.get_channel(ch_id)
+            # ネストした関数の中では interaction.guild の絞り込みが効かないため、
+            # 都度 cast する（外側の None チェックにより実行時は必ず非 None）。
+            guild = cast(discord.Guild, interaction.guild)
+            ch = guild.get_channel(ch_id)
             return ch.mention if ch else f"ID: {ch_id}（チャンネル未検出）"
 
         embed = discord.Embed(title="🎵 DJAudio 設定", color=discord.Color.blurple())

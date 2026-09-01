@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Optional, cast
 
 import discord
 from discord import app_commands
@@ -163,7 +163,9 @@ async def tts_join(
     if not settings.get("enabled"):
         await send_ephemeral(interaction, "❌ TTS が無効。先に `/tts enable` で有効にせよ。")
         return
-    await tts_service.temp_join(interaction.client, interaction.guild, channel.id)
+    # このアプリでは interaction.client は常に commands.Bot のインスタンス。
+    bot = cast(Bot, interaction.client)
+    await tts_service.temp_join(bot, interaction.guild, channel.id)
 
     # 読み上げと録音は独立したスイッチ。両方オンなら、こちらの入口から入っても
     # 録音が始まるようにする（人の入室イベントだけを入口にしていると、既に人が

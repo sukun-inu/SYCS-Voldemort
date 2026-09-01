@@ -5,6 +5,8 @@ register_recording_commands() 分割前の commands/recording_commands.py から
 ここだけ管理者専用ではない（本人が自分に対して使う）。
 """
 
+from typing import cast
+
 import discord
 from discord import app_commands
 
@@ -21,7 +23,10 @@ def register(group: app_commands.Group) -> None:
             await send_ephemeral(interaction, "ギルド内でのみ使えるぞ。")
             return
 
-        settings = get_recording_settings(interaction.guild_id)
+        # guild_id は guild とは別属性で、上のチェックでは絞り込みが効かない。
+        # guild が非 None である以上、guild_id も必ず非 None。
+        guild_id = cast(int, interaction.guild_id)
+        settings = get_recording_settings(guild_id)
         excluded = set(settings.get("excluded_user_ids", []))
         user_id = interaction.user.id
 
@@ -32,10 +37,10 @@ def register(group: app_commands.Group) -> None:
             excluded.discard(user_id)
             message = "除外を解除した。以後の録音では貴様の声も記録される。"
 
-        await awrite(set_recording_excluded_users, interaction.guild_id, sorted(excluded))
+        await awrite(set_recording_excluded_users, guild_id, sorted(excluded))
 
         # 進行中のセッションにも反映する（設定だけ変えて今の録音に効かないと紛らわしい）
-        session = recording.get_session(interaction.guild_id)
+        session = recording.get_session(guild_id)
         if session is not None:
             session.excluded_user_ids = set(excluded)
 
