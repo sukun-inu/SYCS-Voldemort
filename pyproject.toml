@@ -64,6 +64,7 @@ follow_imports = "silent"
 module = [
     "aiohttp.*",
     "apscheduler.*",
+    "asyncpg.*",
     "colorthief.*",
     "discord.*",
     "groq.*",

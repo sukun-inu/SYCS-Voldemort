@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 import time
-from typing import Optional
+from typing import Optional, cast
 from urllib.parse import urlencode
 
 import aiohttp
@@ -58,7 +58,9 @@ async def exchange_code(code: str) -> Optional[dict]:
                 },
             ) as resp:
                 resp.raise_for_status()
-                return await resp.json()
+                # aiohttp の json() は Any を返す。Discord のレスポンスが常に
+                # オブジェクトである保証を型に落とし込むだけで、中身は見ていない。
+                return cast(Optional[dict], await resp.json())
     except Exception:
         return None
 
@@ -71,7 +73,9 @@ async def get_user_info(access_token: str) -> Optional[dict]:
                 headers={"Authorization": f"Bearer {access_token}"},
             ) as resp:
                 resp.raise_for_status()
-                return await resp.json()
+                # aiohttp の json() は Any を返す。Discord のレスポンスが常に
+                # オブジェクトである保証を型に落とし込むだけで、中身は見ていない。
+                return cast(Optional[dict], await resp.json())
     except Exception:
         return None
 
@@ -84,7 +88,9 @@ async def get_user_guilds(access_token: str) -> list[dict]:
                 headers={"Authorization": f"Bearer {access_token}"},
             ) as resp:
                 resp.raise_for_status()
-                return await resp.json()
+                # aiohttp の json() は Any を返す。Discord のレスポンスが常に
+                # 配列である保証を型に落とし込むだけで、中身は見ていない。
+                return cast("list[dict]", await resp.json())
     except Exception:
         return []
 
@@ -315,7 +321,10 @@ async def get_discord_user(user_id: int) -> Optional[dict]:
 
         # 取得できなかったことも覚える。None をそのまま入れると get() の
         # 「見つからない」と区別が付かず、失敗のたびに叩き直してしまう。
-        _user_info_cache.set(user_id, data if data is not None else _USER_INFO_MISS)
+        # _USER_INFO_MISS は object() の番兵で、キャッシュの値の型そのものでは
+        # ない。is 比較でしか使わないので、キャッシュへ入れる際は型だけ合わせる。
+        miss = cast(Optional[dict], _USER_INFO_MISS)
+        _user_info_cache.set(user_id, data if data is not None else miss)
         return data
 
 

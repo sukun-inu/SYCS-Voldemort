@@ -122,4 +122,8 @@ def render(request: Request, template_name: str, status_code: int = 200, **ctx):
             status_code=status_code,
         )
     except TypeError:
-        return templates.TemplateResponse(template_name, ctx, status_code=status_code)
+        # 型スタブは新しい TemplateResponse(request=..., name=..., context=...) 形式
+        # しか知らないため、Starlette 旧バージョン互換のこの位置引数呼び出しは
+        # 型検査に引っかかる。実際に来る Starlette のバージョンによって分岐する
+        # フォールバックそのものは変えない。
+        return templates.TemplateResponse(template_name, ctx, status_code=status_code)  # type: ignore[arg-type]

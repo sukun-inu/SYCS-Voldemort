@@ -16,7 +16,7 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -137,7 +137,10 @@ def check_dev(request: Request) -> dict:
         raise _NeedsLogin()
     if not is_dev_user(request):
         raise HTTPException(status_code=403, detail="開発者専用です。")
-    return request.session["user"]
+    # request.session は Any 値の MutableMapping。ここで返す値が dict である
+    # ことは呼び出し側（is_dev_user 等）の前提そのままで、絞り込みだけ足す。
+    user: dict = request.session["user"]
+    return user
 
 
 # ── 内部ヘルパー ─────────────────────────────────────────────
@@ -250,15 +253,21 @@ def _resolve_env_value(key: str, cfg: object | None) -> str | None:
 
 
 def _env_rows() -> list[dict]:
+    # import 成功時は config モジュールを、失敗時は None を cfg に持たせたい。
+    # `import config as cfg` の直後に `cfg = None` を代入すると、mypy には
+    # 「Module 型の変数に None を代入している」ように見えてしまうため、
+    # モジュール自体は別名で受けて cfg には Any として渡す。
+    cfg: Any = None
     try:
-        import config as cfg
+        import config as _config
 
+        cfg = _config
         defaults = {
-            "DJAUDIO_BASE_URL": str(cfg.DJAUDIO_BASE_URL),
-            "DJAUDIO_CACHE_DIR": str(cfg.DJAUDIO_CACHE_DIR),
-            "DJAUDIO_CACHE_TTL_SECONDS": str(cfg.DJAUDIO_CACHE_TTL),
-            "METALS_SITE_URL": cfg.METALS_SITE_URL,
-            "ADMIN_SITE_URL": cfg.ADMIN_SITE_URL,
+            "DJAUDIO_BASE_URL": str(_config.DJAUDIO_BASE_URL),
+            "DJAUDIO_CACHE_DIR": str(_config.DJAUDIO_CACHE_DIR),
+            "DJAUDIO_CACHE_TTL_SECONDS": str(_config.DJAUDIO_CACHE_TTL),
+            "METALS_SITE_URL": _config.METALS_SITE_URL,
+            "ADMIN_SITE_URL": _config.ADMIN_SITE_URL,
         }
     except Exception:
         cfg = None
@@ -409,7 +418,10 @@ async def earthquakes(request: Request, _=Depends(check_dev), limit: int = Query
                 "place": hypocenter.get("name") or "不明",
                 "magnitude": hypocenter.get("magnitude"),
                 "scale": scale,
-                "scale_label": SCALE_LABELS.get(scale, "不明"),
+                # 外部APIのJSONなので scale の型は保証されない。SCALE_LABELS.get()
+                # は実行時には見つからないキーで default を返すだけなので、
+                # int でない/None のときの挙動は変わらない。
+                "scale_label": SCALE_LABELS.get(cast(int, scale), "不明"),
                 "json": json.dumps(item, ensure_ascii=False),
             }
         )
