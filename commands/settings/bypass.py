@@ -4,7 +4,7 @@ register_logging_commands() 分割前の commands/logging_commands.py から
 そのまま切り出した（経緯は commands/settings/__init__.py を参照）。
 """
 
-from typing import List
+from typing import Any, List, cast
 
 import discord
 from discord import app_commands
@@ -20,7 +20,7 @@ def register(bypass_group: app_commands.Group) -> None:
     async def add_bypass_roles_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
-        select = discord.ui.RoleSelect(
+        select: discord.ui.RoleSelect[Any] = discord.ui.RoleSelect(
             placeholder="追加するロールを選択（複数選択可・最大25個）", min_values=1, max_values=25
         )
         view = EntityPickerView(
@@ -34,7 +34,7 @@ def register(bypass_group: app_commands.Group) -> None:
     async def remove_bypass_roles_cmd(interaction: discord.Interaction):
         if not await _ensure_admin_in_guild(interaction):
             return
-        select = discord.ui.RoleSelect(
+        select: discord.ui.RoleSelect[Any] = discord.ui.RoleSelect(
             placeholder="削除するロールを選択（複数選択可・最大25個）", min_values=1, max_values=25
         )
         view = EntityPickerView(
@@ -49,14 +49,16 @@ def register(bypass_group: app_commands.Group) -> None:
         if not await _ensure_admin_in_guild(interaction):
             return
 
-        ids = get_bypass_role_ids(interaction.guild.id)
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
+        ids = get_bypass_role_ids(guild.id)
         if not ids:
             await interaction.response.send_message("バイパスロールはまだ設定されていない。", ephemeral=True)
             return
 
         role_mentions: List[str] = []
         for rid in ids:
-            r = interaction.guild.get_role(rid)
+            r = guild.get_role(rid)
             role_mentions.append(r.mention if r else f"<@&{rid}>")
 
         # 件数が多いとDiscordのメッセージ上限(2000文字)を超えて送信自体が失敗する。

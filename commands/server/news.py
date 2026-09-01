@@ -5,6 +5,7 @@ register_server_commands() 分割前の commands/server_commands.py から
 """
 
 import uuid
+from typing import cast
 
 import discord
 from discord import app_commands
@@ -38,12 +39,14 @@ def register(bot: Bot) -> None:
         if interval < 5:
             await interaction.response.send_message("間隔は5分以上で指定せよ。", ephemeral=True)
             return
-        feeds = get_news_feeds(interaction.guild.id)
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
+        feeds = get_news_feeds(guild.id)
         if len(feeds) >= 10:
             await interaction.response.send_message("フィードは最大10件までだ。余の力にも限りがある。", ephemeral=True)
             return
         feed_id = uuid.uuid4().hex[:8]
-        await awrite(add_news_feed, interaction.guild.id, feed_id, channel.id, query, interval)
+        await awrite(add_news_feed, guild.id, feed_id, channel.id, query, interval)
         await interaction.response.send_message(
             f"ニュースフィードを加えた。\nID: `{feed_id}` | クエリ: `{query}` | "
             f"チャンネル: {channel.mention} | 間隔: {interval}分",
@@ -55,7 +58,9 @@ def register(bot: Bot) -> None:
     async def remove_news_cmd(interaction: discord.Interaction, feed_id: str):
         if not await _ensure_admin(interaction):
             return
-        removed = await awrite(remove_news_feed, interaction.guild.id, feed_id.strip())
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
+        removed = await awrite(remove_news_feed, guild.id, feed_id.strip())
         if removed:
             await interaction.response.send_message(f"フィード `{feed_id}` を抹消した。", ephemeral=True)
         else:

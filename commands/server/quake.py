@@ -4,6 +4,8 @@ register_server_commands() 分割前の commands/server_commands.py から
 そのまま切り出した（経緯は commands/server/__init__.py を参照）。
 """
 
+from typing import cast
+
 import discord
 from discord import app_commands
 from discord.ext.commands import Bot
@@ -52,7 +54,10 @@ class _ToggleButton(discord.ui.Button):
         self.key = key
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await self.view.handle_toggle(interaction, self.key)  # type: ignore[attr-defined]
+        # self.view は Item 基底では Any | None 型だが、_ToggleButton は必ず
+        # _NotifyTypeView に追加されるので実行時は常にそれ。
+        view = cast("_NotifyTypeView", self.view)
+        await view.handle_toggle(interaction, self.key)
 
 
 class _SaveButton(discord.ui.Button):
@@ -65,7 +70,10 @@ class _SaveButton(discord.ui.Button):
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await self.view.handle_save(interaction)  # type: ignore[attr-defined]
+        # self.view は Item 基底では Any | None 型だが、_SaveButton は必ず
+        # _NotifyTypeView に追加されるので実行時は常にそれ。
+        view = cast("_NotifyTypeView", self.view)
+        await view.handle_save(interaction)
 
 
 class _NotifyTypeView(discord.ui.View):
@@ -119,7 +127,9 @@ def register(bot: Bot) -> None:
     async def set_eq_ch(interaction: discord.Interaction, channel: discord.TextChannel):
         if not await _ensure_admin(interaction):
             return
-        await awrite(set_earthquake_channel, interaction.guild.id, channel.id)
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
+        await awrite(set_earthquake_channel, guild.id, channel.id)
         await interaction.response.send_message(f"{channel.mention} を地震アラートチャンネルと定めた。", ephemeral=True)
 
     @quake_group.command(name="min_scale", description="【管理者】地震通知の最小震度を設定します")
@@ -130,7 +140,9 @@ def register(bot: Bot) -> None:
     async def set_eq_scale(interaction: discord.Interaction, scale: int):
         if not await _ensure_admin(interaction):
             return
-        await awrite(set_earthquake_min_scale, interaction.guild.id, scale)
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
+        await awrite(set_earthquake_min_scale, guild.id, scale)
         await interaction.response.send_message(
             f"地震アラートの最小震度を 震度{SCALE_LABELS.get(scale, scale)} と定めた。",
             ephemeral=True,
@@ -158,8 +170,10 @@ def register(bot: Bot) -> None:
     async def eq_notify_type_cmd(interaction: discord.Interaction):
         if not await _ensure_admin(interaction):
             return
-        types = get_earthquake_notify_types(interaction.guild.id)
-        view = _NotifyTypeView(interaction.guild.id, interaction.user.id, types)
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
+        types = get_earthquake_notify_types(guild.id)
+        view = _NotifyTypeView(guild.id, interaction.user.id, types)
         await interaction.response.send_message(embed=_build_notify_type_embed(types), view=view, ephemeral=True)
 
     bot.tree.add_command(quake_group)

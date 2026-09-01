@@ -4,6 +4,8 @@ register_recording_commands() 分割前の commands/recording_commands.py から
 そのまま切り出した（経緯は commands/record/__init__.py を参照）。
 """
 
+from typing import Optional, cast
+
 import discord
 from discord import app_commands
 from discord.ext.commands import Bot
@@ -29,6 +31,9 @@ def register(bot: Bot, group: app_commands.Group) -> None:
         if not await _ensure_admin(interaction):
             return
 
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
+
         target = channel
         if target is None:
             voice_state = getattr(interaction.user, "voice", None)
@@ -44,10 +49,12 @@ def register(bot: Bot, group: app_commands.Group) -> None:
         try:
             session = await recording.start_recording(
                 bot,
-                interaction.guild,
+                guild,
                 target,
                 started_by=interaction.user,
-                announce_to=interaction.channel,
+                # ForumChannel/CategoryChannel は Messageable ではないが、スラッシュ
+                # コマンドの発生元チャンネルとしては実質的に来ない。
+                announce_to=cast(Optional[discord.abc.Messageable], interaction.channel),
             )
         except recording.RecordingError as e:
             await interaction.followup.send(str(e), ephemeral=True)
@@ -67,18 +74,20 @@ def register(bot: Bot, group: app_commands.Group) -> None:
     async def record_stop(interaction: discord.Interaction):
         if not await _ensure_admin(interaction):
             return
-        if not recording.is_recording(interaction.guild_id):
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild_id = cast(int, interaction.guild_id)
+        if not recording.is_recording(guild_id):
             await send_ephemeral(interaction, "このサーバーでは録音しておらぬ。")
             return
 
         await interaction.response.defer(thinking=True)
         try:
-            result = await recording.stop_recording(bot, interaction.guild_id)
+            result = await recording.stop_recording(bot, guild_id)
         except recording.RecordingError as e:
             await interaction.followup.send(str(e))
             return
 
-        embed = recording.build_result_embed(interaction.guild_id, result)
+        embed = recording.build_result_embed(guild_id, result)
         await interaction.followup.send(embed=embed)
 
     @group.command(name="status", description="録音の状況を表示します")
@@ -88,7 +97,9 @@ def register(bot: Bot, group: app_commands.Group) -> None:
         # /record exclude で分かる）。
         if not await _ensure_admin(interaction):
             return
-        session = recording.get_session(interaction.guild_id)
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild_id = cast(int, interaction.guild_id)
+        session = recording.get_session(guild_id)
         if session is None:
             await send_ephemeral(interaction, "今は録音しておらぬ。")
             return

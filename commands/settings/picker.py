@@ -5,7 +5,7 @@ register_logging_commands() 分割前の commands/logging_commands.py から
 trusted.py と bypass.py の両方から使うため、ここに置いてある。
 """
 
-from typing import Callable
+from typing import Any, Callable, cast
 
 import discord
 
@@ -20,7 +20,10 @@ async def update_entity_list(
     edit: bool = False,
 ) -> None:
     ids = [e.id for e in entities]
-    updated = update_fn(interaction.guild.id, ids)
+    # EntityPickerView はコマンド側の ensure_admin 通過後にしか生成されないので、
+    # ここに来る interaction.guild は必ず非 None。
+    guild = cast(discord.Guild, interaction.guild)
+    updated = update_fn(guild.id, ids)
     mentions = ", ".join(e.mention for e in entities)
     content = f"{action_text}: {mentions}\n（{count_label}: {len(updated)}）"
     if edit:
@@ -39,7 +42,7 @@ class EntityPickerView(discord.ui.View):
     def __init__(
         self,
         author_id: int,
-        select_item: discord.ui.Select,
+        select_item: discord.ui.Select[Any] | discord.ui.UserSelect[Any] | discord.ui.RoleSelect[Any],
         update_fn: Callable,
         action_text: str,
         count_label: str,
@@ -52,11 +55,14 @@ class EntityPickerView(discord.ui.View):
         self.picked: list = []
 
         self.select_item = select_item
-        self.select_item.callback = self._on_select
+        # Item.callback はメソッドだが、View の定石どおりインスタンスへ差し替える。
+        self.select_item.callback = self._on_select  # type: ignore[method-assign]
         self.add_item(self.select_item)
 
-        self.confirm_button = discord.ui.Button(label="確定", style=discord.ButtonStyle.primary, disabled=True)
-        self.confirm_button.callback = self._on_confirm
+        self.confirm_button: discord.ui.Button = discord.ui.Button(
+            label="確定", style=discord.ButtonStyle.primary, disabled=True
+        )
+        self.confirm_button.callback = self._on_confirm  # type: ignore[method-assign]  # 同上
         self.add_item(self.confirm_button)
 
     async def _check_author(self, interaction: discord.Interaction) -> bool:

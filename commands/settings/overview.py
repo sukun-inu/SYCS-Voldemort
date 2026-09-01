@@ -5,6 +5,8 @@ register_logging_commands() 分割前の commands/logging_commands.py から
 help コマンドが bot.tree を走査するため、ここだけ bot を受け取る。
 """
 
+from typing import cast
+
 import discord
 from discord import app_commands
 from discord.ext.commands import Bot
@@ -21,7 +23,8 @@ def register(bot: Bot, bot_group: app_commands.Group) -> None:
         if not await _ensure_admin_in_guild(interaction):
             return
 
-        guild_id = interaction.guild.id
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild_id = cast(discord.Guild, interaction.guild).id
 
         log_settings = get_log_settings(guild_id)
         log_ch_id = log_settings.get("channel_id")

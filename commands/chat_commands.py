@@ -1,4 +1,5 @@
 import time
+from typing import cast
 
 import discord
 
@@ -41,6 +42,10 @@ async def handle_chatgpt_message(bot: discord.Client, message: discord.Message):
     if target_channel_id <= 0 or message.channel.id != target_channel_id:
         return
 
+    # /chat set で選べるのは TextChannel のみなので、target_channel_id に一致した
+    # ここでの message.channel は実行時には必ず TextChannel。
+    channel = cast(discord.TextChannel, message.channel)
+
     key = (message.guild.id, message.author.id)
 
     if key not in user_chatgpt:
@@ -69,7 +74,7 @@ async def handle_chatgpt_message(bot: discord.Client, message: discord.Message):
         await message.channel.send("ヴォルデモートでも手こずるとはな… 少し待ってから試せ。")
         return
 
-    await send_large_message(message.channel, response)
+    await send_large_message(channel, response)
 
     preview = response[:1800]
     await log_action(
@@ -79,7 +84,7 @@ async def handle_chatgpt_message(bot: discord.Client, message: discord.Message):
         "ChatGPT出力",
         user=message.author,
         fields={
-            "チャンネル": message.channel.mention,
+            "チャンネル": channel.mention,
             "入力": (message.content or "(内容なし)")[:1024],
             "出力プレビュー": preview[:1024],
         },

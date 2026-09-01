@@ -4,6 +4,8 @@ register_server_commands() 分割前の commands/server_commands.py から
 そのまま切り出した（経緯は commands/server/__init__.py を参照）。
 """
 
+from typing import cast
+
 import discord
 from discord import app_commands
 from discord.ext.commands import Bot
@@ -37,7 +39,9 @@ def register(bot: Bot) -> None:
         except ValueError:
             await interaction.response.send_message("メッセージIDは数値で指定するがよい。", ephemeral=True)
             return
-        await awrite(add_reaction_role, interaction.guild.id, mid, emoji.strip(), role.id)
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
+        await awrite(add_reaction_role, guild.id, mid, emoji.strip(), role.id)
         await interaction.response.send_message(
             f"メッセージ `{mid}` に {emoji} → {role.mention} のリアクションロールを追加した。",
             ephemeral=True,
@@ -60,7 +64,9 @@ def register(bot: Bot) -> None:
         except ValueError:
             await interaction.response.send_message("メッセージIDは数値で指定するがよい。", ephemeral=True)
             return
-        removed = await awrite(remove_reaction_role, interaction.guild.id, mid, emoji.strip())
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
+        removed = await awrite(remove_reaction_role, guild.id, mid, emoji.strip())
         if removed:
             await interaction.response.send_message(f"リアクションロール ({emoji}) を取り除いた。", ephemeral=True)
         else:

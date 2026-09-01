@@ -4,6 +4,8 @@ register_server_commands() 分割前の commands/server_commands.py から
 そのまま切り出した（経緯は commands/server/__init__.py を参照）。
 """
 
+from typing import cast
+
 import discord
 from discord import app_commands
 from discord.ext.commands import Bot
@@ -36,7 +38,9 @@ def register(bot: Bot) -> None:
     async def set_welcome_ch(interaction: discord.Interaction, channel: discord.TextChannel):
         if not await _ensure_admin(interaction):
             return
-        await awrite(set_welcome_channel, interaction.guild.id, channel.id)
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
+        await awrite(set_welcome_channel, guild.id, channel.id)
         await interaction.response.send_message(f"{channel.mention} をウェルカムチャンネルと定めた。", ephemeral=True)
 
     @welcome_group.command(name="message", description="【管理者】ウェルカムメッセージを設定します")
@@ -44,7 +48,9 @@ def register(bot: Bot) -> None:
     async def set_welcome_msg(interaction: discord.Interaction, message: str):
         if not await _ensure_admin(interaction):
             return
-        await awrite(set_welcome_message, interaction.guild.id, message)
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
+        await awrite(set_welcome_message, guild.id, message)
         await interaction.response.send_message(f"ウェルカムメッセージを定めた。\n> {message}", ephemeral=True)
 
     @goodbye_group.command(name="channel", description="【管理者】グッバイ送信チャンネルを設定します")
@@ -52,7 +58,9 @@ def register(bot: Bot) -> None:
     async def set_goodbye_ch(interaction: discord.Interaction, channel: discord.TextChannel):
         if not await _ensure_admin(interaction):
             return
-        await awrite(set_goodbye_channel, interaction.guild.id, channel.id)
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
+        await awrite(set_goodbye_channel, guild.id, channel.id)
         await interaction.response.send_message(f"{channel.mention} をグッバイチャンネルと定めた。", ephemeral=True)
 
     @goodbye_group.command(name="message", description="【管理者】グッバイメッセージを設定します")
@@ -60,7 +68,9 @@ def register(bot: Bot) -> None:
     async def set_goodbye_msg(interaction: discord.Interaction, message: str):
         if not await _ensure_admin(interaction):
             return
-        await awrite(set_goodbye_message, interaction.guild.id, message)
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild = cast(discord.Guild, interaction.guild)
+        await awrite(set_goodbye_message, guild.id, message)
         await interaction.response.send_message(f"グッバイメッセージを定めた。\n> {message}", ephemeral=True)
 
     @greeting_group.command(name="status", description="ウェルカム/グッバイ設定を表示します")

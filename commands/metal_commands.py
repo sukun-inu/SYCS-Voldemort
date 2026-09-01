@@ -1,8 +1,10 @@
 import asyncio
 import logging
+from typing import cast
 
 import discord
 from discord import app_commands
+from discord.ext.commands import Bot
 
 from config import METAL_COMMANDS, MetalSpec
 from commands.interaction_utils import metals_site_view, send_interaction
@@ -71,7 +73,7 @@ async def _handle_single_metal(interaction: discord.Interaction, grams: float, s
         await _respond_error(interaction, "エラーだ。余の力をもってしても処理できなかった。しばらく待ってから試せ。")
 
 
-def register_metal_commands(bot: discord.Client) -> None:
+def register_metal_commands(bot: Bot) -> None:
     """金属価格コマンドを登録"""
     group = app_commands.Group(name="metal", description="貴金属の現在価格")
 
@@ -91,7 +93,7 @@ def register_metal_commands(bot: discord.Client) -> None:
                     user=interaction.user,
                     fields={
                         "チャンネル": (
-                            interaction.channel.mention
+                            interaction.channel.mention  # type: ignore[union-attr]  # hasattr で絞っているが mypy は追えない（None も含め対象外なら else 分岐へ）
                             if hasattr(interaction.channel, "mention")
                             else str(interaction.channel)
                         ),
@@ -124,7 +126,10 @@ def register_metal_commands(bot: discord.Client) -> None:
             for spec, prices in zip(specs, results):
                 if isinstance(prices, Exception):
                     raise prices
-                data[f"{spec.display_name} ({spec.key.title()})"] = _format_prices(prices)
+                # gather の型は dict[str, int] | BaseException だが、上の isinstance
+                # で Exception は排除済み（BaseException 直系の非 Exception 型は
+                # calculate_metal_value が投げないので実行時には来ない）。
+                data[f"{spec.display_name} ({spec.key.title()})"] = _format_prices(cast(dict[str, int], prices))
 
             embed = create_embed(
                 f"{g}グラムの金属価格",

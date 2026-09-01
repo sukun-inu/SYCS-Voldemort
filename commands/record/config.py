@@ -4,6 +4,8 @@ register_recording_commands() 分割前の commands/recording_commands.py から
 そのまま切り出した（経緯は commands/record/__init__.py を参照）。
 """
 
+from typing import cast
+
 import discord
 from discord import app_commands
 
@@ -27,17 +29,19 @@ def register(group: app_commands.Group) -> None:
         if not await _ensure_admin(interaction):
             return
 
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild_id = cast(int, interaction.guild_id)
         patch: dict = {"auto_start": enabled}
         if channel is not None:
             patch["vc_channel_id"] = channel.id
-        await awrite(set_recording_settings, interaction.guild_id, patch)
+        await awrite(set_recording_settings, guild_id, patch)
 
-        settings = get_recording_settings(interaction.guild_id)
+        settings = get_recording_settings(guild_id)
         if not enabled:
             await send_ephemeral(interaction, "自動録音を切った。手動の `/record start` は使える。")
             return
 
-        target_id = recording.auto_start_channel_id(interaction.guild_id)
+        target_id = recording.auto_start_channel_id(guild_id)
         if not settings.get("enabled", True):
             where = "ただし録音そのものが無効なので、まず有効にせよ。"
         elif target_id:
@@ -67,6 +71,8 @@ def register(group: app_commands.Group) -> None:
         if not await _ensure_admin(interaction):
             return
 
+        # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
+        guild_id = cast(int, interaction.guild_id)
         patch: dict = {}
         if enabled is not None:
             patch["enabled"] = enabled
@@ -90,10 +96,10 @@ def register(group: app_commands.Group) -> None:
             patch["announce_channel_id"] = announce_channel.id
 
         if patch:
-            await awrite(set_recording_settings, interaction.guild_id, patch)
+            await awrite(set_recording_settings, guild_id, patch)
 
-        settings = get_recording_settings(interaction.guild_id)
-        target_id = recording.preferred_vc_channel_id(interaction.guild_id)
+        settings = get_recording_settings(guild_id)
+        target_id = recording.preferred_vc_channel_id(guild_id)
 
         embed = discord.Embed(
             title="🎙️ 録音の設定" + ("（更新した）" if patch else ""),
