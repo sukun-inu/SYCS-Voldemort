@@ -2014,3 +2014,54 @@ class ConfigReadingConsistencyTests(unittest.TestCase):
         )
         self.assertNotIn('os.getenv("DEV_USER_ID")', source)
         self.assertNotIn('os.environ.get("DEV_USER_ID"', source)
+
+
+class GuildSelectFormTests(unittest.TestCase):
+    """/admin/guilds/select が、テキスト以外を送られても 500 にならないこと。
+
+    guild_id は <select> から来る前提で書かれているが、フォームは誰でも
+    組み立てられる。ファイルパートとして送られると int() が ValueError では
+    なく TypeError を投げ、except ValueError では捕まらずに 500 まで抜ける。
+    「無効なサーバーIDです」で済むはずの入力が、追いにくい500になる。
+    """
+
+    def _run(self, value):
+        import asyncio
+        from unittest.mock import Mock
+
+        from webapp_admin.views.dashboard_views import select_guild
+
+        class FakeForm:
+            def get(self, key, default=None):
+                return value if key == "guild_id" else default
+
+        request = Mock()
+        request.session = {}
+
+        async def form():
+            return FakeForm()
+
+        request.form = form
+        response = asyncio.run(select_guild(request))
+        return request, response
+
+    def test_a_file_part_is_refused_instead_of_crashing(self):
+        class NotAnInt:
+            """int() が TypeError を投げる値（UploadFile の代役）。"""
+
+        request, response = self._run(NotAnInt())
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers["location"], "/admin/guilds")
+        self.assertEqual(request.session["_flashes"], [["danger", "無効なサーバーIDです。"]])
+
+    def test_a_non_numeric_string_is_still_refused_the_same_way(self):
+        """ValueError 側の経路。TypeError を足したときに壊していないこと。"""
+        request, response = self._run("abc")
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(request.session["_flashes"], [["danger", "無効なサーバーIDです。"]])
+
+    def test_an_unknown_guild_id_is_refused_for_lacking_permission(self):
+        """数値として読めた先の分岐を、上の2件と取り違えていないこと。"""
+        request, response = self._run("12345")
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(request.session["_flashes"], [["danger", "アクセス権限がありません。"]])
