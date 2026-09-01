@@ -11,14 +11,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Callable, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from webapp_admin.api.jsonsafe import SafeJSONResponse as JSONResponse
 
 from webapp_admin.schema import choices as choice_resolver
 from webapp_admin.schema.registry import PANEL_BY_ID, app_groups
-from webapp_admin.schema.types_def import Collection, Panel
+from webapp_admin.schema.types_def import Collection, Field, Panel
 from webapp_admin.schema.validation import validate_item, validate_values
 from webapp_admin.security import check_csrf, check_guild, is_dev_user
 
@@ -67,7 +67,13 @@ def _read_values(panel: Panel, guild_id: int) -> tuple[dict[str, Any], dict[str,
     errors: dict[str, str] = {}
     for field in panel.fields:
         try:
-            values[field.key] = field.to_json_value(field.get(guild_id))
+            # Field.get はコレクションの入力欄では省略できるため型は Optional
+            # だが、registry の検査（app_groups 経由で読み込み時に走る）が
+            # トップレベルのフィールドには必ず get/set がある前提を保証している。
+            # None ならここで TypeError になり、下の except でそのまま拾われる
+            # （挙動は変えていない）。
+            getter = cast(Callable[[int], Any], field.get)
+            values[field.key] = field.to_json_value(getter(guild_id))
         except Exception as exc:  # 1項目の失敗でパネル全体を落とさない
             logger.exception("設定値の読み取りに失敗 panel=%s field=%s", panel.id, field.key)
             values[field.key] = field.default
@@ -165,9 +171,15 @@ async def save_app(
         applied: list[str] = []
         failures: dict[str, str] = {}
         for key, value in clean.items():
-            field = panel.field(key)
+            # clean の key は validate_values() が
+            # 「panel.field(key) が存在し、かつ field.set が非 None」の場合に
+            # しか入れていない（webapp_admin/schema/validation.py 参照）ので、
+            # ここで None になることは無い。None なら下の except がそのまま拾う
+            # （挙動は変えていない）。
+            field = cast(Field, panel.field(key))
             try:
-                field.set(guild_id, value)
+                setter = cast(Callable[[int, Any], Any], field.set)
+                setter(guild_id, value)
                 applied.append(key)
             except Exception as exc:
                 logger.exception("設定の保存に失敗 panel=%s field=%s", panel.id, key)

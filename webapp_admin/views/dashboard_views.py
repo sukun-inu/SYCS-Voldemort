@@ -5,6 +5,7 @@
 """
 
 import time
+from typing import cast
 
 from fastapi import APIRouter, Depends, Request
 from starlette.responses import JSONResponse, RedirectResponse
@@ -32,7 +33,9 @@ async def guild_select(request: Request, _=Depends(check_login)):
 @router.post("/guilds/select")
 async def select_guild(request: Request, _=Depends(check_login), _csrf=Depends(check_csrf)):
     form = await request.form()
-    guild_id_str = form.get("guild_id", "")
+    # FormData.get() の型は str | UploadFile。この項目は常にテキスト入力
+    # （<select name="guild_id">）として送られてくる前提のまま、絞り込みだけ足す。
+    guild_id_str = cast(str, form.get("guild_id", ""))
     try:
         guild_id = int(guild_id_str)
     except ValueError:
