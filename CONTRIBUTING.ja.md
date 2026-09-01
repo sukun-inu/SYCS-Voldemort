@@ -164,7 +164,7 @@ DB が要るものは、`services` 層を差し替えるか、同じ SQLAlchemy 
 ```bash
 python -m ruff check .
 python -m black .
-python -m mypy -p webapp -p events
+python -m mypy -p webapp -p events -p services -p webapp_admin -p commands
 ```
 
 設定は `pyproject.toml`。CI が3つとも回し、落ちたらジョブが落ちます。
@@ -216,9 +216,9 @@ return discord.Color.dark_grey()
 
 | 場所 | 値 | 意味 |
 |---|---|---|
-| `.coveragerc` の `fail_under` | 56 | これを割ると CI が落ちる |
-| `pyproject.toml` の `max-complexity` | 75 | 現在の最大値に合わせた天井 |
-| CI の `mypy -p ...` | webapp, events | 通せるパッケージだけ |
+| `.coveragerc` の `fail_under` | 69 | これを割ると CI が落ちる（実測 71.2%） |
+| `pyproject.toml` の `max-complexity` | 31 | 現在の最大値に合わせた天井（`create_app`） |
+| CI の `mypy -p ...` | 本体5パッケージ全部 | 147ファイル |
 
 どれも「今より悪くしない」ための歯止めです。**テストを足したり関数を割ったり
 したら、この数字も一緒に締めてください。** 緩めたままにすると、その分だけ静かに
@@ -238,7 +238,7 @@ return discord.Color.dark_grey()
 2. カバレッジが `fail_under` を下回らないこと
 3. `ruff check .`
 4. `black --check .`
-5. `mypy -p webapp -p events`
+5. `mypy -p webapp -p events -p services -p webapp_admin -p commands`
 6. `tools/check_requirements.py`（依存の固定が Docker と同じ条件で解けるか）
 7. `tools/check_admin_schema.py` と `tools/generate_admin_docs.py --check`
 

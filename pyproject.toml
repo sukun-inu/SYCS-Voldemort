@@ -25,7 +25,7 @@ select = ["E", "F", "W", "C90"]
 #   75 → register_server_commands（457行）を commands/server/ 7モジュールへ
 #        分割したので 35 へ。現在の最大は register_logging_commands と
 #        register_recording_commands（どちらも 35）。次はこの2つ。
-max-complexity = 35
+max-complexity = 31
 
 [tool.ruff.lint.per-file-ignores]
 # テストは services/* が読み込み時に SETTINGS_DIR を解決する都合上、

@@ -47,7 +47,7 @@ Postgres. Note that `patch()` on a module attribute does **not** affect FastAPI
 ```bash
 python -m ruff check .
 python -m black .
-python -m mypy -p webapp -p events
+python -m mypy -p webapp -p events -p services -p webapp_admin -p commands
 ```
 
 CI runs all three and fails on any of them.
