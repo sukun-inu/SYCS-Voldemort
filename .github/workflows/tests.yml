@@ -54,10 +54,10 @@ jobs:
         run: python -m black --check --diff .
 
       - name: 型検査（mypy）
-        # 通せるパッケージから順に広げている。残るのは commands（70件前後）と
-        # webapp_admin（14件）。ここに足す前に、そのパッケージの指摘を 0 に
-        # すること。「入れたが素通り」は作らない。
-        run: python -m mypy -p webapp -p events -p services
+        # 本体5パッケージすべてが対象になった（147ファイル）。新しく
+        # パッケージを足すときは、そのパッケージの指摘を 0 にしてから
+        # ここへ加えること。「入れたが素通り」は作らない。
+        run: python -m mypy -p webapp -p events -p services -p webapp_admin -p commands
 
       - name: 依存の固定が Docker と同じ条件で解けるか確認
         run: python tools/check_requirements.py
