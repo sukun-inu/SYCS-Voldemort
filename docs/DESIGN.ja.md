@@ -243,14 +243,32 @@ session-level advisory lock** を取れたプロセスだけがスケジュー�
 ### 4.1 構成
 
 ```
-  main.py           ログ設定、create_bot、コマンド登録、起動
-    └─ bot_setup.py  イベントハンドラと定期タスク（1,300行）
+  main.py            ログ設定、create_bot、コマンド登録、起動
+    └─ bot_setup.py  events/ の各 register(bot) を呼ぶだけ（35行）
+         └─ events/    イベントハンドラと定期タスク（9モジュール）
     └─ commands/     スラッシュコマンドの登録（機能ごと）
          └─ services/  実処理
 ```
 
 `commands/__init__.py` が登録モジュールの一覧を持ち、`register_all_commands()`
 が順に呼ぶ。増やすときはここに1行足す。
+
+登録関数が大きくなったものは、トピックごとのサブパッケージへ割ってある。
+どれも「登録は薄く、中身は素の関数へ」で、呼び出し口の型は変えていない。
+
+| 分割元 | 分割先 | 経緯 |
+|---|---|---|
+| `setup_events`（1,210行） | `events/` 9モジュール | `events/__init__.py` |
+| `register_server_commands`（457行） | `commands/server/` 7モジュール | `commands/server/__init__.py` |
+| `register_logging_commands`（271行） | `commands/settings/` 6モジュール | `commands/settings/__init__.py` |
+| `register_recording_commands`（268行） | `commands/record/` 3モジュール | `commands/record/__init__.py` |
+
+`commands/server/` は各モジュールが自分でグループを作って
+`bot.tree.add_command()` まで行う。`commands/settings/` と `commands/record/` は
+そうしていない。前者は5つのグループの登録順を1箇所で読める形を保つため、
+後者は6コマンドが1つの `/record` グループを共有していて、そもそも各モジュールが
+自分でグループを作れないため。**分け方が3通りあるのは、共有するものが違うから**で、
+揃えていないのは意図的。
 
 ### 4.2 イベントと定期タスク
 
