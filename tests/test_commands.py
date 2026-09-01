@@ -158,6 +158,11 @@ class AdminGuardTests(unittest.TestCase):
         return registry, FakeGroup
 
     def test_record_status_refuses_non_admins(self):
+        # commands/recording_commands.py はトピック別モジュール（commands/record/
+        # 以下）へ分割済みで、/record status の実処理と recording_service 参照は
+        # commands.record.session 側にある。パッチ対象もそちらに合わせる
+        # （分割の経緯は commands/record/__init__.py を参照）。
+        import commands.record.session as rs
         import commands.recording_commands as rc
 
         registry, FakeGroup = self._tree()
@@ -165,12 +170,13 @@ class AdminGuardTests(unittest.TestCase):
             rc.register_recording_commands(Mock())
 
         interaction, calls = make_interaction(administrator=False)
-        with patch.object(rc.recording, "get_session", Mock()) as get_session:
+        with patch.object(rs.recording, "get_session", Mock()) as get_session:
             asyncio.run(registry["status"](interaction))
         get_session.assert_not_called()
         self.assertTrue(calls, "何も返していない")
 
     def test_record_status_answers_admins(self):
+        import commands.record.session as rs
         import commands.recording_commands as rc
 
         registry, FakeGroup = self._tree()
@@ -178,7 +184,7 @@ class AdminGuardTests(unittest.TestCase):
             rc.register_recording_commands(Mock())
 
         interaction, calls = make_interaction(administrator=True)
-        with patch.object(rc.recording, "get_session", Mock(return_value=None)):
+        with patch.object(rs.recording, "get_session", Mock(return_value=None)):
             asyncio.run(registry["status"](interaction))
         self.assertTrue(calls, "何も返していない")
 
@@ -365,6 +371,14 @@ class RecordingListCapTests(unittest.TestCase):
     """録音の除外リスト・参加者リストは、件数が多くても省略件数を隠さない。"""
 
     def _register(self):
+        # /record config の実処理は commands/record/ への分割で
+        # commands.record.config へ移った。get_recording_settings を patch する
+        # 先もそちらでなければならない（分割の経緯は
+        # commands/record/__init__.py を参照）。recording_commands 側へ
+        # 再エクスポートして AttributeError だけ消すと、patch が実際の
+        # 呼び出し先へ届かないまま既定の設定を読み、除外0人の経路を通って
+        # 何も確かめずに緑になる。
+        import commands.record.config as rcfg
         import commands.recording_commands as rc
 
         registry = {}
@@ -385,10 +399,10 @@ class RecordingListCapTests(unittest.TestCase):
 
         with patch.object(rc.app_commands, "Group", FakeGroup):
             rc.register_recording_commands(Mock())
-        return rc, registry
+        return rcfg, registry
 
     def test_excluded_list_shows_the_omitted_count(self):
-        rc, registry = self._register()
+        rcfg, registry = self._register()
         interaction, calls = make_interaction(administrator=True)
         sent = {}
 
@@ -400,7 +414,7 @@ class RecordingListCapTests(unittest.TestCase):
         excluded_ids = list(range(30))
         with (
             patch.object(
-                rc,
+                rcfg,
                 "get_recording_settings",
                 Mock(
                     return_value={
@@ -412,7 +426,7 @@ class RecordingListCapTests(unittest.TestCase):
                     }
                 ),
             ),
-            patch.object(rc.recording, "preferred_vc_channel_id", Mock(return_value=None)),
+            patch.object(rcfg.recording, "preferred_vc_channel_id", Mock(return_value=None)),
         ):
             asyncio.run(registry["config"](interaction))
 
@@ -489,6 +503,13 @@ class LoggingSettingsListDedupTests(unittest.TestCase):
     def test_settings_shows_the_omitted_count_via_the_shared_helper(self):
         import commands.logging_commands as lc
 
+        # /bot settings の実処理は register_logging_commands の分割で
+        # commands/settings/overview.py へ移った。設定取得を patch する先も
+        # そちらでなければならない。logging_commands 側へ再エクスポートして
+        # AttributeError だけ消すと、patch が実際の呼び出し先へ届かないまま
+        # 「未設定なので一覧は空」の経路を通り、何も確かめずに緑になる。
+        import commands.settings.overview as overview
+
         registry = {}
 
         class FakeGroup:
@@ -517,10 +538,10 @@ class LoggingSettingsListDedupTests(unittest.TestCase):
         interaction.response.send_message = fake_send
 
         with (
-            patch.object(lc, "get_log_settings", Mock(return_value={})),
-            patch.object(lc, "get_response_channel_id", Mock(return_value=None)),
-            patch.object(lc, "get_trusted_user_ids", Mock(return_value=list(range(20)))),
-            patch.object(lc, "get_bypass_role_ids", Mock(return_value=[])),
+            patch.object(overview, "get_log_settings", Mock(return_value={})),
+            patch.object(overview, "get_response_channel_id", Mock(return_value=None)),
+            patch.object(overview, "get_trusted_user_ids", Mock(return_value=list(range(20)))),
+            patch.object(overview, "get_bypass_role_ids", Mock(return_value=[])),
         ):
             asyncio.run(registry["settings"](interaction))
 
