@@ -386,6 +386,128 @@ class RecordStatusTests(unittest.TestCase):
 # ── /record auto・config（commands/record/config.py） ─────────────────────
 
 
+class RecordConfigRegistrationShapeTests(unittest.TestCase):
+    """commands/record/config.py の register が何をどう登録するかを固定する。
+
+    144行あるこの関数を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+
+    下の RecordAutoTests / RecordConfigTests は**登録されたあとの中身**を
+    呼んでいるが、**登録そのもの**は誰も見ていない。コマンドの本体を関数の
+    外へ出すと、次のものが黙って変わりうる。
+
+      - コマンドの名前・説明・並び順
+      - 引数の名前・順序・既定値（Discord のコマンド定義そのもの）
+      - `describe` の文（スラッシュコマンドの入力欄に出る説明）
+
+    どれが変わっても**テストは通り、例外も出ず、Discord 側の見た目だけが
+    変わる。** 登録の形は、ここで押さえておかないと誰も気づけない。
+    """
+
+    def _register(self):
+        """config.register() だけを、名前と説明を控える群へ登録する。"""
+        import commands.record.config as rcfg
+
+        registered: list[tuple[str, str]] = []
+        functions: dict[str, object] = {}
+
+        class RecordingGroup:
+            """`group.command` に渡された名前・説明・関数を控えるだけの群。"""
+
+            def command(self, *, name, description=""):
+                """デコレータを返す。関数はそのまま返し、包み直さない。"""
+
+                def wrap(fn):
+                    registered.append((name, description))
+                    functions[name] = fn
+                    return fn
+
+                return wrap
+
+        rcfg.register(RecordingGroup())
+        return registered, functions
+
+    def test_the_two_commands_are_registered_with_their_names_and_descriptions(self):
+        """auto と config が、この名前・この説明・この順で並ぶこと。"""
+        registered, _ = self._register()
+
+        self.assertEqual(
+            registered,
+            [
+                ("auto", "【管理者】自動録音のオン／オフを切り替えます"),
+                (
+                    "config",
+                    "【管理者】録音の設定を表示・変更します（引数なしで現在の設定を表示）",
+                ),
+            ],
+        )
+
+    def test_each_command_keeps_its_arguments(self):
+        """引数の名前・順序・既定値が変わらないこと。
+
+        ここは Discord へ送るコマンド定義そのものなので、順序が入れ替わる
+        だけでも利用者の入力欄の並びが変わる。既定値が消えれば必須引数に
+        なり、これまで通っていた呼び出しが弾かれる。
+        """
+        import inspect
+
+        _, functions = self._register()
+
+        def shape(fn):
+            """(引数名, 既定値) の並びにする。既定値なしは inspect の番兵のまま。"""
+            return [(p.name, p.default) for p in inspect.signature(fn).parameters.values()]
+
+        empty = inspect.Parameter.empty
+        self.assertEqual(
+            shape(functions["auto"]),
+            [("interaction", empty), ("enabled", empty), ("channel", None)],
+        )
+        self.assertEqual(
+            shape(functions["config"]),
+            [
+                ("interaction", empty),
+                ("enabled", None),
+                ("limit_minutes", None),
+                ("retention_days", None),
+                ("announce_channel", None),
+            ],
+        )
+
+    def test_each_argument_keeps_its_description(self):
+        """describe の文が、引数ごとに付いたままであること。
+
+        本体を関数の外へ出すとき `@app_commands.describe` を一緒に運び
+        忘れると、説明が全部消える。**動作は何も変わらない**ので、
+        テストでも例外でも気づけない。
+        """
+        import commands.record.config as rcfg
+
+        _, functions = self._register()
+        described = {
+            name: getattr(fn, "__discord_app_commands_param_description__", None) for name, fn in functions.items()
+        }
+
+        self.assertEqual(
+            described["auto"],
+            {
+                "enabled": "オンにすると、対象VCに人が入った時点で録音を始めます",
+                "channel": "自動録音するVC（未指定なら読み上げと同じVC）",
+            },
+        )
+        self.assertEqual(
+            described["config"],
+            {
+                "enabled": "録音機能そのもののオン／オフ",
+                "limit_minutes": f"自動停止までの分数（0 で無制限・最大 {rcfg.recording.MAX_MINUTES_LIMIT}）",
+                "retention_days": (
+                    f"ダウンロードリンクの保存日数"
+                    f"（{rcfg.recording.RETENTION_DAYS_MIN}〜{rcfg.recording.RETENTION_DAYS_MAX}）"
+                ),
+                "announce_channel": "開始・完了の通知先（未指定ならVCのチャット欄）",
+            },
+        )
+
+
 class RecordAutoTests(unittest.TestCase):
     def setUp(self):
         self.rcfg, _, _, self.registry = _register_record()
