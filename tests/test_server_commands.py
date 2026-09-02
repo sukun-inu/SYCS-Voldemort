@@ -358,6 +358,181 @@ class StickyAdminGuardTests(unittest.TestCase):
         self.assertEqual(calls, ["response.send_message"])
 
 
+class ReactionRoleRegistrationShapeTests(unittest.TestCase):
+    """commands/server/reactionrole.py の register が何をどう登録するかを固定する。
+
+    136行あるこの関数を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+
+    下の ReactionRoleAdminGuardTests は**登録されたあとの中身**を呼ぶだけで、
+    **登録そのもの**は誰も見ていない。中身を関数の外へ出すと次のものが黙って
+    変わりうる。どれが変わっても例外は出ず、既存テストも通る。
+
+      - グループの名前・説明・guild_only
+      - コマンドの名前・説明・並び順
+      - 引数の名前・順序・型（message_id を str で受けることが要）
+      - describe の文
+      - autocomplete が remove の message_id と emoji に付いていること
+      - グループが bot のコマンドツリーへ渡されること
+
+    message_id の型は特に効く。int に変えると 64bit のメッセージIDが桁落ち
+    しうるが、**手元の小さいIDでは再現しない**（原文のコメント参照）。
+
+    最後のひとつが抜けると、コマンドは1つも Discord に出ない。例外は出ないし、
+    テストも（コマンドを直接呼ぶので）全部通る。
+    """
+
+    def _register(self):
+        """reactionrole.register() だけを、登録の形を控える群へ流す。"""
+        import commands.server.reactionrole as rr
+
+        created: list[dict] = []
+        registered: list[tuple[str, str]] = []
+        functions: dict[str, object] = {}
+        autocompletes: list[tuple[str, str]] = []
+
+        class RecordingGroup:
+            """作られ方と、渡されたコマンド・autocomplete を控えるだけの群。"""
+
+            def __init__(self, **kwargs):
+                """グループの作成引数を控える。"""
+                created.append(kwargs)
+
+            def command(self, *, name, description=""):
+                """デコレータを返す。関数はそのまま返し、包み直さない。"""
+
+                def wrap(fn):
+                    registered.append((name, description))
+                    functions[name] = fn
+
+                    def autocomplete(param_name):
+                        """`@cmd.autocomplete("x")` の受け皿。どの引数に付いたかを控える。"""
+
+                        def deco(g):
+                            autocompletes.append((name, param_name))
+                            return g
+
+                        return deco
+
+                    fn.autocomplete = autocomplete
+                    return fn
+
+                return wrap
+
+        bot = Mock()
+        with patch.object(rr.app_commands, "Group", RecordingGroup):
+            rr.register(bot)
+        return SimpleNamespace(
+            created=created,
+            registered=registered,
+            functions=functions,
+            autocompletes=autocompletes,
+            bot=bot,
+        )
+
+    def test_the_group_and_its_three_commands_are_registered(self):
+        """グループの作り方と、3つのコマンドの名前・説明・並び順を固定する。"""
+        shape = self._register()
+
+        self.assertEqual(
+            shape.created,
+            [
+                {
+                    "name": "reactionrole",
+                    "description": "リアクションでロールを付与する設定",
+                    "guild_only": True,
+                }
+            ],
+        )
+        self.assertEqual(
+            shape.registered,
+            [
+                ("add", "【管理者】リアクションロールを追加します"),
+                ("remove", "【管理者】リアクションロールを削除します"),
+                ("list", "リアクションロール一覧を表示します"),
+            ],
+        )
+
+    def test_message_id_stays_a_string(self):
+        """引数の名前・順序・型が変わらないこと。
+
+        message_id を int にすると、64bit のメッセージIDがスラッシュコマンドの
+        int オプションで桁落ちしうる。**手元の小さいIDでは再現せず**、
+        実運用の古いメッセージだけが静かに外れる。
+        """
+        import inspect
+
+        shape = self._register()
+
+        def types(fn):
+            """(引数名, 注釈) の並びにする。"""
+            return [(p.name, p.annotation) for p in inspect.signature(fn).parameters.values()]
+
+        self.assertEqual(
+            types(shape.functions["add"]),
+            [
+                ("interaction", discord.Interaction),
+                ("message_id", str),
+                ("emoji", str),
+                ("role", discord.Role),
+            ],
+        )
+        self.assertEqual(
+            types(shape.functions["remove"]),
+            [("interaction", discord.Interaction), ("message_id", str), ("emoji", str)],
+        )
+        self.assertEqual(types(shape.functions["list"]), [("interaction", discord.Interaction)])
+
+    def test_each_argument_keeps_its_description(self):
+        """describe の文が、引数ごとに付いたままであること。
+
+        本体を関数の外へ出すとき `@app_commands.describe` を運び忘れると
+        説明が全部消える。**動作は何も変わらない**ので気づけない。
+        """
+        shape = self._register()
+        described = {
+            name: getattr(fn, "__discord_app_commands_param_description__", None)
+            for name, fn in shape.functions.items()
+        }
+
+        self.assertEqual(
+            described["add"],
+            {
+                "message_id": "対象メッセージのID",
+                "emoji": "リアクションで使う絵文字",
+                "role": "付与するロール",
+            },
+        )
+        self.assertEqual(
+            described["remove"],
+            {
+                "message_id": "対象メッセージのID（候補から選択できる）",
+                "emoji": "削除するリアクション絵文字（候補から選択できる）",
+            },
+        )
+        self.assertIsNone(described["list"])
+
+    def test_remove_keeps_both_autocompletes(self):
+        """remove の message_id と emoji の両方に候補が付くこと。
+
+        候補が外れても**コマンドは動く**（手で打てば通る）ので、テストでも
+        例外でも気づけない。使い勝手だけが静かに落ちる。
+        """
+        shape = self._register()
+
+        self.assertEqual(shape.autocompletes, [("remove", "message_id"), ("remove", "emoji")])
+
+    def test_the_group_is_handed_to_the_command_tree(self):
+        """bot.tree.add_command(group) を呼ぶこと。
+
+        ここが抜けると Discord 側にコマンドが1つも現れない。関数の中では
+        全部組み上がっているので、**例外も出ず、単体テストも通る。**
+        """
+        shape = self._register()
+
+        shape.bot.tree.add_command.assert_called_once()
+
+
 class ReactionRoleAdminGuardTests(unittest.TestCase):
     """reactionrole add/remove は【管理者】限定。引数検証も併せて確認する。"""
 
