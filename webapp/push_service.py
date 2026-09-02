@@ -12,12 +12,19 @@ _cached_config: VapidConfig | None = None
 
 
 def refresh_vapid_config() -> VapidConfig:
+    """鍵ファイルを読み直してキャッシュを差し替える。起動時の鍵生成直後に呼ぶ用。
+
+    プロセス起動中に VAPID 鍵が無くて自動生成された場合、その場では
+    まだ _cached_config が古いままなので、生成直後にここを呼ばないと
+    公開鍵配信や送信が古い（無効な）鍵のままになる。
+    """
     global _cached_config
     _cached_config = load_vapid_config()
     return _cached_config
 
 
 def _get_vapid_config() -> VapidConfig:
+    """キャッシュがあれば使い、無ければ読み込む。鍵ファイルの毎回読み込みを避ける。"""
     global _cached_config
     if _cached_config is None:
         _cached_config = load_vapid_config()
@@ -25,15 +32,18 @@ def _get_vapid_config() -> VapidConfig:
 
 
 def get_vapid_public_key() -> str | None:
+    """フロントの購読処理へ渡す公開鍵。鍵が無い環境では None（push機能自体を無効化）。"""
     return _get_vapid_config().public_key
 
 
 def is_push_enabled() -> bool:
+    """3値すべて揃って初めて送信可能。1つでも欠けたら呼び出し側はpush処理を丸ごと諦める。"""
     config = _get_vapid_config()
     return bool(config.public_key and config.private_key and config.subject)
 
 
 def build_push_payload(*, title: str, body: str, url: str = "./") -> str:
+    """tag を固定するのは、同じ通知種別を複数出しても端末側で1件に集約させるため。"""
     payload = {
         "title": title,
         "body": body,

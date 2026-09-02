@@ -18,6 +18,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    """予測と実勢を後から突き合わせるための答え合わせ用テーブルを作る。
+
+    predicted は予測を出した時点で埋め、actual/error_pct は forecast_date
+    が実際に来てから別途更新する運用を前提に nullable にしている。ここが
+    無いと、モデルを変えたときに前より当たっているのか劣化したのかを
+    確かめる手段が無い。
+    """
     op.create_table(
         "forecast_accuracy_log",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
@@ -62,4 +69,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """テーブルごと削除する。蓄積した答え合わせ履歴は復元できなくなる。"""
     op.drop_table("forecast_accuracy_log")

@@ -34,10 +34,18 @@ _last_missing_data_repair_attempt: datetime | None = None
 
 
 def _quantize_delta(value: Decimal) -> Decimal:
+    """既存行のdelta_from_previousと桁数を揃える。揃えないと差分検知(!=)が誤検知する。"""
     return value.quantize(PRICE_SCALE, rounding=ROUND_HALF_UP)
 
 
 def _forecast_has_drift(payload: dict[str, Any] | None, *, latest_snapshot_date_iso: str | None) -> bool:
+    """保存済みの週次予測が、直近スナップショットと噛み合っていないかを見る。
+
+    ここが True を返すケース（as_of_date が最新日と違う、必須フィールドが
+    欠けている等）は、価格データだけ直っても予測キャッシュが古いままに
+    なる状況。噛み合っていないのに気づかず放置すると、画面には
+    「更新されているはずの予測」として古い/不整合な数字が出続ける。
+    """
     if payload is None:
         return True
 
@@ -70,6 +78,15 @@ async def repair_metalprice_integrity(
     *,
     force_forecast_refresh: bool = False,
 ) -> dict[str, int]:
+    """定期実行される自己修復ジョブ。何度呼んでも安全（差分がなければ何もしない）。
+
+    やることは3つ: (1) 今日分の欠損をAPIから補完（クールダウン付きで
+    無料枠を守る）、(2) 全履歴のmetal_code/delta_from_previousの不整合を
+    ローカル計算だけで直す（外部APIは叩かない）、(3) 保存済み週次予測が
+    最新の価格と噛み合っていなければ再計算する。呼び出しごとに
+    stats を返すのは、無人実行の結果を後からログだけで追えるようにする
+    ため。
+    """
     today = jst_today()
 
     stats: dict[str, int] = {

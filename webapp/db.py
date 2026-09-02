@@ -49,6 +49,12 @@ def _read_secret_file(path: str | None) -> str | None:
 
 
 def _build_database_url() -> str:
+    """POSTGRES_DSNがあれば最優先。無ければ個別項目から組み立てる。
+
+    user/password は quote_plus を通す。パスワードに `@` や `/` 等の
+    URL予約文字が入っていると、素のままではDSNの区切りと衝突して
+    別ホスト・別ユーザーに解釈されたり、接続文字列として壊れたりする。
+    """
     dsn = os.getenv("POSTGRES_DSN")
     if dsn:
         return dsn
@@ -95,6 +101,12 @@ async def _detect_legacy_db() -> bool:
 
 
 def _run_alembic_upgrade() -> None:
+    """DBをAlembicのheadまで進める。同期APIなので呼び出し側でto_threadに包むこと。
+
+    alembic.command は同期実装しか無い。await せず直接呼ぶと
+    イベントループを実行中ずっとブロックし、その間は他のリクエストも
+    バックグラウンドジョブも進まなくなる。
+    """
     from alembic import command
     from alembic.config import Config
 
@@ -105,6 +117,13 @@ def _run_alembic_upgrade() -> None:
 
 
 def _run_alembic_stamp(revision: str) -> None:
+    """DDLを実行せず、alembic_versionテーブルにだけ指定リビジョンを書き込む。
+
+    旧式（create_all で作られた）DBは既にテーブルが存在するので、
+    0001のマイグレーションをそのまま流すとテーブル重複エラーになる。
+    実体には触れず「ここまで適用済み」という記録だけ作り、以降の
+    差分だけを upgrade で当てる。
+    """
     from alembic import command
     from alembic.config import Config
 
@@ -125,6 +144,14 @@ DB_MIGRATION_ADVISORY_LOCK_KEY = 721045777
 
 
 async def init_db() -> None:
+    """起動時にDBスキーマをheadへ揃える。advisory lockで複数ワーカー間を直列化する。
+
+    ロックを取らずに複数ワーカーが同時にこれを呼ぶと、同じDDLが競合し
+    "duplicate key value violates unique constraint
+    pg_class_relname_nsp_index" のようなエラーで起動が失敗することを
+    本番で確認している（詳細は DB_MIGRATION_ADVISORY_LOCK_KEY の定義
+    コメントを参照）。
+    """
     async with engine.connect() as conn:
         await conn.execute(
             text("SELECT pg_advisory_lock(:key)"),
@@ -153,4 +180,5 @@ async def init_db() -> None:
 
 
 async def close_db() -> None:
+    """シャットダウン時に全コネクションを閉じる。呼び忘れるとプロセス終了時に接続が残る。"""
     await engine.dispose()

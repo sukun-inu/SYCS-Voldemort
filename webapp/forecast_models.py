@@ -79,6 +79,12 @@ FORECAST_WIDTH_REFERENCE_PCT = env_float("FORECAST_WIDTH_REFERENCE_PCT", 12.0, m
 
 
 def extract_prices(history_items: list[dict[str, Any]]) -> list[float]:
+    """price_per_gram だけを時系列順に取り出す。0以下・欠損の行は黙って除く。
+
+    0円や負値はデータ不整合（未取得日の穴埋め漏れ等）であって実際の
+    価格ではない。混ぜたまま daily_trend/daily_volatility に渡すと、
+    変化率の分母が0や負になって結果が発散したり符号が反転したりする。
+    """
     prices: list[float] = []
     for item in history_items:
         value = safe_float(item.get("price_per_gram"))
@@ -169,6 +175,12 @@ def coverage_confidence_adjustment(coverage: float | None, *, nominal: float) ->
 
 
 def daily_trend(prices: list[float], *, window: int = 14) -> float:
+    """直近window件の幾何平均日次成長率。LLMへ渡すシグナルの一部として使う。
+
+    ±3%/日でクランプしているのは、直近2点だけで急騰・急落を捉えた場合に
+    そのまま複利で先まで伸ばすと予測が非現実的な値に発散するため
+    （例: 1日で3%動いた日をそのまま7日複利すると+23%になる）。
+    """
     if len(prices) < 2:
         return 0.0
     sampled = prices[-min(window, len(prices)) :]
@@ -182,6 +194,13 @@ def daily_trend(prices: list[float], *, window: int = 14) -> float:
 
 
 def daily_volatility(prices: list[float], *, window: int = 14) -> float:
+    """直近window件の日次リターンの標準偏差。データ不足時は0ではなく既定値0.004を返す。
+
+    データが足りないからといって0（無変動）を返すと、LLMへのシグナルが
+    「値動きが無い金属」に見えてしまい、実際には不確実なのに強気の
+    予測を許してしまう。0.4%というのは金属価格として穏当な下限程度の
+    値動きを仮定した保守的な既定値。
+    """
     if len(prices) < 3:
         return 0.004
     sampled = prices[-min(window, len(prices)) :]

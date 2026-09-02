@@ -18,6 +18,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    """初期スキーマを作る。空DBが前提で、既存データの移行は考えなくてよい。
+
+    価格の日次スナップショット・プッシュ購読・通知の重複防止・週次予測の
+    メタ情報と日別予測の5テーブルを一度に作る。metal_price_daily と
+    weekly_forecast_daily のユニーク制約は「同じ日に同じ金属を二重に
+    書かない」ための歯止めで、これが無いと再実行のたびに重複行が増える。
+    """
     op.create_table(
         "metal_price_daily",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
@@ -174,6 +181,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """5テーブルを全部消す。ここまでの全データが失われる、後戻りできない操作。"""
     op.drop_table("weekly_forecast_daily")
     op.drop_table("weekly_forecast_meta")
     op.drop_table("notification_dispatch")

@@ -14,6 +14,15 @@ from envutil import env_bool
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        """全レスポンスへセキュリティヘッダを一律付与する。
+
+        CSP の script-src に `'unsafe-inline'` を残しているのは、
+        `index.html` がインラインの `<script>` を直接埋め込んでいるため
+        （nonce/hash 化していない）。cloudflareinsights.com を許可して
+        いるのは Cloudflare 側が自動で差し込む解析ビーコン用で、
+        アプリのコードには現れない。どちらも外すとブラウザ側で読み込みが
+        ブロックされ、機能や解析が静かに止まる。
+        """
         response = await call_next(request)
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -51,6 +60,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         require_cf_connecting_ip: bool = False,
         trusted_proxy_cidrs: list[str] | None = None,
     ):
+        """/api/ 配下だけをレート制限する。それ以外の静的ファイル配信は対象外。
+
+        `/api/prices/calculate` にだけ別枠（既定で通常の半分）を設けて
+        いるのは、他の read 系APIより重い処理（DBアクセス＋計算）を
+        伴うため。共通の上限にすると、この重いエンドポイントへの
+        連打を軽いAPIと同じ回数まで許してしまい、負荷対策として緩すぎる。
+        """
         super().__init__(app)
         self.requests_per_window = requests_per_window
         self.calculate_requests_per_window = calculate_requests_per_window
@@ -66,6 +82,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def _parse_proxy_cidrs(
         cidrs: list[str],
     ) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+        """設定文字列をCIDRへ変換する。壊れた1件は無視し、他の設定は活かす。
+
+        ここで例外を上げると起動時の設定読み込みが丸ごと失敗するため、
+        書式ミス1件でアプリが立ち上がらなくなるのを避けている。
+        """
         nets: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
         for cidr in cidrs:
             try:
@@ -76,6 +97,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _parse_ip_token(token: str | None) -> str | None:
+        """ヘッダやsocketから来た値からIPだけを取り出す。ポート・角括弧が付いていても剥がす。
+
+        `request.client.host` や `X-Forwarded-For` は "1.2.3.4:5678" や
+        "[::1]:5678" のようにポート付きで来ることがある。剥がさずに
+        `ipaddress.ip_address()` へ渡すと必ず失敗し、信頼できるはずの
+        プロキシ経由の接続まで「不明なIP」扱いになってしまう。
+        """
         if not token:
             return None
         raw = token.strip()
@@ -96,6 +124,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return None
 
     def _is_trusted_proxy(self, remote_ip: str | None) -> bool:
+        """直接つないできたIPが、設定済みの信頼プロキシ帯域に入っているか。
+
+        ここが false のリクエストでは CF-Connecting-IP や
+        X-Forwarded-For を一切信用しない（_extract_client_ip 参照）。
+        信頼判定を省いてヘッダを鵜呑みにすると、攻撃者が
+        `X-Forwarded-For: 1.1.1.1` を自分で送るだけでレート制限の
+        カウント先を偽装でき、実質ノーリミットになる。
+        """
         if not remote_ip:
             return False
         parsed = self._parse_ip_token(remote_ip)
@@ -108,6 +144,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return any(ip_obj in net for net in self.trusted_proxy_networks)
 
     def _cleanup(self, now: float) -> None:
+        """呼ぶのは1ウィンドウに1回だけに抑える。毎リクエストで全IPを
+        走査すると、多数の送信元から叩かれる攻撃時ほど重くなる
+        （守るための処理が一番効いてほしい場面で遅くなる）。
+        """
         # 攻撃時にIPキーが増え続けないよう、期限切れエントリを間引く。
         if now - self._last_cleanup < self.window_seconds:
             return
@@ -122,6 +162,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             del self._hits[client_ip]
 
     def _extract_client_ip(self, request: Request) -> tuple[str, bool]:
+        """レート制限のキーにするIPを決める。信頼できないヘッダは無視する。
+
+        直接つないできたIP（TCP接続のIP。偽装不能）が信頼プロキシ帯域に
+        入っている場合に限り、そのプロキシが付けたヘッダを見る。
+        CF-Connecting-IP を X-Forwarded-For より先に見るのは、
+        Cloudflare 経由の構成では前者の方が改ざんされにくいため
+        （後者は複数プロキシを経由すると先頭以外の値も混じりうる）。
+        戻り値の bool は「CF-Connecting-IP を使えたか」で、
+        require_cf_connecting_ip の判定に使う。
+        """
         remote_ip = self._parse_ip_token(request.client.host if request.client else None) or "unknown"
         from_trusted_proxy = self._is_trusted_proxy(remote_ip)
 
@@ -145,6 +195,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return remote_ip, False
 
     async def dispatch(self, request: Request, call_next):
+        """スライディングウィンドウ方式でIPごとに件数を数え、上限超過なら429を返す。
+
+        require_cf_connecting_ip を有効にした環境で CF-Connecting-IP が
+        取れなかった場合は、レート制限をすり抜けさせず 403 で弾く
+        （Cloudflareを必ず経由する構成のとき、直アクセスや偽装を
+        締め出す用途）。
+        """
         if request.url.path.startswith("/api/"):
             now = time.monotonic()
             client_ip, used_cf_header = self._extract_client_ip(request)
@@ -173,6 +230,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 
 def read_env_bool(name: str, default: bool = False) -> bool:
+    """envutil.env_bool への薄いラッパー。webapp/app.py がこの名前で import している。"""
     # 実装は envutil.env_bool に一本化している(旧実装との差分は解釈不能値でも
     # 警告ログを残す点のみで、返り値の挙動は同一であることを確認済み)。
     # webapp/app.py がこの名前で import しているため、関数名はそのまま残す。
@@ -180,6 +238,14 @@ def read_env_bool(name: str, default: bool = False) -> bool:
 
 
 def load_allowed_hosts() -> list[str]:
+    """未設定・空なら localhost系のみを許可する既定値に倒す。空リストは返さない。
+
+    呼び出し先の TrustedHostMiddleware は allowed_hosts=[] を渡すと
+    「一致するホストが無い」ため全リクエストを400で拒否する
+    （allow-any になるのは None を渡さなかった場合のみ）。空リストの
+    まま渡すと ALLOWED_HOSTS の設定ミス1つでアプリ全体が丸ごと
+    アクセス不能になる。
+    """
     raw = os.getenv("ALLOWED_HOSTS", "").strip()
     if not raw:
         return ["localhost", "127.0.0.1", "::1"]
@@ -188,6 +254,14 @@ def load_allowed_hosts() -> list[str]:
 
 
 def load_trusted_proxy_cidrs() -> list[str]:
+    """既定はループバックのみ信頼する。空文字を明示指定すれば「誰も信頼しない」にできる。
+
+    既定を空にせずループバックだけにしているのは、コンテナ内部からの
+    ヘルスチェック等がループバック越しに来る構成を壊さないため。逆に
+    デフォルトを甘く（例えば0.0.0.0/0)すると、外部から直接
+    X-Forwarded-For を偽装したリクエストがそのまま信頼され、
+    レート制限もIP偽装で回避できてしまう。
+    """
     raw = os.getenv("TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128").strip()
     if not raw:
         return []

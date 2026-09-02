@@ -27,14 +27,23 @@ TRACKED_METALS = [MetalRecord(key=spec.key, code=spec.code) for spec in METAL_CO
 
 
 def jst_today() -> date:
+    """スナップショットの「日付」はJSTで決める。サーバーのTZがUTCでも日付境界がずれない。"""
     return datetime.now(JST).date()
 
 
 def _as_decimal(value: float) -> Decimal:
+    """DBのNumericカラムに合わせて4桁で丸める。float保存だと桁が実行ごとに揺れるため。"""
     return Decimal(str(value)).quantize(PRICE_SCALE, rounding=ROUND_HALF_UP)
 
 
 async def _fetch_all_prices() -> dict[str, Decimal]:
+    """1件でも取れれば返す。全滅したときだけ例外にする。
+
+    一部の金属だけ取得元でエラーが出ることがあるが、そこで全体を
+    諦めると他の正常な金属まで巻き込んで記録できなくなる。全滅時に
+    例外にしているのは、呼び出し側（store_snapshot）に「今日は
+    何も書けなかった」ことを伝え、空データで上書きさせないため。
+    """
     # 全金属を1リクエストでまとめて取得する。金属ごとに個別リクエストしていた頃は
     # 日次スナップショットだけで3回/日=約90回/月を消費し、無料枠(100回/月)を
     # Discordコマンドや修復リトライと奪い合って毎月10日前後のデータ欠損を起こしていた。
@@ -58,12 +67,19 @@ async def _fetch_all_prices() -> dict[str, Decimal]:
 
 
 async def _rows_for_date(session: AsyncSession, snapshot_date: date) -> dict[str, MetalPriceDaily]:
+    """指定日に既に書かれている行を金属キーで引けるようにする。store_snapshotの再実行判定に使う。"""
     stmt = select(MetalPriceDaily).where(MetalPriceDaily.snapshot_date == snapshot_date)
     rows = list((await session.scalars(stmt)).all())
     return {row.metal_key: row for row in rows}
 
 
 async def _latest_rows_before(session: AsyncSession, snapshot_date: date) -> dict[str, MetalPriceDaily]:
+    """snapshot_date より前で直近の行を金属ごとに1件ずつ取る。前日比(delta)の基準にする。
+
+    「前日」固定ではなく「直近」にしているのは、休止やデータ欠損で
+    間に日が空いても差分を計算し続けられるようにするため。前日限定
+    だと欠損の翌日は必ず delta が None になる。
+    """
     latest_date_subq = (
         select(
             MetalPriceDaily.metal_key,
@@ -87,6 +103,15 @@ async def _latest_rows_before(session: AsyncSession, snapshot_date: date) -> dic
 async def store_snapshot(
     session: AsyncSession, snapshot_date: date, *, skip_if_exists: bool = True
 ) -> list[MetalPriceDaily]:
+    """指定日のスナップショットを書く。追記ではなく上書きなので、同日の再実行は安全。
+
+    skip_if_exists=True（既定）だと、全金属が既に揃っている日はAPIを
+    叩かずそのまま返す。バッチのリトライやDiscordコマンドから何度
+    呼ばれても外部APIの無料枠を消費しないためで、逆に一部の金属だけ
+    欠けている日は「揃っていない」ので取得し直す。skip_if_exists=False
+    は欠損補完ジョブ用（webapp/repair_service.py参照）で、既存行が
+    あってもAPIから取り直して上書きする。
+    """
     existing_rows = await _rows_for_date(session, snapshot_date)
     if skip_if_exists and len(existing_rows) >= len(TRACKED_METALS):
         return sorted(existing_rows.values(), key=lambda row: row.metal_key)
@@ -126,16 +151,23 @@ async def store_snapshot(
 
 
 async def store_today_snapshot(session: AsyncSession, *, skip_if_exists: bool = True) -> list[MetalPriceDaily]:
+    """毎日のバッチジョブから呼ぶ入口。日付をJSTの「今日」に固定する薄いラッパー。"""
     return await store_snapshot(session, jst_today(), skip_if_exists=skip_if_exists)
 
 
 async def load_earliest_snapshot_date(session: AsyncSession) -> date | None:
+    """記録が一件も無ければ None。「全期間」表示のグラフ開始日を決めるのに使う。"""
     return await session.scalar(select(func.min(MetalPriceDaily.snapshot_date)))
 
 
 async def load_history(
     session: AsyncSession, days: int, *, end_date: date | None = None
 ) -> dict[str, list[dict[str, float | str | None]]]:
+    """metal_key ごとの時系列を返す。データが無い日は詰めずに単に出ない（0埋めしない）。
+
+    0埋めすると欠損日がグラフ上「価格0円」に見えてしまい、実際の価格
+    急落と区別が付かなくなる。
+    """
     end = end_date or jst_today()
     start_date = end - timedelta(days=days - 1)
     stmt = (
@@ -166,6 +198,7 @@ async def load_history(
 
 
 async def load_latest_rows(session: AsyncSession) -> dict[str, MetalPriceDaily]:
+    """金属ごとに最新1行を返す。今日分が欠損していれば、その金属だけ前日以前の値になる。"""
     latest_date_subq = (
         select(
             MetalPriceDaily.metal_key,
@@ -188,6 +221,12 @@ async def load_latest_rows(session: AsyncSession) -> dict[str, MetalPriceDaily]:
 async def load_latest(
     session: AsyncSession,
 ) -> dict[str, dict[str, float | str | None]]:
+    """記録が一度も無い金属も含め、TRACKED_METALS全キー分を返す（無ければ全項目None）。
+
+    load_latest_rows はレコードが無い金属をそもそも辞書に含めない。
+    フロント側は全金属キーが揃っている前提で描画するため、ここで
+    埋めておかないと未記録の金属だけ画面に出ない・KeyErrorになる。
+    """
     latest_rows = await load_latest_rows(session)
     latest: dict[str, dict[str, float | str | None]] = {}
 

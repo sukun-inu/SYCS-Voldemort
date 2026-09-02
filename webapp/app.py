@@ -100,6 +100,7 @@ _PUSH_ALLOWED_ENDPOINT_SUFFIXES = tuple(
 
 
 def _normalize_public_path(path: str) -> str:
+    """先頭・末尾に必ず `/` を付ける。Push通知のurlやService-Worker-Allowedヘッダに使う値の形を揃える。"""
     if path in {"", "/"}:
         return "/"
     normalized = path if path.startswith("/") else f"/{path}"
@@ -109,10 +110,24 @@ def _normalize_public_path(path: str) -> str:
 
 
 def _is_repairable_db_error(exc: Exception) -> bool:
+    """再接続・再マイグレーションで直る見込みがあるDBエラーかを見る。
+
+    OperationalError/ProgrammingError（接続断・スキーマ不一致など）は
+    init_db() のやり直しで復旧しうる。IntegrityError等の他の例外は
+    データそのものの問題なので、自己修復を試みても意味が無く、無駄な
+    再試行でログとレイテンシを浪費するだけになる。
+    """
     return isinstance(exc, (OperationalError, ProgrammingError))
 
 
 async def _try_db_self_heal(*, context: str, exc: Exception) -> bool:
+    """DB起因のエラーからの自動復旧を1回だけ試みる。バッチジョブ各所が同じ手順を呼ぶ。
+
+    コンテナ再起動を待たず、アプリ内でDB再接続・再マイグレーションを
+    試すことで、一時的なDB不調（再起動直後の接続断など）から自動で
+    復帰できるようにする。直らない場合は False を返し、呼び出し元は
+    そのジョブ回だけ諦めて次回実行に委ねる（無限リトライしない）。
+    """
     if not _is_repairable_db_error(exc):
         return False
     logger.warning("[WEB] %s failed with DB error. trying self-heal: %s", context, exc)
@@ -166,17 +181,27 @@ class PushUnsubscribeRequest(BaseModel):
 
 
 async def get_db_session():
+    """FastAPIのDepends用セッションファクトリ。Depends()はここを読み込み時に束縛するので、
+    差し替えたい場合は app.dependency_overrides を使うこと(モジュール属性のpatchは効かない)。
+    """
     async with SessionLocal() as session:
         yield session
 
 
 def _cache_headers(ttl_seconds: int) -> dict[str, str]:
+    """CDN(Cloudflare等)とブラウザ双方に同じTTLを伝える。stale-while-revalidateで再検証中も即応答させる。"""
     return {
         "Cache-Control": f"public, max-age={ttl_seconds}, s-maxage={ttl_seconds}, stale-while-revalidate={ttl_seconds}",
     }
 
 
 def _validate_push_endpoint(endpoint: str) -> str:
+    """購読エンドポイントURLを検証する。SSRF対策と、任意ホストへの通知投稿を防ぐ許可リストの2段構え。
+
+    validate_public_http_url はプライベート/内部アドレスを弾く（SSRF
+    対策）。PUSH_ALLOWED_ENDPOINT_SUFFIXES を設定した環境ではさらに
+    ホスト名を許可リストに限定する。両方を経て初めて受理する。
+    """
     endpoint = endpoint.strip()
     try:
         validate_public_http_url(endpoint, allow_http=False)
@@ -196,6 +221,7 @@ def _validate_push_endpoint(endpoint: str) -> str:
 
 
 async def _clear_response_caches() -> None:
+    """DBが更新された直後に全レスポンスキャッシュを破棄する。TTL満了を待つと古い値を配り続ける。"""
     await history_cache.clear()
     await latest_prices_cache.clear()
     await calculate_cache.clear()
@@ -203,6 +229,13 @@ async def _clear_response_caches() -> None:
 
 
 async def _get_latest_prices(session: AsyncSession) -> dict[str, dict[str, str | None]]:
+    """全金属の最新価格をDecimal文字列のまま返す（float丸め誤差を持ち込まない内部表現）。
+
+    キャッシュキーに日付を含めるのは、日付が変わったらTTLを待たず
+    新しい「今日」のキャッシュ空間へ切り替えるため。price計算
+    (calculate_by_purity)がこの文字列をDecimalへ戻して使うので、ここで
+    floatにしてしまうと計算結果の桁がずれる。
+    """
     cache_key = f"latest:{datetime.now(JST).date().isoformat()}"
     cached = await latest_prices_cache.get(cache_key)
     if cached is not None:
@@ -230,6 +263,12 @@ async def _get_latest_prices(session: AsyncSession) -> dict[str, dict[str, str |
 
 
 def _latest_prices_public(snapshot: dict[str, dict[str, str | None]]) -> dict[str, dict[str, float | str | None]]:
+    """_get_latest_prices が返すDecimal文字列を、JSONレスポンス用にfloatへ変換する。
+
+    内部表現(str)と外部公開用(float)を分けているのは、キャッシュされた
+    内部値を後で別の計算に再利用するときに丸め誤差を持ち込みたくない
+    ため。API応答としてはfloatで十分。
+    """
     latest: dict[str, dict[str, float | str | None]] = {}
     for metal_key in METAL_COMMANDS.keys():
         item = snapshot.get(metal_key, {})
@@ -244,6 +283,12 @@ def _latest_prices_public(snapshot: dict[str, dict[str, str | None]]) -> dict[st
 
 
 def _pick_top_delta(snapshot: dict[str, dict[str, str | None]]) -> tuple[str, Decimal, str] | None:
+    """前日比の絶対値が最大の金属を選ぶ。日次Push通知1件に使う「今日いちばん動いた金属」の決定。
+
+    delta_from_previous・date のどちらか欠けている金属は候補から除く
+    （前日データが無い、または当日未取得）。全金属欠けていれば None を
+    返し、呼び出し側は通知を送らない。
+    """
     top_metal_key: str | None = None
     top_delta: Decimal | None = None
     top_date: str | None = None
@@ -302,6 +347,13 @@ async def _send_push_to_subscriptions(
     payload: str,
     session: AsyncSession,
 ) -> tuple[int, list[str]]:
+    """全購読へ順に送信し、404/410で無効と分かった購読はまとめてDBから削除する。
+
+    session.commit() はここでは呼ばない。呼び出し元がNotificationDispatch
+    の更新と同じトランザクションでまとめてcommitするため、ここで
+    commitすると途中失敗時に「購読は削除済みだが配信記録は残っていない」
+    半端な状態になりうる。
+    """
     stale_endpoints: list[str] = []
     success_count = 0
     for sub in subscriptions:
@@ -324,6 +376,18 @@ async def _send_push_to_subscriptions(
 
 
 async def dispatch_top_delta_notification(*, enforce_schedule_time: bool = False) -> None:
+    """日次Push通知を1日1回だけ送る。多重起動・時刻ずれ・途中失敗のいずれでも二重送信しない。
+
+    _claim_dispatch_slot の ON CONFLICT DO NOTHING で、同じ
+    (notification_type, snapshot_date) の枠を取れたインスタンスだけが
+    送信する（複数ワーカー/複数インスタンス構成での重複防止）。送信中に
+    例外が起きたら、確保したスロット自体を削除してロールバックする
+    （enforce_schedule_time=True のcron経由なら次回の定期実行で再試行
+    できるようにするため。中途半端な"pending"のまま残すと、二度と
+    その日は送信されなくなる）。enforce_schedule_time はcron経由の
+    定期実行と起動時の即時実行を区別するためのフラグで、Trueのときは
+    指定時刻より前なら何もしない。
+    """
     if not is_push_enabled():
         return
 
@@ -388,6 +452,10 @@ async def dispatch_top_delta_notification(*, enforce_schedule_time: bool = False
 
 
 def _running_in_container() -> bool:
+    """コンテナ内で実行中かを判定する。_startup_test_enabled がSTARTUP_TEST_REQUIRE_DOCKER=true
+    のとき、この判定に使う。STARTUP_TEST_RUN_PUSH_ON_BOOTは実際の購読者にPushを送るため、
+    開発機やステージング機でSTARTUP_TEST_MODEを立てたまま起動して誤爆させないための関門になる。
+    """
     if Path("/.dockerenv").exists():
         return True
     cgroup_file = Path("/proc/1/cgroup")
@@ -401,6 +469,13 @@ def _running_in_container() -> bool:
 
 
 def _startup_test_enabled() -> bool:
+    """起動テストジョブを本当に走らせてよいかを1箇所で判定する。
+
+    STARTUP_TEST_MODE=falseなら他の実行フラグが立っていても常に無効化し、
+    設定ミス(消し忘れ)に気付けるよう警告を出す。REQUIRE_DOCKER=trueのときは
+    _running_in_container()で実行環境も確認し、本番相当のホストで誤って
+    テストジョブ(実際のPush送信を含む)を起動しないようにする。
+    """
     if not STARTUP_TEST_MODE:
         if STARTUP_TEST_RUN_MIDNIGHT_JOB_ON_BOOT or STARTUP_TEST_RUN_PUSH_ON_BOOT:
             logger.warning("起動テスト設定を検出したが STARTUP_TEST_MODE=false のため無効化。")
@@ -412,6 +487,14 @@ def _startup_test_enabled() -> bool:
 
 
 async def _dispatch_startup_test_push_notification() -> None:
+    """起動直後に実データで本物のPush通知を送り、疎通確認する。
+
+    dispatch_top_delta_notificationと違い_claim_dispatch_slotを使わない
+    (NotificationDispatchに記録しない)。起動テストは何度でも打てないと
+    確認の意味が無いためで、その代わり多重起動環境では起動のたびに
+    同じ通知が重複して届き得る。STARTUP_TEST_MODE経由でしか呼ばれない
+    前提で、通常運用の重複防止・送信履歴には一切影響させない。
+    """
     # 起動時テスト通知は通常運用の重複判定・送信履歴に影響させない。
     if not is_push_enabled():
         logger.warning("起動時テストPushをスキップ: Push通知が未設定")
@@ -450,6 +533,12 @@ async def _dispatch_startup_test_push_notification() -> None:
 
 
 async def _run_startup_test_jobs() -> None:
+    """STARTUP_TEST_*フラグに従って起動時ジョブを順に試走させる。
+
+    各ジョブの例外はここで個別にログへ落として握りつぶす。テストジョブの
+    1つが失敗しても他のテストジョブやアプリ本体の起動処理を止めないため
+    (起動テストの失敗でサービス自体が上がらなくなっては本末転倒)。
+    """
     if not _startup_test_enabled():
         return
     logger.warning(
@@ -477,6 +566,13 @@ async def _run_startup_test_jobs() -> None:
 
 
 async def collect_daily_snapshot(*, force_refresh: bool = False) -> None:
+    """日次価格スナップショットを保存する。DBエラーなら自己修復して1回だけ再試行する。
+
+    _try_db_self_heal経由の再試行は最大1回。コンテナ再起動を待たず、
+    再接続直後などの一時的なDB不調から自動復帰させるためだが、直らなければ
+    その回は諦めてログに残し、次回のスケジュール実行に委ねる(無限リトライで
+    ジョブを詰まらせない)。
+    """
     for attempt in range(2):
         async with SessionLocal() as session:
             try:
@@ -496,6 +592,13 @@ async def collect_daily_snapshot(*, force_refresh: bool = False) -> None:
 
 
 async def collect_weekly_forecast_cache(*, force_refresh: bool = False) -> None:
+    """週次予測をDBとインプロセスキャッシュへ反映する。同日分はforce_refresh無指定なら再計算しない。
+
+    予測計算はGroq/為替API/ニュースRSSを叩く重い処理で、いずれも呼び出し
+    回数に実質的な上限がある。as_of_dateが今日と一致する既存データが
+    あれば計算をスキップし、同じ日に何度も外部APIを無駄撃ちしないようにする。
+    DBエラー時の再試行はcollect_daily_snapshotと同じく1回きりの自己修復。
+    """
     for attempt in range(2):
         async with SessionLocal() as session:
             try:
@@ -524,6 +627,12 @@ async def collect_weekly_forecast_cache(*, force_refresh: bool = False) -> None:
 
 
 async def auto_repair_metalprice_data(*, force_forecast_refresh: bool = False) -> None:
+    """metalpriceテーブルの欠損・不整合を定期的に自己修復する。DBエラー時のみ1回だけ再試行する。
+
+    実際の修復ロジック(コード修正・欠損補完・クールダウン管理)は
+    repair_metalprice_integrity側にある。ここはcollect_daily_snapshotと
+    同じDB自己修復付きの実行枠を提供し、結果統計をまとめてログに残す役割。
+    """
     for attempt in range(2):
         async with SessionLocal() as session:
             try:
@@ -590,6 +699,13 @@ async def reconcile_forecast_accuracy_job() -> None:
 
 
 async def collect_daily_data(*, force_snapshot_refresh: bool = False, force_forecast_refresh: bool = False) -> None:
+    """JST 0時の日次ジョブ本体。スナップショット保存→答え合わせ→週次予測更新の順を守る。
+
+    reconcile_forecast_accuracy_jobを予測更新より先に呼ぶのは、前日までの
+    予測を「新しく確定した今日の実勢価格」と突き合わせるため。先に予測を
+    更新してしまうと、答え合わせの対象が古い予測のままなのか新しい予測
+    なのか区別できなくなる。
+    """
     await collect_daily_snapshot(force_refresh=force_snapshot_refresh)
     await reconcile_forecast_accuracy_job()
     await collect_weekly_forecast_cache(force_refresh=force_forecast_refresh)
@@ -624,6 +740,14 @@ async def _try_acquire_scheduler_lock() -> bool:
 
 
 async def _release_scheduler_lock() -> None:
+    """_try_acquire_scheduler_lockで確保したadvisory lockを解放する。lifespanのfinallyから呼ぶ。
+
+    lockを取れなかった(=他プロセスが定期ジョブを担当している)ワーカーでは
+    _scheduler_lock_connがNoneなので何もしない。解放処理自体が失敗しても
+    例外は外に投げない。ここで送出するとlifespanのfinally内で後続の
+    close_db()まで巻き込んで止めてしまうため、失敗はログに残すだけにして
+    確実にconn.close()まで進める。
+    """
     global _scheduler_lock_conn
     conn = _scheduler_lock_conn
     _scheduler_lock_conn = None
@@ -642,6 +766,16 @@ async def _release_scheduler_lock() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    """DB初期化とスケジューラ起動を行い、終了時に後始末する。
+
+    advisory lockを取れたワーカーだけが日次ジョブの登録・スケジューラ起動・
+    起動時ジョブ実行を行う。uvicorn --workersや複数インスタンス構成で
+    全ワーカーが同じジョブを重複実行すると、MetalpriceAPIの無料枠(月100回)
+    を単純に人数倍消費してしまうため、実行担当を1プロセスに絞るのが目的。
+    lockを取れなかったワーカーはAPIリクエストの処理だけを担当し、
+    スケジューラを一切持たない。finally節はyield前の初期化失敗でも安全に
+    通れるよう、scheduler/has_scheduler_lockのNoneチェックを先に行う。
+    """
     await init_db()
     refresh_vapid_config()
     scheduler: AsyncIOScheduler | None = None
@@ -757,6 +891,15 @@ STATIC_DEFAULT_CACHE_CONTROL = "public, max-age=300, must-revalidate"
 
 class VersionedStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
+        """静的ファイル配信にCache-Controlをoriginから明示的に付ける。
+
+        StaticFilesを素のままmountするとCache-Controlを返さず、
+        Cloudflare配下では独自TTL(実測でmax-age=300、Ageがそれを
+        はるかに超える不整合)を勝手に注入され、更新が反映されずService
+        Workerの手動Unregisterが必要になる事故が起きた。?v=付き(内容ハッシュ)は
+        1年キャッシュ可能、?v=無しの素のURL(sw.jsのプリキャッシュ等が使う)
+        は短命+must-revalidateにして、originが常に鮮度の主導権を握る。
+        """
         response = await super().get_response(path, scope)
         if response.status_code == 200:
             query = scope.get("query_string", b"").decode("latin-1", "ignore")
@@ -772,6 +915,12 @@ app.mount("/static", VersionedStaticFiles(directory=STATIC_DIR), name="static")
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """422バリデーションエラーを全エンドポイント共通で人間向けの1文字列に畳み込む。
+
+    アプリ全体に対する例外ハンドラなので、新しいエンドポイントを追加しても
+    個別にエラー整形を書く必要がない。畳み込みの中身(なぜ配列のままだと
+    フロントで壊れるか)は直下のコメント参照。
+    """
     # FastAPI/Pydanticの既定422レスポンスは detail がオブジェクト配列になり、
     # フロント側でそのまま文字列化すると "[object Object]" のように壊れて見える。
     # ここで常に人間向けの一文字列へ畳み込んでから返す。
@@ -793,6 +942,12 @@ STYLES_CSS_FILE = STATIC_DIR / "styles.css"
 
 
 def _index_response() -> HTMLResponse:
+    """index.html配信の共通処理。index/index_html/fallback_pageの3ルートから呼ぶ。
+
+    3つの入口が同じヘッダ・同じレンダリングを共有することで、SPAへどこから
+    入っても挙動が揃う(1箇所だけno-storeを付け忘れる、といった食い違いを
+    構造的に防ぐ)。ヘッダの理由自体は直下のコメント参照。
+    """
     # index.html自体は常にno-storeで配らせ、その中に埋め込む app.js / styles.css の
     # `?v=` を内容ハッシュへ差し替える。手動でのバージョン更新が不要になり、
     # 「中身は新しいのにURLが同じでキャッシュが効き続ける」事故を構造的に防ぐ。
@@ -804,16 +959,25 @@ def _index_response() -> HTMLResponse:
 
 @app.get("/", include_in_schema=False)
 async def index() -> HTMLResponse:
+    """SPAのエントリーポイント。ルート `/` は常にindex.htmlを返す。"""
     return _index_response()
 
 
 @app.get("/index.html", include_in_schema=False)
 async def index_html() -> HTMLResponse:
+    """`/index.html` への直リンク・ブックマークも `/` と同じindex.htmlを返す。"""
     return _index_response()
 
 
 @app.get("/sw.js", include_in_schema=False)
 async def service_worker() -> PlainTextResponse:
+    """Service WorkerのJSを配信する。ビルド成果物ではなく、配信時にCACHE_NAME等を差し込んで生成する。
+
+    no-storeで配ることで、sw.js自体の更新をブラウザのService Worker更新
+    チェックに必ず新しい中身として見せる。CACHE_NAMEをハッシュから生成する
+    理由は直下のコメント参照(手動更新忘れで古いキャッシュが破棄されない
+    事故が過去に起きている)。
+    """
     # CACHE_NAME も内容ハッシュから生成する。アセットが変わったときだけ名前が変わり、
     # activate時に古いキャッシュが確実に破棄される(手動更新漏れが起きない)。
     return PlainTextResponse(
@@ -828,6 +992,13 @@ async def service_worker() -> PlainTextResponse:
 
 @app.get("/manifest.webmanifest", include_in_schema=False)
 async def manifest() -> FileResponse:
+    """PWAのWebアプリマニフェストを配信する。
+
+    キャッシュ秒数はPURITY_OPTIONS_CACHE_SECONDSを流用する。マニフェスト・
+    純度区分のどちらも実行中に変わらない静的な設定値という点で性質が同じ
+    ため専用の環境変数を増やさなかった。裏を返すと、片方だけキャッシュ期間を
+    変えたいつもりでこの変数を触ると、もう一方の配信も一緒に変わる。
+    """
     return FileResponse(
         MANIFEST_FILE,
         media_type="application/manifest+json",
@@ -837,6 +1008,13 @@ async def manifest() -> FileResponse:
 
 @app.get("/health")
 async def health() -> dict[str, str]:
+    """死活監視用の固定応答。DBやキャッシュには一切触れない。
+
+    Depends(get_db_session)を使わないのは意図的。DBが落ちている間も
+    プロセス自体は生きていることを区別できるようにするためで、ここに
+    DB疎通チェックを足すとDB障害時にアプリごと再起動される側の判断材料が
+    失われる。
+    """
     return {"status": "ok"}
 
 
@@ -848,6 +1026,15 @@ async def price_history(
     end: date | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
+    """価格履歴を返す。プリセット日数モードとstart/endのカスタム範囲モードを1本の関数で扱う。
+
+    カスタム範囲は未来日・前後逆転・過大なスパンをここで安全な範囲へ丸める。
+    フロント側にも同等のバリデーションはあるが、それはUXのためのものに
+    過ぎず、ここでの丸めが実際の安全装置になる(クライアントを経由しない
+    直接リクエストは丸めを素通りできない)。cache_keyの形式がモードごとに
+    違う(custom:開始:終了 / all / 日数)のは、同じ日に別条件のリクエストが
+    互いのキャッシュを踏まないようにするため。
+    """
     today = datetime.now(JST).date()
     is_custom_range = start is not None or end is not None
 
@@ -904,6 +1091,14 @@ async def weekly_forecast(
     days: int = Query(default=7, ge=1, le=7),
     session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
+    """週次予測を返す。鮮度管理はforecast_cacheに任せ、HTTP層は常にno-storeにする。
+
+    予測はJST 0時の他、FORECAST_REFRESH_EXTRA_HOURS_JSTの時刻にも日中
+    強制更新され、更新のたびcollect_weekly_forecast_cacheがforecast_cacheを
+    clearする。ここでブラウザ/CDNにTTL付きキャッシュを許すと、intraday更新
+    が反映されるまでその分だけ古い予測を見せ続けることになるため、
+    price_historyの_cache_headersとは違いno-storeで固定している。
+    """
     cache_key = f"forecast:{datetime.now(JST).date().isoformat()}:{days}"
     cached = await forecast_cache.get(cache_key)
     if cached is not None:
@@ -928,11 +1123,23 @@ async def weekly_forecast(
 
 @app.get("/api/purity/options")
 async def purity_options() -> JSONResponse:
+    """金属ごとの純度区分一覧を返す。PURITY_OPTIONS_PAYLOADはMETAL_COMMANDS由来でモジュール読込時に組み立て済み。
+
+    リクエストのたびに辞書内包表記をやり直さない(値は起動中変わらない)。
+    キャッシュ秒数manifest()と共有している点はそちらのdocstring参照。
+    """
     return JSONResponse(PURITY_OPTIONS_PAYLOAD, headers=_cache_headers(PURITY_OPTIONS_CACHE_SECONDS))
 
 
 @app.get("/api/push/public-key")
 async def push_public_key() -> JSONResponse:
+    """VAPID公開鍵とPush通知の有効可否をクライアントに伝える。
+
+    enabledはis_push_enabled()とpublic_key is not Noneの両方を見て決める。
+    どちらか一方だけで判定すると、鍵はあるのに機能自体が無効(または鍵の
+    生成に失敗しているだけで機能自体は有効)という食い違った状態で購読
+    ボタンが誤って有効/無効に見えてしまう。
+    """
     public_key = get_vapid_public_key()
     enabled = is_push_enabled() and public_key is not None
     reason = None if enabled else "vapid_not_configured_or_generation_failed"
@@ -953,6 +1160,15 @@ async def push_subscribe(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, bool]:
+    """ブラウザのPush購読を登録/更新する。同一endpointへの競合登録はIntegrityErrorを無害化して吸収する。
+
+    存在チェック(SELECT)と新規挿入の間に、別リクエストが同じendpointを
+    先に挿入すると、endpointのUNIQUE制約(uq_push_subscription_endpoint)に
+    ぶつかる。ページ再読み込み・複数タブ・Service Workerの購読再試行では
+    同一endpointへの同時リクエストが実際に起こり得るため、ここで
+    IntegrityErrorを握りつぶして成功扱いにする(再度呼ばれればSELECTで
+    拾えるようになる)。
+    """
     if not is_push_enabled():
         raise HTTPException(status_code=503, detail="Push通知が無効です。VAPID設定を確認してください。")
 
@@ -988,6 +1204,10 @@ async def push_unsubscribe(
     payload: PushUnsubscribeRequest,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, int | bool]:
+    """指定endpointのPush購読を解除する。存在しない/既に削除済みのendpointでも成功扱いにする冪等な操作。
+
+    rowcountの扱いについては直下のコメント参照。
+    """
     result = await session.execute(
         delete(PushSubscription).where(PushSubscription.endpoint == payload.endpoint.strip())
     )
@@ -1004,6 +1224,15 @@ async def calculate_by_purity(
     grams: float = Query(..., gt=0, le=100000),
     session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
+    """指定した金属とグラム数から地金価値を純度区分ごとに計算する。
+
+    最新価格はDB由来のDecimal文字列のまま取り出し、掛け算もDecimalで
+    行ってから最後にintへ切り捨てる。floatを一度でも経由すると桁落ちが
+    起きうるため、_get_latest_pricesが内部表現をstrに保っているのと同じ
+    理由でここでもfloat変換を最後まで遅らせる。円に小数単位が無いため
+    int()で切り捨てる(四捨五入ではないので、表示額が実勢よりわずかに
+    高く見えることはない)。
+    """
     metal_key = metal.strip().lower()
     spec = METAL_COMMANDS.get(metal_key)
     if spec is None:
@@ -1050,6 +1279,15 @@ async def calculate_by_purity(
 
 @app.get("/{page_path:path}", include_in_schema=False)
 async def fallback_page(page_path: str) -> HTMLResponse:
+    """SPAのクライアントサイドルーティング用フォールバック。予約パス以外は全てindex.htmlを返す。
+
+    フロントのJSルーターが処理する/settingsや/historyのようなパスは
+    サーバ側にルートが無いため、ここで拾ってSPAシェルを返す。api/static/
+    health等のRESERVED_TOP_LEVEL_PATHS配下でマッチしなかったURL(例:
+    存在しないAPIパスの typo)まで無条件にindex.htmlを返すと、クライアント
+    が本物の404と区別できず原因不明の挙動になるため、予約済みの先頭
+    セグメントだけは通常の404を返す。
+    """
     first = page_path.split("/", 1)[0] if page_path else ""
     if first in RESERVED_TOP_LEVEL_PATHS:
         raise HTTPException(status_code=404, detail="Not Found")

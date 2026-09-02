@@ -30,6 +30,7 @@ _GROQ_BUCKET = "forecast"
 
 
 def _get_groq_client(timeout: float):
+    """予測用のGroq呼び出しを専用バケットに固定する。他機能（DJ音声等）とレート制限枠を分ける。"""
     return get_groq_client(timeout=timeout, bucket=_GROQ_BUCKET)
 
 
@@ -107,6 +108,11 @@ NEGATIVE_TOKENS = (
 
 
 def _compile_token_pattern(token: str) -> "re.Pattern[str]":
+    """POSITIVE_TOKENS/NEGATIVE_TOKENSの1語を、単語境界つき正規表現へ変換する。
+
+    素の部分文字列マッチだと "up" が "support" や "upgrade" にも
+    ヒットしてしまい、ニュース感情のスコアが無関係な語で歪む。
+    """
     # 複数語のトークンは語順通り・単語境界つきでマッチさせる(部分文字列マッチの誤検出を防ぐ)。
     words = [re.escape(word) for word in token.split()]
     return re.compile(r"\b" + r"\s+".join(words) + r"\b")
@@ -120,6 +126,12 @@ _USDJPY_SOURCE_NAME = "Frankfurter (ECB)"
 
 
 def _empty_usdjpy_signal() -> dict[str, Any]:
+    """為替APIが失敗・不整合だったときの既定形。available=Falseにして呼び出し側に「無い」と伝える。
+
+    0や欠損で埋めるのではなく明示的に available フラグを立てるのは、
+    「為替影響が無い(0%)」と「為替データが取れなかった」を呼び出し側や
+    LLMプロンプトで区別できるようにするため。
+    """
     return {
         "available": False,
         "source": _USDJPY_SOURCE_NAME,
@@ -132,6 +144,13 @@ def _empty_usdjpy_signal() -> dict[str, Any]:
 
 
 async def fetch_usdjpy_signal(session: aiohttp.ClientSession) -> dict[str, Any]:
+    """USD/JPYの週次変化率と日次リターン系列を取得する。失敗時は例外を投げず空シグナルへ倒す。
+
+    為替APIはあくまで予測材料の1つで、これが落ちても金属価格の予測
+    自体は続行できる必要がある。ここで例外を投げると呼び出し元の
+    予測リフレッシュ全体が失敗し、為替とは無関係な部分まで巻き添えに
+    なる。
+    """
     # ECBは平日のみレートを発表するため、直近1週間の変化率(6営業日前との比較)を安全に
     # 取れるよう45日分の範囲で取得する。
     today = datetime.now(timezone.utc).date()
@@ -193,6 +212,7 @@ async def fetch_usdjpy_signal(session: aiohttp.ClientSession) -> dict[str, Any]:
 
 
 def _news_score(text: str) -> int:
+    """見出し+説明文中のポジティブ/ネガティブ語の出現差を整数で返す。単純な多数決の材料。"""
     normalized = text.lower()
     score = sum(1 for pattern in _POSITIVE_PATTERNS if pattern.search(normalized))
     score -= sum(1 for pattern in _NEGATIVE_PATTERNS if pattern.search(normalized))
@@ -205,6 +225,14 @@ async def _fetch_news_for_query(
     *,
     limit: int = 18,
 ) -> tuple[list[str], float]:
+    """1クエリ分のニュース見出しとtanh正規化した感情スコア([-1,1])を返す。
+
+    取得・パースいずれの失敗も例外を外へ投げず ([], 0.0) にする。
+    3金属分を並行実行する fetch_news_signals から見て、1クエリの失敗が
+    他の金属のシグナル取得まで止めてはいけないため。tanh を使うのは
+    素点(整数)のままだと見出し数が多い日ほどスコアが際限なく伸びて
+    しまうのを、-1〜1の範囲に飽和させるため。
+    """
     url = GOOGLE_NEWS_RSS_URL.format(query=quote_plus(query))
     try:
         async with session.get(url) as response:
@@ -244,6 +272,12 @@ async def _fetch_news_for_query(
 
 
 async def fetch_news_signals(session: aiohttp.ClientSession) -> dict[str, Any]:
+    """3金属分のニュース取得を並行実行し、まとめて返す。1金属の失敗は他に影響しない。
+
+    asyncio.create_task で同時に投げるのは、RSS取得(ネットワークI/O)を
+    金属数だけ直列で待つと、予測リフレッシュ全体のレイテンシが
+    金属数倍に伸びるため。
+    """
     tasks = {
         metal_key: asyncio.create_task(_fetch_news_for_query(session, query))
         for metal_key, query in NEWS_QUERY_BY_METAL.items()
@@ -276,6 +310,16 @@ async def fetch_llm_signal(
     news_signal: dict[str, Any],
     recent_accuracy: dict[str, float] | None = None,
 ) -> dict[str, Any]:
+    """LLM(Groq)へ価格・為替・ニュースをまとめて渡し、金属ごとのスコア/確信度を得る。
+
+    無効化・APIキー未設定・呼び出し失敗・JSON解析失敗のいずれでも
+    例外を投げず、available=False かつ全金属スコア0のフォールバックを
+    返す。ここが例外を投げると週次予測の再計算全体が失敗し、LLM抜きの
+    統計モデルだけの予測にすら更新できなくなる。LLM判定は「効けば良い
+    追加シグナル」であって前提条件ではない。
+    recent_accuracy を渡すのは、直近の自分自身の予測誤差をLLMに
+    フィードバックし、外している時期ほど確信度を下げさせるため。
+    """
     _empty = {
         "available": False,
         "source": "Groq",

@@ -24,6 +24,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    """ベースライン予測(傾き無し)との比較用カラムを forecast_accuracy_log に足す。
+
+    3カラムとも nullable。既存行は「傾き無し予測」を遡って作れないので
+    NULL のまま残り、この列が埋まるのはこのリビジョン適用後に新しく
+    記録される行からになる。
+    """
     op.add_column(
         "forecast_accuracy_log",
         sa.Column("baseline_price_per_gram", sa.Numeric(precision=18, scale=4), nullable=True),
@@ -39,6 +45,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """追加した3カラムを削除する。蓄積したベースライン比較の値も消える。"""
     op.drop_column("forecast_accuracy_log", "baseline_error_pct")
     op.drop_column("forecast_accuracy_log", "tilt_pct_per_day")
     op.drop_column("forecast_accuracy_log", "baseline_price_per_gram")

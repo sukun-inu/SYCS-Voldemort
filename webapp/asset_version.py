@@ -41,6 +41,12 @@ def _stat_stamp(paths: list[Path]) -> tuple[tuple[str, int | None, int | None], 
 
 
 def _content_hash(paths: list[Path]) -> str:
+    """複数ファイルの中身を結合してハッシュ化する。1ファイルだけ変わっても値が変わる。
+
+    区切りに `\0` を挟むのは、"ab"+"c" と "a"+"bc" のように、ファイル境界を
+    跨いで連結すると別々の内容が同じバイト列になり得るのを防ぐため
+    （境界が無いとハッシュが衝突しうる）。
+    """
     digest = hashlib.sha256()
     for path in paths:
         try:
@@ -70,6 +76,12 @@ def render_index_html(index_file: Path, app_js: Path, styles_css: Path) -> str:
     """index.html の app.js / styles.css の `?v=` を内容ハッシュへ置き換えて返す。"""
 
     def transform(text: str, version: str) -> str:
+        """app.js / styles.css 両方の `?v=` を同じバージョン値に揃える。
+
+        別々の値にすると、片方だけ更新されたように見えて古い方が
+        キャッシュされたまま残る（実際は両方 asset_version() の同じ
+        入力から作っているので値は常に同期している）。
+        """
         for name, pattern in _ASSET_QUERY_PATTERNS.items():
             text = pattern.sub(rf"\1?v={version}", text)
         return text
@@ -85,6 +97,7 @@ def render_service_worker(sw_file: Path, app_js: Path, styles_css: Path) -> str:
     """
 
     def transform(text: str, version: str) -> str:
+        """CACHE_NAME定数の値だけを差し替える。sw.jsの他の記述は一切変更しない。"""
         return _CACHE_NAME_PATTERN.sub(rf"\g<1>metal-tracker-{version}\g<2>", text)
 
     return _render("sw.js", sw_file, [app_js, styles_css, sw_file], transform)

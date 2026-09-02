@@ -38,6 +38,14 @@ FORECAST_HISTORY_WINDOW_MIN_DAYS = env_int("FORECAST_HISTORY_WINDOW_MIN_DAYS", 1
 
 
 async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7) -> dict[str, Any]:
+    """為替・ニュース・LLM判定を集め、金属ごとの週次予測を新規に計算する（DBへの保存は別関数）。
+
+    為替とニュースの取得は asyncio.gather で並行に行い、LLM判定は
+    その結果を使うため後で呼ぶ（依存関係があるので並行化できない）。
+    1金属も予測が作れなければ RuntimeError にする。呼び出し元
+    （バッチジョブ）はこれを握りつぶさず、古い予測をそのままキャッシュに
+    残す判断ができるようにするため。
+    """
     history_window_days = max(FORECAST_HISTORY_WINDOW_MIN_DAYS, horizon_days * 20)
     history_by_metal = await load_history(session, history_window_days)
     recent_accuracy = await load_recent_forecast_error(session)
@@ -164,6 +172,14 @@ def _forecast_payload_from_db(
     meta: WeeklyForecastMeta,
     rows: list[WeeklyForecastDaily],
 ) -> dict[str, Any]:
+    """DBの行から、build_weekly_forecastが返すのと同じ形のpayloadを組み立て直す。
+
+    news_headlines_json は過去のスキーマ変更でネスト形式が変わっている
+    ため（後から llm/interval/accuracy 等を1つのJSON列に相乗りさせた）、
+    "sample_headlines" キーの有無で新旧どちらの形式かを判定して読み分ける。
+    区間列（lower/upper）が無い古い行は None のまま返し、フロントエンドは
+    帯なしで描画する。
+    """
     by_metal: dict[str, list[WeeklyForecastDaily]] = {}
     for row in rows:
         by_metal.setdefault(row.metal_key, []).append(row)
@@ -288,6 +304,13 @@ def _forecast_payload_from_db(
 
 
 def _trim_payload_to_days(payload: dict[str, Any], days: int) -> dict[str, Any]:
+    """保存済み7日分のpayloadから先頭days日だけを切り出す。再計算はしない。
+
+    json_dumps→json_loads を介してコピーしているのは、payload（呼び出し元
+    がキャッシュしている可能性がある辞書）を直接書き換えて日数の少ない
+    リクエストが元データまで短く破壊するのを防ぐため。projected_price_per_gram
+    等は切り詰めた最終日に合わせて作り直す。
+    """
     horizon = int(payload.get("horizon_days", 7))
     if days >= horizon:
         return payload
@@ -308,6 +331,7 @@ def _trim_payload_to_days(payload: dict[str, Any], days: int) -> dict[str, Any]:
 
 
 async def load_stored_weekly_forecast(session: AsyncSession, *, days: int = 7) -> dict[str, Any] | None:
+    """DBに保存済みの最新予測を読む（無ければNone、計算はしない）。画面表示・修復判定の両方から呼ばれる。"""
     meta = (await session.scalars(select(WeeklyForecastMeta).order_by(WeeklyForecastMeta.generated_at.desc()))).first()
     if meta is None:
         return None
@@ -330,6 +354,16 @@ async def store_weekly_forecast(
     *,
     horizon_days: int = 7,
 ) -> None:
+    """週次予測を保存する。過去の予測は残さず、最新1回分だけに置き換える。
+
+    weekly_forecast_daily・weekly_forecast_meta とも「今回計算した行」に
+    無いものは削除する（既存行の集合を desired と突き合わせ、外れた分を
+    session.delete する／meta は id が最新以外を消す）。予測は外部API
+    （為替・ニュース）を叩いて作るので、失敗して途中の状態で呼び直される
+    ことがある。追記にすると古い予測と新しい予測が並存し、フロントが
+    どちらを表示するか・精度集計がどちらを見るかが曖昧になる。同じ日に
+    再実行しても、常に「直近1回分」だけが残る。
+    """
     as_of_raw = payload.get("as_of_date")
     if not isinstance(as_of_raw, str):
         raise RuntimeError("as_of_date が予測payloadに存在しません。")
@@ -472,6 +506,14 @@ async def refresh_weekly_forecast_cache(
     *,
     horizon_days: int = 7,
 ) -> dict[str, Any]:
+    """計算→保存→精度ログ記録を1回で行う、バッチジョブからの主入口。
+
+    精度ログ（record_forecast_snapshot）の失敗は握りつぶし、予測自体の
+    配信・保存は成功として扱う。答え合わせ用の記録が1回落ちても、次回
+    実行分から追跡を続けられれば実害は小さい一方、ここで全体を失敗
+    させると、精度トラッキングの不具合のせいで予測そのものが更新
+    されなくなるという本末転倒が起きる。
+    """
     payload = await build_weekly_forecast(session, horizon_days=horizon_days)
     await store_weekly_forecast(session, payload, horizon_days=horizon_days)
     try:

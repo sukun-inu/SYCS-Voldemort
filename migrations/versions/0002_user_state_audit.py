@@ -18,6 +18,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    """メンバーの現在状態テーブルと、その変化を積む監査ログテーブルを作る。
+
+    user_state_current は guild_id + user_id で1行に正規化し、直近の状態
+    (在籍・BAN・タイムアウト等) を上書きしていく。user_state_event 側は
+    上書きせず追記のみで、誰が・いつ・何をしたかの履歴を保つ。両者を
+    分けているのは、「今どうか」を1行引きで速く見たい要求と、「何が
+    起きたか」を時系列で追いたい要求が別物だから。片方に寄せると、
+    現在状態を追うには全履歴を毎回集約することになるか、履歴を消して
+    上書きするしかなくなる。
+    """
     op.create_table(
         "user_state_current",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
@@ -87,5 +97,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """2テーブルとも削除する。監査ログ（誰が何をしたか）も含めて消える。"""
     op.drop_table("user_state_event")
     op.drop_table("user_state_current")
