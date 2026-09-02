@@ -2486,6 +2486,121 @@ class OpusResilienceTests(unittest.TestCase):
         self.assertTrue(any("取りこぼし" in f.name for f in noisy.fields))
 
 
+class RecordingSinkShapeTests(unittest.TestCase):
+    """_make_sink_class() が返すクラスの、外から見える姿を固定する。
+
+    213行ある `_make_sink_class` を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+
+    受け取り側の挙動（壊れたパケット・除外ユーザー・並べ直し）は
+    OpusResilienceTests が押さえているが、**次の3つは誰も見ていなかった。**
+
+      1. voice_recv が受け取れる型であること
+         `listen(sink)` は AudioSink のサブクラスしか受けない。継承の形を
+         変えると、テストは全部通るのに**本番で録音を始めた瞬間に落ちる**。
+      2. 停止時の要約
+         33行あるのに1件もテストが無かった。壊れても録音そのものは動くので、
+         「あとからログを読む人」だけが困る（そして誰も気づかない）。
+      3. cleanup() が参照を手放すこと
+         手放さないとセッションのたびにメモリが積み上がる。動きはする。
+    """
+
+    def setUp(self):
+        import services.recording_service as recording
+
+        self.rec = recording
+        self.cls = recording._make_sink_class()
+        self.session = recording.RecordingSession(
+            guild_id=999,
+            channel_id=555,
+            channel_name="雑談VC",
+            started_by_id=1,
+            started_by_name="すずき",
+            started_at=time.monotonic(),
+            max_seconds=0,
+            retention_days=7,
+        )
+        self.sink = self.cls(self.session)
+        self.user = Mock(id=1, display_name="すずき")
+        self._seq = 1000
+
+    def tearDown(self):
+        import shutil
+
+        # ffmpeg のパイプを開いたまま作業ディレクトリを消すと、後始末の順序で
+        # BrokenPipeError の警告がテスト出力へ混ざる。先に閉じる。
+        for track in self.session.tracks.values():
+            with contextlib.suppress(Exception):
+                track.close(0.0, timeout=5.0)
+        shutil.rmtree(self.session.workdir, ignore_errors=True)
+
+    def _packet(self, ssrc=18295):
+        """本物と同じ形（SSRC・連番・タイムスタンプ・ペイロード種別つき）。"""
+        self._seq += 1
+        packet = SimpleNamespace(
+            ssrc=ssrc,
+            sequence=self._seq % 65536,
+            timestamp=(self._seq * 960) % (2**32),
+            payload=120,
+        )
+        return SimpleNamespace(opus=b"\xfc\xff\xfe" + b"\x00" * 20, packet=packet)
+
+    def test_the_sink_is_a_subclass_of_the_library_audio_sink(self):
+        """voice_recv.AudioSink のサブクラスであること。
+
+        `listen()` はこの型しか受け取らない。継承の形を変えると、単体テストは
+        sink を直接呼ぶので全部通るが、本番では録音の開始そのものが失敗する。
+        """
+        from discord.ext import voice_recv
+
+        self.assertTrue(issubclass(self.cls, voice_recv.AudioSink))
+        self.assertIsInstance(self.sink, voice_recv.AudioSink)
+
+    def test_the_method_surface_is_unchanged(self):
+        """クラスが持つメソッドの顔ぶれが変わらないこと。
+
+        `write` / `cleanup` / `wants_opus` はライブラリが呼ぶ側の約束で、
+        残りは録音側から呼ぶ。移し替えのときに1つ落としても、呼ばれるまで
+        分からない（`cleanup` は停止時にしか呼ばれない）。
+        """
+        surface = sorted(name for name in dir(self.cls) if not name.startswith("__") and name != "_abc_impl")
+        for expected in ("write", "cleanup", "wants_opus", "flush_pending", "log_summary", "_emit", "_stream_for"):
+            self.assertIn(expected, surface)
+
+    def test_the_summary_reports_every_counter_for_each_stream(self):
+        """停止時の要約に、ストリームごとの内訳が全部出ること。
+
+        数だけ見ても何が起きたか分からないので内訳を並べている。項目が1つ
+        減っても録音は動くため、**ログを読む段になって初めて足りないと気づく**。
+        """
+        self.sink.write(self.user, self._packet())
+        self.sink.write(self.user, self._packet())
+        with self.assertLogs(self.rec.logger, level="INFO") as captured:
+            self.sink.flush_pending()
+
+        summary = [line for line in captured.output if "ssrc=" in line]
+        self.assertEqual(len(summary), 1, captured.output)
+        self.assertIn(
+            "ssrc=18295 (すずき) 受信=2 成功=2 失敗=0 E2EE復号=0 E2EE不可=0 "
+            "詰め物=0 欠落=0 手遅れ=0 無音=0 RTP種別={120: 2}",
+            summary[0],
+        )
+
+    def test_cleanup_releases_the_streams_and_the_users(self):
+        """cleanup() が抱えていた参照を手放すこと。
+
+        手放さないと、録音セッションのたびに SSRC ごとの状態とユーザー
+        オブジェクトが積み上がる。動きはするので、長く動かして初めて効く。
+        """
+        self.sink.write(self.user, self._packet())
+        self.assertTrue(self.sink._streams)
+        self.assertTrue(self.sink._users)
+
+        self.sink.cleanup()
+        self.assertFalse(self.sink._streams)
+        self.assertFalse(self.sink._users)
+
+
 class ReceiverHealthTests(unittest.TestCase):
     """受信が止まったことに気づけること。
 

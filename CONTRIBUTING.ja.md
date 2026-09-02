@@ -248,7 +248,7 @@ return discord.Color.dark_grey()
 | 場所 | 値 | 意味 |
 |---|---|---|
 | `.coveragerc` の `fail_under` | 69 | これを割ると CI が落ちる（実測 71.2%） |
-| `pyproject.toml` の `max-complexity` | 29 | 現在の最大値に合わせた天井（`background_tasks.register` と `_make_sink_class`） |
+| `pyproject.toml` の `max-complexity` | 23 | 現在の最大値に合わせた天井（`_build_search_queries` と `handle_security_for_message`） |
 | CI の `mypy -p ...` | 本体5パッケージ全部 | 147ファイル |
 | `tools/check_docstrings.py` の `FLOOR_PERCENT` | 100 | 本体の関数 1144 本すべてに docstring がある状態を保つ |
 
