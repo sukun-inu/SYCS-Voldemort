@@ -22,6 +22,12 @@ logging.getLogger().addHandler(_fh)
 
 
 async def main():
+    """Bot を組み立てて起動する。
+
+    登録の順に意味がある。setup_events → register_all_commands →
+    エラーハンドラの順で、最後のものはコマンドツリー全体に掛けるため、
+    コマンドが出揃ってから入れる必要がある。
+    """
     bot = create_bot()
     setup_events(bot)
     loaded_modules = register_all_commands(bot)
