@@ -1963,5 +1963,165 @@ class OnVoiceStateUpdateContractTests(unittest.TestCase):
         self.assertTrue(any("TTS auto_leave error" in line for line in cm.output))
 
 
+class OnVoiceStateUpdateOrderAndStateTests(unittest.TestCase):
+    """on_voice_state_update の呼び出し順と、呼び出しをまたぐ状態を固定する。
+
+    118行ある events/voice.py の register を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+
+    上の OnVoiceStateUpdateContractTests は「どれが呼ばれ、どれが呼ばれないか」
+    を見ているが、次の3つは崩しても全部通る。原文の docstring が
+    「入れ替えると壊れる」と名指ししているのに、誰も見ていなかったところ。
+
+      1. 録音の自動停止が、TTS の切断より**先**に走ること
+      2. before.channel / after.channel を1回だけ読むこと
+      3. 入室時刻とメンション時刻が、呼び出しをまたいで残ること
+
+    1 を入れ替えると、VC が空になったとき **録音が途中で切れて終わる。**
+    3 が崩れると在室時間が常に 0 になり、ロールメンションの10分抑止も
+    毎回リセットされて連投になる。どちらも例外は出ない。
+    """
+
+    def setUp(self):
+        self.bot = _FakeBot()
+        voice.register(self.bot)
+        self.handler = self.bot.on_voice_state_update
+
+    def _member(self, guild_id=1):
+        return SimpleNamespace(guild=SimpleNamespace(id=guild_id), bot=False, id=2)
+
+    def _patched(self, stack, **extra):
+        """配線先をすべて差し替える。中身は個別のテストクラスで確認済み。"""
+        mocks = {
+            "tts_announce": stack.enter_context(patch.object(voice, "_tts_vc_announce", AsyncMock())),
+            "security": stack.enter_context(patch.object(voice, "handle_security_for_voice_join", AsyncMock())),
+            "log_transition": stack.enter_context(patch.object(voice, "_log_vc_transition", AsyncMock())),
+            "persist_transition": stack.enter_context(patch.object(voice, "_persist_vc_transition", AsyncMock())),
+            "notify": stack.enter_context(patch.object(voice, "_vc_notify_handler", AsyncMock())),
+            "auto_start": stack.enter_context(patch("services.recording_service.maybe_auto_start", AsyncMock())),
+            "maybe_start_for_channel": stack.enter_context(
+                patch("services.recording_service.maybe_start_for_channel", AsyncMock())
+            ),
+            "auto_join": stack.enter_context(patch("services.tts_service.auto_join", AsyncMock())),
+            "has_temp": stack.enter_context(patch("services.tts_service.has_temp_override", return_value=False)),
+            "get_tts_settings": stack.enter_context(patch("services.tts_store.get_tts_settings", return_value={})),
+        }
+        mocks.update(extra)
+        return mocks
+
+    def test_the_recording_is_stopped_before_tts_disconnects(self):
+        """録音の自動停止が、TTS の切断より先に走ること。
+
+        逆にすると、VC が空になったときに先に切断が起きる。**録音は
+        途中で終わり、そこまでの音だけが書き出される。** 例外は出ないし、
+        呼ばれた回数はどちらの順でも同じなので、順序を見るしかない。
+        """
+        order: list[str] = []
+
+        async def stop_recording(*a, **k):
+            """録音の自動停止の代わり。"""
+            order.append("stop_recording")
+
+        async def disconnect(*a, **k):
+            """TTS 切断の代わり。"""
+            order.append("disconnect")
+
+        member = self._member()
+        before_ch = SimpleNamespace(id=5, name="c", members=[])
+        before = SimpleNamespace(channel=before_ch)
+        after = SimpleNamespace(channel=None)
+        with ExitStack() as stack:
+            self._patched(
+                stack,
+                stop_recording=stack.enter_context(patch.object(voice, "_stop_recording_if_vc_empty", stop_recording)),
+                disconnect=stack.enter_context(patch("services.tts_service.disconnect", disconnect)),
+            )
+            stack.enter_context(patch.object(voice, "_tts_vc_became_empty", return_value=True))
+            _run(self.handler(member, before, after))
+
+        self.assertEqual(order, ["stop_recording", "disconnect"])
+
+    def test_the_channel_properties_are_read_only_once(self):
+        """before.channel / after.channel を読み直さないこと。
+
+        discord.py の VoiceState.channel はプロパティで、読み直すと None に
+        化けることがある（原文のコメント参照）。**化けるのは実運用の一部の
+        場面だけ**なので、読み直しが増えてもテストは緑のまま通る。
+        """
+        counts = {"before": 0, "after": 0}
+
+        class CountingState:
+            """channel を読まれた回数を数える VoiceState の代わり。"""
+
+            def __init__(self, key, channel):
+                """どちらの側かと、返すチャンネルを控える。"""
+                self._key = key
+                self._channel = channel
+
+            @property
+            def channel(self):
+                """読まれた回数を数えてから返す。"""
+                counts[self._key] += 1
+                return self._channel
+
+        member = self._member()
+        before = CountingState("before", None)
+        after = CountingState("after", SimpleNamespace(id=5, name="c"))
+        with ExitStack() as stack:
+            self._patched(
+                stack,
+                stop_recording=stack.enter_context(patch.object(voice, "_stop_recording_if_vc_empty", AsyncMock())),
+                disconnect=stack.enter_context(patch("services.tts_service.disconnect", AsyncMock())),
+            )
+            _run(self.handler(member, before, after))
+
+        self.assertEqual(counts, {"before": 1, "after": 1})
+
+    def test_the_join_time_survives_between_calls(self):
+        """入室時刻が次の呼び出しまで残り、在室時間になること。
+
+        入室時刻を持つ辞書を呼び出しごとに作り直すと、退出時に引ける
+        入室時刻が無くなり、**在室時間は常に 0 になる。** ログには
+        「0分」と出るだけで、誰も落ちない。
+        """
+        member = self._member()
+        channel = SimpleNamespace(id=5, name="c", members=[])
+        clock = iter([1_700_000_000.0, 1_700_000_090.0])
+        with ExitStack() as stack:
+            mocks = self._patched(
+                stack,
+                stop_recording=stack.enter_context(patch.object(voice, "_stop_recording_if_vc_empty", AsyncMock())),
+                disconnect=stack.enter_context(patch("services.tts_service.disconnect", AsyncMock())),
+            )
+            stack.enter_context(patch.object(voice.time, "time", lambda: next(clock)))
+            _run(self.handler(member, SimpleNamespace(channel=None), SimpleNamespace(channel=channel)))
+            _run(self.handler(member, SimpleNamespace(channel=channel), SimpleNamespace(channel=None)))
+
+        # _persist_vc_transition(member, is_join, is_leave, is_move, before_ch,
+        #                        after_ch, duration_seconds, duration_str)
+        self.assertEqual(mocks["persist_transition"].call_args.args[6], 90)
+
+    def test_the_mention_throttle_state_survives_between_calls(self):
+        """メンションの抑止に使う辞書が、呼び出しごとに作り直されないこと。
+
+        作り直すと10分の抑止が毎回リセットされ、入室のたびにロールメンション
+        が飛ぶ。**荒らしに見える挙動になるが、例外は出ない。**
+        """
+        member = self._member()
+        after_ch = SimpleNamespace(id=5, name="c")
+        with ExitStack() as stack:
+            mocks = self._patched(
+                stack,
+                stop_recording=stack.enter_context(patch.object(voice, "_stop_recording_if_vc_empty", AsyncMock())),
+                disconnect=stack.enter_context(patch("services.tts_service.disconnect", AsyncMock())),
+            )
+            _run(self.handler(member, SimpleNamespace(channel=None), SimpleNamespace(channel=after_ch)))
+            first = mocks["notify"].call_args.args[8]
+            _run(self.handler(member, SimpleNamespace(channel=None), SimpleNamespace(channel=after_ch)))
+            second = mocks["notify"].call_args.args[8]
+
+        self.assertIs(first, second, "呼び出しごとに作り直されている")
+
+
 if __name__ == "__main__":
     unittest.main()

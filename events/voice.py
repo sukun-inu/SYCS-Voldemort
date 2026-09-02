@@ -386,6 +386,142 @@ async def _stop_recording_if_vc_empty(bot: Bot, guild: discord.Guild, channel) -
     logger.warning("[BOT_SETUP] guild=%s 録音結果の通知先がありませんでした（token=%s）", guild.id, result["token"])
 
 
+async def _auto_start_recording(bot: Bot, member: discord.Member, after_ch, is_join: bool) -> None:
+    """自動録音: 設定済みVCに人が入ったら録り始める。
+
+    読み上げとは独立したスイッチで、両方オンなら同じ接続で両方動く。
+    """
+    if not (is_join and after_ch is not None):
+        return
+
+    from services import recording_service as recording
+
+    await _safe(
+        recording.maybe_auto_start(bot, member, after_ch),
+        "録音の自動開始",
+    )
+
+
+async def _maybe_tts_auto_join(bot: Bot, member: discord.Member, after_ch, is_join: bool) -> None:
+    """TTS 自動参加: 設定済みVCに誰か入ったらBotも入る（temp override 中はスキップ）。"""
+    try:
+        if is_join and after_ch is not None:
+            from services.tts_service import auto_join as _tts_auto_join, has_temp_override as _has_temp
+            from services.tts_store import get_tts_settings as _get_tts_settings
+
+            _tts_cfg = _get_tts_settings(member.guild.id)
+            _tts_vc_id = _tts_cfg.get("vc_channel_id")
+            if _tts_cfg.get("enabled") and _tts_vc_id and int(_tts_vc_id) == after_ch.id:
+                if not _has_temp(member.guild.id):
+                    await _tts_auto_join(member.guild, int(_tts_vc_id))
+                    # 読み上げが入った VC でも録音の条件を見る（入室側の
+                    # 判定と入口が違うだけで、狙いは同じ）
+                    from services import recording_service as _recording
+
+                    await _recording.maybe_start_for_channel(
+                        bot,
+                        member.guild,
+                        after_ch,
+                        trigger="TTS参加",
+                    )
+    except Exception as e:
+        logger.exception("[BOT_SETUP] TTS auto_join error: %s", e)
+
+
+async def _maybe_tts_auto_leave(member: discord.Member, before_ch, is_leave: bool, is_move: bool) -> None:
+    """TTS 自動退出: VCに人間が誰もいなくなったらBotも退出（temp override も解除）。
+
+    退出だけでなく移動も対象になるのがここ。判定そのものは _tts_vc_announce と共通。
+    呼び出し側は、これより**先に**録音の自動停止を済ませておくこと
+    （切断されると録音が途中で終わる）。
+    """
+    try:
+        if (is_leave or is_move) and _tts_vc_became_empty(member.guild.id, before_ch):
+            from services.tts_service import disconnect as _tts_disconnect
+
+            await _tts_disconnect(member.guild.id)
+    except Exception as e:
+        logger.exception("[BOT_SETUP] TTS auto_leave error: %s", e)
+
+
+async def _dispatch_voice_state(
+    bot: Bot,
+    member: discord.Member,
+    before: discord.VoiceState,
+    after: discord.VoiceState,
+    vc_join_times: dict[tuple[int, int], float],
+    vc_last_mention: dict[int, float],
+) -> None:
+    """VC入退室まわりの全処理を順番に呼ぶ司令塔。
+
+    呼び出し順序に依存関係が複数あり、入れ替えると壊れる（各所のコメント参照）:
+    TTSアナウンス(_tts_vc_announce)はbot自身の入退室も対象なので
+    member.bot判定より前に呼ぶ／録音の自動停止はTTS切断より先に呼ぶ
+    （切断されると録音が途中で終わる）。before_ch/after_chはプロパティを
+    1回だけ読んで使い回す（何度も読み直すとNoneに化けることがある）。
+
+    状態の2つの辞書は呼び出しをまたいで持ち回る。ここで作ると、在室時間が
+    常に0になり、メンションの10分抑止も毎回リセットされる。
+    """
+    # TTS VC参加・退出アナウンス（bot含む全メンバー対象のため早期returnの前に実行）
+    if member.guild is not None:
+        await _tts_vc_announce(bot, member, before, after)
+
+    if member.guild is None or member.bot:
+        return
+
+    await _safe(handle_security_for_voice_join(bot, member, before, after), "VC security")
+
+    # チャンネル参照を一度だけ取得（プロパティ再ルックアップによる None 化を防ぐ）
+    before_ch = before.channel
+    after_ch = after.channel
+
+    key = (member.guild.id, member.id)
+    now_ts = time.time()
+    is_join, is_leave, is_move, duration_seconds, duration_str = _compute_vc_transition(
+        key,
+        now_ts,
+        before_ch,
+        after_ch,
+        vc_join_times,
+    )
+
+    await _log_vc_transition(bot, member, is_join, is_leave, is_move, before_ch, after_ch)
+    await _persist_vc_transition(
+        member,
+        is_join,
+        is_leave,
+        is_move,
+        before_ch,
+        after_ch,
+        duration_seconds,
+        duration_str,
+    )
+    await _safe(
+        _vc_notify_handler(
+            member,
+            is_join,
+            is_leave,
+            is_move,
+            before_ch,
+            after_ch,
+            now_ts,
+            duration_str,
+            vc_last_mention,
+        ),
+        "VC notify",
+    )
+
+    await _auto_start_recording(bot, member, after_ch, is_join)
+    await _maybe_tts_auto_join(bot, member, after_ch, is_join)
+
+    # 録音中のVCが空になったら、無音を録り続けないよう自動で止めて書き出す。
+    # TTS の切断より先に処理する（切断されると録音が途中で終わるため）。
+    await _safe(_stop_recording_if_vc_empty(bot, member.guild, before_ch), "録音の自動停止")
+
+    await _maybe_tts_auto_leave(member, before_ch, is_leave, is_move)
+
+
 def register(bot: Bot) -> None:
     """on_voice_state_update 1本だけを登録する。_vc_join_times /
     _vc_last_mention はこのハンドラの呼び出しをまたいで状態を持つ必要が
@@ -401,106 +537,5 @@ def register(bot: Bot) -> None:
 
     @bot.event
     async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
-        """VC入退室まわりの全処理を順番に呼ぶ司令塔。呼び出し順序に依存
-        関係が複数あり、入れ替えると壊れる（各所のコメント参照）:
-        TTSアナウンス(_tts_vc_announce)はbot自身の入退室も対象なので
-        member.bot判定より前に呼ぶ／録音の自動停止はTTS切断より先に呼ぶ
-        （切断されると録音が途中で終わる）。before_ch/after_chはプロパティを
-        1回だけ読んで使い回す（何度も読み直すとNoneに化けることがある）。
-        """
-        # TTS VC参加・退出アナウンス（bot含む全メンバー対象のため早期returnの前に実行）
-        if member.guild is not None:
-            await _tts_vc_announce(bot, member, before, after)
-
-        if member.guild is None or member.bot:
-            return
-
-        await _safe(handle_security_for_voice_join(bot, member, before, after), "VC security")
-
-        # チャンネル参照を一度だけ取得（プロパティ再ルックアップによる None 化を防ぐ）
-        before_ch = before.channel
-        after_ch = after.channel
-
-        key = (member.guild.id, member.id)
-        now_ts = time.time()
-        is_join, is_leave, is_move, duration_seconds, duration_str = _compute_vc_transition(
-            key,
-            now_ts,
-            before_ch,
-            after_ch,
-            _vc_join_times,
-        )
-
-        await _log_vc_transition(bot, member, is_join, is_leave, is_move, before_ch, after_ch)
-        await _persist_vc_transition(
-            member,
-            is_join,
-            is_leave,
-            is_move,
-            before_ch,
-            after_ch,
-            duration_seconds,
-            duration_str,
-        )
-        await _safe(
-            _vc_notify_handler(
-                member,
-                is_join,
-                is_leave,
-                is_move,
-                before_ch,
-                after_ch,
-                now_ts,
-                duration_str,
-                _vc_last_mention,
-            ),
-            "VC notify",
-        )
-
-        # 自動録音: 設定済みVCに人が入ったら録り始める。読み上げとは独立した
-        # スイッチで、両方オンなら同じ接続で両方動く。
-        if is_join and after_ch is not None:
-            from services import recording_service as recording
-
-            await _safe(
-                recording.maybe_auto_start(bot, member, after_ch),
-                "録音の自動開始",
-            )
-
-        # TTS 自動参加: 設定済みVCに誰か入ったらBotも入る（temp override 中はスキップ）
-        try:
-            if is_join and after_ch is not None:
-                from services.tts_service import auto_join as _tts_auto_join, has_temp_override as _has_temp
-                from services.tts_store import get_tts_settings as _get_tts_settings
-
-                _tts_cfg = _get_tts_settings(member.guild.id)
-                _tts_vc_id = _tts_cfg.get("vc_channel_id")
-                if _tts_cfg.get("enabled") and _tts_vc_id and int(_tts_vc_id) == after_ch.id:
-                    if not _has_temp(member.guild.id):
-                        await _tts_auto_join(member.guild, int(_tts_vc_id))
-                        # 読み上げが入った VC でも録音の条件を見る（入室側の
-                        # 判定と入口が違うだけで、狙いは同じ）
-                        from services import recording_service as _recording
-
-                        await _recording.maybe_start_for_channel(
-                            bot,
-                            member.guild,
-                            after_ch,
-                            trigger="TTS参加",
-                        )
-        except Exception as e:
-            logger.exception("[BOT_SETUP] TTS auto_join error: %s", e)
-
-        # 録音中のVCが空になったら、無音を録り続けないよう自動で止めて書き出す。
-        # TTS の切断より先に処理する（切断されると録音が途中で終わるため）。
-        await _safe(_stop_recording_if_vc_empty(bot, member.guild, before_ch), "録音の自動停止")
-
-        # TTS 自動退出: VCに人間が誰もいなくなったらBotも退出（temp override も解除）。
-        # 退出だけでなく移動も対象になるのがここ。判定そのものは冒頭と共通。
-        try:
-            if (is_leave or is_move) and _tts_vc_became_empty(member.guild.id, before_ch):
-                from services.tts_service import disconnect as _tts_disconnect
-
-                await _tts_disconnect(member.guild.id)
-        except Exception as e:
-            logger.exception("[BOT_SETUP] TTS auto_leave error: %s", e)
+        """VC入退室の入口（本体は _dispatch_voice_state）。"""
+        await _dispatch_voice_state(bot, member, before, after, _vc_join_times, _vc_last_mention)
