@@ -631,19 +631,13 @@ def _quote_ident(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
-@router.post("/query")
-@limiter.limit("60/minute")
-async def run_query(request: Request, _dev=Depends(check_dev), _csrf=Depends(check_csrf)):
-    """SQL を実行する。既定は読み取り専用トランザクション。"""
-    body = await _json_body(request)
-    server_id = str(body.get("server") or "")
-    database = str(body.get("database") or "")
-    script = body.get("sql")
-    write = bool(body.get("write"))
-    limit = _clamp(body.get("limit"), 1, MAX_ROWS, DEFAULT_ROWS)
-    timeout = _clamp(body.get("timeout"), 1, MAX_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS)
-    token = str(body.get("token") or "")[:64]
+def _parse_query_request(body: dict) -> tuple[list[str], dict[str, Any]]:
+    """要求を検証して、(実行する文の並び, 実行の設定) にする。
 
+    数と長さの上限は、画面から生の SQL を投げられる経路そのものへの歯止め。
+    上限を超えたものは 400 で断り、接続すら開かない。
+    """
+    script = body.get("sql")
     if not isinstance(script, str) or not script.strip():
         raise HTTPException(status_code=400, detail="SQL が空です。")
     if len(script) > MAX_SQL_CHARS:
@@ -654,65 +648,85 @@ async def run_query(request: Request, _dev=Depends(check_dev), _csrf=Depends(che
     if len(statements) > MAX_STATEMENTS:
         raise HTTPException(status_code=400, detail=f"文が多すぎます（{MAX_STATEMENTS} 文まで）。")
 
-    target = _server_or_404(server_id)
-    user = request.session.get("user") or {}
-    logger.warning(
-        "SQL実行 user=%s db=%s/%s mode=%s statements=%d sql=%.500s",
-        user.get("id"),
-        server_id,
-        database,
-        "write" if write else "read",
-        len(statements),
-        script,
-    )
+    return statements, {
+        "script": script,
+        "server_id": str(body.get("server") or ""),
+        "database": str(body.get("database") or ""),
+        "write": bool(body.get("write")),
+        "limit": _clamp(body.get("limit"), 1, MAX_ROWS, DEFAULT_ROWS),
+        "timeout": _clamp(body.get("timeout"), 1, MAX_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS),
+        "token": str(body.get("token") or "")[:64],
+    }
 
-    conn = await _connect(target, database, timeout_ms=timeout * 1000)
-    _remember_running(token, server_id, database, conn.get_server_pid())
+
+def _is_non_transactional(statements: list[str], write: bool) -> bool:
+    """VACUUM のようにトランザクション内で実行できない文か。
+
+    書き込みモードで1文だけ投げられたときに限り、トランザクションを張らずに
+    そのまま流す。先頭のコメントは判定の邪魔になるので判定用にだけ落とす
+    （**実行は原文のまま。** 落とした文字列を実行すると、記録も原文と食い違う）。
+    """
+    return write and len(statements) == 1 and bool(_NON_TRANSACTIONAL.match(_COMMENTS.sub("", statements[0])))
+
+
+async def _run_outside_transaction(conn, statement: str, timeout: int, token: str, started: float):
+    """トランザクションを張らずに1文だけ流す（VACUUM 等）。
+
+    こちらは本流と別の道なので、後始末（token の削除と接続の close）を
+    書き忘れても**普通の SELECT のテストは全部通る。** 接続が漏れ、token が
+    居座って別のクエリのキャンセルが誤爆する。
+    """
     results: list[dict[str, Any]] = []
-    started = time.perf_counter()
-
-    # VACUUM のようにトランザクション内で実行できない文は、書き込みモードで
-    # 1文だけ投げられたときに限り、トランザクションを張らずにそのまま流す。
-    # 先頭のコメントは判定の邪魔になるので、判定用にだけ落とす（実行は原文のまま）
-    if write and len(statements) == 1 and _NON_TRANSACTIONAL.match(_COMMENTS.sub("", statements[0])):
-        try:
-            begun = time.perf_counter()
-            status = await conn.execute(statements[0], timeout=float(timeout))
-            results.append(
-                {
-                    "columns": [],
-                    "rows": [],
-                    "rowCount": _affected(status),
-                    "truncated": False,
-                    "status": status or "OK",
-                    "elapsedMs": round((time.perf_counter() - begun) * 1000, 1),
-                    "sql": statements[0],
-                }
-            )
-            error = None
-        except asyncpg.PostgresError as exc:
-            error = {**_error_payload(exc), "statementIndex": 0}
-        except asyncio.TimeoutError:
-            error = _timeout_error(timeout, 0)
-        finally:
-            _RUNNING.pop(token, None)
-            await conn.close()
-        return JSONResponse(
+    try:
+        begun = time.perf_counter()
+        status = await conn.execute(statement, timeout=float(timeout))
+        results.append(
             {
-                "results": results,
-                "error": error,
-                "committed": error is None,
-                "outsideTransaction": True,
-                "elapsedMs": round((time.perf_counter() - started) * 1000, 1),
+                "columns": [],
+                "rows": [],
+                "rowCount": _affected(status),
+                "truncated": False,
+                "status": status or "OK",
+                "elapsedMs": round((time.perf_counter() - begun) * 1000, 1),
+                "sql": statement,
             }
         )
+        error = None
+    except asyncpg.PostgresError as exc:
+        error = {**_error_payload(exc), "statementIndex": 0}
+    except asyncio.TimeoutError:
+        error = _timeout_error(timeout, 0)
+    finally:
+        _RUNNING.pop(token, None)
+        await conn.close()
+    return JSONResponse(
+        {
+            "results": results,
+            "error": error,
+            "committed": error is None,
+            "outsideTransaction": True,
+            "elapsedMs": round((time.perf_counter() - started) * 1000, 1),
+        }
+    )
 
+
+async def _run_in_transaction(conn, statements: list[str], settings: dict[str, Any], started: float):
+    """トランザクションの中で順に流す。読み取り専用なら必ず巻き戻す。
+
+    読み取り専用は Postgres 側で READ ONLY を宣言する（SQL の文字列判定では
+    ないので抜け道が無い）。成功しても rollback するのは、READ ONLY でも
+    一時オブジェクト等で状態が残る余地を消すため。
+    """
+    write = settings["write"]
+    timeout = settings["timeout"]
+    token = settings["token"]
+    results: list[dict[str, Any]] = []
     transaction = conn.transaction(readonly=not write)
     try:
         await transaction.start()
         try:
             for statement in statements:
-                results.append(await _run_one(conn, statement, limit, float(timeout)))
+                results.append(await _run_one(conn, statement, settings["limit"], float(timeout)))
         except asyncpg.PostgresError as exc:
             await transaction.rollback()
             return JSONResponse(
@@ -751,6 +765,42 @@ async def run_query(request: Request, _dev=Depends(check_dev), _csrf=Depends(che
             "elapsedMs": round((time.perf_counter() - started) * 1000, 1),
         }
     )
+
+
+@router.post("/query")
+@limiter.limit("60/minute")
+async def run_query(request: Request, _dev=Depends(check_dev), _csrf=Depends(check_csrf)):
+    """SQL を実行する。既定は読み取り専用トランザクション。
+
+    開発者専用の生 SQL 実行なので、**誰が何を投げたかを必ず記録する。**
+    記録が消えると、後から辿る手立てが無くなる。
+
+    token の登録は文を投げる前に済ませる。後ろへずれると、止めたい長い
+    クエリの最中だけ token が無く、キャンセルが効くのは終わったあとだけ
+    になる（終わってしまえば止める必要も無い）。
+    """
+    body = await _json_body(request)
+    statements, settings = _parse_query_request(body)
+
+    target = _server_or_404(settings["server_id"])
+    user = request.session.get("user") or {}
+    logger.warning(
+        "SQL実行 user=%s db=%s/%s mode=%s statements=%d sql=%.500s",
+        user.get("id"),
+        settings["server_id"],
+        settings["database"],
+        "write" if settings["write"] else "read",
+        len(statements),
+        settings["script"],
+    )
+
+    conn = await _connect(target, settings["database"], timeout_ms=settings["timeout"] * 1000)
+    _remember_running(settings["token"], settings["server_id"], settings["database"], conn.get_server_pid())
+    started = time.perf_counter()
+
+    if _is_non_transactional(statements, settings["write"]):
+        return await _run_outside_transaction(conn, statements[0], settings["timeout"], settings["token"], started)
+    return await _run_in_transaction(conn, statements, settings, started)
 
 
 @router.post("/cancel")
