@@ -948,7 +948,11 @@ export async function createMixer(container, options = {}) {
   }
 
   function layout() {
-    view.width = viewport.clientWidth || 1;
+    // 隠れているあいだ（ミキサー画面を出しているとき）は幅が 0 になる。
+    // そのまま進めると view.start / view.end が 1px 幅の値で潰れ、戻って
+    // きたときに表示範囲がおかしくなる。
+    if (!viewport.clientWidth) return;
+    view.width = viewport.clientWidth;
     scrollSpacer.style.width = `${totalWidth()}px`;
     view.start = scroller.scrollLeft / view.pxPerSecond;
     view.end = view.start + view.width / view.pxPerSecond;
@@ -1156,7 +1160,22 @@ export async function createMixer(container, options = {}) {
   );
 
   const onResize = () => layout();
+  // ブラウザ窓の大きさと、画面の細かさ（devicePixelRatio）の変化はこちらで拾う。
   window.addEventListener("resize", onResize);
+
+  /* 中の窓（wm/window.js）の大きさが変わっても、window の resize は起きない。
+     最大化は class を付け替えるだけだし、つまみと矢印キーでの伸縮は要素の
+     style を書き換えるだけなので、こちらには何も届かない。
+
+     届かないと layout() が回らず、キャンバスの中身は前の幅のまま CSS の
+     width:100% で引き伸ばされる。**波形が横に伸びて見えるのはこれ。**
+     しかも view.width が古いままなので、目盛りの位置も、クリックした所の
+     秒数も、再生位置の線も、伸びたぶんだけずれる。
+
+     要素そのものを見張れば、最大化・つまみ・矢印キー・ブラウザ窓の
+     どれで変わっても同じ1本で拾える。 */
+  const sizeWatch = new ResizeObserver(() => layout());
+  sizeWatch.observe(viewport);
 
   // レイアウトが決まってから描く。
   // このハンドルも raf に入れておくこと。入れていなかったときは、最初の1コマが
@@ -1174,6 +1193,7 @@ export async function createMixer(container, options = {}) {
       if (destroyed) return;
       destroyed = true;
       playing = false;
+      sizeWatch.disconnect();
       window.removeEventListener("resize", onResize);
       window.removeEventListener("keydown", onKeyDown);
       if (raf) window.cancelAnimationFrame(raf);

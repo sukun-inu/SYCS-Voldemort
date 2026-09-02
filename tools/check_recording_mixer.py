@@ -3,7 +3,7 @@
 
   python tools/check_recording_mixer.py
 
-見ているのは2つ。どちらも単体テストでは捕まえられない（描画と <audio> の
+見ているのは3つ。どれも単体テストでは捕まえられない（描画と <audio> の
 挙動はブラウザの中でしか起きない）。
 
   1. 波形が録音全体に渡って描かれること
@@ -20,6 +20,11 @@
      <audio> がほとんど離れないため、直す前のコード（0.25秒ずれるまで放置し、
      直し方は毎回の頭出し）でもこの検査は通ってしまう。実機で会話が二重に
      聞こえる状態を再現するには、実際の録音と実際のブラウザが要る。
+
+  3. 入れ物の幅が変わったら、キャンバスも描き直されること
+     中の窓（wm/window.js）は、最大化しても つまみで伸ばしても window の
+     resize を起こさない。それを待っていたころは、最大化するとキャンバスの
+     中身が前の幅のまま CSS で引き伸ばされ、波形が横に伸びて見えていた。
 
 使い捨ての設定ディレクトリで管理UIを起動し、その上でミキサーを直接読み込む。
 本物の settings.json やログイン中のセッションには触らない。
@@ -476,6 +481,35 @@ def main() -> int:
                 f"ミュート={colours['mute']} ソロ={colours['solo']}",
             )
 
+            page.evaluate("window.__mixer.destroy()")
+
+            print()
+            print("== 6. 入れ物の幅が変わったら、波形を描き直すこと ==")
+            # window の resize は起きない。中の窓は class と style を書き換える
+            # だけなので、要素を見張っていないと気づけない。
+            open_mixer(page, play_token)
+            stretched = page.evaluate(
+                """async () => {
+              const stage = document.getElementById("stage");
+              const canvas = document.querySelector(".daw-lane-canvas");
+              const dpr = window.devicePixelRatio || 1;
+              const before = { bitmap: canvas.width, css: canvas.getBoundingClientRect().width };
+
+              stage.style.width = "1400px";
+              // ResizeObserver は次のコマで届く。2コマ待って描き直しまで通す。
+              await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+              await new Promise((r) => setTimeout(r, 100));
+
+              const css = canvas.getBoundingClientRect().width;
+              return { before, css, bitmap: canvas.width, want: Math.floor(Math.floor(css) * dpr) };
+            }"""
+            )
+            check(
+                "広げたぶんだけキャンバスも広がる",
+                stretched["css"] > stretched["before"]["css"] and stretched["bitmap"] == stretched["want"],
+                f"CSS {stretched['before']['css']:.0f} -> {stretched['css']:.0f}px / "
+                f"中身 {stretched['before']['bitmap']} -> {stretched['bitmap']}（想定 {stretched['want']}）",
+            )
             page.evaluate("window.__mixer.destroy()")
 
             browser.close()
