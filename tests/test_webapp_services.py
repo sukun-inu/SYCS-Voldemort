@@ -2791,6 +2791,104 @@ class RepairMetalpriceIntegrityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stats["missing_data_repair_attempted"], 0)
         self.assertEqual(stats["missing_data_repair_skipped_cooldown"], 1)
 
+    def _row(self, metal_key, day, price, *, code=None, delta="keep"):
+        """走査対象の1行。delta を省くと「既に正しい」値を入れる。"""
+        from webapp.models import MetalPriceDaily as Row
+
+        spec = repair_service.METAL_COMMANDS.get(metal_key)
+        return Row(
+            metal_key=metal_key,
+            metal_code=code if code is not None else (spec.code if spec else "X"),
+            snapshot_date=date(2026, 8, day),
+            price_per_gram=Decimal(price),
+            delta_from_previous=None if delta == "keep" else delta,
+        )
+
+    async def _repair(self, rows, *, after=("gold", "silver", "platinum")):
+        """全件走査に rows を流して修復を1回走らせ、(stats, session) を返す。"""
+        session = AsyncMock()
+        session.scalars = AsyncMock(
+            side_effect=[
+                _scalars_result(self._today_rows(["gold", "silver", "platinum"])),
+                _scalars_result(rows),
+                _scalars_result(self._today_rows(list(after))),
+            ]
+        )
+        with (
+            patch.object(repair_service, "jst_today", return_value=date(2026, 8, 31)),
+            patch.object(repair_service, "store_snapshot", AsyncMock()),
+            patch.object(repair_service, "load_latest_rows", AsyncMock(return_value={})),
+            patch.object(repair_service, "load_stored_weekly_forecast", AsyncMock(return_value=None)),
+            patch.object(repair_service, "refresh_weekly_forecast_cache", AsyncMock()),
+        ):
+            stats = await repair_service.repair_metalprice_integrity(session)
+        return stats, session
+
+    async def test_the_previous_price_is_kept_per_metal(self):
+        """前日値は金属ごとに持つこと。
+
+        1本の変数で持ち回すと、**金の差分が銀の価格から引かれる。** 行は
+        金属ごとに並べて読むので、境目の1行だけが桁違いの差分になる。既存の
+        テストは gold だけを流していたため、混ざっても再現しない。
+
+        109行あるこの関数を割る前に押さえる
+        （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+        """
+        rows = [
+            self._row("gold", 1, "5000"),
+            self._row("gold", 2, "5010"),
+            self._row("silver", 1, "80"),
+            self._row("silver", 2, "82"),
+        ]
+        await self._repair(rows)
+
+        self.assertIsNone(rows[0].delta_from_previous, "各金属の1行目に前日値は無い")
+        self.assertEqual(rows[1].delta_from_previous, Decimal("10.0000"))
+        self.assertIsNone(rows[2].delta_from_previous, "銀の1行目が金の値から引かれている")
+        self.assertEqual(rows[3].delta_from_previous, Decimal("2.0000"))
+
+    async def test_the_scan_is_ordered_by_metal_then_date(self):
+        """走査は metal_key・snapshot_date の昇順で読むこと。
+
+        差分は「1つ前の行」との引き算なので、並び順が変われば値も変わる。
+        並べ替えを外しても DB は何らかの順で返すため、**手元では正しい順に
+        見えることがある。** 実際に投げる文で確かめる。
+        """
+        _, session = await self._repair([self._row("gold", 1, "5000")])
+
+        scan_stmt = str(session.scalars.await_args_list[1].args[0])
+        self.assertIn("ORDER BY", scan_stmt.upper())
+        order = scan_stmt.upper().split("ORDER BY", 1)[1]
+        self.assertLess(order.index("METAL_KEY"), order.index("SNAPSHOT_DATE"))
+        self.assertEqual(order.count("DESC"), 0, scan_stmt)
+
+    async def test_todays_gaps_are_counted_again_after_the_repair(self):
+        """補完のあとに、今日の欠損を数え直すこと。
+
+        補完前の行を使い回すと missing_today_after が補完前と同じ値になり、
+        **直ったのに「直っていない」と記録される。** 無人実行なので、
+        後から読むのはこの数字だけ。
+        """
+        session = AsyncMock()
+        session.scalars = AsyncMock(
+            side_effect=[
+                _scalars_result(self._today_rows(["gold"])),  # 2件欠損
+                _scalars_result([]),
+                _scalars_result(self._today_rows(["gold", "silver", "platinum"])),  # 補完後は揃った
+            ]
+        )
+        with (
+            patch.object(repair_service, "jst_today", return_value=date(2026, 8, 31)),
+            patch.object(repair_service, "store_snapshot", AsyncMock()),
+            patch.object(repair_service, "load_latest_rows", AsyncMock(return_value={})),
+            patch.object(repair_service, "load_stored_weekly_forecast", AsyncMock(return_value=None)),
+            patch.object(repair_service, "refresh_weekly_forecast_cache", AsyncMock()),
+        ):
+            stats = await repair_service.repair_metalprice_integrity(session)
+
+        self.assertEqual(stats["missing_today_before"], 2)
+        self.assertEqual(stats["missing_today_after"], 0, "補完前の行を使い回している")
+
     async def test_force_forecast_refresh_overrides_drift_free_payload(self):
         session = AsyncMock()
         session.scalars = AsyncMock(

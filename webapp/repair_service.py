@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
@@ -73,6 +73,108 @@ def _forecast_has_drift(payload: dict[str, Any] | None, *, latest_snapshot_date_
     return False
 
 
+async def _missing_today(session: AsyncSession, today: date) -> set[str]:
+    """今日ぶんが揃っていない金属。補完の前後で同じ数え方をする。
+
+    補完のあとに数え直さず前の結果を使い回すと、直ったのに「直っていない」
+    と記録される。無人実行なので、後から読むのはその数字だけ。
+    """
+    rows = list((await session.scalars(select(MetalPriceDaily).where(MetalPriceDaily.snapshot_date == today))).all())
+    return _TRACKED_KEYS - {row.metal_key for row in rows if row.metal_key in _TRACKED_KEYS}
+
+
+async def _refill_today(session: AsyncSession, today: date, missing: set[str], stats: dict[str, int]) -> None:
+    """今日の不足データをAPI再取得で補う。クールダウン中は見送る。
+
+    無条件にリトライすると無料枠を食い潰すので、前回の試行から一定時間は
+    間を空ける。見送ったことも stats とログに残す（黙って何もしないと、
+    「補完が動かない」のか「まだ待っている」のかが区別できない）。
+    """
+    global _last_missing_data_repair_attempt
+
+    now = datetime.now(JST)
+    cooldown_until = (
+        _last_missing_data_repair_attempt + MISSING_DATA_REPAIR_COOLDOWN
+        if _last_missing_data_repair_attempt is not None
+        else None
+    )
+    if cooldown_until is not None and now < cooldown_until:
+        stats["missing_data_repair_skipped_cooldown"] = 1
+        logger.info(
+            "本日データ欠損(%d件)を検知したがクールダウン中のため再取得をスキップ。次回試行可能: %s",
+            len(missing),
+            cooldown_until.isoformat(),
+        )
+        return
+
+    _last_missing_data_repair_attempt = now
+    stats["missing_data_repair_attempted"] = 1
+    await store_snapshot(session, today, skip_if_exists=False)
+
+
+async def _repair_rows(session: AsyncSession, stats: dict[str, int]) -> None:
+    """metal_code と delta_from_previous の不整合を全履歴ぶん直す。
+
+    ローカル計算だけで完結する（MetalpriceAPI など外部APIは一切消費しない）。
+    以前は lookback_days(既定60日)で範囲を絞っていたため、「全期間」表示
+    追加後に60日より古い行の delta_from_previous が NULL のまま永久に直らない
+    不整合が発生していた。日次1行×金属3種の規模では全履歴走査でも軽量なため、
+    範囲を絞らず常に全件を対象にする。
+
+    前日値は**金属ごとに**持つ。1本の変数で持ち回すと、金の差分が銀の価格から
+    引かれる。並べ替えを外すのも同じ理由で、差分は「1つ前の行」との引き算
+    なので、順序が変われば値も変わる。
+    """
+    stmt = select(MetalPriceDaily).order_by(MetalPriceDaily.metal_key.asc(), MetalPriceDaily.snapshot_date.asc())
+    rows = list((await session.scalars(stmt)).all())
+    prev_price_by_metal: dict[str, Decimal] = {}
+
+    for row in rows:
+        stats["rows_scanned"] += 1
+        changed = False
+
+        spec = METAL_COMMANDS.get(row.metal_key)
+        if spec is not None and row.metal_code != spec.code:
+            row.metal_code = spec.code
+            changed = True
+            stats["metal_code_fixed"] += 1
+
+        prev_price = prev_price_by_metal.get(row.metal_key)
+        expected_delta = _quantize_delta(row.price_per_gram - prev_price) if prev_price is not None else None
+        if row.delta_from_previous != expected_delta:
+            row.delta_from_previous = expected_delta
+            changed = True
+            stats["delta_fixed"] += 1
+
+        prev_price_by_metal[row.metal_key] = row.price_per_gram
+        if changed:
+            stats["rows_fixed"] += 1
+
+
+async def _refresh_forecast_if_needed(
+    session: AsyncSession,
+    stats: dict[str, int],
+    force_forecast_refresh: bool,
+) -> None:
+    """保存済みの週次予測が最新の価格と噛み合っていなければ作り直す。
+
+    比べる基準日は、追跡している金属の最新日が全部そろって同じときだけ
+    決める。ばらけているときは比べようがないので、ずれとは見なさない
+    （その状態で作り直すと、取り込み途中の日で予測が固まる）。
+    """
+    latest_rows = await load_latest_rows(session)
+    latest_dates = {row.snapshot_date for row in latest_rows.values() if row.metal_key in _TRACKED_KEYS}
+    latest_snapshot_date_iso = next(iter(latest_dates)).isoformat() if len(latest_dates) == 1 else None
+
+    forecast_payload = await load_stored_weekly_forecast(session, days=7)
+    if force_forecast_refresh or _forecast_has_drift(
+        forecast_payload,
+        latest_snapshot_date_iso=latest_snapshot_date_iso,
+    ):
+        await refresh_weekly_forecast_cache(session, horizon_days=7)
+        stats["forecast_refreshed"] = 1
+
+
 async def repair_metalprice_integrity(
     session: AsyncSession,
     *,
@@ -101,84 +203,17 @@ async def repair_metalprice_integrity(
         "missing_data_repair_skipped_cooldown": 0,
     }
 
-    # 今日の不足データはAPI再取得で補完を試みるが、クールダウン中は無条件リトライで
-    # API枠を消費しないようスキップする。
-    global _last_missing_data_repair_attempt
-    today_rows_before = list(
-        (await session.scalars(select(MetalPriceDaily).where(MetalPriceDaily.snapshot_date == today))).all()
-    )
-    today_keys_before = {row.metal_key for row in today_rows_before if row.metal_key in _TRACKED_KEYS}
-    missing_today_before = _TRACKED_KEYS - today_keys_before
+    missing_today_before = await _missing_today(session, today)
     stats["missing_today_before"] = len(missing_today_before)
     if missing_today_before:
-        now = datetime.now(JST)
-        cooldown_until = (
-            _last_missing_data_repair_attempt + MISSING_DATA_REPAIR_COOLDOWN
-            if _last_missing_data_repair_attempt is not None
-            else None
-        )
-        if cooldown_until is not None and now < cooldown_until:
-            stats["missing_data_repair_skipped_cooldown"] = 1
-            logger.info(
-                "本日データ欠損(%d件)を検知したがクールダウン中のため再取得をスキップ。次回試行可能: %s",
-                len(missing_today_before),
-                cooldown_until.isoformat(),
-            )
-        else:
-            _last_missing_data_repair_attempt = now
-            stats["missing_data_repair_attempted"] = 1
-            await store_snapshot(session, today, skip_if_exists=False)
+        await _refill_today(session, today, missing_today_before, stats)
 
-    # delta_from_previous・metal_codeの整合性チェックは全行を読み込んでメモリ上で照合し、
-    # 差分があった行だけをUPDATEする純粋なローカル計算(MetalpriceAPIなど外部APIは一切
-    # 消費しない)。以前はlookback_days(既定60日)で範囲を絞っていたため、「全期間」表示
-    # 追加後に60日より古い行のdelta_from_previousがNULLのまま永久に直らない不整合が
-    # 発生していた。日次1行×金属3種の規模では全履歴走査でも軽量なため、範囲を絞らず
-    # 常に全件を対象にする。
-    stmt = select(MetalPriceDaily).order_by(MetalPriceDaily.metal_key.asc(), MetalPriceDaily.snapshot_date.asc())
-    rows = list((await session.scalars(stmt)).all())
-    prev_price_by_metal: dict[str, Decimal] = {}
+    await _repair_rows(session, stats)
 
-    for row in rows:
-        stats["rows_scanned"] += 1
-        changed = False
+    # 補完のあとに数え直す（前の結果を使い回すと、直ったのに直っていないと記録される）。
+    stats["missing_today_after"] = len(await _missing_today(session, today))
 
-        spec = METAL_COMMANDS.get(row.metal_key)
-        if spec is not None and row.metal_code != spec.code:
-            row.metal_code = spec.code
-            changed = True
-            stats["metal_code_fixed"] += 1
-
-        prev_price = prev_price_by_metal.get(row.metal_key)
-        expected_delta = _quantize_delta(row.price_per_gram - prev_price) if prev_price is not None else None
-        if row.delta_from_previous != expected_delta:
-            row.delta_from_previous = expected_delta
-            changed = True
-            stats["delta_fixed"] += 1
-
-        prev_price_by_metal[row.metal_key] = row.price_per_gram
-        if changed:
-            stats["rows_fixed"] += 1
-
-    today_rows_after = list(
-        (await session.scalars(select(MetalPriceDaily).where(MetalPriceDaily.snapshot_date == today))).all()
-    )
-    today_keys_after = {row.metal_key for row in today_rows_after if row.metal_key in _TRACKED_KEYS}
-    stats["missing_today_after"] = len(_TRACKED_KEYS - today_keys_after)
-
-    latest_rows = await load_latest_rows(session)
-    latest_dates = {row.snapshot_date for row in latest_rows.values() if row.metal_key in _TRACKED_KEYS}
-    latest_snapshot_date_iso = None
-    if len(latest_dates) == 1:
-        latest_snapshot_date_iso = next(iter(latest_dates)).isoformat()
-
-    forecast_payload = await load_stored_weekly_forecast(session, days=7)
-    if force_forecast_refresh or _forecast_has_drift(
-        forecast_payload,
-        latest_snapshot_date_iso=latest_snapshot_date_iso,
-    ):
-        await refresh_weekly_forecast_cache(session, horizon_days=7)
-        stats["forecast_refreshed"] = 1
+    await _refresh_forecast_if_needed(session, stats, force_forecast_refresh)
 
     await session.commit()
     return stats
