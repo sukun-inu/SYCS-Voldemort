@@ -13,9 +13,28 @@ _BLOCKED_HOSTNAMES = {
 }
 
 
+def _unwrap_ipv4_mapped(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
+    """IPv4-mapped IPv6（::ffff:a.b.c.d）は、実体である IPv4 として判定する。
+
+    ここを噛ませないと Python のバージョンで結果が変わる。3.12.4 未満の
+    ipaddress は ::ffff:0:0/96 を丸ごと「private」に数えるので、公開 IPv4 を
+    指す ::ffff:142.251.150.119 が is_global=False になる。3.13 以降は
+    「IPv4-mapped の is_private は、埋め込まれた IPv4 の意味で決まる」と
+    明記された（IPv6Address.is_private の docstring）。
+
+    手元（3.13）で通るのに本番・CI（3.11）だけ弾かれる、という形になる。
+    実際に VirusTotal のスキャンが non_public_ip で落ちる事例が出ている。
+    バージョンに依存させないため、判定の前に IPv4 へ開いておく。
+    """
+    mapped = getattr(ip, "ipv4_mapped", None)
+    return mapped if mapped is not None else ip
+
+
 def _is_public_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     # is_global=False のアドレス（private / loopback / link-local / multicast / reserved など）を拒否
-    return ip.is_global
+    return _unwrap_ipv4_mapped(ip).is_global
 
 
 def _resolve_hostname(hostname: str) -> set[ipaddress.IPv4Address | ipaddress.IPv6Address]:
@@ -83,6 +102,11 @@ def validate_public_http_url(
     except ValueError:
         ips = _resolve_hostname(host_l)
 
+    # 1つでも非公開なら拒否する（fail-close）。DNS を握られていれば
+    # 「公開IPも返しつつ、実際の接続先は内部IP」にできるため、多数決や
+    # 「1つでも公開なら可」にはしない。
     for ip in ips:
+        resolved = _unwrap_ipv4_mapped(ip)
         if not _is_public_ip(ip):
-            raise URLSafetyError(f"non_public_ip:{ip}")
+            detail = f"{ip}" if resolved == ip else f"{ip}(={resolved})"
+            raise URLSafetyError(f"non_public_ip:{detail}")
