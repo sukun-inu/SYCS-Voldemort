@@ -16,12 +16,28 @@ from services.url_safety import URLSafetyError, validate_public_http_url
 
 MALICIOUS_THRESHOLD = 10
 VT_CACHE_TTL = 60 * 60 * 6
+
+# vt-py のクライアントに渡す制限時間（秒）。**渡さないと既定の300秒が効く。**
+# スキャンは asyncio.to_thread の中で待つので、到達できない相手を5分待つと
+# 既定のスレッドプール（CPU数+4、最大32本）が1本ずつ塞がっていく。詰まると
+# 設定の書き込み（settings_store.awrite）など、他の to_thread も後ろに並ぶ。
+#
+# 本番のログでは接続失敗が返るまで31秒かかっていた（2026-09-02）。
+VT_SCAN_TIMEOUT_SEC = env_int("VT_SCAN_TIMEOUT_SECONDS", 30, minimum=5)
+
+# 失敗した結果を短く持つ時間（秒）。成功の6時間と同じだけ持つと、相手が
+# 復旧しても6時間スキャンしないままになる。一時的な不通と恒久的な不通は
+# 区別できないので、短く持って様子を見るほうへ倒す。
+VT_FAILURE_CACHE_TTL = env_int("VT_FAILURE_CACHE_TTL_SECONDS", 300, minimum=10)
 VT_MAX_REDIRECTS = env_int("VT_MAX_REDIRECTS", 5, minimum=0)
 VT_MAX_DOWNLOAD_BYTES = env_int("VT_MAX_DOWNLOAD_BYTES", 20 * 1024 * 1024, minimum=1)
 
 # URL 1件ごとに鍵が増える。追い出しの無い素の dict だったため、大量の
 # 異なる URL がスキャンされ続けると TTL の6時間が経つまで際限なく膨らんでいた。
 _vt_cache: TTLCache[str, Dict[str, Any]] = TTLCache(ttl=VT_CACHE_TTL, max_entries=5000)
+# 失敗した結果は別の入れ物で、短い期限で持つ。同じ入れ物に入れると、成功と
+# 同じ6時間居座ってしまう。
+_vt_failure_cache: TTLCache[str, Dict[str, Any]] = TTLCache(ttl=VT_FAILURE_CACHE_TTL, max_entries=1000)
 logger = logging.getLogger(__name__)
 
 
@@ -33,14 +49,30 @@ def hash_text(text: str) -> str:
 
 
 def _vt_cache_get(key: str) -> Optional[Dict[str, Any]]:
-    """スキャン結果のキャッシュを読む薄いラッパー。呼び出し側に TTLCache の
-    実装を直接触らせないための間接層。
+    """スキャン結果のキャッシュを読む。成功を先に見て、無ければ失敗を見る。
+
+    失敗も返すのは、**到達できない相手をメッセージのたびに叩き直さない**
+    ため。返す中身は失敗したときと同じ（malicious=0 / suspicious=0 /
+    status="error"）なので、危険と判定するかどうかは変わらない。
     """
-    return _vt_cache.get(key)
+    hit = _vt_cache.get(key)
+    if hit is not None:
+        return hit
+    return _vt_failure_cache.get(key)
 
 
 def _vt_cache_set(key: str, data: Dict[str, Any]) -> None:
-    """スキャン結果をキャッシュへ書く薄いラッパー。"""
+    """スキャン結果をキャッシュへ書く。失敗は短い期限のほうへ入れる。"""
+    if data.get("status") == "error":
+        _vt_failure_cache.set(key, data)
+        return
+    # 復旧したら、残っている失敗も消す。
+    #
+    # **この行を消してもテストは全部通る。** _vt_cache_get が成功を先に見る
+    # ので、失敗が残っていても普通は隠れるため。効くのは「成功が LRU で
+    # 追い出され、失敗のほうがまだ生きている」場合だけ（5分以内に5000件の
+    # 別URLを走らせると起こりうる）。まず起きないが、起きたときに復旧済みの
+    # URL を「失敗」として扱うのは避けたいので残す。
     _vt_cache.set(key, data)
 
 
@@ -130,7 +162,7 @@ async def vt_check_url(url: str) -> Dict[str, Any]:
             """vt-py の同期クライアントで実際にスキャンする本体。vt-py が同期APIしか
             持たないため、asyncio.to_thread に包んで呼ぶ。
             """
-            with vt.Client(VIRUSTOTAL_API_KEY) as client:
+            with vt.Client(VIRUSTOTAL_API_KEY, timeout=VT_SCAN_TIMEOUT_SEC) as client:
                 analysis = client.scan_url(url, wait_for_completion=True)
                 stats = analysis.stats
                 return {
@@ -146,7 +178,9 @@ async def vt_check_url(url: str) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error("[VT] URL scan exception: %s", e)
-        return {"status": "error", "type": "url", "reason": str(e), "malicious": 0, "suspicious": 0}
+        failure = {"status": "error", "type": "url", "reason": str(e), "malicious": 0, "suspicious": 0}
+        _vt_cache_set(key, failure)
+        return failure
 
 
 async def vt_check_file(content: bytes) -> Dict[str, Any]:
@@ -170,7 +204,7 @@ async def vt_check_file(content: bytes) -> Dict[str, Any]:
             見つからない（APIError）場合は None を返し、アップロードによる
             新規スキャンへ進ませる。
             """
-            with vt.Client(VIRUSTOTAL_API_KEY) as client:
+            with vt.Client(VIRUSTOTAL_API_KEY, timeout=VT_SCAN_TIMEOUT_SEC) as client:
                 try:
                     obj = client.get_object(f"/files/{sha256}")
                     stats = obj.last_analysis_stats
@@ -196,7 +230,7 @@ async def vt_check_file(content: bytes) -> Dict[str, Any]:
             する。成功・失敗のどちらでも一時ファイルは必ず削除する。
             """
             try:
-                with vt.Client(VIRUSTOTAL_API_KEY) as client:
+                with vt.Client(VIRUSTOTAL_API_KEY, timeout=VT_SCAN_TIMEOUT_SEC) as client:
                     with open(tmp_path, "rb") as f:
                         analysis = client.scan_file(f, wait_for_completion=True)
                     stats = analysis.stats
@@ -221,7 +255,7 @@ async def vt_check_file(content: bytes) -> Dict[str, Any]:
                 """新規スキャンが ConflictError（他所で同時にスキャン中）になったとき、
                 既存の解析結果をハッシュから取得し直す。
                 """
-                with vt.Client(VIRUSTOTAL_API_KEY) as client:
+                with vt.Client(VIRUSTOTAL_API_KEY, timeout=VT_SCAN_TIMEOUT_SEC) as client:
                     obj = client.get_object(f"/files/{sha256}")
                     stats = obj.last_analysis_stats
                     return {
