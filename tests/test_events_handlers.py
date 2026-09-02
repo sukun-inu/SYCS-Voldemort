@@ -209,6 +209,142 @@ class OnMessageDispatchTests(unittest.TestCase):
         enqueue.assert_not_called()
 
 
+class OnMessageDispatchShapeTests(unittest.TestCase):
+    """on_message の配り方そのものを固定する。
+
+    138行ある events/messages.py の register を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+
+    上の OnMessageDispatchTests は「5つのハンドラが1回ずつ呼ばれたか」を見て
+    いるが、**どう呼ばれたか**は誰も見ていない。次の3つは、崩しても
+    `assert_called_once_with` が全部通る。
+
+      1. 5つが同時に走ること（直列に書き換えても呼ばれた回数は同じ）
+      2. 1つが落ちても他が止まらないこと（_safe を1つ外しても平常時は緑）
+      3. process_commands が gather のあとに来ること
+
+    2 が崩れると **prefix コマンドが一切反応しなくなる。** gather は最初の
+    例外をそのまま投げるので、_safe を外したハンドラが落ちた時点で
+    process_commands まで届かない。しかも落ちるのは外部APIが不調なときだけ
+    なので、手元では再現しない。
+    """
+
+    def setUp(self):
+        self.bot = _FakeBot()
+        messages.register(self.bot)
+        self.handler = self.bot.on_message
+        self.guild = SimpleNamespace(id=10)
+        self.msg = _message(
+            guild=self.guild,
+            author=SimpleNamespace(bot=False),
+            channel=SimpleNamespace(id=20),
+            content="hello",
+        )
+
+    def _dispatch(self, handlers):
+        """4つのサービスを差し替えて on_message を1回流す。TTS は黙らせる。"""
+        with (
+            patch.object(messages, "handle_security_for_message", handlers["security"]),
+            patch.object(messages, "handle_chatgpt_message", handlers["chat"]),
+            patch.object(messages, "handle_sticky", handlers["sticky"]),
+            patch.object(messages, "handle_djaudio_message", handlers["djaudio"]),
+            patch("services.tts_store.get_tts_settings", return_value={}),
+            patch("services.tts_service.get_effective_vc_watch", return_value=(None, [])),
+        ):
+            _run(self.handler(self.msg))
+
+    def test_the_handlers_run_at_the_same_time(self):
+        """4つのサービスが、1つずつ順番待ちにならないこと。
+
+        VT スキャンは秒単位でかかる。直列に並べると、その間 DJAudio も
+        読み上げも動かない。**呼ばれた回数は直列でも同じ**なので、同時に
+        走っていることをここで見ておく。
+        """
+        state = {"running": 0, "peak": 0}
+
+        def make(_name):
+            """走っている本数の最大を控えるだけのハンドラ。"""
+
+            async def handler(*a, **k):
+                state["running"] += 1
+                state["peak"] = max(state["peak"], state["running"])
+                await asyncio.sleep(0.02)
+                state["running"] -= 1
+
+            return handler
+
+        self.bot.process_commands = AsyncMock()
+        self._dispatch({name: make(name) for name in ("security", "chat", "sticky", "djaudio")})
+
+        self.assertEqual(state["peak"], 4, "1つずつ順番に走っている")
+
+    def test_one_failing_handler_stops_neither_the_others_nor_prefix_commands(self):
+        """1つが落ちても、残りと process_commands は動くこと。
+
+        gather は最初の例外をそのまま投げる。落ちたハンドラの _safe が
+        外れていると、**そこで on_message ごと終わり、prefix コマンドが
+        一切反応しなくなる。** 例外が出るのは外部APIが不調なときだけなので、
+        平常時のテストでは緑のまま気づけない。
+        """
+        done: list[str] = []
+
+        async def boom(*a, **k):
+            """必ず落ちるハンドラ。"""
+            raise RuntimeError("外部APIが落ちた")
+
+        def make(name):
+            """呼ばれたことだけ控えるハンドラ。"""
+
+            async def handler(*a, **k):
+                done.append(name)
+
+            return handler
+
+        self.bot.process_commands = AsyncMock()
+        # 握りつぶすのではなく _safe が記録すること（黙って消えると、
+        # 「動いていないのに緑」の原因が追えない）も、ここで併せて見る。
+        with self.assertLogs("events._util", level="ERROR") as captured:
+            self._dispatch(
+                {
+                    "security": boom,
+                    "chat": make("chat"),
+                    "sticky": make("sticky"),
+                    "djaudio": make("djaudio"),
+                }
+            )
+
+        self.assertEqual(sorted(done), ["chat", "djaudio", "sticky"])
+        self.bot.process_commands.assert_awaited_once_with(self.msg)
+        self.assertTrue(any("security_service" in line for line in captured.output), captured.output)
+
+    def test_prefix_commands_are_processed_after_the_handlers(self):
+        """process_commands は、5つを配り終えてから呼ぶこと。
+
+        先に呼ぶと、prefix コマンドの処理が security の判定より前に走る。
+        順序を入れ替えても**呼ばれた回数は同じ**なので、ここで押さえる。
+        """
+        order: list[str] = []
+
+        def make(name):
+            """終わった順を控えるハンドラ。"""
+
+            async def handler(*a, **k):
+                await asyncio.sleep(0.01)
+                order.append(name)
+
+            return handler
+
+        async def process_commands(_message):
+            """process_commands の代わり。"""
+            order.append("process_commands")
+
+        self.bot.process_commands = process_commands
+        self._dispatch({name: make(name) for name in ("security", "chat", "sticky", "djaudio")})
+
+        self.assertEqual(order[-1], "process_commands", order)
+        self.assertEqual(len(order), 5, order)
+
+
 class OnMessageDeleteTests(unittest.TestCase):
     def setUp(self):
         self.bot = _FakeBot()
