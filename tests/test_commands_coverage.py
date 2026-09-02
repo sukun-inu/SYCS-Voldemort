@@ -696,6 +696,65 @@ class RecordExcludeTests(unittest.TestCase):
 # ── /djaudio channel・output・status（commands/djaudio_commands.py） ───────
 
 
+class DjaudioRegistrationShapeTests(unittest.TestCase):
+    """register_djaudio_commands が何をどう登録するかを固定する。
+
+    144行あるこの関数を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+
+    下の3クラス（Channel/Output/Status）は**登録されたあとの中身**を見て
+    いるが、**登録そのもの**は誰も見ていなかった。
+
+      - グループの名前・説明・guild_only
+      - 3つのコマンドが、この名前・この順で並ぶこと
+      - グループが bot のコマンドツリーへ渡されること
+
+    最後のひとつが抜けると、**コマンドは1つも Discord に出ない。** 例外は
+    出ないし、テストも（コマンドを直接呼ぶので）全部通る。
+    """
+
+    def test_the_group_and_its_three_commands_are_registered(self):
+        """名前・説明・並び順ごと固定する。"""
+        import commands.djaudio_commands as dj
+
+        registry, FakeGroup = _make_group()
+        created: list[dict] = []
+
+        class RecordingGroup(FakeGroup):
+            """作られたグループの引数を控えるだけの FakeGroup。"""
+
+            def __init__(self, **kwargs):
+                """kwargs を控えてから、元の FakeGroup と同じ初期化をする。"""
+                created.append(kwargs)
+                super().__init__(**kwargs)
+
+        bot = Mock()
+        with patch.object(dj.app_commands, "Group", RecordingGroup):
+            dj.register_djaudio_commands(bot)
+
+        self.assertEqual(
+            created,
+            [{"name": "djaudio", "description": "DJAudio（URL の自動MP3変換）の設定", "guild_only": True}],
+        )
+        self.assertEqual(list(registry), ["channel", "output", "status"])
+
+    def test_the_group_is_handed_to_the_command_tree(self):
+        """bot.tree.add_command(group) を呼ぶこと。
+
+        ここが抜けると Discord 側にコマンドが1つも現れない。関数の中では
+        全部組み上がっているので、**例外も出ず、単体テストも通る。**
+        """
+        import commands.djaudio_commands as dj
+
+        _, FakeGroup = _make_group()
+        bot = Mock()
+        with patch.object(dj.app_commands, "Group", FakeGroup):
+            dj.register_djaudio_commands(bot)
+
+        bot.tree.add_command.assert_called_once()
+        self.assertIsInstance(bot.tree.add_command.call_args.args[0], FakeGroup)
+
+
 class DjaudioChannelTests(unittest.TestCase):
     def setUp(self):
         self.dj, self.registry = _register_djaudio()
