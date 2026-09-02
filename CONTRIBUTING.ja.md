@@ -219,7 +219,7 @@ return discord.Color.dark_grey()
 | `.coveragerc` の `fail_under` | 69 | これを割ると CI が落ちる（実測 71.2%） |
 | `pyproject.toml` の `max-complexity` | 31 | 現在の最大値に合わせた天井（`create_app`） |
 | CI の `mypy -p ...` | 本体5パッケージ全部 | 147ファイル |
-| `tools/check_docstrings.py` の `FLOOR_PERCENT` | 100 | 本体の関数 1109 本すべてに docstring がある状態を保つ |
+| `tools/check_docstrings.py` の `FLOOR_PERCENT` | 100 | 本体の関数 1114 本すべてに docstring がある状態を保つ |
 
 どれも「今より悪くしない」ための歯止めです。**テストを足したり関数を割ったり
 したら、この数字も一緒に締めてください。** 緩めたままにすると、その分だけ静かに
