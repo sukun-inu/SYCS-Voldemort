@@ -16,6 +16,7 @@ from services.settings_store import add_reaction_role, awrite, get_reaction_role
 
 
 def register(bot: Bot) -> None:
+    """/reactionrole add・remove・list（リアクションロールの設定）を登録する。"""
     reactionrole_group = app_commands.Group(
         name="reactionrole", description="リアクションでロールを付与する設定", guild_only=True
     )
@@ -32,6 +33,12 @@ def register(bot: Bot) -> None:
         emoji: str,
         role: discord.Role,
     ):
+        """message_id はDiscordの int オプションではなく str で受け、ここで手動変換する。
+
+        メッセージID(snowflake)は64bitあり、Discordのスラッシュコマンド int
+        オプションが素直に扱える範囲を超えて桁落ちしうる。str で受けて
+        Python の任意精度 int に変換することで、そのリスクを避けている。
+        """
         if not await _ensure_admin(interaction):
             return
         try:
@@ -57,6 +64,7 @@ def register(bot: Bot) -> None:
         message_id: str,
         emoji: str,
     ):
+        """message_id を str で受ける理由は add_rr_cmd と同じ（64bit ID の桁落ち回避）。"""
         if not await _ensure_admin(interaction):
             return
         try:
@@ -76,6 +84,9 @@ def register(bot: Bot) -> None:
     async def _remove_rr_message_id_autocomplete(
         interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
+        """value は str のまま返す。remove_rr_cmd 側が受け取るのも str なので、
+        ここで int に変換し直す必要はない。
+        """
         if interaction.guild is None:
             return []
         rr = get_reaction_roles(interaction.guild.id)
@@ -90,6 +101,15 @@ def register(bot: Bot) -> None:
     async def _remove_rr_emoji_autocomplete(
         interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
+        """interaction.namespace で、同じコマンド内で先に入力済みの message_id を読む。
+
+        Discord の autocomplete は全パラメータをまとめて送るのではなく、
+        入力中の1つずつ問い合わせてくるが、その時点で確定している他の
+        パラメータ値は namespace 経由で見える。それを使って候補を
+        選択済みメッセージの絵文字だけに絞り込む（未選択なら全件から）。
+        件数上限は最後に slice する _remove_rr_message_id_autocomplete と違い、
+        ここは role 解決のループ中に25件で break して以降の処理を省く。
+        """
         if interaction.guild is None:
             return []
         rr = get_reaction_roles(interaction.guild.id)
@@ -112,6 +132,7 @@ def register(bot: Bot) -> None:
 
     @reactionrole_group.command(name="list", description="リアクションロール一覧を表示します")
     async def list_rr_cmd(interaction: discord.Interaction):
+        """add/remove と違い ensure_admin なし。閲覧は全員に開放している。"""
         if interaction.guild is None:
             await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return

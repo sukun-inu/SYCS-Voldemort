@@ -16,8 +16,14 @@ from services.settings_store import add_bypass_roles, get_bypass_role_ids, remov
 
 
 def register(bypass_group: app_commands.Group) -> None:
+    """/bypass add・remove・list を登録する。"""
+
     @bypass_group.command(name="add", description="【管理者】バイパスロールを追加します（複数選択可）")
     async def add_bypass_roles_cmd(interaction: discord.Interaction):
+        """スラッシュコマンドの引数は固定個数しか取れないため、複数選択は
+        EntityPickerView（RoleSelect）に委ねる。ここでは選択UIを出すだけで、
+        実際の保存(add_bypass_roles)は選択確定後にビュー側が呼ぶ。
+        """
         if not await _ensure_admin_in_guild(interaction):
             return
         select: discord.ui.RoleSelect[Any] = discord.ui.RoleSelect(
@@ -32,6 +38,9 @@ def register(bypass_group: app_commands.Group) -> None:
 
     @bypass_group.command(name="remove", description="【管理者】バイパスロールを削除します（複数選択可）")
     async def remove_bypass_roles_cmd(interaction: discord.Interaction):
+        """add_bypass_roles_cmd と同じ流れ（複数選択を EntityPickerView に委ねる
+        理由もそちら参照）。渡す関数が remove_bypass_roles に変わるだけ。
+        """
         if not await _ensure_admin_in_guild(interaction):
             return
         select: discord.ui.RoleSelect[Any] = discord.ui.RoleSelect(
@@ -46,6 +55,10 @@ def register(bypass_group: app_commands.Group) -> None:
 
     @bypass_group.command(name="list", description="【管理者】バイパスロール一覧を表示します")
     async def list_bypass_roles_cmd(interaction: discord.Interaction):
+        """guild.get_role が None を返すのは、ID だけ設定に残ったままロールが
+        削除された場合。mention は解決できないので `<@&id>` の生メンションで
+        代替し、それだけを理由に一覧表示自体を落とさない。
+        """
         if not await _ensure_admin_in_guild(interaction):
             return
 

@@ -18,8 +18,14 @@ from services.settings_store import get_bypass_role_ids, get_response_channel_id
 
 
 def register(bot: Bot, bot_group: app_commands.Group) -> None:
+    """/bot settings（設定一覧）と /bot help（コマンド一覧）を登録する。"""
+
     @bot_group.command(name="settings", description="【管理者】Bot設定を一覧表示します")
     async def settings_cmd(interaction: discord.Interaction):
+        """一覧に出す信頼済みユーザー/バイパスロールは、多いギルドだと
+        embed の1フィールド上限に収まらないので cap_list_for_message で
+        丸める（全件ではなく先頭15件+省略表記）。
+        """
         if not await _ensure_admin_in_guild(interaction):
             return
 
@@ -83,6 +89,10 @@ def register(bot: Bot, bot_group: app_commands.Group) -> None:
 
     @bot_group.command(name="help", description="利用可能なスラッシュコマンド一覧を表示します")
     async def help_cmd(interaction: discord.Interaction):
+        """一覧に出るのは Discord へ sync 済みのコマンドとは限らない。この
+        プロセスの bot.tree に register() 済みのものを見ているだけなので、
+        sync 前でも並ぶし、他プロセスの状態は反映されない。
+        """
         # walk_commands() はグループ自身も返し、cmd.name は葉の名前しか持たない。
         # 素直に name で集めると /log channel と /quake channel が衝突して
         # 片方が消える。実際に打てる形（qualified_name）で並べる。

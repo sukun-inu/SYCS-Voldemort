@@ -5,6 +5,11 @@ from commands.interaction_utils import send_ephemeral
 
 
 async def ensure_admin(interaction: discord.Interaction) -> bool:
+    """管理者でなければ理由付きで断り、コマンド本体はここで打ち切る。
+
+    defer() より前に呼ぶ前提。defer 済みだと ephemeral な初回応答が使えず、
+    断り方が変わってしまう（ephemeral な followup にする等の分岐が要る）。
+    """
     if interaction.guild is None:
         await send_ephemeral(interaction, "ギルド内でのみ使えるぞ。")
         return False

@@ -16,10 +16,12 @@ from services.settings_store import (
 
 
 def _base_url_is_local() -> bool:
+    """厳密な到達性判定はしない。開発時によくある2値だけを見た簡易チェック。"""
     return "localhost" in DJAUDIO_BASE_URL or "127.0.0.1" in DJAUDIO_BASE_URL
 
 
 def register_djaudio_commands(bot: Bot) -> None:
+    """DJAudio（URL自動MP3変換）の /djaudio channel/output/status を登録する。"""
     group = app_commands.Group(
         name="djaudio",
         description="DJAudio（URL の自動MP3変換）の設定",
@@ -36,6 +38,12 @@ def register_djaudio_commands(bot: Bot) -> None:
         interaction: discord.Interaction,
         channel: discord.TextChannel | None = None,
     ):
+        """has_permissions(manage_channels=True) だけでは admin 限定にならない。
+
+        Manage Channels 権限だけ持つ非管理者も decorator は通してしまうため、
+        説明文の「【管理者】」を実際に守るには ensure_admin の追加チェックが
+        要る。decorator 側は主にDiscordの権限エラー表示のためだけに残している。
+        """
         if not await _ensure_admin(interaction):
             return
         # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
@@ -85,6 +93,8 @@ def register_djaudio_commands(bot: Bot) -> None:
         interaction: discord.Interaction,
         channel: discord.TextChannel | None = None,
     ):
+        """ensure_admin が要る理由は djaudio_channel_set と同じ（manage_channels
+        decorator だけでは非管理者を弾けない）。"""
         if not await _ensure_admin(interaction):
             return
 
@@ -114,6 +124,7 @@ def register_djaudio_commands(bot: Bot) -> None:
         description="DJAudio の現在設定を表示します",
     )
     async def djaudio_status(interaction: discord.Interaction):
+        """設定を変えない読み取り専用なので、他の2つと違い admin ガードは無い。"""
         if interaction.guild is None:
             await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return
@@ -123,6 +134,7 @@ def register_djaudio_commands(bot: Bot) -> None:
         runtime = get_djaudio_runtime_settings(guild_id)
 
         def _ch_text(ch_id: int | None) -> str:
+            """設定後にチャンネルが削除されていても落ちないよう、IDのみで表示する。"""
             if not ch_id:
                 return "未設定"
             # ネストした関数の中では interaction.guild の絞り込みが効かないため、

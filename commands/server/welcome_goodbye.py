@@ -24,6 +24,7 @@ from services.settings_store import (
 
 
 def register(bot: Bot) -> None:
+    """/greeting welcome/goodbye の channel・message と /greeting status を登録する。"""
     # 入退室のあいさつは welcome と goodbye で対になっており、状況表示は
     # 両方をまとめて出す。別々のグループにすると status の置き場所が無くなる
     # ので、greeting の下に welcome / goodbye を置く二段構えにする。
@@ -36,6 +37,7 @@ def register(bot: Bot) -> None:
     @welcome_group.command(name="channel", description="【管理者】ウェルカム送信チャンネルを設定します")
     @app_commands.describe(channel="ウェルカムメッセージを送るチャンネル")
     async def set_welcome_ch(interaction: discord.Interaction, channel: discord.TextChannel):
+        """set_goodbye_ch と対になる、welcome 側のチャンネル設定。"""
         if not await _ensure_admin(interaction):
             return
         # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
@@ -46,6 +48,13 @@ def register(bot: Bot) -> None:
     @welcome_group.command(name="message", description="【管理者】ウェルカムメッセージを設定します")
     @app_commands.describe(message="テンプレート: {user} {username} {server} {count} が使用可能")
     async def set_welcome_msg(interaction: discord.Interaction, message: str):
+        """テンプレート文字列はここでは検証しない。
+
+        実際の展開(services/welcome_service.py)が str.format ではなく
+        .replace() の連鎖なので、{typo} のような存在しないプレースホルダを
+        書いても例外にはならず、そのまま文字通り出力されるだけ。だから
+        ここで許可された名前かを事前チェックする必要が無い。
+        """
         if not await _ensure_admin(interaction):
             return
         # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
@@ -56,6 +65,7 @@ def register(bot: Bot) -> None:
     @goodbye_group.command(name="channel", description="【管理者】グッバイ送信チャンネルを設定します")
     @app_commands.describe(channel="グッバイメッセージを送るチャンネル")
     async def set_goodbye_ch(interaction: discord.Interaction, channel: discord.TextChannel):
+        """set_welcome_ch と対になる、goodbye 側のチャンネル設定。"""
         if not await _ensure_admin(interaction):
             return
         # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
@@ -66,6 +76,7 @@ def register(bot: Bot) -> None:
     @goodbye_group.command(name="message", description="【管理者】グッバイメッセージを設定します")
     @app_commands.describe(message="テンプレート: {user} {username} {server} {count} が使用可能")
     async def set_goodbye_msg(interaction: discord.Interaction, message: str):
+        """テンプレート未検証の理由は set_welcome_msg と同じ（.replace() 連鎖で例外にならない）。"""
         if not await _ensure_admin(interaction):
             return
         # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
@@ -75,6 +86,7 @@ def register(bot: Bot) -> None:
 
     @greeting_group.command(name="status", description="ウェルカム/グッバイ設定を表示します")
     async def welcome_settings_cmd(interaction: discord.Interaction):
+        """channel/message の4コマンドと違い ensure_admin なし。閲覧は全員に開放している。"""
         if interaction.guild is None:
             await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return

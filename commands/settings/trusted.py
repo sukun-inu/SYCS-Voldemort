@@ -16,8 +16,15 @@ from services.settings_store import add_trusted_users, get_trusted_user_ids, rem
 
 
 def register(trusted_group: app_commands.Group) -> None:
+    """/trusted add・remove・list を登録する。"""
+
     @trusted_group.command(name="add", description="【管理者】信頼済みユーザーを追加します（複数選択可）")
     async def add_trusted_members_cmd(interaction: discord.Interaction):
+        """スラッシュコマンドの引数は固定個数しか取れないため、複数選択は
+        EntityPickerView（UserSelect）に委ねる。ここでは選択UIを出すだけで、
+        実際の保存(add_trusted_users)は選択確定後にビュー側が呼ぶ
+        （commands/settings/bypass.py の add_bypass_roles_cmd と同じ形）。
+        """
         if not await _ensure_admin_in_guild(interaction):
             return
         select: discord.ui.UserSelect[Any] = discord.ui.UserSelect(
@@ -32,6 +39,9 @@ def register(trusted_group: app_commands.Group) -> None:
 
     @trusted_group.command(name="remove", description="【管理者】信頼済みユーザーを削除します（複数選択可）")
     async def remove_trusted_members_cmd(interaction: discord.Interaction):
+        """add_trusted_members_cmd と同じ流れ。渡す関数が remove_trusted_users
+        に変わるだけ。
+        """
         if not await _ensure_admin_in_guild(interaction):
             return
         select: discord.ui.UserSelect[Any] = discord.ui.UserSelect(
@@ -46,6 +56,10 @@ def register(trusted_group: app_commands.Group) -> None:
 
     @trusted_group.command(name="list", description="【管理者】信頼済みユーザー一覧を表示します")
     async def list_trusted_members_cmd(interaction: discord.Interaction):
+        """guild.get_member が None を返すのは、ID だけ設定に残ったまま
+        メンバーがサーバーを抜けた（キャッシュから落ちた）場合。mention は
+        解決できないので `<@id>` の生メンションで代替する。
+        """
         if not await _ensure_admin_in_guild(interaction):
             return
 

@@ -42,6 +42,9 @@ tts_group = app_commands.Group(name="tts", description="TTS読み上げ設定（
 
 @tts_group.command(name="enable", description="TTS読み上げを有効にする")
 async def tts_enable(interaction: discord.Interaction) -> None:
+    """TTSを有効化するだけ。実際に読み上げが動くには watch チャンネルと
+    VCチャンネルの設定（tts_add_watch/tts_vc）も別途要る。
+    """
     if not await ensure_admin(interaction):
         return
     assert interaction.guild
@@ -51,6 +54,9 @@ async def tts_enable(interaction: discord.Interaction) -> None:
 
 @tts_group.command(name="disable", description="TTS読み上げを無効にする")
 async def tts_disable(interaction: discord.Interaction) -> None:
+    """無効化するだけで、watch_channel_ids/vc_channel_id 等の設定は消さない。
+    残しておくことで、再度 enable すれば同じ構成のまま復帰できる。
+    """
     if not await ensure_admin(interaction):
         return
     assert interaction.guild
@@ -64,6 +70,11 @@ async def tts_add_watch(
     interaction: discord.Interaction,
     channel: discord.TextChannel,
 ) -> None:
+    """set_tts_channels は watch_channel_ids と vc_channel_id を同時に丸ごと
+    書き換える（services/tts_store.py参照）。ここで現在の vc_channel_id を
+    読み戻してから渡さないと、watch を1件足しただけのつもりでVC設定が
+    消えてしまう。
+    """
     if not await ensure_admin(interaction):
         return
     assert interaction.guild
@@ -81,6 +92,10 @@ async def tts_remove_watch(
     interaction: discord.Interaction,
     channel: discord.TextChannel,
 ) -> None:
+    """tts_add_watch と同じ理由で vc_channel_id を読み戻してから渡す。
+    watch_channel_ids に無い channel.id を指定してもリストは変わらず、
+    エラーにもしない。
+    """
     if not await ensure_admin(interaction):
         return
     assert interaction.guild
@@ -96,6 +111,9 @@ async def tts_vc(
     interaction: discord.Interaction,
     channel: discord.VoiceChannel,
 ) -> None:
+    """tts_add_watch と同じ理由で watch_channel_ids を読み戻してから渡す
+    （vc側だけを差し替えて、読み上げ対象チャンネルの設定を消さないため）。
+    """
     if not await ensure_admin(interaction):
         return
     assert interaction.guild
@@ -107,6 +125,11 @@ async def tts_vc(
 
 @tts_group.command(name="status", description="TTS設定の現在状況を表示する")
 async def tts_status(interaction: discord.Interaction) -> None:
+    """設定を変えない読み取り専用だが、ギルド全体の構成（監視チャンネル・
+    VC・デフォルト声等）をそのまま出すため、一般ユーザーには見せず
+    /tts の他コマンド同様に管理者限定にしている。自分個人の設定だけを
+    見たい場合は /voice info を使わせる想定。
+    """
     # /tts の他のコマンドと同じく管理者向け（ドキュメントにもそう書いてある）。
     if not await ensure_admin(interaction):
         return
@@ -154,6 +177,9 @@ async def tts_join(
     interaction: discord.Interaction,
     channel: discord.VoiceChannel,
 ) -> None:
+    """VC参加自体は誰でも使える。管理者以外に録音の自動開始を許さない
+    ガードの理由、defer の位置付けは本文コメント参照。
+    """
     assert interaction.guild
     # VC接続（temp_join）、さらに管理者なら録音の自動開始判定も続けて行う。
     # どちらもDiscordとの往復を伴い、3秒の持ち時間を超えうるので先にdeferする
@@ -196,6 +222,10 @@ async def tts_join(
 
 @tts_group.command(name="leave", description="ボットをVCから退出させキューをクリアする（録音中なら締めてから退出）")
 async def tts_leave(interaction: discord.Interaction) -> None:
+    """録音停止の権限（/record stop は管理者限定）を、このコマンド経由で
+    迂回させない分岐の理由は本文コメント参照。管理者以外は読み上げだけを
+    切り、録音は続けさせる。
+    """
     assert interaction.guild
     from services import recording_service as recording
 
@@ -237,6 +267,10 @@ async def tts_default_voice_cmd(
     interaction: discord.Interaction,
     voice: str,
 ) -> None:
+    """空白のみの入力を弾く理由は本文コメント参照（空文字が保存されると
+    settings.get("default_voice", ...) の既定値フォールバックが効かなく
+    なり、空の声設定のまま残ってしまう）。
+    """
     if not await ensure_admin(interaction):
         return
     assert interaction.guild
@@ -255,6 +289,10 @@ async def _voice_autocomplete(
     interaction: discord.Interaction,
     current: str,
 ) -> list[app_commands.Choice[str]]:
+    """入力中の文字列に対し、前方一致ではなく部分一致で候補を絞り込む
+    （声の名前は先頭が揃っていないことが多いため）。Discordのautocomplete
+    表示上限が25件なので、絞り込み後さらに先頭25件で打ち切る。
+    """
     voices = await tts_service.fetch_voices()
     return [app_commands.Choice(name=v, value=v) for v in voices if current.lower() in v.lower()][:25]
 
@@ -271,6 +309,11 @@ async def tts_read_name_cmd(
     interaction: discord.Interaction,
     enabled: str,
 ) -> None:
+    """bool ではなく on/off の choice にしているのは、Discord UI 上で
+    bool 引数は "True"/"False" としか表示されず分かりにくいため
+    （record/config.py の auto コマンドは同じ用途に bool を直接使っており、
+    ここはUI表示を優先して意図的に choice にしている）。
+    """
     if not await ensure_admin(interaction):
         return
     assert interaction.guild
@@ -288,6 +331,10 @@ async def tts_default_rate_cmd(
     interaction: discord.Interaction,
     rate: int,
 ) -> None:
+    """範囲チェック(100〜400)は voice_set 側にも同じものが別途あり、
+    共有はしていない（デフォルト速度用とユーザー個別速度用で別のバリデーション
+    箇所を持つ）。
+    """
     if not await ensure_admin(interaction):
         return
     assert interaction.guild
@@ -314,6 +361,9 @@ async def voice_set(
     voice: Optional[str] = None,
     rate: Optional[int] = None,
 ) -> None:
+    """voice・rate はどちらか一方だけの指定も許す（両方 None のときだけ拒否）。
+    stripする理由は本文コメント参照。
+    """
     if interaction.guild is None:
         await send_ephemeral(interaction, "ギルド内でのみ使えるぞ。")
         return
@@ -341,12 +391,19 @@ async def _voice_set_autocomplete(
     interaction: discord.Interaction,
     current: str,
 ) -> list[app_commands.Choice[str]]:
+    """_voice_autocomplete と全く同じ絞り込みロジック。discord.py の
+    autocomplete はコマンドごとに紐付ける必要があり、voice_set 用として
+    別関数にしているためコードは重複している（機能上の問題は無い）。
+    """
     voices = await tts_service.fetch_voices()
     return [app_commands.Choice(name=v, value=v) for v in voices if current.lower() in v.lower()][:25]
 
 
 @voice_group.command(name="reset", description="自分の読み上げ設定をデフォルトに戻す")
 async def voice_reset(interaction: discord.Interaction) -> None:
+    """個別設定を消すだけで、以後はサーバーの default_voice/default_rate へ
+    自動的にフォールバックする（voice_info の優先順位参照）。
+    """
     if interaction.guild is None:
         await send_ephemeral(interaction, "ギルド内でのみ使えるぞ。")
         return
@@ -356,6 +413,11 @@ async def voice_reset(interaction: discord.Interaction) -> None:
 
 @voice_group.command(name="info", description="自分の現在の読み上げ設定を表示する")
 async def voice_info(interaction: discord.Interaction) -> None:
+    """声・速度の優先順位はユーザー個別設定 → サーバーのデフォルト →
+    ハードコードの既定値(_DEFAULT_VOICE/_DEFAULT_RATE)。has_custom は
+    user_cfg の有無だけで判定するため、voice/rateのどちらか一方しか
+    個別設定していなくても「カスタム設定あり」と表示される。
+    """
     if interaction.guild is None:
         await send_ephemeral(interaction, "ギルド内でのみ使えるぞ。")
         return
@@ -390,6 +452,9 @@ async def dict_add(
     word: str,
     reading: str,
 ) -> None:
+    """空白のみの単語・読みを弾く理由、strip前の長さで判定してはいけない
+    理由は本文コメント参照。
+    """
     if interaction.guild is None:
         await send_ephemeral(interaction, "ギルド内でのみ使えるぞ。")
         return
@@ -413,6 +478,9 @@ async def dict_remove(
     interaction: discord.Interaction,
     word: str,
 ) -> None:
+    """remove_tts_dictionary_entry の bool 戻り値で存在有無を判定し、
+    無かった場合と削除できた場合とでメッセージを分ける。
+    """
     if interaction.guild is None:
         await send_ephemeral(interaction, "ギルド内でのみ使えるぞ。")
         return
@@ -425,6 +493,9 @@ async def dict_remove(
 
 @dict_group.command(name="list", description="辞書の一覧を表示する")
 async def dict_list(interaction: discord.Interaction) -> None:
+    """辞書をembedで一覧表示する。文字数予算ベースで打ち切る理由（件数だけ
+    で打ち切ると embed の description 上限を超えうる）は本文コメント参照。
+    """
     if interaction.guild is None:
         await send_ephemeral(interaction, "ギルド内でのみ使えるぞ。")
         return
@@ -449,6 +520,10 @@ async def dict_list(interaction: discord.Interaction) -> None:
 
 
 def register_tts_commands(bot: Bot) -> None:
+    """/tts・/voice・/dict の3グループを bot.tree に登録する。各サブコマンドは
+    モジュールレベルで @tts_group.command 等として既に定義済みなので、ここ
+    ではグループそのものを足すだけでよい。
+    """
     bot.tree.add_command(tts_group)
     bot.tree.add_command(voice_group)
     bot.tree.add_command(dict_group)

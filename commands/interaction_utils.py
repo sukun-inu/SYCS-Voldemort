@@ -74,6 +74,11 @@ def cap_list_for_message(
 
 
 def metals_site_view() -> discord.ui.View:
+    """貴金属トラッカーへのリンクボタンをここ1箇所に集約する。
+
+    URL・文言をコマンドごとに書き散らすと、リンク先を変えるときに直し漏れが
+    起きる。
+    """
     view = discord.ui.View()
     view.add_item(
         discord.ui.Button(
@@ -86,6 +91,7 @@ def metals_site_view() -> discord.ui.View:
 
 
 def admin_site_view() -> discord.ui.View:
+    """metals_site_view と同じ理由で、Web管理画面へのボタンを集約する。"""
     view = discord.ui.View()
     view.add_item(
         discord.ui.Button(
@@ -127,6 +133,7 @@ async def send_interaction(
 
 
 async def send_ephemeral(interaction: discord.Interaction, message: str) -> None:
+    """content 専用の ephemeral 送信。embed/view が要るなら send_interaction を直接使う。"""
     await send_interaction(interaction, content=message, ephemeral=True)
 
 
@@ -135,11 +142,22 @@ def bind_permission_error_handler(
     *,
     missing_permissions_message: str = "❌ 余のコマンドを使う権限が貴様にはない。",
 ) -> None:
+    """コマンド固有の権限不足メッセージを出すための、コマンド単位のエラーハンドラ。
+
+    discord.py の CommandTree._dispatch_error は、コマンド側のハンドラを
+    呼んだ後も finally で必ず tree 側の on_error（install_global_app_command_
+    error_handler が設定するもの）を呼ぶ。つまりこれを bind したコマンドで
+    権限エラーが起きると、ここでの応答とグローバルハンドラの応答が両方
+    飛ぶ（2通目は response.is_done() 経由で followup になる）。ここでは
+    その二重送信を止めていない。
+    """
+
     @command.error
     async def _on_error(
         interaction: discord.Interaction,
         error: app_commands.AppCommandError,
     ):
+        """種類ごとの文言分けのみ担当。二重送信の事情は外側の docstring を参照。"""
         if isinstance(error, app_commands.MissingPermissions):
             await send_ephemeral(interaction, missing_permissions_message)
             return
@@ -153,11 +171,23 @@ def bind_permission_error_handler(
 
 
 def install_global_app_command_error_handler(bot: Bot) -> None:
+    """bind_permission_error_handler を付け忘れたコマンドの最後の受け皿。
+
+    tree.on_error は CommandTree._dispatch_error の finally から常に呼ばれる
+    ため、bind_permission_error_handler 済みのコマンドでもここは通る
+    （二重送信になる点は bind_permission_error_handler 側に書いた）。main.py
+    から起動時に1回だけ呼ぶ想定。
+    """
+
     @bot.tree.error
     async def _on_tree_error(
         interaction: discord.Interaction,
         error: app_commands.AppCommandError,
     ):
+        """CommandNotFound はコマンド同期のずれ（削除済み・未反映）で起こりうる
+        ので、ユーザー操作の誤りとして扱わず黙って捨てる。それ以外は文言だけ
+        install_global_app_command_error_handler 側の説明と同じ二重送信の対象。
+        """
         if isinstance(error, app_commands.CommandNotFound):
             return
 

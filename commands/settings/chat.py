@@ -14,9 +14,15 @@ from services.settings_store import awrite, set_response_channel_id
 
 
 def register(chat_group: app_commands.Group) -> None:
+    """/chat set・clear を登録する。"""
+
     @chat_group.command(name="set", description="【管理者】AI応答チャンネルを設定します")
     @app_commands.describe(channel="ChatGPTが応答するテキストチャンネル")
     async def set_response_channel_cmd(interaction: discord.Interaction, channel: discord.TextChannel):
+        """clear_response_channel_cmd と対になる設定側。書き込みを awrite
+        経由にする理由（同期呼び出しのままだとイベントループが止まる）は
+        awrite の docstring 参照。
+        """
         if not await _ensure_admin_in_guild(interaction):
             return
 
@@ -30,6 +36,11 @@ def register(chat_group: app_commands.Group) -> None:
 
     @chat_group.command(name="clear", description="【管理者】AI応答チャンネル設定を解除します")
     async def clear_response_channel_cmd(interaction: discord.Interaction):
+        """None を書き込んで解除する。get_response_channel_id は未設定/None を
+        0 として返す（services/settings_store.py参照）ため、この 0 が
+        handle_chatgpt_message 側で「未設定」を表す番兵として扱われる経路に
+        そのまま乗る。
+        """
         if not await _ensure_admin_in_guild(interaction):
             return
 

@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def _format_prices(prices: dict[str, int]) -> str:
+    """単体表示(_handle_single_metal)とまとめ表示(all_metals)で表記を揃えるための共通整形。"""
     return "\n".join([f"{k}: {format(v, ',')}円" for k, v in prices.items()])
 
 
@@ -41,6 +42,14 @@ async def _respond_error(interaction: discord.Interaction, message: str) -> None
 
 
 async def _handle_single_metal(interaction: discord.Interaction, grams: float, spec: MetalSpec) -> None:
+    """except は ValueError/MetalPriceError だけを狙って拾う。
+
+    それ以外の想定外の例外はここでは拾わず、呼び出し元（コマンド本体）から
+    抜けて discord.py 側の CommandInvokeError 経路に流す。監査ログ
+    (log_action) に載せるのは「価格取得の失敗」という想定内の事象だけにし、
+    プログラムの不具合まで通常運用のエラーとしてギルドの監査ログに残さない
+    ための切り分け。
+    """
     if grams <= 0:
         await _respond_error(interaction, "グラム数は正の値で指定せよ。")
         return
@@ -78,9 +87,18 @@ def register_metal_commands(bot: Bot) -> None:
     group = app_commands.Group(name="metal", description="貴金属の現在価格")
 
     def _create_single_command(spec: MetalSpec):
+        """for ループの中で直接 @group.command を定義すると、Python のクロージャは
+        遅延束縛のため全コマンドが最後の spec を共有してしまう（ループ変数の
+        典型的な事故）。関数でラップし spec を引数として束縛することで防ぐ。
+        """
+
         @group.command(name=spec.key, description=f"{spec.display_name}の現在価格を表示します")
         @app_commands.describe(g="計算するグラム数を入力してください")
         async def _cmd(interaction: discord.Interaction, g: float):
+            """価格計算そのものは _handle_single_metal に委譲し、ここでは
+            実行の監査ログ送信だけを担う（成功/失敗を問わず実行された事実を
+            残したいので、価格取得の成否を待たず先に打つ）。
+            """
             # 監査ログの送信も Discord への往復で、失敗すれば待たされる。
             # 3秒の持ち時間を使い切らないよう、先に defer しておく。
             await _defer(interaction)
@@ -110,6 +128,12 @@ def register_metal_commands(bot: Bot) -> None:
     @group.command(name="all", description="金・銀・プラチナの現在価格をまとめて表示します")
     @app_commands.describe(g="計算するグラム数を入力してください")
     async def all_metals(interaction: discord.Interaction, g: float):
+        """3種の外部API呼び出しを gather(return_exceptions=True) でまとめて待つ。
+
+        1つでも失敗した時点で例外を投げて終わらせるのではなく、必ず全部の
+        リクエストを最後まで並行して走らせてから raise する（1件だけ早く
+        中断しても、他の待機中リクエストの遅延はどのみち解消しないため）。
+        """
         if g <= 0:
             await _respond_error(interaction, "グラム数は正の値で指定せよ。")
             return

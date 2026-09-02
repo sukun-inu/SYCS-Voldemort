@@ -17,6 +17,7 @@ from services.settings_store import add_news_feed, awrite, get_news_feeds, remov
 
 
 def register(bot: Bot) -> None:
+    """/news add・remove・list（Google Newsフィード配信の設定）を登録する。"""
     news_group = app_commands.Group(name="news", description="ニュースフィードの配信設定", guild_only=True)
 
     @news_group.command(name="add", description="【管理者】Google Newsフィードを追加します")
@@ -34,6 +35,10 @@ def register(bot: Bot) -> None:
         query: app_commands.Range[str, 1, 100],
         interval: int = 60,
     ):
+        """フィード数の上限10件は、/news list をメッセージ本文の上限(2000文字)
+        に収めるための設計上の制約であって、任意の運用ルールではない。ここを
+        緩めると list_news_cmd 側の表示が壊れうる。
+        """
         if not await _ensure_admin(interaction):
             return
         if interval < 5:
@@ -56,6 +61,9 @@ def register(bot: Bot) -> None:
     @news_group.command(name="remove", description="【管理者】ニュースフィードを削除します")
     @app_commands.describe(feed_id="削除するフィード（候補から選択できる）")
     async def remove_news_cmd(interaction: discord.Interaction, feed_id: str):
+        """feed_id は自由入力可能（autocomplete の選択を強制できない）なので、
+        コピペ由来の前後空白を strip() してから照合する。
+        """
         if not await _ensure_admin(interaction):
             return
         # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
@@ -70,6 +78,9 @@ def register(bot: Bot) -> None:
     async def _remove_news_feed_id_autocomplete(
         interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
+        """label[:100] と choices[:25] はどちらもアプリの都合ではなく、Discord の
+        Autocomplete Choice 側の固定上限（名前100文字・候補25件）に合わせている。
+        """
         if interaction.guild is None:
             return []
         feeds = get_news_feeds(interaction.guild.id)
@@ -87,6 +98,9 @@ def register(bot: Bot) -> None:
 
     @news_group.command(name="list", description="ニュースフィード一覧を表示します")
     async def list_news_cmd(interaction: discord.Interaction):
+        """add/remove と違い ensure_admin を呼んでいない。閲覧は誰でもでき、
+        変更だけ管理者に絞る設計。
+        """
         if interaction.guild is None:
             await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return

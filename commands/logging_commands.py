@@ -21,6 +21,9 @@ from commands.settings import bypass, chat, log, overview, trusted
 
 
 def register_logging_commands(bot: Bot) -> None:
+    """log/chat/trusted/bypass/bot の5グループを作り、各サブモジュールに
+    登録させたうえで bot.tree に足す。分割の経緯はモジュール docstring参照。
+    """
     # 平坦な名前を並べると /（スラッシュ）の一覧が長くなり、関連するものが
     # 隣り合う保証も無い。同じ話題はグループにまとめる。
     log_group = app_commands.Group(name="log", description="ログの送信先とレベル", guild_only=True)

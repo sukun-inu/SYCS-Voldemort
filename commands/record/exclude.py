@@ -16,9 +16,17 @@ from services.settings_store import awrite, get_recording_settings, set_recordin
 
 
 def register(group: app_commands.Group) -> None:
+    """/record exclude（本人による録音対象からの自己除外）を登録する。"""
+
     @group.command(name="exclude", description="自分を録音の対象から外す／戻します")
     @app_commands.describe(exclude="True で除外、False で解除")
     async def record_exclude(interaction: discord.Interaction, exclude: bool = True):
+        """設定の保存だけでなく、進行中のセッションにも同じ値を直接書く。
+
+        保存 (set_recording_excluded_users) は次回セッション向けで、進行中の
+        session.excluded_user_ids を更新しない限り「解除したのに録音され
+        続ける／除外したのに録られ続ける」状態になる。両方揃えて反映する。
+        """
         if interaction.guild is None:
             await send_ephemeral(interaction, "ギルド内でのみ使えるぞ。")
             return

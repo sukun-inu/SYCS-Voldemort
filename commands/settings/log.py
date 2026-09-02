@@ -14,9 +14,16 @@ from services.logging_service import get_log_settings, set_log_channel, set_log_
 
 
 def register(log_group: app_commands.Group) -> None:
+    """/log channel・level を登録する。"""
+
     @log_group.command(name="channel", description="【管理者】ログ送信チャンネルを設定します")
     @app_commands.describe(channel="ログを投稿するテキストチャンネル")
     async def set_log_channel_cmd(interaction: discord.Interaction, channel: discord.TextChannel):
+        """set_log_channel を同期のまま直接呼んでいる（/chat や /bypass の
+        書き込みが通している awrite をここでは通していない）。
+        update_guild_settings はファイルロックを取るため（awrite の docstring
+        参照）、ロック待ちの間はこのコマンドだけイベントループごと止まる。
+        """
         if not await _ensure_admin_in_guild(interaction):
             return
 
@@ -40,6 +47,10 @@ def register(log_group: app_commands.Group) -> None:
         ]
     )
     async def set_log_level_cmd(interaction: discord.Interaction, level: str):
+        """set_log_channel_cmd と同じく awrite を通していない（理由・影響は
+        そちらの docstring 参照）。不正なレベルは set_log_level が投げる
+        ValueError をここで捕まえ、例外ではなくユーザー向けメッセージに変える。
+        """
         if not await _ensure_admin_in_guild(interaction):
             return
 

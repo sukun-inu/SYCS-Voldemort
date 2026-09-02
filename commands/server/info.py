@@ -15,10 +15,12 @@ from config import JST as _JST
 
 
 def register(bot: Bot) -> None:
+    """/info server と /info user（読み取り専用の情報表示）を登録する。"""
     info_group = app_commands.Group(name="info", description="サーバーとユーザーの情報", guild_only=True)
 
     @info_group.command(name="server", description="サーバー情報を表示します")
     async def serverinfo_cmd(interaction: discord.Interaction):
+        """ephemeral にしていないので、応答は誰でも見えるチャンネル投稿になる。"""
         if interaction.guild is None:
             await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return
@@ -50,6 +52,11 @@ def register(bot: Bot) -> None:
         interaction: discord.Interaction,
         member: Optional[discord.Member] = None,
     ):
+        """roles[:15] は cap_list_for_message と違い省略件数を出さない。
+
+        16個目以降が黙って消えるため、多ロールなメンバーでは何個省いたか
+        画面から分からない（他の一覧表示との不統一。直していない）。
+        """
         if interaction.guild is None:
             await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return

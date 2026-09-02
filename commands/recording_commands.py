@@ -25,6 +25,7 @@ from commands.record import config, exclude, session
 
 
 def register_recording_commands(bot: Bot) -> None:
+    """/record グループを作り、session/config/exclude の順で登録して束ねる。"""
     group = app_commands.Group(
         name="record",
         description="【管理者】ボイスチャンネルを録音します",

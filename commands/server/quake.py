@@ -32,6 +32,11 @@ _NOTIFY_TYPE_LABELS: dict[str, str] = {
 
 
 def _build_notify_type_embed(types: dict[str, bool]) -> discord.Embed:
+    """静的表示(eq_settings_cmd)とトグルView(_NotifyTypeView)の両方から呼ばれる。
+
+    描画ロジックを1箇所に集約しないと、保存前(View操作中)と保存後(/quake
+    status)で表示形式が食い違いかねない。
+    """
     embed = discord.Embed(
         title="地震通知タイプ設定",
         description="ボタンをクリックしてオン/オフを切り替え、「保存」で確定します。",
@@ -45,6 +50,11 @@ def _build_notify_type_embed(types: dict[str, bool]) -> discord.Embed:
 
 class _ToggleButton(discord.ui.Button):
     def __init__(self, key: str, label: str, enabled: bool, row: int):
+        """状態(enabled)はボタン自身が持たず、生成時のラベル/色にしか反映しない。
+
+        実際の on/off は _NotifyTypeView.types が真実で、トグルのたびに
+        _rebuild() がこの__init__を作り直す形で表示を追従させる。
+        """
         super().__init__(
             label=f"{'✅' if enabled else '❌'} {label}",
             style=discord.ButtonStyle.success if enabled else discord.ButtonStyle.secondary,
@@ -54,6 +64,7 @@ class _ToggleButton(discord.ui.Button):
         self.key = key
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        """状態遷移は持たず、どのキーが押されたかだけを view に渡す薄い委譲。"""
         # self.view は Item 基底では Any | None 型だが、_ToggleButton は必ず
         # _NotifyTypeView に追加されるので実行時は常にそれ。
         view = cast("_NotifyTypeView", self.view)
@@ -62,6 +73,7 @@ class _ToggleButton(discord.ui.Button):
 
 class _SaveButton(discord.ui.Button):
     def __init__(self, row: int):
+        """View 内に1個だけ置く確定ボタン。row は _rebuild がトグル行数から計算して渡す。"""
         super().__init__(
             label="保存して閉じる",
             style=discord.ButtonStyle.primary,
@@ -70,6 +82,7 @@ class _SaveButton(discord.ui.Button):
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        """_ToggleButton.callback と同じく、保存の実処理は持たず view に委譲するだけ。"""
         # self.view は Item 基底では Any | None 型だが、_SaveButton は必ず
         # _NotifyTypeView に追加されるので実行時は常にそれ。
         view = cast("_NotifyTypeView", self.view)
@@ -78,6 +91,10 @@ class _SaveButton(discord.ui.Button):
 
 class _NotifyTypeView(discord.ui.View):
     def __init__(self, guild_id: int, author_id: int, types: dict[str, bool]):
+        """types は dict(types) でコピーして持つ。呼び出し元(register)が
+        保持している設定辞書を直接書き換えないための分離で、handle_save で
+        awrite するまでは変更が確定しない。
+        """
         super().__init__(timeout=180)
         self.guild_id = guild_id
         self.author_id = author_id
@@ -85,6 +102,11 @@ class _NotifyTypeView(discord.ui.View):
         self._rebuild()
 
     def _rebuild(self) -> None:
+        """ボタンごとの label/style を直接書き換えず、毎回全ボタンを作り直す。
+
+        トグル操作のたびに呼ぶことで、self.types（真の状態）とボタンの見た目
+        を必ず一致させる。個別に書き換える経路を作らない分、ズレが起きない。
+        """
         self.clear_items()
         keys = list(_NOTIFY_TYPE_LABELS.keys())
         for i, key in enumerate(keys):
@@ -94,12 +116,20 @@ class _NotifyTypeView(discord.ui.View):
         self.add_item(_SaveButton(row=len(keys) // 2 + 1))
 
     async def _check_author(self, interaction: discord.Interaction) -> bool:
+        """呼び出し元は ephemeral 応答で本人にしか見えないはずだが、その前提が
+        崩れても他人が操作できないよう、念のため author_id と照合する。
+        """
         if interaction.user.id != self.author_id:
             await interaction.response.send_message("貴様にその操作の権限はない。", ephemeral=True)
             return False
         return True
 
     async def handle_toggle(self, interaction: discord.Interaction, key: str) -> None:
+        """メモリ上の self.types だけを書き換える。ここではまだ awrite しない。
+
+        保存は handle_save が担当。トグルのたびに永続化すると、開いたまま
+        放置された View が閉じられずに終わったときの整合性の考慮が増える。
+        """
         if not await self._check_author(interaction):
             return
         self.types[key] = not self.types.get(key, True)
@@ -107,6 +137,12 @@ class _NotifyTypeView(discord.ui.View):
         await interaction.response.edit_message(embed=_build_notify_type_embed(self.types), view=self)
 
     async def handle_save(self, interaction: discord.Interaction) -> None:
+        """clear_items() + stop() で、保存後はこの View のボタンをもう押せなくする。
+
+        timeout=180 を待たず即座に無効化することで、保存後にもう一度押して
+        古い状態で上書きする（handle_toggle が持つメモリ上の self.types が
+        既に確定済みの内容と食い違う）事故を防ぐ。
+        """
         if not await self._check_author(interaction):
             return
         await awrite(set_earthquake_notify_types, self.guild_id, self.types)
@@ -120,11 +156,13 @@ class _NotifyTypeView(discord.ui.View):
 
 
 def register(bot: Bot) -> None:
+    """/quake channel・min_scale・status・type（地震アラートの設定一式）を登録する。"""
     quake_group = app_commands.Group(name="quake", description="地震アラートの設定", guild_only=True)
 
     @quake_group.command(name="channel", description="【管理者】地震アラートチャンネルを設定します")
     @app_commands.describe(channel="地震情報を送るテキストチャンネル")
     async def set_eq_ch(interaction: discord.Interaction, channel: discord.TextChannel):
+        """通知タイプ(_NOTIFY_TYPE_LABELS)には触れない。チャンネル設定だけを独立して変えられるようにしてある。"""
         if not await _ensure_admin(interaction):
             return
         # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
@@ -138,6 +176,10 @@ def register(bot: Bot) -> None:
         scale=[app_commands.Choice(name=f"震度 {label} 以上", value=code) for code, label in SCALE_LABELS.items()]
     )
     async def set_eq_scale(interaction: discord.Interaction, scale: int):
+        """scale は choices で SCALE_LABELS のキーに絞ってあるので、想定外の
+        値は選択肢としては出ない（表示側の SCALE_LABELS.get(scale, scale) の
+        フォールバックは設定データの破損など choices を経ない経路向け）。
+        """
         if not await _ensure_admin(interaction):
             return
         # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
@@ -150,6 +192,10 @@ def register(bot: Bot) -> None:
 
     @quake_group.command(name="status", description="地震アラート設定を表示します")
     async def eq_settings_cmd(interaction: discord.Interaction):
+        """ゼロ幅スペース1文字の空フィールド(name/value 共に "​")は、embedの
+        インライン折り返しを断ち切って、チャンネル/最小震度の2列と下の通知
+        タイプ一覧を別ブロックに見せるための整形用。
+        """
         if interaction.guild is None:
             await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return
@@ -168,6 +214,11 @@ def register(bot: Bot) -> None:
 
     @quake_group.command(name="type", description="【管理者】地震通知タイプのオン/オフを設定します")
     async def eq_notify_type_cmd(interaction: discord.Interaction):
+        """_NotifyTypeView は timeout=180 秒でこのメッセージだけ生きる。
+
+        bot.add_view() 等での永続化はしていないため、Bot再起動後にこの
+        メッセージのボタンを押しても反応しない（設定自体は消えない）。
+        """
         if not await _ensure_admin(interaction):
             return
         # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。

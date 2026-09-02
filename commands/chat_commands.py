@@ -17,6 +17,13 @@ _CLEANUP_INTERVAL = 20
 
 
 def _cleanup_stale_instances() -> None:
+    """呼ばれるたびにではなく、_CLEANUP_INTERVAL 回に1回だけ走査する。
+
+    毎メッセージで dict 全体を舐めるのは無駄なので間引く。カウンタは
+    ギルド・ユーザーをまたいだ共通の1本なので、間引きの周期はチャット全体の
+    トラフィックで決まる。会話が少ないサーバーだけを見ても、他のサーバーの
+    メッセージでカウンタが進んでいれば掃除は走る。
+    """
     global _cleanup_counter
     _cleanup_counter += 1
     if _cleanup_counter < _CLEANUP_INTERVAL:
@@ -30,6 +37,13 @@ def _cleanup_stale_instances() -> None:
 
 
 async def handle_chatgpt_message(bot: discord.Client, message: discord.Message):
+    """on_message から呼ばれる、ChatGPT応答チャンネル専用の処理。
+
+    target_channel_id が 0 は「未設定」を表す番兵で、0 のギルドは何も
+    しない（未設定を「チャンネルID 0」と誤解して反応してしまう事故を防ぐ）。
+    typing() をコンテキストマネージャで使うと5秒ごとに再送されてRate
+    Limit(429)に当たるため、ここでは1回だけ直接HTTPを叩いている。
+    """
     if message.author == bot.user:
         return
 

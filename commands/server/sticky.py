@@ -17,6 +17,7 @@ from services.sticky_service import delete_sticky, post_sticky
 
 
 def register(bot: Bot) -> None:
+    """/sticky set・clear・list を登録する。"""
     sticky_group = app_commands.Group(
         name="sticky", description="チャンネル最下部に貼り付けるメッセージ", guild_only=True
     )
@@ -24,6 +25,14 @@ def register(bot: Bot) -> None:
     @sticky_group.command(name="set", description="【管理者】このチャンネルにスティッキーを設定します")
     @app_commands.describe(content="スティッキーとして固定するメッセージ内容")
     async def sticky_cmd(interaction: discord.Interaction, content: str):
+        """content.replace("\\n", "\n") は、ユーザーが改行のつもりで打った
+        リテラルな "\\n" を実際の改行に戻す。スラッシュコマンドの文字列入力
+        は実改行を打ちにくい環境があるための救済。
+
+        確認の ephemeral 応答を先に返し、実際のチャンネル投稿(post_sticky)は
+        その後に行う。post_sticky 側が遅くても、3秒の応答期限には影響しない
+        順序にしている。
+        """
         if not await _ensure_admin(interaction):
             return
         if not isinstance(interaction.channel, discord.TextChannel):
@@ -37,6 +46,7 @@ def register(bot: Bot) -> None:
 
     @sticky_group.command(name="clear", description="【管理者】このチャンネルのスティッキーを解除します")
     async def unsticky_cmd(interaction: discord.Interaction):
+        """sticky_cmd と同じ理由で、応答を返してから delete_sticky を呼ぶ順序にしている。"""
         if not await _ensure_admin(interaction):
             return
         if not isinstance(interaction.channel, discord.TextChannel):
@@ -49,6 +59,7 @@ def register(bot: Bot) -> None:
 
     @sticky_group.command(name="list", description="スティッキー設定一覧を表示します")
     async def list_stickies_cmd(interaction: discord.Interaction):
+        """set/clear と違い ensure_admin なし。閲覧は全員に開放している。"""
         if interaction.guild is None:
             await interaction.response.send_message("ギルド内でのみ使えるぞ。", ephemeral=True)
             return

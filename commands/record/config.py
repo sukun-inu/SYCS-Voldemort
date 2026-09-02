@@ -16,6 +16,8 @@ from services.settings_store import awrite, get_recording_settings, set_recordin
 
 
 def register(group: app_commands.Group) -> None:
+    """/record auto と /record config（録音の設定まわり）を登録する。"""
+
     @group.command(name="auto", description="【管理者】自動録音のオン／オフを切り替えます")
     @app_commands.describe(
         enabled="オンにすると、対象VCに人が入った時点で録音を始めます",
@@ -26,6 +28,12 @@ def register(group: app_commands.Group) -> None:
         enabled: bool,
         channel: discord.VoiceChannel | None = None,
     ):
+        """オンにしても対象VCが定まっていなければ何も起きない。
+
+        target_id が取れない場合の分岐は、そのまま静かに空振りさせず
+        「channel を指定するか読み上げの対象VCを設定せよ」と伝えるためにある。
+        黙って有効化だけ返すと、動いていないのに設定した気になってしまう。
+        """
         if not await _ensure_admin(interaction):
             return
 
@@ -68,6 +76,13 @@ def register(group: app_commands.Group) -> None:
         retention_days: int | None = None,
         announce_channel: discord.TextChannel | None = None,
     ):
+        """引数を1つも渡さなかった場合、patch は空のままなので awrite を呼ばない。
+
+        設定を変えていないのに毎回書き込むと、ただの照会でも永続化が走って
+        しまう（設定ファイル/DBへの不要な書き込みと、更新時刻等の副作用）。
+        フッターの警告（無効なのに自動録音オン）は、設定の組み合わせ自体は
+        許しつつ、動かない状態であることに気づかせるためのもの。
+        """
         if not await _ensure_admin(interaction):
             return
 

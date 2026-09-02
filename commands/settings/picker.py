@@ -19,6 +19,13 @@ async def update_entity_list(
     *,
     edit: bool = False,
 ) -> None:
+    """edit=True で edit_message、False で send_message と応答方法を切り替える。
+
+    現状の呼び出し元は EntityPickerView._on_confirm の edit=True 経路だけで、
+    edit=False（新規メッセージ送信）は今のコードベースでは実際には通らない
+    （呼び出し元が1箇所しかない）。消してよいかは呼び出し側を増やす予定の
+    有無を確認してから判断すること。
+    """
     ids = [e.id for e in entities]
     # EntityPickerView はコマンド側の ensure_admin 通過後にしか生成されないので、
     # ここに来る interaction.guild は必ず非 None。
@@ -47,6 +54,11 @@ class EntityPickerView(discord.ui.View):
         action_text: str,
         count_label: str,
     ):
+        """update_fn/action_text/count_label を保持しておくのは、実際の更新
+        (update_entity_list呼び出し)を選択完了(_on_confirm)まで遅らせるため。
+        select_item は trusted.py/bypass.py がそれぞれ UserSelect/RoleSelect を
+        渡す（このクラス自体はどちらの型か知らない）。
+        """
         super().__init__(timeout=120)
         self.author_id = author_id
         self.update_fn = update_fn
@@ -66,12 +78,16 @@ class EntityPickerView(discord.ui.View):
         self.add_item(self.confirm_button)
 
     async def _check_author(self, interaction: discord.Interaction) -> bool:
+        """ephemeral な応答で通常は本人にしか見えないはずだが、念のための防御
+        （quake._NotifyTypeView._check_author と同じ考え方）。
+        """
         if interaction.user.id != self.author_id:
             await interaction.response.send_message("貴様にその操作の権限はない。", ephemeral=True)
             return False
         return True
 
     async def _on_select(self, interaction: discord.Interaction) -> None:
+        """選択しただけではまだ更新しない。self.picked に貯め、確定は _on_confirm 側。"""
         if not await self._check_author(interaction):
             return
         self.picked = list(self.select_item.values)
@@ -80,6 +96,10 @@ class EntityPickerView(discord.ui.View):
         await interaction.response.edit_message(view=self)
 
     async def _on_confirm(self, interaction: discord.Interaction) -> None:
+        """confirm_button は未選択時 disabled のはずだが、念のため self.picked
+        の空チェックを二重に持つ（disabled は表示上のヒントでしかなく、
+        古いクライアント状態から押せてしまう可能性を排除できないため）。
+        """
         if not await self._check_author(interaction):
             return
         if not self.picked:

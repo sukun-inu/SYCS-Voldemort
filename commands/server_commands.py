@@ -20,6 +20,7 @@ from commands.server import info, news, quake, reactionrole, sticky, vcnotify, w
 
 
 def register_server_commands(bot: Bot) -> None:
+    """commands/server/ 7モジュールの register(bot) を、旧クロージャと同じ順で呼ぶだけ。"""
     welcome_goodbye.register(bot)
     vcnotify.register(bot)
     sticky.register(bot)

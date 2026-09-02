@@ -30,6 +30,13 @@ COMMAND_MODULES: tuple[CommandModule, ...] = (
 
 
 def register_all_commands(bot: Bot) -> list[str]:
+    """各モジュールの register() を順に呼び、読み込めた名前を集めて返す。
+
+    途中の register() が例外を送出してもここでは catch しない。1つでも
+    失敗したら起動全体を止めたいからで、一部のコマンド群だけ動く半端な
+    起動を避けるための意図的な素通し。戻り値は main.py が起動ログに
+    「実際に何が登録されたか」を出すためだけに使っている。
+    """
     loaded: list[str] = []
     for module in COMMAND_MODULES:
         module.register(bot)

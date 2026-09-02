@@ -16,18 +16,31 @@ from services import recording_service as recording
 
 
 def _duration(seconds: int) -> str:
+    """0時間なら時間の桁を出さない（"0時間5分"ではなく"5分3秒"）。record_status が前提にしている。"""
     minutes, secs = divmod(int(seconds), 60)
     hours, minutes = divmod(minutes, 60)
     return f"{hours}時間{minutes}分{secs}秒" if hours else f"{minutes}分{secs}秒"
 
 
 def register(bot: Bot, group: app_commands.Group) -> None:
+    """/record start・stop・status を登録する。
+
+    bot を受け取るのは start/stop の実処理（recording.start_recording /
+    stop_recording）が Bot を必要とするため（commands/record/__init__.py 参照）。
+    """
+
     @group.command(name="start", description="【管理者】VCの録音を開始します（参加者に通知されます）")
     @app_commands.describe(channel="録音するVC（未指定なら自分が今いるVC）")
     async def record_start(
         interaction: discord.Interaction,
         channel: discord.VoiceChannel | None = None,
     ):
+        """対象VCが決まらない場合は defer() より前に断る。
+
+        defer 済みだと ephemeral な初回応答を使えなくなる（guards.ensure_admin
+        と同じ制約）ため、VC特定の失敗もここで早期returnしてから defer する
+        順序を守っている。
+        """
         if not await _ensure_admin(interaction):
             return
 
@@ -72,6 +85,13 @@ def register(bot: Bot, group: app_commands.Group) -> None:
 
     @group.command(name="stop", description="【管理者】録音を停止して、ダウンロードリンクを出します")
     async def record_stop(interaction: discord.Interaction):
+        """録音していなければ、stop_recording を呼ぶ前に断る。
+
+        呼んでも stop_recording 自身が RecordingError で同じ状況を弾くので
+        安全ではあるが、その例外経路の followup.send には ephemeral 指定が
+        無く公開メッセージになる。ここで先に止めているのは、単なる使い方の
+        誤りをチャンネルに公開エラーとして残さないため。
+        """
         if not await _ensure_admin(interaction):
             return
         # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
@@ -92,6 +112,7 @@ def register(bot: Bot, group: app_commands.Group) -> None:
 
     @group.command(name="status", description="録音の状況を表示します")
     async def record_status(interaction: discord.Interaction):
+        """description に管理者限定とは書いていないが、実装は admin 限定。理由は次のコメント通り。"""
         # 誰が録音されていて、どれだけ喋ったかを出す。個人に紐づく情報なので、
         # ドキュメントどおり管理者に限る（自分が対象かどうかは開始時の通知と
         # /record exclude で分かる）。

@@ -15,11 +15,14 @@ from services.settings_store import awrite, set_vc_notify_channel_id
 
 
 def register(bot: Bot) -> None:
+    """/vcnotify set・clear を登録する。"""
     vcnotify_group = app_commands.Group(name="vcnotify", description="VC の入退室通知", guild_only=True)
 
     @vcnotify_group.command(name="set", description="【管理者】VC通知チャンネルを設定します")
     @app_commands.describe(channel="VC通知を送るテキストチャンネル")
     async def set_vc_notify_ch(interaction: discord.Interaction, channel: discord.TextChannel):
+        """clear_vc_notify_ch と同じ set_vc_notify_channel_id を使い、値が None かで
+        設定/解除を切り替える（解除専用の別関数を持たない）。"""
         if not await _ensure_admin(interaction):
             return
         # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
@@ -29,6 +32,7 @@ def register(bot: Bot) -> None:
 
     @vcnotify_group.command(name="clear", description="【管理者】VC通知チャンネル設定を解除します")
     async def clear_vc_notify_ch(interaction: discord.Interaction):
+        """set_vc_notify_ch と同じ setter に None を渡すことで解除を表す。"""
         if not await _ensure_admin(interaction):
             return
         # ensure_admin は guild が None なら False を返して打ち切るので、ここは必ず非 None。
