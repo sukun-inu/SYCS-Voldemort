@@ -617,6 +617,220 @@ class ForecastModelsTests(unittest.TestCase):
 
 
 # ======================================================================
+# forecast_for_metal — 割る前に姿を固定するためのゴールデン値
+# ======================================================================
+class ForecastForMetalGoldenTests(unittest.TestCase):
+    """`forecast_for_metal` が返すものを、丸ごと固定する。
+
+    278行ある関数を割る前に、外から見た姿を押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+
+    この関数は純粋計算（入力は全部引数、出力は辞書1つ）なので、固定するのは
+    **固定入力に対する出力そのもの**でよい。上の ForecastModelsTests は
+    「7件ある」「上限で丸められている」といった性質を見ているが、**丸めや
+    係数の掛け順が変わっても気づけない。** 割るときに怖いのはそこなので、
+    数値を1つずつ並べて持つ。
+
+    2通りだけ用意してあるのは、内訳の条件分岐を全部通すため。
+
+      TRACK_RECORD           … 答え合わせ実績あり・傾きは上限に達しない・欠損なし
+      NO_RECORD_GAPS_CLAMPED … 実績なし・欠損あり・傾きが上限に張り付く
+
+    係数は環境変数で変えられるので、モジュール定数を固定してから呼ぶ。
+    そうしないと、`.env` を触った人の手元でだけ落ちる。
+    """
+
+    CONSTANTS = {
+        "FORECAST_LLM_WEIGHT": 0.008,
+        "FORECAST_TILT_MAX_PCT_PER_DAY": 0.0015,
+        "FORECAST_INTERVAL_PROB": 0.8,
+        "FORECAST_WIDTH_REFERENCE_PCT": 12.0,
+        "FORECAST_CONFIDENCE_CAP_WITHOUT_ACCURACY": 0.75,
+        "FORECAST_ACCURACY_GOOD_MAE_PCT": 1.5,
+        "FORECAST_ACCURACY_BAD_MAE_PCT": 6.0,
+    }
+
+    TRACK_RECORD = [
+        "confidence = 0.778",
+        "daily 2026-09-01 c=4594.17 d=5.51 lo=4516.09 hi=4691.86",
+        "daily 2026-09-02 c=4599.69 d=5.52 lo=4489.52 hi=4738.61",
+        "daily 2026-09-03 c=4605.21 d=5.52 lo=4470.49 hi=4776.13",
+        "daily 2026-09-04 c=4610.74 d=5.53 lo=4455.35 hi=4808.9",
+        "daily 2026-09-05 c=4616.28 d=5.54 lo=4442.68 hi=4838.64",
+        "daily 2026-09-06 c=4621.82 d=5.54 lo=4431.78 hi=4866.25",
+        "daily 2026-09-07 c=4627.37 d=5.55 lo=4422.19 hi=4892.26",
+        "daily_sigma_pct = 1.0139",
+        "fx_beta = 0.3",
+        "fx_beta_samples = 0",
+        "history_gaps = 0",
+        "implied_daily_return_pct = 0.12",
+        "interval_method = 'empirical'",
+        "interval_prob = 0.8",
+        "interval_samples = 53",
+        "interval_width_multiplier = 1.3266",
+        "model_variant = 'interval_rw_v1'",
+        "projected_change_pct_7d = 0.844",
+        "projected_lower_change_pct = -3.628",
+        "projected_lower_per_gram = 4422.19",
+        "projected_price_per_gram = 4627.37",
+        "projected_upper_change_pct = 6.616",
+        "projected_upper_per_gram = 4892.26",
+        "start_price_per_gram = 4588.66",
+        "tilt_effect = {'improvement_pct': 12.5, 'samples': 30, 'baseline_mae_pct': 3.37, 'model_mae_pct': 2.95}",
+        "driver 現在価格(レンジの中心): (7日先の価格は現在価格を中心に置くのが実測で最も誤差が小さいため、"
+        "中心は現在価格に固定し、幅で不確実性を示しています)",
+        "driver 予測レンジ(80%): (-3.63% 〜 +6.62%(過去の7日変動53件の分布から算出 / 幅補正×1.33))",
+        "driver AI判定感応: +0.080%/日 (スコア +0.200 / 確信度 0.500)",
+        "driver ニュース感応: +0.025%/日 (見出しスコア +0.100 / 5件)",
+        "driver USD/JPY感応: +0.015%/日 (β=0.300(既定値。推定に必要なデータが不足))",
+        "driver 直近の的中(区間内に収まった割合): (80%(名目 80% / 信頼度を -0.00 補正))",
+        "driver 直近14日の平均誤差: (1.00%(信頼度を +0.05 補正))",
+        "driver シグナルの実績(何もしない場合との比較): (直近30件で誤差 3.37% → 2.95%(+12.5% 改善))",
+        "driver AI判定所見: (材料に大きな偏りは無い)",
+        "role primary / 現在価格(レンジの中心)",
+        "role primary / 予測レンジ(80%)",
+        "role signal / AI判定感応",
+        "role signal / ニュース感応",
+        "role signal / USD/JPY感応",
+        "role reference / 直近の的中(区間内に収まった割合)",
+        "role reference / 直近14日の平均誤差",
+        "role reference / シグナルの実績(何もしない場合との比較)",
+        "role reference / AI判定所見",
+    ]
+
+    NO_RECORD_GAPS_CLAMPED = [
+        "confidence = 0.657",
+        "daily 2026-09-01 c=4595.55 d=6.89 lo=4519.04 hi=4694.94",
+        "daily 2026-09-02 c=4602.45 d=6.9 lo=4494.46 hi=4743.84",
+        "daily 2026-09-03 c=4609.36 d=6.91 lo=4477.25 hi=4783.38",
+        "daily 2026-09-04 c=4616.28 d=6.92 lo=4463.85 hi=4818.1",
+        "daily 2026-09-05 c=4623.21 d=6.93 lo=4452.86 hi=4849.77",
+        "daily 2026-09-06 c=4630.15 d=6.94 lo=4443.6 hi=4879.28",
+        "daily 2026-09-07 c=4637.1 d=6.95 lo=4435.63 hi=4907.17",
+        "daily_sigma_pct = 1.1438",
+        "fx_beta = 0.3",
+        "fx_beta_samples = 0",
+        "history_gaps = 1",
+        "implied_daily_return_pct = 0.15",
+        "interval_method = 'empirical'",
+        "interval_prob = 0.8",
+        "interval_samples = 51",
+        "interval_width_multiplier = 1.3313",
+        "model_variant = 'interval_rw_v1'",
+        "projected_change_pct_7d = 1.056",
+        "projected_lower_change_pct = -3.335",
+        "projected_lower_per_gram = 4435.63",
+        "projected_price_per_gram = 4637.1",
+        "projected_upper_change_pct = 6.941",
+        "projected_upper_per_gram = 4907.17",
+        "start_price_per_gram = 4588.66",
+        "tilt_effect = None",
+        "driver 現在価格(レンジの中心): (7日先の価格は現在価格を中心に置くのが実測で最も誤差が小さいため、"
+        "中心は現在価格に固定し、幅で不確実性を示しています)",
+        "driver 予測レンジ(80%): (-3.34% 〜 +6.94%(過去の7日変動51件の分布から算出 / 幅補正×1.33))",
+        "driver USD/JPY感応: +30.000%/日 (β=0.300(既定値。推定に必要なデータが不足))",
+        "driver AI判定感応: +0.800%/日 (スコア +1.000 / 確信度 1.000)",
+        "driver ニュース感応: +0.250%/日 (見出しスコア +1.000 / 5件)",
+        "driver 傾きの上限: +0.150%/日 (シグナル合計 +31.050%/日 は上限±0.15%/日 に丸めています)",
+        "driver データ欠損: (履歴に1箇所の欠損あり。該当区間は1日あたりへ正規化して扱っています)",
+        "driver 答え合わせ実績: (まだ無し(信頼度の上限を 75% に制限))",
+        "driver AI判定所見: (材料に大きな偏りは無い)",
+        "role primary / 現在価格(レンジの中心)",
+        "role primary / 予測レンジ(80%)",
+        "role signal / USD/JPY感応",
+        "role signal / AI判定感応",
+        "role signal / ニュース感応",
+        "role reference / 傾きの上限",
+        "role reference / データ欠損",
+        "role reference / 答え合わせ実績",
+        "role reference / AI判定所見",
+    ]
+
+    @staticmethod
+    def _flatten(result):
+        """辞書を「1行1項目」へ潰す。差分がそのまま読めるようにするため。
+
+        まとめて assertEqual すると、unittest がリストの差分を出してくれる。
+        辞書のまま比べると、どの鍵が動いたのかを目で探すことになる。
+        """
+        rows = []
+        for key, value in sorted(result.items()):
+            if key == "daily":
+                for day in value:
+                    rows.append(
+                        f"daily {day['date']} c={day['price_per_gram']} "
+                        f"d={day['delta_from_previous']} "
+                        f"lo={day['lower_price_per_gram']} hi={day['upper_price_per_gram']}"
+                    )
+            elif key in ("drivers", "driver_breakdown"):
+                continue
+            else:
+                rows.append(f"{key} = {value!r}")
+        rows += [f"driver {text}" for text in result["drivers"]]
+        rows += [f"role {row['role']} / {row['label']}" for row in result["driver_breakdown"]]
+        return rows
+
+    def _kwargs(self, **overrides):
+        """ForecastModelsTests と同じ土台の入力（欠損なし60日）。"""
+        kwargs = dict(
+            metal_key="gold",
+            history_items=_build_price_history(60),
+            horizon_days=7,
+            today=datetime(2026, 8, 31, tzinfo=timezone.utc),
+            fx_daily_factor=0.0005,
+            news_score=0.1,
+            article_count=5,
+            fx_available=True,
+            llm_score=0.2,
+            llm_confidence=0.5,
+            llm_rationale="材料に大きな偏りは無い",
+            llm_available=True,
+        )
+        kwargs.update(overrides)
+        return kwargs
+
+    def _run(self, **overrides):
+        """定数を固定したうえで1回呼び、潰した形で返す。"""
+        with patch.multiple(forecast_models, **self.CONSTANTS):
+            return self._flatten(forecast_models.forecast_for_metal(**self._kwargs(**overrides)))
+
+    def test_the_forecast_with_a_track_record_is_unchanged(self):
+        """実績ありの経路の出力が、1項目も変わらないこと。
+
+        信頼度の補正・区間の幅補正・内訳の並び（signal は絶対値の大きい順）
+        まで含めて、数字がそのままであることを見る。
+        """
+        actual = self._run(
+            recent_mae_pct=1.0,
+            recent_coverage=0.8,
+            tilt_effect={
+                "improvement_pct": 12.5,
+                "samples": 30,
+                "baseline_mae_pct": 3.37,
+                "model_mae_pct": 2.95,
+            },
+        )
+        self.assertEqual(actual, self.TRACK_RECORD)
+
+    def test_the_forecast_without_a_record_and_with_gaps_is_unchanged(self):
+        """実績なし・欠損あり・傾きが上限に張り付く経路の出力が変わらないこと。
+
+        信頼度の上限、欠損の減点、傾きの丸めという「条件が揃ったときだけ
+        通る分岐」を1回でまとめて通す。
+        """
+        gapped = _build_price_history(60)
+        del gapped[30]
+        actual = self._run(
+            history_items=gapped,
+            fx_daily_factor=1.0,
+            news_score=1.0,
+            llm_score=1.0,
+            llm_confidence=1.0,
+        )
+        self.assertEqual(actual, self.NO_RECORD_GAPS_CLAMPED)
+
+
+# ======================================================================
 # forecast_signals.py — Groq/ニュースRSS/為替APIを呼ばない純粋な部分だけ
 # ======================================================================
 class ForecastSignalsPureTests(unittest.TestCase):
