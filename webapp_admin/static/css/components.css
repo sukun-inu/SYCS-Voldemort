@@ -466,7 +466,8 @@
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  /* 下に区間の列がくっつくので、角は上だけ丸める。 */
+  border-radius: var(--radius) var(--radius) 0 0;
   background: var(--canvas-subtle);
 }
 .daw-clock {
@@ -482,6 +483,42 @@
   color: var(--accent);
   background: var(--accent-soft);
 }
+
+/* ── 区間の操作列 ──
+   ドラッグだけだと、数時間の録音を全体表示にしたとき 1px が数秒になり、
+   秒の単位で合わせられない。打ち込みと再生位置からの指定を並べる。 */
+.daw-region {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--canvas);
+}
+.daw-region-label { font-size: var(--text-md); color: var(--fg-muted); }
+.daw-region-tilde { color: var(--fg-subtle); }
+.daw-region-len { font-size: var(--text-md); color: var(--fg-muted); min-width: 7em; }
+.daw-time {
+  width: 8.5em;
+  padding: 3px 8px;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius);
+  background: var(--canvas);
+  color: var(--fg);
+}
+.daw-time:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* 区間の端。つまめることが見て分かるようにする（判定は線そのものではなく
+   前後 7px。細い線をぴたりと狙わせない）。 */
+.daw-loop-grip {
+  position: absolute; top: 0; bottom: 0; width: 5px;
+  background: var(--accent);
+  opacity: .55;
+}
+.daw-loop-grip.is-start { left: -1px; border-radius: 2px 0 0 2px; }
+.daw-loop-grip.is-end { right: -1px; border-radius: 0 2px 2px 0; }
+.daw-ruler.is-on-edge { cursor: col-resize; }
 
 .daw-tabs { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .daw-tab {
