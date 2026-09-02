@@ -13,6 +13,7 @@ Discord とネットワークには一切触らない。discord.py の型は Moc
 import ast
 import asyncio
 import contextlib
+import io
 import json
 import logging
 import os
@@ -84,6 +85,21 @@ def _record_command_source() -> str:
     from commands.record import config, exclude, session
 
     return "\n".join(inspect.getsource(m) for m in (session, config, exclude))
+
+
+class _NullSession:
+    """aiohttp.ClientSession の代わり。地図生成を差し替えているので中身は要らない。"""
+
+    def __init__(self, *a, **k):
+        """引数は受け取るだけ。"""
+
+    async def __aenter__(self):
+        """自分を返す。"""
+        return self
+
+    async def __aexit__(self, *exc):
+        """例外は握らない。"""
+        return False
 
 
 def text_channel(channel_id: int = 555):
@@ -261,6 +277,151 @@ class BadgeTests(unittest.TestCase):
             asyncio.run(eq._notify_all_guilds(bot, QUAKE_FOREIGN))
 
         self.assertEqual(made, [])
+
+
+class NotifyAllGuildsTests(unittest.TestCase):
+    """通知の組み立て順と、失敗の握り方を固定する。
+
+    114行ある _notify_all_guilds を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+    直接の既存テストは「震度不明ならバッジを作らない」1本だけだった。
+
+      - 送信先が0件なら、リンクもバッジも地図も作らずに返すこと
+      - バッジ・地図の生成が落ちても、通知そのものは出すこと
+      - 地図を貼るときは embed 側にも画像を差すこと
+      - 0件の警告は only_guild_id 指定のときだけ出すこと
+
+    1つ目が崩れると、**誰も受け取らない地震のたびにタイル25枚を取りに行く。**
+    地震は1日に何度も来るので、そのぶんの通信と描画が丸ごと無駄になる。
+    例外は出ず、通知の中身も変わらないので、外から見て気づく手立てが無い。
+    """
+
+    def setUp(self):
+        self.channel = text_channel()
+        self.bot = bot_with(guild_with(self.channel))
+
+    def _patched(self, stack, *, targets=True, badge=None, quake_map=None):
+        """外の重い処理を全部差し替え、呼ばれたかどうかを控える。"""
+        called = {"jma": 0, "badge": 0, "map": 0}
+
+        async def jma(event, scale):
+            """JMA 詳細リンクの解決。"""
+            called["jma"] += 1
+            return "https://example.invalid/jma"
+
+        def generate_badge(scale):
+            """バッジの生成。"""
+            called["badge"] += 1
+            if isinstance(badge, Exception):
+                raise badge
+            return io.BytesIO(b"badge")
+
+        async def generate_map(session, lat, lon, points, title, subtitle):
+            """震度マップの生成。"""
+            called["map"] += 1
+            if isinstance(quake_map, Exception):
+                raise quake_map
+            return io.BytesIO(b"map")
+
+        settings = {"channel_id": 555, "min_scale": -1} if targets else {}
+        stack.enter_context(patch.object(eq, "_resolve_jma_detail_url", jma))
+        stack.enter_context(patch.object(eq, "_generate_badge", generate_badge))
+        stack.enter_context(patch.object(eq, "_generate_intensity_map", generate_map))
+        stack.enter_context(patch.object(eq, "get_all_guild_ids", lambda: [1]))
+        stack.enter_context(patch.object(eq, "get_earthquake_settings", lambda g: settings))
+        stack.enter_context(patch.object(eq, "get_earthquake_notify_types", lambda g: {}))
+        stack.enter_context(patch.object(eq.aiohttp, "ClientSession", _NullSession))
+        sent = stack.enter_context(patch.object(eq, "_dispatch", AsyncMock(return_value=1)))
+        return called, sent
+
+    def test_nothing_heavy_runs_when_no_one_would_receive_it(self):
+        """送信先が0件なら、リンクもバッジも地図も作らずに返すこと。
+
+        以前は JMA 詳細リンクの取得・バッジ生成・震度マップ生成
+        （タイル25枚のHTTP取得）を対象判定より先に走らせていた。**誰も
+        受け取らない地震でも毎回そのぶんの通信と描画が発生していた。**
+        地震は1日に何度も来る。
+        """
+        with contextlib.ExitStack() as stack:
+            called, sent = self._patched(stack, targets=False)
+            count = asyncio.run(eq._notify_all_guilds(self.bot, QUAKE_551))
+
+        self.assertEqual(count, 0)
+        self.assertEqual(called, {"jma": 0, "badge": 0, "map": 0})
+        sent.assert_not_awaited()
+
+    def test_a_failed_badge_does_not_stop_the_notification(self):
+        """バッジ生成が落ちても、通知そのものは出すこと。
+
+        画像が1枚足りないだけで**地震の通知が丸ごと消える**のは割に合わない。
+        落ちるのは PIL 側の都合なので、平常時のテストでは再現しない。
+        """
+        with contextlib.ExitStack() as stack:
+            _, sent = self._patched(stack, badge=RuntimeError("PILが落ちた"))
+            stack.enter_context(self.assertLogs(eq.logger, level="ERROR"))
+            count = asyncio.run(eq._notify_all_guilds(self.bot, QUAKE_551))
+
+        self.assertEqual(count, 1)
+        names = [name for name, _ in sent.call_args.kwargs["attachments"]]
+        self.assertNotIn("intensity_badge.png", names)
+
+    def test_a_failed_map_does_not_stop_the_notification(self):
+        """地図生成が落ちても、通知そのものは出すこと。
+
+        地図はタイル25枚の取得を伴うので、外の都合で落ちる余地が最も大きい。
+        ここで例外が抜けると、**取りに行けなかった日は通知が全部消える。**
+        """
+        with contextlib.ExitStack() as stack:
+            _, sent = self._patched(stack, quake_map=RuntimeError("タイルが取れない"))
+            stack.enter_context(self.assertLogs(eq.logger, level="ERROR"))
+            count = asyncio.run(eq._notify_all_guilds(self.bot, QUAKE_551))
+
+        self.assertEqual(count, 1)
+        names = [name for name, _ in sent.call_args.kwargs["attachments"]]
+        self.assertEqual(names, ["intensity_badge.png"])
+
+    def test_the_map_is_attached_and_shown_in_the_embed(self):
+        """地図を添えるときは、embed 側にも画像を差すこと。
+
+        添付だけして set_image を忘れると、**ファイルは付いているのに
+        埋め込みには出ない。** 送信は成功するので、見た人が「地図が無い」
+        と言うまで分からない。
+        """
+        with contextlib.ExitStack() as stack:
+            _, sent = self._patched(stack)
+            asyncio.run(eq._notify_all_guilds(self.bot, QUAKE_551))
+
+        kwargs = sent.call_args.kwargs
+        names = [name for name, _ in kwargs["attachments"]]
+        self.assertEqual(names, ["intensity_badge.png", "earthquake_map.png"])
+        self.assertEqual(kwargs["embed"].image.url, "attachment://earthquake_map.png")
+
+    def test_an_empty_replay_says_why_nothing_was_sent(self):
+        """開発者パネルのリプレイで0件なら、理由をログに残すこと。
+
+        押した側には「受信・完了」のログしか見えず、何も届かない理由が
+        分からない。**全ギルド一斉（本番の WS 経由）では毎回ほぼ全ギルドが
+        対象外になるのが通常**なので、そちらでは出さない。
+        """
+        with contextlib.ExitStack() as stack:
+            self._patched(stack, targets=False)
+            captured = stack.enter_context(self.assertLogs(eq.logger, level="WARNING"))
+            asyncio.run(eq._notify_all_guilds(self.bot, QUAKE_551, only_guild_id=1))
+
+        self.assertTrue(any("送信先が0件" in line for line in captured.output), captured.output)
+
+    def test_a_broadcast_with_no_targets_stays_quiet(self):
+        """全ギルド一斉で0件のときは、警告を出さないこと。
+
+        ほとんどの地震はほとんどのギルドの閾値を下回る。毎回警告を出すと
+        **ログが警告で埋まり、本当の異常が見えなくなる。**
+        """
+        with contextlib.ExitStack() as stack:
+            self._patched(stack, targets=False)
+            with self.assertRaises(AssertionError):
+                # 1行も出ないことを、assertLogs が空で落ちることで見る
+                with self.assertLogs(eq.logger, level="WARNING"):
+                    asyncio.run(eq._notify_all_guilds(self.bot, QUAKE_551))
 
 
 class IntensityMapTests(unittest.TestCase):
