@@ -533,14 +533,12 @@
 }
 .daw-btn:hover { border-color: var(--fg-subtle); }
 /* ミュートは赤、ソロは橙。以前は「並びの最後がソロ」という前提で
-   :last-child に色を当てていたので、トラック見出しに「声を調べる」を足した
-   とたんソロが赤（ミュートと同じ見た目）になり、押しても区別が付かなく
-   なった。並び順ではなく役割で決める。 */
+   :last-child に色を当てていたので、トラック見出しにボタンを1つ足した
+   （当時の「声を調べる」。今は無い）とたんソロが赤（ミュートと同じ
+   見た目）になり、押しても区別が付かなくなった。並び順ではなく役割で
+   決める。 */
 .daw-btn.is-on { background: var(--danger); border-color: var(--danger); color: #fff; }
 .daw-btn.is-solo.is-on { background: var(--attention); border-color: var(--attention); }
-/* 選択範囲があるとき、その区間を見るという合図。押せる・押せないの話では
-   ないので、ミュートやソロのように塗りつぶさず縁だけを変える。 */
-.daw-btn.is-armed { border-color: var(--accent); color: var(--accent); }
 
 .daw-track-area { flex: 1 1 auto; min-width: 0; position: relative; }
 .daw-viewport { position: relative; }
@@ -690,13 +688,3 @@
   .daw-head-col { flex-basis: 132px; }
   .daw-strip { flex-basis: 78px; }
 }
-
-/* 声の解析。トラックの「?」から開く。 */
-.daw-inspect {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--canvas);
-  padding: 12px 14px;
-}
-.daw-inspect-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.daw-inspect .list-row { padding: 4px 0; font-size: var(--text-md); }

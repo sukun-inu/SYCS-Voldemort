@@ -295,7 +295,6 @@ export async function mount(win) {
       mixerHandle = await createMixer(stage, {
         manifestUrl: `${recording.url}/mixer`,
         clipUrl: `${recording.url}/clip`,
-        analysisUrl: `${recording.url}/analysis`,
       });
     } catch (error) {
       clear(stage).append(

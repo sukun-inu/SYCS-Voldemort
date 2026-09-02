@@ -150,7 +150,6 @@ HARNESS = """<!doctype html><meta charset="utf-8">
   window.__ready = createMixer(document.getElementById("stage"), {
     manifestUrl: TOKEN_URL + "/mixer",
     clipUrl: TOKEN_URL + "/clip",
-    analysisUrl: TOKEN_URL + "/analysis",
   }).then((handle) => { window.__mixer = handle; return true; });
 </script>"""
 
@@ -433,31 +432,10 @@ def main() -> int:
             page.evaluate("window.__mixer.destroy()")
 
             print()
-            print("== 5. 声の解析が、選んだ区間を見に行くこと ==")
-            # 自動で録音全体から抜き出す方式は、長い録音ほど喋っている所へ
-            # 当たらない（4時間22分の実録音5本では、5本とも判定不能になった）。
-            # どこを見るかは波形を見ている人が決める。ここで確かめるのは、
-            # 時間目盛りで選んだ区間が実際にリクエストへ乗ることまで。
+            print("== 5. 時間目盛りで選んだ区間が、帯として出ること ==")
+            # 区間は書き出し（/clip）がそのまま使う。帯が出なければ、どこを
+            # 書き出すのかが操作している側から見えない。
             open_mixer(page, play_token)
-            asked: list[str] = []
-            page.on("request", lambda r: asked.append(r.url) if "/analysis/" in r.url else None)
-
-            # 区間を選ばずに押したとき
-            page.evaluate(
-                """() => {
-              document.querySelector(".daw-head-buttons button[title^='声を調べる']").click();
-            }"""
-            )
-            page.wait_for_function(
-                "() => { const p = document.querySelector('.daw-inspect');"
-                " return p && !p.hidden && !p.querySelector('.loading'); }",
-                timeout=15000,
-            )
-            check(
-                "区間を選ばなければ、これまでどおり全体を見る",
-                len(asked) == 1 and "start=" not in asked[-1],
-                asked[-1].split("/analysis/")[-1] if asked else "呼ばれていない",
-            )
 
             # 時間目盛りを横にドラッグして区間を決める
             dragged = page.evaluate(
@@ -480,50 +458,8 @@ def main() -> int:
             )
             check("ドラッグした区間が帯として出る", dragged["shown"], f"幅={dragged['width']}")
 
-            armed = page.evaluate(
-                """() => {
-              const b = document.querySelector(".daw-head-buttons button[title$='の声を調べる']");
-              return b ? { title: b.title, armed: b.classList.contains("is-armed") } : null;
-            }"""
-            )
-            check(
-                "押す前に、どの区間を見るかがボタンに出る",
-                bool(armed) and armed["armed"],
-                armed["title"] if armed else "説明が変わっていない",
-            )
-
-            page.evaluate(
-                """() => {
-              document.querySelector(".daw-head-buttons button[title$='の声を調べる']").click();
-            }"""
-            )
-            # 固定時間で待つと、解析が遅れたときに「まだ読み込み中」の中身を
-            # 見て落ちる（実際に一度そうなった）。読み込みが終わるまで待つ。
-            page.wait_for_function(
-                "() => { const p = document.querySelector('.daw-inspect');"
-                " return p && !p.hidden && !p.querySelector('.loading'); }",
-                timeout=15000,
-            )
-            last = asked[-1] if asked else ""
-            check(
-                "選んだ区間がリクエストに乗る",
-                len(asked) == 2 and "start=" in last and "end=" in last,
-                last.split("/analysis/")[-1] if last else "呼ばれていない",
-            )
-
-            shown = page.evaluate(
-                """() => {
-              const panel = document.querySelector(".daw-inspect");
-              return { open: panel && !panel.hidden,
-                       text: panel ? panel.innerText.slice(0, 300) : "" };
-            }"""
-            )
-            check(
-                "結果に「どこを調べたか」が出る", shown["open"] and "調べた区間" in shown["text"], shown["text"][:120]
-            )
-
-            # ミュートとソロが同じ色にならないこと（見出しの並びに「?」を
-            # 足したとき、:last-child で色を当てていたソロが赤に化けた）
+            # ミュートとソロが同じ色にならないこと（見出しの並びにボタンを
+            # 1つ足したとき、:last-child で色を当てていたソロが赤に化けた）
             colours = page.evaluate(
                 """async () => {
               const head = document.querySelector(".daw-head-buttons");
