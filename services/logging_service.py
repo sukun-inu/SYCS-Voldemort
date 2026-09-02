@@ -12,6 +12,7 @@ except ImportError:  # ライブラリ未導入時は色抽出をスキップ
     ColorThief = None
 
 from config import JST as _JST
+from services.http_client import get_session
 from services.settings_store import get_guild_settings, update_guild_settings
 
 logger = logging.getLogger(__name__)
@@ -119,11 +120,11 @@ async def _user_avatar_color(user: Optional[discord.abc.User]) -> Optional[disco
         return None
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(str(avatar_url)) as resp:
-                if resp.status != 200:
-                    return None
-                data = await resp.read()
+        session = get_session()
+        async with session.get(str(avatar_url), timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            if resp.status != 200:
+                return None
+            data = await resp.read()
     except Exception:
         return None
 

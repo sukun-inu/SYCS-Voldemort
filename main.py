@@ -46,9 +46,13 @@ async def main():
         finally:
             # 録音中に落ちると、そこまで録った分がまるごと消える。
             # 終了時は必ず書き出してからにする。
+            from services.http_client import close_session
             from services.recording_service import stop_all
 
             await stop_all(bot, reason="bot 停止")
+            # 使い回している HTTP セッションを閉じる。録音の書き出しより後に
+            # 置くのは、書き出し側がまだ通信する可能性があるため。
+            await close_session()
 
 
 if __name__ == "__main__":

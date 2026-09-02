@@ -37,6 +37,27 @@ from webapp_admin.app import app  # noqa: E402
 from webapp_admin.schema.registry import PANEL_BY_ID  # noqa: E402
 from webapp_admin.schema.types_def import Field, Widget  # noqa: E402
 
+
+def tearDownModule():
+    """使い回している HTTP セッションを閉じる。
+
+    API を叩くテストは本番と同じ経路を通るので、共有セッションが実際に
+    作られる。閉じずに終わると "Unclosed client session" がテスト出力へ
+    混ざり、本物の警告が埋もれる。
+    """
+    import asyncio
+
+    from services import http_client
+
+    # セッションは作られたループに縛られている。別のループから閉じようと
+    # すると失敗するので、作られたループが生きていればそちらで閉じる。
+    loop = http_client._loop
+    if loop is not None and not loop.is_closed():
+        loop.run_until_complete(http_client.close_session())
+    else:
+        asyncio.run(http_client.close_session())
+
+
 SECRET = "x" * 64
 CSRF = "t" * 64
 GUILD_ID = 999

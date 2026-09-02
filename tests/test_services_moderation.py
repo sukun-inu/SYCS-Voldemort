@@ -142,7 +142,13 @@ class _FakeAvatarResponse:
 
 
 class _FakeAvatarSession:
-    """logging_service.aiohttp.ClientSession の差し替え先。"""
+    """logging_service が使い回すセッションの差し替え先。
+
+    本体は services/http_client.get_session() を通すようになったので、
+    差し替える先も aiohttp ではなくそちらになる。`async with` で閉じない
+    （共有セッションを閉じると次の呼び出しが落ちる）ことも、この形で
+    そのまま守れる。
+    """
 
     response = _FakeAvatarResponse()
     get_calls: list = []
@@ -216,7 +222,7 @@ class UserAvatarColorTests(unittest.TestCase):
         logging_service._USER_COLOR_CACHE[42] = (10 << 16) + (20 << 8) + 30
         with (
             patch.object(logging_service, "ColorThief", _FakeColorThief),
-            patch.object(logging_service.aiohttp, "ClientSession", _FakeAvatarSession),
+            patch.object(logging_service, "get_session", lambda: _FakeAvatarSession()),
         ):
             result = asyncio.run(logging_service._user_avatar_color(self._user(user_id=42)))
         self.assertEqual(result, discord.Color.from_rgb(10, 20, 30))
@@ -235,7 +241,7 @@ class UserAvatarColorTests(unittest.TestCase):
         try:
             with (
                 patch.object(logging_service, "ColorThief", _FakeColorThief),
-                patch.object(logging_service.aiohttp, "ClientSession", _FakeAvatarSession),
+                patch.object(logging_service, "get_session", lambda: _FakeAvatarSession()),
             ):
                 result = asyncio.run(logging_service._user_avatar_color(self._user(user_id=8)))
         finally:
@@ -249,7 +255,7 @@ class UserAvatarColorTests(unittest.TestCase):
 
         with (
             patch.object(logging_service, "ColorThief", _FakeColorThief),
-            patch.object(logging_service.aiohttp, "ClientSession", _RaisingSession),
+            patch.object(logging_service, "get_session", lambda: _RaisingSession()),
         ):
             result = asyncio.run(logging_service._user_avatar_color(self._user(user_id=9)))
         self.assertIsNone(result)
@@ -257,7 +263,7 @@ class UserAvatarColorTests(unittest.TestCase):
     def test_colorthief_failure_returns_none(self):
         with (
             patch.object(logging_service, "ColorThief", _BoomColorThief),
-            patch.object(logging_service.aiohttp, "ClientSession", _FakeAvatarSession),
+            patch.object(logging_service, "get_session", lambda: _FakeAvatarSession()),
         ):
             result = asyncio.run(logging_service._user_avatar_color(self._user(user_id=10)))
         self.assertIsNone(result)
@@ -265,7 +271,7 @@ class UserAvatarColorTests(unittest.TestCase):
     def test_success_caches_the_result(self):
         with (
             patch.object(logging_service, "ColorThief", _FakeColorThief),
-            patch.object(logging_service.aiohttp, "ClientSession", _FakeAvatarSession),
+            patch.object(logging_service, "get_session", lambda: _FakeAvatarSession()),
         ):
             result = asyncio.run(logging_service._user_avatar_color(self._user(user_id=11)))
         self.assertEqual(result, discord.Color.from_rgb(10, 20, 30))
@@ -281,7 +287,7 @@ class UserAvatarColorTests(unittest.TestCase):
             logging_service._USER_COLOR_CACHE[i] = i
         with (
             patch.object(logging_service, "ColorThief", _FakeColorThief),
-            patch.object(logging_service.aiohttp, "ClientSession", _FakeAvatarSession),
+            patch.object(logging_service, "get_session", lambda: _FakeAvatarSession()),
         ):
             asyncio.run(logging_service._user_avatar_color(self._user(user_id=999999)))
         self.assertEqual(len(logging_service._USER_COLOR_CACHE), logging_service._USER_COLOR_CACHE_MAX)

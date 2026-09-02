@@ -11,6 +11,7 @@ from discord.ext.commands import Bot
 
 from config import TTS_BASE_URL
 from services import voice_session
+from services.http_client import get_session
 
 logger = logging.getLogger(__name__)
 
@@ -124,21 +125,23 @@ async def _synthesize(text: str, voice: str, rate: int) -> tuple[Optional[str], 
     """
     started = time.monotonic()
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{TTS_BASE_URL}/api/v1/synthesize",
-                json={"text": text, "voice": voice, "rate": rate, "format": "wav"},
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as resp:
-                if resp.status != 200:
-                    body = await resp.text()
-                    elapsed_ms = int((time.monotonic() - started) * 1000)
-                    logger.error("[TTS] API %s（%dms）: %s", resp.status, elapsed_ms, body[:200])
-                    return None, elapsed_ms
-                data = await resp.json()
+        # セッションは使い回す（services/http_client.py）。作り直すと1発話ごとに
+        # DNS + TCP + TLS をやり直すことになる。
+        session = get_session()
+        async with session.post(
+            f"{TTS_BASE_URL}/api/v1/synthesize",
+            json={"text": text, "voice": voice, "rate": rate, "format": "wav"},
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as resp:
+            if resp.status != 200:
+                body = await resp.text()
                 elapsed_ms = int((time.monotonic() - started) * 1000)
-                logger.info("[TTS] 合成 %dms（%d文字 / voice=%s）", elapsed_ms, len(text), voice)
-                return f"{TTS_BASE_URL}{data['url']}", elapsed_ms
+                logger.error("[TTS] API %s（%dms）: %s", resp.status, elapsed_ms, body[:200])
+                return None, elapsed_ms
+            data = await resp.json()
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            logger.info("[TTS] 合成 %dms（%d文字 / voice=%s）", elapsed_ms, len(text), voice)
+            return f"{TTS_BASE_URL}{data['url']}", elapsed_ms
     except Exception as e:
         elapsed_ms = int((time.monotonic() - started) * 1000)
         logger.exception("[TTS] synthesize error（%dms）: %s", elapsed_ms, e)
@@ -363,17 +366,17 @@ async def disconnect(guild_id: int) -> None:
 async def fetch_voices(locale: str = "ja") -> list[str]:
     """利用可能な声の一覧をAPIから取得する。"""
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{TTS_BASE_URL}/api/v1/voices",
-                params={"locale": locale},
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as resp:
-                if resp.status != 200:
-                    return []
-                data = await resp.json()
-                voices = data if isinstance(data, list) else data.get("voices", [])
-                return [v["name"] for v in voices if isinstance(v, dict) and v.get("name")]
+        session = get_session()
+        async with session.get(
+            f"{TTS_BASE_URL}/api/v1/voices",
+            params={"locale": locale},
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as resp:
+            if resp.status != 200:
+                return []
+            data = await resp.json()
+            voices = data if isinstance(data, list) else data.get("voices", [])
+            return [v["name"] for v in voices if isinstance(v, dict) and v.get("name")]
     except Exception as e:
         logger.exception("[TTS] fetch_voices error: %s", e)
         return []

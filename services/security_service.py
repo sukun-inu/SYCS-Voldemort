@@ -4,11 +4,11 @@ import logging
 import re
 from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple, cast
 
-import aiohttp
 import discord
 
 from envutil import env_int
 from services.content_moderation import gpt_assess
+from services.http_client import get_session
 from services.logging_service import log_action, send_log_embed
 from services.raid_detection import check_vc_raid
 from services.settings_store import get_bypass_role_ids, get_response_channel_id, get_trusted_user_ids
@@ -330,38 +330,39 @@ async def _run_vt_scans(
         "INFO",
         embed=discord.Embed(title="セキュリティ検査中", description="VirusTotal解析中…", color=discord.Color.blurple()),
     )
-    timeout = aiohttp.ClientTimeout(total=25)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        targets = links + [a.url for a in attachments]
-        gate = asyncio.Semaphore(VT_SCAN_CONCURRENCY)
-        done = 0
+    # セッションは使い回す（services/http_client.py）。制限時間はリクエストごとに
+    # 渡す形へ移した（セッションへ焼き付けると使い回せない）。
+    session = get_session()
+    targets = links + [a.url for a in attachments]
+    gate = asyncio.Semaphore(VT_SCAN_CONCURRENCY)
+    done = 0
 
-        async def scan_one(url: str) -> Dict[str, Any]:
-            """1件スキャンして、終わるたびに進捗を1つ進める。"""
-            nonlocal done, progress_msg
-            async with gate:
-                res = await vt_scan_target(session, url)
-            done += 1
-            if progress_msg:
-                # 「何本終わったか」だけを出す。並列に走るので、どの行まで
-                # 進んだかは終わってからでないと分からない。
-                bar = build_progress_bar(done, len(targets))
-                try:
-                    await progress_msg.edit(
-                        embed=discord.Embed(
-                            title="セキュリティ検査中",
-                            description="VirusTotal解析中… " + bar,
-                            color=discord.Color.blurple(),
-                        )
+    async def scan_one(url: str) -> Dict[str, Any]:
+        """1件スキャンして、終わるたびに進捗を1つ進める。"""
+        nonlocal done, progress_msg
+        async with gate:
+            res = await vt_scan_target(session, url)
+        done += 1
+        if progress_msg:
+            # 「何本終わったか」だけを出す。並列に走るので、どの行まで
+            # 進んだかは終わってからでないと分からない。
+            bar = build_progress_bar(done, len(targets))
+            try:
+                await progress_msg.edit(
+                    embed=discord.Embed(
+                        title="セキュリティ検査中",
+                        description="VirusTotal解析中… " + bar,
+                        color=discord.Color.blurple(),
                     )
-                except Exception:
-                    logger.debug("[SECURITY] プログレスメッセージ更新に失敗", exc_info=True)
-                    progress_msg = None
-            return res
+                )
+            except Exception:
+                logger.debug("[SECURITY] プログレスメッセージ更新に失敗", exc_info=True)
+                progress_msg = None
+        return res
 
-        # gather は**渡した順**で結果を返す。終わった順に並べると、ログの行と
-        # 結果の対応が崩れて「どのURLがどの結果か」が読めなくなる。
-        vt_results = list(await asyncio.gather(*(scan_one(url) for url in targets)))
+    # gather は**渡した順**で結果を返す。終わった順に並べると、ログの行と
+    # 結果の対応が崩れて「どのURLがどの結果か」が読めなくなる。
+    vt_results = list(await asyncio.gather(*(scan_one(url) for url in targets)))
 
     for url, res in zip(targets, vt_results):
         mal = int(res.get("malicious", 0) or 0)
