@@ -3934,3 +3934,196 @@ class ReactionRoleEmojiTests(unittest.TestCase):
         mapping = {"123456789012345678": 42}
         other = Mock(id=999999999999999999)
         self.assertIsNone(self.rr._role_id_for(mapping, other))
+
+
+class LosslessJitterBufferTests(unittest.TestCase):
+    """順番待ちの穴に当たったとき、ライブラリが中身を捨てないこと。
+
+    voice_recv は穴に当たると、抱えていたパケットのうち先頭1個だけを返して
+    残りを捨てる。捨てられたぶんは sink まで来ないので、こちらの並べ直し
+    （_StreamAssembler）では取り返せず、そのまま録音の穴になる。本番のログでは
+    録音中ずっと「1 packets were lost being flushed in decoder-1148」が出ていた。
+
+    ライブラリの実物（HeapJitterBuffer / PacketDecoder）を動かして確かめる。
+    自前で真似た版を相手にすると、直しているつもりの相手が居なくなる。
+    """
+
+    SSRC = 1148
+
+    def setUp(self):
+        from discord.ext.voice_recv import opus as vr_opus
+
+        from services import voice_jitter
+
+        self.vr_opus = vr_opus
+        self.vj = voice_jitter
+        # install() は差し替え済みかどうかをモジュールに持つ。テスト間で
+        # 持ち越すと、順番によって結果が変わる。
+        self.addCleanup(setattr, vr_opus, "JitterBuffer", vr_opus.JitterBuffer)
+        self.addCleanup(setattr, voice_jitter, "_installed", voice_jitter._installed)
+        voice_jitter.reset_stats()
+
+    def _packet(self, sequence: int, ssrc: int | None = None):
+        """RTP のヘッダを組んで本物の RTPPacket を作る。
+
+        FakePacket は使えない。__bool__ が False なので、PacketDecoder が
+        「欠落ぶんの穴埋め」と誤解して別のパケットに差し替えてしまう。
+        """
+        import struct
+
+        from discord.ext.voice_recv.rtp import RTPPacket
+
+        header = struct.pack(">BBHII", 0x80, 120, sequence % (1 << 16), (960 * sequence) % (1 << 32), ssrc or self.SSRC)
+        return RTPPacket(header + b"\x00" * 20)
+
+    def _decoder(self, buffer_cls):
+        """buffer_cls を使う PacketDecoder と、その waiter を作る。
+
+        router / sink は Mock で足りる（wants_opus() が真なら、ライブラリ側は
+        デコードしないので opus も要らない）。waiter だけは本物を使う。
+        router が「どの decoder を見に行くか」を決めているのがこれで、
+        真似ると穴のときの取りこぼしが再現しない。
+        """
+        from discord.ext.voice_recv.opus import PacketDecoder
+        from discord.ext.voice_recv.utils import MultiDataEvent
+
+        router = Mock()
+        router.waiter = MultiDataEvent()
+        with patch.object(self.vr_opus, "JitterBuffer", buffer_cls):
+            decoder = PacketDecoder(router, self.SSRC)
+        return decoder, router.waiter
+
+    def _drive(self, buffer_cls, arrivals):
+        """届いた順に押し込み、router と同じ回し方で取り出す。
+
+        返すのは (sink へ届いた番号, まだ抱えている番号)。抱えているぶんは
+        まだ捨てられていないので、損失に数えない。
+        """
+        decoder, waiter = self._decoder(buffer_cls)
+        delivered: list[int] = []
+        for packet in arrivals:
+            decoder.push_packet(packet)
+            for _ in range(64):  # 暴走止め。実際は数回で waiter が空になる
+                if not waiter.is_ready():
+                    break
+                for ready in waiter.items:
+                    data = ready.pop_data()  # router._do_run と同じ timeout=0
+                    if data is not None:
+                        delivered.append(data.packet.sequence)
+        held = [p.sequence for p in decoder._buffer.flush()]
+        return delivered, held
+
+    def test_the_stock_buffer_throws_away_the_packets_behind_a_gap(self):
+        """まず、直す相手が実在することを押さえる。
+
+        ライブラリ側がこれを直したら、このテストが落ちて教えてくれる。
+        そのときは差し替え（services/voice_jitter.py）を外してよい。
+        """
+        from discord.ext.voice_recv.buffer import HeapJitterBuffer
+
+        seqs = [s for s in range(20295, 20316) if s not in (20300, 20301)]
+        delivered, held = self._drive(HeapJitterBuffer, [self._packet(s) for s in seqs])
+
+        lost = sorted(set(seqs) - set(delivered) - set(held))
+        self.assertEqual(lost, [20303], f"捨てられた番号が想定と違う: {lost}")
+
+    def test_no_packet_is_thrown_away_when_a_gap_appears(self):
+        """差し替えた版では、穴の後ろのパケットが1つも消えないこと。
+
+        消えたぶんは録音の穴になり、あとから取り返す方法が無い。
+        """
+        seqs = [s for s in range(20295, 20316) if s not in (20300, 20301)]
+        delivered, held = self._drive(self.vj._LosslessJitterBuffer, [self._packet(s) for s in seqs])
+
+        lost = sorted(set(seqs) - set(delivered) - set(held))
+        self.assertEqual(lost, [], f"捨てられた: {lost}")
+
+    def test_a_burst_of_out_of_order_packets_survives(self):
+        """話者が入れ替わった直後の、順不同で届く塊も落とさないこと。
+
+        本番では、この形で1回に6個捨てていた（decoder-1352 の
+        「6 packets were lost being flushed」）。ここがいちばん実害が大きい。
+        """
+        seqs = [16761, 16762, 16764, 16765, 16766, 16768, 16769, 16781, 16782, 16783, 16784, 16785, 16786]
+        delivered, held = self._drive(self.vj._LosslessJitterBuffer, [self._packet(s) for s in seqs])
+
+        lost = sorted(set(seqs) - set(delivered) - set(held))
+        self.assertEqual(lost, [], f"捨てられた: {lost}")
+
+    def test_the_order_out_is_still_ascending(self):
+        """取り出す順序を変えていないこと。
+
+        Opus は直前の状態を使って復号するので、順不同で渡すと音が壊れる
+        （実測で 440Hz が 719Hz に化けた）。捨てないようにしただけで、
+        順番まで変えたつもりは無い、ということを固定する。
+        """
+        seqs = [s for s in range(4000, 4030) if s not in (4007, 4008, 4019)]
+        delivered, _ = self._drive(self.vj._LosslessJitterBuffer, [self._packet(s) for s in seqs])
+
+        self.assertEqual(delivered, sorted(delivered), f"昇順でない: {delivered}")
+
+    def test_install_replaces_the_class_the_decoder_builds(self):
+        """差し替えが、実際に decoder の作る型まで届いていること。
+
+        PacketDecoder は JitterBuffer() を自分で作る。モジュール属性を
+        置き換えられていなければ、install() が True を返しても効かない。
+        """
+        from discord.ext.voice_recv.opus import PacketDecoder
+        from discord.ext.voice_recv.utils import MultiDataEvent
+
+        self.vj._installed = False
+        self.assertTrue(self.vj.install())
+
+        router = Mock()
+        router.waiter = MultiDataEvent()
+        decoder = PacketDecoder(router, self.SSRC)
+        self.assertIsInstance(decoder._buffer, self.vj._LosslessJitterBuffer)
+
+    def test_install_refuses_when_the_library_lost_the_hook(self):
+        """差し替え先が無くなっていたら、黙って続けないこと。
+
+        voice_recv 側の作りが変わったときに素通りさせると、「差し替えた
+        つもりで、穴のたびに捨て続ける」状態になる。これは元より悪い
+        （直っていると思って測るのをやめるため）。
+        """
+        self.vj._installed = False
+        before = self.vr_opus.JitterBuffer
+        # _update_has_item を持たない型に差し替えて、「作りが変わった」状態を作る
+        with patch.object(self.vj, "HeapJitterBuffer", object):
+            with self.assertLogs("services.voice_jitter", level="WARNING") as logs:
+                self.assertFalse(self.vj.install())
+        self.assertIs(self.vr_opus.JitterBuffer, before, "差し替えてしまっている")
+        self.assertFalse(self.vj.stats()["installed"])
+        self.assertIn("_update_has_item", logs.output[0])
+
+    def test_one_packet_alone_is_kept_as_a_cushion(self):
+        """1個しか抱えていないあいだは出さないこと。
+
+        prefsize の1個は、すぐ後ろに順不同で届くぶんと並べ替えるための遊び。
+        捨てないようにしただけで、この遊びまで詰めたつもりは無い。
+
+        なお `len(self._buffer) <= self.prefsize` を `<` に変える変異は、
+        どのテストでも落ちない。router は「2個以上抱えている decoder」しか
+        見に来ないので、1個のときの旗の状態は誰も読まないためで、これは
+        等価な変異である（落ちないから守れていない、ではない）。
+        """
+        delivered, held = self._drive(self.vj._LosslessJitterBuffer, [self._packet(7000)])
+
+        self.assertEqual(delivered, [])
+        self.assertEqual(held, [7000])
+
+    def test_packets_that_arrive_too_late_are_counted(self):
+        """遅すぎて受け取れなかったぶんを数えていること。
+
+        ここが 0 でないなら、こちらの並べ直しを延ばしても届かない領域の
+        損失が残っている、と分かる。数えていないと「直った」と言い切れない。
+        """
+        buf = self.vj._LosslessJitterBuffer()
+        for seq in (5000, 5001, 5002, 5003):
+            buf.push(self._packet(seq))
+        while buf.pop(timeout=0) is not None:
+            pass
+
+        self.assertEqual(self.vj.stats()["late_rejected"], 0)
+        buf.push(self._packet(4990))  # もう出した所より後ろ
+        self.assertEqual(self.vj.stats()["late_rejected"], 1)

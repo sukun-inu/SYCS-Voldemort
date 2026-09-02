@@ -39,7 +39,7 @@ import discord
 
 from config import DJAUDIO_FFMPEG_PATH, JST as _JST
 from envutil import env_path
-from services import dave, voice_session
+from services import dave, voice_jitter, voice_session
 from services.djaudio_cache import register_file
 
 logger = logging.getLogger(__name__)
@@ -766,6 +766,17 @@ def _make_sink_class():
 
         def log_summary(self) -> None:
             """ストリームごとの内訳。数だけでは何が起きたか分からないため。"""
+            jitter = voice_jitter.stats()
+            if not jitter["installed"]:
+                # 差し替えに失敗している。穴が空くたびにライブラリ側が
+                # パケットを捨てるので、下の「欠落」はそのぶん多く出る。
+                logger.warning("[recording] ジッタバッファを差し替えられていません（損失が増えます）")
+            elif jitter["late_rejected"]:
+                # 差し込むには遅すぎた到着。こちらの並べ直しを延ばしても届かない。
+                logger.info(
+                    "[recording] 遅すぎて受け取れなかったパケット=%d（プロセス全体の累計）",
+                    jitter["late_rejected"],
+                )
             for ssrc, stream in self._streams.items():
                 user = self._users.get(ssrc)
                 name = getattr(user, "display_name", ssrc)
@@ -1016,6 +1027,10 @@ async def start_recording(
 
     sink_cls = _make_sink_class()
     session.sink = sink_cls(session)
+    # listen() より前に置くこと。ジッタバッファは SSRC ごとの decoder が
+    # 自分で作るので、聞き始めたあとに差し替えても既存の decoder には
+    # 効かない（services/voice_jitter.py）。
+    voice_jitter.install()
     try:
         # listen は受信拡張（VoiceRecvClient）側の API。discord.py 本体の
         # 型には無いので、型検査にだけ黙ってもらう。
