@@ -26,10 +26,14 @@ select = ["E", "F", "W", "C90"]
 #        分割したので 35 へ。現在の最大は register_logging_commands と
 #        register_recording_commands（どちらも 35）。次はこの2つ。
 #      → その2つを割って 31 へ（当時の最大は create_app）。
-#      → create_app（323行・31）を6つに割ったので 29 へ。現在の最大は
+#      → create_app（323行・31）を6つに割ったので 29 へ。当時の最大は
 #        events/background_tasks.py の register と
 #        services/recording_service.py の _make_sink_class（どちらも 29）。
-max-complexity = 29
+#      → その2つを割ったので 23 へ。現在の最大は
+#        services/djaudio_isrc_meta.py の _build_search_queries と
+#        services/security_service.py の handle_security_for_message
+#        （どちらも 23）。次はこの2つ。
+max-complexity = 23
 
 [tool.ruff.lint.per-file-ignores]
 # テストは services/* が読み込み時に SETTINGS_DIR を解決する都合上、

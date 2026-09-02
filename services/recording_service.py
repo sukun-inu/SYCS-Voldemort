@@ -593,217 +593,232 @@ class _StreamAssembler:
         return self.drain(float("inf"))
 
 
+class _RecordingSinkBase:
+    """Opus のまま受け取り、並べ直してから自前でデコードする。
+
+    wants_opus() を False にするとライブラリ側がデコードするが、そこで
+    1つでも壊れたパケットに当たると OpusError が上がり、受信スレッドごと
+    落ちて stop_listening() まで呼ばれる（router.py の run/finally）。
+    つまり壊れたパケット1個で録音が黙って止まる。
+
+    デコーダは SSRC ごとに持つ。Opus は直前の状態を使って復号するので、
+    別々のストリームを1つのデコーダに入れると音が壊れる。user_id で持つと、
+    同じ人が付け直した SSRC が1つのデコーダに混ざる。
+
+    **`voice_recv.AudioSink` をここでは継承していない。** 受信拡張が入って
+    いない環境ではその import そのものができず、モジュールを読み込めなく
+    なるため。継ぎ足すのは _make_sink_class() の仕事で、そちらが返す
+    クラスだけが `listen()` に渡せる。
+    """
+
+    def __init__(self, session: "RecordingSession"):
+        """録音セッションに紐づくシンクを初期化する。
+
+        SSRC ごとの _StreamAssembler と直近の話者（VoiceRecvClient から
+        渡されるユーザー情報）を、guild 単位ではなくこのシンク単位
+        （＝録音セッション単位）で保持する。
+        """
+        super().__init__()
+        self.session = session
+        self._streams: dict[int, _StreamAssembler] = {}
+        self._users: dict[int, object] = {}  # ssrc -> 直近の話者
+
+    def wants_opus(self) -> bool:
+        """常に True。
+
+        ライブラリ側にデコードを任せると、壊れたパケット1個で OpusError が
+        受信スレッドごと殺し、stop_listening() まで呼ばれて録音が黙って
+        止まる（クラス docstring 参照）。自前でデコードして例外を握り
+        つぶすためにここで断る。
+        """
+        return True
+
+    def _client(self):
+        """繋がっていない状態でも例外にしない。
+
+        voice_recv の AudioSink.voice_client は、接続前だと
+        AttributeError を投げる（_voice_client がまだ無い）。
+        """
+        return getattr(self, "_voice_client", None)
+
+    def _stream_for(self, ssrc: int) -> _StreamAssembler:
+        """ssrc に対応する _StreamAssembler を返す。無ければ新規に作って保持する。"""
+        stream = self._streams.get(ssrc)
+        if stream is None:
+            stream = _StreamAssembler(ssrc)
+            self._streams[ssrc] = stream
+        return stream
+
+    def write(self, user, data) -> None:
+        # voice_recv の受信スレッドから呼ばれる。ここでイベントループには触らない。
+        """1パケット受信のたびに voice_recv から呼ばれる（別スレッド、イベント
+        ループには触れない）。
+
+        DAVE（E2EE）の復号と並べ替えキューへの投入までを行い、実際の
+        デコードと書き込みは _emit() に任せる。ここで例外を外に出すと
+        stop_listening() まで呼ばれて録音全体が止まる。
+        """
+        packet = getattr(data, "packet", None)
+        if user is None or packet is None:
+            return
+
+        user_id = int(getattr(user, "id", 0) or 0)
+        if not user_id or user_id in self.session.excluded_user_ids:
+            return
+
+        ssrc = int(getattr(packet, "ssrc", 0) or 0)
+        self._users[ssrc] = user
+        stream = self._stream_for(ssrc)
+        # Discord の音声は 120。別の番号が混ざっているなら、音声以外の
+        # パケットが音声として流れてきている。
+        ptype = getattr(packet, "payload", None)
+        if ptype is not None:
+            stream.payload_types[ptype] = stream.payload_types.get(ptype, 0) + 1
+
+        encoded = strip_rtp_padding(packet, data.opus)
+        if encoded is None:
+            # 中身がパディングだけ（帯域推定の探査）。音声ではない。
+            stream.padding_only += 1
+            return
+        now = time.monotonic()
+        sequence = int(getattr(packet, "sequence", -1))
+        if encoded and dave.is_dave_frame(encoded):
+            # 端から端まで暗号化されている。復号してから渡す。
+            # 暗号文のまま Opus に食わせると、例外にならず雑音が返る。
+            plain = dave.decrypt_opus(self._client(), user_id, encoded)
+            if plain is None:
+                stream.received += 1
+                stream.encrypted += 1
+                self.session.note_encrypted()
+                return
+            encoded = plain
+            stream.decrypted += 1
+        if encoded and sequence >= 0:
+            stream.received += 1
+            stream.push(sequence, int(packet.timestamp), encoded, now)
+        elif encoded:
+            # voice_recv の SilencePacket は sequence が常に -1（rtp.py）。
+            # 連番で並べ直す仕組みに入れると、すべて同じ鍵で衝突したうえ、
+            # 「もう出した番号より後ろ」と見なされて捨てられる。
+            # 中身は無音なので、時間軸の穴埋めに任せて数えるだけにする。
+            stream.silence += 1
+
+        # 抱えている全ストリームを見る。喋り終えた人の最後のぶんが
+        # 出されないまま残り続けないように。
+        for other_ssrc, other in list(self._streams.items()):
+            self._emit(other_ssrc, other, other.drain(now))
+
+    def _emit(self, ssrc: int, stream: _StreamAssembler, ready) -> None:
+        """並べ直しが完了したパケット群をデコードし、トラックへ書き込む。
+
+        時間軸の起点をどう取るかで実際に時間がずれるバグを踏んでいるため、
+        起点の選び方はメソッド内のコメントを必ず読むこと。
+        """
+        if not ready:
+            return
+        user = self._users.get(ssrc)
+        if user is None:
+            return
+        # 時間軸の起点は「受信した時刻」で取る。ここで self.session.elapsed
+        # （＝出したときの時刻）を使っていたため、並べ直しで抱えていた
+        # あいだのぶんだけトラックまるごと後ろへずれていた。
+        #
+        # drain() は誰かのパケットが届いたときにしか回らない。ある人が
+        # 一言だけ話して黙ると、その声は「次に誰かが話すまで」抱えられた
+        # ままになり、そのときの時刻を起点にされる。実測では 5.00 秒に
+        # 話した声が 20.00 秒の位置に書き込まれた（次の発話が 20.00 秒
+        # だったため）。しかも起点は最初のパケットで決まるので、以後の
+        # 音は全部そのぶんずれたまま。トラックごとにずれ幅が違うのは、
+        # 「次に誰かが話した時刻」がトラックごとに違うため。
+        started_at = self.session.started_at
+        for timestamp, encoded, arrived_at in ready:
+            try:
+                pcm = stream.decode(encoded)
+            except Exception as e:
+                # 壊れたパケットは捨てて続ける。毎回ログを出すと洪水になるので
+                # 数は最後にまとめて残し、中身は最初の数件だけ記録する
+                # （数だけ見ても何が起きたのか分からなかったため）。
+                self.session.dropped_packets += 1
+                stream.failed += 1
+                if stream.failed <= _FAILURE_SAMPLES:
+                    logger.warning(
+                        "[recording] デコード失敗 ssrc=%s %s: %s / %d バイト "
+                        "先頭=%s 末尾=%s ここまで成功=%d 失敗=%d 種別=%s",
+                        ssrc,
+                        type(e).__name__,
+                        e,
+                        0 if encoded is None else len(encoded),
+                        "（欠落補間）" if encoded is None else encoded[:12].hex(),
+                        "-" if encoded is None else encoded[-6:].hex(),
+                        stream.decoded,
+                        stream.failed,
+                        stream.payload_types,
+                    )
+                continue
+            stream.decoded += 1
+            elapsed = arrived_at - started_at
+            self.session.feed(user, pcm, at=stream.offset_for(timestamp, elapsed))
+
+    def flush_pending(self) -> None:
+        """停止時に、抱えたままのパケットを書き出す。"""
+        for ssrc, stream in list(self._streams.items()):
+            self._emit(ssrc, stream, stream.flush())
+        self.log_summary()
+
+    def log_summary(self) -> None:
+        """ストリームごとの内訳。数だけでは何が起きたか分からないため。"""
+        jitter = voice_jitter.stats()
+        if not jitter["installed"]:
+            # 差し替えに失敗している。穴が空くたびにライブラリ側が
+            # パケットを捨てるので、下の「欠落」はそのぶん多く出る。
+            logger.warning("[recording] ジッタバッファを差し替えられていません（損失が増えます）")
+        elif jitter["late_rejected"]:
+            # 差し込むには遅すぎた到着。こちらの並べ直しを延ばしても届かない。
+            logger.info(
+                "[recording] 遅すぎて受け取れなかったパケット=%d（プロセス全体の累計）",
+                jitter["late_rejected"],
+            )
+        for ssrc, stream in self._streams.items():
+            user = self._users.get(ssrc)
+            name = getattr(user, "display_name", ssrc)
+            logger.info(
+                "[recording] ssrc=%s (%s) 受信=%d 成功=%d 失敗=%d "
+                "E2EE復号=%d E2EE不可=%d 詰め物=%d 欠落=%d 手遅れ=%d 無音=%d "
+                "RTP種別=%s",
+                ssrc,
+                name,
+                stream.received,
+                stream.decoded,
+                stream.failed,
+                stream.decrypted,
+                stream.encrypted,
+                stream.padding_only,
+                stream.lost,
+                stream.late,
+                stream.silence,
+                stream.payload_types,
+            )
+
+    def cleanup(self) -> None:
+        """録音停止後にストリーム状態を解放する。参照を残すとセッションのたびに
+        メモリが積み上がる。
+        """
+        self._streams.clear()
+        self._users.clear()
+
+
 def _make_sink_class():
-    """AudioSink の実装を返す。受信拡張が無い環境では import 自体ができない。"""
+    """AudioSink の実装を返す。受信拡張が無い環境では import 自体ができない。
+
+    中身は _RecordingSinkBase にある。ここでやるのは、それに
+    `voice_recv.AudioSink` を継ぎ足すことだけ。**継承の形を変えないこと** —
+    `listen()` は AudioSink のサブクラスしか受け取らないので、外すと単体
+    テストは全部通るのに本番で録音の開始そのものが失敗する。
+    """
     from discord.ext import voice_recv
 
-    class _RecordingSink(voice_recv.AudioSink):
-        """Opus のまま受け取り、並べ直してから自前でデコードする。
-
-        wants_opus() を False にするとライブラリ側がデコードするが、そこで
-        1つでも壊れたパケットに当たると OpusError が上がり、受信スレッドごと
-        落ちて stop_listening() まで呼ばれる（router.py の run/finally）。
-        つまり壊れたパケット1個で録音が黙って止まる。
-
-        デコーダは SSRC ごとに持つ。Opus は直前の状態を使って復号するので、
-        別々のストリームを1つのデコーダに入れると音が壊れる。user_id で持つと、
-        同じ人が付け直した SSRC が1つのデコーダに混ざる。
-        """
-
-        def __init__(self, session: "RecordingSession"):
-            """録音セッションに紐づくシンクを初期化する。
-
-            SSRC ごとの _StreamAssembler と直近の話者（VoiceRecvClient から
-            渡されるユーザー情報）を、guild 単位ではなくこのシンク単位
-            （＝録音セッション単位）で保持する。
-            """
-            super().__init__()
-            self.session = session
-            self._streams: dict[int, _StreamAssembler] = {}
-            self._users: dict[int, object] = {}  # ssrc -> 直近の話者
-
-        def wants_opus(self) -> bool:
-            """常に True。
-
-            ライブラリ側にデコードを任せると、壊れたパケット1個で OpusError が
-            受信スレッドごと殺し、stop_listening() まで呼ばれて録音が黙って
-            止まる（クラス docstring 参照）。自前でデコードして例外を握り
-            つぶすためにここで断る。
-            """
-            return True
-
-        def _client(self):
-            """繋がっていない状態でも例外にしない。
-
-            voice_recv の AudioSink.voice_client は、接続前だと
-            AttributeError を投げる（_voice_client がまだ無い）。
-            """
-            return getattr(self, "_voice_client", None)
-
-        def _stream_for(self, ssrc: int) -> _StreamAssembler:
-            """ssrc に対応する _StreamAssembler を返す。無ければ新規に作って保持する。"""
-            stream = self._streams.get(ssrc)
-            if stream is None:
-                stream = _StreamAssembler(ssrc)
-                self._streams[ssrc] = stream
-            return stream
-
-        def write(self, user, data) -> None:
-            # voice_recv の受信スレッドから呼ばれる。ここでイベントループには触らない。
-            """1パケット受信のたびに voice_recv から呼ばれる（別スレッド、イベント
-            ループには触れない）。
-
-            DAVE（E2EE）の復号と並べ替えキューへの投入までを行い、実際の
-            デコードと書き込みは _emit() に任せる。ここで例外を外に出すと
-            stop_listening() まで呼ばれて録音全体が止まる。
-            """
-            packet = getattr(data, "packet", None)
-            if user is None or packet is None:
-                return
-
-            user_id = int(getattr(user, "id", 0) or 0)
-            if not user_id or user_id in self.session.excluded_user_ids:
-                return
-
-            ssrc = int(getattr(packet, "ssrc", 0) or 0)
-            self._users[ssrc] = user
-            stream = self._stream_for(ssrc)
-            # Discord の音声は 120。別の番号が混ざっているなら、音声以外の
-            # パケットが音声として流れてきている。
-            ptype = getattr(packet, "payload", None)
-            if ptype is not None:
-                stream.payload_types[ptype] = stream.payload_types.get(ptype, 0) + 1
-
-            encoded = strip_rtp_padding(packet, data.opus)
-            if encoded is None:
-                # 中身がパディングだけ（帯域推定の探査）。音声ではない。
-                stream.padding_only += 1
-                return
-            now = time.monotonic()
-            sequence = int(getattr(packet, "sequence", -1))
-            if encoded and dave.is_dave_frame(encoded):
-                # 端から端まで暗号化されている。復号してから渡す。
-                # 暗号文のまま Opus に食わせると、例外にならず雑音が返る。
-                plain = dave.decrypt_opus(self._client(), user_id, encoded)
-                if plain is None:
-                    stream.received += 1
-                    stream.encrypted += 1
-                    self.session.note_encrypted()
-                    return
-                encoded = plain
-                stream.decrypted += 1
-            if encoded and sequence >= 0:
-                stream.received += 1
-                stream.push(sequence, int(packet.timestamp), encoded, now)
-            elif encoded:
-                # voice_recv の SilencePacket は sequence が常に -1（rtp.py）。
-                # 連番で並べ直す仕組みに入れると、すべて同じ鍵で衝突したうえ、
-                # 「もう出した番号より後ろ」と見なされて捨てられる。
-                # 中身は無音なので、時間軸の穴埋めに任せて数えるだけにする。
-                stream.silence += 1
-
-            # 抱えている全ストリームを見る。喋り終えた人の最後のぶんが
-            # 出されないまま残り続けないように。
-            for other_ssrc, other in list(self._streams.items()):
-                self._emit(other_ssrc, other, other.drain(now))
-
-        def _emit(self, ssrc: int, stream: _StreamAssembler, ready) -> None:
-            """並べ直しが完了したパケット群をデコードし、トラックへ書き込む。
-
-            時間軸の起点をどう取るかで実際に時間がずれるバグを踏んでいるため、
-            起点の選び方はメソッド内のコメントを必ず読むこと。
-            """
-            if not ready:
-                return
-            user = self._users.get(ssrc)
-            if user is None:
-                return
-            # 時間軸の起点は「受信した時刻」で取る。ここで self.session.elapsed
-            # （＝出したときの時刻）を使っていたため、並べ直しで抱えていた
-            # あいだのぶんだけトラックまるごと後ろへずれていた。
-            #
-            # drain() は誰かのパケットが届いたときにしか回らない。ある人が
-            # 一言だけ話して黙ると、その声は「次に誰かが話すまで」抱えられた
-            # ままになり、そのときの時刻を起点にされる。実測では 5.00 秒に
-            # 話した声が 20.00 秒の位置に書き込まれた（次の発話が 20.00 秒
-            # だったため）。しかも起点は最初のパケットで決まるので、以後の
-            # 音は全部そのぶんずれたまま。トラックごとにずれ幅が違うのは、
-            # 「次に誰かが話した時刻」がトラックごとに違うため。
-            started_at = self.session.started_at
-            for timestamp, encoded, arrived_at in ready:
-                try:
-                    pcm = stream.decode(encoded)
-                except Exception as e:
-                    # 壊れたパケットは捨てて続ける。毎回ログを出すと洪水になるので
-                    # 数は最後にまとめて残し、中身は最初の数件だけ記録する
-                    # （数だけ見ても何が起きたのか分からなかったため）。
-                    self.session.dropped_packets += 1
-                    stream.failed += 1
-                    if stream.failed <= _FAILURE_SAMPLES:
-                        logger.warning(
-                            "[recording] デコード失敗 ssrc=%s %s: %s / %d バイト "
-                            "先頭=%s 末尾=%s ここまで成功=%d 失敗=%d 種別=%s",
-                            ssrc,
-                            type(e).__name__,
-                            e,
-                            0 if encoded is None else len(encoded),
-                            "（欠落補間）" if encoded is None else encoded[:12].hex(),
-                            "-" if encoded is None else encoded[-6:].hex(),
-                            stream.decoded,
-                            stream.failed,
-                            stream.payload_types,
-                        )
-                    continue
-                stream.decoded += 1
-                elapsed = arrived_at - started_at
-                self.session.feed(user, pcm, at=stream.offset_for(timestamp, elapsed))
-
-        def flush_pending(self) -> None:
-            """停止時に、抱えたままのパケットを書き出す。"""
-            for ssrc, stream in list(self._streams.items()):
-                self._emit(ssrc, stream, stream.flush())
-            self.log_summary()
-
-        def log_summary(self) -> None:
-            """ストリームごとの内訳。数だけでは何が起きたか分からないため。"""
-            jitter = voice_jitter.stats()
-            if not jitter["installed"]:
-                # 差し替えに失敗している。穴が空くたびにライブラリ側が
-                # パケットを捨てるので、下の「欠落」はそのぶん多く出る。
-                logger.warning("[recording] ジッタバッファを差し替えられていません（損失が増えます）")
-            elif jitter["late_rejected"]:
-                # 差し込むには遅すぎた到着。こちらの並べ直しを延ばしても届かない。
-                logger.info(
-                    "[recording] 遅すぎて受け取れなかったパケット=%d（プロセス全体の累計）",
-                    jitter["late_rejected"],
-                )
-            for ssrc, stream in self._streams.items():
-                user = self._users.get(ssrc)
-                name = getattr(user, "display_name", ssrc)
-                logger.info(
-                    "[recording] ssrc=%s (%s) 受信=%d 成功=%d 失敗=%d "
-                    "E2EE復号=%d E2EE不可=%d 詰め物=%d 欠落=%d 手遅れ=%d 無音=%d "
-                    "RTP種別=%s",
-                    ssrc,
-                    name,
-                    stream.received,
-                    stream.decoded,
-                    stream.failed,
-                    stream.decrypted,
-                    stream.encrypted,
-                    stream.padding_only,
-                    stream.lost,
-                    stream.late,
-                    stream.silence,
-                    stream.payload_types,
-                )
-
-        def cleanup(self) -> None:
-            """録音停止後にストリーム状態を解放する。参照を残すとセッションのたびに
-            メモリが積み上がる。
-            """
-            self._streams.clear()
-            self._users.clear()
+    class _RecordingSink(_RecordingSinkBase, voice_recv.AudioSink):
+        """_RecordingSinkBase に AudioSink を継ぎ足しただけの実体。"""
 
     return _RecordingSink
 
