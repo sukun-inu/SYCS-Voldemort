@@ -32,8 +32,23 @@ _BOT_BACKGROUND_WORKER = env_bool("BOT_BACKGROUND_WORKER", True)
 
 
 def register(bot: Bot, state: EventState, loops: BackgroundLoops) -> None:
+    """常駐処理（ステータス更新・開発シグナル監視・ニュース/スティッキー・
+    地震WS監視・djaudioキャッシュ掃除・ユーザー状態同期/自動修復）の起動を
+    on_ready の中に配線する。on_ready は再接続のたびに何度でも発火する
+    ため、二重起動を防ぐ判定（is_running()やstate側の*_startedフラグ）が
+    このモジュールの主眼（モジュール docstring 参照）。
+    """
+
     @bot.event
     async def on_ready():
+        """再接続のたびに呼ばれる。bot.tree.sync()は呼ぶたびにDiscord側と
+        コマンド定義を全同期するだけなので毎回呼んでも実害は無いが、下の
+        各常駐タスクの起動は多重に走ると同じ処理が並行実行されてしまうため、
+        is_running()/state.*_started で毎回ガードしてからstart()する。
+        BOT_BACKGROUND_WORKER=false のときはニュース・スティッキー・地震
+        監視・djaudioキャッシュ掃除だけを止める（ステータス更新と
+        dev_signal_taskは常時起動）。
+        """
         logger.info("[BOT] Logged in as %s", bot.user)
         await bot.tree.sync()
         if not loops.update_status.is_running():

@@ -58,6 +58,7 @@ class BackgroundLoops:
     """
 
     def __init__(self, update_status, news_feed_task, pending_sticky_task, dev_signal_task):
+        """受け取った4本の tasks.Loop をそのまま同名フィールドへ保持するだけ。"""
         self.update_status = update_status
         self.news_feed_task = news_feed_task
         self.pending_sticky_task = pending_sticky_task
@@ -65,6 +66,12 @@ class BackgroundLoops:
 
 
 def register(bot: Bot, state: EventState) -> BackgroundLoops:
+    """4本の @tasks.loop をクロージャとして定義し、BackgroundLoops にまとめて
+    返す（詳細と分割の経緯はモジュール docstring 参照）。ここでは定義する
+    だけで start() はしない。実際に動かし始めるのは events.ready.on_ready
+    の仕事で、それまでは4本とも停止した Loop オブジェクトのまま返る。
+    """
+
     # --------------------------
     # ステータス更新
     # --------------------------
@@ -74,6 +81,13 @@ def register(bot: Bot, state: EventState) -> BackgroundLoops:
     # 表示が実際に変わったときだけ送る。
     @tasks.loop(seconds=_STATUS_INTERVAL_SECONDS)
     async def update_status():
+        """change_presence は表示文字列が前回から変わったときだけ送る。
+        CPU/MEM は常に数%揺れるため、愚直に毎回送るとプレゼンス更新のレート
+        制限（20秒あたり5回）にすぐ達する。"Cannot write to closing
+        transport"・ClientConnectionResetError は接続が閉じかけている間に
+        飛んでくる例外で、is_ready()/is_closed() のチェックを入れてもなお
+        発生するため、ログを埋めないよう個別に握りつぶす。
+        """
         if not bot.is_ready() or bot.is_closed():
             return
         try:
@@ -94,6 +108,11 @@ def register(bot: Bot, state: EventState) -> BackgroundLoops:
     # --------------------------
     @tasks.loop(minutes=5)
     async def news_feed_task():
+        """_safe で例外を握りつぶす。discord.ext.tasks の loop は中で例外が
+        飛ぶとその回のイテレーションで停止し、再始動しない限り二度と
+        走らない。ニュース取得先のAPIが一時的に落ちただけでフィード配信が
+        完全に止まるのを防ぐ。
+        """
         await _safe(run_news_feeds(bot), "news_feed_task")
 
     # --------------------------
@@ -101,6 +120,9 @@ def register(bot: Bot, state: EventState) -> BackgroundLoops:
     # --------------------------
     @tasks.loop(seconds=30)
     async def pending_sticky_task():
+        """_safe を通す理由は news_feed_task と同じ（discord.ext.tasks の
+        loop は例外で止まったまま自動では再始動しない）。
+        """
         await _safe(process_pending_stickies(bot), "pending_sticky_task")
 
     # --------------------------
@@ -108,6 +130,11 @@ def register(bot: Bot, state: EventState) -> BackgroundLoops:
     # --------------------------
     @tasks.loop(seconds=30)
     async def dev_signal_task():
+        """開発用シグナルファイル（管理画面など別プロセスからの合図）を拾って
+        対応する処理を呼ぶ。1ファイルの処理で例外が出ても内側の try/except
+        で捕まえ、他のシグナルの処理やこのループ自体を止めない。未知の
+        task_name を黙って無視しない理由（else節）は本文コメント参照。
+        """
         # 置かれた順に処理する。同じ用途が複数溜まっていることがあり
         # （録音の開始と停止など）、順序が入れ替わると噛み合わない。
         for sig_file in dev_signals.collect():

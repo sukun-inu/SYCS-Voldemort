@@ -23,6 +23,13 @@ logger = logging.getLogger(__name__)
 
 
 async def _handle_nickname_change(bot: Bot, before: discord.Member, after: discord.Member) -> None:
+    """ログ通知(log_action)とユーザー状態の永続化(record_user_state_event)を
+    それぞれ別の _safe でくるむ。1つの _safe でまとめると、log_action の
+    失敗（ログチャンネル未設定・Discord側の一時エラー等）で
+    record_user_state_event まで巻き込まれて呼ばれなくなり、あとから
+    ニックネーム変更の履歴を追えなくなる。逆に永続化側が失敗しても通知は
+    飛ばしたい。
+    """
     if before.nick == after.nick:
         return
     await _safe(
@@ -59,6 +66,12 @@ async def _handle_nickname_change(bot: Bot, before: discord.Member, after: disco
 
 
 async def _handle_role_change(bot: Bot, before: discord.Member, after: discord.Member) -> None:
+    """通知と永続化を別の _safe にくるむ理由は _handle_nickname_change と
+    同じ。is_default()（@everyone ロール）を除いて集合を作っているが、
+    @everyone は全メンバーが常に同じものを1つだけ持つため before/after
+    どちらの集合にも等しく含まれ、除外してもしなくても差分の結果自体は
+    変わらない。
+    """
     before_roles = set(r.id for r in before.roles if not r.is_default())
     after_roles = set(r.id for r in after.roles if not r.is_default())
     added_roles = [r for r in after.roles if r.id in (after_roles - before_roles)]
@@ -107,6 +120,11 @@ async def _handle_role_change(bot: Bot, before: discord.Member, after: discord.M
 
 
 async def _handle_timeout_change(bot: Bot, before: discord.Member, after: discord.Member) -> None:
+    """タイムアウト付与は ERROR レベル、解除は INFO レベルでログを分ける
+    （付与はモデレーションアクションとして目立たせたいが、解除は通常運用の
+    一部として扱う）。通知と永続化を別の _safe にくるむ理由は
+    _handle_nickname_change と同じ。
+    """
     before_timeout = before.timed_out_until
     after_timeout = after.timed_out_until
     if before_timeout == after_timeout:
@@ -173,6 +191,10 @@ async def _handle_timeout_change(bot: Bot, before: discord.Member, after: discor
 # メンバー参加・退出
 # --------------------------
 async def _on_member_join(bot: Bot, member: discord.Member) -> None:
+    """log_action・record_user_state_event・send_welcome を別々の _safe で
+    くるむ理由は _handle_nickname_change と同じ（ウェルカムメッセージ送信の
+    失敗が監査ログや状態記録を巻き込んで消えないようにするため）。
+    """
     joined_at = member.joined_at.astimezone(_JST).strftime("%Y/%m/%d %H:%M") if member.joined_at else "(不明)"
     created_at = member.created_at.astimezone(_JST).strftime("%Y/%m/%d %H:%M") if member.created_at else "(不明)"
     await _safe(
@@ -215,6 +237,14 @@ async def _on_member_join(bot: Bot, member: discord.Member) -> None:
 
 
 async def _on_member_remove(bot: Bot, member: discord.Member) -> None:
+    """退出が実は kick だったかを監査ログで見分け、event_type/status_after を
+    member_leave から member_kick へ差し替える。この監査ログ照会自体は
+    _safe ではなく try/except+logger.debug で囲む——ここで例外が出ても、
+    以降の log_action・record_user_state_event は member_leave 扱いのまま
+    必ず実行したいため（監査ログの照会失敗と、退出そのものの記録は独立の
+    事象）。ログ通知と永続化を別の _safe にくるむ理由は
+    _handle_nickname_change と同じ。
+    """
     roles = [r.mention for r in member.roles if not r.is_default()]
     event_type = "member_leave"
     status_after = "left"
@@ -282,6 +312,10 @@ async def _on_member_remove(bot: Bot, member: discord.Member) -> None:
 # メンバー情報変更（ニックネーム・ロール・タイムアウト）
 # --------------------------
 async def _on_member_update(bot: Bot, before: discord.Member, after: discord.Member) -> None:
+    """ニックネーム・ロール・タイムアウトの3判定を順に呼ぶだけ（元は146行の
+    1関数だったものを分割した経緯はモジュール docstring 参照）。3つは
+    互いに独立した判定・通知なので、この呼び出し順自体に意味は無い。
+    """
     await _handle_nickname_change(bot, before, after)
     await _handle_role_change(bot, before, after)
     await _handle_timeout_change(bot, before, after)
@@ -291,6 +325,12 @@ async def _on_member_update(bot: Bot, before: discord.Member, after: discord.Mem
 # BAN / BAN 解除
 # --------------------------
 async def _on_member_ban(bot: Bot, guild: discord.Guild, user: discord.User) -> None:
+    """実行者・理由を監査ログから引く部分は _on_member_remove の kick 検出と
+    同じ形（照会失敗を try/except+logger.debug で吸収し、以降のログ通知・
+    永続化は actor 情報が取れなくても必ず実行する）。member ではなく user を
+    受け取るのは、BAN されたユーザーは既にギルドから外れておりメンバー
+    キャッシュに残っていないことがあるため。
+    """
     actor_user: discord.abc.User | None = None
     audit_reason: str | None = None
     try:
@@ -339,6 +379,9 @@ async def _on_member_ban(bot: Bot, guild: discord.Guild, user: discord.User) -> 
 
 
 async def _on_member_unban(bot: Bot, guild: discord.Guild, user: discord.User) -> None:
+    """_on_member_ban と対になる BAN 解除版。監査ログ照会の扱い・user を
+    受け取る理由は _on_member_ban 参照。
+    """
     actor_user: discord.abc.User | None = None
     audit_reason: str | None = None
     try:
@@ -396,20 +439,27 @@ def register(bot: Bot) -> None:
 
     @bot.event
     async def on_member_join(member: discord.Member):
+        """discord.pyへの薄い配線。実処理は_on_member_joinへ委譲（配線の
+        事情はregister()のdocstring参照）。
+        """
         await _on_member_join(bot, member)
 
     @bot.event
     async def on_member_remove(member: discord.Member):
+        """実処理は_on_member_removeへ委譲。配線の事情はregister()のdocstring参照。"""
         await _on_member_remove(bot, member)
 
     @bot.event
     async def on_member_update(before: discord.Member, after: discord.Member):
+        """実処理は_on_member_updateへ委譲。配線の事情はregister()のdocstring参照。"""
         await _on_member_update(bot, before, after)
 
     @bot.event
     async def on_member_ban(guild: discord.Guild, user: discord.User):
+        """実処理は_on_member_banへ委譲。配線の事情はregister()のdocstring参照。"""
         await _on_member_ban(bot, guild, user)
 
     @bot.event
     async def on_member_unban(guild: discord.Guild, user: discord.User):
+        """実処理は_on_member_unbanへ委譲。配線の事情はregister()のdocstring参照。"""
         await _on_member_unban(bot, guild, user)

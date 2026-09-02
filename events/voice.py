@@ -387,6 +387,12 @@ async def _stop_recording_if_vc_empty(bot: Bot, guild: discord.Guild, channel) -
 
 
 def register(bot: Bot) -> None:
+    """on_voice_state_update 1本だけを登録する。_vc_join_times /
+    _vc_last_mention はこのハンドラの呼び出しをまたいで状態を持つ必要が
+    あるが、他のモジュールとは共有しないため EventState ではなくこの
+    クロージャのローカル変数として持つ。
+    """
+
     # (guild_id, user_id) → 入室時刻。VC の在室時間を数えるためだけの状態で、
     # 他のモジュールとは共有しないので EventState には含めていない。
     _vc_join_times: dict[tuple[int, int], float] = {}
@@ -395,6 +401,13 @@ def register(bot: Bot) -> None:
 
     @bot.event
     async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        """VC入退室まわりの全処理を順番に呼ぶ司令塔。呼び出し順序に依存
+        関係が複数あり、入れ替えると壊れる（各所のコメント参照）:
+        TTSアナウンス(_tts_vc_announce)はbot自身の入退室も対象なので
+        member.bot判定より前に呼ぶ／録音の自動停止はTTS切断より先に呼ぶ
+        （切断されると録音が途中で終わる）。before_ch/after_chはプロパティを
+        1回だけ読んで使い回す（何度も読み直すとNoneに化けることがある）。
+        """
         # TTS VC参加・退出アナウンス（bot含む全メンバー対象のため早期returnの前に実行）
         if member.guild is not None:
             await _tts_vc_announce(bot, member, before, after)

@@ -24,11 +24,23 @@ logger = logging.getLogger(__name__)
 
 
 def register(bot: Bot) -> None:
+    """on_message・on_message_delete・on_message_edit の3イベントを bot へ
+    登録する。on_message は司令塔で、実処理は各サービス（security_service・
+    chat_commands等）に委ねる薄い作り（モジュール docstring 参照）。
+    """
+
     # --------------------------
     # メッセージ（司令塔）
     # --------------------------
     @bot.event
     async def on_message(message: discord.Message):
+        """botのメッセージ全ての入口。botメッセージ・DM/グループ（guild無し）
+        は早期returnで弾く。5つのハンドラをasyncio.gatherで並列実行し、
+        それぞれ_safeで個別にくるむため、1つが例外を出しても他は止まらず
+        （1つの遅い外部APIが他の応答を巻き込んで遅らせもしない）。最後の
+        bot.process_commands(message)を呼び忘れると、通常のprefixコマンドが
+        一切反応しなくなる。
+        """
         if message.guild is None or message.author.bot:
             return
         # ローカルへ束ねる。下の _tts_handler は入れ子なので、この None 判定を
@@ -43,6 +55,12 @@ def register(bot: Bot) -> None:
         )
 
         async def _tts_handler() -> None:
+            """on_messageから呼ばれる、TTS読み上げ専用の振り分け。ネストして
+            いる理由は本文コメント参照（guildのNone判定を持ち込むため）。
+            isinstance チェックは、webhook経由の投稿等 discord.Member でない
+            authorを弾く（ユーザー個別の声設定はMemberのuser_idに紐づくため、
+            Memberでないと引けない）。
+            """
             from services.tts_service import enqueue_message as _tts_enqueue, get_effective_vc_watch as _get_vc_watch
             from services.tts_store import get_tts_settings as _get_tts_settings
 
@@ -68,6 +86,11 @@ def register(bot: Bot) -> None:
     # --------------------------
     @bot.event
     async def on_message_delete(message: discord.Message):
+        """メッセージ削除の監査ログ通知。message.author が無いケースへの
+        対処を fields だけでなく本文（who の組み立て）にも用意する必要が
+        ある理由は本文コメント参照——_safe の外側で AttributeError が出ると
+        _safe には守られず、削除ログが出ないまま静かに消える。
+        """
         if message.guild is None:
             return
 
@@ -109,6 +132,10 @@ def register(bot: Bot) -> None:
     # --------------------------
     @bot.event
     async def on_message_edit(before: discord.Message, after: discord.Message):
+        """本文が変わった編集だけを対象にする。on_message_editは埋め込み
+        展開やピン留め等、本文以外の理由でも発火するため、content比較で
+        除外しないと無関係な変化までログに出てしまう。
+        """
         if before.guild is None:
             return
         if before.content == after.content:

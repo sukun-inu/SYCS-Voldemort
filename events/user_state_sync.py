@@ -63,6 +63,15 @@ async def _find_recent_audit_entry(
     retries: int = 2,
     retry_delay: float = 0.6,
 ) -> discord.AuditLogEntry | None:
+    """BAN/kick等の実行者を、対象アクションの監査ログから追跡する。
+
+    view_audit_log 権限が無ければ即Noneを返す。guild.audit_logsの呼び出し
+    自体は権限が無くても403を投げるだけなので、事前にガードして無駄な
+    例外送出とログ汚染を避ける。監査ログへの反映はDiscord側で数百ms〜数秒
+    遅れることがあるため、初回で見つからなくても retry_delay を挟んで
+    数回リトライする。window_seconds は、対象イベントとは無関係な、
+    たまたま近い時刻に起きた別の同種アクションを取り違えないための枠。
+    """
     me = guild.me
     if me is None or not me.guild_permissions.view_audit_log:
         return None
@@ -96,6 +105,13 @@ async def _find_recent_audit_entry(
 
 
 async def _fetch_guild_members_for_sync(guild: discord.Guild) -> tuple[list[discord.Member], bool]:
+    """fetch_membersはメンバー一覧を取るIntentが必要で、無いとForbiddenに
+    なる。その場合はキャッシュ(guild.members)にフォールバックするが、
+    キャッシュが全メンバーを含む保証は無いためfetched_all=Falseを返す。
+    呼び出し側(_sync_user_state_all_guilds)はこのフラグでreconcile_missing
+    （退出者の突き合わせ）を行うかどうかを決める——不完全な一覧のまま
+    突き合わせると、実際にはまだいるメンバーを「退出した」と誤判定しかねない。
+    """
     members: list[discord.Member] = []
     fetched_all = False
     fetch_limit = _USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD or None
@@ -124,6 +140,11 @@ async def _fetch_guild_members_for_sync(guild: discord.Guild) -> tuple[list[disc
 
 
 async def _fetch_guild_bans_for_sync(guild: discord.Guild) -> list[discord.abc.User]:
+    """_fetch_guild_members_for_syncと違い、Forbiddenでもキャッシュ代替が
+    無い（BAN一覧はDiscord側にしか無く、ローカルキャッシュという概念が
+    存在しないため）。取得できなければ空リストのまま諦め、そのギルドの
+    BAN同期だけをスキップする。
+    """
     users: list[discord.abc.User] = []
     try:
         async for entry in guild.bans(limit=None):
@@ -150,6 +171,16 @@ async def _sync_user_state_all_guilds(
     run_integrity_repair: bool,
     lock: asyncio.Lock,
 ) -> None:
+    """全ギルドのメンバー/BAN状態を1つずつ順番に同期する。
+
+    並行にせずギルドを1つずつ処理し、間に
+    _USER_STATE_SYNC_GUILD_PAUSE_SECONDS の待機を挟むのは、
+    fetch_members/bansのレート制限を避けるため。1ギルドの処理で例外が
+    出ても他ギルドを止めないよう、ギルド単位でtry/exceptしている。
+    lockで全体を囲むのは、on_ready起点の同期(_sync_user_state_on_ready)と
+    定期修復ループ(_user_state_auto_repair_loop)が同時に走って同じDBへ
+    二重に書き込むのを防ぐため。
+    """
     async with lock:
         logger.info(
             "[BOT_SETUP] user_state sync started source=%s guilds=%s",
@@ -237,6 +268,12 @@ async def _sync_user_state_all_guilds(
 
 
 async def _sync_user_state_on_ready(bot: Bot, lock: asyncio.Lock) -> None:
+    """起動直後は他の初期化処理と競合しやすいため、
+    _USER_STATE_SYNC_DELAY_SECONDS だけ遅らせてから同期する。ここで例外を
+    握りつぶす（re-raiseしない）のは、on_readyのasyncio.create_taskとして
+    起動されるため、放置すると例外が「処理されなかったタスク例外」として
+    ログに埋もれるだけで誰も拾わないため。
+    """
     try:
         if _USER_STATE_SYNC_DELAY_SECONDS > 0:
             await asyncio.sleep(_USER_STATE_SYNC_DELAY_SECONDS)
@@ -252,6 +289,14 @@ async def _sync_user_state_on_ready(bot: Bot, lock: asyncio.Lock) -> None:
 
 
 async def _user_state_auto_repair_loop(bot: Bot, lock: asyncio.Lock) -> None:
+    """@tasks.loopではなく手書きのwhileループにしているのは、開始遅延
+    (_USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS)を挟んでから無限ループに
+    入る形が必要だったため。bot.is_closed()を見て自然に抜けるので、切断
+    時は明示的なキャンセルをしなくても止まる。CancelledErrorだけは
+    re-raiseし、後段のexcept Exceptionで「修復ループが異常終了した」扱いに
+    しない——タスクをキャンセルする経路（プロセス終了時のイベントループの
+    片付け等）が正しく機能するよう、キャンセル要求は必ず伝播させる。
+    """
     try:
         if _USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS > 0:
             await asyncio.sleep(_USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS)
