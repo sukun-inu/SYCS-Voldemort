@@ -1090,6 +1090,89 @@ class UrlSafetyTests(unittest.TestCase):
         with self.assertRaises(URLSafetyError):
             validate_public_http_url("example.com")
 
+    def test_ipv4_mapped_public_address_is_allowed(self):
+        """公開IPv4を指す ::ffff: 形式を弾かないこと。"""
+        validate_public_http_url("https://[::ffff:142.251.150.119]/path")
+
+    def test_ipv4_mapped_is_judged_by_the_embedded_ipv4(self):
+        """::ffff:a.b.c.d は a.b.c.d そのものとして判定すること。
+
+        この1行が無いと、判定が Python のバージョンに依存する。3.12.4 未満の
+        ipaddress は ::ffff:0:0/96 を丸ごと private に数えるため、公開IPv4を
+        指すアドレスが is_global=False になる。手元(3.13)では通り、本番・
+        CI(3.11)だけ non_public_ip で落ちる——という最も追いにくい形になり、
+        実際に VirusTotal のスキャンが黙ってスキップされていた。
+        """
+        import ipaddress as _ip
+
+        from services.url_safety import _unwrap_ipv4_mapped
+
+        self.assertEqual(
+            _unwrap_ipv4_mapped(_ip.ip_address("::ffff:142.251.150.119")),
+            _ip.ip_address("142.251.150.119"),
+        )
+        # IPv4-mapped でないものは触らない
+        raw = _ip.ip_address("2606:4700::6810:85e5")
+        self.assertIs(_unwrap_ipv4_mapped(raw), raw)
+
+    def test_is_public_ip_consults_the_embedded_ipv4_not_the_ipv6_flag(self):
+        """判定が is_global そのままに戻されたら気づけること。
+
+        手元の Python では ::ffff: の is_global が既に True なので、実物を
+        渡すだけでは修正を外しても落ちない（実際に外して確認した）。
+        3.12 未満の ipaddress を模した値を渡して、埋め込まれた IPv4 のほうを
+        見ていることを、バージョンに依存せず押さえる。
+        """
+        import ipaddress as _ip
+
+        from services.url_safety import _is_public_ip
+
+        class _OldStyleMapped:
+            """::ffff: を private と数えていた頃の ipaddress を模した値。"""
+
+            is_global = False
+            ipv4_mapped = _ip.ip_address("142.251.150.119")
+
+        self.assertTrue(_is_public_ip(_OldStyleMapped()))
+
+        class _OldStyleMappedPrivate:
+            is_global = False
+            ipv4_mapped = _ip.ip_address("10.0.0.5")
+
+        self.assertFalse(_is_public_ip(_OldStyleMappedPrivate()))
+
+    def test_ipv4_mapped_private_address_is_still_blocked(self):
+        """↑の緩和が、内部アドレスへの抜け道になっていないこと。
+
+        ::ffff:10.0.0.5 は 10.0.0.5 そのもの。IPv6 の皮をかぶせるだけで
+        SSRF 対策を回避できるなら、この検査は無いのと同じになる。
+        """
+        for url in (
+            "http://[::ffff:127.0.0.1]/",
+            "http://[::ffff:10.0.0.5]/",
+            "http://[::ffff:192.168.1.1]/",
+            "http://[::ffff:169.254.169.254]/",
+        ):
+            with self.subTest(url=url), self.assertRaises(URLSafetyError):
+                validate_public_http_url(url)
+
+    def test_one_private_address_rejects_the_whole_hostname(self):
+        """名前解決の結果に1つでも内部アドレスがあれば拒否すること（fail-close）。
+
+        DNS を握られていれば「公開IPも返しつつ、実際の接続先は内部IP」に
+        できる。「1つでも公開なら可」にすると、その一手で素通りする。
+        """
+        import socket as _socket
+
+        infos = [
+            (_socket.AF_INET, None, None, "", ("142.251.150.119", 0)),
+            (_socket.AF_INET, None, None, "", ("10.0.0.5", 0)),
+        ]
+        with patch("services.url_safety.socket.getaddrinfo", return_value=infos) as gai:
+            with self.assertRaises(URLSafetyError):
+                validate_public_http_url("https://mixed.example/")
+        self.assertTrue(gai.called, "getaddrinfo が差し替わっていない")
+
 
 class NewsFaviconTests(unittest.TestCase):
     def test_domain_becomes_a_favicon_url(self):
