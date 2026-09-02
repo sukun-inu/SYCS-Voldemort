@@ -3282,6 +3282,144 @@ class TTLCacheTests(unittest.TestCase):
                 self.assertGreater(cache.max_entries, 0)
 
 
+class VirusTotalTimeoutAndFailureCacheTests(unittest.TestCase):
+    """VirusTotal へ到達できないとき、待ち続けず・叩き直さないこと。
+
+    本番のログにこれが出ていた。
+
+        10:26:59 [VT] Content-Type https://.../h1565493.html ->
+        10:27:30 [VT] URL scan exception: Cannot connect to host www.virustotal.com:443
+
+    **31秒の空白。** そのあいだスキャンは `asyncio.to_thread` の中で待って
+    いて、既定のスレッドプール（16本）を1本占める。詰まると `awrite`
+    （設定の書き込み）など他の to_thread も後ろに並ぶ。
+
+    さらに `on_message` は5つのハンドラを待ってから
+    `bot.process_commands()` を呼ぶので、プレフィックスコマンドの応答も
+    そのぶん遅れる。
+
+    2つの欠陥がある。
+
+      1. `vt.Client` に timeout を渡していない → **vt-py の既定は300秒**
+      2. 失敗した結果をキャッシュしない → 同じ死んだURLを毎回叩き直す
+
+    どちらも「危険と判定するか」には影響しない（失敗は元から
+    malicious=0 として扱われる）。**遅いだけ**なので、動いている限り
+    気づけない類の欠陥である。
+    """
+
+    def setUp(self):
+        import services.virustotal_service as virustotal
+
+        self.vt_service = virustotal
+        # キーが無いと実際に叩く前に skip で戻るため、テストの間だけ差し替える。
+        key_patch = patch.object(virustotal, "VIRUSTOTAL_API_KEY", "dummy-key")
+        key_patch.start()
+        self.addCleanup(key_patch.stop)
+        self.vt_service._vt_cache.clear()
+        self.vt_service._vt_failure_cache.clear()
+        self.addCleanup(self.vt_service._vt_cache.clear)
+        self.addCleanup(self.vt_service._vt_failure_cache.clear)
+
+    def _client_factory(self, *, side_effect):
+        """vt.Client の代わり。渡された引数を控え、scan_url で side_effect を起こす。"""
+        seen: list[dict] = []
+
+        class FakeClient:
+            def __init__(self, apikey, **kwargs):
+                seen.append(kwargs)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def scan_url(self, url, wait_for_completion=False):
+                raise side_effect
+
+        return FakeClient, seen
+
+    def test_the_client_is_given_a_timeout(self):
+        """vt.Client に timeout を渡すこと。
+
+        渡さないと vt-py の既定 300秒 が効く。到達できない相手を5分待つ
+        あいだ、スレッドプールの1本が塞がる。
+        """
+        FakeClient, seen = self._client_factory(side_effect=OSError("Cannot connect"))
+        with patch.object(self.vt_service.vt, "Client", FakeClient):
+            asyncio.run(self.vt_service.vt_check_url("https://example.com/a"))
+
+        self.assertTrue(seen, "vt.Client が作られていない")
+        self.assertIn("timeout", seen[0], "timeout を渡していない（既定の300秒が効く）")
+        self.assertLessEqual(seen[0]["timeout"], 60, "300秒の既定と大差ない値になっている")
+
+    def test_a_failed_scan_is_not_retried_for_every_message(self):
+        """失敗したURLを、次のメッセージでまた叩きに行かないこと。
+
+        到達できない相手なら、次も到達できない。毎回30秒待つと、リンクを
+        含むメッセージが流れるだけでスレッドプールが埋まる。
+        """
+        FakeClient, seen = self._client_factory(side_effect=OSError("Cannot connect"))
+        with patch.object(self.vt_service.vt, "Client", FakeClient):
+            first = asyncio.run(self.vt_service.vt_check_url("https://example.com/b"))
+            second = asyncio.run(self.vt_service.vt_check_url("https://example.com/b"))
+
+        self.assertEqual(len(seen), 1, f"2回叩いている（{len(seen)}回）")
+        self.assertEqual(first["status"], "error")
+        self.assertEqual(second["status"], "error")
+
+    def test_a_cached_failure_still_reports_nothing_malicious(self):
+        """失敗をキャッシュしても、判定が甘くならないこと。
+
+        失敗は**元から** malicious=0 / suspicious=0 として扱われている
+        （_run_vt_scans は数だけを見る）。キャッシュしても同じものを返す
+        だけで、危険を見逃す方向へは動かない。
+        """
+        FakeClient, _ = self._client_factory(side_effect=OSError("Cannot connect"))
+        with patch.object(self.vt_service.vt, "Client", FakeClient):
+            asyncio.run(self.vt_service.vt_check_url("https://example.com/c"))
+            cached = asyncio.run(self.vt_service.vt_check_url("https://example.com/c"))
+
+        self.assertEqual(cached["malicious"], 0)
+        self.assertEqual(cached["suspicious"], 0)
+
+    def test_the_failure_cache_expires_much_sooner_than_the_success_cache(self):
+        """失敗の保持は短くすること。
+
+        成功は6時間持つが、失敗を同じだけ持つと、復旧しても6時間スキャン
+        しない状態が続く。一時的な不通と恒久的な不通を区別できない以上、
+        短く持って様子を見るほうへ倒す。
+        """
+        self.assertLess(self.vt_service._vt_failure_cache.ttl, self.vt_service._vt_cache.ttl)
+        self.assertLessEqual(self.vt_service._vt_failure_cache.ttl, 60 * 30)
+
+    def test_a_success_after_the_failure_window_replaces_the_cached_error(self):
+        """復旧したら、成功の結果で上書きされること。"""
+        FakeClient, _ = self._client_factory(side_effect=OSError("Cannot connect"))
+        with patch.object(self.vt_service.vt, "Client", FakeClient):
+            asyncio.run(self.vt_service.vt_check_url("https://example.com/d"))
+
+        self.vt_service._vt_failure_cache.clear()  # 期限切れの代わり
+
+        class OkClient:
+            def __init__(self, apikey, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def scan_url(self, url, wait_for_completion=False):
+                return SimpleNamespace(stats={"malicious": 0, "suspicious": 0})
+
+        with patch.object(self.vt_service.vt, "Client", OkClient):
+            result = asyncio.run(self.vt_service.vt_check_url("https://example.com/d"))
+        self.assertEqual(result["status"], "ok")
+
+
 class SecurityFailSafeTests(unittest.TestCase):
     """バイパス判定に失敗したときに破壊的操作へ進まないこと。
 
