@@ -1898,6 +1898,106 @@ async def _dispatch(
     return ok_count
 
 
+def _quake_targets(
+    bot: Bot,
+    event: dict,
+    max_scale: int,
+    only_guild_id: int | None,
+    override_channel_id: int | None,
+) -> list:
+    """送信先を決める。**重い処理より先に呼ぶこと。**
+
+    以前は JMA 詳細リンクの取得・バッジ生成・震度マップ生成（タイル25枚の
+    HTTP取得）を対象判定より先に走らせていたため、誰も受け取らない地震でも
+    毎回そのぶんの通信と描画が発生していた。地震は1日に何度も来る。
+    """
+    if override_channel_id is not None and only_guild_id is not None:
+        # override 経路は _override_target 側で理由を出しきっている。
+        return _override_target(bot, only_guild_id, override_channel_id)
+
+    targets = _collect_targets(
+        bot,
+        notify_type="quake_info",
+        max_scale=max_scale,
+        only_guild_id=only_guild_id,
+    )
+    # only_guild_id 指定（開発者パネルのリプレイ）で 0 件だと、押した側は
+    # 「受信・完了」のログしか見えず、何も届かない理由が分からない。
+    # 全ギルド一斉送信（本番の WS 経由）では毎回ほぼ全ギルドが対象外に
+    # なるのが通常なので、そちらでは出さない（出すとログが警告で埋まる）。
+    if not targets and only_guild_id is not None:
+        logger.warning(
+            "[earthquake] guild=%s: 送信先が0件でした（理由: %s）",
+            only_guild_id,
+            _diagnose_no_target(bot, only_guild_id, notify_type="quake_info", max_scale=max_scale),
+        )
+    return targets
+
+
+async def _quake_badge(max_scale: int) -> "io.BytesIO | None":
+    """最大震度のバッジ画像。作れなければ None。
+
+    震度が取れないイベント（遠地地震など、points も areas も maxScale も
+    無い）では max_scale が -1 になる。そのままバッジを作ると「最大震度 -1」と
+    大書きした画像を貼ってしまうため、分からないときは作らない。
+
+    生成に失敗しても例外を外へ出さない。画像が1枚足りないだけで**地震の
+    通知が丸ごと消える**のは割に合わない。
+    """
+    if max_scale < 0:
+        return None
+    try:
+        # PIL の描画と PNG 保存。地図ほど重くはないが、同じ理由で
+        # イベントループの上では回さない。
+        return await asyncio.to_thread(_generate_badge, max_scale)
+    except Exception as e:
+        logger.exception("[earthquake] badge generation error: %s", e)
+        return None
+
+
+def _map_subtitle(event: dict) -> str:
+    """地図の副題。震源・規模・深さ・時刻を1行に並べる。"""
+    hypo_info = event.get("earthquake", {}).get("hypocenter", {})
+    time_label, _ = _format_time(event.get("earthquake", {}).get("time", ""))
+    mag_label, _ = _parse_magnitude(hypo_info.get("magnitude"))
+    parts = [
+        hypo_info.get("name") or "",
+        mag_label,
+        _parse_depth(hypo_info.get("depth")),
+        time_label if time_label != "不明" else "",
+    ]
+    return "  ".join(part for part in parts if part)
+
+
+async def _quake_map(
+    event: dict,
+    max_scale: int,
+    lat: float | None,
+    lon: float | None,
+    points: list,
+) -> "io.BytesIO | None":
+    """震度マップ。震度1-2（コンパクト表示）や座標が無いときは作らない。
+
+    画像だけを見ても意味が通るよう、見出しに震度と震源を入れる。Discord の
+    埋め込みは本文が折り畳まれることがあり、画像だけが目に入る場面がある。
+
+    生成に失敗しても例外を外へ出さない。タイル25枚の取得を伴うので外の都合で
+    落ちる余地が最も大きく、ここで抜けると**取りに行けなかった日は通知が
+    全部消える。**
+    """
+    is_minor = max_scale <= 20  # 震度1-2 はコンパクト表示
+    if is_minor or lat is None or lon is None or not points:
+        return None
+    try:
+        map_title = f"最大震度 {_SCALE_DISPLAY[max_scale]}" if max_scale in _SCALE_DISPLAY else "震度分布"
+        # タイル取得は専用セッションで実施（WS セッションを汚染しない）
+        async with aiohttp.ClientSession() as tile_session:
+            return await _generate_intensity_map(tile_session, lat, lon, points, map_title, _map_subtitle(event))
+    except Exception as e:
+        logger.exception("[earthquake] map generation error: %s", e)
+        return None
+
+
 async def _notify_all_guilds(
     bot: Bot,
     event: dict,
@@ -1921,88 +2021,28 @@ async def _notify_all_guilds(
     がログを残せるように返す。"""
     max_scale = _max_scale(event)
 
-    # 先に送信先を決める。以前は JMA 詳細リンクの取得・バッジ生成・震度マップ
-    # 生成（タイル25枚のHTTP取得）を対象判定より先に走らせていたため、誰も
-    # 受け取らない地震でも毎回そのぶんの通信と描画が発生していた。
-    if override_channel_id is not None and only_guild_id is not None:
-        targets = _override_target(bot, only_guild_id, override_channel_id)
-    else:
-        targets = _collect_targets(
-            bot,
-            notify_type="quake_info",
-            max_scale=max_scale,
-            only_guild_id=only_guild_id,
-        )
-        # only_guild_id 指定（開発者パネルのリプレイ）で 0 件だと、押した側は
-        # 「受信・完了」のログしか見えず、何も届かない理由が分からない。
-        # 全ギルド一斉送信（本番の WS 経由）では毎回ほぼ全ギルドが対象外に
-        # なるのが通常なので、そちらでは出さない。override 経路は
-        # _override_target 側で理由を出しきっている。
-        if not targets and only_guild_id is not None:
-            logger.warning(
-                "[earthquake] guild=%s: 送信先が0件でした（理由: %s）",
-                only_guild_id,
-                _diagnose_no_target(bot, only_guild_id, notify_type="quake_info", max_scale=max_scale),
-            )
-
+    # 送信先を先に決める。誰も受け取らないなら、リンクも画像も作らない。
+    targets = _quake_targets(bot, event, max_scale, only_guild_id, override_channel_id)
     if not targets:
         return 0
 
     points = event.get("points", [])
-    eq = event.get("earthquake", {})
-    hypo = eq.get("hypocenter", {})
+    hypo = event.get("earthquake", {}).get("hypocenter", {})
     lat = _parse_coord(hypo.get("latitude"))
     lon = _parse_coord(hypo.get("longitude"))
 
     detail_url = await _resolve_jma_detail_url(event, max_scale)
-
-    is_minor = max_scale <= 20  # 震度1-2 はコンパクト表示
-
-    # 震度が取れないイベント（遠地地震など、points も areas も maxScale も無い）
-    # では max_scale が -1 になる。そのままバッジを作ると「最大震度 -1」と
-    # 大書きした画像を貼ってしまうため、分からないときは作らない。
-    badge_buf: io.BytesIO | None = None
-    if max_scale >= 0:
-        try:
-            # PIL の描画と PNG 保存。地図ほど重くはないが、同じ理由で
-            # イベントループの上では回さない。
-            badge_buf = await asyncio.to_thread(_generate_badge, max_scale)
-        except Exception as e:
-            logger.exception("[earthquake] badge generation error: %s", e)
-
-    map_buf: io.BytesIO | None = None
-    if not is_minor and lat is not None and lon is not None and points:
-        try:
-            # 画像だけを見ても意味が通るよう、見出しに震度と震源を入れる。
-            # Discord の埋め込みは本文が折り畳まれることがあり、画像だけが
-            # 目に入る場面がある。
-            eq_info = event.get("earthquake", {})
-            hypo_info = eq_info.get("hypocenter", {})
-            map_title = f"最大震度 {_SCALE_DISPLAY[max_scale]}" if max_scale in _SCALE_DISPLAY else "震度分布"
-            time_label, _ = _format_time(eq_info.get("time", ""))
-            mag_label, _ = _parse_magnitude(hypo_info.get("magnitude"))
-            parts = [
-                hypo_info.get("name") or "",
-                mag_label,
-                _parse_depth(hypo_info.get("depth")),
-                time_label if time_label != "不明" else "",
-            ]
-            map_subtitle = "  ".join(part for part in parts if part)
-
-            # タイル取得は専用セッションで実施（WS セッションを汚染しない）
-            async with aiohttp.ClientSession() as tile_session:
-                map_buf = await _generate_intensity_map(tile_session, lat, lon, points, map_title, map_subtitle)
-        except Exception as e:
-            logger.exception("[earthquake] map generation error: %s", e)
+    badge_buf = await _quake_badge(max_scale)
+    map_buf = await _quake_map(event, max_scale, lat, lon, points)
 
     embed = _build_embed(event, max_scale, has_badge=bool(badge_buf))
-    if map_buf:
-        embed.set_image(url="attachment://earthquake_map.png")
-
     attachments: list[tuple[str, bytes]] = []
     if badge_buf:
         attachments.append(("intensity_badge.png", badge_buf.getvalue()))
     if map_buf:
+        # 添付だけして set_image を忘れると、ファイルは付いているのに
+        # 埋め込みには出ない（送信そのものは成功する）。
+        embed.set_image(url="attachment://earthquake_map.png")
         attachments.append(("earthquake_map.png", map_buf.getvalue()))
 
     return await _dispatch(
