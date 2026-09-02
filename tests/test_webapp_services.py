@@ -22,6 +22,7 @@ import random
 import sys
 import tempfile
 import unittest
+from contextlib import ExitStack
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -1101,6 +1102,164 @@ class StoreWeeklyForecastTests(unittest.TestCase):
         """
         with self.assertRaises(RuntimeError):
             self._store(self._payload(metals=("unknown_metal",)))
+
+
+class BuildWeeklyForecastTests(unittest.IsolatedAsyncioTestCase):
+    """build_weekly_forecast の組み立て方を固定する。
+
+    128行あるこの関数を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+    **この関数にはテストが1本も無かった。** 外へ4回問い合わせるので
+    書きにくく、そのまま残っていた。
+
+    見るのは、割ったときに黙って変わりうるところだけ。
+
+      - 1金属も作れなければ RuntimeError にすること
+      - 一部の金属だけ作れたときは、作れたぶんを返すこと
+      - 要約は「予測を作ったあと」に取り、既存の金属にだけ入れること
+      - LLM 判定は為替とニュースの結果を受け取ってから呼ぶこと
+
+    1つ目が特に効く。ここで例外にせず空の payload を返すと、呼び出し元の
+    バッチが**そのまま「予測なし」をキャッシュへ上書きする。** 古い予測
+    ごと消える。
+    """
+
+    def setUp(self):
+        self.fs = forecast_service
+
+    class _FakeClientSession:
+        """aiohttp.ClientSession の代わり。中では何も通信しない。"""
+
+        def __init__(self, *a, **k):
+            """引数（timeout/headers）は受け取るだけ。"""
+
+        async def __aenter__(self):
+            """自分を返す。"""
+            return self
+
+        async def __aexit__(self, *exc):
+            """例外は握らない。"""
+            return False
+
+    def _item(self, metal_key):
+        """forecast_for_metal が返す1金属ぶんの代わり。"""
+        return {"start_price_per_gram": 100.0, "drivers": [f"{metal_key}の理由"]}
+
+    def _patched(self, stack, *, for_metal, summaries=None, llm=None):
+        """外への問い合わせを全部差し替える。返した mock を辞書で渡す。"""
+        order: list[str] = []
+
+        async def fx(*a, **k):
+            """為替の取得。"""
+            order.append("fx")
+            return {"available": True, "daily_factor": 0.0, "daily_returns_by_date": {}, "source": "Stooq"}
+
+        async def news(*a, **k):
+            """ニュースの取得。"""
+            order.append("news")
+            return {"available": True, "sentiment": {}, "article_counts": {}, "sample_headlines": {}}
+
+        async def llm_signal(**kwargs):
+            """LLM 判定。為替とニュースの結果を受け取っているかを控える。"""
+            order.append("llm")
+            order.append(f"llm_saw_fx={bool(kwargs.get('fx_signal'))}")
+            order.append(f"llm_saw_news={bool(kwargs.get('news_signal'))}")
+            return llm or {"available": False, "scores": {}, "confidences": {}, "rationales": {}}
+
+        async def summaries_fn(*, forecast):
+            """要約の取得。呼ばれた時点の金属一覧を控える。"""
+            order.append("summaries:" + ",".join(sorted(forecast)))
+            return summaries or {}
+
+        mocks = {
+            "order": order,
+            "load_history": stack.enter_context(
+                patch.object(self.fs, "load_history", AsyncMock(return_value={"gold": [1], "silver": [1]}))
+            ),
+            "accuracy": stack.enter_context(
+                patch.object(self.fs, "load_recent_forecast_error", AsyncMock(return_value={}))
+            ),
+            "session": stack.enter_context(patch.object(self.fs.aiohttp, "ClientSession", self._FakeClientSession)),
+            "fx": stack.enter_context(patch.object(self.fs, "fetch_usdjpy_signal", fx)),
+            "news": stack.enter_context(patch.object(self.fs, "fetch_news_signals", news)),
+            "llm": stack.enter_context(patch.object(self.fs, "fetch_llm_signal", llm_signal)),
+            "for_metal": stack.enter_context(patch.object(self.fs, "forecast_for_metal", for_metal)),
+            "summaries": stack.enter_context(patch.object(self.fs, "fetch_forecast_summaries", summaries_fn)),
+        }
+        return mocks
+
+    async def test_no_metal_at_all_raises_instead_of_returning_an_empty_forecast(self):
+        """1金属も作れなければ RuntimeError にすること。
+
+        空の payload を返すと、呼び出し元のバッチがそれを**そのまま
+        キャッシュへ上書きする。** 古い予測ごと消え、画面から予測が
+        まるごと無くなる。例外にしておけば、バッチは古い予測を残せる。
+        """
+        with ExitStack() as stack:
+            self._patched(stack, for_metal=Mock(return_value=None))
+            with self.assertRaisesRegex(RuntimeError, "価格履歴"):
+                await self.fs.build_weekly_forecast(Mock())
+
+    async def test_the_metals_that_could_be_built_are_returned(self):
+        """一部の金属だけ作れたときは、作れたぶんを返すこと。
+
+        履歴が足りない金属が1つあるだけで全部落とすと、残りの予測まで
+        出なくなる。
+        """
+
+        def for_metal(*, metal_key, **kwargs):
+            """gold だけ作れる。"""
+            return self._item(metal_key) if metal_key == "gold" else None
+
+        with ExitStack() as stack:
+            self._patched(stack, for_metal=for_metal)
+            payload = await self.fs.build_weekly_forecast(Mock())
+
+        self.assertEqual(set(payload["forecast"]), {"gold"})
+
+    async def test_the_summary_is_fetched_after_the_forecast_and_only_fills_known_metals(self):
+        """要約は予測を作ったあとに取り、既存の金属にだけ入れること。
+
+        要約は drivers を材料に書かせるので、予測より先には取れない。
+        また、返ってきた金属名を素直に信じて入れると、**予測が無いのに
+        要約だけある金属**が payload に生える。フロントエンドはそれを
+        1つの予測として描こうとして落ちる。空文字で既存の要約を
+        上書きしないことも併せて見る。
+        """
+
+        def for_metal(*, metal_key, **kwargs):
+            """gold だけ作れる。"""
+            return self._item(metal_key) if metal_key == "gold" else None
+
+        with ExitStack() as stack:
+            mocks = self._patched(
+                stack,
+                for_metal=for_metal,
+                summaries={"gold": "金の要約", "platinum": "作れなかった金属の要約", "silver": ""},
+            )
+            payload = await self.fs.build_weekly_forecast(Mock())
+
+        self.assertIn("summaries:gold", mocks["order"])
+        self.assertLess(mocks["order"].index("llm"), mocks["order"].index("summaries:gold"))
+        self.assertEqual(set(payload["forecast"]), {"gold"})
+        self.assertEqual(payload["forecast"]["gold"]["summary"], "金の要約")
+
+    async def test_the_llm_is_asked_after_the_fx_and_news_results_are_in(self):
+        """LLM 判定は、為替とニュースの結果を受け取ってから呼ぶこと。
+
+        LLM はこの2つを材料に採点する。並行に走らせると空のまま採点する
+        ことになり、**点は返るが中身が変わる。** 例外も出ないし、
+        payload の形も同じなので、出てきた数字を疑うまで気づけない。
+        """
+        with ExitStack() as stack:
+            mocks = self._patched(stack, for_metal=lambda *, metal_key, **k: self._item(metal_key))
+            await self.fs.build_weekly_forecast(Mock())
+
+        order = mocks["order"]
+        self.assertLess(order.index("fx"), order.index("llm"))
+        self.assertLess(order.index("news"), order.index("llm"))
+        self.assertIn("llm_saw_fx=True", order)
+        self.assertIn("llm_saw_news=True", order)
 
 
 class ForecastServicePureTests(unittest.TestCase):

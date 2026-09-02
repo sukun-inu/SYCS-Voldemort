@@ -37,22 +37,16 @@ logger = logging.getLogger(__name__)
 FORECAST_HISTORY_WINDOW_MIN_DAYS = env_int("FORECAST_HISTORY_WINDOW_MIN_DAYS", 120, minimum=45)
 
 
-async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7) -> dict[str, Any]:
-    """為替・ニュース・LLM判定を集め、金属ごとの週次予測を新規に計算する（DBへの保存は別関数）。
+async def _gather_signals(history_by_metal: dict, mae_by_metal: dict) -> tuple[dict, dict, dict]:
+    """為替・ニュース・LLM判定を集めて (fx, news, llm) を返す。
 
-    為替とニュースの取得は asyncio.gather で並行に行い、LLM判定は
-    その結果を使うため後で呼ぶ（依存関係があるので並行化できない）。
-    1金属も予測が作れなければ RuntimeError にする。呼び出し元
-    （バッチジョブ）はこれを握りつぶさず、古い予測をそのままキャッシュに
-    残す判断ができるようにするため。
+    為替とニュースの取得は asyncio.gather で並行に行い、**LLM判定はその
+    結果を材料に採点するので後で呼ぶ**（依存関係があるので並行化できない）。
+    並行に走らせると空のまま採点することになり、点は返るが中身が変わる。
+
+    このセッションは使い回さない（services/http_client.py 参照）。予測は
+    数時間に1回しか組まないので、作り直す36msを惜しむ理由が無い。
     """
-    history_window_days = max(FORECAST_HISTORY_WINDOW_MIN_DAYS, horizon_days * 20)
-    history_by_metal = await load_history(session, history_window_days)
-    recent_accuracy = await load_recent_forecast_error(session)
-    mae_by_metal = recent_accuracy.get("mean_abs_error_pct", {})
-    coverage_by_metal = recent_accuracy.get("coverage", {})
-    tilt_effect_by_metal = recent_accuracy.get("tilt_effect", {})
-
     timeout = aiohttp.ClientTimeout(
         total=max(FORECAST_LLM_TIMEOUT_SECONDS + 10, 30),
         connect=8,
@@ -75,11 +69,32 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
             news_signal=news_signal,
             recent_accuracy=mae_by_metal,
         )
+    return fx_signal, news_signal, llm_signal
 
-    today = datetime.now(JST)
+
+def _forecast_all_metals(
+    *,
+    history_by_metal: dict,
+    horizon_days: int,
+    today: datetime,
+    fx_signal: dict,
+    news_signal: dict,
+    llm_signal: dict,
+    recent_accuracy: dict,
+) -> dict[str, Any]:
+    """金属ごとに予測を組む。作れなかった金属は入れない。
+
+    履歴が足りない金属が1つあるだけで全部落とすと、残りの予測まで出なく
+    なるので、作れたぶんだけを返す。1つも作れなかった場合の扱いは
+    呼び出し側（build_weekly_forecast）が決める。
+    """
+    mae_by_metal = recent_accuracy.get("mean_abs_error_pct", {})
+    coverage_by_metal = recent_accuracy.get("coverage", {})
+    tilt_effect_by_metal = recent_accuracy.get("tilt_effect", {})
     fx_returns_by_date = {
         str(key): safe_float(value) or 0.0 for key, value in (fx_signal.get("daily_returns_by_date") or {}).items()
     }
+
     forecast: dict[str, Any] = {}
     for metal_key in METAL_COMMANDS.keys():
         item = forecast_for_metal(
@@ -104,18 +119,110 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
         )
         if item is not None:
             forecast[metal_key] = item
+    return forecast
 
-    if not forecast:
-        raise RuntimeError("予測に必要な価格履歴データがありません。")
 
-    # driversはforecast_for_metal計算後でないと確定しないため、scoring用のfetch_llm_signal
-    # とは別にもう一度Groqを呼び、平易な要約文をここで確定させてから各金属へ埋め込む。
+async def _fill_summaries(forecast: dict[str, Any]) -> None:
+    """平易な要約文を取ってきて、各金属へ埋める（forecast を直接書き換える）。
+
+    driversはforecast_for_metal計算後でないと確定しないため、scoring用の
+    fetch_llm_signal とは別にもう一度Groqを呼ぶ。
+
+    返ってきた金属名を素直に信じて入れないこと。予測が作れなかった金属の
+    要約が混ざると、**予測が無いのに要約だけある金属**が payload に生え、
+    フロントエンドがそれを1つの予測として描こうとして落ちる。空文字で
+    既にある要約を上書きしないのも同じ理由。
+    """
     summaries = await fetch_forecast_summaries(forecast=forecast)
     for metal_key, summary_text in summaries.items():
         if metal_key in forecast and summary_text:
             forecast[metal_key]["summary"] = summary_text
 
-    model_name = MODEL_VARIANT
+
+def _live_signals_payload(
+    *,
+    fx_signal: dict,
+    news_signal: dict,
+    llm_signal: dict,
+    recent_accuracy: dict,
+) -> dict[str, Any]:
+    """いま集めたシグナルを payload の signals ブロックにする。
+
+    DBから読み直す側（_signals_payload）と同じ形にすること。形が食い違うと、
+    新規に組んだ予測と保存済みの予測とで画面の出方が変わる。
+    """
+    mae_by_metal = recent_accuracy.get("mean_abs_error_pct", {})
+    coverage_by_metal = recent_accuracy.get("coverage", {})
+    return {
+        "usd_jpy": {
+            "available": bool(fx_signal.get("available")),
+            "source": fx_signal.get("source", "Stooq"),
+            "latest": fx_signal.get("latest"),
+            "weekly_change_pct": fx_signal.get("weekly_change_pct", 0.0),
+        },
+        "news": {
+            "available": bool(news_signal.get("available")),
+            "source": news_signal.get("source", "Google News RSS"),
+            "sentiment": news_signal.get("sentiment", {}),
+            "article_counts": news_signal.get("article_counts", {}),
+            "sample_headlines": news_signal.get("sample_headlines", {}),
+        },
+        "llm": {
+            "available": bool(llm_signal.get("available")),
+            "source": llm_signal.get("source", "Groq"),
+            "model": llm_signal.get("model", FORECAST_LLM_MODEL),
+            "scores": llm_signal.get("scores", {}),
+            "confidences": llm_signal.get("confidences", {}),
+            "rationales": llm_signal.get("rationales", {}),
+            "global_comment": llm_signal.get("global_comment", ""),
+        },
+        "interval": {
+            "prob": FORECAST_INTERVAL_PROB,
+            "tilt_max_pct_per_day": FORECAST_TILT_MAX_PCT_PER_DAY * 100,
+        },
+        "accuracy": {
+            "available": bool(mae_by_metal or coverage_by_metal),
+            "lookback_days": int(recent_accuracy.get("lookback_days", 14)),
+            "mean_abs_error_pct": mae_by_metal,
+            "baseline_mean_abs_error_pct": recent_accuracy.get("baseline_mean_abs_error_pct", {}),
+            "tilt_effect": recent_accuracy.get("tilt_effect", {}),
+            "coverage": coverage_by_metal,
+        },
+    }
+
+
+async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7) -> dict[str, Any]:
+    """為替・ニュース・LLM判定を集め、金属ごとの週次予測を新規に計算する（DBへの保存は別関数）。
+
+    1金属も予測が作れなければ RuntimeError にする。呼び出し元（バッチジョブ）
+    はこれを握りつぶさず、古い予測をそのままキャッシュに残す判断ができる
+    ようにするため。**空の payload を返すと、そのまま「予測なし」が
+    キャッシュへ上書きされて古い予測ごと消える。**
+    """
+    history_window_days = max(FORECAST_HISTORY_WINDOW_MIN_DAYS, horizon_days * 20)
+    history_by_metal = await load_history(session, history_window_days)
+    recent_accuracy = await load_recent_forecast_error(session)
+
+    fx_signal, news_signal, llm_signal = await _gather_signals(
+        history_by_metal, recent_accuracy.get("mean_abs_error_pct", {})
+    )
+
+    today = datetime.now(JST)
+    forecast = _forecast_all_metals(
+        history_by_metal=history_by_metal,
+        horizon_days=horizon_days,
+        today=today,
+        fx_signal=fx_signal,
+        news_signal=news_signal,
+        llm_signal=llm_signal,
+        recent_accuracy=recent_accuracy,
+    )
+
+    if not forecast:
+        raise RuntimeError("予測に必要な価格履歴データがありません。")
+
+    await _fill_summaries(forecast)
+
     model_description = (
         f"現在価格を中心に、過去の7日変動分布から求めた{FORECAST_INTERVAL_PROB:.0%}予測区間を示すモデル。"
         "USD/JPY・ニュース・AI判定は中心をわずかに傾けるだけに留める。"
@@ -126,43 +233,13 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
         "as_of_date": today.date().isoformat(),
         "generated_at": today.isoformat(),
         "horizon_days": horizon_days,
-        "model": {"name": model_name, "description": model_description},
-        "signals": {
-            "usd_jpy": {
-                "available": bool(fx_signal.get("available")),
-                "source": fx_signal.get("source", "Stooq"),
-                "latest": fx_signal.get("latest"),
-                "weekly_change_pct": fx_signal.get("weekly_change_pct", 0.0),
-            },
-            "news": {
-                "available": bool(news_signal.get("available")),
-                "source": news_signal.get("source", "Google News RSS"),
-                "sentiment": news_signal.get("sentiment", {}),
-                "article_counts": news_signal.get("article_counts", {}),
-                "sample_headlines": news_signal.get("sample_headlines", {}),
-            },
-            "llm": {
-                "available": bool(llm_signal.get("available")),
-                "source": llm_signal.get("source", "Groq"),
-                "model": llm_signal.get("model", FORECAST_LLM_MODEL),
-                "scores": llm_signal.get("scores", {}),
-                "confidences": llm_signal.get("confidences", {}),
-                "rationales": llm_signal.get("rationales", {}),
-                "global_comment": llm_signal.get("global_comment", ""),
-            },
-            "interval": {
-                "prob": FORECAST_INTERVAL_PROB,
-                "tilt_max_pct_per_day": FORECAST_TILT_MAX_PCT_PER_DAY * 100,
-            },
-            "accuracy": {
-                "available": bool(mae_by_metal or coverage_by_metal),
-                "lookback_days": int(recent_accuracy.get("lookback_days", 14)),
-                "mean_abs_error_pct": mae_by_metal,
-                "baseline_mean_abs_error_pct": recent_accuracy.get("baseline_mean_abs_error_pct", {}),
-                "tilt_effect": tilt_effect_by_metal,
-                "coverage": coverage_by_metal,
-            },
-        },
+        "model": {"name": MODEL_VARIANT, "description": model_description},
+        "signals": _live_signals_payload(
+            fx_signal=fx_signal,
+            news_signal=news_signal,
+            llm_signal=llm_signal,
+            recent_accuracy=recent_accuracy,
+        ),
         "forecast": forecast,
     }
 
