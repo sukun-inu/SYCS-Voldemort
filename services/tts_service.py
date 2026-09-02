@@ -1,8 +1,9 @@
 import asyncio
+import time
 import logging
 import re
 from functools import lru_cache
-from typing import Optional
+from typing import NamedTuple, Optional
 
 import aiohttp
 import discord
@@ -27,6 +28,22 @@ _RECONNECT_DELAY_SEC = 2.0  # 再接続間隔（秒）
 
 # ギルドごとの状態
 _queues: dict[int, asyncio.Queue] = {}
+
+
+class _Utterance(NamedTuple):
+    """読み上げ1件ぶん。所要時間を測るための時刻も一緒に運ぶ。
+
+    合成にかかった時間は合成した側にしか分からず、待ち時間は再生する側に
+    しか分からない。**両方そろって初めて「喋り出すまで何ミリ秒か」になる**
+    ので、1件に括って持ち回す。
+    """
+
+    audio_url: str
+    vc_channel_id: int
+    synth_ms: int
+    queued_at: float
+
+
 _tasks: dict[int, asyncio.Task] = {}
 _temp_overrides: dict[int, dict] = {}  # guild_id -> {"vc_channel_id": int}
 
@@ -94,8 +111,18 @@ def _apply_dictionary(text: str, dictionary: dict[str, str]) -> str:
     return _dictionary_pattern(words).sub(lambda m: dictionary[m.group(0)], text)
 
 
-async def _synthesize(text: str, voice: str, rate: int) -> Optional[str]:
-    """TTS APIを叩いて音声URLを返す。失敗時はNone。"""
+async def _synthesize(text: str, voice: str, rate: int) -> tuple[Optional[str], int]:
+    """TTS APIを叩いて (音声URL, 所要ミリ秒) を返す。失敗時は (None, 所要ミリ秒)。
+
+    所要時間を返すのは、**遅いときにどこが遅いのかを後から言えるようにする**
+    ため。ここは1発話ごとに `aiohttp.ClientSession()` を作り直しており、毎回
+    DNS 解決・TCP・TLS からやり直している。その固定費が効いているのか、
+    サーバ側の生成が遅いのかは、測らないと区別できない。
+
+    失敗したときも測って返す。**いちばん知りたいのは、失敗するまでに何秒
+    待たされたか**（30秒の制限まで待って落ちているのか、すぐ断られたのか）。
+    """
+    started = time.monotonic()
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -105,13 +132,17 @@ async def _synthesize(text: str, voice: str, rate: int) -> Optional[str]:
             ) as resp:
                 if resp.status != 200:
                     body = await resp.text()
-                    logger.error("[TTS] API %s: %s", resp.status, body[:200])
-                    return None
+                    elapsed_ms = int((time.monotonic() - started) * 1000)
+                    logger.error("[TTS] API %s（%dms）: %s", resp.status, elapsed_ms, body[:200])
+                    return None, elapsed_ms
                 data = await resp.json()
-                return f"{TTS_BASE_URL}{data['url']}"
+                elapsed_ms = int((time.monotonic() - started) * 1000)
+                logger.info("[TTS] 合成 %dms（%d文字 / voice=%s）", elapsed_ms, len(text), voice)
+                return f"{TTS_BASE_URL}{data['url']}", elapsed_ms
     except Exception as e:
-        logger.exception("[TTS] synthesize error: %s", e)
-        return None
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        logger.exception("[TTS] synthesize error（%dms）: %s", elapsed_ms, e)
+        return None, elapsed_ms
 
 
 async def _connect_or_move(guild: discord.Guild, vc_channel_id: int) -> discord.VoiceClient | None:
@@ -145,7 +176,7 @@ async def _player_loop(bot: Bot, guild_id: int) -> None:
         except asyncio.CancelledError:
             break
 
-        audio_url, vc_channel_id = item
+        audio_url, vc_channel_id, synth_ms, queued_at = item
         guild = bot.get_guild(guild_id)
         if guild is None:
             queue.task_done()
@@ -193,6 +224,16 @@ async def _player_loop(bot: Bot, guild_id: int) -> None:
 
             source = discord.FFmpegPCMAudio(audio_url)
             vc.play(source, after=_after)
+            # 合成が終わってから実際に音が出るまで。キューの待ちと VC 接続、
+            # ffmpeg の起動がここに入る。合成と足すと「投稿から喋り出すまで」。
+            wait_ms = int((time.monotonic() - queued_at) * 1000)
+            logger.info(
+                "[TTS] 再生開始 guild=%s 合成=%dms 待ち=%dms 計=%dms",
+                guild_id,
+                synth_ms,
+                wait_ms,
+                synth_ms + wait_ms,
+            )
             await done_event.wait()
         except Exception as e:
             logger.exception("[TTS] play error: %s", e)
@@ -235,12 +276,12 @@ async def enqueue_message(
     if len(speak_text) > speak_max:
         speak_text = speak_text[:speak_max]
 
-    audio_url = await _synthesize(speak_text, voice, rate)
+    audio_url, synth_ms = await _synthesize(speak_text, voice, rate)
     if not audio_url:
         return
 
     queue = _queues.setdefault(guild.id, asyncio.Queue())
-    await queue.put((audio_url, int(vc_channel_id)))
+    await queue.put(_Utterance(audio_url, int(vc_channel_id), synth_ms, time.monotonic()))
 
     task = _tasks.get(guild.id)
     if task is None or task.done():
@@ -269,12 +310,12 @@ async def enqueue_vc_event(
     voice = str(settings.get("default_voice") or _DEFAULT_VOICE)
     rate = int(settings.get("default_rate") or _DEFAULT_RATE)
 
-    audio_url = await _synthesize(text, voice, rate)
+    audio_url, synth_ms = await _synthesize(text, voice, rate)
     if not audio_url:
         return
 
     queue = _queues.setdefault(guild.id, asyncio.Queue())
-    await queue.put((audio_url, int(vc_channel_id)))
+    await queue.put(_Utterance(audio_url, int(vc_channel_id), synth_ms, time.monotonic()))
 
     task = _tasks.get(guild.id)
     if task is None or task.done():

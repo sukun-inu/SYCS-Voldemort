@@ -3282,6 +3282,166 @@ class TTLCacheTests(unittest.TestCase):
                 self.assertGreater(cache.max_entries, 0)
 
 
+class TtsLatencyLoggingTests(unittest.TestCase):
+    """読み上げにかかった時間が、あとから読める形で残ること。
+
+    「TTS が遅い」という報告に対して、**手元には測った値が1つも無かった**。
+    合成が遅いのか、キューで待っているのか、VC 接続が遅いのかを区別できない
+    と、直す場所を当てずっぽうで選ぶことになる。
+
+    測るのは2つ。
+
+      合成 … TTS サーバへ投げて音声URLが返るまで
+      待ち … 合成が終わってから実際に音が出るまで（キュー・VC接続・ffmpeg）
+
+    失敗したときも測る。**いちばん知りたいのは、失敗するまでに何秒待たされた
+    か**（30秒の制限まで粘ったのか、すぐ断られたのか）である。
+    """
+
+    def setUp(self):
+        import services.tts_service as tts
+
+        self.tts = tts
+
+    def _fake_session(self, *, status=200, payload=None, elapsed=1.5):
+        """POST を1回だけ受ける aiohttp セッションの代わり。
+
+        time.monotonic を進めることで、経過時間の計測そのものを確かめる
+        （固定値を返しているだけなら、この差分は出ない）。
+        """
+        clock = {"now": 100.0}
+
+        class FakeResponse:
+            def __init__(self):
+                self.status = status
+
+            async def __aenter__(self):
+                clock["now"] += elapsed
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def json(self):
+                return payload or {"url": "/audio/x.wav"}
+
+            async def text(self):
+                return "エラー本文"
+
+        class FakeSession:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            def post(self, *a, **k):
+                return FakeResponse()
+
+        return FakeSession, lambda: clock["now"]
+
+    def test_a_successful_synthesis_reports_how_long_it_took(self):
+        """合成が成功したら、URL と所要ミリ秒を返してログにも出すこと。"""
+        FakeSession, clock = self._fake_session(elapsed=1.5)
+        with (
+            patch.object(self.tts.aiohttp, "ClientSession", FakeSession),
+            patch.object(self.tts.time, "monotonic", clock),
+            self.assertLogs(self.tts.logger, level="INFO") as captured,
+        ):
+            url, ms = asyncio.run(self.tts._synthesize("こんにちは", "ja-JP-NanamiNeural", 0))
+
+        self.assertTrue(url.endswith("/audio/x.wav"))
+        self.assertEqual(ms, 1500)
+        self.assertTrue(any("合成 1500ms" in line for line in captured.output), captured.output)
+
+    def test_a_failed_synthesis_still_reports_how_long_it_waited(self):
+        """失敗しても所要時間を返すこと。
+
+        30秒の制限まで粘って落ちたのか、すぐ断られたのかで、疑う場所が
+        変わる。None だけ返すと、その区別が消える。
+        """
+        FakeSession, clock = self._fake_session(status=503, elapsed=4.0)
+        with (
+            patch.object(self.tts.aiohttp, "ClientSession", FakeSession),
+            patch.object(self.tts.time, "monotonic", clock),
+            self.assertLogs(self.tts.logger, level="ERROR") as captured,
+        ):
+            url, ms = asyncio.run(self.tts._synthesize("こんにちは", "ja-JP-NanamiNeural", 0))
+
+        self.assertIsNone(url)
+        self.assertEqual(ms, 4000)
+        self.assertTrue(any("4000ms" in line for line in captured.output), captured.output)
+
+    def test_the_playback_start_reports_the_wait(self):
+        """実際に音が出た時点で、合成と待ちの両方をログへ出すこと。
+
+        合成の時間だけ見ても「投稿から喋り出すまで」は分からない。キューの
+        待ち・VC接続・ffmpeg の起動がここに乗る。**INFO で出すこと**まで
+        見ているのは、DEBUG へ落とすと本番のログから消えるため（本番は
+        INFO で回している）。
+        """
+        guild_id = 8
+        queue = asyncio.Queue()
+        self.tts._queues[guild_id] = queue
+        self.addCleanup(self.tts._queues.pop, guild_id, None)
+
+        voice_client = Mock()
+        voice_client.is_playing.return_value = False
+        voice_client.play.side_effect = lambda source, after: after(None)
+
+        async def one_round():
+            """1件だけ流して、ループが待ちに入ったところで打ち切る。"""
+            await queue.put(self.tts._Utterance("http://x/a.wav", 99, 1234, time.monotonic() - 0.5))
+            task = asyncio.get_running_loop().create_task(self.tts._player_loop(Mock(), guild_id))
+            await queue.join()
+            task.cancel()
+
+        with (
+            patch.object(self.tts, "_connect_or_move", AsyncMock(return_value=voice_client)),
+            patch.object(self.tts.discord, "FFmpegPCMAudio", Mock()),
+            self.assertLogs(self.tts.logger, level="INFO") as captured,
+        ):
+            asyncio.run(one_round())
+
+        started = [line for line in captured.output if "再生開始" in line]
+        self.assertEqual(len(started), 1, captured.output)
+        self.assertIn("合成=1234ms", started[0])
+        # 0.5秒前にキューへ入れた1件なので、待ちは500ms前後になるはず。
+        # 「待ち=」の有無だけ見ていると、0 を書くだけの変異で素通りする。
+        import re
+
+        waited = int(re.search(r"待ち=(\d+)ms", started[0]).group(1))
+        self.assertGreaterEqual(waited, 400, started[0])
+
+    def test_the_queued_item_carries_the_synthesis_time(self):
+        """キューへ流す1件が、合成にかかった時間を持って行くこと。
+
+        合成の時間は合成した側にしか、待ち時間は再生する側にしか分からない。
+        一緒に運ばないと「喋り出すまで何ミリ秒か」が言えない。
+        """
+        guild = SimpleNamespace(id=7)
+        member = SimpleNamespace(id=1, display_name="すずき")
+        self.tts._queues.pop(7, None)
+        self.addCleanup(self.tts._queues.pop, 7, None)
+        # 設定の取得は関数の中で import している（循環を避けるため）ので、
+        # モジュール属性ではなく tts_store 側を差し替える。
+        with (
+            patch.object(self.tts, "_synthesize", AsyncMock(return_value=("http://x/a.wav", 1234))),
+            patch("services.tts_store.get_tts_settings", lambda gid: {"enabled": True, "vc_channel_id": 99}),
+            patch("services.tts_store.get_tts_dictionary", lambda gid: {}),
+            patch("services.tts_store.get_user_tts_settings", lambda gid, uid: {}),
+            patch.object(self.tts, "get_effective_vc_watch", lambda gid, settings: (99, [])),
+            patch.object(self.tts.asyncio, "create_task", lambda coro: coro.close()),
+        ):
+            asyncio.run(self.tts.enqueue_message(Mock(), guild, member, "やあ"))
+
+        queue = self.tts._queues[7]
+        item = queue.get_nowait()
+        self.assertIsInstance(item, self.tts._Utterance)
+        self.assertEqual(item.synth_ms, 1234)
+        self.assertEqual(item.vc_channel_id, 99)
+
+
 class VirusTotalTimeoutAndFailureCacheTests(unittest.TestCase):
     """VirusTotal へ到達できないとき、待ち続けず・叩き直さないこと。
 
