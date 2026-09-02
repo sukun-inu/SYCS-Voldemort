@@ -908,6 +908,83 @@ def _sig_file(name, content="", *, read_error=None):
     return sig
 
 
+class RegisterBackgroundTasksShapeTests(unittest.TestCase):
+    """register() が組み立てる4本のループを、間隔ごと固定する。
+
+    214行ある `register` を割る前に、外から見た姿を押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+
+    振り分けの中身は下の DevSignalTaskTests が用途名ごとに押さえているが、
+    **どのループが何秒間隔かは誰も見ていなかった。** クロージャを外へ出す
+    ときに `seconds=30` を `minutes=30` と書き間違えても、型は tasks.Loop の
+    ままだし、テストも全部通る。本番では60倍遅くなるだけで、例外も出ない。
+
+    ステータス更新の20秒は Discord のプレゼンス更新制限（20秒あたり5回）から
+    決めた値なので、短くすると制限に当たる。ここは数字そのものに意味がある。
+    """
+
+    # (フィールド名, seconds, minutes, hours, コルーチン名)
+    LOOPS = [
+        ("update_status", 20.0, 0.0, 0.0, "update_status"),
+        ("news_feed_task", 0.0, 5.0, 0.0, "news_feed_task"),
+        ("pending_sticky_task", 30.0, 0.0, 0.0, "pending_sticky_task"),
+        ("dev_signal_task", 30.0, 0.0, 0.0, "dev_signal_task"),
+    ]
+
+    def test_every_loop_keeps_its_interval(self):
+        """4本とも、同じ名前・同じ間隔で作られること。"""
+        loops = bg.register(SimpleNamespace(), EventState())
+        actual = [
+            (name, loop.seconds, loop.minutes, loop.hours, loop.coro.__name__)
+            for name, loop in ((n, getattr(loops, n)) for n, *_ in self.LOOPS)
+        ]
+        self.assertEqual(actual, [tuple(row) for row in self.LOOPS])
+
+    def test_the_status_interval_comes_from_the_environment(self):
+        """ステータス更新の間隔だけは環境変数で変えられること。
+
+        レート制限に当たったときに再デプロイ無しで延ばせるようにしてある。
+        定数を直接参照しているので、切り出しの際に読む場所を間違えると
+        環境変数が効かなくなる（効かなくなっても既定値で動くので気づけない）。
+        """
+        with patch.object(bg, "_STATUS_INTERVAL_SECONDS", 47):
+            loops = bg.register(SimpleNamespace(), EventState())
+        self.assertEqual(loops.update_status.seconds, 47.0)
+
+
+class DevSignalOrderTests(unittest.TestCase):
+    """シグナルを、置かれた順に処理すること。
+
+    同じ用途が複数溜まっていることがあり（録音の開始と停止など）、順序が
+    入れ替わると噛み合わない。**入れ替わっても例外は出ず、ログも全部出る。**
+    「開始→停止」が「停止→開始」になれば、録音が止まらないまま残るだけ。
+    """
+
+    def setUp(self):
+        self.state = EventState()
+        self.bot = SimpleNamespace()
+        self.loops = bg.register(self.bot, self.state)
+
+    def test_signals_are_handled_in_the_order_they_were_collected(self):
+        """並べた順にそのまま処理されること。
+
+        用途を3つとも別にしてあるのは、並びを逆にする変異で落ちるようにする
+        ため。最初は news/sticky/news の3件で書いていたが、これは逆順にしても
+        同じ並びになる（回文）ので、順序を壊しても落ちなかった。
+        """
+        files = [_sig_file("news_feeds.signal"), _sig_file("sticky.signal"), _sig_file("djaudio_cache.signal")]
+        calls: list[str] = []
+        cleanup = AsyncMock(side_effect=lambda **_: calls.append("djaudio"))
+        with (
+            patch("services.dev_signals.collect", return_value=files),
+            patch.object(bg, "run_news_feeds", AsyncMock(side_effect=lambda *_: calls.append("news"))),
+            patch.object(bg, "process_pending_stickies", AsyncMock(side_effect=lambda *_: calls.append("sticky"))),
+            patch("services.djaudio_cache._cleanup_expired", cleanup),
+        ):
+            _run(self.loops.dev_signal_task())
+        self.assertEqual(calls, ["news", "sticky", "djaudio"])
+
+
 class DevSignalTaskTests(unittest.TestCase):
     """dev_signal_task: シグナルの用途名ごとにどのサービスへ振り分けるか。"""
 
