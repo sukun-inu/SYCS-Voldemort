@@ -149,6 +149,138 @@ def _register_djaudio():
 # ── /record start・stop・status（commands/record/session.py） ──────────────
 
 
+class RecordSessionRegistrationShapeTests(unittest.TestCase):
+    """commands/record/session.py の register が何をどう登録するかを固定する。
+
+    136行あるこの関数を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+
+    下の RecordStart / RecordStop / RecordStatus は**登録されたあとの中身**を
+    呼ぶだけで、**登録そのもの**は誰も見ていない。中身を関数の外へ出すと、
+    コマンドの名前・説明・並び順、引数の名前と既定値、describe の文が黙って
+    変わりうる。どれが変わっても例外は出ず、既存テストも通り、Discord 側の
+    見た目だけが変わる。
+
+    status の説明に「【管理者】」が付いていないのは意図的なもの（実装は
+    admin 限定・session.py の record_status のコメント参照）。ここで説明の
+    原文ごと固定しておくと、**気を利かせて付け足す**変更も目に見える。
+    """
+
+    def _register(self):
+        """session.register() だけを、名前と説明を控える群へ登録する。"""
+        import commands.record.session as rs
+
+        registered: list[tuple[str, str]] = []
+        functions: dict[str, object] = {}
+
+        class RecordingGroup:
+            """`group.command` に渡された名前・説明・関数を控えるだけの群。"""
+
+            def command(self, *, name, description=""):
+                """デコレータを返す。関数はそのまま返し、包み直さない。"""
+
+                def wrap(fn):
+                    registered.append((name, description))
+                    functions[name] = fn
+                    return fn
+
+                return wrap
+
+        rs.register(Mock(), RecordingGroup())
+        return registered, functions
+
+    def test_the_three_commands_are_registered_with_their_names_and_descriptions(self):
+        """start・stop・status が、この名前・この説明・この順で並ぶこと。"""
+        registered, _ = self._register()
+
+        self.assertEqual(
+            registered,
+            [
+                ("start", "【管理者】VCの録音を開始します（参加者に通知されます）"),
+                ("stop", "【管理者】録音を停止して、ダウンロードリンクを出します"),
+                ("status", "録音の状況を表示します"),
+            ],
+        )
+
+    def test_each_command_keeps_its_arguments(self):
+        """引数の名前・順序・既定値が変わらないこと。
+
+        ここは Discord へ送るコマンド定義そのものなので、既定値が消えれば
+        `/record start` が channel 必須になり、いま通っている使い方
+        （VCに入って引数なしで打つ）がそのまま弾かれる。
+        """
+        import inspect
+
+        _, functions = self._register()
+
+        def shape(fn):
+            """(引数名, 既定値) の並びにする。既定値なしは inspect の番兵のまま。"""
+            return [(p.name, p.default) for p in inspect.signature(fn).parameters.values()]
+
+        empty = inspect.Parameter.empty
+        self.assertEqual(shape(functions["start"]), [("interaction", empty), ("channel", None)])
+        self.assertEqual(shape(functions["stop"]), [("interaction", empty)])
+        self.assertEqual(shape(functions["status"]), [("interaction", empty)])
+
+    def test_the_only_described_argument_keeps_its_description(self):
+        """start の channel だけに describe が付いていること。
+
+        本体を関数の外へ出すとき `@app_commands.describe` を運び忘れると
+        説明が消える。**動作は何も変わらない**ので、テストでも例外でも
+        気づけない。stop / status は引数が interaction だけなので describe
+        を持たない――ここも「増えていない」ことを含めて固定する。
+        """
+        _, functions = self._register()
+        described = {
+            name: getattr(fn, "__discord_app_commands_param_description__", None) for name, fn in functions.items()
+        }
+
+        self.assertEqual(described["start"], {"channel": "録音するVC（未指定なら自分が今いるVC）"})
+        self.assertIsNone(described["stop"])
+        self.assertIsNone(described["status"])
+
+    def test_the_bot_reaches_the_commands_that_need_it(self):
+        """register が受け取った bot が、start と stop へそのまま渡ること。
+
+        start_recording / stop_recording は Bot を要る。中身を関数の外へ
+        出すと bot は閉包から消えるので、**渡し忘れても登録は通り、
+        コマンドを打った瞬間に初めて落ちる。**
+        """
+        import commands.record.session as rs
+
+        bot = Mock(name="bot")
+        registered_bot = {}
+
+        class RecordingGroup:
+            """関数だけ拾う群。"""
+
+            def command(self, *, name, description=""):
+                """デコレータを返す。"""
+
+                def wrap(fn):
+                    registered_bot[name] = fn
+                    return fn
+
+                return wrap
+
+        rs.register(bot, RecordingGroup())
+
+        interaction = Mock()
+        interaction.guild = Mock()
+        interaction.guild_id = 1
+        interaction.user.guild_permissions.administrator = True
+        interaction.response.defer = AsyncMock()
+        interaction.followup.send = AsyncMock()
+        with (
+            patch.object(rs.recording, "is_recording", Mock(return_value=True)),
+            patch.object(rs.recording, "stop_recording", AsyncMock(return_value=Mock())) as stop,
+            patch.object(rs.recording, "build_result_embed", Mock(return_value=None)),
+        ):
+            asyncio.run(registered_bot["stop"](interaction))
+
+        self.assertIs(stop.await_args.args[0], bot)
+
+
 class RecordStartTests(unittest.TestCase):
     def setUp(self):
         self.rs, _, _, self.registry = _register_record()
