@@ -16,6 +16,7 @@ import contextlib
 import json
 import logging
 import os
+import re
 import sys
 import tempfile
 import time
@@ -43,6 +44,25 @@ from services.news_service import _favicon_url  # noqa: E402
 from services.url_safety import URLSafetyError, validate_public_http_url  # noqa: E402
 from services.welcome_service import DEFAULT_GOODBYE, DEFAULT_WELCOME, render_template  # noqa: E402
 from webapp_admin.schema.validation import InvalidValue, validate_field  # noqa: E402
+
+
+def _command_body(source: str, name: str) -> str:
+    """`async def name(` の本体を原文から切り出す。1行の委譲なら委譲先も繋げる。
+
+    コマンドの中身をモジュール直下の関数へ出すと、`@group.command` の下に
+    残るのは `await _apply_xxx(...)` の1行だけになる。ガードの有無を原文で
+    見るテストは、その1行の先まで追わないと**割った瞬間に嘘をつく**。
+    """
+    body = source[source.index(f"async def {name}(") :]
+    body = body[: body.index("@group.command") if "@group.command" in body else len(body)]
+    delegated = re.findall(r"await (_[a-z_]+)\(", body)
+    for callee in delegated:
+        marker = f"async def {callee}("
+        if marker in source:
+            tail = source[source.index(marker) :]
+            sep = chr(10) * 3  # 空行2つ＝次のトップレベル定義の始まり
+            body += tail[: tail.index(sep) if sep in tail else len(tail)]
+    return body
 
 
 def _record_command_source() -> str:
@@ -3202,13 +3222,18 @@ class RecordingPrivilegeTests(unittest.TestCase):
         self.assertLess(guard_at, stop_at)
 
     def test_record_commands_require_admin(self):
-        """/record の管理系サブコマンドが素通りしないこと。"""
+        """/record の管理系サブコマンドが素通りしないこと。
+
+        コマンドの中身をモジュール直下へ出した関数は、`@group.command` の
+        下に1行の委譲だけを残す。原文をそのまま読むと委譲行しか見えない
+        ので、**委譲先まで追う**こと。ここを追わないままにすると、割った
+        時点で「ガードが見当たらない」と落ちるか、逆に「委譲行にガードが
+        無い」のを見逃すかのどちらかになる。
+        """
         source = _record_command_source()
         for name in ("record_start", "record_stop", "record_auto", "record_config"):
             with self.subTest(command=name):
-                body = source[source.index(f"async def {name}(") :]
-                body = body[: body.index("@group.command") if "@group.command" in body else len(body)]
-                self.assertIn("_ensure_admin(interaction)", body)
+                self.assertIn("_ensure_admin(interaction)", _command_body(source, name))
 
 
 class TTLCacheTests(unittest.TestCase):
