@@ -1244,6 +1244,143 @@ class FetchLlmSignalTests(unittest.IsolatedAsyncioTestCase):
         self.assertLessEqual(len(result["rationales"]["gold"]), 140)
 
 
+class FetchForecastSummariesTests(unittest.IsolatedAsyncioTestCase):
+    """fetch_forecast_summaries の入力の選び方と、答えの受け取り方を固定する。
+
+    118行あるこの関数を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+    ヘルパー（_range_direction / _contradicts_direction）には専用の
+    テストがあるが、**この関数そのものには1本も無かった。**
+
+      - 失敗しても例外を投げず、全金属を空文字で返すこと
+      - 材料が揃っていない金属は、そもそも LLM へ渡さないこと
+      - 渡すものが1つも無ければ、呼ばずに空を返すこと
+      - 予測の向きと矛盾する要約は、捨てたうえでログに残すこと
+
+    最後のひとつは実際に起きた事故で、「-2.97%の下落予測」に対して
+    「上昇が期待できます」という真逆の要約が出た。捨てそこねると
+    **誤った断定がそのまま画面に出る。**
+    """
+
+    def setUp(self):
+        self.sig = forecast_signals
+        self.metals = {"gold", "silver", "platinum"}
+
+    def _item(self, *, lower=-3.0, upper=-1.0, drivers=("理由",)):
+        """forecast の1金属ぶん。既定では下落方向のレンジ。"""
+        return {
+            "drivers": list(drivers),
+            "projected_lower_change_pct": lower,
+            "projected_upper_change_pct": upper,
+            "interval_prob": 0.8,
+            "confidence": 0.5,
+        }
+
+    def _enabled(self, stack, *, answer=None, error=None):
+        """有効化した状態にして、Groq の応答を差し替える。渡した messages を控える。"""
+        seen = {}
+
+        async def call(client, *, messages, **kwargs):
+            """create_json_chat_completion の代わり。"""
+            seen["messages"] = messages
+            if error is not None:
+                raise error
+            return answer, "stop"
+
+        stack.enter_context(patch.object(self.sig, "FORECAST_SUMMARY_ENABLED", True))
+        stack.enter_context(patch.object(self.sig, "GROQ_API_KEY", "dummy"))
+        stack.enter_context(patch.object(self.sig, "_get_groq_client", Mock()))
+        stack.enter_context(patch.object(self.sig, "create_json_chat_completion", call))
+        return seen
+
+    async def test_it_is_disabled_without_a_key_and_returns_every_metal_empty(self):
+        """キーが無ければ、呼ばずに全金属を空文字で返すこと。
+
+        空文字はフロントエンドが従来の drivers 箇条書き表示へ戻る合図。
+        キーごと欠けさせると、その分岐に入れない。
+        """
+        with (
+            patch.object(self.sig, "FORECAST_SUMMARY_ENABLED", True),
+            patch.object(self.sig, "GROQ_API_KEY", ""),
+            patch.object(self.sig, "create_json_chat_completion", AsyncMock()) as call,
+        ):
+            result = await self.sig.fetch_forecast_summaries(forecast={"gold": self._item()})
+
+        call.assert_not_awaited()
+        self.assertEqual(result, {key: "" for key in self.metals})
+
+    async def test_a_failed_call_returns_every_metal_empty_without_raising(self):
+        """呼び出しが落ちても例外を外へ出さないこと。
+
+        ここが例外になると、要約が無いだけでは済まず**予測の組み立て
+        そのものが落ちる**（呼び出し元は build_weekly_forecast の中）。
+        """
+        with ExitStack() as stack:
+            self._enabled(stack, error=RuntimeError("落ちた"))
+            stack.enter_context(self.assertLogs(self.sig.logger, level="WARNING"))
+            result = await self.sig.fetch_forecast_summaries(forecast={"gold": self._item()})
+
+        self.assertEqual(result, {key: "" for key in self.metals})
+
+    async def test_metals_without_drivers_or_a_range_are_not_sent_to_the_llm(self):
+        """材料が揃っていない金属は、そもそも問い合わせに含めないこと。
+
+        drivers が空、あるいは区間（lower/upper）が無い金属について尋ねても
+        書ける材料が無い。混ぜると **LLM が空欄を埋めようとして作り話を
+        書く。** 出てきた文章は自然なので、読んだ人は気づけない。
+        """
+        forecast = {
+            "gold": self._item(),
+            "silver": self._item(drivers=()),  # 箇条書きが無い
+            "platinum": self._item(lower=None, upper=None),  # 区間が無い（古い行）
+        }
+        with ExitStack() as stack:
+            seen = self._enabled(stack, answer=forecast_utils.json_dumps({"summaries": {}}))
+            await self.sig.fetch_forecast_summaries(forecast=forecast)
+
+        user_prompt = seen["messages"][1]["content"]
+        self.assertIn("gold", user_prompt.split("Return JSON schema:")[0])
+        self.assertNotIn("silver", user_prompt.split("Return JSON schema:")[0])
+        self.assertNotIn("platinum", user_prompt.split("Return JSON schema:")[0])
+
+    async def test_nothing_worth_asking_about_skips_the_call_entirely(self):
+        """渡すものが1つも無ければ、Groq を呼ばずに空を返すこと。
+
+        空の入力で問い合わせても、料金と待ち時間だけかかって何も得られない。
+        """
+        with ExitStack() as stack:
+            seen = self._enabled(stack, answer=forecast_utils.json_dumps({"summaries": {}}))
+            result = await self.sig.fetch_forecast_summaries(forecast={"gold": self._item(drivers=())})
+
+        self.assertNotIn("messages", seen)
+        self.assertEqual(result, {key: "" for key in self.metals})
+
+    async def test_a_summary_that_contradicts_the_range_is_dropped_and_logged(self):
+        """予測の向きと逆の要約は採用せず、捨てたことを記録すること。
+
+        実際に「-2.97%の下落予測」に対して「上昇が期待できます」という
+        要約が出た。プロンプトで強く指示していても LLM が従う保証は無い。
+        黙って捨てると、**LLM がどれだけ外しているのかが誰にも見えない。**
+        """
+        answer = forecast_utils.json_dumps(
+            {
+                "summaries": {
+                    "gold": "今後1週間は上昇が期待できます。",  # レンジは下落方向
+                    "silver": "小幅な値動きにとどまりそうです。",
+                }
+            }
+        )
+        forecast = {"gold": self._item(lower=-3.0, upper=-1.0), "silver": self._item(lower=-0.1, upper=0.1)}
+        with ExitStack() as stack:
+            self._enabled(stack, answer=answer)
+            captured = stack.enter_context(self.assertLogs(self.sig.logger, level="WARNING"))
+            result = await self.sig.fetch_forecast_summaries(forecast=forecast)
+
+        self.assertEqual(result["gold"], "")
+        self.assertEqual(result["silver"], "小幅な値動きにとどまりそうです。")
+        self.assertTrue(any("矛盾する要約を破棄" in line for line in captured.output), captured.output)
+
+
 class BuildWeeklyForecastTests(unittest.IsolatedAsyncioTestCase):
     """build_weekly_forecast の組み立て方を固定する。
 
