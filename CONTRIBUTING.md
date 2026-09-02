@@ -38,6 +38,19 @@ production file, change exactly one thing (invert a condition, shift a bound by 
 delete a guard), confirm that only the intended tests fail, then restore it and check
 `git status`. A test that keeps passing guards nothing — rewrite it or delete it.
 
+**Before splitting a long function, write the invariant test first — and make it
+pass on the *unsplit* code.** The order is the whole point: a test written after the
+split is shaped by the split, so it cannot say whether behaviour stayed the same.
+Fix what the test pins to the kind of function it is: for assembly (`create_app`, the
+`register` family) pin what got registered and in what order; for computation, pin
+golden values for fixed inputs; for procedures, pin the sequence of outward effects.
+Then break the unsplit code once and confirm the test fails — a test that does not
+catch that has not captured the invariant, and carrying it into a refactor is worse
+than carrying nothing. When 787 docstrings were added, stripping docstrings from the
+AST and diffing proved nothing else had moved; **splitting a function has no such
+tool**, so you build one before you start. Three earlier splits, done without one,
+left the over-100-line count at 26 → 26: the length only moved.
+
 Tests must not reach the network or a real database. Everything passes without
 Postgres. Note that `patch()` on a module attribute does **not** affect FastAPI
 `Depends()` — those are bound at import time; use `app.dependency_overrides`.
@@ -74,6 +87,20 @@ things getting worse. Tighten them whenever you improve the thing they measure.
 The docstring floor is at 100, but it counts only whether a docstring is present —
 never whether it says anything. A docstring that paraphrases the signature passes.
 Green there is not evidence that the "comment the why" rule was followed.
+
+## Handing work to an agent
+
+An agent is filled up by what it reads: one 1,600-line file plus its tests is most of
+a sitting. Decide the target before handing it over, rather than asking it to survey
+and then decide.
+
+One piece of work per sitting, carried through to the merge — stopping halfway can
+leave production code that was edited for a mutation test still edited, which has
+happened here. Keep the files it must read closed to that one target. Start from a
+clean `git status`. And say the procedure, not just the goal: *write the invariant
+test first, make it pass before the split, break it once to prove it bites, then
+split and keep it passing.* Handing over only "split this" makes the agent re-derive
+the procedure every time.
 
 ## CI must never pass vacuously
 
