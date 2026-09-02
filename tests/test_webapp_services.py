@@ -15,6 +15,7 @@ AsyncSession や外部呼び出しはすべて unittest.mock で差し替える�
 
 from __future__ import annotations
 
+import asyncio
 import math
 import os
 import random
@@ -23,6 +24,8 @@ import tempfile
 import unittest
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+
+from sqlalchemy import select
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
@@ -894,6 +897,212 @@ class ForecastSignalsPureTests(unittest.TestCase):
 # ======================================================================
 # forecast_service.py — DB非依存のペイロード整形関数
 # ======================================================================
+class _StoreFakeSession:
+    """本物の同期 Session に、await できる薄い皮だけ被せて包む。
+
+    本番の SessionLocal は asyncpg 前提で Postgres が無いと動かせない。ここでは
+    同じ ORM モデル・同じ SQL 文をインメモリ SQLite の同期セッションで実際に
+    実行し、`await` の形だけ本番コードに合わせる（tests/test_user_state.py の
+    _FakeAsyncSession と同じ考え方。あちらは delete/flush を使わないので、
+    こちらで足している）。
+    """
+
+    def __init__(self, sync_session):
+        """同期セッションを1つ抱える。"""
+        self._session = sync_session
+
+    def add(self, obj):
+        """そのまま渡す。"""
+        self._session.add(obj)
+
+    async def scalars(self, stmt):
+        """await の形だけ合わせる。"""
+        return self._session.scalars(stmt)
+
+    async def execute(self, stmt):
+        """await の形だけ合わせる。"""
+        return self._session.execute(stmt)
+
+    async def delete(self, obj):
+        """本番は AsyncSession.delete が待てるので、こちらも待てる形にする。"""
+        self._session.delete(obj)
+
+    async def flush(self):
+        """await の形だけ合わせる。"""
+        self._session.flush()
+
+    async def commit(self):
+        """await の形だけ合わせる。"""
+        self._session.commit()
+
+    def close(self):
+        """後始末。"""
+        self._session.close()
+
+
+class StoreWeeklyForecastTests(unittest.TestCase):
+    """store_weekly_forecast が、いつも「直近1回分だけ」を残すこと。
+
+    151行あるこの関数を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+    **この関数にはテストが1件も無かった。**
+
+    予測は外部API（為替・ニュース）を叩いて作るので、失敗して途中の状態で
+    呼び直されることがある。追記になっていると古い予測と新しい予測が並存し、
+    フロントがどちらを表示するか・精度集計がどちらを見るかが曖昧になる。
+    **並存しても例外は出ない。**画面に古い日付が混ざるだけで、気づくのは
+    数字を突き合わせた人だけになる。
+    """
+
+    def setUp(self):
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+
+        self.engine = create_engine("sqlite://")
+        WeeklyForecastDaily.__table__.create(bind=self.engine, checkfirst=True)
+        WeeklyForecastMeta.__table__.create(bind=self.engine, checkfirst=True)
+        self.maker = sessionmaker(bind=self.engine, expire_on_commit=False)
+
+    def _payload(self, *, as_of="2026-08-30", days=("2026-08-31", "2026-09-01"), metals=("gold", "silver")):
+        """最小限だが本物と同じ形の payload。"""
+        forecast = {}
+        for index, metal_key in enumerate(metals):
+            forecast[metal_key] = {
+                "start_price_per_gram": 5000 + index,
+                "projected_price_per_gram": 5010 + index,
+                "projected_change_pct_7d": 0.2,
+                "confidence": 0.6,
+                "implied_daily_return_pct": 0.03,
+                "drivers": [f"{metal_key} の根拠"],
+                "summary": f"{metal_key} のまとめ",
+                "driver_breakdown": [],
+                "daily": [
+                    {
+                        "date": day,
+                        "price_per_gram": 5010 + index + offset,
+                        "delta_from_previous": 1 + offset,
+                        "lower_price_per_gram": 4950 + index,
+                        "upper_price_per_gram": 5070 + index,
+                    }
+                    for offset, day in enumerate(days)
+                ],
+            }
+        return {
+            "as_of_date": as_of,
+            "horizon_days": 7,
+            "generated_at": "2026-08-30T09:00:00+09:00",
+            "forecast": forecast,
+            "model": {"name": "interval_rw_v1", "description": "テスト"},
+            "signals": {},
+        }
+
+    def _store(self, payload):
+        """本物の store_weekly_forecast を、SQLite のセッションで走らせる。"""
+        session = _StoreFakeSession(self.maker())
+        try:
+            asyncio.run(forecast_service.store_weekly_forecast(session, payload))
+        finally:
+            session.close()
+
+    def _rows(self):
+        """保存された日次行を (金属, 予測日, 中心値) で読み出す。"""
+        with self.maker() as session:
+            rows = session.scalars(select(WeeklyForecastDaily)).all()
+            return sorted((r.metal_key, r.forecast_date.isoformat(), str(r.price_per_gram)) for r in rows)
+
+    def _meta_rows(self):
+        """保存された meta を (as_of, horizon, モデル名) で読み出す。"""
+        with self.maker() as session:
+            metas = session.scalars(select(WeeklyForecastMeta)).all()
+            return [(m.as_of_date.isoformat(), m.horizon_days, m.model_name) for m in metas]
+
+    def test_a_stored_forecast_writes_one_row_per_metal_and_day(self):
+        """金属×予測日のぶんだけ行が入り、meta が1件できること。"""
+        self._store(self._payload())
+
+        self.assertEqual(
+            self._rows(),
+            [
+                ("gold", "2026-08-31", "5010.0000"),
+                ("gold", "2026-09-01", "5011.0000"),
+                ("silver", "2026-08-31", "5011.0000"),
+                ("silver", "2026-09-01", "5012.0000"),
+            ],
+        )
+        self.assertEqual(self._meta_rows(), [("2026-08-30", 7, "interval_rw_v1")])
+
+    def test_re_storing_replaces_the_previous_forecast_instead_of_appending(self):
+        """作り直したら、前回の行が残らないこと。
+
+        **この関数のいちばん大事な性質。** 追記になると古い予測と新しい予測が
+        並存し、どちらを見ればいいのか誰にも分からなくなる。
+        """
+        self._store(self._payload())
+        self._store(self._payload(as_of="2026-08-31", days=("2026-09-01",), metals=("gold",)))
+
+        self.assertEqual(self._rows(), [("gold", "2026-09-01", "5010.0000")])
+        self.assertEqual(self._meta_rows(), [("2026-08-31", 7, "interval_rw_v1")])
+
+    def test_days_outside_the_horizon_are_not_stored(self):
+        """予測期間の外の日付は捨てること。
+
+        as_of 当日以前と、horizon を超えた先は入れない。入れてしまうと、
+        画面のグラフに「今日より前の予測」が混ざる。
+        """
+        payload = self._payload(days=("2026-08-29", "2026-08-30", "2026-08-31", "2026-09-30"), metals=("gold",))
+        self._store(payload)
+
+        self.assertEqual(self._rows(), [("gold", "2026-08-31", "5012.0000")])
+
+    def test_only_one_meta_row_survives(self):
+        """meta が複数あっても、最新の1件だけを残すこと。
+
+        meta は「この予測はいつ・どのモデルで作ったか」を持つ1行で、複数
+        あるとフロントがどれを読むかで表示が変わる。**残っていても例外は
+        出ない。**過去の版が複数書いていた可能性があるので、毎回掃除する。
+        """
+        # 2行入れる。1行だけだと、保存側が最古の行を使い回すので掃除が
+        # 走らない（＝掃除を消しても落ちない）。過去の版が複数書いていた
+        # 状態を作って初めて、この後始末が効いているか確かめられる。
+        with self.maker() as session:
+            for index in (1, 2):
+                session.add(
+                    WeeklyForecastMeta(
+                        as_of_date=date(2020, 1, index),
+                        generated_at=datetime(2020, 1, index, tzinfo=timezone.utc),
+                        horizon_days=7,
+                        model_name=f"古い版{index}",
+                        model_description="前の版が書いた行",
+                    )
+                )
+            session.commit()
+
+        self._store(self._payload())
+
+        self.assertEqual(self._meta_rows(), [("2026-08-30", 7, "interval_rw_v1")])
+
+    def test_a_payload_without_an_as_of_date_is_refused(self):
+        """as_of_date が無い payload は保存しないこと。
+
+        黙って今日の日付で保存すると、いつ作った予測なのか分からなくなる。
+        どの RuntimeError かまで見る。既定日を入れて先へ進む変異は、結果的に
+        別の理由（保存できる行が無い）で落ちるので、種類を見ないと素通りする。
+        """
+        payload = self._payload()
+        del payload["as_of_date"]
+        with self.assertRaisesRegex(RuntimeError, "as_of_date"):
+            self._store(payload)
+
+    def test_a_payload_with_nothing_storable_is_refused(self):
+        """入れられる行が1つも無いなら、保存せずに断ること。
+
+        ここで黙って戻ると、**既存の行を消してから何も書かない**（＝予測が
+        丸ごと消える）経路ができる。
+        """
+        with self.assertRaises(RuntimeError):
+            self._store(self._payload(metals=("unknown_metal",)))
+
+
 class ForecastServicePureTests(unittest.TestCase):
     """_forecast_payload_from_db / _trim_payload_to_days をDB無しで検証する。
 

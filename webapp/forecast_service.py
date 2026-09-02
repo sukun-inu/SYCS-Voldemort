@@ -348,29 +348,17 @@ async def load_stored_weekly_forecast(session: AsyncSession, *, days: int = 7) -
     return _trim_payload_to_days(payload, days=days)
 
 
-async def store_weekly_forecast(
-    session: AsyncSession,
+def _desired_daily_rows(
     payload: dict[str, Any],
     *,
-    horizon_days: int = 7,
-) -> None:
-    """週次予測を保存する。過去の予測は残さず、最新1回分だけに置き換える。
+    as_of_date: date,
+    horizon_end: date,
+) -> dict[tuple[str, date], dict[str, Any]]:
+    """payload から「保存すべき日次行」を (金属, 予測日) をキーにして取り出す。
 
-    weekly_forecast_daily・weekly_forecast_meta とも「今回計算した行」に
-    無いものは削除する（既存行の集合を desired と突き合わせ、外れた分を
-    session.delete する／meta は id が最新以外を消す）。予測は外部API
-    （為替・ニュース）を叩いて作るので、失敗して途中の状態で呼び直される
-    ことがある。追記にすると古い予測と新しい予測が並存し、フロントが
-    どちらを表示するか・精度集計がどちらを見るかが曖昧になる。同じ日に
-    再実行しても、常に「直近1回分」だけが残る。
+    as_of 当日以前と horizon を超えた先は捨てる。入れてしまうと、画面の
+    グラフに「今日より前の予測」が混ざる。知らない金属も捨てる。
     """
-    as_of_raw = payload.get("as_of_date")
-    if not isinstance(as_of_raw, str):
-        raise RuntimeError("as_of_date が予測payloadに存在しません。")
-    as_of_date = date.fromisoformat(as_of_raw)
-    horizon = max(1, min(horizon_days, int(payload.get("horizon_days", horizon_days))))
-    horizon_end = as_of_date + timedelta(days=horizon)
-
     desired: dict[tuple[str, date], dict[str, Any]] = {}
     forecast_map = payload.get("forecast", {}) if isinstance(payload.get("forecast"), dict) else {}
     for metal_key, item in forecast_map.items():
@@ -397,10 +385,16 @@ async def store_weekly_forecast(
                 "upper_price_per_gram": as_decimal(daily_item.get("upper_price_per_gram"), PRICE_SCALE),
                 "drivers_json": json_dumps(item.get("drivers", [])),
             }
+    return desired
 
-    if not desired:
-        raise RuntimeError("保存可能な予測データがありません。")
 
+async def _replace_daily_rows(session: AsyncSession, desired: dict[tuple[str, date], dict[str, Any]]) -> None:
+    """日次行を desired の内容へ置き換える。**追記ではなく置き換え。**
+
+    今回計算した行に無いものは消す。追記にすると古い予測と新しい予測が
+    並存し、フロントがどちらを表示するか・精度集計がどちらを見るかが
+    曖昧になる。
+    """
     existing_rows = list((await session.scalars(select(WeeklyForecastDaily))).all())
     existing_by_key = {(row.metal_key, row.forecast_date): row for row in existing_rows}
 
@@ -426,43 +420,34 @@ async def store_weekly_forecast(
         if (row.metal_key, row.forecast_date) not in desired:
             await session.delete(row)
 
-    generated_at_raw = payload.get("generated_at")
-    generated_at = datetime.now(JST)
-    if isinstance(generated_at_raw, str):
+
+def _generated_at_of(payload: dict[str, Any]) -> datetime:
+    """payload の生成時刻。読めなければ今の時刻にする。
+
+    ここで例外にしないのは、時刻が読めないことは予測そのものの価値を
+    損なわないため。ただし黙って古い時刻にはしない（今にする）。
+    """
+    raw = payload.get("generated_at")
+    if isinstance(raw, str):
         try:
-            generated_at = datetime.fromisoformat(generated_at_raw)
+            return datetime.fromisoformat(raw)
         except ValueError:
             pass
+    return datetime.now(JST)
 
-    meta = (await session.scalars(select(WeeklyForecastMeta).order_by(WeeklyForecastMeta.id.asc()))).first()
-    if meta is None:
-        meta = WeeklyForecastMeta()
-        session.add(meta)
 
-    model_data = payload.get("model", {}) if isinstance(payload.get("model"), dict) else {}
-    signal_data = payload.get("signals", {}) if isinstance(payload.get("signals"), dict) else {}
-    usd_jpy = signal_data.get("usd_jpy", {}) if isinstance(signal_data.get("usd_jpy"), dict) else {}
+def _headlines_json(payload: dict[str, Any], signal_data: dict[str, Any]) -> str:
+    """news_headlines_json に入れる塊。見出し・LLM・区間・精度・要約をまとめる。
+
+    1つの列に押し込んでいるのは、ここが「表示のための添え物」で、検索も
+    集計もしないため。列を増やすとマイグレーションが要る。
+    """
     news = signal_data.get("news", {}) if isinstance(signal_data.get("news"), dict) else {}
     llm = signal_data.get("llm", {}) if isinstance(signal_data.get("llm"), dict) else {}
     interval = signal_data.get("interval", {}) if isinstance(signal_data.get("interval"), dict) else {}
     accuracy = signal_data.get("accuracy", {}) if isinstance(signal_data.get("accuracy"), dict) else {}
-
-    meta.as_of_date = as_of_date
-    meta.generated_at = generated_at
-    meta.horizon_days = horizon
-    meta.model_name = str(model_data.get("name", "heuristic_fx_news_v1"))
-    meta.model_description = str(
-        model_data.get("description", "直近価格トレンド + USD/JPY + ニュース見出し極性を合成した簡易予測。")
-    )
-    meta.usd_jpy_available = bool(usd_jpy.get("available"))
-    meta.usd_jpy_source = str(usd_jpy.get("source", "Stooq"))
-    meta.usd_jpy_latest = as_decimal(usd_jpy.get("latest"), Decimal("0.000001"))
-    meta.usd_jpy_weekly_change_pct = as_decimal(usd_jpy.get("weekly_change_pct"), Decimal("0.000001"))
-    meta.news_available = bool(news.get("available"))
-    meta.news_source = str(news.get("source", "Google News RSS"))
-    meta.news_sentiment_json = json_dumps(news.get("sentiment", {}))
-    meta.news_article_counts_json = json_dumps(news.get("article_counts", {}))
-    meta.news_headlines_json = json_dumps(
+    forecast_map = payload.get("forecast", {}) if isinstance(payload.get("forecast"), dict) else {}
+    return json_dumps(
         {
             "sample_headlines": news.get("sample_headlines", {}),
             "llm": {
@@ -496,8 +481,81 @@ async def store_weekly_forecast(
         }
     )
 
+
+async def _replace_meta_row(
+    session: AsyncSession,
+    payload: dict[str, Any],
+    *,
+    as_of_date: date,
+    horizon: int,
+) -> None:
+    """meta を最新の1件だけにする。
+
+    meta は「この予測はいつ・どのモデルで作ったか」を持つ1行で、複数あると
+    フロントがどれを読むかで表示が変わる。既存の最も古い行を使い回して
+    上書きし、**それ以外を消す**（過去の版が複数書いていた場合の後始末）。
+    """
+    meta = (await session.scalars(select(WeeklyForecastMeta).order_by(WeeklyForecastMeta.id.asc()))).first()
+    if meta is None:
+        meta = WeeklyForecastMeta()
+        session.add(meta)
+
+    model_data = payload.get("model", {}) if isinstance(payload.get("model"), dict) else {}
+    signal_data = payload.get("signals", {}) if isinstance(payload.get("signals"), dict) else {}
+    usd_jpy = signal_data.get("usd_jpy", {}) if isinstance(signal_data.get("usd_jpy"), dict) else {}
+    news = signal_data.get("news", {}) if isinstance(signal_data.get("news"), dict) else {}
+
+    meta.as_of_date = as_of_date
+    meta.generated_at = _generated_at_of(payload)
+    meta.horizon_days = horizon
+    meta.model_name = str(model_data.get("name", "heuristic_fx_news_v1"))
+    meta.model_description = str(
+        model_data.get("description", "直近価格トレンド + USD/JPY + ニュース見出し極性を合成した簡易予測。")
+    )
+    meta.usd_jpy_available = bool(usd_jpy.get("available"))
+    meta.usd_jpy_source = str(usd_jpy.get("source", "Stooq"))
+    meta.usd_jpy_latest = as_decimal(usd_jpy.get("latest"), Decimal("0.000001"))
+    meta.usd_jpy_weekly_change_pct = as_decimal(usd_jpy.get("weekly_change_pct"), Decimal("0.000001"))
+    meta.news_available = bool(news.get("available"))
+    meta.news_source = str(news.get("source", "Google News RSS"))
+    meta.news_sentiment_json = json_dumps(news.get("sentiment", {}))
+    meta.news_article_counts_json = json_dumps(news.get("article_counts", {}))
+    meta.news_headlines_json = _headlines_json(payload, signal_data)
+
     await session.flush()
     await session.execute(delete(WeeklyForecastMeta).where(WeeklyForecastMeta.id != meta.id))
+
+
+async def store_weekly_forecast(
+    session: AsyncSession,
+    payload: dict[str, Any],
+    *,
+    horizon_days: int = 7,
+) -> None:
+    """週次予測を保存する。過去の予測は残さず、最新1回分だけに置き換える。
+
+    weekly_forecast_daily・weekly_forecast_meta とも「今回計算した行」に
+    無いものは削除する。予測は外部API（為替・ニュース）を叩いて作るので、
+    失敗して途中の状態で呼び直されることがある。追記にすると古い予測と
+    新しい予測が並存し、フロントがどちらを表示するか・精度集計がどちらを
+    見るかが曖昧になる。同じ日に再実行しても、常に「直近1回分」だけが残る。
+
+    結果は tests の StoreWeeklyForecastTests が行と meta ごと固定している。
+    """
+    as_of_raw = payload.get("as_of_date")
+    if not isinstance(as_of_raw, str):
+        raise RuntimeError("as_of_date が予測payloadに存在しません。")
+    as_of_date = date.fromisoformat(as_of_raw)
+    horizon = max(1, min(horizon_days, int(payload.get("horizon_days", horizon_days))))
+
+    desired = _desired_daily_rows(payload, as_of_date=as_of_date, horizon_end=as_of_date + timedelta(days=horizon))
+    if not desired:
+        # ここで黙って戻ると、既存の行を消してから何も書かない経路ができる
+        # （＝予測が丸ごと消える）。書けないなら、何も触らずに断る。
+        raise RuntimeError("保存可能な予測データがありません。")
+
+    await _replace_daily_rows(session, desired)
+    await _replace_meta_row(session, payload, as_of_date=as_of_date, horizon=horizon)
     await session.commit()
 
 
