@@ -41,10 +41,11 @@ def register(bot: Bot, state: EventState, loops: BackgroundLoops) -> None:
 
     @bot.event
     async def on_ready():
-        """再接続のたびに呼ばれる。bot.tree.sync()は呼ぶたびにDiscord側と
-        コマンド定義を全同期するだけなので毎回呼んでも実害は無いが、下の
-        各常駐タスクの起動は多重に走ると同じ処理が並行実行されてしまうため、
-        is_running()/state.*_started で毎回ガードしてからstart()する。
+        """初回だけでなく再接続のたびに呼ばれる。だから下の各常駐タスクは
+        無条件に start() してはいけない——多重に走ると同じ処理が並行実行
+        されるため、is_running()/state.*_started で毎回ガードしてから
+        start()する。
+
         BOT_BACKGROUND_WORKER=false のときはニュース・スティッキー・地震
         監視・djaudioキャッシュ掃除だけを止める（ステータス更新と
         dev_signal_taskは常時起動）。

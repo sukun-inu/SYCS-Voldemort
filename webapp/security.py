@@ -242,9 +242,10 @@ def load_allowed_hosts() -> list[str]:
 
     呼び出し先の TrustedHostMiddleware は allowed_hosts=[] を渡すと
     「一致するホストが無い」ため全リクエストを400で拒否する
-    （allow-any になるのは None を渡さなかった場合のみ）。空リストの
-    まま渡すと ALLOWED_HOSTS の設定ミス1つでアプリ全体が丸ごと
-    アクセス不能になる。
+    （allow-any に倒れるのは allowed_hosts を省略するか None を渡した
+    ときだけで、この関数は常に具体的なリストを返すのでその経路には
+    乗らない）。空リストのまま渡すと ALLOWED_HOSTS の設定ミス1つで
+    アプリ全体が丸ごとアクセス不能になる。
     """
     raw = os.getenv("ALLOWED_HOSTS", "").strip()
     if not raw:
