@@ -3936,6 +3936,111 @@ class ReactionRoleEmojiTests(unittest.TestCase):
         self.assertIsNone(self.rr._role_id_for(mapping, other))
 
 
+class VoiceChangerJudgementTests(unittest.TestCase):
+    """判定規則そのものを、音を作らずに直接押さえる。
+
+    音から測るところ（VoiceAnalysisTests）は ffmpeg と LPC を回すので重く、
+    組み合わせを増やせない。誤検知が出るかどうかは「測れた値をどう読むか」で
+    決まるので、そこだけを切り出して多くの組を通す。
+    """
+
+    def setUp(self):
+        from services import voice_analysis
+
+        self.va = voice_analysis
+
+    def _verdict(self, vtl, f0):
+        expected = self.va._VTL_FROM_F0_INTERCEPT - self.va._VTL_FROM_F0_SLOPE * f0
+        return self.va._judge(vtl, f0, expected)[0]
+
+    # 同じ話者でも声域で F0 は倍近く動く。声道の長さは動かない。
+    NATURAL = [
+        ("成人男性 平常", 120, 17.5),
+        ("成人男性 やや高い", 200, 17.5),
+        ("成人男性 興奮", 250, 17.5),
+        ("成人男性 叫び", 280, 17.5),
+        ("成人女性 平常", 210, 15.2),
+        ("成人女性 高い声域", 300, 15.2),
+        ("成人女性 叫び", 350, 15.2),
+        ("子ども 平常", 300, 12.0),
+        ("子ども 低い声で", 200, 12.0),
+        ("子ども もっと低く", 160, 12.0),
+        ("小柄な成人女性 低い声", 150, 14.0),
+    ]
+
+    def test_raising_the_voice_is_not_treated_as_processing(self):
+        """声域を上げただけの地声を加工扱いしないこと。
+
+        以前は「声の高さから期待される声道長との差が 4cm 以上なら加工」と
+        していたため、叫んだ成人男性（F0 280 / 17.5cm、差 +4.56cm）や
+        低い声を出した子ども（F0 160 / 12.0cm、差 -4.18cm）が加工扱いに
+        なっていた。人を疑う答えなので、ここが緩むと実害が出る。
+        """
+        for label, f0, vtl in self.NATURAL:
+            with self.subTest(case=label):
+                self.assertEqual(
+                    self._verdict(vtl, f0), "natural", f"{label}（F0 {f0} / 声道長 {vtl}cm）を加工扱いにした"
+                )
+
+    def test_vocal_tract_outside_the_human_range_is_still_caught(self):
+        """声道長そのものが人の範囲を外れていれば、従来どおり捕まえること。
+
+        誤検知を減らす方向にだけ動かして、検出まで止めてしまうと
+        「誰も疑わない代わりに何も見つけない」になる。
+        """
+        # (声の高さ, 声道長) — リサンプリングで F0×k・声道長÷k になったもの
+        for label, f0, vtl in [
+            ("男性を 0.70 倍", 84.0, 25.00),
+            ("男性を 0.80 倍", 96.0, 21.88),
+            ("男性を 2.00 倍", 240.0, 8.75),
+            ("女性を 0.70 倍", 147.0, 21.71),
+            ("女性を 1.75 倍", 367.5, 8.69),
+            ("女性を 2.00 倍", 420.0, 7.60),
+        ]:
+            with self.subTest(case=label):
+                self.assertEqual(self._verdict(vtl, f0), "suspect", f"{label} を見逃した")
+
+    def test_only_a_short_vocal_tract_counts_as_a_mismatch(self):
+        """食い違いは「短い側」だけ見ること。長い側は地声で普通に出る。
+
+        声域を上げた地声は「期待より長い」側へずれ、高いほうへの加工は
+        「期待より短い」側へずれる。向きで分かれるので、両側を見ると
+        地声を巻き込む。絶対値で見ていたころは、下の2件が加工扱いだった。
+        """
+        # 長い側（声域を上げた地声）— 差が大きくても natural
+        self.assertEqual(self._verdict(17.5, 280), "natural")  # 差 +4.56cm
+        self.assertEqual(self._verdict(15.2, 350), "natural")  # 差 +4.15cm
+        # 短い側でも、地声の範囲内なら natural
+        self.assertEqual(self._verdict(12.0, 160), "natural")  # 差 -4.18cm
+        self.assertEqual(self._verdict(12.0, 130), "natural")  # 差 -4.99cm
+        # 短い側で、地声では出ないほど離れていれば suspect
+        self.assertEqual(self._verdict(10.8, 117.6), "suspect")  # 差 -6.52cm
+
+    def test_the_real_recording_detection_is_kept(self):
+        """実録音で捕まえていた例を、誤検知を減らす過程で落としていないこと。
+
+        あるトラック（F0 117.6Hz・声道長 9.5〜10.8cm）は、両端とも
+        「声の高さのわりに声道が短すぎる」で捕まっていた。誤検知を減らす
+        方向にだけ動かして、こちらまで止めると意味が無い。
+        """
+        for vtl in (9.5, 10.8):
+            with self.subTest(vtl=vtl):
+                self.assertEqual(self._verdict(vtl, 117.6), "suspect")
+        self.assertTrue(self.va._is_settled("suspect", 9.5, 10.8, 117.6, 17.33))
+
+    def test_the_mismatch_is_reported_as_a_number(self):
+        """食い違いの数値が応答に残っていること。
+
+        判定は片側しか見ないが、材料は隠さない。画面から消すと、操作する人が
+        自分で見比べられなくなる。
+        """
+        import inspect
+
+        source = inspect.getsource(self.va.analyse)
+        self.assertIn("expected_vocal_tract_cm", source)
+        self.assertIn("vocal_tract_mismatch_cm", source)
+
+
 class VoiceAnalysisTests(unittest.TestCase):
     """録音した声に加工が入っていないかの判定。
 
