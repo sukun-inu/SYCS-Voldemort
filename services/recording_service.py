@@ -1470,21 +1470,19 @@ async def _release_if_unused(guild_id: int) -> None:
         logger.info("[recording] guild=%s 録音の終了に伴い VC から退出しました", guild_id)
 
 
-def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> dict:
-    """録音を音声ファイルへ書き出し、ZIP にまとめて登録する（停止処理の本体）。
+def _has_audio(track: _TrackWriter) -> bool:
+    """書き出しに成功したトラックか。
 
-    トラックを閉じる→索引(manifest)を作る→ZIPに固める、の順で行う。
-    戻り値はコマンド応答やAPIがそのまま使う結果セットで、ダウンロードに
-    必要な token や、声として怪しいトラックの一覧まで含む。
+    索引(manifest)と ZIP の両方がこの1つの判定を使う。別々に書くと、
+    **索引にはあるのに ZIP に無い**トラックができ、ミキサーがその1本
+    だけ 404 になる。書き出し自体は成功するので、開くまで気づけない。
     """
-    for track in session.tracks.values():
-        track.close(total_elapsed)
+    return track.out_path.exists() and track.out_path.stat().st_size > 0
 
-    started_jst = datetime.now(_JST)
-    stamp = started_jst.strftime("%Y%m%d_%H%M")
-    title = f"録音 {session.channel_name} {stamp}"
 
-    info = {
+def _finalize_info(session: RecordingSession, total_elapsed: float, reason: str, started_jst: datetime) -> dict:
+    """ZIP へ同梱する info.json の中身（人が読む要約の元でもある）。"""
+    return {
         "サーバーID": str(session.guild_id),
         "チャンネル": session.channel_name,
         "開始した人": session.started_by_name,
@@ -1498,24 +1496,41 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
         ],
     }
 
-    # ミキサー（管理画面）が使う索引。トラックの並び・波形・長さをここで確定させる。
-    # ZIP の中にも入れておくので、落としたあとでも同じ情報が手元に残る。
-    #
-    # 波形の縮尺は全トラックで1つに揃え、間引いたあとの「1点＝何秒か」を索引に
-    # 書く。以前は各トラックが自分の長さから間引き幅を決めたうえで、索引には
-    # 間引く前の 0.25 秒を書いていたため、12.5分を超える録音では波形が時間軸の
-    # 先頭へ圧縮され（6時間なら全体が先頭12.4分ぶんに潰れる）、長さの違う
-    # トラック同士でも縮尺が食い違っていた。
+
+def _peak_scale(session: RecordingSession, total_elapsed: float) -> tuple[int, int, float]:
+    """波形の縮尺を決める。(間引き幅, 点数, 1点あたりの秒数) を返す。
+
+    縮尺は全トラックで1つに揃え、間引いたあとの「1点＝何秒か」を索引に
+    書く。以前は各トラックが自分の長さから間引き幅を決めたうえで、索引には
+    間引く前の 0.25 秒を書いていたため、12.5分を超える録音では波形が時間軸の
+    先頭へ圧縮され（6時間なら全体が先頭12.4分ぶんに潰れる）、長さの違う
+    トラック同士でも縮尺が食い違っていた。
+    """
     peak_buckets = max(
         [len(t.peaks) for t in session.tracks.values()] + [math.ceil(max(total_elapsed, 0.0) / PEAK_BUCKET_SECONDS)]
     )
     peak_group = max(1, math.ceil(peak_buckets / PEAK_MAX_POINTS))
     peak_points = math.ceil(peak_buckets / peak_group)
     peak_seconds = round(PEAK_BUCKET_SECONDS * peak_group, 6)
+    return peak_group, peak_points, peak_seconds
 
+
+def _build_stems(
+    session: RecordingSession,
+    total_elapsed: float,
+    peak_group: int,
+    peak_points: int,
+    peak_seconds: float,
+) -> list[dict]:
+    """ミキサー（管理画面）が使う索引のトラック一覧。
+
+    index は**全トラックの中での位置**で、ミキサーはこの番号で1本を指す。
+    書き出せなかったトラックを飛ばしたぶん番号を詰めると、残りが1つずつ
+    ずれて別人の音を指すので、enumerate は絞り込む前に回す。
+    """
     stems = []
     for index, track in enumerate(session.tracks.values()):
-        if not (track.out_path.exists() and track.out_path.stat().st_size > 0):
+        if not _has_audio(track):
             continue
         voice = measure_voice(track.out_path, total_elapsed)
         if voice is not None and voice < VOICE_PERIODICITY_MIN:
@@ -1541,6 +1556,65 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
                 "bucket_seconds": peak_seconds,
             }
         )
+    return stems
+
+
+def _info_text(session: RecordingSession, info: dict) -> str:
+    """ZIP を開いた人が最初に読む要約。索引(JSON)と違って読み手は人。"""
+    return "\n".join(
+        [
+            f"チャンネル: {session.channel_name}",
+            f"開始した人: {session.started_by_name}",
+            f"書き出し: {info['書き出し日時']}",
+            f"長さ: {info['長さ']}",
+            f"停止理由: {info['停止理由']}",
+            "",
+            "各トラックは同じ時間軸に揃えてあります（そのまま重ねれば同期します）。",
+            "",
+            *[
+                f"  {t['ファイル']}  {t['名前']}  発話 {t['発話時間(秒)']}秒"
+                for t in cast("list[dict[str, Any]]", info["トラック"])
+            ],
+        ]
+    )
+
+
+def _write_archive(session: RecordingSession, manifest: dict, info: dict) -> Path:
+    """トラックと索引を1つの ZIP に固める。"""
+    zip_path = session.workdir / "archive.zip"
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for track in session.tracks.values():
+            if _has_audio(track):
+                # mp3 は既に圧縮済みなので縮まない。無圧縮で入れておくと、
+                # ZIP の中の1本を「その位置から何バイト」で直接読めるようになり、
+                # ミキサーの頭出し（Range リクエスト）が素直に通る。
+                archive.write(track.out_path, arcname=track.out_path.name, compress_type=zipfile.ZIP_STORED)
+        archive.writestr(MANIFEST_NAME, json.dumps(manifest, ensure_ascii=False))
+        archive.writestr("info.json", json.dumps(info, ensure_ascii=False, indent=2))
+        archive.writestr("info.txt", _info_text(session, info))
+    return zip_path
+
+
+def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> dict:
+    """録音を音声ファイルへ書き出し、ZIP にまとめて登録する（停止処理の本体）。
+
+    トラックを閉じる→索引(manifest)を作る→ZIPに固める、の順で行う。
+    戻り値はコマンド応答やAPIがそのまま使う結果セットで、ダウンロードに
+    必要な token や、声として怪しいトラックの一覧まで含む。
+    """
+    for track in session.tracks.values():
+        track.close(total_elapsed)
+
+    started_jst = datetime.now(_JST)
+    stamp = started_jst.strftime("%Y%m%d_%H%M")
+    title = f"録音 {session.channel_name} {stamp}"
+
+    info = _finalize_info(session, total_elapsed, reason, started_jst)
+
+    # ミキサー（管理画面）が使う索引。トラックの並び・波形・長さをここで確定させる。
+    # ZIP の中にも入れておくので、落としたあとでも同じ情報が手元に残る。
+    peak_group, peak_points, peak_seconds = _peak_scale(session, total_elapsed)
+    stems = _build_stems(session, total_elapsed, peak_group, peak_points, peak_seconds)
     manifest = {
         "version": 1,
         "channel_name": session.channel_name,
@@ -1552,35 +1626,7 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
         "stems": stems,
     }
 
-    zip_path = session.workdir / "archive.zip"
-    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for track in session.tracks.values():
-            if track.out_path.exists() and track.out_path.stat().st_size > 0:
-                # mp3 は既に圧縮済みなので縮まない。無圧縮で入れておくと、
-                # ZIP の中の1本を「その位置から何バイト」で直接読めるようになり、
-                # ミキサーの頭出し（Range リクエスト）が素直に通る。
-                archive.write(track.out_path, arcname=track.out_path.name, compress_type=zipfile.ZIP_STORED)
-        archive.writestr(MANIFEST_NAME, json.dumps(manifest, ensure_ascii=False))
-        archive.writestr("info.json", json.dumps(info, ensure_ascii=False, indent=2))
-        archive.writestr(
-            "info.txt",
-            "\n".join(
-                [
-                    f"チャンネル: {session.channel_name}",
-                    f"開始した人: {session.started_by_name}",
-                    f"書き出し: {info['書き出し日時']}",
-                    f"長さ: {info['長さ']}",
-                    f"停止理由: {info['停止理由']}",
-                    "",
-                    "各トラックは同じ時間軸に揃えてあります（そのまま重ねれば同期します）。",
-                    "",
-                    *[
-                        f"  {t['ファイル']}  {t['名前']}  発話 {t['発話時間(秒)']}秒"
-                        for t in cast("list[dict[str, Any]]", info["トラック"])
-                    ],
-                ]
-            ),
-        )
+    zip_path = _write_archive(session, manifest, info)
 
     size_bytes = zip_path.stat().st_size
     token = register_file(

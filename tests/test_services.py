@@ -1823,6 +1823,98 @@ class RecordingTests(unittest.TestCase):
         result = self.rec._finalize(session, 1.0, "テスト")
         self.assertEqual(result["suspect_tracks"], [])
 
+    def _empty_after_close(self, track):
+        """閉じたあとに中身を空にする。書き出しに失敗したトラックの再現。
+
+        ffmpeg が途中で落ちる・音が1バイトも来ないといった理由で、
+        out_path が 0 バイトのまま残ることがある。_finalize はこれを
+        索引にも ZIP にも入れない。
+        """
+        real_close = track.close
+
+        def close_then_empty(*a, **k):
+            """通常どおり閉じてから、ファイルだけ空にする。"""
+            real_close(*a, **k)
+            track.out_path.write_bytes(b"")
+
+        track.close = close_then_empty
+
+    def _manifest_of(self, result):
+        """書き出した ZIP から索引と収録名の一覧を読む。"""
+        from services.djaudio_cache import get_meta, payload_path
+
+        meta = get_meta(result["token"])
+        with zipfile.ZipFile(payload_path(result["token"], meta)) as archive:
+            manifest = json.loads(archive.read(self.rec.MANIFEST_NAME).decode("utf-8"))
+            names = archive.namelist()
+            info_txt = archive.read("info.txt").decode("utf-8")
+        return manifest, names, info_txt
+
+    def test_an_unwritten_track_keeps_its_slot_in_the_numbering(self):
+        """書き出せなかったトラックがあっても、残りの index が繰り上がらないこと。
+
+        index は「全トラックの中での位置」で、ミキサーはこの番号で1本を
+        指す。空のトラックを飛ばしたぶん番号を詰めると、**残りのトラックが
+        1つずつずれて別人の音を指す。** 全員ぶん揃っている平常時には
+        再現しないので、既存のテストは全部通ったままになる。
+        """
+        session = self._session()
+        for user_id, name in ((1, "すずき"), (2, "たなか"), (3, "さとう")):
+            session.feed(Mock(id=user_id, display_name=name), self._tone(0.3))
+        self._empty_after_close(list(session.tracks.values())[1])
+
+        result = self.rec._finalize(session, 2.0, "テスト")
+        manifest, names, _ = self._manifest_of(result)
+
+        self.assertEqual([s["index"] for s in manifest["stems"]], [0, 2])
+        self.assertEqual([s["name"] for s in manifest["stems"]], ["すずき", "さとう"])
+        self.assertEqual(len([n for n in names if n.endswith(".mp3")]), 2)
+        # 書き出せなくても「録っていた人」ではあるので、人数と名前からは消さない。
+        self.assertEqual(result["track_count"], 3)
+        self.assertEqual(result["speakers"], ["すずき", "たなか", "さとう"])
+
+    def test_every_stem_in_the_manifest_is_in_the_zip(self):
+        """索引が指すファイルが、必ず ZIP の中にあること。
+
+        索引を作るときの絞り込みと、ZIP へ入れるときの絞り込みは別々に
+        書かれている。片方だけ変えると**索引にはあるのに ZIP に無い**
+        トラックができ、ミキサーがその1本だけ 404 になる。書き出し自体は
+        成功するので、落として開くまで気づけない。
+        """
+        session = self._session()
+        for user_id, name in ((1, "すずき"), (2, "たなか"), (3, "さとう")):
+            session.feed(Mock(id=user_id, display_name=name), self._tone(0.3))
+        self._empty_after_close(list(session.tracks.values())[1])
+
+        result = self.rec._finalize(session, 2.0, "テスト")
+        manifest, names, _ = self._manifest_of(result)
+
+        self.assertTrue(manifest["stems"])
+        self.assertEqual({s["file"] for s in manifest["stems"]} - set(names), set())
+
+    def test_info_txt_lists_every_track_for_a_human_reader(self):
+        """同梱の info.txt に、全トラックが1行ずつ並ぶこと。
+
+        ZIP を開いた人が最初に読むのがこれ。索引(JSON)と違って読み手は人な
+        ので、行が抜けても機械は誰も困らず、**気づくのは開いた人だけ**になる。
+        """
+        session = self._session()
+        for user_id, name in ((1, "すずき"), (2, "たなか")):
+            session.feed(Mock(id=user_id, display_name=name), self._tone(0.3))
+
+        result = self.rec._finalize(session, 2.0, "テスト停止")
+        _, _, info_txt = self._manifest_of(result)
+
+        self.assertIn("チャンネル: 雑談", info_txt)
+        self.assertIn("開始した人: すずき", info_txt)
+        self.assertIn("停止理由: テスト停止", info_txt)
+        self.assertIn("同じ時間軸に揃えて", info_txt)
+        for name in ("すずき", "たなか"):
+            self.assertTrue(
+                any(line.startswith("  ") and name in line and "発話" in line for line in info_txt.splitlines()),
+                info_txt,
+            )
+
     def test_retention_days_control_the_link_lifetime(self):
         session = self._session(retention_days=3)
         session.feed(Mock(id=1, display_name="すずき"), self._tone(0.2))
