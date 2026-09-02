@@ -13,6 +13,10 @@ _CLEANUP_INTERVAL = 50
 
 
 def _maybe_cleanup() -> None:
+    """呼び出し _CLEANUP_INTERVAL 回に1回だけ、直近ウィンドウ内に参加履歴が
+    無いチャンネルのエントリを間引く。毎回の参加のたびに全チャンネルを
+    スキャンするのは無駄なので頻度を落としている。
+    """
     global _cleanup_counter
     _cleanup_counter += 1
     if _cleanup_counter < _CLEANUP_INTERVAL:
@@ -29,6 +33,11 @@ def _maybe_cleanup() -> None:
 
 
 def check_vc_raid(member: discord.Member, channel_id: int) -> bool:
+    """直近 VC_RAID_WINDOW_SEC 秒以内に、表示名の先頭
+    VC_RAID_SIMILAR_PREFIX 文字が同じユーザーが VC_RAID_THRESHOLD 人
+    以上参加していたら True（レイド荒らしはボットアカウントで似た
+    名前を連番にすることが多いため、完全一致ではなく先頭一致で見る）。
+    """
     now = time.time()
     history = _vc_join_history.setdefault(channel_id, [])
     history.append((now, member.display_name[:VC_RAID_SIMILAR_PREFIX], member.id))

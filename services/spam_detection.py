@@ -10,6 +10,10 @@ _CLEANUP_INTERVAL = 100
 
 
 def _maybe_cleanup() -> None:
+    """呼び出し _CLEANUP_INTERVAL 回に1回だけ、直近ウィンドウ内に発言履歴が
+    無いユーザーのエントリを間引く。メッセージのたびに全ユーザーを
+    スキャンするのは無駄なので頻度を落としている。
+    """
     global _cleanup_counter
     _cleanup_counter += 1
     if _cleanup_counter < _CLEANUP_INTERVAL:

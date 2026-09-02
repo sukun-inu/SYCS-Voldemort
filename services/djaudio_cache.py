@@ -22,6 +22,13 @@ DJAUDIO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _sanitize_filename(value: str, fallback: str = "file") -> str:
+    """ダウンロード時のファイル名として安全な文字列にする。
+
+    Windowsで使えない記号（<>:"|?*\\ 等）とパス区切りを落とし、長さも
+    120文字に切る。動画タイトルはこれらを平気で含むため、素通しすると
+    ダウンロード先OSによっては保存自体に失敗する。空になったら fallback
+    （token等）で必ず何か名前を残す。
+    """
     value = str(value or "").strip()
     value = value.replace("/", " ").replace("\\", " ")
     value = re.sub(r'[<>:"|?*\\]', "", value)
@@ -43,6 +50,9 @@ _CONTENT_TYPES = {
 
 
 def content_type_for(extension: str) -> str:
+    """配信レスポンスのContent-Typeを決める。未知の拡張子は
+    application/octet-stream にフォールバックし、配信自体は止めない。
+    """
     return _CONTENT_TYPES.get(extension.lower(), "application/octet-stream")
 
 
@@ -154,6 +164,10 @@ def get_meta(token: str) -> dict | None:
 
 
 def _delete_entry(token: str) -> None:
+    """実ファイルとメタJSONを両方削除する。拡張子が分からない時点でも
+    呼べるよう、あり得る全拡張子 + .json を順に unlink(missing_ok=True)
+    で試す（存在しないものはエラーにしない）。
+    """
     for suffix in (*_CONTENT_TYPES, ".json"):
         p = DJAUDIO_CACHE_DIR / f"{token}{suffix}"
         try:
@@ -172,6 +186,13 @@ async def cache_cleanup_loop(bot=None, interval: int = 60) -> None:
 
 
 async def _cleanup_expired(bot=None) -> None:
+    """期限切れのキャッシュエントリを全部削除する。
+
+    bot が渡されていれば、紐づく Discord 返信メッセージ（ダウンロード
+    リンク付き）も一緒に削除する。リンク切れのメッセージだけが残って
+    誤クリックを招くのを防ぐための後始末で、メッセージ削除に失敗しても
+    キャッシュ自体の削除は続ける。
+    """
     now = datetime.now(timezone.utc).timestamp()
     deleted = 0
     for meta_path in DJAUDIO_CACHE_DIR.glob("*.json"):
@@ -208,6 +229,11 @@ _TMP_ORPHAN_MAX_AGE_SEC = 300
 
 
 def _cleanup_orphaned_tmp_files(now: float) -> None:
+    """_write_meta_atomic() が置き換え前に落ちて残った *.json.tmp を掃除する。
+
+    直前のコメントの通り、書き込み中の一時ファイルを誤って消さないよう
+    _TMP_ORPHAN_MAX_AGE_SEC より新しいものは対象外にする。
+    """
     removed = 0
     for tmp_path in DJAUDIO_CACHE_DIR.glob("*.json.tmp"):
         try:

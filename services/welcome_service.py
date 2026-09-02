@@ -39,6 +39,10 @@ def render_template(
 
 
 def _render(template: str, member: discord.Member) -> str:
+    """discord.Member から render_template に渡す値を組み立てる薄いラッパー。
+    実際の入退室（send_welcome/send_goodbye）専用で、テスト送信側は
+    render_template を直接呼んでダミー値を渡す。
+    """
     return render_template(
         template,
         user=member.mention,
@@ -49,6 +53,11 @@ def _render(template: str, member: discord.Member) -> str:
 
 
 async def send_welcome(member: discord.Member) -> None:
+    """メンバー参加時のウェルカムメッセージを送る。チャンネル未設定・
+    チャンネルが見つからない・テキストチャンネルでない場合は何も送らず
+    静かに終わる（機能未設定は正常系として扱う）。送信自体の失敗は
+    例外にせずログへ残し、on_member_join のイベント処理を止めない。
+    """
     s = get_welcome_settings(member.guild.id)
     channel_id = s.get("channel_id")
     if not channel_id:
@@ -64,6 +73,9 @@ async def send_welcome(member: discord.Member) -> None:
 
 
 async def send_goodbye(member: discord.Member) -> None:
+    """メンバー退出時のお別れメッセージを送る。send_welcome と同じ方針
+    （未設定は正常系、送信失敗は例外にせずログへ）。
+    """
     s = get_goodbye_settings(member.guild.id)
     channel_id = s.get("channel_id")
     if not channel_id:

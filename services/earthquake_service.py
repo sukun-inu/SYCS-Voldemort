@@ -293,6 +293,10 @@ def _has_cjk_font() -> bool:
 
 
 def _get_font(size: int, bold: bool = False) -> _AnyFont:
+    """指定サイズ・太さのフォントを返す（サイズごとにキャッシュ）。
+    読み込みに失敗した場合は PIL の既定フォントへ静かに切り替える
+    （震度画像の生成自体を止めないため）。
+    """
     key = (size, bold)
     if key in _FONT_CACHE:
         return _FONT_CACHE[key]
@@ -322,6 +326,11 @@ def _get_font(size: int, bold: bool = False) -> _AnyFont:
 
 
 def _max_scale(event: dict) -> int:
+    """イベント全体の最大震度を、ペイロードの型（本震/EEW予報/別形式）ごとに
+    違う場所から拾う。P2PQuake の points を優先し、無ければ EEW予報の
+    areas の scaleTo/From、次に earthquake.maxScale、それでも無ければ
+    intensity.forecastMaxInt.to 文字列を数値へ変換する最後の保険を使う。
+    """
     points = event.get("points", [])
     if points:
         return max((p.get("scale", -1) for p in points), default=-1)
@@ -357,6 +366,10 @@ def _parse_coord(raw) -> float | None:
 
 
 def _parse_depth(raw) -> str:
+    """震源の深さを表示用文字列にする。0 は「ごく浅い」、負値・欠損は「不明」。
+    文字列・数値のどちらの形式で来ても受け付ける（P2PQuake のペイロードで
+    どちらの形式も観測されているため）。
+    """
     if raw is None:
         return "不明"
     if isinstance(raw, str):
@@ -379,6 +392,10 @@ def _parse_depth(raw) -> str:
 
 
 def _parse_magnitude(raw) -> tuple[str, float]:
+    """マグニチュードを表示用の文字列と数値の両方で返す。負値・変換不能は
+    ("不明", -1.0)。表示用の文字列と、比較・ソートで使う数値部分を
+    毎回別々にパースせずに済むよう1回でまとめる。
+    """
     try:
         v = float(raw)
         return (f"M{v}", v) if v >= 0 else ("不明", -1.0)
@@ -387,6 +404,10 @@ def _parse_magnitude(raw) -> tuple[str, float]:
 
 
 def _format_time(time_str: str) -> tuple[str, datetime | None]:
+    """P2PQuake の時刻文字列を日本語表現に直す。パースできないフォーマット
+    でも例外にはせず、元の文字列に「ごろ」を付けた表示へ落とす
+    （通知そのものを止めないため）。
+    """
     if not time_str:
         return "不明", None
     try:
@@ -608,6 +629,10 @@ def _generate_badge(scale: int) -> io.BytesIO | None:
 
 
 def _latlon_to_tile_float(lat: float, lon: float, zoom: int) -> tuple[float, float]:
+    """緯度経度を Web Mercator のタイル座標（浮動小数）へ変換する
+    （Slippy Map 方式）。タイル画像を取得する座標を決める処理と、県境などの
+    図形をタイル座標系へ投影する _project の両方がこの式を共有する。
+    """
     n = 2**zoom
     tx = (lon + 180) / 360 * n
     lat_r = math.radians(lat)
@@ -670,6 +695,11 @@ def _resolve_point_coord(addr: str, pref: str) -> tuple[float, float] | None:
 
 
 async def _fetch_tile(session: aiohttp.ClientSession, z: int, x: int, y: int):
+    """地図タイルを1枚取得する。取れなければ None を返し、呼び出し側は
+    タイル無しのまま描画を続ける（地震速報の配信をタイル取得の失敗で
+    遅らせないため）。timeout を3秒と短くしているのは、数十枚を並行取得
+    する用途で1枚の遅延が全体を長引かせないようにするため。
+    """
     url = _TILE_URL.format(z=z, x=x, y=y)
     try:
         async with session.get(
@@ -1027,6 +1057,9 @@ def _compose_intensity_map(
     canvas = base.resize((_MAP_W * ss, _MAP_H * ss), Image.LANCZOS).convert("RGBA")  # type: ignore[attr-defined]
 
     def to_px(point_lat: float, point_lon: float) -> tuple[float, float]:
+        """座標(lat, lon)をこの地図キャンバスの画素位置へ変換する
+        （原点補正とスーパーサンプル倍率込み）。
+        """
         px, py = _latlon_to_tile_float(point_lat, point_lon, zoom)
         return ((px * _TILE_SZ - origin_x) * ss, (py * _TILE_SZ - origin_y) * ss)
 
@@ -1034,6 +1067,9 @@ def _compose_intensity_map(
     # 札が色だけの丸だったころは視線を導く役に立っていたが、札に数字と大小が
     # 入った今は、最大震度の札そのものを赤くにじませて読みにくくするだけ。
     def overlaps(box: tuple[float, float, float, float], rects: list[tuple[float, float, float, float]]) -> bool:
+        """box が rects のどれかと重なっているか（矩形の当たり判定）。
+        強い震度の札を優先して残すための重なり避けに使う。
+        """
         return any(not (box[2] <= r[0] or box[0] >= r[2] or box[3] <= r[1] or box[1] >= r[3]) for r in rects)
 
     # 先に県の面を塗る。札はその上。
@@ -1144,6 +1180,10 @@ def _compose_intensity_map(
 
 
 def _build_embed(event: dict, max_scale: int, has_badge: bool = False) -> discord.Embed:
+    """地震情報（本震）から Embed を生成する。震源・規模・深さ・日時のうち
+    分からない項目は「不明」と書かず、その行ごと省く（分かる情報だけを
+    見せる）。
+    """
     eq = event.get("earthquake", {})
     hypo = eq.get("hypocenter", {})
     issue = event.get("issue", {})
@@ -1345,6 +1385,9 @@ def _build_tsunami_embed(event: dict) -> discord.Embed:
 
 class _EqView(discord.ui.View):
     def __init__(self, url: str):
+        """気象庁の詳細ページへ飛ぶリンクボタンだけを持つ、常設（timeout=None）の
+        ビュー。
+        """
         super().__init__(timeout=None)
         self.add_item(
             discord.ui.Button(
@@ -1376,6 +1419,9 @@ _jma_list_lock = asyncio.Lock()
 
 
 def _normalize_scale_text(text: str) -> str:
+    """JMA の表記ゆれ（全角数字・「最大」「震度」の接頭辞・空白）を吸収して、
+    _scale_from_text が正規表現で拾いやすい形に揃える。
+    """
     return (
         str(text or "")
         .translate(str.maketrans("０１２３４５６７", "01234567"))
@@ -1387,6 +1433,10 @@ def _normalize_scale_text(text: str) -> str:
 
 
 def _scale_from_text(text: str) -> int:
+    """「5強」のような日本語の震度表記を、内部の数値コード（55等）に変換する。
+    P2PQuake の points が使うコードに合わせてあるので、JMA 由来のデータ
+    でも震度の比較・色分けを同じ表で扱える。
+    """
     norm = _normalize_scale_text(text)
     m = re.search(r"([1-7])(弱|強)?", norm)
     if not m:
@@ -1411,6 +1461,10 @@ def _scale_from_text(text: str) -> int:
 
 
 def _parse_magnitude_value(raw) -> float | None:
+    """マグニチュード文字列を数値へ変換する。負値・変換不能は None
+    （_parse_magnitude と違い、こちらは表示用文字列を作らず比較・
+    スコアリングにしか使わない）。
+    """
     if raw is None:
         return None
     s = str(raw).strip().upper().replace("M", "")
@@ -1422,6 +1476,9 @@ def _parse_magnitude_value(raw) -> float | None:
 
 
 def _parse_any_time(raw) -> datetime | None:
+    """JMA 形式（yyyy/mm/dd HH:MM:SS）と ISO8601 の両方を試し、どちらも
+    JST に統一して返す。パースできなければ None。
+    """
     if not raw:
         return None
     s = str(raw).strip()
@@ -1445,6 +1502,10 @@ def _parse_any_time(raw) -> datetime | None:
 
 
 def _item_area_name(item: dict) -> str:
+    """list.json の1件から地域名らしき文字列を拾う。フィールド名が
+    anm/name/epicenter とばらつくため、順に試して最初に見つかったものを
+    使う。
+    """
     for key in ("anm", "name", "epicenter"):
         value = item.get(key)
         if isinstance(value, str) and value.strip():
@@ -1469,6 +1530,10 @@ def _item_detail_url(item: dict) -> str | None:
 
 
 def _cache_key_for_event(event: dict, max_scale: int) -> str:
+    """P2PQuake のイベントを、JMA list.json 側の詳細URLキャッシュのキーへ
+    変換する。イベントIDを持たないため、種別・時刻・最大震度・震源名の
+    組み合わせで同一性を近似する。
+    """
     eq = event.get("earthquake", {})
     hypo = eq.get("hypocenter", {})
     eq_time = eq.get("originTime") or eq.get("time", "")
@@ -1489,6 +1554,11 @@ def _score_jma_item(
     target_mag: float | None,
     target_scale: int,
 ) -> float:
+    """list.json の1件が、通知しようとしているイベントとどれだけ一致
+    しそうかをスコア化する（時刻・地域名・マグニチュード・震度の近さの
+    加重和）。時刻が15分以上ずれている項目は明確な別イベントとみなし、
+    大きな負の値で事実上除外する。
+    """
     score = 0.0
 
     item_dt = _parse_any_time(item.get("at") or item.get("time") or item.get("datetime"))
@@ -1530,6 +1600,11 @@ def _score_jma_item(
 
 
 async def _get_jma_list() -> list[dict]:
+    """気象庁の地震一覧(list.json)を取得する。TTL付きでキャッシュし、
+    取得に失敗した場合は直前のキャッシュ（無ければ空リスト）へ
+    フォールバックする。通知のたびに毎回ここへ来るとJMAへのリクエストが
+    跳ね上がるため、ロックで同時取得を1本化している。
+    """
     global _jma_list_cache
     now = time.time()
     if _jma_list_cache and now - _jma_list_cache[1] < _JMA_LIST_TTL_SEC:
@@ -1558,6 +1633,13 @@ async def _get_jma_list() -> list[dict]:
 
 
 async def _resolve_jma_detail_url(event: dict, max_scale: int) -> str:
+    """この地震にいちばん近い気象庁の詳細ページURLを推定する。
+
+    P2PQuake 側のイベントと JMA の list.json には共通IDが無いため、
+    _score_jma_item のスコアで最有力候補を選ぶ。十分に一致度が高い
+    （スコア10以上）ときだけ個別ページを返し、そうでなければ汎用の
+    地図ページへフォールバックする。結果はイベント単位でキャッシュする。
+    """
     key = _cache_key_for_event(event, max_scale)
     cached = _jma_detail_url_cache.get(key)
     if cached is not None:
@@ -1747,6 +1829,10 @@ async def _dispatch(
     """
 
     async def _send(channel: discord.TextChannel) -> None:
+        """1チャンネルへ送る。discord.File はここで bytes から作り直す
+        （File オブジェクトは1回使うと消費されて再送信に使えないため、
+        複数チャンネルへ配るループの中で毎回生成する必要がある）。
+        """
         files = [discord.File(io.BytesIO(data), filename=name) for name, data in (attachments or [])]
         await channel.send(
             embed=embed,
@@ -1964,6 +2050,10 @@ _running_tasks: set[asyncio.Task] = set()
 
 
 def _on_task_done(task: asyncio.Task) -> None:
+    """タスク完了時のコールバック。_running_tasks から取り除き、キャンセル
+    以外の未捕捉例外をログへ残す。ここで例外を握りつぶすと、通知タスクが
+    黙って死んだことに誰も気づけない。
+    """
     _running_tasks.discard(task)
     if task.cancelled():
         return

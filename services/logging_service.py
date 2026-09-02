@@ -29,10 +29,17 @@ _USER_COLOR_CACHE_MAX = 1024
 
 
 def _get_default_settings() -> Dict[str, Optional[int | str]]:
+    """未設定ギルドの既定値。チャンネル未設定・レベルINFOで、設定前でも
+    get_log_settings が常に同じ形の辞書を返せるようにする。
+    """
     return {"channel_id": None, "level": "INFO"}
 
 
 def get_log_settings(guild_id: int) -> Dict[str, Optional[int | str]]:
+    """ログチャンネルとレベルをまとめて返す。settings.json 側のキー名
+    (log_channel_id/log_level) と、このモジュールが使うキー名
+    (channel_id/level) が違うため、ここで詰め替える。
+    """
     raw = get_guild_settings(guild_id)
     level = str(raw.get("log_level", "INFO")).upper()
     channel_id = raw.get("log_channel_id")
@@ -43,10 +50,14 @@ def get_log_settings(guild_id: int) -> Dict[str, Optional[int | str]]:
 
 
 def set_log_channel(guild_id: int, channel_id: int | None) -> None:
+    """ログ送信先チャンネルを設定/解除する。"""
     update_guild_settings(guild_id, {"log_channel_id": channel_id})
 
 
 def set_log_level(guild_id: int, level: str) -> None:
+    """ログレベルを設定する。_LEVEL_PRIORITY に無い値は保存前に弾き、
+    後でログ判定（_should_log）が壊れた文字列に当たらないようにする。
+    """
     upper = level.upper()
     if upper not in _LEVEL_PRIORITY:
         raise ValueError(f"不正なログレベル: {level}. 使用可能: NONE, ERROR, INFO, DEBUG")
@@ -54,12 +65,21 @@ def set_log_level(guild_id: int, level: str) -> None:
 
 
 def _should_log(guild_id: int, level: str) -> bool:
+    """このレベルのログを実際に送るべきか。
+
+    数値が大きいほど詳細（NONE=0 < ERROR=1 < INFO=2 < DEBUG=3）。設定した
+    レベル以下（＝設定より詳細でない）ログだけを通す、標準的なログレベルの
+    考え方と同じ。NONEに設定すればERRORさえも出なくなる。
+    """
     settings = get_log_settings(guild_id)
     current_level = str(settings.get("level", "INFO") or "INFO").upper()
     return _LEVEL_PRIORITY.get(level, 0) <= _LEVEL_PRIORITY.get(current_level, 2)
 
 
 def _level_color(level: str) -> discord.Color:
+    """ログレベルごとのEmbed色。未知のレベルは light_grey にフォールバック
+    する。
+    """
     if level == "ERROR":
         return discord.Color.red()
     if level == "INFO":

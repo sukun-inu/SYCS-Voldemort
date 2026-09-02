@@ -43,6 +43,13 @@ def emoji_key(emoji) -> str:
 
 
 def _emoji_key(emoji: discord.PartialEmoji | str) -> str:
+    """emoji_key() の discord 型付きラッパー。
+
+    以前は handle_reaction_add/remove がこちらを直接呼んでいたが、後の
+    改修で `_role_id_for` 経由の `emoji_key` 呼び出しに置き換わった
+    （git log 参照）。このモジュール内から呼ばれておらず、現状は
+    未使用になっている。
+    """
     return emoji_key(emoji)
 
 
@@ -62,6 +69,11 @@ def _role_id_for(mapping: dict[str, str | int], emoji) -> str | int | None:
 
 
 async def handle_reaction_add(bot: Bot, payload: discord.RawReactionActionEvent) -> None:
+    """リアクション追加でロールを付与する。RawReactionActionEvent を使う
+    のは、対象メッセージがキャッシュに無くても（起動直後・再起動後）
+    payload だけでロール付与まで完結させるため。bot自身の反応は
+    member.bot で弾く。
+    """
     if payload.guild_id is None or payload.member is None or payload.member.bot:
         return
 
@@ -99,6 +111,12 @@ async def handle_reaction_add(bot: Bot, payload: discord.RawReactionActionEvent)
 
 
 async def handle_reaction_remove(bot: Bot, payload: discord.RawReactionActionEvent) -> None:
+    """リアクション除去でロールを剥奪する。
+
+    Discordのリアクション除去イベントには追加時と違い member 情報が
+    付かないため、guild.get_member() で引き直す。キャッシュに居なければ
+    None になり、その場合は何もしない（追加時のようにfetchまではしない）。
+    """
     if payload.guild_id is None:
         return
 

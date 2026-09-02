@@ -46,6 +46,10 @@ _summary_cache: TTLCache[str, str] = TTLCache(
 
 
 def _url_hash(url: str) -> str:
+    """記事URLを既読管理・要約キャッシュのキーへ変換する。settings.json の
+    seen_hashes へ長いURLをそのまま溜めないための短縮。既読判定にしか
+    使わないため衝突耐性の低いmd5で十分。
+    """
     return hashlib.md5(url.encode()).hexdigest()
 
 
@@ -69,12 +73,22 @@ def _format_pub_date(raw: str) -> str:
 
 
 def _get_groq_client() -> AsyncGroq | None:
+    """ニュース要約専用bucketでクライアントを取得する。APIキー未設定なら
+    None を返し（例外にしない）、呼び出し元は要約無しでフィードを続行する。
+    """
     if not GROQ_API_KEY:
         return None
     return get_groq_client(timeout=20.0, bucket=_GROQ_BUCKET)
 
 
 def _normalize_summary_text(text: str, max_len: int = _NEWS_SUMMARY_MAX_CHARS) -> str:
+    """LLMの要約出力を表示用に整える。
+
+    「要約:」のような接頭辞を付けて返してくることがあるため取り除き、
+    3行以上の空行は2行に畳む。プロンプトで400文字以内を指示していても
+    従わないことがあるため、max_len超過分は末尾を「…」で切って必ず
+    Embedフィールドの上限内に収める。
+    """
     clean = str(text or "").strip()
     clean = re.sub(r"[ \t]+", " ", clean)
     clean = re.sub(r"\n{3,}", "\n\n", clean)
@@ -143,6 +157,10 @@ def _favicon_url(source_url: str) -> str | None:
 
 
 async def _fetch_articles(session: aiohttp.ClientSession, query: str) -> list[dict]:
+    """Google News RSSを取得してパースする。通信失敗・XMLパース失敗の
+    どちらも例外を投げず空リストを返す。1フィードの取得失敗で
+    run_news_feeds のループ全体（他ギルド・他フィード）を止めないため。
+    """
     url = _RSS_BASE.format(query=quote(query))
     try:
         async with session.get(url, headers=_HEADERS, timeout=aiohttp.ClientTimeout(total=15)) as resp:
@@ -205,6 +223,14 @@ async def _fetch_articles(session: aiohttp.ClientSession, query: str) -> list[di
 
 
 async def run_news_feeds(bot: Bot) -> None:
+    """定期タスクから呼ばれる、全ギルド・全フィードの巡回本体。
+
+    フィードごとの interval（分）が経つまでは何もしない。新着は
+    seen_hashes で既読判定し、1回の巡回で最大5件・古い順（reversed）に
+    投稿する——RSSは新しい順に並ぶため、そのまま送ると新しい記事から
+    投稿されチャンネル内では時系列が逆転する。1フィードの送信失敗は
+    ログに残して次の記事へ進み、フィード全体・他ギルドへは波及させない。
+    """
     now = time.time()
     async with aiohttp.ClientSession() as session:
         for guild_id in get_all_guild_ids():

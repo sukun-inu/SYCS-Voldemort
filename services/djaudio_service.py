@@ -71,6 +71,11 @@ _SC_CLIENT_ID_PATTERNS = [
 
 
 def _get_semaphore() -> asyncio.Semaphore:
+    """プロセス全体で共有するダウンロード同時実行数の制限。
+    モジュール読み込み時ではなく初回使用時に作る（イベントループが
+    まだ無い読み込みタイミングで asyncio.Semaphore() を作ると、後で
+    別のループに紐づいて動かなくなることがあるため）。
+    """
     global _dl_semaphore
     if _dl_semaphore is None:
         _dl_semaphore = asyncio.Semaphore(DJAUDIO_DL_CONCURRENCY)
@@ -192,6 +197,12 @@ async def _fetch_soundcloud_client_id(*, force: bool = False) -> str | None:
 
 
 def _extract_urls(content: str, max_urls: int) -> list[str]:
+    """メッセージ本文からURLを重複無しで最大 max_urls 件抜き出す。
+
+    Discordの文中に貼られたURLは前後に括弧・句読点・山括弧
+    （<https://…> の無効化記法）が付くことがあるため、それらを
+    取り除いてから比較・収集する。
+    """
     urls: list[str] = []
     seen: set[str] = set()
     for raw in URL_PATTERN.findall(content):
@@ -206,10 +217,21 @@ def _extract_urls(content: str, max_urls: int) -> list[str]:
 
 
 def _normalize_text(value: str | None) -> str:
+    """None・非文字列も安全に受け、連続空白を1つに畳んで前後を切る。
+    yt-dlp のメタデータは値が無いフィールドで None が来るため、
+    呼び出し側で毎回 None チェックしなくて済むようにする。
+    """
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
 def _format_title_from_metadata(meta: dict) -> str:
+    """yt-dlp のinfo.jsonから「アーティスト - 曲名」形式の表示タイトルを
+    組み立てる。サイトによってどのフィールドに何が入るかが違う
+    （YouTubeのuploaderは投稿者名でありアーティスト名とは限らない、
+    TikTokは音源情報が別扱い等）ため、サイトごとに使うフィールドの
+    優先順位を変える。どれも無ければ動画タイトルのみ、それも無ければ
+    "unknown" にフォールバックする。
+    """
     title = _normalize_text(meta.get("title"))
     artist = _normalize_text(
         meta.get("artist") or meta.get("album_artist") or meta.get("creator") or meta.get("uploader")
@@ -218,6 +240,11 @@ def _format_title_from_metadata(meta: dict) -> str:
     site = detect_site(meta)
 
     def _with_artist(first: str, second: str) -> str:
+        """ "アーティスト - 曲名" の形に結合する。second が既に first から
+        始まっている場合は連結せずそのまま返す（"曲名"側に既にアーティスト
+        名が含まれるケースで "Artist - Artist - Title" のような重複表示に
+        ならないようにする）。
+        """
         if not first:
             return second
         if not second:
@@ -259,6 +286,11 @@ def _format_title_from_metadata(meta: dict) -> str:
 
 
 def _load_info_json(mp3_path: Path) -> dict | None:
+    """yt-dlp が --write-info-json で書き出したメタデータJSONを読む。
+    無い・壊れている場合は None を返し、呼び出し元はファイル名だけの
+    タイトルにフォールバックする（メタデータが欠けてもダウンロード
+    自体は失敗させない）。
+    """
     info_path = mp3_path.with_suffix(".info.json")
     if not info_path.exists():
         return None
@@ -271,11 +303,19 @@ def _load_info_json(mp3_path: Path) -> dict | None:
 
 
 def _is_soundcloud_url(url: str) -> bool:
+    """SoundCloud向けのclient_id再取得ロジック（_download_as_mp3）を
+    発動してよいURLか判定する。on.soundcloud.com（短縮URL）も対象に
+    含める。
+    """
     host = (urlparse(url).hostname or "").lower().removeprefix("www.")
     return host in ("soundcloud.com", "on.soundcloud.com")
 
 
 async def _run_ytdlp(url: str, output_dir: str, sc_client_id: str | None = None) -> tuple[int, str]:
+    """yt-dlpを1回実行してMP3へ変換する。戻り値は (終了コード, stderr全文)
+    で、成功判定・SoundCloudのclient_idエラー検知は呼び出し元
+    （_download_as_mp3）が行う。
+    """
     template = str(Path(output_dir) / "%(title).80s.%(ext)s")
     cmd = [
         "yt-dlp",
@@ -330,6 +370,13 @@ async def _run_ytdlp(url: str, output_dir: str, sc_client_id: str | None = None)
 
 
 async def _download_as_mp3(url: str, output_dir: str) -> list[Path]:
+    """URLをMP3へ変換する。SoundCloudのclient_idが失効している場合だけ、
+    動的取得→リトライ→（それでも失敗すれば）強制再取得→最終リトライの
+    段階を踏む。SoundCloudは client_id をクライアント側JSから抽出する
+    非公式の仕組みで頻繁に失効するため、失敗のたびに毎回スクレイピングを
+    走らせるとレイテンシと負荷が増える。まずキャッシュ済みの値で試し、
+    本当に効かなくなったときだけ取得し直す設計。
+    """
     returncode, err = await _run_ytdlp(url, output_dir)
 
     if returncode != 0 and _SOUNDCLOUD_CLIENT_ID_ERR in err and _is_soundcloud_url(url):
@@ -385,6 +432,11 @@ async def _download_and_register(
 
 
 def _build_result_embed(results: list[tuple[str, str]], guild_id: int, cache_ttl: int) -> discord.Embed:
+    """ダウンロード完了時の返信Embedを組み立てる。1URLから複数ファイル
+    （プレイリストの一部等）が出ることがあるため、フィールドをファイル
+    ごとに並べる。タイトルは50文字で切る（Embedフィールド名の実用上の
+    見やすさのため。Discordの制限自体はもっと長い）。
+    """
     ttl_min = cache_ttl // 60
     embed = discord.Embed(
         title="🎵 MP3 の準備が整った",
@@ -402,6 +454,9 @@ def _build_result_embed(results: list[tuple[str, str]], guild_id: int, cache_ttl
 
 
 async def _add_reaction_safe(message: discord.Message, emoji: str) -> None:
+    """進捗表示のリアクションを付ける。失敗しても処理本体（ダウンロード）
+    は止めない——絵文字が付かないだけなら実害は小さいため。
+    """
     try:
         await message.add_reaction(emoji)
     except discord.HTTPException as e:
@@ -412,6 +467,10 @@ async def _add_reaction_safe(message: discord.Message, emoji: str) -> None:
 
 
 async def _remove_reaction_safe(message: discord.Message, emoji: str, bot: Bot) -> None:
+    """自分（bot）が付けた進捗リアクションを外す。bot.user が未確定
+    （起動直後等）なら誰のリアクションも指定できないので黙ってスキップ
+    する。
+    """
     if bot.user is None:
         logger.debug("[DJAudio] bot.user が未確定のためリアクション除去をスキップ")
         return
@@ -490,6 +549,13 @@ async def _process_url(
     url: str,
     settings: DJAudioRuntimeSettings,
 ) -> None:
+    """1URLぶんのダウンロード〜返信までを行う。同じ (guild, message, url) の
+    組が既に処理中なら即座に戻る（Discordのイベント重複配信等で
+    handle_djaudio_message が同じメッセージに対して二重に呼ばれても、
+    同じ変換を二重に走らせて進捗リアクションが競合するのを防ぐ）。
+    成功・タイムアウト・その他失敗のどの経路でも finally で
+    _processing から必ず取り除く。
+    """
     # 呼び出し元 handle_djaudio_message が guild なしなら既に return 済みだが、
     # ここは別関数なので mypy 上の絞り込みが引き継がれない。判定内容は同じ。
     if message.guild is None:

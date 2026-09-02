@@ -30,14 +30,25 @@ _last_cleanup_at: datetime | None = None
 
 
 def _utc_now() -> datetime:
+    """現在時刻を UTC aware で返す。DB のタイムゾーン無し値と比較して
+    ずれないよう、このモジュールでは常にこれを起点にする。
+    """
     return datetime.now(timezone.utc)
 
 
 def _is_repairable_db_error(exc: Exception) -> bool:
+    """自己修復（DBの再作成）で直る可能性があるエラーかどうか。
+    接続断やスキーマ不整合はここで拾い、それ以外の例外はそのまま
+    呼び出し元へ伝播させて隠さない。
+    """
     return isinstance(exc, (OperationalError, ProgrammingError))
 
 
 async def _try_db_self_heal(*, context: str, exc: Exception) -> bool:
+    """修復可能なDBエラーなら、DBを作り直してから再試行してよいと伝える。
+    修復不能なエラーや修復自体の失敗では False を返し、呼び出し元は
+    最初の例外をそのまま外へ出す。
+    """
     if not _is_repairable_db_error(exc):
         return False
     logger.warning(
@@ -54,6 +65,10 @@ async def _try_db_self_heal(*, context: str, exc: Exception) -> bool:
 
 
 def _to_aware_utc(dt: datetime | None) -> datetime:
+    """naive な datetime は UTC とみなして aware にする。None なら現在時刻。
+    DBから読んだ値・イベント引数として渡ってきた値のどちらも tzinfo の
+    有無が揃っていない前提で、比較の前に必ずこれを通す。
+    """
     if dt is None:
         return _utc_now()
     if dt.tzinfo is None:
@@ -62,6 +77,10 @@ def _to_aware_utc(dt: datetime | None) -> datetime:
 
 
 def _safe_json_dumps(value: Any, default_json: str) -> str:
+    """JSON化に失敗しても例外を投げず、default_json を返す。
+    ここで例外を出すとユーザー状態イベントの記録そのものが止まるため、
+    シリアライズできない値が混ざっていても記録は続ける。
+    """
     try:
         return json.dumps(value, ensure_ascii=False)
     except Exception:
@@ -69,6 +88,10 @@ def _safe_json_dumps(value: Any, default_json: str) -> str:
 
 
 def _safe_json_loads(raw: str | None, fallback: Any) -> Any:
+    """JSON文字列が空・壊れている場合は fallback を返す。
+    保存時点では壊れていなくても、手動編集やスキーマ変更で読めなくなった
+    行に当たっても例外で落ちないようにする。
+    """
     if not raw:
         return fallback
     try:
@@ -78,6 +101,13 @@ def _safe_json_loads(raw: str | None, fallback: Any) -> Any:
 
 
 def _extract_user_fields(user: Any | None) -> dict[str, Any]:
+    """discord.User/Member から保存用のフィールドを抜き出す。
+
+    avatar は display_avatar → avatar の順で試す。カスタムアバターが
+    無いユーザーでは display_avatar が例外を投げるため。user が None
+    （退出後などで参照が切れた場合）でも空の辞書を返し、呼び出し側で
+    None チェックを増やさずに済むようにする。
+    """
     if user is None:
         return {
             "username": None,
@@ -112,6 +142,12 @@ def _extract_user_fields(user: Any | None) -> dict[str, Any]:
 
 
 def _extract_role_snapshot(member: Any | None) -> list[dict[str, Any]]:
+    """member のロールをイベント記録用の配列へ変換する。
+
+    @everyone（is_default）は全員が持つため記録から除外する。位置
+    (position) の降順にしておくのは、表示側で毎回ソートし直さずに
+    済むようにするため。
+    """
     if member is None:
         return []
 
@@ -174,6 +210,11 @@ def _lookup_ability_ids(getter: Any, guild_id: int, what: str) -> set[int]:
 
 
 def _extract_ability_snapshot(member: Any | None, guild_id: int) -> dict[str, Any]:
+    """退出・BAN後でも「当時どんな権限・扱いだったか」を追えるように、
+    権限フラグと信頼ユーザー/バイパスロールの判定結果をイベント発生時点で
+    固定して残す。あとから settings_store の設定を変えても、この
+    スナップショットは書き換わらない。
+    """
     abilities: dict[str, Any] = {}
     if member is None:
         return abilities
@@ -213,12 +254,22 @@ def _extract_ability_snapshot(member: Any | None, guild_id: int) -> dict[str, An
 
 
 def _is_timed_out_until(until: datetime | None, now: datetime) -> bool:
+    """timed_out_until が未来なら「今もタイムアウト中」と判定する。
+    None は「タイムアウトしていない」を意味する。
+    """
     if until is None:
         return False
     return _to_aware_utc(until) > now
 
 
 async def _cleanup_old_events_if_needed(now: datetime) -> None:
+    """保持期間を過ぎたイベントを間引く。
+
+    記録のたびに毎回スキャンすると重いため、
+    USER_STATE_CLEANUP_INTERVAL_SECONDS 未満の間隔では何もしない。
+    _last_cleanup_at はプロセス内メモリだけで持つので、再起動直後は
+    間隔を無視して必ず1回実行される。
+    """
     global _last_cleanup_at
     await ensure_user_state_db()
     if _last_cleanup_at is not None:
@@ -242,6 +293,10 @@ async def _cleanup_old_events_if_needed(now: datetime) -> None:
 
 
 def _sanitize_status(status_after: str) -> str:
+    """status を保存用に正規化する。小文字化・前後空白除去のうえ、
+    空文字は "unknown" にフォールバックし、DB のカラム長に合わせて
+    32文字で切り詰める。
+    """
     normalized = str(status_after or "").strip().lower()
     if not normalized:
         return "unknown"
@@ -261,6 +316,12 @@ def _update_current_state_fields(
     role_snapshot: list[dict[str, Any]] | None,
     ability_snapshot: dict[str, Any] | None,
 ) -> None:
+    """current 行を、渡された新しい状態でその場更新する。
+
+    引数が None のフィールドは「今回のイベントでは分からない」ことを
+    意味し、既存の値や status_after からの推測に任せて上書きしない
+    （明示的な False と「不明」を区別するために Optional にしている）。
+    """
     if user_fields.get("username"):
         current.username = user_fields["username"]
     if user_fields.get("display_name"):
@@ -326,6 +387,12 @@ async def record_user_state_event(
     payload: dict[str, Any] | None = None,
     event_at: datetime | None = None,
 ) -> None:
+    """入退室・BAN・ロール変更などのイベントを1件、履歴（UserStateEvent）
+    と最新状態（UserStateCurrent）の両方へ書き込む。
+
+    失敗しても例外を上げず、ログに残して呼び出し元（Discordのイベント
+    ハンドラ）を止めない。DBエラーは自己修復付きで一度だけ再試行する。
+    """
     await ensure_user_state_db()
     now = _to_aware_utc(event_at)
     status_after = _sanitize_status(status_after)
@@ -417,6 +484,7 @@ async def record_user_state_event(
 
 
 def _row_to_state_payload(row: UserStateCurrent) -> dict[str, Any]:
+    """DBの行を、API/管理画面がそのまま JSON にできる辞書へ変換する。"""
     return {
         "guild_id": int(row.guild_id),
         "user_id": int(row.user_id),
@@ -440,6 +508,10 @@ def _row_to_state_payload(row: UserStateCurrent) -> dict[str, Any]:
 
 
 def _event_to_payload(row: UserStateEvent) -> dict[str, Any]:
+    """イベント履歴の1行を辞書へ変換する。payload_json が壊れていたり
+    dict でなかったりしても空の dict にフォールバックし、呼び出し側の
+    型を保証する。
+    """
     payload = _safe_json_loads(row.payload_json, {})
     return {
         "id": int(row.id),
@@ -487,6 +559,11 @@ async def list_recent_user_states(  # type: ignore[return]
     # for attempt in range(2): の全分岐が return するため実際には
     # 関数末尾へ到達しないが、mypy はループが必ず実行されるとまでは
     # 検証できず「return 文が無い」と誤検知する。
+    """直近の更新順にユーザー状態を並べて返す。
+
+    DBエラー時は例外を投げず空リストを返す（一覧表示が丸ごと落ちるより
+    空表示のほうがまし、という判断）。自己修復を一度だけ試みてから諦める。
+    """
     await ensure_user_state_db()
     safe_limit = max(1, min(200, int(limit)))
     safe_offset = max(0, int(offset))
@@ -538,6 +615,12 @@ async def get_user_state_detail(  # type: ignore[return]
 ) -> dict[str, Any] | None:
     # for attempt in range(2): の全分岐が return するため実際には
     # 関数末尾へ到達しないが、mypy はそこまで検証できず誤検知する。
+    """1ユーザーの現在状態と直近イベント履歴をまとめて返す。
+
+    current・events のどちらも無ければ None（＝そもそも記録が無い
+    ユーザー）を返し、呼び出し側が「未記録」と「読み込み失敗」を
+    区別できるようにする。
+    """
     await ensure_user_state_db()
     safe_limit = max(1, min(500, int(event_limit)))
     for attempt in range(2):
@@ -582,6 +665,9 @@ async def get_user_state_detail(  # type: ignore[return]
 
 
 def _empty_user_fields() -> dict[str, Any]:
+    """_extract_user_fields(None) と同じ形の空の辞書を返す。actor 情報が
+    無いイベント（システム起因の記録など）で使う。
+    """
     return {"username": None, "display_name": None, "avatar_url": None}
 
 
@@ -597,6 +683,10 @@ def _build_state_event(
     reason: str | None = None,
     payload: dict[str, Any] | None = None,
 ) -> UserStateEvent:
+    """UserStateEvent の行オブジェクトを組み立てるだけで、セッションへの
+    追加やコミットはしない。sync_guild_user_states のように複数件を
+    1トランザクションでまとめて書きたい呼び出し元のためのヘルパー。
+    """
     return UserStateEvent(
         guild_id=int(guild_id),
         user_id=int(user_id),
@@ -615,6 +705,12 @@ async def repair_user_state_integrity(
     guild_id: int | None = None,
     max_rows: int = 50000,
 ) -> dict[str, int]:
+    """保存済みの現在状態行を走査し、正規化ルールに反した値を直す。
+
+    record_user_state_event を経由せずDBを直接触った過去データや、
+    ルール変更前に保存された行を後追いで揃えるためのバッチ処理。
+    どこを何件直したかを stats として返す。
+    """
     await ensure_user_state_db()
     now = _utc_now()
     safe_max_rows = max(100, min(200000, int(max_rows)))
@@ -722,6 +818,13 @@ async def sync_guild_user_states(
     reconcile_missing: bool = True,
     write_events_on_sync: bool = True,
 ) -> dict[str, int]:
+    """起動時などにDiscord側の実際のメンバー/BAN一覧とDBを突き合わせ、
+    ズレを一括で解消する。
+
+    Bot が落ちていた間の入退室・BANは個別イベントとして記録されない
+    ため、このタイミングでまとめて追いつかせないと監査履歴に空白期間が
+    できる。
+    """
     await ensure_user_state_db()
     now = _utc_now()
     safe_guild_id = int(guild_id)

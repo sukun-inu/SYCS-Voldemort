@@ -109,6 +109,12 @@ class _TrackWriter:
     """1ユーザー分の音声を、無音で位置合わせしながら mp3 へ書く。"""
 
     def __init__(self, user_id: int, display_name: str, out_path: Path, started_at: float):
+        """ユーザー1人ぶんの ffmpeg プロセスを起動する。
+
+        ここで Popen が失敗（ffmpeg が無い等）すると例外がそのまま外へ出る。
+        呼び出し元の RecordingSession.feed() はこれを Exception で受けて
+        そのユーザーのトラックだけ諦める設計なので、ここで握りつぶす必要はない。
+        """
         self.user_id = user_id
         self.display_name = display_name
         self.out_path = out_path
@@ -143,6 +149,12 @@ class _TrackWriter:
         )
 
     def _raw(self, payload: bytes, *, silence: bool = False) -> None:
+        """ffmpeg の stdin へ生の PCM/無音を書き込む。
+
+        書き込みに失敗したら failed を立てて以降は何もしない。1トラックの
+        書き込み失敗で例外を外へ投げると、write() を呼ぶ受信スレッド側の
+        ループごと止まり、他の全ユーザーの録音も巻き添えで止まる。
+        """
         if self.failed or self._process.stdin is None:
             return
         try:
@@ -214,6 +226,11 @@ class _TrackWriter:
             gap -= len(chunk)
 
     def write(self, pcm: bytes, elapsed: float) -> None:
+        """pcm を書く前に、経過秒 elapsed までの無音を埋める。
+
+        無音埋めを先にしないと、直前の発話との間の沈黙ぶんだけ詰めずに
+        後続のPCMがそのままくっつき、全トラックの時間軸がずれる。
+        """
         self.pad_until(elapsed)
         self._raw(pcm)
         self.voiced_bytes += len(pcm)
@@ -248,6 +265,7 @@ class _TrackWriter:
 
     @property
     def voiced_seconds(self) -> float:
+        """実際に声が入っていた秒数（無音埋めの分は含まない）。"""
         return self.voiced_bytes / BYTES_PER_SECOND
 
 
@@ -448,6 +466,11 @@ class _StreamAssembler:
     """
 
     def __init__(self, ssrc: int):
+        """1つの SSRC 分の状態を初期化する。
+
+        ここで作るカウンタ類は log_summary() でそのまま出力されるデバッグ用の
+        内訳で、録音そのものの動作には使わない。
+        """
         self.ssrc = ssrc
         # discord.opus.Decoder は使うときに初めて作る（読み込み時に opus が
         # 無い環境でも import は通したいため）。None 始まりなので型を書く。
@@ -497,6 +520,11 @@ class _StreamAssembler:
         return offset
 
     def push(self, sequence: int, timestamp: int, encoded: bytes, now: float) -> None:
+        """受信したパケットを並べ直し待ちの列に積む。
+
+        sequence が既に出した番号より後ろ（手遅れ）なら、いま差し込んでも
+        出力順を乱すだけなので late としてカウントして捨てる。
+        """
         if self._next_seq is not None and _wrapped_delta(sequence, self._next_seq, _SEQ_MOD) < 0:
             self.late += 1  # 既に出したところより後ろ。今さら差し込めない。
             return
@@ -556,6 +584,12 @@ class _StreamAssembler:
         return out
 
     def flush(self) -> list[tuple[int, bytes | None, float]]:
+        """残っている全パケットを、待たずに出す。
+
+        録音停止時に呼ぶ。drain(now) は「まだ来るかもしれない」と一定時間
+        待ってから出すが、停止後はもう届かないので float("inf") を渡して
+        即座に全部吐き出させる。
+        """
         return self.drain(float("inf"))
 
 
@@ -577,12 +611,25 @@ def _make_sink_class():
         """
 
         def __init__(self, session: "RecordingSession"):
+            """録音セッションに紐づくシンクを初期化する。
+
+            SSRC ごとの _StreamAssembler と直近の話者（VoiceRecvClient から
+            渡されるユーザー情報）を、guild 単位ではなくこのシンク単位
+            （＝録音セッション単位）で保持する。
+            """
             super().__init__()
             self.session = session
             self._streams: dict[int, _StreamAssembler] = {}
             self._users: dict[int, object] = {}  # ssrc -> 直近の話者
 
         def wants_opus(self) -> bool:
+            """常に True。
+
+            ライブラリ側にデコードを任せると、壊れたパケット1個で OpusError が
+            受信スレッドごと殺し、stop_listening() まで呼ばれて録音が黙って
+            止まる（クラス docstring 参照）。自前でデコードして例外を握り
+            つぶすためにここで断る。
+            """
             return True
 
         def _client(self):
@@ -594,6 +641,7 @@ def _make_sink_class():
             return getattr(self, "_voice_client", None)
 
         def _stream_for(self, ssrc: int) -> _StreamAssembler:
+            """ssrc に対応する _StreamAssembler を返す。無ければ新規に作って保持する。"""
             stream = self._streams.get(ssrc)
             if stream is None:
                 stream = _StreamAssembler(ssrc)
@@ -602,6 +650,13 @@ def _make_sink_class():
 
         def write(self, user, data) -> None:
             # voice_recv の受信スレッドから呼ばれる。ここでイベントループには触らない。
+            """1パケット受信のたびに voice_recv から呼ばれる（別スレッド、イベント
+            ループには触れない）。
+
+            DAVE（E2EE）の復号と並べ替えキューへの投入までを行い、実際の
+            デコードと書き込みは _emit() に任せる。ここで例外を外に出すと
+            stop_listening() まで呼ばれて録音全体が止まる。
+            """
             packet = getattr(data, "packet", None)
             if user is None or packet is None:
                 return
@@ -653,6 +708,11 @@ def _make_sink_class():
                 self._emit(other_ssrc, other, other.drain(now))
 
         def _emit(self, ssrc: int, stream: _StreamAssembler, ready) -> None:
+            """並べ直しが完了したパケット群をデコードし、トラックへ書き込む。
+
+            時間軸の起点をどう取るかで実際に時間がずれるバグを踏んでいるため、
+            起点の選び方はメソッド内のコメントを必ず読むこと。
+            """
             if not ready:
                 return
             user = self._users.get(ssrc)
@@ -728,6 +788,9 @@ def _make_sink_class():
                 )
 
         def cleanup(self) -> None:
+            """録音停止後にストリーム状態を解放する。参照を残すとセッションのたびに
+            メモリが積み上がる。
+            """
             self._streams.clear()
             self._users.clear()
 
@@ -760,6 +823,7 @@ class RecordingSession:
 
     @property
     def elapsed(self) -> float:
+        """録音開始からの経過秒数（monotonic 時計基準）。"""
         return time.monotonic() - self.started_at
 
     @property
@@ -769,6 +833,9 @@ class RecordingSession:
 
     @property
     def output_bytes(self) -> int:
+        """書き出し済みファイルの合計バイト数。stat に失敗したトラック
+        （書き込み中に消えた等）は黙って0扱いで無視する。
+        """
         total = 0
         for track in self.tracks.values():
             try:
@@ -825,6 +892,7 @@ class RecordingSession:
         track.write(pcm, self.elapsed if at is None else at)
 
     def status(self) -> dict:
+        """管理画面や停止時の embed に渡す、このセッションのスナップショット。"""
         return {
             "guild_id": self.guild_id,
             "channel_id": self.channel_id,
@@ -856,11 +924,20 @@ def _state_file() -> Path:
     # Path("") = カレントディレクトリになる。Bot と管理画面プロセスとで
     # カレントディレクトリが違うと、書いた場所と読む場所がずれて「録音中」の
     # 表示が黙って更新されなくなる。
+    """録音状態ファイルのパスを返す。settings_store.py と同じ SETTINGS_DIR を
+    見ることで、Bot と管理画面が別プロセスでも同じ場所を読み書きできる。
+    """
     default_dir = Path(__file__).resolve().parent.parent / "data"
     return env_path("SETTINGS_DIR", default_dir) / "_recording_state.json"
 
 
 def _write_state() -> None:
+    """現在の全セッションの状態を共有ファイルへ書き出す。
+
+    settings.json と同様に一時ファイル経由でアトミックに置き換える。
+    書き込みに失敗しても録音自体は止めない（表示が古いままになるだけに
+    留める）。
+    """
     try:
         path = _state_file()
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -884,10 +961,12 @@ def read_state() -> dict:
 
 
 def get_session(guild_id: int) -> RecordingSession | None:
+    """実行中の録音セッションを返す（無ければ None）。"""
     return _sessions.get(guild_id)
 
 
 def is_recording(guild_id: int) -> bool:
+    """このギルドで録音中かどうか。"""
     return guild_id in _sessions
 
 
@@ -1091,6 +1170,12 @@ async def _announce_start(
     session: RecordingSession,
     announce_to: discord.abc.Messageable | None,
 ) -> discord.Message | None:
+    """録音開始を告知するメッセージを送る。
+
+    設定した通知先→呼び出し元のチャンネル→VCのチャット欄の順で試し、
+    送れた最初の1つを使う。全滅なら None を返し、以降の停止処理は
+    「告知メッセージの編集」を諦める。
+    """
     embed = discord.Embed(
         title="🔴 このボイスチャンネルの録音を開始しました",
         description=(
@@ -1356,6 +1441,12 @@ async def _release_if_unused(guild_id: int) -> None:
 
 
 def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> dict:
+    """録音を音声ファイルへ書き出し、ZIP にまとめて登録する（停止処理の本体）。
+
+    トラックを閉じる→索引(manifest)を作る→ZIPに固める、の順で行う。
+    戻り値はコマンド応答やAPIがそのまま使う結果セットで、ダウンロードに
+    必要な token や、声として怪しいトラックの一覧まで含む。
+    """
     for track in session.tracks.values():
         track.close(total_elapsed)
 
@@ -1495,12 +1586,14 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
 
 
 def download_url(guild_id: int, token: str) -> str:
+    """この録音のダウンロードURLを組み立てる。"""
     from config import DJAUDIO_BASE_URL
 
     return f"{DJAUDIO_BASE_URL}/dlaudio/files/{guild_id}/{token}"
 
 
 def build_result_embed(guild_id: int, result: dict) -> discord.Embed:
+    """停止時に投稿する結果 embed を組み立てる。"""
     minutes, seconds = divmod(result["duration_seconds"], 60)
     embed = discord.Embed(
         title="⏹️ 録音を保存しました",

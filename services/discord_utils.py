@@ -24,6 +24,10 @@ def create_embed(
     color: str | int | discord.Color,
     footer_text: str = "",
 ) -> discord.Embed:
+    """data の各項目をinlineフィールドとして並べ、タイムスタンプ付きの
+    footerを付けた汎用Embedを組み立てる。フィールドの並びを個別に作り
+    込む必要がない通知（metal_commands等）向けの共通部品。
+    """
     embed = discord.Embed(title=title, description=description, color=_resolve_color(color))
     for name, value in data.items():
         embed.add_field(name=name, value=value, inline=True)

@@ -18,12 +18,22 @@ _pending: dict[int, bool] = {}
 
 
 def _get_lock(channel_id: int) -> asyncio.Lock:
+    """チャンネルごとの投稿ロックを使い回す。スティッキーの再投稿は
+    「削除してから送り直す」の2段階なので、同じチャンネルで複数の
+    トリガー（メッセージ発言・WebUI操作）が重なると、削除と送信の
+    順序が入れ替わって二重投稿や削除漏れになる。それを防ぐための鍵。
+    """
     if channel_id not in _locks:
         _locks[channel_id] = asyncio.Lock()
     return _locks[channel_id]
 
 
 async def _post_once(channel: discord.TextChannel, guild_id: int, content: str, old_message_id: int | None) -> None:
+    """古いスティッキーを削除してから新しく送り直し、新メッセージIDを
+    保存する。呼び出し元でロックを取っている前提（この関数自体は
+    排他しない）。古いメッセージが既に無くても（手動削除等）
+    NotFound/HTTPException は無視して投稿を続ける。
+    """
     if old_message_id:
         try:
             old_msg = await channel.fetch_message(old_message_id)
@@ -67,6 +77,14 @@ async def delete_sticky(channel: discord.TextChannel, guild_id: int) -> None:
 
 
 async def handle_sticky(message: discord.Message) -> None:
+    """発言のたびにスティッキーを一番下へ送り直す（on_message から呼ぶ）。
+
+    連投で呼び出しが重なったときは、ロックを持っている投稿が終わるまで
+    _pending フラグだけ立てて自分は投稿しない。ロック解放後にもう一度
+    だけ投稿し直すことで、連投1回ごとに削除→送信を繰り返して
+    レートリミットを消費するのを避けつつ、最終的には最新の内容で
+    再投稿される。
+    """
     if message.guild is None or message.author.bot:
         return
 

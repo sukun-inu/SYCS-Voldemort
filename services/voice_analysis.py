@@ -619,6 +619,10 @@ def harmonic_prominence(frame: list[float], f0: float) -> tuple[int, float]:
     nyquist = RATE / 2.0
 
     def band_max(centre: float) -> float:
+        """centre ± (f0×許容幅) の帯域内で最大の振幅を返す。周波数ビンが
+        centre の値をちょうど指すとは限らないため、山・谷それぞれを
+        1点ではなく帯域として見る。
+        """
         width = f0 * _HARMONIC_TOLERANCE
         picked = spectrum[(freqs >= centre - width) & (freqs <= centre + width)]
         return float(picked.max()) if picked.size else 0.0

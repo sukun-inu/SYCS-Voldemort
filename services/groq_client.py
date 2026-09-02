@@ -45,6 +45,9 @@ def get_groq_client(*, timeout: float, bucket: str = "default") -> AsyncGroq:
 
 
 def _get_semaphore(bucket: str) -> asyncio.Semaphore:
+    """bucketごとのSemaphoreを使い回す。呼び出しのたびに新規作成すると
+    同時実行数の制限が毎回リセットされ、意味を成さなくなる。
+    """
     semaphore = _semaphores.get(bucket)
     if semaphore is None:
         semaphore = asyncio.Semaphore(GROQ_MAX_CONCURRENT_REQUESTS)
@@ -53,6 +56,12 @@ def _get_semaphore(bucket: str) -> asyncio.Semaphore:
 
 
 async def _respect_min_interval(bucket: str) -> None:
+    """前回の呼び出しから最小間隔が経つまで待つ。
+
+    「経過時間を見る」と「待って時刻を更新する」をロックで1つにまとめて
+    いるのは、同時に複数の呼び出しが来たとき全員が同じ「まだ十分経って
+    いる」を見て素通りしてしまい、間隔制御が効かなくなるのを防ぐため。
+    """
     if GROQ_MIN_REQUEST_INTERVAL_SECONDS <= 0:
         return
     lock = _interval_locks.setdefault(bucket, asyncio.Lock())
@@ -65,6 +74,10 @@ async def _respect_min_interval(bucket: str) -> None:
 
 
 def _retry_after_seconds(exc: RateLimitError) -> float | None:
+    """429応答のRetry-Afterヘッダーから待機秒数を取り出す。
+    無い・壊れている場合は None を返し、呼び出し元に指数バックオフへ
+    フォールバックさせる（サーバーが指定した待ち時間を無視しないため）。
+    """
     response = getattr(exc, "response", None)
     header = response.headers.get("retry-after") if response is not None else None
     if header is None:

@@ -37,6 +37,9 @@ KINDS = tuple(_TEST_KINDS)
 
 
 def kind_label(kind: str) -> str:
+    """人が読む表示名を返す。未登録の kind はそのまま返し、表示自体は
+    落とさない。
+    """
     return _TEST_KINDS.get(kind, kind)
 
 
@@ -74,6 +77,11 @@ def _configured_channel_id(kind: str, guild_id: int) -> int | None:
 
 
 def _as_id(value) -> int | None:
+    """チャンネル/ロールIDとして妥当な正の整数だけを返す。0や負値・
+    変換不能な値は「未設定」として None に丸める（設定ファイルでは
+    未設定を 0 で表すことがあるため、0 をそのまま有効なIDとして
+    扱わない）。
+    """
     try:
         parsed = int(value)
     except (TypeError, ValueError):
@@ -116,6 +124,13 @@ def resolve_channel(
 
 
 async def _send_welcome_like(channel, guild, *, goodbye: bool) -> str:
+    """ウェルカム・お別れの両方をこの1つの実装で送る（goodbyeで切り替える）。
+
+    モジュール冒頭の方針どおり、本番の render_template と本番の既定文面
+    （DEFAULT_WELCOME/DEFAULT_GOODBYE）をそのまま使う。以前ウェルカムだけ
+    独自の既定文面を持っていて、テストで見た文面と本番の文面が食い違う
+    事故があったため。
+    """
     from services.settings_store import get_goodbye_settings, get_welcome_settings
     from services.welcome_service import (
         DEFAULT_GOODBYE,
@@ -138,6 +153,9 @@ async def _send_welcome_like(channel, guild, *, goodbye: bool) -> str:
 
 
 async def _send_vc(channel, guild) -> str:
+    """VC入退室通知の見た目だけを再現した固定文面のEmbedを送る。
+    実際の入退室イベントやVC状態は読まない、見た目確認だけのテスト。
+    """
     embed = discord.Embed(
         title="🎙️ テストユーザー が参加しました",
         description="VC: テストチャンネル",

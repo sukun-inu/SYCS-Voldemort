@@ -26,6 +26,11 @@ def _pooled_int(primary_key: str, fallback_key: str, default: int, *, minimum: i
 
 
 def _read_secret_file(path: str | None) -> str | None:
+    """*_FILE 系の環境変数（Docker/Kubernetesのsecretマウント）からパスワード
+    等を読む。パス自体が未設定なら黙って None（そもそも使わない構成）。
+    パスは指定されているのに読めない場合は設定ミスの可能性が高いので、
+    理由をログに残してから None を返す（詳細は下のコメント参照）。
+    """
     if not path:
         return None
     try:
@@ -42,6 +47,12 @@ def _read_secret_file(path: str | None) -> str | None:
 
 
 def _build_user_state_database_url() -> str:
+    """接続文字列を組み立てる。USER_STATE_POSTGRES_DSN があれば最優先で
+    そのまま使い、無ければ各要素を USER_STATE_POSTGRES_* → POSTGRES_*
+    （このモジュール専用のDBを分けていない構成向け）→既定値の順に拾って
+    組み立てる。パスワードはURLに埋め込む前にquote_plusで、記号を含む
+    値でも接続文字列を壊さないようにする。
+    """
     dsn = os.getenv("USER_STATE_POSTGRES_DSN")
     if dsn:
         return dsn
@@ -84,6 +95,10 @@ _initialized = False
 
 
 def _create_tables(sync_conn) -> None:
+    """テーブルを（無ければ）作る。AsyncEngine には同期DDL APIが無いため
+    conn.run_sync() 経由でこの同期関数として呼ぶ。checkfirst=True なので
+    既存環境で毎起動時に呼んでも安全。
+    """
     # __table__ の静的型は SQLAlchemy の FromClause だが、宣言的モデルの
     # __table__ は実際には Table インスタンスであり .create() を持つ。
     # 型定義側がこの実行時の具体型まで表現していないための誤検知。
@@ -92,6 +107,15 @@ def _create_tables(sync_conn) -> None:
 
 
 async def ensure_user_state_db(*, force: bool = False) -> None:
+    """テーブル作成が済んでいることを保証する。初回だけ実行し、以降の
+    呼び出しは即座に戻る（DB呼び出しごとに毎回呼ばれる想定のため）。
+
+    ロック取得前後で2回 _initialized を見る二重チェックは、複数の
+    コルーチンがほぼ同時に初回呼び出しをした場合に、テーブル作成を
+    1回だけに留めるため。force=True は user_state_service の自己修復
+    （テーブル消失等からの再作成）から使われ、既に初期化済みでも
+    もう一度 _create_tables を走らせる。
+    """
     global _initialized, _init_lock
     if _initialized and not force:
         return
@@ -110,4 +134,5 @@ async def ensure_user_state_db(*, force: bool = False) -> None:
 
 
 async def close_user_state_db() -> None:
+    """接続プールを破棄する。Bot終了時のクリーンアップ用。"""
     await engine.dispose()

@@ -33,11 +33,20 @@ def _unwrap_ipv4_mapped(
 
 
 def _is_public_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """SSRF対策の核。private/loopback/link-local/multicast/reservedの
+    どれかに該当すれば拒否する。IPv4-mapped IPv6を先に開くのは
+    _unwrap_ipv4_mapped のdocstring参照。
+    """
     # is_global=False のアドレス（private / loopback / link-local / multicast / reserved など）を拒否
     return _unwrap_ipv4_mapped(ip).is_global
 
 
 def _resolve_hostname(hostname: str) -> set[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """ホスト名を名前解決し、A/AAAA両方の結果を集める。IDN（国際化ドメイン名）
+    はASCII（punycode）に変換してから解決する。解決に失敗した場合も
+    「解決できないので安全」とはみなさず例外にする（呼び出し元は
+    URLの取得自体を諦める）。
+    """
     try:
         ascii_host = hostname.encode("idna").decode("ascii")
     except UnicodeError as e:

@@ -96,6 +96,9 @@ def collect() -> list[Path]:
         return []
 
     def order(path: Path) -> tuple[float, str]:
+        """(mtime, ファイル名) でソートするためのキー。取得中に消えたファイルは
+        無限大を返して末尾へ回し、例外でソート自体を止めない。
+        """
         try:
             return (path.stat().st_mtime, path.name)
         except OSError:

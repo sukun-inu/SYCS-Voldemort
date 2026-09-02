@@ -13,6 +13,7 @@ _GROQ_BUCKET = "moderation"
 
 
 def _get_groq_client() -> AsyncGroq:
+    """モデレーション専用のbucket("moderation")でGroqクライアントを取得する。"""
     return get_groq_client(timeout=20.0, bucket=_GROQ_BUCKET)
 
 
@@ -23,6 +24,16 @@ async def gpt_assess(
     min_interval: float = float("inf"),
     is_new_member: bool = False,
 ) -> str:
+    """投稿を DANGEROUS / SUSPICIOUS / SAFE / UNKNOWN のいずれかに判定する。
+
+    VirusTotalで既に危険と分かっているならLLMには回さず即断する（判定の
+    信頼性が高い上、無駄なAPI呼び出しを避けられる）。GROQ_API_KEY が無い
+    環境では SAFE を返す（UNKNOWNではない）——LLM判定が使えないことを
+    「疑わしい」ではなく「判定機能自体が無効」として扱う設計。逆に、
+    キーはあるのに呼び出し自体が失敗した場合は UNKNOWN を返し、
+    呼び出し元（security_service.gpt_icon）でSUSPICIOUSと同じ警戒表示に
+    倒す。「判定できなかった」を「安全」と混同しないため。
+    """
     for r in vt_results:
         mal = int(r.get("malicious", 0) or 0)
         sus = int(r.get("suspicious", 0) or 0)

@@ -26,10 +26,17 @@ logger = logging.getLogger(__name__)
 # ユーティリティ
 # ==================================================
 def now_jst() -> str:
+    """現在時刻をJST・ログ表示用の書式で返す。"""
     return datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def normalize_url(url: str) -> str:
+    """抽出したURLの前後に付いた記号を取り除く。
+
+    Discordの <https://example.com> というリンク無効化記法や、
+    "https://example.com." のように文の一部として書かれたURLでも、
+    実際のURLだけを取り出せるようにする。
+    """
     if not url:
         return ""
     u = url.strip()
@@ -41,6 +48,10 @@ def normalize_url(url: str) -> str:
 
 
 def extract_links(text: str) -> List[str]:
+    """本文からURLを重複無しで抜き出す。normalize_url を通したあとの
+    文字列で重複判定するので、記号の付き方が違うだけの同じURLを
+    二重にスキャンしない。
+    """
     raw = URL_REGEX.findall(text or "")
     links: List[str] = []
     seen: set[str] = set()
@@ -54,6 +65,9 @@ def extract_links(text: str) -> List[str]:
 
 
 def is_new_member(member: discord.Member) -> bool:
+    """参加してから NEW_MEMBER_THRESHOLD_DAYS 日未満のメンバーかどうか。
+    joined_at が取れない場合は「新規ではない」扱いにする（無害側に倒す）。
+    """
     if not member.joined_at:
         return False
     return (discord.utils.utcnow() - member.joined_at).days < NEW_MEMBER_THRESHOLD_DAYS
@@ -72,6 +86,13 @@ class BypassResult(NamedTuple):
 
 
 def is_security_bypassed(member: discord.Member) -> BypassResult:
+    """信頼ユーザー／バイパスロールのどちらかに該当するか判定する。
+
+    設定の読み取りに失敗した場合は bypassed=False ではなく
+    check_failed=True を立てて返す。呼び出し側はこれを「バイパスなし」と
+    区別し、強制措置を見送る材料にする（設定を読めなかっただけで
+    ロールを剥がされる事故を防ぐ）。
+    """
     try:
         trusted = get_trusted_user_ids(member.guild.id)
         if member.id in trusted:
@@ -96,6 +117,12 @@ def is_security_bypassed(member: discord.Member) -> BypassResult:
 
 
 async def strip_roles(member: discord.Member) -> Tuple[bool, str]:
+    """@everyone 以外の全ロールを剥奪する。
+
+    剥奪対象が無ければ何もせず成功扱い（"no_roles"）。権限不足
+    （discord.Forbidden）は個別に区別して返し、呼び出し側でログの
+    出し分けができるようにする。
+    """
     try:
         roles = [r for r in member.roles if not r.is_default()]
         if not roles:
@@ -130,12 +157,17 @@ REASON_ICONS = {
 
 
 def build_progress_bar(current: int, total: int, length: int = 10) -> str:
+    """VirusTotal 走査の進捗をテキストのプログレスバーにする。"""
     filled_len = int(length * current / total)
     bar = "#" * filled_len + "-" * (length - filled_len)
     return f"[{bar}] {current}/{total}"
 
 
 def vt_icon(malicious: int, suspicious: int, status: Optional[str] = None) -> str:
+    """VirusTotal の結果をアイコンへ変換する。status が error/skip
+    （＝走査できなかった）のときは SAFE ではなく WARN を返す。
+    判定できなかったことを「安全」と混同させないため。
+    """
     if status in ("error", "skip"):
         return WARN_ICON
     if malicious > 0:
@@ -146,6 +178,10 @@ def vt_icon(malicious: int, suspicious: int, status: Optional[str] = None) -> st
 
 
 def gpt_icon(result: str) -> str:
+    """ChatGPT判定の結果をアイコンへ変換する。UNKNOWN（Groq呼び出し失敗）は
+    SUSPICIOUS と同じ WARN 扱いにする。「判定できなかった」ことが
+    埋め込みの上で「問題なし」に化けないようにするため。
+    """
     if result == "DANGEROUS":
         return ALERT_ICON
     if result in ("SUSPICIOUS", "UNKNOWN"):
@@ -157,6 +193,10 @@ def gpt_icon(result: str) -> str:
 
 
 def reason_icon(reason: str) -> str:
+    """reason 文字列（"GPT:DANGEROUS" のように ":" で付加情報が付くことがある）
+    から種別だけを取り出し、対応するアイコンを返す。未知の種別は
+    [INFO] にフォールバックする。
+    """
     base = reason.split(":")[0]
     return REASON_ICONS.get(base, "[INFO]")
 
@@ -167,6 +207,11 @@ def build_final_embed(
     reasons: List[str],
     logs: List[str],
 ) -> discord.Embed:
+    """検査結果の総括 embed を組み立てる。
+
+    危険度に応じて色とタイトルを決める際、GPT判定の UNKNOWN（判定失敗）
+    を安全側と混同しないよう独立した分岐にしてある。
+    """
     is_vt_dangerous = "VT_DANGEROUS" in reasons
     is_vc_raid = "VC_RAID" in reasons
     is_spam = "SPAM" in reasons
@@ -248,6 +293,13 @@ async def _run_vt_scans(
     attachments: Sequence,
     logs: List[str],
 ) -> Tuple[List[Dict[str, Any]], Optional[discord.Message], List[str], bool]:
+    """リンク・添付ファイルを順にVirusTotalへ回し、結果と危険フラグを
+    まとめる。
+
+    走査対象が無ければ何もせず空の結果を返す。走査中は進捗メッセージを
+    都度編集するが、編集自体が失敗した場合は以降の更新を諦める
+    （進捗表示の失敗で検査そのものを止めない）。
+    """
     vt_results: List[Dict[str, Any]] = []
     vt_malicious_max = 0
     vt_suspicious_max = 0
@@ -308,6 +360,14 @@ async def _run_vt_scans(
 # メッセージセキュリティ
 # ==================================================
 async def handle_security_for_message(bot: discord.Client, message: discord.Message):
+    """メッセージ1件に対する検査の入口。
+
+    スパム・リンク過多・ユニコードトリック・VirusTotal・GPT判定・VC
+    レイドを順に確認し、危険と判定したら削除とロール剥奪を行う。
+    バイパス判定に失敗した場合は、危険と判定していても強制措置を
+    見送り、人が確認できるようログに大きく残す（信頼済みかどうか
+    分からないまま取り返しのつかない操作をしないため）。
+    """
     if message.author.bot or message.guild is None:
         return
 
@@ -477,6 +537,10 @@ async def handle_security_for_voice_join(
     before: discord.VoiceState,
     after: discord.VoiceState,
 ) -> None:
+    """VC参加時にレイド検出だけを行う入口（メッセージ検査とは別経路）。
+    バイパス判定に失敗した場合はロール剥奪を見送り、人が確認できる
+    よう大きくログに残す（handle_security_for_message と同じ方針）。
+    """
     if member.bot or member.guild is None:
         return
 

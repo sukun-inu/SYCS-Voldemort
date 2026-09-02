@@ -42,10 +42,20 @@ def get_effective_vc_watch(guild_id: int, settings: dict) -> tuple[int | None, l
 
 
 def has_temp_override(guild_id: int) -> bool:
+    """一時参加（temp_join）中で、通常の監視チャンネル設定より優先すべき
+    VCがあるかどうか。
+    """
     return guild_id in _temp_overrides
 
 
 def _clean_text(text: str, max_len: int) -> str:
+    """読み上げに向かない要素をテキストへ置き換える。
+
+    URL・メンション・チャンネル/ロールリンクをそのまま読み上げると
+    意味不明な羅列になるため種別名に差し替え、カスタム絵文字は
+    <a?:name:id> の name 部分だけを読ませる。max_len を超える分は
+    「、以下省略」で打ち切り、長文で読み上げが延々続くのを防ぐ。
+    """
     text = re.sub(r"https?://\S+", "URL", text)
     text = re.sub(r"<@!?\d+>", "メンション", text)
     text = re.sub(r"<#\d+>", "チャンネル", text)
@@ -115,6 +125,13 @@ async def _connect_or_move(guild: discord.Guild, vc_channel_id: int) -> discord.
 
 
 async def _player_loop(bot: Bot, guild_id: int) -> None:
+    """1ギルドにつき1つだけ動く、キューから取り出して順に読み上げる
+    常駐タスク。キューが _IDLE_TIMEOUT_SEC の間空ならVCから退出して
+    自分自身を終了する（現状は None で無効化されており、手動退出
+    以外では止まらない）。接続が切れていれば _RECONNECT_RETRIES 回
+    まで再接続を試み、それでも繋がらなければそのアイテムは諦めて
+    次へ進む（1件の失敗でキュー全体を詰まらせない）。
+    """
     queue = _queues.setdefault(guild_id, asyncio.Queue())
     while True:
         try:
@@ -166,6 +183,10 @@ async def _player_loop(bot: Bot, guild_id: int) -> None:
             done_event = asyncio.Event()
 
             def _after(error: Exception | None) -> None:
+                """discord.py の再生完了コールバック（別スレッドから呼ばれる）。
+                done_event を立てるだけで、実際の待機はループ側の
+                await done_event.wait() が行う。
+                """
                 if error:
                     logger.error("[TTS] playback error: %s", error)
                 done_event.set()

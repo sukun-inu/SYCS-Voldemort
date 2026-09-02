@@ -48,6 +48,10 @@ _locks: dict[int, asyncio.Lock] = {}
 
 
 def receive_unavailable_reason() -> str:
+    """discord-ext-voice-recv が読み込めなかった理由。RECEIVE_AVAILABLE が
+    True の間は空文字（読み込みに成功しているため）。録音機能が無効な
+    ときに、なぜ無効かをログや管理画面で示すためのもの。
+    """
     return _RECEIVE_UNAVAILABLE_REASON
 
 
@@ -64,6 +68,10 @@ def can_receive(client: discord.VoiceClient | None) -> bool:
 
 
 def get(guild_id: int) -> discord.VoiceClient | None:
+    """現在の共有接続を返す。切断済みなら None（_clients に残っていても
+    実際には繋がっていないハンドシェイク切れの接続を、生きているものと
+    偽って返さないようにする）。
+    """
     client = _clients.get(guild_id)
     if client is not None and not client.is_connected():
         return None
@@ -71,6 +79,7 @@ def get(guild_id: int) -> discord.VoiceClient | None:
 
 
 def channel_id(guild_id: int) -> int | None:
+    """現在接続中のVCチャンネルID。未接続なら None。"""
     client = get(guild_id)
     return client.channel.id if client and client.channel else None
 
@@ -84,6 +93,9 @@ def hold(guild_id: int, holder: str) -> None:
 
 
 def unhold(guild_id: int, holder: str) -> None:
+    """占有を解除する。占有者が他にもいれば release() はまだ切断しない
+    （空集合になったときだけ guild_id のエントリごと片付ける）。
+    """
     holders = _holds.get(guild_id)
     if not holders:
         return
@@ -93,10 +105,14 @@ def unhold(guild_id: int, holder: str) -> None:
 
 
 def holders(guild_id: int) -> set[str]:
+    """現在の占有者名の集合を返す（コピー）。ログ表示用。呼び出し側が
+    内部の _holds セットを直接書き換えられないようにコピーを渡す。
+    """
     return set(_holds.get(guild_id, ()))
 
 
 def is_held(guild_id: int) -> bool:
+    """誰か一人でも占有していれば True。"""
     return bool(_holds.get(guild_id))
 
 
@@ -180,6 +196,11 @@ async def acquire(
 
 
 async def _force_disconnect(guild_id: int, client: discord.VoiceClient) -> None:
+    """古い/移動できない接続を切ってから _clients から取り除く。切断が
+    discord.py 側で失敗しても _clients からは必ず外す（呼び出し元は
+    このあと新しい接続を張りに行くため、管理表だけは新しい接続に
+    差し替えられるようにしておく必要がある）。
+    """
     try:
         await client.disconnect(force=True)
     except Exception as e:

@@ -63,6 +63,12 @@ _DASH_SPLIT = re.compile(r"\s+[-－—–]\s+")
 
 
 def _clean_title(title: str) -> str:
+    """動画タイトルからDeezer検索の邪魔になる装飾（"(Official Music Video)"
+    "feat. ○○" "[4K]" 等）を取り除く。動画サイトのタイトルは曲名そのもの
+    ではなく人間向けの説明が混ざっているため、これを残したまま検索すると
+    一致率が落ちる。全部取り除いて空になった場合は元のタイトルを返す
+    （検索クエリを空にしないため）。
+    """
     t = _FEAT_BARE.sub("", title)
     t = _NOISE_BRACKET.sub("", t)
     t = re.sub(r"\s{2,}", " ", t).strip()
@@ -71,6 +77,10 @@ def _clean_title(title: str) -> str:
 
 
 def _normalize_for_compare(text: str) -> str:
+    """類似度比較の前処理。全角/半角・大文字/小文字・記号の有無だけで
+    一致しなくなるのを防ぐため、NFKD正規化して濁点等の結合文字を外し、
+    小文字化・記号除去・空白の畳み込みまで行う。
+    """
     t = unicodedata.normalize("NFKD", text)
     t = "".join(c for c in t if not unicodedata.combining(c))
     t = t.lower()
@@ -80,6 +90,11 @@ def _normalize_for_compare(text: str) -> str:
 
 
 def _similarity(a: str, b: str) -> float:
+    """正規化した2文字列の類似度（0〜1）。どちらかが空になった場合は
+    0.0（一致とみなさない）。SequenceMatcherはタイトルの語順の細かな
+    違いや表記ゆれに強く、完全一致を要求しないDeezer検索結果の採点に
+    使いやすい。
+    """
     na, nb = _normalize_for_compare(a), _normalize_for_compare(b)
     if not na or not nb:
         return 0.0
@@ -87,6 +102,10 @@ def _similarity(a: str, b: str) -> float:
 
 
 def _score_result(item: dict, ref_title: str, ref_artist: str | None) -> float:
+    """Deezer検索結果1件のスコア。タイトルを主、アーティストを従で
+    重み付けする（0.65:0.35）。参照アーティストが分からない場合は
+    タイトルの一致度だけで判断する（存在しない情報で減点しない）。
+    """
     dz_title = item.get("title") or ""
     dz_artist = (item.get("artist") or {}).get("name") or ""
     title_sim = _similarity(ref_title, dz_title)
@@ -96,6 +115,14 @@ def _score_result(item: dict, ref_title: str, ref_artist: str | None) -> float:
 
 
 def _build_search_queries(title: str, artist: str | None, site: str, info: dict) -> list[str]:
+    """検索クエリを、有力そうな順に複数組み立てる。
+
+    _fetch_by_search は上から順に投げ、高スコアが出た時点で打ち切る。
+    サイトごとに手がかりが違う（YouTubeはタイトルに「アーティスト - 曲名」
+    形式やuploader名が入る、TikTokは音源情報が別フィールドにある等）ため、
+    site別に有効なクエリの組み立て方を変えている。最後に必ず素の曲名
+    だけのクエリを足しておき、どの手がかりも外れたときの保険にする。
+    """
     clean = _clean_title(title)
     queries: list[str] = []
 
@@ -165,6 +192,12 @@ def _build_search_queries(title: str, artist: str | None, site: str, info: dict)
 
 
 async def _fetch_by_isrc(isrc: str, session: aiohttp.ClientSession) -> dict | None:
+    """ISRCが分かっている場合の完全一致検索。Deezerは未登録のISRCでも
+    HTTP 200 + {"error": ...} を返すため、ステータスだけでなく応答本体の
+    "error" キーも見て失敗と判定する。通信エラー・タイムアウトも含めて
+    ここで握りつぶし、呼び出し元にはテキスト検索へのフォールバックを
+    促す（None を返すだけで例外は投げない）。
+    """
     try:
         async with session.get(
             _DEEZER_ISRC.format(isrc),
@@ -190,6 +223,13 @@ async def _fetch_by_search(
     site: str = "generic",
     info: dict | None = None,
 ) -> dict | None:
+    """ISRCが無い場合のテキスト検索。_build_search_queries が作った候補を
+    順に試し、_HIGH_SCORE 以上が出た時点で即採用して残りを試さない
+    （無駄なAPI呼び出しを避ける）。どれも高スコアに届かなくても、
+    _MIN_SCORE 以上のベストマッチがあればそれを採用する。これも満たさ
+    なければ「該当なし」として None を返す——低スコアでも何か返すと、
+    無関係な曲のタグを上書きしてしまう。
+    """
     clean = _clean_title(title)
     ref_title = clean
     ref_artist = artist
@@ -233,6 +273,9 @@ async def _fetch_by_search(
 
 
 async def _download_bytes(url: str, session: aiohttp.ClientSession) -> bytes | None:
+    """カバー画像を取得する。失敗しても None を返すだけで例外を投げない
+    （カバーが取れないだけでタグ付け全体を失敗させないため）。
+    """
     try:
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
             if resp.status == 200:
@@ -244,6 +287,15 @@ async def _download_bytes(url: str, session: aiohttp.ClientSession) -> bytes | N
 
 
 def _write_tags(mp3_path: Path, data: dict, cover: bytes | None) -> None:
+    """Deezerの検索結果からID3タグを書き込む。同期・ブロッキングI/Oなので
+    呼び出し元は asyncio.to_thread で包んで呼ぶこと。
+
+    各フィールドはDeezer応答に存在するものだけ上書きする（無ければ既存の
+    タグを消さずそのまま残す）。カバー画像はJPEGのマジックバイト
+    (\xff\xd8\xff) を確認できたものだけ埋め込む。Deezerが返す形式は
+    通常JPEGだが、想定外の形式（壊れた応答等）をそのままAPICへ入れると
+    プレイヤー側でカバーが表示できない壊れたタグになるため。
+    """
     audio = MP3(mp3_path, ID3=ID3)
     if audio.tags is None:
         audio.add_tags()
@@ -270,6 +322,9 @@ def _write_tags(mp3_path: Path, data: dict, cover: bytes | None) -> None:
 
 
 def _cover_url(data: dict) -> str | None:
+    """カバー画像URLを解像度の高い順に探す。cover_xl（最大）が無ければ
+    順に小さいものへ落とす。
+    """
     album = data.get("album") or {}
     return album.get("cover_xl") or album.get("cover_big") or album.get("cover")
 

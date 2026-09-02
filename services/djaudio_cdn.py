@@ -31,15 +31,23 @@ dlaudio_router = APIRouter()
 
 
 def _validate_token(token: str) -> bool:
+    """トークンの形（uuid4.hex と同じ32文字の英数字）だけを見る。
+    実在の照合は get_meta() 側で行うため、ここでは明らかに不正な値を
+    ファイルシステムへ渡す前に弾くだけでよい。
+    """
     return token.isalnum() and len(token) == 32
 
 
 def _validate_guild_id(guild_id: str) -> bool:
+    """URLの guild_id が数字だけか。不正な値をそのまま比較・ログへ通さない
+    ための最低限の検査。
+    """
     return guild_id.isdigit()
 
 
 @dlaudio_router.get("/health")
 async def dlaudio_health():
+    """CDNプロセスが生きているかだけを返す。認証も状態確認もしない。"""
     return JSONResponse({"status": "ok"})
 
 
@@ -50,6 +58,13 @@ _LINK_WRONG_GUILD = "このリンクは別のサーバー向けに発行され�
 
 @dlaudio_router.get("/files/{guild_id}/{token}")
 async def serve_file(guild_id: str, token: str):
+    """MP3等を配信するDJAudio-DLの本体。
+
+    404/410/403 をエラー内容ごとに使い分けているのは、利用者に見せる文面
+    （_LINK_INVALID/_LINK_EXPIRED/_LINK_WRONG_GUILD）を状態ごとに変える
+    ため。guild_id の不一致は、リンクを他サーバーへ転送された場合の
+    アクセス制御なので、期限切れとは別に検知してログへ残す。
+    """
     if not _validate_guild_id(guild_id) or not _validate_token(token):
         raise HTTPException(status_code=404, detail=_LINK_INVALID)
 
@@ -78,6 +93,9 @@ async def serve_file(guild_id: str, token: str):
 
 @dlaudio_router.get("/info/{guild_id}/{token}")
 async def file_info(guild_id: str, token: str):
+    """ファイル本体は落とさず、残り時間などのメタ情報だけを返す。
+    ダウンロード前に「あと何分で切れるか」をUIへ出すためのエンドポイント。
+    """
     if not _validate_guild_id(guild_id) or not _validate_token(token):
         raise HTTPException(status_code=404, detail=_LINK_INVALID)
 
@@ -156,6 +174,10 @@ def _stored_member_range(zip_path: Path, name: str) -> tuple[int, int] | None:
 
 
 def _read_manifest(zip_path: Path) -> dict:
+    """録音ZIP内の索引を読む。索引が無い古いアーカイブでも、mp3ファイル名
+    から並び・stemだけを推測して同じ形の辞書に仕立てる（"legacy": True で
+    区別できるようにする）ので、呼び出し側は世代を意識しなくてよい。
+    """
     from services.recording_service import MANIFEST_NAME
 
     try:
@@ -256,6 +278,11 @@ async def recording_stem(guild_id: str, token: str, index: int, request: Request
     length = end - begin + 1
 
     def stream():
+        """[begin, end] の範囲だけをチャンクで読んで返す。ZIP内の当該
+        メンバーがファイル先頭からの絶対オフセット(start)に無圧縮で
+        入っている前提（_stored_member_range で確認済み）なので、
+        zipfile を介さず直接 seek して読める。
+        """
         remaining = length
         with open(zip_path, "rb") as handle:
             handle.seek(start + begin)
@@ -631,6 +658,10 @@ def _extract_member(zip_path: Path, member: str, destination: Path) -> bool:
 
 
 def _stem_of(guild_id: str, token: str, index: int) -> tuple[Path, dict, dict]:
+    """録音1本ぶんの (ZIPパス, 索引全体, そのトラックのstem情報) をまとめて
+    取る。解析・復元の両エンドポイントが同じ組み合わせを必要とするための
+    共通の入口。
+    """
     zip_path = _recording_zip(guild_id, token)
     manifest = _read_manifest(zip_path)
     stem = next((s for s in manifest.get("stems", []) if int(s.get("index", -1)) == index), None)
@@ -677,6 +708,9 @@ async def recording_analysis(
         raise HTTPException(status_code=400, detail=detail)
 
     def _run() -> dict:
+        """実際の声解析処理。asyncio.to_thread で別スレッドに逃がすための
+        同期関数（ffmpeg 呼び出しと解析がブロッキングなため）。
+        """
         # 解析は録音の一部だけを見る。以前はトラック全体をメモリへ読んでから、
         # その bytes を ffmpeg の標準入力へ何度も流していた。6時間のトラック
         # なら 86MB を抱えたうえ、毎回先頭から読み捨てさせていたことになる。
@@ -743,6 +777,10 @@ async def recording_stem_restored(
     out_path = work / "restored.mp3"
 
     def _run() -> subprocess.CompletedProcess | None:
+        """トラックの取り出しとffmpegでの変換打ち消しをまとめて行う同期関数。
+        asyncio.to_thread で呼ぶことで、最大300秒のブロッキングが
+        イベントループを止めないようにする。
+        """
         if not _extract_member(zip_path, str(stem.get("file", "")), source):
             return None
         return subprocess.run(

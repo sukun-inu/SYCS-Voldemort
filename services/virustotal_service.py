@@ -26,19 +26,41 @@ logger = logging.getLogger(__name__)
 
 
 def hash_text(text: str) -> str:
+    """URLをキャッシュキーにするための sha256 ハッシュ。URLをそのままキーに
+    すると長さや記号がまちまちで扱いづらいため、固定長へ丸める。
+    """
     return hashlib.sha256(text.encode()).hexdigest()
 
 
 def _vt_cache_get(key: str) -> Optional[Dict[str, Any]]:
+    """スキャン結果のキャッシュを読む薄いラッパー。呼び出し側に TTLCache の
+    実装を直接触らせないための間接層。
+    """
     return _vt_cache.get(key)
 
 
 def _vt_cache_set(key: str, data: Dict[str, Any]) -> None:
+    """スキャン結果をキャッシュへ書く薄いラッパー。"""
     _vt_cache.set(key, data)
 
 
 async def fetch_content_type(session: aiohttp.ClientSession, url: str) -> str:
+    """URL の Content-Type を確認する。
+
+    まず HEAD で試し、失敗したり Content-Type が空だったりした場合だけ
+    GET にフォールバックする。HEAD の方がファイル本体を落とさず安く済み、
+    対応していないサーバー向けの保険として GET を残している。
+    """
+
     async def _probe(method: str, target_url: str) -> tuple[int, str]:
+        """1つのHTTPメソッドでリダイレクトを辿りながら、最終的な status と
+        Content-Type を得る。
+
+        VT_MAX_REDIRECTS を超えたら追跡を諦める（無限リダイレクトに
+        引きずられないため）。リダイレクト先ごとに validate_public_http_url
+        を通すので、外部URLがリダイレクトで内部アドレスへ誘導する経路も
+        弾く。
+        """
         current = target_url
         for _ in range(VT_MAX_REDIRECTS + 1):
             validate_public_http_url(current)
@@ -73,6 +95,10 @@ async def fetch_content_type(session: aiohttp.ClientSession, url: str) -> str:
 
 
 def is_file_content_type(content_type: str) -> bool:
+    """VirusTotalへファイルとして送るべき Content-Type かどうか。
+    application/* と application/octet-stream 系だけを対象にする
+    （画像・テキスト・動画等はここでは扱わない）。
+    """
     if not content_type:
         return False
     ct = content_type.lower()
@@ -84,6 +110,12 @@ def is_file_content_type(content_type: str) -> bool:
 
 
 async def vt_check_url(url: str) -> Dict[str, Any]:
+    """URLをVirusTotalへ送って結果を得る（結果はキャッシュする）。
+
+    APIキー未設定なら実際には呼ばずスキップとして返す。例外はここで
+    握りつぶし、呼び出し元には status="error" として伝える（検査全体を
+    1URLの失敗で止めないため）。
+    """
     key = hash_text(url)
     cached = _vt_cache_get(key)
     if cached is not None:
@@ -95,6 +127,9 @@ async def vt_check_url(url: str) -> Dict[str, Any]:
     try:
 
         def sync() -> Dict[str, Any]:
+            """vt-py の同期クライアントで実際にスキャンする本体。vt-py が同期APIしか
+            持たないため、asyncio.to_thread に包んで呼ぶ。
+            """
             with vt.Client(VIRUSTOTAL_API_KEY) as client:
                 analysis = client.scan_url(url, wait_for_completion=True)
                 stats = analysis.stats
@@ -115,6 +150,13 @@ async def vt_check_url(url: str) -> Dict[str, Any]:
 
 
 async def vt_check_file(content: bytes) -> Dict[str, Any]:
+    """ファイルの内容をVirusTotalへ送って結果を得る。
+
+    先にハッシュでの既知ファイル照会（sync_lookup）を試し、無ければ
+    実際にアップロードしてスキャンする。同時に同じファイルがスキャン
+    され始めていた場合（ConflictError）は、新規スキャンを諦めて既存の
+    解析結果を取りに行く（sync_fallback）。
+    """
     if not VIRUSTOTAL_API_KEY:
         return {"status": "skip", "type": "file", "reason": "no_api_key", "malicious": 0, "suspicious": 0}
 
@@ -124,6 +166,10 @@ async def vt_check_file(content: bytes) -> Dict[str, Any]:
     try:
 
         def sync_lookup() -> Optional[Dict[str, Any]]:
+            """ハッシュだけでVirusTotal側に既存の解析結果が無いか確認する。
+            見つからない（APIError）場合は None を返し、アップロードによる
+            新規スキャンへ進ませる。
+            """
             with vt.Client(VIRUSTOTAL_API_KEY) as client:
                 try:
                     obj = client.get_object(f"/files/{sha256}")
@@ -146,6 +192,9 @@ async def vt_check_file(content: bytes) -> Dict[str, Any]:
             tmp_path = tmp.name
 
         def sync_scan():
+            """一時ファイルとして書き出した内容を実際にアップロードしてスキャン
+            する。成功・失敗のどちらでも一時ファイルは必ず削除する。
+            """
             try:
                 with vt.Client(VIRUSTOTAL_API_KEY) as client:
                     with open(tmp_path, "rb") as f:
@@ -169,6 +218,9 @@ async def vt_check_file(content: bytes) -> Dict[str, Any]:
         try:
 
             def sync_fallback():
+                """新規スキャンが ConflictError（他所で同時にスキャン中）になったとき、
+                既存の解析結果をハッシュから取得し直す。
+                """
                 with vt.Client(VIRUSTOTAL_API_KEY) as client:
                     obj = client.get_object(f"/files/{sha256}")
                     stats = obj.last_analysis_stats
@@ -196,6 +248,14 @@ async def vt_check_file(content: bytes) -> Dict[str, Any]:
 
 
 async def vt_scan_target(session: aiohttp.ClientSession, url: str) -> Dict[str, Any]:
+    """URLをVirusTotalへ回す前段の窓口。
+
+    まず公開URLとして安全か検証し、Content-Typeを見て画像なら丸ごと
+    スキップ、ファイルらしい種別ならダウンロードしてファイルスキャン
+    （vt_check_file）、それ以外はURLスキャン（vt_check_url）へ振り分ける。
+    ダウンロード中もリダイレクトごとに安全性を検証し、
+    VT_MAX_DOWNLOAD_BYTES を超えたら読み切る前に打ち切る。
+    """
     try:
         validate_public_http_url(url)
     except URLSafetyError as e:

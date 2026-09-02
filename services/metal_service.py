@@ -24,6 +24,9 @@ _price_cache_lock = asyncio.Lock()
 
 
 def _cached_price(metal_code: str, now: float) -> float | None:
+    """TTL内のキャッシュ値があればそれを返し、無ければ None。
+    期限切れの判定はここに一本化する（呼び出し側が個別にTTL計算しない）。
+    """
     cached = _price_cache.get(metal_code)
     if cached is not None and now - cached[1] < METALPRICE_CACHE_TTL_SECONDS:
         return cached[0]
@@ -167,6 +170,9 @@ async def _fetch_metal_prices_live(metal_codes: Iterable[str]) -> dict[str, floa
 
 
 async def calculate_metal_value(grams: float, metal_code: str, purity: Mapping[str, float]) -> Dict[str, int]:
+    """グラム数から、純度（K18等の含有率）ごとの評価額を整数円で返す。
+    grams が0以下では意味のある査定にならないため、APIを呼ぶ前に弾く。
+    """
     if grams <= 0:
         raise MetalPriceError("グラム数は正の値で指定せよ。")
     price_per_gram = await fetch_metal_price_per_gram(metal_code)
