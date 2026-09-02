@@ -1992,3 +1992,185 @@ class GuildSelectFormTests(unittest.TestCase):
         request, response = self._run("12345")
         self.assertEqual(response.status_code, 303)
         self.assertEqual(request.session["_flashes"], [["danger", "アクセス権限がありません。"]])
+
+
+class CreateAppShapeTests(unittest.TestCase):
+    """create_app() が組み立てたものと、その順序を丸ごと固定する。
+
+    323行ある `create_app` を割る前に、外から見た姿を押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+
+    割るときに怖いのは「1つ登録し忘れる」「順番が入れ替わる」で、**どちらも
+    起動はするし、ほとんどの画面も動く。** 落ちるのは特定の経路だけなので、
+    動かしてみるだけでは気づけない。
+
+    とくにミドルウェアの順序には意味がある。`create_app` の docstring にある
+    とおり、session_serialization_guard は SessionMiddleware より内側に居る
+    必要がある（浄化がクッキーの書き出しより先に走る）。ここが入れ替わると
+    `_sanitize_session_payload` を呼んでも手遅れになるが、**入れ替わっても
+    例外は出ず、画面も出る。**
+
+    エンドポイントを増やしたときも、この表を1行足すまでは落ちる。それが
+    目的である。組み立てを変えたのか、増やしたのかを、必ず一度は見る。
+    """
+
+    # create_app が自分で登録するもの（ルーター経由でないもの）。順序ごと固定する。
+    DIRECT = [
+        ("/openapi.json", "GET,HEAD", "openapi"),
+        ("mount", "/static", "static"),
+        ("/admin/users/state", "GET", "handler"),
+        ("/admin/settings/logging", "GET", "handler"),
+        ("/admin/settings/welcome", "GET", "handler"),
+        ("/admin/settings/vc-notify", "GET", "handler"),
+        ("/admin/settings/earthquake", "GET", "handler"),
+        ("/admin/settings/news-feeds", "GET", "handler"),
+        ("/admin/settings/sticky", "GET", "handler"),
+        ("/admin/settings/reaction-roles", "GET", "handler"),
+        ("/admin/settings/djaudio", "GET", "handler"),
+        ("/admin/settings/tts", "GET", "handler"),
+        ("/admin/settings/security", "GET", "handler"),
+        ("/admin/dev", "GET", "handler"),
+        ("/", "GET", "landing"),
+        ("/guide", "GET", "guide"),
+        ("/privacy", "GET", "privacy"),
+        ("/terms", "GET", "terms"),
+        ("/admin/guide", "GET", "redirect_admin_guide"),
+        ("/admin/privacy", "GET", "redirect_admin_privacy"),
+        ("/admin/terms", "GET", "redirect_admin_terms"),
+    ]
+
+    # 8本のルーターが、どの接頭辞の下に入ったか。中身（各ルーターの経路）まで
+    # 並ぶので、接頭辞の付け間違いも登録漏れもここで出る。
+    SCHEMA_PATHS = [
+        ("/admin/login", "get"),
+        ("/admin/auth", "get"),
+        ("/admin/callback", "get"),
+        ("/admin/logout", "get,post"),
+        ("/admin/", "get"),
+        ("/admin/guilds", "get"),
+        ("/admin/guilds/select", "post"),
+        ("/admin/overview", "get"),
+        ("/admin/api/metrics", "get"),
+        ("/admin/api/incidents", "get"),
+        ("/admin/api/apps", "get"),
+        ("/admin/api/apps/{app_id}", "get,put"),
+        ("/admin/api/apps/{app_id}/collections/{key}", "post"),
+        ("/admin/api/apps/{app_id}/collections/{key}/{item_id}", "delete,put"),
+        ("/admin/api/users/state", "get"),
+        ("/admin/api/users/state/{user_id}", "get"),
+        ("/admin/api/recording", "get"),
+        ("/admin/api/recording/start", "post"),
+        ("/admin/api/recording/stop", "post"),
+        ("/admin/api/recording/settings", "put"),
+        ("/admin/api/dev/overview", "get"),
+        ("/admin/api/dev/earthquakes", "get"),
+        ("/admin/api/dev/send-message", "post"),
+        ("/admin/api/dev/forward-message", "post"),
+        ("/admin/api/dev/news-send", "post"),
+        ("/admin/api/dev/signal/{task_name}", "post"),
+        ("/admin/api/dev/test-notify/{kind}", "post"),
+        ("/admin/api/dev/earthquake-replay", "post"),
+        ("/admin/api/dev/channels", "get"),
+        ("/admin/api/dev/user", "get"),
+        ("/admin/api/dev/logs", "get"),
+        ("/admin/api/dev/settings/{guild_id}", "get"),
+        ("/admin/api/dev/settings/{guild_id}/import", "post"),
+        ("/admin/api/dev/cache/{token}", "delete"),
+        ("/admin/api/dev/cache/purge", "post"),
+        ("/admin/api/sql/servers", "get"),
+        ("/admin/api/sql/objects", "get"),
+        ("/admin/api/sql/ddl", "get"),
+        ("/admin/api/sql/query", "post"),
+        ("/admin/api/sql/cancel", "post"),
+        ("/dlaudio/health", "get"),
+        ("/dlaudio/files/{guild_id}/{token}", "get"),
+        ("/dlaudio/info/{guild_id}/{token}", "get"),
+        ("/dlaudio/files/{guild_id}/{token}/mixer", "get"),
+        ("/dlaudio/files/{guild_id}/{token}/stem/{index}", "get"),
+        ("/dlaudio/files/{guild_id}/{token}/segment", "get"),
+        ("/dlaudio/files/{guild_id}/{token}/clip", "get"),
+        ("/", "get"),
+        ("/guide", "get"),
+        ("/privacy", "get"),
+        ("/terms", "get"),
+        ("/admin/guide", "get"),
+        ("/admin/privacy", "get"),
+        ("/admin/terms", "get"),
+    ]
+
+    # 外側から順。add_middleware したものが前に、@app.middleware したものが後ろに来る。
+    MIDDLEWARE = [
+        "SessionMiddleware",
+        "SlowAPIMiddleware",
+        "session_serialization_guard_middleware",
+        "security_headers_middleware",
+        "metrics_middleware",
+    ]
+
+    # 先頭3つは FastAPI が既定で入れるもの。4つ目以降が create_app の登録。
+    HANDLERS = [
+        ("HTTPException", "http_exception_handler"),
+        ("RequestValidationError", "request_validation_exception_handler"),
+        ("WebSocketRequestValidationError", "websocket_request_validation_exception_handler"),
+        ("_NeedsLogin", "needs_login_handler"),
+        ("_NeedsGuild", "needs_guild_handler"),
+        ("RateLimitExceeded", "rate_limit_handler"),
+        ("HTTPException", "http_exception_handler"),
+        ("ExceptionGroup", "exception_group_handler"),
+    ]
+
+    def test_what_create_app_registers_itself_is_unchanged(self):
+        """公開ページ・旧URLのリダイレクト・静的ファイルが、同じ順で並ぶこと。
+
+        旧URLのリダイレクトはパネル定義から作られるので、定義を1つ落とすと
+        ここが黙って1行減る。ブックマークやリンクが 404 になるだけで、
+        新しい画面は動き続けるため、使っている人からの報告でしか気づけない。
+        """
+        from starlette.routing import Mount, Route
+
+        actual = []
+        for route in app.routes:
+            if isinstance(route, Mount):
+                actual.append(("mount", route.path, route.name))
+            elif isinstance(route, Route):
+                actual.append((route.path, ",".join(sorted(route.methods or ())), route.name))
+        self.assertEqual(actual, [tuple(row) for row in self.DIRECT])
+
+    def test_every_router_is_mounted_under_its_prefix(self):
+        """8本のルーターが、それぞれの接頭辞の下に入っていること。
+
+        接頭辞を付け間違えても起動する。落ちるのはその API を呼ぶ画面だけで、
+        しかも「404 が返る」という形なので、開くまで分からない。
+        """
+        actual = [(path, ",".join(sorted(ops))) for path, ops in app.openapi()["paths"].items()]
+        self.assertEqual(actual, [tuple(row) for row in self.SCHEMA_PATHS])
+
+    def test_the_middleware_order_is_unchanged(self):
+        """ミドルウェアが、外側から同じ順で積まれていること。
+
+        session_serialization_guard は SessionMiddleware より**内側**に居る
+        必要がある。レスポンス側は内側から先に走るので、この並びだと浄化が
+        クッキーの書き出しより先に終わる。入れ替えても例外は出ず、画面も
+        出るが、浄化されていないセッションがクッキーに載る。
+        """
+        actual = []
+        for middleware in app.user_middleware:
+            dispatch = (getattr(middleware, "kwargs", None) or {}).get("dispatch")
+            actual.append(dispatch.__name__ if dispatch else middleware.cls.__name__)
+        self.assertEqual(actual, self.MIDDLEWARE)
+
+        guard = actual.index("session_serialization_guard_middleware")
+        session = actual.index("SessionMiddleware")
+        self.assertLess(session, guard, "浄化が Cookie の書き出しより後になっている")
+
+    def test_the_exception_handlers_are_unchanged(self):
+        """例外ハンドラの対応表が、同じ順で同じ中身であること。
+
+        `_NeedsLogin` のハンドラを落とすと、ログインが必要な画面で例外が
+        そのまま上がり、500 になる。ログインしている状態でテストすると
+        気づけない。
+        """
+        actual = [
+            (getattr(key, "__name__", str(key)), handler.__name__) for key, handler in app.exception_handlers.items()
+        ]
+        self.assertEqual(actual, [tuple(row) for row in self.HANDLERS])
