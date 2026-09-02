@@ -827,6 +827,93 @@ class QueryErrorAndTimeoutTests(_SqlApiTestBase):
         self.assertNotIn("my-token", sql._RUNNING)
 
 
+class QueryAuditAndCancellationTests(_SqlApiTestBase):
+    """実行の記録と、途中で止められることを固定する。
+
+    118行ある run_query を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+    この関数は読み取り専用・コミット・打ち切り・行数上限まで手厚く見られて
+    いるが、次の3つは崩しても全部通る。
+
+      - 誰が何を実行したかをログに残すこと
+      - 実行**前**に token を登録すること（走っている間に止められる）
+      - 非トランザクション経路（VACUUM 等）でも後始末をすること
+
+    1つ目は開発者専用の生 SQL 実行なので、記録が消えると**誰が何をしたかを
+    後から辿る手立てが無くなる。** 2つ目は登録が実行より後ろへずれると、
+    止めたい長いクエリの最中だけ token が無く、**キャンセルが効くのは
+    終わったあとだけ**になる。どちらも普通に使うぶんには何も起きない。
+    """
+
+    def test_the_execution_is_written_to_the_log_with_who_and_what(self):
+        """誰が・どのDBへ・どのモードで・何を投げたかを残すこと。"""
+        conn = _FakeConnection(plan=[_FakeStatement()])
+        with self.assertLogs(sql.logger, level="WARNING") as captured:
+            response = self.query(conn, "SELECT 42", write=True)
+
+        self.assertEqual(response.status_code, 200)
+        logged = "\n".join(captured.output)
+        self.assertIn("SQL実行", logged)
+        self.assertIn("4242", logged)  # 実行した開発者
+        self.assertIn(DATABASE, logged)
+        self.assertIn("write", logged)
+        self.assertIn("SELECT 42", logged)
+
+    def test_the_cancel_token_is_registered_while_the_query_runs(self):
+        """token の登録は、文を投げる**前**に済ませること。
+
+        登録が後ろへずれると、止めたい長いクエリの最中だけ token が無く、
+        **キャンセルが効くのは終わったあとだけ**になる。終わってしまえば
+        止める必要も無い。
+        """
+        seen: list[dict] = []
+        conn = _FakeConnection(plan=[_FakeStatement()])
+
+        real_run_one = sql._run_one
+
+        async def spy(connection, statement, limit, timeout):
+            """1文の実行。走っている最中の _RUNNING を控える。"""
+            seen.append(dict(sql._RUNNING))
+            return await real_run_one(connection, statement, limit, timeout)
+
+        with patch.object(sql, "_run_one", spy):
+            self.query(conn, "SELECT 1", token="tok-1")
+
+        self.assertEqual(len(seen), 1)
+        self.assertIn("tok-1", seen[0], "実行中に token が登録されていない")
+        self.assertEqual(seen[0]["tok-1"][2], conn.get_server_pid())
+        # 終わったら消えていること（既存テストと同じ後始末）
+        self.assertNotIn("tok-1", sql._RUNNING)
+
+    def test_the_non_transactional_path_also_cleans_up(self):
+        """VACUUM 経路でも、token を消して接続を閉じること。
+
+        こちらはトランザクションを張らない別の道なので、後始末を書き忘れて
+        も**普通の SELECT のテストは全部通る。** 残ると接続が漏れ、token が
+        居座って別のクエリのキャンセルが誤爆する。
+        """
+        conn = _FakeConnection(plan=["VACUUM"])
+        response = self.query(conn, "VACUUM some_table", write=True, token="tok-2")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["outsideTransaction"])
+        self.assertTrue(conn.closed, "接続が閉じられていない")
+        self.assertNotIn("tok-2", sql._RUNNING)
+
+    def test_the_statement_is_executed_exactly_as_written(self):
+        """コメントの除去は判定用だけで、実行は原文のままにすること。
+
+        先頭のコメントは「トランザクション内で実行できない文か」の判定の
+        邪魔になるので落とすが、**落とした文字列をそのまま実行してはいけない。**
+        VACUUM は通ってしまうため、動くかどうかでは気づけない。
+        """
+        conn = _FakeConnection(plan=["VACUUM"])
+        script = "-- 定期整理\nVACUUM some_table"
+        self.query(conn, script, write=True)
+
+        self.assertEqual(conn.executed, [script])
+
+
 class QueryRowLimitTests(_SqlApiTestBase):
     def test_rows_beyond_limit_are_truncated(self):
         statement = select_statement([("n", "int4")], [[1], [2], [3]])
