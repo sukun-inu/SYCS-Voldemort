@@ -32,6 +32,12 @@ _TIMEOUT = aiohttp.ClientTimeout(total=10)
 
 
 def get_oauth_url(state: str) -> str:
+    """Discord の認可画面へ飛ばす URL を組み立てる。
+
+    `state` はここでは検証しない。呼び出し側（views/auth_views.py）がセッションへ
+    保存し、コールバック側で一致を確認する CSRF 対策なので、渡す値の生成・保存
+    まで含めて呼び出し側の責務。
+    """
     params = {
         "client_id": DISCORD_CLIENT_ID,
         "redirect_uri": DISCORD_REDIRECT_URI,
@@ -45,6 +51,12 @@ def get_oauth_url(state: str) -> str:
 
 
 async def exchange_code(code: str) -> Optional[dict]:
+    """OAuth の認可コードをアクセストークンへ交換する。失敗は例外にせず None。
+
+    呼び出し側（コールバックハンドラ）はここで例外を捕まえる作りにしておらず、
+    None を「認証失敗」として案内画面へ落とす前提。ここで例外を投げる実装に
+    変えると、その分岐が素通りしてユーザーに 500 が出る。
+    """
     try:
         async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
             async with session.post(
@@ -66,6 +78,11 @@ async def exchange_code(code: str) -> Optional[dict]:
 
 
 async def get_user_info(access_token: str) -> Optional[dict]:
+    """ログインしてきた本人の Discord アカウント情報（id・username 等）を取る。
+
+    exchange_code と同じく、失敗は None で返して呼び出し側にログイン失敗
+    画面を出させる（例外を伝播させない）。
+    """
     try:
         async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
             async with session.get(
@@ -81,6 +98,13 @@ async def get_user_info(access_token: str) -> Optional[dict]:
 
 
 async def get_user_guilds(access_token: str) -> list[dict]:
+    """本人が所属する全ギルド（Bot の参加有無・権限は問わない）を取る。
+
+    この結果だけでは「管理できるギルド」は決まらない。get_admin_guilds() が
+    permissions ビットと _get_bot_guild_ids() の両方で絞り込むための材料。
+    失敗時は空リスト（呼び出し側は「管理できるギルドが無い」と区別できない
+    が、ログイン導線としては同じ「サーバーがありません」表示で扱って問題ない）。
+    """
     try:
         async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
             async with session.get(
@@ -96,6 +120,14 @@ async def get_user_guilds(access_token: str) -> list[dict]:
 
 
 async def _get_bot_guild_ids() -> set[int]:
+    """Bot が実際に参加しているギルドIDの集合。
+
+    「本人が管理者権限を持つギルド」だけでは不十分で、Bot がそのギルドに
+    いなければ管理画面から操作できるものが無い。get_admin_guilds() はこの
+    集合との積を取って一覧を絞る。トークン未設定・取得失敗時は空集合を返し、
+    その場合 get_admin_guilds() は誰にとっても「管理できるギルドが無い」に
+    なる（フェイルクローズ。取得できないからといって全ギルドを許可はしない）。
+    """
     if not DISCORD_BOT_TOKEN:
         logger.warning("DISCORD_BOT_TOKEN が未設定のため Bot ギルド一覧を取得できません。")
         return set()
@@ -197,6 +229,12 @@ _GUILD_CHANNELS_COOLDOWN_MAX = 300.0
 
 
 def _retry_after(resp) -> float:
+    """429 応答の Retry-After を秒数として読む。無い/壊れていれば既定の待ち時間。
+
+    Discord が値を返さない・数値でない場合に例外を伝播させると 429 処理その
+    ものが失敗してクールダウンに入れず、レート制限を食らったまま叩き続ける
+    ことになる。既定値へ倒して必ずクールダウンさせる。
+    """
     try:
         return max(0.0, float(resp.headers.get("Retry-After", "")))
     except (TypeError, ValueError):
@@ -263,6 +301,12 @@ async def _fetch_guild_channels(guild_id: int) -> list[dict]:
 
 
 def _of_type(channels: list[dict], channel_type: int) -> list[dict]:
+    """種類でフィルタし、Discord のチャンネル一覧に見えている並び順（position）に揃える。
+
+    API はテキスト/ボイスを分けずに1本の配列で返すため、種類ごとに切り出す
+    のはここで行う。position で並べないと、Discord クライアントでの表示順と
+    管理画面のプルダウンの順番が食い違う。
+    """
     return sorted(
         [c for c in channels if c.get("type") == channel_type],
         key=lambda c: c.get("position", 0),

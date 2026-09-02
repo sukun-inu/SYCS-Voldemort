@@ -26,10 +26,18 @@ VALID_SCALES: tuple[int, ...] = (10, 20, 30, 40, 45, 50, 55, 60, 70)
 
 
 def _channel(guild_id: int):
+    """channel_id フィールドの Field.get。"""
     return get_earthquake_settings(guild_id).get("channel_id")
 
 
 def _min_scale(guild_id: int) -> int:
+    """min_scale フィールドの Field.get。壊れた値（型不正）はデフォルトの30（震度3）に倒す。
+
+    ここで例外を上げると _read_values がパネル全体をエラー扱いにしてしまう
+    （webapp_admin/api/apps.py 参照）。地震アラートは常時稼働の通知系なので、
+    1つの壊れた設定値のせいで画面を開けなくするより、安全側の既定値で
+    表示を続けるほうを選んでいる。
+    """
     try:
         return int(get_earthquake_settings(guild_id).get("min_scale", 30))
     except (TypeError, ValueError):
@@ -37,14 +45,24 @@ def _min_scale(guild_id: int) -> int:
 
 
 def _set_min_scale(guild_id: int, value) -> None:
+    """min_scale フィールドの Field.set。"""
     set_earthquake_min_scale(guild_id, int(value))
 
 
 def _notify_types(guild_id: int) -> dict[str, bool]:
+    """notify_types フィールド（CHECKLIST）の Field.get。キーは NOTIFY_TYPES と一致させる。"""
     return get_earthquake_notify_types(guild_id)
 
 
 def _set_notify_types(guild_id: int, enabled_keys) -> None:
+    """notify_types フィールドの Field.set。
+
+    CHECKLIST は「有効なキーの配列」で届く（_validate_checklist 参照）が、
+    保存側の set_earthquake_notify_types は全キー分の bool 辞書を要求する。
+    NOTIFY_TYPES を正として全キーを埋め直すことで、届かなかったキー
+    （＝チェックを外した項目）を明示的に False にする。届いた分だけ
+    マージすると「外した」が保存されずに残ってしまう。
+    """
     selected = {str(k) for k in (enabled_keys or [])}
     set_earthquake_notify_types(guild_id, {key: key in selected for key, _ in NOTIFY_TYPES})
 

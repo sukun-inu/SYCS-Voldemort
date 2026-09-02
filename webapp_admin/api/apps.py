@@ -28,10 +28,17 @@ router = APIRouter()
 
 
 def _guild_id(request: Request) -> int:
+    """check_guild 依存を通過済みという前提で session から取り出す。呼ぶ側で存在保証すること。"""
     return int(request.session["guild_id"])
 
 
 def _panel_or_404(request: Request, app_id: str) -> Panel:
+    """未知のパネルIDと、開発者専用パネルへの非開発者アクセスを同じ404にする。
+
+    dev_only パネル（SQLコンソール等）を403にすると「存在するが権限が無い」
+    ことが伝わってしまう。404で一様に扱い、パネルの存在自体を開発者以外へ
+    漏らさない。registry.visible_panels() の一覧非表示と揃えた振る舞い。
+    """
     panel = PANEL_BY_ID.get(app_id)
     if panel is None or (panel.dev_only and not is_dev_user(request)):
         raise HTTPException(status_code=404)
@@ -39,6 +46,12 @@ def _panel_or_404(request: Request, app_id: str) -> Panel:
 
 
 def _editable_panel(request: Request, app_id: str) -> Panel:
+    """書き込み系エンドポイント共通のガード。custom パネルには明示保存の概念が無い。
+
+    custom パネル（DEV/SQL/RECORDING/USER_STATE 等）は自前のAPIで状態を持ち、
+    このスキーマ駆動の values/collections 経由の保存対象ではない。ここを
+    通さずに save_app 等を直接叩かれても 404 で弾く。
+    """
     panel = _panel_or_404(request, app_id)
     if panel.custom:
         raise HTTPException(status_code=404)
@@ -46,6 +59,7 @@ def _editable_panel(request: Request, app_id: str) -> Panel:
 
 
 def _collection_or_404(panel: Panel, key: str) -> Collection:
+    """パネルにそのコレクションキーが定義されていなければ404。"""
     collection = panel.collection(key)
     if collection is None:
         raise HTTPException(status_code=404)
@@ -53,6 +67,11 @@ def _collection_or_404(panel: Panel, key: str) -> Collection:
 
 
 async def _json_body(request: Request) -> dict[str, Any]:
+    """書き込み系エンドポイント共通の本文パース。JSON でない/オブジェクトでなければ400で止める。
+
+    ここで型を保証しておかないと、下流の validate_values/validate_item が
+    list や文字列を渡されて予期しない例外を出し、422 ではなく素の 500 になる。
+    """
     try:
         body = await request.json()
     except Exception:
@@ -63,6 +82,12 @@ async def _json_body(request: Request) -> dict[str, Any]:
 
 
 def _read_values(panel: Panel, guild_id: int) -> tuple[dict[str, Any], dict[str, str]]:
+    """パネルの全フィールドを読む。1項目の読み取り失敗でパネル全体を落とさない。
+
+    失敗した項目は field.default で埋めて errors に理由を積む。ここで例外を
+    伝播させると、1つの壊れた設定値のせいでパネル全体が開けなくなり、
+    直そうにも画面へ辿り着けなくなる。
+    """
     values: dict[str, Any] = {}
     errors: dict[str, str] = {}
     for field in panel.fields:
@@ -82,6 +107,7 @@ def _read_values(panel: Panel, guild_id: int) -> tuple[dict[str, Any], dict[str,
 
 
 def _read_collections(panel: Panel, guild_id: int) -> tuple[dict[str, list], dict[str, str]]:
+    """パネルの全コレクションを読む。_read_values と同じく1件の失敗で全体を落とさない。"""
     rows: dict[str, list] = {}
     errors: dict[str, str] = {}
     for collection in panel.collections:
@@ -168,6 +194,13 @@ async def save_app(
     # Bot と管理画面は同じファイルを共有していて、競合は実際に起きる。
     # 項目ごとにスレッドを跨ぐ必要は無いので、ループごと逃がす。
     def _apply() -> tuple[list[str], dict[str, str]]:
+        """実際の書き込みを担う。asyncio.to_thread で呼ぶ前提（直呼びしない）。
+
+        setter は settings.json のファイルロックを取るため、ここを await せず
+        イベントループ上で直接呼ぶと、ロック待ちの間ワーカー全体が固まり、
+        Bot 側の書き込みと鉢合わせたときは特に長く止まる（上のコメント参照）。
+        1項目の失敗は failures に積んで続行し、他の項目の保存は妨げない。
+        """
         applied: list[str] = []
         failures: dict[str, str] = {}
         for key, value in clean.items():
@@ -208,6 +241,12 @@ async def add_item(
     _=Depends(check_guild),
     _csrf=Depends(check_csrf),
 ):
+    """コレクションへ1件追加する。保存ボタンを介さず即時反映（明示保存とは別系統）。
+
+    max_items の上限チェックは検証（validate_item）より前に行う。件数超過を
+    先に弾かないと、入力自体は正しいのに上限で失敗したケースでも個別項目の
+    エラー扱いになり、原因が「多すぎる」ではなく「値がおかしい」ように見える。
+    """
     panel = _editable_panel(request, app_id)
     collection = _collection_or_404(panel, key)
     if collection.add is None:
@@ -256,6 +295,7 @@ async def update_item(
     _=Depends(check_guild),
     _csrf=Depends(check_csrf),
 ):
+    """コレクションの1件を更新する。add_item と同じく即時反映で、明示保存は経由しない。"""
     panel = _editable_panel(request, app_id)
     collection = _collection_or_404(panel, key)
     if collection.update is None:
@@ -295,6 +335,7 @@ async def remove_item(
     _=Depends(check_guild),
     _csrf=Depends(check_csrf),
 ):
+    """コレクションの1件を削除する。取り消し確認は画面側の責務で、ここでは即座に消す。"""
     panel = _editable_panel(request, app_id)
     collection = _collection_or_404(panel, key)
     if collection.remove is None:

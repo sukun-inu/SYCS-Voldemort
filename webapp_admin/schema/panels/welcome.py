@@ -18,18 +18,22 @@ _MESSAGE_HELP = (
 
 
 def _welcome_channel(guild_id: int):
+    """welcome_channel_id フィールドの Field.get。"""
     return get_welcome_settings(guild_id).get("channel_id")
 
 
 def _welcome_message(guild_id: int):
+    """welcome_message フィールドの Field.get。テンプレート変数の説明は _MESSAGE_HELP 側にまとめてある。"""
     return get_welcome_settings(guild_id).get("message")
 
 
 def _goodbye_channel(guild_id: int):
+    """goodbye_channel_id フィールドの Field.get。ウェルカムと保存先（get_goodbye_settings）が別なので取り違え注意。"""
     return get_goodbye_settings(guild_id).get("channel_id")
 
 
 def _goodbye_message(guild_id: int):
+    """goodbye_message フィールドの Field.get。_welcome_message と同じくテンプレート変数を使える。"""
     return get_goodbye_settings(guild_id).get("message")
 
 

@@ -32,6 +32,12 @@ def settings_dir() -> Path:
 
 
 def _read_secret_file(path: Path) -> str | None:
+    """ファイルの中身をシークレットとして使える形で返す。無ければ・短すぎれば None。
+
+    `_MIN_SECRET_LEN` 未満は「壊れかけの生成途中」や「空ファイル」の可能性が
+    あるので、そのまま署名キーとして使わず None を返して呼び出し側に生成し
+    直させる。
+    """
     try:
         content = path.read_text(encoding="utf-8").strip()
     except OSError:

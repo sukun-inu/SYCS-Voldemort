@@ -112,6 +112,13 @@ def _servers() -> dict[str, dict[str, Any]]:
 
 
 def _server_or_404(server_id: str) -> dict[str, Any]:
+    """server_id は _servers() が組み立てた表引き用の合成キー（host:port/user）でしか通らない。
+
+    画面が任意の DSN 文字列を渡せる作りにはなっていない。ここで未知の
+    server_id を弾くことで、_sources() に登録した以外のサーバへは
+    接続しようがない（モジュール docstring の「接続先はアプリ自身が
+    持っている DSN だけを使う」を実装で担保している箇所）。
+    """
     server = _servers().get(server_id)
     if server is None:
         raise HTTPException(status_code=404, detail="その接続先は登録されていません。")
@@ -169,6 +176,7 @@ def _cell(value: Any) -> Any:
 
 
 def _clip(text: str) -> str:
+    """1セルの文字列を MAX_CELL_CHARS で切る。巨大な text 列1つで画面が固まるのを防ぐ。"""
     return text if len(text) <= MAX_CELL_CHARS else text[:MAX_CELL_CHARS] + "…"
 
 
@@ -304,6 +312,12 @@ async def _run_one(conn, sql: str, limit: int, timeout: float) -> dict[str, Any]
 
 
 def _timeout_error(timeout: int, index: int) -> dict[str, Any]:
+    """statement_timeout で打ち切られたときの表示用エラー。_error_payload と同じ形に揃える。
+
+    sqlstate "57014" は Postgres の query_canceled と同じ番号を借りている
+    （実際に Postgres が返すコードではなく、画面側の分岐・表示を統一する
+    ための表記）。
+    """
     return {
         "message": f"{timeout} 秒で打ち切りました。",
         "sqlstate": "57014",
@@ -338,6 +352,13 @@ _NON_TRANSACTIONAL = re.compile(
 
 
 def _remember_running(token: str, server_id: str, database: str, pid: int) -> None:
+    """cancel_query が pg_cancel_backend を呼べるよう、実行中クエリの接続先を token 単位で覚える。
+
+    token は画面が生成し使い捨てる相関ID（クエリを一意に指すものではない）。
+    無ければ何もしない ── キャンセルできなくてもクエリ自体は実行されるので、
+    ここは失敗させる理由がない。MAX_RUNNING を超えたら最も古い1件を無条件で
+    追い出す（LRU ではなく dict の挿入順を利用した簡易な上限）。
+    """
     if not token:
         return
     if len(_RUNNING) >= MAX_RUNNING:
@@ -346,6 +367,7 @@ def _remember_running(token: str, server_id: str, database: str, pid: int) -> No
 
 
 async def _json_body(request: Request) -> dict[str, Any]:
+    """書き込み系エンドポイント共通の本文パース。JSON でない/オブジェクトでなければ400。"""
     try:
         body = await request.json()
     except Exception:
@@ -356,6 +378,13 @@ async def _json_body(request: Request) -> dict[str, Any]:
 
 
 def _clamp(value: Any, low: int, high: int, fallback: int) -> int:
+    """limit/timeout をサーバ側で強制的に範囲内へ収める。画面がどんな値を送っても、この関数の外へは出ない。
+
+    limit を外すと MAX_ROWS を超える行を保持しようとしてメモリ・レスポンス
+    サイズが膨らみ、timeout を外すと statement_timeout が無い＝無制限実行を
+    許すことになる。変換できない値は fallback（既定値）へ倒し、例外にしない
+    （画面側の一時的な入力ミスでクエリ実行そのものを止めたくない）。
+    """
     try:
         return max(low, min(high, int(value)))
     except (TypeError, ValueError):
@@ -593,6 +622,12 @@ async def table_ddl(
 
 
 def _quote_ident(name: str) -> str:
+    """table_ddl の表示専用。識別子を二重引用符で囲み、中の `"` は `""` に倍にしてエスケープする。
+
+    ここへ来る schema/table は Postgres のカタログから取得した実在の名前
+    （利用者が自由に打った文字列ではない）なので SQL インジェクションの
+    経路ではない。あくまで見た目を CREATE TABLE 文として正しく整形するため。
+    """
     return '"' + name.replace('"', '""') + '"'
 
 

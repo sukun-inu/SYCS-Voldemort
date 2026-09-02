@@ -17,6 +17,11 @@ MAX_FEEDS = 10
 
 
 def _list(guild_id: int) -> list[dict[str, Any]]:
+    """feeds コレクションの Collection.list。壊れた（dict でない）エントリは黙って除外する。
+
+    settings.json を直接編集された場合など想定外の形が来ても、一覧表示自体を
+    落とさないため。
+    """
     feeds = get_news_feeds(guild_id)
     rows: list[dict[str, Any]] = []
     for feed_id, feed in feeds.items():
@@ -35,6 +40,12 @@ def _list(guild_id: int) -> list[dict[str, Any]]:
 
 
 def _add(guild_id: int, data: dict[str, Any]) -> str:
+    """feeds コレクションの Collection.add。フィード ID はここで発番する（利用者は指定できない）。
+
+    8桁に切り詰めているのは一覧・項目IDとしての見た目を短くするためで、
+    衝突を数学的に排除してはいない。1ギルドあたり MAX_FEEDS=10 件までしか
+    存在しない前提での割り切り。
+    """
     feed_id = uuid.uuid4().hex[:8]
     add_news_feed(
         guild_id,
@@ -47,6 +58,7 @@ def _add(guild_id: int, data: dict[str, Any]) -> str:
 
 
 def _update(guild_id: int, feed_id: str, data: dict[str, Any]) -> bool:
+    """feeds コレクションの Collection.update。feed_id 自体は変更対象に含まれない（項目IDは固定）。"""
     return update_news_feed(
         guild_id,
         feed_id,

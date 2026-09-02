@@ -47,6 +47,13 @@ PATH_TO_ID: dict[str, str] = {panel.path: panel.id for panel in PANELS if panel.
 
 
 def visible_panels(is_dev: bool) -> list[Panel]:
+    """スタートメニューに出してよいパネルだけを返す。
+
+    dev_only なパネル（SQL コンソールなど）は、is_dev_user() が False の相手には
+    存在ごと隠す。403 ではなく一覧から消すのは、URL を知っていても手がかりを
+    与えないため。個別ルート側の認可判定はこれとは別に必要（一覧を隠しても
+    直接URLアクセスは防げない）。
+    """
     return [panel for panel in PANELS if is_dev or not panel.dev_only]
 
 

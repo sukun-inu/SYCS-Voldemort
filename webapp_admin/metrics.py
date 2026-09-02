@@ -29,12 +29,23 @@ _LAST_ALERT_AT: dict[str, float] = {}
 
 
 def record_request() -> None:
+    """TPS 計測用に1リクエスト分の時刻を記録する。metrics_middleware から /static 以外の全リクエストで呼ばれる。
+
+    呼ぶたびに _prune_requests も走らせる。専用の掃除タイミングを別に
+    設けていないので、ここで一緒に処理しないと _REQUEST_TIMESTAMPS が
+    リクエストが来続ける限り際限なく伸びる。
+    """
     now = time.time()
     _REQUEST_TIMESTAMPS.append(now)
     _prune_requests(now)
 
 
 def record_error_response(status_code: int, request_info: dict[str, Any]) -> None:
+    """5xx のレスポンスだけをインシデントとして記録する。
+
+    4xx（未認証・入力ミスなど日常的に起きるもの）まで拾うとインシデント
+    一覧がノイズで埋もれ、本当に見るべき障害が流れてしまう。
+    """
     if status_code < 500:
         return
     record_incident(
@@ -47,6 +58,12 @@ def record_error_response(status_code: int, request_info: dict[str, Any]) -> Non
 
 
 def record_exception(exception: BaseException, request_info: dict[str, Any]) -> None:
+    """metrics_middleware の最終防波堤（app.py 参照）が拾った未捕捉例外をインシデント化する。
+
+    message を500文字で切るのは、例外によっては str() が巨大な文字列
+    （長いクエリやスタック情報を埋め込んだメッセージ等）を返すことがあり、
+    それを丸ごと jsonl に書くとインシデント一覧の1行が異常に重くなるため。
+    """
     record_incident(
         kind="exception",
         severity="critical",
@@ -57,6 +74,14 @@ def record_exception(exception: BaseException, request_info: dict[str, Any]) -> 
 
 
 def start_background_monitor(logger: Any | None = None) -> None:
+    """バックグラウンド監視スレッドを起動する。
+
+    app.py は `app = create_app()` をモジュール読み込み時に実行するため、
+    テストでの再インポートなどで create_app() が複数回呼ばれることがある。
+    _MONITOR_STARTED のガードが無いと、そのたびに監視スレッドが増殖する。
+    daemon=True にしているのは、プロセス終了時にこの無限ループ
+    （_monitor_loop）のせいで終了がブロックされないようにするため。
+    """
     global _MONITOR_STARTED
     with _MONITOR_LOCK:
         if _MONITOR_STARTED:
@@ -92,6 +117,12 @@ def load_tone(percent: float, alert_at: float) -> str:
 
 
 def sla_tone(percent: float) -> str:
+    """SLA 表示の色。しきい値は load_tone と違い固定（99.9% / 99.0%）。
+
+    「スリーナイン」慣習に合わせた値で、環境変数化していない。CPU/メモリ/TPS
+    のような運用でチューニングする類の値ではなく、SLA の目標値そのものなので、
+    ここを動かすなら数字の意味を理解した上でコードごと変えるべき、という判断。
+    """
     if percent >= 99.9:
         return "success"
     if percent >= 99.0:
@@ -100,6 +131,12 @@ def sla_tone(percent: float) -> str:
 
 
 def collect_host_metrics() -> dict:
+    """ダッシュボードの4指標（CPU/Memory/TPS/SLA）をまとめて1回で組み立てる。
+
+    psutil.cpu_percent(interval=0.1) はブロッキング呼び出し（0.1秒待つ）。
+    interval=None（前回呼び出しからの平均）にすると、呼び出し間隔がバラバラな
+    場合に数値が安定しないため、多少待ってでも都度その場の値を取る方を選んでいる。
+    """
     now = time.time()
     cpu_percent = psutil.cpu_percent(interval=0.1)
     memory = psutil.virtual_memory()
@@ -151,6 +188,12 @@ def collect_host_metrics() -> dict:
 
 
 def list_incidents(limit: int = 20) -> list[dict[str, Any]]:
+    """ダッシュボード表示用のインシデント一覧。新しい順、_public_incident で整形済み。
+
+    ファイルは末尾に追記されていくので reversed(lines) で新しい順にする。
+    limit を1〜200に丸めているのは、0以下や巨大な値を渡されても
+    「何も返らない」「全件読み込む」といった意図しない挙動にしないため。
+    """
     limit = max(1, min(int(limit), 200))
     path = _incidents_file()
     if not path.exists():
@@ -185,6 +228,12 @@ def record_incident(
     end_epoch: float | None = None,
     duration_seconds: float | None = None,
 ) -> dict[str, Any]:
+    """インシデント（障害・エラー・ダウンタイム）を1件、incidents.jsonl に永続化する。
+
+    全ての record_* / _record_* 系はここに集約する。呼び出し元ごとに書き込み
+    形式を変えていないので、list_incidents や _downtime_seconds_for_period
+    といった読み出し側が kind で分岐するだけで済む。
+    """
     now = time.time()
     incident = {
         "id": uuid.uuid4().hex,
@@ -206,6 +255,13 @@ def record_incident(
 
 
 def _monitor_loop(logger: Any | None) -> None:
+    """start_background_monitor が起動するスレッド本体。プロセスが生きている限り回り続ける。
+
+    起動直後に一度だけ _record_startup_downtime/_write_heartbeat を実行してから
+    interval 秒おきのループへ入る。ループ内の try/except は「1回のtick失敗で
+    監視スレッド自体が死んで二度と復活しない」事態を避けるためのもの
+    （daemon スレッドなので落ちても誰も再起動しない）。
+    """
     try:
         _record_startup_downtime()
         _write_heartbeat()
@@ -226,6 +282,13 @@ def _monitor_loop(logger: Any | None) -> None:
 
 
 def _record_startup_downtime() -> None:
+    """前回の heartbeat から今回の起動までの空白を、プロセス停止期間として記録する。
+
+    heartbeat は動いている間しか更新されない。次に起動したときの
+    「last_seen からどれだけ経っているか」が、そのままダウンタイムの実測値
+    になる（プロセスクラッシュ・デプロイでの再起動のどちらも同じ形で拾える）。
+    grace 以内の差は通常の再起動・再デプロイの範囲として無視する。
+    """
     heartbeat = _read_json(_heartbeat_file())
     last_seen = heartbeat.get("last_seen_epoch") if isinstance(heartbeat, dict) else None
     if not isinstance(last_seen, (int, float)):
@@ -250,6 +313,12 @@ def _record_startup_downtime() -> None:
 
 
 def _record_threshold_alerts(metrics: dict[str, Any]) -> None:
+    """CPU/メモリ/TPS がしきい値を超えていたら、指標ごとにアラートを記録する。
+
+    collect_host_metrics の tone 判定（load_tone）と閾値は同じ環境変数を見て
+    いるが、ここは別経路。画面の色分けはリクエストのたびに再計算されるだけ
+    だが、こちらは監視ループから呼ばれてインシデントとして残す側。
+    """
     thresholds = {
         "cpu": env_float("ADMIN_CPU_ALERT_PERCENT", 90.0),
         "memory": env_float("ADMIN_MEMORY_ALERT_PERCENT", 90.0),
@@ -286,6 +355,12 @@ def _record_alert_with_cooldown(
     message: str,
     metadata: dict[str, Any],
 ) -> None:
+    """key ごとにクールダウンを掛けてから record_incident する。
+
+    _monitor_loop は既定30秒おきに tick する。クールダウン無しだと、
+    しきい値を超えたまま張り付いている間、tick のたびに同じアラートが
+    量産されてインシデント一覧が同一件名で埋まる。
+    """
     now = time.time()
     cooldown = env_float("ADMIN_MONITOR_ALERT_COOLDOWN_SECONDS", 300.0, minimum=0.0)
     last_at = _LAST_ALERT_AT.get(key, 0)
@@ -296,6 +371,12 @@ def _record_alert_with_cooldown(
 
 
 def _write_heartbeat() -> None:
+    """「生きていた最後の時刻」をファイルへ書く。_record_startup_downtime が次回起動時に読む相手。
+
+    app_started_epoch も一緒に残しておくのは、heartbeat.json だけを見ても
+    「このプロセスがいつから動いているか」と「直近まで動いていたか」を
+    混同しないようにするため。
+    """
     now = time.time()
     _write_json(
         _heartbeat_file(),
@@ -310,6 +391,12 @@ def _write_heartbeat() -> None:
 
 
 def _request_tps(now: float) -> float:
+    """直近 _TPS_WINDOW_SECONDS 秒の平均 req/s。ウィンドウは保持期間（_REQUEST_HISTORY_SECONDS）より短い。
+
+    表示用のTPSは短いウィンドウ（変化に追従してほしい）、保持は長め
+    （ダッシュボードのポーリング間隔がずれても取りこぼさない）という別々の
+    目的があるため、2つの秒数を分けて持っている。
+    """
     _prune_requests(now)
     window_start = now - _TPS_WINDOW_SECONDS
     count = sum(1 for timestamp in _REQUEST_TIMESTAMPS if timestamp >= window_start)
@@ -317,12 +404,23 @@ def _request_tps(now: float) -> float:
 
 
 def _prune_requests(now: float) -> None:
+    """_REQUEST_HISTORY_SECONDS より古い記録を先頭から捨てる。
+
+    _REQUEST_TIMESTAMPS は record_request が append するだけで常に時刻昇順
+    なので、先頭（最古）から見て cutoff を下回らなくなった時点で止めてよい。
+    途中の要素だけ抜くような操作は想定していない。
+    """
     cutoff = now - _REQUEST_HISTORY_SECONDS
     while _REQUEST_TIMESTAMPS and _REQUEST_TIMESTAMPS[0] < cutoff:
         _REQUEST_TIMESTAMPS.popleft()
 
 
 def _month_to_date_sla_percent(now: float) -> float:
+    """月初から今この瞬間までの稼働率。ダッシュボードの SLA 指標そのもの。
+
+    period_seconds を `max(..., 1)` で下限を設けているのは、月が始まった
+    直後（now がほぼ month_start）にゼロ除算するのを避けるため。
+    """
     current = datetime.fromtimestamp(now, timezone.utc)
     month_start = current.replace(day=1, hour=0, minute=0, second=0, microsecond=0).timestamp()
     period_seconds = max(now - month_start, 1)
@@ -332,12 +430,23 @@ def _month_to_date_sla_percent(now: float) -> float:
 
 
 def _downtime_seconds_month_to_date(now: float) -> float:
+    """collect_host_metrics の detail 表示（「記録済み停止 ○○」）用。
+
+    _month_to_date_sla_percent と同じ期間定義を使う。
+    """
     current = datetime.fromtimestamp(now, timezone.utc)
     month_start = current.replace(day=1, hour=0, minute=0, second=0, microsecond=0).timestamp()
     return _downtime_seconds_for_period(month_start, now)
 
 
 def _downtime_seconds_for_period(period_start: float, period_end: float) -> float:
+    """kind="downtime" のインシデントのうち、指定期間と重なった秒数だけを合算する。
+
+    インシデントの start/end をそのまま足すと、月初より前に始まって月をまたいで
+    続いたダウンタイムまで期間内の秒数として過大に数えてしまう。
+    max(start, period_start) / min(end, period_end) で期間との重なり部分だけに
+    切り詰めてから加算する。
+    """
     total = 0.0
     for incident in _iter_incidents():
         if incident.get("kind") != "downtime":
@@ -354,6 +463,13 @@ def _downtime_seconds_for_period(period_start: float, period_end: float) -> floa
 
 
 def _iter_incidents() -> list[dict[str, Any]]:
+    """全インシデントを生データのまま返す（_public_incident の整形をかけない）内部用。
+
+    list_incidents（画面向け）とは別に用意しているのは、SLA計算
+    （_downtime_seconds_for_period）が start_epoch/end_epoch という生の数値を
+    必要とするため。_public_incident はそれらを duration 文字列に変換して
+    しまい、計算には使えない。
+    """
     path = _incidents_file()
     if not path.exists():
         return []
@@ -372,6 +488,14 @@ def _iter_incidents() -> list[dict[str, Any]]:
 
 
 def _public_incident(incident: dict[str, Any]) -> dict[str, Any]:
+    """list_incidents が画面へ返す1件分の形へ整形する。生の epoch フィールドは出さない。
+
+    created_epoch/start_epoch/end_epoch はサーバ内部の計算（_downtime_seconds_for_period
+    等）専用の値で、画面側はローカライズ済みの created_at と duration
+    （_format_duration 済みの文字列）だけを表示に使う。get() にデフォルトを
+    与えているのは、古い形式で保存された行に欠けているキーがあっても
+    一覧描画自体は止めないため。
+    """
     duration = incident.get("duration_seconds")
     return {
         "id": incident.get("id"),
@@ -386,20 +510,35 @@ def _public_incident(incident: dict[str, Any]) -> dict[str, Any]:
 
 
 def _monitor_dir() -> Path:
+    """heartbeat/incidents の保存先。ADMIN_MONITOR_DIR > SETTINGS_DIR > このファイルからの相対パスの順で決める。
+
+    SETTINGS_DIR を後ろで参照するのは、settings.json 一式と同じボリューム
+    （デプロイ環境で永続化される場所）に監視データも一緒に置くのがデフォルトで、
+    それとは別の置き場が必要なときだけ ADMIN_MONITOR_DIR で個別に上書きできる
+    ようにするため。
+    """
     default_dir = Path(__file__).resolve().parent.parent / "data"
     settings_dir = Path(os.getenv("SETTINGS_DIR", str(default_dir)))
     return Path(os.getenv("ADMIN_MONITOR_DIR", str(settings_dir / "admin_monitor")))
 
 
 def _heartbeat_file() -> Path:
+    """_write_heartbeat / _record_startup_downtime が読み書きする単一ファイルのパス。"""
     return _monitor_dir() / "heartbeat.json"
 
 
 def _incidents_file() -> Path:
+    """record_incident が追記し、list_incidents/_iter_incidents が読む単一ファイルのパス。"""
     return _monitor_dir() / "incidents.jsonl"
 
 
 def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+    """record_incident の実際の書き込み。追記のたびに _trim_jsonl で上限チェックまで行う。
+
+    _FILE_LOCK を取るのは、監視スレッド（_monitor_loop）とリクエスト処理
+    スレッドが同時に record_incident を呼びうるため。呼び出しごとに追記＋
+    トリム判定を1セットにして、この2つが割り込み合わないようにしている。
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     line = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     with _FILE_LOCK:
@@ -430,6 +569,13 @@ def _trim_jsonl(path: Path) -> None:
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    """heartbeat.json の書き込み。一時ファイルへ書いてから replace() で入れ替える（tmp.replace は原子的操作）。
+
+    直接 path へ書くと、書き込み途中でプロセスが落ちた場合に heartbeat.json が
+    壊れたJSONのまま残る。次回起動時の _record_startup_downtime が
+    _read_json で読めずに「ダウンタイム不明」扱いになってしまうため、
+    tmp+replace で「壊れた途中状態」を作らないようにしている。
+    """
     tmp = path.with_suffix(path.suffix + ".tmp")
     with _FILE_LOCK:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -438,6 +584,13 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _read_json(path: Path) -> dict[str, Any]:
+    """heartbeat.json の読み込み。壊れていても例外を投げず空 dict で返す。
+
+    _record_startup_downtime はこの戻り値が空でも「heartbeat が無い＝
+    ダウンタイム計算をスキップ」として扱う設計なので、ここで例外を上げると
+    監視スレッドの起動処理そのものが落ちる（_monitor_loop 側の except は
+    拾うが、本来ここで吸収すべき想定内の異常）。
+    """
     if not path.exists():
         return {}
     with _FILE_LOCK:
@@ -449,15 +602,23 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def _iso(epoch: float | None = None) -> str:
+    """epoch を UTC の ISO8601 文字列にする。record_incident が created_at 等の表示用文字列を作るのに使う。
+
+    timezone.utc を明示しているのは、fromtimestamp にタイムゾーンを渡さないと
+    ホストのローカルタイムで解釈され、サーバの実行環境によって同じ epoch でも
+    違う時刻文字列になってしまうため。
+    """
     value = time.time() if epoch is None else epoch
     return datetime.fromtimestamp(value, timezone.utc).isoformat()
 
 
 def _clamp_percent(value: float) -> float:
+    """メーター系の数値を表示可能な 0〜100% に丸める。TPSの実測が目標を超えると100%を超えうるため必要。"""
     return round(min(max(float(value), 0.0), 100.0), 2)
 
 
 def _format_bytes(value: float) -> str:
+    """メモリ使用量の表示（例: "1.2 GB"）。collect_host_metrics の detail 表示専用の整形。"""
     units = ("B", "KB", "MB", "GB", "TB")
     size = float(value)
     for unit in units:
@@ -468,6 +629,13 @@ def _format_bytes(value: float) -> str:
 
 
 def _format_duration(seconds: float) -> str:
+    """秒数を "2h 30m" のような人間向け表示に丸める。runtime 表示とインシデント duration の両方が使う共通の整形。
+
+    上位2単位までしか出さない（日→時間で止め、分・秒は捨てる、等）。
+    稼働時間やダウンタイムの表示で「3日と4時間と12分と5秒」まで細かく出しても
+    読み手には粒度が細かすぎるだけなので、目安として読める粒度に絞っている。
+    負の秒数は 0 に丸める（クロックのずれ等で負の duration が来ても "0s" 表示に倒す）。
+    """
     total = max(int(seconds), 0)
     days, remainder = divmod(total, 86400)
     hours, remainder = divmod(remainder, 3600)

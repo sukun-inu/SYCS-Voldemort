@@ -19,6 +19,7 @@ router = APIRouter()
 
 @router.get("/")
 async def admin_root(request: Request, _=Depends(check_login)):
+    """/admin 直下。ギルド未選択ならギルド選択へ、選択済みならオーバービューへ流す。"""
     if "guild_id" not in request.session:
         return RedirectResponse("/admin/guilds", status_code=303)
     return RedirectResponse("/admin/overview", status_code=303)
@@ -26,11 +27,25 @@ async def admin_root(request: Request, _=Depends(check_login)):
 
 @router.get("/guilds")
 async def guild_select(request: Request, _=Depends(check_login)):
+    """管理できるギルド一覧を出す。一覧はログイン時にセッションへ焼き込んだもの。
+
+    ここでは Discord へ問い合わせ直さない。表示するだけなら古い一覧でも実害が
+    薄く、権限が本当に有効かどうかの見直しは select_guild() 側（実際に選んだ
+    ときだけ）に寄せてある。
+    """
     return render(request, "guild_select.html", guilds=request.session.get("admin_guilds", []))
 
 
 @router.post("/guilds/select")
 async def select_guild(request: Request, _=Depends(check_login), _csrf=Depends(check_csrf)):
+    """選んだギルドをセッションに確定させる。管理者権限を実際に使う前の最終確認。
+
+    ログイン時に持ってきた admin_guilds はここでも「本当に管理者か」の
+    唯一の情報源ではない。古くなっていれば user_still_admin() で Discord に
+    問い合わせ直し、権限が無くなっていれば admin_guilds からもその場で除いて
+    guild_id をセッションから外す（次に別のギルドを選ぶまで、そのギルドの
+    管理画面には check_guild すら通らない）。
+    """
     form = await request.form()
     # FormData.get() は str だけでなく UploadFile を返しうる。guild_id という
     # 名前でファイルパートを送られると int(UploadFile) は ValueError ではなく
@@ -76,6 +91,7 @@ async def select_guild(request: Request, _=Depends(check_login), _csrf=Depends(c
 
 @router.get("/overview")
 async def overview(request: Request, _=Depends(check_guild)):
+    """デスクトップUIの骨組みだけを返す。中身はこのHTMLではなく別経路で埋まる。"""
     # シェルはHTMLとしては骨だけを返す。タイル一覧も各アプリの中身も
     # クライアントが /admin/api/apps から取得して描く。
     return render(request, "shell.html")
@@ -83,9 +99,11 @@ async def overview(request: Request, _=Depends(check_guild)):
 
 @router.get("/api/metrics")
 async def system_metrics(request: Request, _=Depends(check_guild)):
+    """デスクトップの「システムモニター」ウィジェットが叩く。ホストのCPU/メモリ等。"""
     return JSONResponse(collect_host_metrics())
 
 
 @router.get("/api/incidents")
 async def monitor_incidents(request: Request, _=Depends(check_guild)):
+    """直近の障害・インシデント履歴。件数を30に固定しているのは表示欄の分量に合わせたもの。"""
     return JSONResponse({"incidents": list_incidents(limit=30)})

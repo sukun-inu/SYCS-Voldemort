@@ -19,10 +19,18 @@ _ID_SEPARATOR = ":"
 
 
 def _count(guild_id: int) -> int:
+    """タイルのバッジ用件数。message_id 単位ではなく emoji ごとの割り当て総数を数える。"""
     return sum(len(entries) for entries in get_reaction_roles(guild_id).values() if isinstance(entries, dict))
 
 
 def _list(guild_id: int) -> list[dict[str, Any]]:
+    """reaction_roles コレクションの Collection.list。
+
+    保存構造（message_id → {emoji: role_id}）はそのままでは一覧UIの
+    「1行1項目」に合わないため、モジュール docstring のとおり
+    "<message_id>:<emoji>" を項目IDとして平坦化する。_add/_remove もこの
+    形式を前提にしている。
+    """
     rows: list[dict[str, Any]] = []
     for message_id, entries in get_reaction_roles(guild_id).items():
         if not isinstance(entries, dict):
@@ -40,6 +48,7 @@ def _list(guild_id: int) -> list[dict[str, Any]]:
 
 
 def _add(guild_id: int, data: dict[str, Any]) -> str:
+    """reaction_roles コレクションの Collection.add。返す項目IDの形式は _list/_remove と揃える。"""
     message_id = int(data["message_id"])
     emoji = str(data["emoji"]).strip()
     add_reaction_role(guild_id, message_id, emoji, int(data["role_id"]))
@@ -47,6 +56,13 @@ def _add(guild_id: int, data: dict[str, Any]) -> str:
 
 
 def _remove(guild_id: int, item_id: str) -> bool:
+    """reaction_roles コレクションの Collection.remove。
+
+    split ではなく partition を使うのが要点。カスタム絵文字の表現
+    "<:name:id>" 自体に ":" を含むため、split(":") では絵文字側が壊れる。
+    先頭の区切りだけで割る partition なら、message_id が数字である限り
+    残り全部を絵文字としてそのまま渡せる。
+    """
     message_id, _, emoji = str(item_id).partition(_ID_SEPARATOR)
     return remove_reaction_role(guild_id, int(message_id), emoji)
 

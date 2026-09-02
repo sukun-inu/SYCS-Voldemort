@@ -87,12 +87,19 @@ class Field:
 
     @property
     def choice_source(self) -> ChoiceSource | None:
+        """choices を明示していないウィジェット（CHANNEL 等）でも動的解決を効かせる。
+
+        IMPLIED_SOURCE で引けるものは choices を書かなくてよいという設計
+        （各パネルの宣言を見ればチャンネル系フィールドに choices が無いのは
+        このため）。choices に ChoiceSource を直接書いた場合はそちらを優先する。
+        """
         if isinstance(self.choices, ChoiceSource):
             return self.choices
         return IMPLIED_SOURCE.get(self.widget)
 
     @property
     def static_choices(self) -> tuple[Choice, ...] | None:
+        """choices が固定リストとして書かれている場合だけ返す。動的解決分は含めない。"""
         return self.choices if isinstance(self.choices, tuple) else None
 
     def to_json_value(self, value: Any) -> Any:
@@ -153,6 +160,13 @@ class Field:
         return text or (None if self.nullable else text)
 
     def to_json(self) -> dict[str, Any]:
+        """クライアントの描画・検証が読む形へ変換する。get/set は含めない。
+
+        Callable を混ぜると JSON エンコードで TypeError になるので機械的にも
+        除外が要るが、それだけの理由ではない。get/set は services/* の関数
+        そのものなので、含めてしまうと実装の参照をクライアントに渡すことになる
+        （値そのものは _read_values 側が呼び出して渡す設計）。
+        """
         payload: dict[str, Any] = {
             "key": self.key,
             "label": self.label,
@@ -194,6 +208,13 @@ class Collection:
     help: str | None = None
 
     def to_json(self) -> dict[str, Any]:
+        """can_add/can_remove/can_update はクライアントがボタンを出すかどうかの判定材料でしかない。
+
+        実際に操作を受け付けるかどうかは api/apps.py の add_item/update_item/
+        remove_item が改めて collection.add/update/remove is None を見て 405 に
+        している（このフラグを直接は信用していない）。ここを True にしても
+        サーバ側で対応する callable が無ければ実行できない。
+        """
         payload: dict[str, Any] = {
             "key": self.key,
             "label": self.label,
@@ -219,6 +240,11 @@ class Section:
     help: str | None = None
 
     def to_json(self) -> dict[str, Any]:
+        """Field/Collection の to_json をそのまま束ねるだけで、独自の整形は持たない。
+
+        モジュール docstring のとおり Field/Collection が JSON 形状の単一の
+        情報源なので、Section 側で個別の変換を書き足すとその前提が崩れる。
+        """
         payload: dict[str, Any] = {
             "title": self.title,
             "fields": [f.to_json() for f in self.fields],
@@ -254,25 +280,47 @@ class Panel:
 
     @property
     def resolved_layout(self) -> str:
+        """ "auto" を実際の描画方式へ確定する。しきい値（4セクション）はここ1箇所だけに置く。
+
+        layout フィールドの直上コメントにあるとおり、クライアントはこの結果
+        しか見ない。タブ/縦並びの境目を変えるときはここだけ直せばよく、
+        クライアント側の判定と二重に持たない。
+        """
         if self.layout != "auto":
             return self.layout
         return "tabs" if len(self.sections) >= 4 else "stack"
 
     @property
     def fields(self) -> list[Field]:
+        """全セクションの Field を平坦化する。panel.field()/choice_sources() が使う内部表現。"""
         return [f for section in self.sections for f in section.fields]
 
     @property
     def collections(self) -> list[Collection]:
+        """全セクションの Collection を平坦化する。fields と同じ理由で用意している。"""
         return [c for section in self.sections for c in section.collections]
 
     def field(self, key: str) -> Field | None:
+        """key からトップレベル Field を引く。api/apps.py の保存処理が変更キーごとに呼ぶ。
+
+        見つからない場合は None を返すだけで例外にしない。呼び出し側
+        （validate_values）が「不明な設定項目です」という利用者向けエラーに
+        変換する前提のため、ここで例外にすると分岐が二重になる。
+        """
         return next((f for f in self.fields if f.key == key), None)
 
     def collection(self, key: str) -> Collection | None:
+        """field() と同じ設計。_collection_or_404 が None を 404 に変換する。"""
         return next((c for c in self.collections if c.key == key), None)
 
     def choice_sources(self) -> set[ChoiceSource]:
+        """パネル全体が必要とする供給元の集合。get_app（パネルを開く時）専用。
+
+        保存時は変更された項目だけで済む（_choices_for_keys）が、パネルを開く
+        ときは全フィールドの選択肢を一度に描画する必要があるため、こちらは
+        item_fields も含めて洗い出す。集合にしているのは、複数フィールドが
+        同じ供給元（例: チャンネル）を使っても resolve() 側で1回にまとめるため。
+        """
         sources: set[ChoiceSource] = set()
         for f in self.fields:
             if f.choice_source:
@@ -301,6 +349,14 @@ class Panel:
         }
 
     def to_json(self) -> dict[str, Any]:
+        """get_app が返すパネル本体。custom パネルでは sections が空のまま返る。
+
+        custom パネル（DEV/SQL 等）は自前のAPIで状態を持つため、ここでは
+        「どのクライアントモジュールで描くか」（client）だけを渡し、
+        values/collections は付けない（get_app 側も custom なら早期リターンする）。
+        client を schema パネルでは常に None にしているのは、iframe/専用モジュール
+        の区別が custom パネルにしか意味を持たないため。
+        """
         return {
             "id": self.id,
             "title": self.title,

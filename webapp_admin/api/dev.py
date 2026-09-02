@@ -166,6 +166,12 @@ def describe_exception(exc: BaseException, *, timeout: float | None = None) -> s
 
 
 async def _discord(method: str, path: str, **kwargs) -> Any:
+    """開発者パネルから Discord API を叩く共通経路。失敗は例外にせず None（理由はログへ）。
+
+    この画面のどの操作も「失敗したら諦めて次を試せる」性質のもの（送信・
+    参照）なので、呼び出し側は None を都度チェックするだけでよく、例外
+    ハンドリングを個別に書かなくていい。
+    """
     if not DISCORD_BOT_TOKEN:
         return None
     try:
@@ -192,6 +198,10 @@ async def _discord(method: str, path: str, **kwargs) -> Any:
 
 
 def _all_settings() -> dict:
+    """全ギルドの設定を丸ごと読む（開発者パネル専用。通常の設定APIはギルド単位でしか読まない）。
+
+    読み込みに失敗しても空の構造を返し、概要画面が丸ごと落ちるのを避ける。
+    """
     try:
         from services.settings_store import _load_all_from_disk
 
@@ -201,6 +211,7 @@ def _all_settings() -> dict:
 
 
 def _cache_entries() -> list[dict]:
+    """DJAudio キャッシュのメタ情報一覧。新しい順（1件ずつ壊れていても他は返す）。"""
     entries: list[dict] = []
     try:
         paths = sorted(DJAUDIO_CACHE_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -234,6 +245,7 @@ _write_signal = dev_signals.write
 
 
 def _normalize_env_value(value: object) -> str | None:
+    """空白だけの値を「未設定」として扱う。os.environ.get() は空文字と未設定を区別しない。"""
     if value is None:
         return None
     text = str(value).strip()
@@ -241,6 +253,13 @@ def _normalize_env_value(value: object) -> str | None:
 
 
 def _resolve_env_value(key: str, cfg: object | None) -> str | None:
+    """環境変数を、旧名(alias)・config.py 側の解決済み値の順にフォールバックしながら読む。
+
+    OS 環境変数を直接見るだけでは、config.py が別ソース（.env・シークレット
+    ファイル等）から読んで実際に使っている値と食い違うことがある。開発者
+    パネルは「実際に効いている値」を見せたいので、環境変数で見つからなければ
+    cfg（import 済みの config モジュール）の実効値まで見に行く。
+    """
     for candidate in (key, *_ENV_ALIASES.get(key, ())):
         normalized = _normalize_env_value(os.environ.get(candidate))
         if normalized is not None:
@@ -253,6 +272,12 @@ def _resolve_env_value(key: str, cfg: object | None) -> str | None:
 
 
 def _env_rows() -> list[dict]:
+    """環境変数の一覧を表示用に組み立てる。secret な項目は値を伏せ字にする。
+
+    伏せ字は先頭4文字だけ見せて残りを * にする（"見えている値が本当に
+    意図したものか"を確認できる最小限だけ出し、値そのものはログや画面
+    キャプチャに残さない）。
+    """
     # import 成功時は config モジュールを、失敗時は None を cfg に持たせたい。
     # `import config as cfg` の直後に `cfg = None` を代入すると、mypy には
     # 「Module 型の変数に None を代入している」ように見えてしまうため、
@@ -294,6 +319,7 @@ def _env_rows() -> list[dict]:
 
 
 def _all_stickies() -> list[dict]:
+    """全ギルドのスティッキーメッセージ設定を横断して一覧にする（開発者パネル専用の俯瞰表示）。"""
     rows: list[dict] = []
     for guild_id, guild_data in _all_settings().get("guilds", {}).items():
         if not isinstance(guild_data, dict):
@@ -314,6 +340,11 @@ def _all_stickies() -> list[dict]:
 
 
 def _tail_file(path: Path, lines: int) -> list[str]:
+    """ログの末尾N行を返す。全文を読んでから末尾を切るので、巨大ログでは相応にI/Oが発生する。
+
+    ファイルが無い/読めない場合は空リスト（呼び出し側は「ログが無い」と
+    「読めなかった」を区別しない前提）。
+    """
     try:
         with path.open("r", encoding="utf-8", errors="replace") as f:
             return [line.rstrip("\n") for line in f.readlines()[-lines:]]
@@ -322,6 +353,12 @@ def _tail_file(path: Path, lines: int) -> list[str]:
 
 
 def _require_id(value: str, label: str) -> str:
+    """Discord ID として妥当な数字文字列だけを受け付ける。sanitize() で長さも制御弁を入れる。
+
+    api/recording.py の _require_id と役割は同じだが、こちらは戻り値が
+    str（呼び出し側で int() するかどうかを選べる。ID をログへそのまま
+    出す用途があるため）。
+    """
     text = sanitize(value or "", 20).strip()
     if not _ID_PATTERN.fullmatch(text):
         raise HTTPException(status_code=400, detail=f"{label}は数字のIDで指定してください。")
@@ -329,6 +366,7 @@ def _require_id(value: str, label: str) -> str:
 
 
 async def _json_body(request: Request) -> dict:
+    """書き込み系エンドポイント共通の本文パース。JSON でない/オブジェクトでなければ400。"""
     try:
         body = await request.json()
     except Exception:
@@ -339,6 +377,7 @@ async def _json_body(request: Request) -> dict:
 
 
 def _ok(message: str, **extra) -> JSONResponse:
+    """成功レスポンスの共通の形。この画面の書き込み系エンドポイントはほぼ全てこれを返す。"""
     return JSONResponse({"ok": True, "message": message, **extra})
 
 
@@ -347,6 +386,12 @@ def _ok(message: str, **extra) -> JSONResponse:
 
 @router.get("/overview")
 async def overview(request: Request, _=Depends(check_dev)):
+    """開発者パネルのトップに必要な情報をまとめて返す。個々のセクションが1つでも取得失敗しても全体は返す。
+
+    guild_list は _discord() が返した list をそのまま in-place sort する
+    （Discord API のレスポンスをこの関数のためだけに使い捨てる前提なので、
+    コピーは取らない）。
+    """
     guilds, bot_user = await asyncio.gather(
         _discord("GET", "/users/@me/guilds?limit=200"),
         _discord("GET", "/users/@me"),
@@ -434,6 +479,11 @@ async def earthquakes(request: Request, _=Depends(check_dev), limit: int = Query
 @router.post("/send-message")
 @limiter.limit("10/minute")
 async def send_message(request: Request, _=Depends(check_dev), _csrf=Depends(check_csrf)):
+    """任意チャンネルへ任意の文面を直接送る。宛先の権限確認は Discord API 呼び出し自体に委ねる。
+
+    ギルドの設定や紐付けを一切見ない。開発者が「Bot がそのチャンネルに
+    書き込めるか」を試すための最短経路であり、business ロジックを通さない。
+    """
     body = await _json_body(request)
     channel_id = _require_id(body.get("channel_id", ""), "チャンネルID")
     content = sanitize(body.get("content", ""), 2000).strip()
@@ -449,6 +499,7 @@ async def send_message(request: Request, _=Depends(check_dev), _csrf=Depends(che
 @router.post("/forward-message")
 @limiter.limit("10/minute")
 async def forward_message(request: Request, _=Depends(check_dev), _csrf=Depends(check_csrf)):
+    """Discord のメッセージURLから本文だけを抜き、別チャンネルへ転記する（埋め込みや添付は運ばない）。"""
     body = await _json_body(request)
     match = _MESSAGE_URL_PATTERN.match(sanitize(body.get("message_url", ""), 200).strip())
     if not match:
@@ -473,6 +524,12 @@ async def forward_message(request: Request, _=Depends(check_dev), _csrf=Depends(
 @router.post("/news-send")
 @limiter.limit("5/minute")
 async def news_send(request: Request, _=Depends(check_dev), _csrf=Depends(check_csrf)):
+    """ニュース検索→要約→指定チャンネルへ即時送信する、本番の定期実行とは別経路の手動テスト。
+
+    要約（Groq 呼び出し）が失敗しても記事の送信自体は続行する。要約は
+    「あれば嬉しい付加情報」であって、これが落ちたせいで検証したい本題
+    （記事が見つかり送信できるか）まで止める理由が無い。
+    """
     body = await _json_body(request)
     channel_id = _require_id(body.get("channel_id", ""), "チャンネルID")
     query = sanitize(body.get("query", ""), 200).strip()
@@ -513,6 +570,7 @@ async def news_send(request: Request, _=Depends(check_dev), _csrf=Depends(check_
 @router.post("/signal/{task_name}")
 @limiter.limit("10/minute")
 async def trigger_signal(task_name: str, request: Request, _=Depends(check_dev), _csrf=Depends(check_csrf)):
+    """定期実行タスクを今すぐ1回動かす。VALID_TASKS に無い名前は404（任意のタスク名を実行させない）。"""
     if task_name not in VALID_TASKS:
         raise HTTPException(status_code=404, detail="不明なタスクです。")
     _write_signal(task_name, {"task": task_name, "created_at": datetime.now(timezone.utc).isoformat()})
@@ -525,6 +583,7 @@ async def trigger_signal(task_name: str, request: Request, _=Depends(check_dev),
 @router.post("/test-notify/{kind}")
 @limiter.limit("10/minute")
 async def test_notify(kind: str, request: Request, _=Depends(check_dev), _csrf=Depends(check_csrf)):
+    """各種通知（VC参加・入退室等）の送信テスト。channel_id を指定すると本番設定を無視して直接送る。"""
     from services.dev_test_notify import KINDS, kind_label
 
     if kind not in KINDS:
@@ -560,6 +619,12 @@ async def test_notify(kind: str, request: Request, _=Depends(check_dev), _csrf=D
 @router.post("/earthquake-replay")
 @limiter.limit("5/minute")
 async def earthquake_replay(request: Request, _=Depends(check_dev), _csrf=Depends(check_csrf)):
+    """任意の地震速報JSONをBotに渡し、通知パイプラインを実データ受信なしで検証する。
+
+    guild_id を省略すると全サーバーへ配信されるので、誤爆を避けるため画面
+    側は既定でギルドを選ばせる（下のコメント参照）。channel_id 単独指定
+    （guild_id 無し）は「送信先ギルドが不明」になり事前に弾く。
+    """
     body = await _json_body(request)
     event_json = sanitize(body.get("event_json", ""), 100000).strip()
     if not event_json:
@@ -607,6 +672,7 @@ async def earthquake_replay(request: Request, _=Depends(check_dev), _csrf=Depend
 @router.get("/channels")
 @limiter.limit("30/minute")
 async def channels(request: Request, guild_id: str = Query(...), _=Depends(check_dev)):
+    """送信/転送/テスト通知タブで使うチャンネル選択肢。テキスト・ボイス両方をまとめて返す。"""
     gid = _require_id(guild_id, "ギルドID")
     # 取得は webapp_admin.auth のキャッシュ層に任せる。送信タブは1回の
     # ギルド変更で3つの選択欄が同時にここを叩くため、素通しすると同じ
@@ -621,6 +687,7 @@ async def channels(request: Request, guild_id: str = Query(...), _=Depends(check
     voice_types = {2, 13}  # GUILD_VOICE / STAGE_VOICE
 
     def pick(types: set[int]) -> list[dict]:
+        """指定した type 集合のチャンネルだけを、名前の辞書順（大小無視）で並べ替える。"""
         return sorted(
             (
                 {"id": str(c["id"]), "name": c.get("name", ""), "type": c.get("type", 0)}
@@ -637,6 +704,7 @@ async def channels(request: Request, guild_id: str = Query(...), _=Depends(check
 @router.get("/user")
 @limiter.limit("20/minute")
 async def user_lookup(request: Request, user_id: str = Query(...), _=Depends(check_dev)):
+    """ユーザーIDから基本情報を引く。作成日時はAPIを叩かずID自体（スノーフレーク）から逆算する。"""
     uid = _require_id(user_id, "ユーザーID")
     data = await _discord("GET", f"/users/{uid}")
     if not isinstance(data, dict):
@@ -667,6 +735,7 @@ async def logs(
     source: str = Query("bot", pattern="^(bot|admin)$"),
     lines: int = Query(200, ge=10, le=1000),
 ):
+    """bot.log / admin.log の末尾を返す。source は正規表現パターンで bot/admin のみに固定（任意パス読み出しを防ぐ）。"""
     path = _LOG_DIR / f"{source}.log"
     return JSONResponse({"source": source, "path": str(path), "lines": _tail_file(path, lines)})
 
@@ -677,6 +746,7 @@ async def logs(
 @router.get("/settings/{guild_id}")
 @limiter.limit("20/minute")
 async def guild_settings(guild_id: str, request: Request, _=Depends(check_dev)):
+    """1ギルド分の生設定をそのまま返す。import_guild_settings とペアで、書き出し→取り込みの経路。"""
     gid = _require_id(guild_id, "ギルドID")
     data = _all_settings().get("guilds", {}).get(gid)
     if data is None:
@@ -687,6 +757,11 @@ async def guild_settings(guild_id: str, request: Request, _=Depends(check_dev)):
 @router.post("/settings/{guild_id}/import")
 @limiter.limit("5/minute")
 async def import_guild_settings(guild_id: str, request: Request, _=Depends(check_dev), _csrf=Depends(check_csrf)):
+    """guild_settings() で書き出した設定を丸ごと上書きする。差分ではなく全置換（replace_guild_settings）。
+
+    上限（_MAX_IMPORT_BYTES）を超える巨大な貼り付けを拒否するのは、
+    settings.json 全体の肥大化・保存の詰まりをここで止めるため。
+    """
     gid = _require_id(guild_id, "ギルドID")
     body = await _json_body(request)
     settings = body.get("settings")
@@ -716,6 +791,13 @@ async def import_guild_settings(guild_id: str, request: Request, _=Depends(check
 @router.delete("/cache/{token}")
 @limiter.limit("20/minute")
 async def delete_cache_entry(token: str, request: Request, _=Depends(check_dev), _csrf=Depends(check_csrf)):
+    """DJAudio キャッシュを1件削除する。token の形式チェックがパストラバーサル対策そのもの。
+
+    services/djaudio_cache._delete_entry は token をそのまま
+    `DJAUDIO_CACHE_DIR / f"{token}{suffix}"` に埋め込んでファイルを消す。
+    そちら側には検証が無いため、ここで英数字と `_`/`-` だけに絞らないと、
+    token に `../` を混ぜてキャッシュディレクトリ外の任意ファイルを消せてしまう。
+    """
     if not re.fullmatch(r"[A-Za-z0-9_\-]+", token or ""):
         raise HTTPException(status_code=400, detail="無効なトークンです。")
     from services.djaudio_cache import _delete_entry
@@ -727,6 +809,10 @@ async def delete_cache_entry(token: str, request: Request, _=Depends(check_dev),
 @router.post("/cache/purge")
 @limiter.limit("5/minute")
 async def purge_cache(request: Request, _=Depends(check_dev), _csrf=Depends(check_csrf)):
+    """期限切れの DJAudio キャッシュを今すぐ全件掃除する。
+
+    バックグラウンドループを待たず即時実行するための開発者用エンドポイント。
+    """
     from services.djaudio_cache import _cleanup_expired
 
     await _cleanup_expired()

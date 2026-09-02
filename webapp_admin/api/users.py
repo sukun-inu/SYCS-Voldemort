@@ -92,16 +92,25 @@ ABILITY_LABELS: dict[str, str] = {
 
 
 def status_label(value: str | None) -> str:
+    """未知の状態コードでも、値をそのまま返して表に穴を開けない（辞書に無ければ生の値）。"""
     if not value:
         return STATUS_LABELS["unknown"]
     return STATUS_LABELS.get(value, value)
 
 
 def status_tone(value: str | None) -> str:
+    """バッジの色。表に無い状態は "accent"（未定義色）に倒し、危険色・安全色を誤って出さない。"""
     return STATUS_TONES.get(value or "", "accent")
 
 
 def event_label(value: str | None) -> str:
+    """イベント種別を日本語ラベルへ。"sync_member_<source>" のような可変サフィックス付きにも対応する。
+
+    sync_guild_user_states が起点(source)を末尾に付けて書き込むため、
+    固定辞書には登録しきれない。接頭辞一致でベースラベルを決め、起点名は
+    別辞書（無ければ生の値）で埋める。どちらの辞書にも無い値は生の文字列
+    のまま返し、ラベル化できないことを黙って隠さない。
+    """
     if not value:
         return "-"
     if value in EVENT_LABELS:
@@ -114,10 +123,17 @@ def event_label(value: str | None) -> str:
 
 
 def ability_label(value: str) -> str:
+    """権限キーを日本語ラベルへ。未登録のキーはそのまま返す。"""
     return ABILITY_LABELS.get(value, value)
 
 
 def format_jst(value: Any) -> str:
+    """datetime を JST 表示へ整形する。datetime でない/変換できない値はそのまま文字列化。
+
+    DB から来る値の型を信用しない（保存経路によって str のまま入っている
+    ことがある）。ここで例外を出すと一覧全体が描画できなくなるので、
+    整形できない場合も画面には「何かの値」が出るようにする。
+    """
     if value is None:
         return "-"
     if not isinstance(value, datetime):
@@ -129,18 +145,21 @@ def format_jst(value: Any) -> str:
 
 
 def _roles(raw: Any) -> list[dict[str, Any]]:
+    """DB の JSON カラムから来た値を、信用できる形（dict のリスト）へ絞る。壊れていれば空。"""
     if not isinstance(raw, list):
         return []
     return [role for role in raw if isinstance(role, dict)]
 
 
 def _enabled_abilities(raw: Any) -> list[str]:
+    """True になっている権限キーだけを日本語ラベルへ変換し、五十音・アルファベット順に並べる。"""
     if not isinstance(raw, dict):
         return []
     return sorted(ability_label(str(key)) for key, enabled in raw.items() if enabled)
 
 
 def _row(state: dict[str, Any]) -> dict[str, Any]:
+    """一覧・詳細の両方で使う、1ユーザー分の表示用行に変換する共通処理。"""
     roles = _roles(state.get("roles"))
     role_names = [str(role.get("name")) for role in roles if role.get("name")]
     abilities = _enabled_abilities(state.get("abilities"))
@@ -170,6 +189,7 @@ async def list_states(
     limit: int = Query(default=25, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ):
+    """絞り込み・ページ送りをサーバ側で行う一覧。モジュール docstring 参照。"""
     guild_id = int(request.session["guild_id"])
     keyword = q.strip() or None
 
@@ -196,6 +216,7 @@ async def user_detail(
     _=Depends(check_guild),
     event_limit: int = Query(default=100, ge=1, le=500),
 ):
+    """1ユーザーの現在状態とイベント履歴。current が None でも 404 にはしない（履歴だけ残る場合がある）。"""
     guild_id = int(request.session["guild_id"])
     detail = await get_user_state_detail(guild_id, user_id, event_limit=event_limit)
     if detail is None:

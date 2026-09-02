@@ -21,6 +21,12 @@ class InvalidValue(ValueError):
 
 
 def _options(field: Field, choices: dict[str, list[dict[str, str]]]) -> list[dict[str, str]]:
+    """field の choice_source に対応する解決済み一覧だけを取り出す。
+
+    _validate_id と _validate_select の両方が「一覧にある値か」を判定するのに使う。
+    判定基準をここ1箇所にまとめておかないと、ID系とSELECT系で「一覧にない値」の
+    扱いがいずれズレる。
+    """
     source = field.choice_source
     if source is None:
         return []
@@ -28,6 +34,13 @@ def _options(field: Field, choices: dict[str, list[dict[str, str]]]) -> list[dic
 
 
 def _validate_id(field: Field, raw: Any, choices) -> int | None:
+    """チャンネル・ロールなど Discord ID系のウィジェットを検証する。
+
+    数字であることまでは形式チェックで弾けるが、それだけでは「今のギルドに
+    実在する項目か」までは保証できない。一覧が取れているときに限って
+    _options() で突き合わせるのは、退出済みチャンネルや別サーバーの ID を
+    貼り付けても数字である限り通ってしまう抜け道を塞ぐため。
+    """
     if raw in (None, "", "0", 0):
         if not field.nullable:
             raise InvalidValue("選択してください。")
@@ -46,6 +59,14 @@ def _validate_id(field: Field, raw: Any, choices) -> int | None:
 
 
 def _validate_int(field: Field, raw: Any) -> int:
+    """整数項目の検証。
+
+    validate_values に渡ってくるのは「変更された項目のみ」（呼び出し元
+    api/apps.py の書き込みエンドポイントが差分だけを送る想定）なので、ここに
+    来る空文字は未入力ではなく利用者が明示的に消した値。そのまま int() に
+    渡すと ValueError で弾かれてしまうため、default があればそれで埋めて
+    「空に戻す」操作を成立させる。
+    """
     if raw in (None, "") and field.default is not None:
         return int(field.default)
     try:
@@ -78,6 +99,13 @@ def _validate_duration(field: Field, raw: Any) -> int:
 
 
 def _validate_select(field: Field, raw: Any, choices) -> str | None:
+    """SELECT ウィジェットの検証。静的選択肢・動的選択肢・free_text の3経路を持つ。
+
+    動的選択肢（choices）が空で返ってくるのは webapp_admin/schema/choices.py の
+    設計どおり「取得失敗＝通常状態」（例: TTS API 停止中）。ここで free_text の
+    項目まで拒否すると、外部APIが落ちているだけで既存の声設定を1文字も
+    変更できなくなる。free_text を許した項目だけ手入力をそのまま通す。
+    """
     text = "" if raw is None else str(raw).strip()
     if not text:
         if not field.nullable:
@@ -103,6 +131,13 @@ def _validate_select(field: Field, raw: Any, choices) -> str | None:
 
 
 def _validate_checklist(field: Field, raw: Any) -> list[str]:
+    """CHECKLIST ウィジェットの検証。static_choices だけを正とする。
+
+    CHECKLIST は choice_source（Discord API 等からの動的解決）を今のところ
+    使わない設計（地震アラートの通知タイプのように選択肢が固定の項目専用）。
+    そのため _validate_select と違って _options() を呼ばず、field.static_choices
+    に無い値は無条件で不正とする。
+    """
     if raw is None:
         return []
     if not isinstance(raw, (list, tuple, set)):
@@ -115,6 +150,14 @@ def _validate_checklist(field: Field, raw: Any) -> list[str]:
 
 
 def _validate_text(field: Field, raw: Any) -> str | None:
+    """TEXT/TEXTAREA の検証。長さ超過は sanitize() に切らせず、先にここで拒否する。
+
+    sanitize() 自体にも max_len 相当の切り詰め（s[:max_len]）があるので、この
+    事前チェックを外しても例外にはならない。ただしその場合、上限を超えた
+    入力が「エラーで差し戻される」のではなく「黙って末尾が消えて保存される」
+    動作に変わる。利用者が気づかないまま設定が欠けるのを避けるため、先に
+    弾いてから sanitize() へ渡す。
+    """
     text = "" if raw is None else str(raw)
     if field.max_len is not None and len(text) > field.max_len:
         raise InvalidValue(f"{field.max_len} 文字以内で入力してください。")

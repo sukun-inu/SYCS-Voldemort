@@ -16,6 +16,7 @@ from webapp_admin.schema.types_def import Collection, Field, Panel, Section, Wid
 
 
 def _list(guild_id: int) -> list[dict[str, Any]]:
+    """stickies コレクションの Collection.list。項目IDはモジュール docstring のとおりチャンネルIDそのもの。"""
     rows: list[dict[str, Any]] = []
     for channel_id, entry in get_sticky_messages(guild_id).items():
         if not isinstance(entry, dict):
@@ -32,19 +33,26 @@ def _list(guild_id: int) -> list[dict[str, Any]]:
 
 
 def _add(guild_id: int, data: dict[str, Any]) -> str:
+    """stickies コレクションの Collection.add。1チャンネル1件なので、既存分があれば上書きになる。"""
     channel_id = int(data["channel_id"])
     set_sticky_message(guild_id, channel_id, str(data["content"]))
     return str(channel_id)
 
 
 def _update(guild_id: int, item_id: str, data: dict[str, Any]) -> str:
+    """stickies コレクションの Collection.update。_add の実装をそのまま流用する。"""
     # チャンネル単位の上書きなので、追加と同じ操作になる。
     return _add(guild_id, {"channel_id": item_id, "content": data["content"]})
 
 
 def _remove(guild_id: int, item_id: str) -> None:
-    # 実際の削除は Bot 側が投稿済みメッセージを消してから行うため、
-    # ここでは「削除保留」を立てるだけにする（既存の解除動作と同じ）。
+    """stickies コレクションの Collection.remove。即時削除ではなく削除保留フラグを立てるだけ。
+
+    Bot 側が投稿済みメッセージを実際に消してから設定を消す（コメントの
+    「既存の解除動作と同じ」）ため、ここで settings.json から即座に消すと、
+    Bot がまだ Discord 上のメッセージを消していない状態で参照先を失い、
+    貼り直されたメッセージが放置される。
+    """
     mark_sticky_pending_delete(guild_id, int(item_id))
 
 

@@ -24,17 +24,28 @@ _URLS_MIN, _URLS_MAX = DJAUDIO_LIMITS["max_urls"]
 
 
 def _watch_channel(guild_id: int):
+    """channel_id フィールドの Field.get。未設定を表す値（0 等）を None に揃えて返す。"""
     return get_djaudio_watch_channel(guild_id) or None
 
 
 def _output_channel(guild_id: int):
+    """output_channel_id フィールドの Field.get。_watch_channel と同じ理由で None に揃える。"""
     return get_djaudio_output_channel(guild_id) or None
 
 
 # 数値3項目は set_djaudio_settings() が一括で受け取る形なので、
 # 1項目ずつのパッチに直して渡す（正規化・上下限は store 側にもある）。
 def _set_limit(key: str):
+    """cache_ttl/cooldown/max_urls 用の Field.set をキーごとに作るファクトリ。
+
+    Field.set は (guild_id, value) の1項目しか受け取れないが、保存先の
+    set_djaudio_settings() は3項目まとめて受け取る一括更新の形。ここで
+    key をクロージャに閉じ込めることで、他の2項目に触れずその1項目だけの
+    パッチとして渡せるようにしている。
+    """
+
     def setter(guild_id: int, value) -> None:
+        """_set_limit(key) が返す実体。key はクロージャで束縛済みで呼び出し側からは渡せない。"""
         set_djaudio_settings(guild_id, {key: int(value)})
 
     return setter

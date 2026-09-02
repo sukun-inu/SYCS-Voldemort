@@ -20,14 +20,18 @@ logger = logging.getLogger(__name__)
 
 
 async def _channels(guild_id: int) -> list[dict[str, str]]:
+    """ChoiceSource.CHANNELS の実体。_RESOLVERS から (guild_id) だけで一律に呼ばれるため、
+    引数を増やすなど呼び出し規約からはみ出す変更はできない。"""
     return [{"value": str(c["id"]), "label": f"# {c['name']}"} for c in await get_guild_channels(guild_id)]
 
 
 async def _voice_channels(guild_id: int) -> list[dict[str, str]]:
+    """ChoiceSource.VOICE_CHANNELS の実体。_channels と同じ理由でシグネチャは固定。"""
     return [{"value": str(c["id"]), "label": c["name"]} for c in await get_guild_voice_channels(guild_id)]
 
 
 async def _roles(guild_id: int) -> list[dict[str, str]]:
+    """ChoiceSource.ROLES の実体。_channels と同じ理由でシグネチャは固定。"""
     return [{"value": str(r["id"]), "label": r["name"]} for r in await get_guild_roles(guild_id)]
 
 
@@ -37,6 +41,12 @@ _VOICES_TIMEOUT = 3.0
 
 
 async def _tts_voices(guild_id: int) -> list[dict[str, str]]:
+    """ChoiceSource.TTS_VOICES の実体。応答が来ない相手を _VOICES_TIMEOUT で見切る。
+
+    ここで timeout せず待ち続けると、resolve() の asyncio.gather 全体がその分
+    止まり、TTS 以外の選択肢も含めて画面が「読み込み中」のまま固まる。
+    TimeoutError は resolve() 側が拾って空リスト扱いにする前提。
+    """
     # tts_service は discord.py を読み込むため、必要になった時だけ import する。
     from services.tts_service import fetch_voices
 

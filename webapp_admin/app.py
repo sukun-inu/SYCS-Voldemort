@@ -34,6 +34,13 @@ logger = logging.getLogger(__name__)
 
 
 def _flatten_exception_group(exc: BaseException) -> list[BaseException]:
+    """入れ子になった ExceptionGroup を再帰的にほどき、末端の例外だけを並べる。
+
+    FastAPI のミドルウェア層は複数の内部タスクをまとめて実行するため、1つの
+    ルートハンドラが投げた例外でも ExceptionGroup に包まれて（しかも何重にも
+    ネストして）上がってくることがある。ログにグループそのものを出しても
+    「ExceptionGroup」としか分からず、原因の例外の型・メッセージが埋もれる。
+    """
     if isinstance(exc, BaseExceptionGroup):
         leaves: list[BaseException] = []
         for child in exc.exceptions:
@@ -43,11 +50,24 @@ def _flatten_exception_group(exc: BaseException) -> list[BaseException]:
 
 
 def _unwrap_exception_group(exc: BaseException) -> BaseException:
+    """ハンドリングの分岐に使う代表例外を1つ選ぶ（先頭の末端例外）。
+
+    _NeedsLogin / _NeedsGuild / HTTPException かどうかで分岐したいだけなので、
+    グループの中身を全部見る必要はない。空グループという通常ありえない形は
+    exc 自身へフォールバックし、呼び出し側を壊さない。
+    """
     leaves = _flatten_exception_group(exc)
     return leaves[0] if leaves else exc
 
 
 def _compact_admin_guilds(value):
+    """セッションへ書く前にギルド一覧を必要最小限のフィールドへ削る。
+
+    Discord のギルドオブジェクトは大きく、丸ごとセッションへ入れると
+    Cookie ベースのセッション（starlette SessionMiddleware は署名するだけで
+    サイズ制限は Cookie 側にかかる）が肥大化する。id/name/icon 以外は捨てる。
+    形が壊れている要素（dict でない、id が int にできない）は黙って除く。
+    """
     if not isinstance(value, list):
         return []
     compact: list[dict[str, str | None]] = []
@@ -70,6 +90,14 @@ def _compact_admin_guilds(value):
 
 
 def _make_json_safe(value):
+    """json.dumps に通らない値を、通る形（文字列化）へ強制的に変換する。
+
+    _sanitize_session_payload の最終手段。ここに来る時点で「何が JSON 化
+    できないか」を個別に特定してはいない（特定できるなら _compact_admin_guilds
+    のように専用の削り方をする）。str(value) で潰すので中身の構造は失われる
+    ── 表示できなくても、セッション全体が壊れて 500 になるよりまし、という
+    最後の砦。
+    """
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     if isinstance(value, dict):
@@ -80,6 +108,15 @@ def _make_json_safe(value):
 
 
 def _sanitize_session_payload(session: dict) -> None:
+    """レスポンスを返す直前に、セッションが Cookie へ書き出せる形かを保証する。
+
+    starlette の SessionMiddleware は最後に session を JSON へ dumps して
+    署名・Cookie 化する。ここで弾かず json.dumps に任せると、どこかのハンドラが
+    JSON化できない値（datetime など）を session に置いた瞬間、無関係に見える
+    リクエストまで例外で 500 になる。admin_guilds は専用の削り方
+    （_compact_admin_guilds）で先に軽くし、それでも通らなければ全体を
+    _make_json_safe で強制変換する。in-place で書き換えるので戻り値は無い。
+    """
     if "admin_guilds" in session:
         session["admin_guilds"] = _compact_admin_guilds(session.get("admin_guilds"))
 
@@ -96,11 +133,26 @@ def _sanitize_session_payload(session: dict) -> None:
 
 
 def _register_legacy_redirects(app: FastAPI) -> None:
+    """旧URL（/admin/settings/... 等）へブックマークやリンクが残っている前提で301ではなく303を返す。
+
+    パネルは今はデスクトップUI内のウィンドウであり、単独の画面URLを持たない。
+    旧URLを404にせず、対応するパネルのオーバービュー内アンカーへ流す。
+    check_guild を通すのは、認証前に旧URLがどのパネルの存在を示すかを
+    外部へ漏らさないため（未ログインならログイン画面へ落ちる）。
+    """
     from webapp_admin.schema.registry import PANELS
     from webapp_admin.security import check_guild
 
     def _make_handler(app_id: str):
+        """ルート登録用にクロージャでパネルIDを1つずつ束縛する。
+
+        ループ変数をそのままハンドラ内で参照すると、全ハンドラが最後に代入
+        された app_id を共有してしまう（Python のクロージャは変数を後から
+        評価するため）。関数を挟んで呼び出し時点の値を束縛し直している。
+        """
+
         async def handler(request: Request, _=Depends(check_guild)):
+            """このパネルのオーバービュー内アンカーへ303リダイレクトする。"""
             return RedirectResponse(f"/admin/overview#{app_id}", status_code=303)
 
         return handler
@@ -111,6 +163,16 @@ def _register_legacy_redirects(app: FastAPI) -> None:
 
 
 def create_app() -> FastAPI:
+    """FastAPI アプリ本体を組み立てる。ルーター・例外ハンドラ・ミドルウェアの登録順に意味がある。
+
+    ミドルウェアは `add_middleware` した順とは逆順（後で足したものが先に
+    リクエストを受ける）に実行される。session_serialization_guard は
+    SessionMiddleware より前に足してあるので、レスポンス側の処理では
+    SessionMiddleware が Cookie を書き出すより前にセッションを浄化できる。
+    ここを並べ替えると、この保証が崩れて未浄化のセッションがそのまま
+    Cookie 化されようとし、_sanitize_session_payload が存在する意味が
+    無くなる。
+    """
     secret = resolve_session_secret()
 
     app = FastAPI(docs_url=None, redoc_url=None)
@@ -144,6 +206,12 @@ def create_app() -> FastAPI:
     from webapp_admin.auth import DISCORD_CLIENT_ID, get_bot_guild_count
 
     def _invite_url() -> str | None:
+        """未ログインの訪問者向けページで使う招待リンク。DISCORD_CLIENT_ID 未設定なら None。
+
+        auth_views._build_invite_url と同じ組み立てを別実装として持っている
+        （ログイン後の画面から呼ぶものと、ログイン前の公開ページから呼ぶもので
+        経路が分かれているため）。scope/permissions を変えるときは両方直すこと。
+        """
         if not DISCORD_CLIENT_ID:
             return None
         return (
@@ -154,38 +222,66 @@ def create_app() -> FastAPI:
 
     @app.get("/")
     async def landing(request: Request):
+        """公開トップページ。guild_count は get_bot_guild_count() 経由で5分キャッシュされる。
+
+        ここだけ他の公開ページと違い Discord への問い合わせ（キャッシュ切れ時）
+        を await する。毎リクエストで叩きに行くわけではないので、通常このページ
+        だけが遅くなることはない。
+        """
         return render(request, "landing.html", invite_url=_invite_url(), guild_count=await get_bot_guild_count())
 
     @app.get("/guide")
     async def guide(request: Request):
+        """使い方ページ。認証不要で誰でも見える。"""
         return render(request, "guide.html", invite_url=_invite_url())
 
     @app.get("/privacy")
     async def privacy(request: Request):
+        """プライバシーポリシー。認証不要で誰でも見える。"""
         return render(request, "privacy.html", invite_url=_invite_url())
 
     @app.get("/terms")
     async def terms(request: Request):
+        """利用規約。認証不要で誰でも見える。"""
         return render(request, "terms.html", invite_url=_invite_url())
 
     @app.get("/admin/guide")
     async def redirect_admin_guide():
+        """旧 /admin/guide への外部リンク・ブックマーク向けの恒久リダイレクト。
+
+        ページの実体は /admin 配下から独立済みなので 301（恒久）で新URLを
+        覚えさせる。ログイン導線の 303（その場限り）とは意味が違うので混ぜない。
+        """
         return RedirectResponse("/guide", status_code=301)
 
     @app.get("/admin/privacy")
     async def redirect_admin_privacy():
+        """旧 /admin/privacy への恒久リダイレクト。理由は redirect_admin_guide と同じ。"""
         return RedirectResponse("/privacy", status_code=301)
 
     @app.get("/admin/terms")
     async def redirect_admin_terms():
+        """旧 /admin/terms への恒久リダイレクト。理由は redirect_admin_guide と同じ。"""
         return RedirectResponse("/terms", status_code=301)
 
     @app.exception_handler(_NeedsLogin)
     async def needs_login_handler(request: Request, exc: _NeedsLogin):
+        """check_login/check_guild が投げた _NeedsLogin を、ログイン画面への303へ変換する。
+
+        anyio のタスクグループ経由で例外が ExceptionGroup に包まれて上がってくる
+        経路もあり、その場合はここではなく exception_group_handler 側の同じ判定が
+        効く。2箇所に同じ判定があるのはそのため（片方だけ直すとどちらか一方の
+        経路だけ壊れたままになる）。
+        """
         return RedirectResponse("/admin/login", status_code=303)
 
     @app.exception_handler(_NeedsGuild)
     async def needs_guild_handler(request: Request, exc: _NeedsGuild):
+        """check_guild が投げた _NeedsGuild を、ギルド選択画面への303へ変換する。
+
+        needs_login_handler と同じ理由で、ExceptionGroup に包まれた経路は
+        exception_group_handler 側の同じ判定が担う。
+        """
         return RedirectResponse("/admin/guilds", status_code=303)
 
     def _is_api(request: Request) -> bool:
@@ -204,6 +300,12 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(RateLimitExceeded)
     async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+        """slowapi のレート制限超過を、他のエラーと同じ見た目（JSON/HTML）で返す。
+
+        素通しすると slowapi の既定ハンドラがプレーンテキストを返し、fetch 側は
+        本文を読めず「HTTP 429」としか分からない。_is_api() で振り分けるのは
+        他の例外ハンドラと同じ理由。
+        """
         message = "リクエストが多すぎます。しばらく待ってから再試行してください。"
         if _is_api(request):
             return JSONResponse({"detail": message}, status_code=429)
@@ -211,6 +313,14 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
+        """HTTPException を、コードごとの日本語メッセージ + detail の補足で返す。
+
+        exc.detail をそのまま補足文として画面に出す。detail を渡さずに
+        `HTTPException(status_code=400)` とだけ書くと、starlette が既定で
+        detail へ "Bad Request" 等の英語フレーズを入れるため、それがそのまま
+        補足として日本語ページに出てしまう（detail が既定メッセージと完全一致
+        するときだけ二重表示を避けている。既定フレーズはここには一致しない）。
+        """
         msgs = {
             400: "不正なリクエストです。",
             403: "アクセス権限がありません。",
@@ -239,6 +349,13 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(ExceptionGroup)
     async def exception_group_handler(request: Request, exc: ExceptionGroup):
+        """anyio のタスクグループ経由で来た例外の受け皿。中身を見て他のハンドラへ振り分ける。
+
+        _NeedsLogin/_NeedsGuild/HTTPException を包んだ ExceptionGroup は
+        FastAPI が直接は拾わない（登録してあるのはそれぞれの生の型に対する
+        ハンドラのため）ので、ここで unwrap して手動で同じ処理に回す。
+        どれにも当たらない場合だけ、原因不明のバグとしてログへ残し 500 を返す。
+        """
         root = _unwrap_exception_group(exc)
         if isinstance(root, _NeedsLogin):
             return RedirectResponse("/admin/login", status_code=303)
@@ -266,6 +383,14 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def metrics_middleware(request: Request, call_next):
+        """全リクエストの計測と、想定外の未捕捉例外の最終防波堤。
+
+        ここでの except は HTTPException/RateLimitExceeded/ExceptionGroup の
+        いずれでもない例外（＝上のハンドラが対応していない実装バグ）しか
+        受け取らない。素の Exception を raise し直すと Starlette 既定の
+        プレーンテキスト応答になり fetch 側が読めなくなるため、ここでも
+        _is_api() に応じて JSON/HTML に整形してから返す。
+        """
         client_ip = request.headers.get("CF-Connecting-IP") or (request.client.host if request.client else "unknown")
         snap = {"method": request.method, "path": request.url.path, "endpoint": None, "remote_addr": client_ip}
         try:
@@ -299,6 +424,13 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def security_headers_middleware(request: Request, call_next):
+        """全レスポンスへセキュリティヘッダを付ける。CSP はここが唯一の定義箇所。
+
+        埋め込み表示（iframe）は廃止済みなので X-Frame-Options は問答無用で
+        DENY にできる。CSP の許可リストを広げるときは、実際に読み込む外部
+        オリジンをここへ足すこと（黙って動かない・コンソールにブロックの
+        ログが出るだけで気付きにくい）。
+        """
         response = await call_next(request)
         secure = env_bool("FLASK_SECURE_COOKIES", False)
         if request.url.path.startswith("/static"):
@@ -328,6 +460,12 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def session_serialization_guard_middleware(request: Request, call_next):
+        """レスポンスを作り終えた後、Cookie化される前にセッションを浄化する。
+
+        create_app() の docstring にある登録順の理由により、この浄化は
+        SessionMiddleware が Cookie を書き出すより必ず先に走る。順序が崩れると
+        _sanitize_session_payload を呼んでも手遅れになる。
+        """
         response = await call_next(request)
         session = getattr(request, "session", None)
         if isinstance(session, dict):

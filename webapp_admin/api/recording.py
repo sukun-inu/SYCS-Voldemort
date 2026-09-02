@@ -24,10 +24,12 @@ router = APIRouter()
 
 
 def _guild_id(request: Request) -> int:
+    """check_guild 依存を通過済みという前提で session から取り出す。"""
     return int(request.session["guild_id"])
 
 
 async def _json_body(request: Request) -> dict:
+    """書き込み系エンドポイント共通の本文パース。JSON でない/オブジェクトでなければ400。"""
     try:
         body = await request.json()
     except Exception:
@@ -38,6 +40,11 @@ async def _json_body(request: Request) -> dict:
 
 
 def _require_id(value, label: str) -> int:
+    """Discord ID として妥当な数字文字列だけを受け付ける。負号や小数を通さないため str.isdigit() で見る。
+
+    int(value) は "-1" や "1.5" を通してしまい、負のチャンネルID/ユーザーIDが
+    そのまま保存されかねない。isdigit() で数字だけであることを先に確認する。
+    """
     text = str(value or "").strip()
     if not text.isdigit():
         raise HTTPException(status_code=400, detail=f"{label}は数字のIDで指定してください。")
@@ -143,6 +150,11 @@ async def recording_overview(
 @router.post("/recording/start")
 @limiter.limit("10/minute")
 async def recording_start(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
+    """録音開始をキューに積む。管理画面プロセスは録音そのものをしない（モジュール docstring 参照）。
+
+    ここで返す 200 は「開始した」ではなく「Bot に伝えた」の意味。実際の開始は
+    Bot の巡回タイミング次第で数十秒ずれるため、メッセージもそう案内する。
+    """
     guild_id = _guild_id(request)
     body = await _json_body(request)
     channel_id = _require_id(body.get("channel_id"), "VCのチャンネルID")
@@ -167,6 +179,7 @@ async def recording_start(request: Request, _=Depends(check_guild), _csrf=Depend
 @router.post("/recording/stop")
 @limiter.limit("10/minute")
 async def recording_stop(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
+    """録音停止をキューに積む。recording_start と同じく非同期にBotへ伝えるだけ。"""
     guild_id = _guild_id(request)
     _write_signal("recording_stop", {"guild_id": guild_id})
     return JSONResponse(
@@ -179,6 +192,12 @@ async def recording_stop(request: Request, _=Depends(check_guild), _csrf=Depends
 @router.put("/recording/settings")
 @limiter.limit("30/minute")
 async def recording_settings(request: Request, _=Depends(check_guild), _csrf=Depends(check_csrf)):
+    """録音設定を部分更新する。body に無いキーは変更しない（PATCH 相当の差分更新）。
+
+    各項目は「そもそも body に入っているか」を先に見てから検証するため、
+    一部の項目だけ送るリクエストでも他の設定を巻き戻さない。max_minutes は
+    0 を「無制限」という特別な意味で許容しており、単純な正数チェックにしない。
+    """
     from services.settings_store import awrite, get_recording_settings, set_recording_settings
 
     guild_id = _guild_id(request)

@@ -38,6 +38,13 @@ _ROUTE_MAP: dict[str, str] = {
 
 
 def _url_for(name: str, **kwargs: str) -> str:
+    """テンプレートの `url_for` はここへ来る。FastAPI のルーティングは見ない。
+
+    `_ROUTE_MAP` を引くだけの静的な表引きで、実在するルートかどうかは検証
+    しない。表に無い名前は `/{name}` を黙って返すので、テンプレートを書き
+    間違えても実行時エラーにはならず、リンク切れとして現れる。名前を足す
+    ときは `_ROUTE_MAP` へ対で足すこと（表のコメント参照）。
+    """
     short = name.split(".")[-1] if "." in name else name
     dotted_as_underscore = name.replace(".", "_") if "." in name else ""
     path = (
@@ -51,6 +58,14 @@ def _url_for(name: str, **kwargs: str) -> str:
 
 
 def _admin_asset_url(filename: str) -> str:
+    """静的アセットの URL にキャッシュバスター（?v=）を付ける。
+
+    ファイルの mtime とサイズから作るので、内容を更新すれば URL が自動で
+    変わり、ブラウザ・CDN の古いキャッシュを踏まない。static/ の外を指す
+    パスや読めないファイルは relative_to() / stat() で弾き、その場合は
+    ADMIN_ASSET_VERSION（無ければ固定文字列）だけの URL にフォールバックする
+    ── 404 にはしないが、キャッシュは更新されなくなる。
+    """
     version_seed = os.environ.get("ADMIN_ASSET_VERSION", "admin")
     version = version_seed
     try:
@@ -83,6 +98,13 @@ templates.env.filters["tojson"] = lambda v: _json.dumps(v, ensure_ascii=False)
 
 
 def _get_csrf_token(request: Request) -> str:
+    """render() から呼ぶための薄いラッパー。発行そのものは security 側の責務。
+
+    関数を分けているのは、発行ロジックを security.issue_csrf_token 側に一本化
+    して、check_csrf が検証するトークンと画面へ埋め込むトークンが常に同じ
+    経路で発行されるようにするため。ここで別実装を持つと、発行と検証がずれて
+    フォームに埋まったトークンが常に不一致になりかねない。
+    """
     # 発行そのものは security 側に持たせる（ログイン確定時と HTML 描画時の
     # 両方から同じ関数を使うため）。
     from webapp_admin.security import issue_csrf_token
@@ -91,10 +113,22 @@ def _get_csrf_token(request: Request) -> str:
 
 
 def flash(request: Request, message: str, category: str = "info") -> None:
+    """次に render() するページで1回だけ表示するメッセージを積む。
+
+    セッションに溜めるだけで、消費（pop）は render() 側が担う。ここで pop
+    すると、リダイレクトを挟んで別リクエストで表示する使い方（ログイン失敗
+    など）が壊れる。
+    """
     request.session.setdefault("_flashes", []).append([category, message])
 
 
 def render(request: Request, template_name: str, status_code: int = 200, **ctx):
+    """テンプレートを描画する。flash・CSRF トークン・埋め込み判定を必ず context へ足す。
+
+    ここを通さず TemplateResponse を直接使うと、csrf_token が context に
+    乗らずフォームの hidden input が空になり、そのフォームからの POST は
+    check_csrf で必ず 403 になる。
+    """
     messages = request.session.pop("_flashes", [])
     csrf_token = _get_csrf_token(request)
     # デスクトップUIのウィンドウ（<iframe>）内で読み込まれているかをFetch Metadataヘッダで判定する。

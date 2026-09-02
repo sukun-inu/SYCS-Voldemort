@@ -15,14 +15,17 @@ from webapp_admin.schema.types_def import Field, Panel, Section, Widget
 
 # getter は未設定を 0 で返すため、スキーマ側で None に寄せる。
 def _channel(guild_id: int):
+    """vc_notify_channel_id フィールドの Field.get。上のコメントのとおり 0 を None に寄せる。"""
     return get_vc_notify_channel_id(guild_id) or None
 
 
 def _role(guild_id: int):
+    """vc_notify_role_id フィールドの Field.get。_channel と同じ理由で None に寄せる。"""
     return get_vc_notify_role_id(guild_id) or None
 
 
 def _filter_role(guild_id: int):
+    """vc_notify_filter_role_id フィールドの Field.get。_channel と同じ理由で None に寄せる。"""
     return get_vc_notify_filter_role_id(guild_id) or None
 
 

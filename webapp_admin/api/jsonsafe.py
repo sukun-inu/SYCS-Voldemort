@@ -46,4 +46,10 @@ class SafeJSONResponse(JSONResponse):
     """
 
     def render(self, content: Any) -> bytes:
+        """Starlette がレスポンス確定時に自動で呼ぶフック。呼び出し側からは呼ばない。
+
+        `return SafeJSONResponse(...)` するだけで変換がかかるのはこのため。
+        メソッド名・シグネチャを変えると Starlette 側のオーバーライドが外れ、
+        素の JSONResponse.render に戻って桁落ちが復活する。
+        """
         return super().render(stringify_big_ints(content))

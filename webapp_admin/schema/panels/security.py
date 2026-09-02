@@ -16,34 +16,55 @@ from webapp_admin.schema.types_def import Collection, Field, Panel, Section, Wid
 
 
 def _trusted_list(guild_id: int) -> list[dict[str, Any]]:
+    """trusted_users コレクションの Collection.list。
+
+    信頼済み＝スパム/レイド検出の対象外（モジュール docstring 参照）。
+    """
     return [{"id": str(uid), "user_id": str(uid)} for uid in get_trusted_user_ids(guild_id)]
 
 
 def _trusted_add(guild_id: int, data: dict[str, Any]) -> str:
+    """trusted_users コレクションの Collection.add。
+
+    ここに追加したユーザーはスパム・レイド検出を素通りするようになる
+    （services 側の検出ロジックがこのリストを見て判定自体をスキップする）。
+    誤って追加すると、そのユーザーが起こす荒らし行為を自動検出が拾わなく
+    なるので、UI 側では慎重な操作として扱うこと。
+    """
     user_id = int(data["user_id"])
     add_trusted_users(guild_id, [user_id])
     return str(user_id)
 
 
 def _trusted_remove(guild_id: int, item_id: str) -> None:
+    """trusted_users コレクションの Collection.remove。外すと以後そのユーザーも通常どおり検出対象になる。"""
     remove_trusted_users(guild_id, [int(item_id)])
 
 
 def _bypass_list(guild_id: int) -> list[dict[str, Any]]:
+    """bypass_roles コレクションの Collection.list。"""
     return [{"id": str(rid), "role_id": str(rid)} for rid in get_bypass_role_ids(guild_id)]
 
 
 def _bypass_add(guild_id: int, data: dict[str, Any]) -> str:
+    """bypass_roles コレクションの Collection.add。
+
+    _trusted_add と違い、こちらはロール単位で検出を素通りさせる。ロール付与を
+    自由に行えるサーバーで @everyone に近いロールを誤って登録すると、
+    実質的にスパム/レイド検出そのものを無効化してしまう。
+    """
     role_id = int(data["role_id"])
     add_bypass_roles(guild_id, [role_id])
     return str(role_id)
 
 
 def _bypass_remove(guild_id: int, item_id: str) -> None:
+    """bypass_roles コレクションの Collection.remove。"""
     remove_bypass_roles(guild_id, [int(item_id)])
 
 
 def _count(guild_id: int) -> int:
+    """タイルのバッジ用件数。信頼済みユーザーとバイパスロールを合算した「例外の総数」を出す。"""
     return len(get_trusted_user_ids(guild_id)) + len(get_bypass_role_ids(guild_id))
 
 

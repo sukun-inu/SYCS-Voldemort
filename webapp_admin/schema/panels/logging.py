@@ -10,14 +10,23 @@ LOG_LEVELS = ("NONE", "ERROR", "INFO", "DEBUG")
 
 
 def _log_channel(guild_id: int):
+    """log_channel_id フィールドの Field.get。"""
     return get_log_settings(guild_id).get("channel_id")
 
 
 def _log_level(guild_id: int) -> str:
+    """log_level フィールドの Field.get。空値は「レベル未設定」ではなく INFO に倒す。
+
+    Widget.SELECT は nullable=False で default="INFO" だが、default は保存側が
+    値を返さなかったとき（未初期化のギルド）まではカバーしない。ここで
+    フォールバックしておかないと空文字が選択肢一覧に無い値として
+    _validate_select を素通りし、画面のプルダウンが「選べない値」を表示する。
+    """
     return str(get_log_settings(guild_id).get("level") or "INFO")
 
 
 def _chatgpt_channel(guild_id: int):
+    """chatgpt_channel_id フィールドの Field.get。0 は「未設定」を表す規約（下記コメント）に合わせて None にする。"""
     # 0 は「未設定=無効」を意味する（Bot / WebUI で統一済みの仕様）。
     return get_response_channel_id(guild_id) or None
 
