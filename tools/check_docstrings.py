@@ -36,7 +36,9 @@ import sys
 from pathlib import Path
 
 # 現在の下限。改善したら締めること（CONTRIBUTING 7.）。
-FLOOR_PERCENT = 29.0
+# 100 に到達したので 100 で固定した。ここを下げるのは「docstring の無い関数を
+# 足したい」ということなので、下げる前に 4. を読み直すこと。
+FLOOR_PERCENT = 100.0
 
 SKIP_PREFIXES = ("tests/", "tools/", "scripts/")
 

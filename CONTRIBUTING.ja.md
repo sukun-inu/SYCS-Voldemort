@@ -219,6 +219,7 @@ return discord.Color.dark_grey()
 | `.coveragerc` の `fail_under` | 69 | これを割ると CI が落ちる（実測 71.2%） |
 | `pyproject.toml` の `max-complexity` | 31 | 現在の最大値に合わせた天井（`create_app`） |
 | CI の `mypy -p ...` | 本体5パッケージ全部 | 147ファイル |
+| `tools/check_docstrings.py` の `FLOOR_PERCENT` | 100 | 本体の関数 1136 本すべてに docstring がある状態を保つ |
 
 どれも「今より悪くしない」ための歯止めです。**テストを足したり関数を割ったり
 したら、この数字も一緒に締めてください。** 緩めたままにすると、その分だけ静かに
@@ -229,7 +230,7 @@ return discord.Color.dark_grey()
 
 ---
 
-## 8. CI が落とす7つの条件
+## 8. CI が落とす8つの条件
 
 `.github/workflows/tests.yml`。`main` への push と、すべての pull request で
 走ります。
@@ -241,6 +242,11 @@ return discord.Color.dark_grey()
 5. `mypy -p webapp -p events -p services -p webapp_admin -p commands`
 6. `tools/check_requirements.py`（依存の固定が Docker と同じ条件で解けるか）
 7. `tools/check_admin_schema.py` と `tools/generate_admin_docs.py --check`
+8. `tools/check_docstrings.py`（本体の関数に docstring があるか。下限 100）
+
+8. は**数しか見ていません。** 空でない文字列が書いてあれば通るので、「読めば
+分かることを書き写しただけの docstring」は素通りします。緑であることは、4. を
+満たしている証拠にはなりません。
 
 **「入れてはあるが、緑にするために素通りさせる」形にはしないでください。**
 `tools/check_admin_ui.py` を CI に入れていないのは同じ理由です。playwright を

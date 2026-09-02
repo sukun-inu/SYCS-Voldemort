@@ -67,9 +67,13 @@ build here. A local `Success` from mypy is not proof that CI will pass.
 
 ## Thresholds are ceilings, not targets
 
-`fail_under` in `.coveragerc`, `max-complexity` in `pyproject.toml`, and the package
-list passed to mypy all exist to stop things getting worse. Tighten them whenever you
-improve the thing they measure.
+`fail_under` in `.coveragerc`, `max-complexity` in `pyproject.toml`, the package list
+passed to mypy, and `FLOOR_PERCENT` in `tools/check_docstrings.py` all exist to stop
+things getting worse. Tighten them whenever you improve the thing they measure.
+
+The docstring floor is at 100, but it counts only whether a docstring is present —
+never whether it says anything. A docstring that paraphrases the signature passes.
+Green there is not evidence that the "comment the why" rule was followed.
 
 ## CI must never pass vacuously
 

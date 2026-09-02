@@ -68,6 +68,12 @@ jobs:
       - name: 管理UIのドキュメントがスキーマと一致しているか確認
         run: python tools/generate_admin_docs.py --check
 
+      - name: docstring の充足率が下限を割っていないか確認
+        # 下限は 100。この検査が守れるのは「書く場所が空でない」ことだけで、
+        # 中身の良し悪しは見られない（スクリプトの docstring 参照）。数を
+        # 保つための歯止めであって、質はここでは担保できていない。
+        run: python tools/check_docstrings.py
+
       - name: テストをカバレッジ付きで実行
         run: python -m coverage run -m unittest discover -s tests -t .
 
