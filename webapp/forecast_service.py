@@ -167,6 +167,148 @@ async def build_weekly_forecast(session: AsyncSession, *, horizon_days: int = 7)
     }
 
 
+def _headline_sections(meta: WeeklyForecastMeta) -> dict[str, Any]:
+    """news_headlines_json を、新旧どちらの形式でも同じ形に読み解く。
+
+    この列は過去のスキーマ変更でネスト形式が変わっている（後から
+    llm/interval/accuracy 等を1つのJSON列に相乗りさせた）ため、
+    "sample_headlines" キーの有無で判定して読み分ける。旧形式では
+    辞書全体が見出し一覧そのものだった。
+    """
+    payload = json_loads(meta.news_headlines_json, {})
+    if isinstance(payload, dict) and "sample_headlines" in payload:
+        return {
+            "sample_headlines": payload.get("sample_headlines") or {},
+            "llm": payload.get("llm") or {},
+            "interval": payload.get("interval") or {},
+            "accuracy": payload.get("accuracy") or {},
+            "summaries": payload.get("summaries") or {},
+            "driver_breakdowns": payload.get("driver_breakdowns") or {},
+        }
+    return {
+        "sample_headlines": payload if isinstance(payload, dict) else {},
+        "llm": {},
+        "interval": {},
+        "accuracy": {},
+        "summaries": {},
+        "driver_breakdowns": {},
+    }
+
+
+def _daily_payload(sorted_rows: list[WeeklyForecastDaily]) -> list[dict[str, Any]]:
+    """1金属ぶんの日次予測。日付の昇順で渡されたものをそのまま並べる。"""
+    return [
+        {
+            "date": row.forecast_date.isoformat(),
+            "price_per_gram": float(row.price_per_gram),
+            "delta_from_previous": float(row.delta_from_previous) if row.delta_from_previous is not None else None,
+            # 区間列は 0004 で追加したため、それ以前に保存された行では NULL になる。
+            # その場合は None のまま返し、フロントエンドは帯なしで描画する。
+            # 0.0 で埋めると幅ゼロの帯が描かれ、予測がぴたりと当たるように見える。
+            "lower_price_per_gram": (float(row.lower_price_per_gram) if row.lower_price_per_gram is not None else None),
+            "upper_price_per_gram": (float(row.upper_price_per_gram) if row.upper_price_per_gram is not None else None),
+        }
+        for row in sorted_rows
+    ]
+
+
+def _change_pct(bound: object, start_price: float) -> float | None:
+    """予測帯の端が、開始価格から何%離れているか。
+
+    isinstance は型検査を通すために要る。daily の各要素は dict[str, Any]
+    なので、そこから取り出した値を mypy は object としか見ない。実際の
+    中身は _daily_payload で float(...) か None に揃えてあるので、この判定が
+    偽になることは無い（＝実行時の振る舞いは変わらない）。引数を Any では
+    なく object にしてあるのは、そうしないと isinstance で絞っても
+    mypy が Any のままと見て no-any-return で落ちるため。
+    """
+    if bound is None or not isinstance(bound, float) or start_price <= 0:
+        return None
+    return round((bound - start_price) / start_price * 100, 3)
+
+
+def _metal_payload(
+    metal_key: str,
+    metal_rows: list[WeeklyForecastDaily],
+    sections: dict[str, Any],
+) -> dict[str, Any]:
+    """1金属ぶんの予測。行はここで日付順に並べ替える。
+
+    予測帯（projected_lower/upper）は**最終日**の行から取る。他の値は先頭の
+    行から取っているので first から取るのは自然な間違いだが、そうすると
+    帯だけが1日目の幅のまま7日先まで同じ太さになる。
+    """
+    sorted_rows = sorted(metal_rows, key=lambda row: row.forecast_date)
+    first = sorted_rows[0]
+    daily = _daily_payload(sorted_rows)
+    last_daily = daily[-1] if daily else {}
+    start_price = float(first.start_price_per_gram)
+    projected_lower = last_daily.get("lower_price_per_gram")
+    projected_upper = last_daily.get("upper_price_per_gram")
+    summaries = sections["summaries"]
+    breakdowns = sections["driver_breakdowns"]
+    return {
+        "start_price_per_gram": start_price,
+        "projected_price_per_gram": float(first.projected_price_per_gram),
+        "projected_change_pct_7d": float(first.projected_change_pct_7d),
+        "confidence": float(first.confidence),
+        "implied_daily_return_pct": float(first.implied_daily_return_pct),
+        "projected_lower_per_gram": projected_lower,
+        "projected_upper_per_gram": projected_upper,
+        "projected_lower_change_pct": _change_pct(projected_lower, start_price),
+        "projected_upper_change_pct": _change_pct(projected_upper, start_price),
+        "interval_prob": float(safe_float(sections["interval"].get("prob")) or FORECAST_INTERVAL_PROB),
+        "daily": daily,
+        "drivers": json_loads(first.drivers_json, []),
+        "summary": str(summaries.get(metal_key, "")) if isinstance(summaries, dict) else "",
+        # 旧キャッシュには driver_breakdowns が無いため、その場合は空リストにして
+        # フロントエンドが従来の drivers 箇条書き表示へフォールバックできるようにする。
+        "driver_breakdown": (breakdowns.get(metal_key) or [] if isinstance(breakdowns, dict) else []),
+    }
+
+
+def _signals_payload(meta: WeeklyForecastMeta, sections: dict[str, Any]) -> dict[str, Any]:
+    """signals ブロック。保存されていない区画は既定値で補う。
+
+    llm/interval/accuracy は後から足した区画なので、旧キャッシュには入って
+    いない。空のまま返すとフロントエンドがキーを引けずに落ちる。
+    """
+    llm_payload = sections["llm"] or {
+        "available": False,
+        "source": "Groq",
+        "model": FORECAST_LLM_MODEL,
+        "scores": {},
+        "confidences": {},
+        "rationales": {},
+        "global_comment": "",
+    }
+    interval_payload = sections["interval"] or {
+        "prob": FORECAST_INTERVAL_PROB,
+        "tilt_max_pct_per_day": FORECAST_TILT_MAX_PCT_PER_DAY * 100,
+    }
+    accuracy_payload = sections["accuracy"] or {"available": False, "lookback_days": 14, "mean_abs_error_pct": {}}
+    return {
+        "usd_jpy": {
+            "available": bool(meta.usd_jpy_available),
+            "source": meta.usd_jpy_source,
+            "latest": float(meta.usd_jpy_latest) if meta.usd_jpy_latest is not None else None,
+            "weekly_change_pct": (
+                float(meta.usd_jpy_weekly_change_pct) if meta.usd_jpy_weekly_change_pct is not None else 0.0
+            ),
+        },
+        "news": {
+            "available": bool(meta.news_available),
+            "source": meta.news_source,
+            "sentiment": json_loads(meta.news_sentiment_json, {}),
+            "article_counts": json_loads(meta.news_article_counts_json, {}),
+            "sample_headlines": sections["sample_headlines"],
+        },
+        "llm": llm_payload,
+        "interval": interval_payload,
+        "accuracy": accuracy_payload,
+    }
+
+
 def _forecast_payload_from_db(
     *,
     meta: WeeklyForecastMeta,
@@ -184,94 +326,7 @@ def _forecast_payload_from_db(
     for row in rows:
         by_metal.setdefault(row.metal_key, []).append(row)
 
-    headlines_payload = json_loads(meta.news_headlines_json, {})
-    if isinstance(headlines_payload, dict) and "sample_headlines" in headlines_payload:
-        sample_headlines = headlines_payload.get("sample_headlines") or {}
-        llm_payload = headlines_payload.get("llm") or {}
-        interval_payload = headlines_payload.get("interval") or {}
-        accuracy_payload = headlines_payload.get("accuracy") or {}
-        summaries_payload = headlines_payload.get("summaries") or {}
-        breakdown_payload = headlines_payload.get("driver_breakdowns") or {}
-    else:
-        sample_headlines = headlines_payload if isinstance(headlines_payload, dict) else {}
-        llm_payload = {}
-        interval_payload = {}
-        accuracy_payload = {}
-        summaries_payload = {}
-        breakdown_payload = {}
-
-    forecast: dict[str, Any] = {}
-    for metal_key, metal_rows in by_metal.items():
-        sorted_rows = sorted(metal_rows, key=lambda row: row.forecast_date)
-        first = sorted_rows[0]
-        daily = [
-            {
-                "date": row.forecast_date.isoformat(),
-                "price_per_gram": float(row.price_per_gram),
-                "delta_from_previous": float(row.delta_from_previous) if row.delta_from_previous is not None else None,
-                # 区間列は 0004 で追加したため、それ以前に保存された行では NULL になる。
-                # その場合は None のまま返し、フロントエンドは帯なしで描画する。
-                "lower_price_per_gram": (
-                    float(row.lower_price_per_gram) if row.lower_price_per_gram is not None else None
-                ),
-                "upper_price_per_gram": (
-                    float(row.upper_price_per_gram) if row.upper_price_per_gram is not None else None
-                ),
-            }
-            for row in sorted_rows
-        ]
-        last_daily = daily[-1] if daily else {}
-        start_price = float(first.start_price_per_gram)
-        projected_lower = last_daily.get("lower_price_per_gram")
-        projected_upper = last_daily.get("upper_price_per_gram")
-        forecast[metal_key] = {
-            "start_price_per_gram": float(first.start_price_per_gram),
-            "projected_price_per_gram": float(first.projected_price_per_gram),
-            "projected_change_pct_7d": float(first.projected_change_pct_7d),
-            "confidence": float(first.confidence),
-            "implied_daily_return_pct": float(first.implied_daily_return_pct),
-            "projected_lower_per_gram": projected_lower,
-            "projected_upper_per_gram": projected_upper,
-            # isinstance は型検査を通すために要る。daily の各要素は dict[str, Any]
-            # なので、そこから取り出した値を mypy は object としか見ない。実際の
-            # 中身は上の内包表記で float(...) か None に揃えてあるので、この判定が
-            # 偽になることは無い（＝実行時の振る舞いは変わらない）。
-            "projected_lower_change_pct": (
-                round((projected_lower - start_price) / start_price * 100, 3)
-                if projected_lower is not None and isinstance(projected_lower, float) and start_price > 0
-                else None
-            ),
-            "projected_upper_change_pct": (
-                round((projected_upper - start_price) / start_price * 100, 3)
-                if projected_upper is not None and isinstance(projected_upper, float) and start_price > 0
-                else None
-            ),
-            "interval_prob": float(safe_float(interval_payload.get("prob")) or FORECAST_INTERVAL_PROB),
-            "daily": daily,
-            "drivers": json_loads(first.drivers_json, []),
-            "summary": str(summaries_payload.get(metal_key, "")) if isinstance(summaries_payload, dict) else "",
-            # 旧キャッシュには driver_breakdowns が無いため、その場合は空リストにして
-            # フロントエンドが従来の drivers 箇条書き表示へフォールバックできるようにする。
-            "driver_breakdown": (breakdown_payload.get(metal_key) or [] if isinstance(breakdown_payload, dict) else []),
-        }
-
-    if not llm_payload:
-        llm_payload = {
-            "available": False,
-            "source": "Groq",
-            "model": FORECAST_LLM_MODEL,
-            "scores": {},
-            "confidences": {},
-            "rationales": {},
-            "global_comment": "",
-        }
-    if not interval_payload:
-        interval_payload = {
-            "prob": FORECAST_INTERVAL_PROB,
-            "tilt_max_pct_per_day": FORECAST_TILT_MAX_PCT_PER_DAY * 100,
-        }
-    if not accuracy_payload:
-        accuracy_payload = {"available": False, "lookback_days": 14, "mean_abs_error_pct": {}}
+    sections = _headline_sections(meta)
 
     return {
         "timezone": "Asia/Tokyo",
@@ -279,27 +334,10 @@ def _forecast_payload_from_db(
         "generated_at": meta.generated_at.isoformat(),
         "horizon_days": int(meta.horizon_days),
         "model": {"name": meta.model_name, "description": meta.model_description},
-        "signals": {
-            "usd_jpy": {
-                "available": bool(meta.usd_jpy_available),
-                "source": meta.usd_jpy_source,
-                "latest": float(meta.usd_jpy_latest) if meta.usd_jpy_latest is not None else None,
-                "weekly_change_pct": (
-                    float(meta.usd_jpy_weekly_change_pct) if meta.usd_jpy_weekly_change_pct is not None else 0.0
-                ),
-            },
-            "news": {
-                "available": bool(meta.news_available),
-                "source": meta.news_source,
-                "sentiment": json_loads(meta.news_sentiment_json, {}),
-                "article_counts": json_loads(meta.news_article_counts_json, {}),
-                "sample_headlines": sample_headlines,
-            },
-            "llm": llm_payload,
-            "interval": interval_payload,
-            "accuracy": accuracy_payload,
+        "signals": _signals_payload(meta, sections),
+        "forecast": {
+            metal_key: _metal_payload(metal_key, metal_rows, sections) for metal_key, metal_rows in by_metal.items()
         },
-        "forecast": forecast,
     }
 
 

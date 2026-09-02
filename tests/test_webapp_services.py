@@ -1201,6 +1201,96 @@ class ForecastServicePureTests(unittest.TestCase):
         self.assertEqual(payload["signals"]["news"]["sample_headlines"], {"gold": ["旧形式の見出し"]})
         self.assertEqual(payload["forecast"]["gold"]["summary"], "")
 
+    def test_the_band_comes_from_the_last_day_not_the_first(self):
+        """予測帯（projected_lower/upper）は、最終日の行から取ること。
+
+        他の値（start_price・confidence 等）は全部**先頭の行**から取って
+        いるので、帯も first から取るのは自然な間違いになる。**1日ぶんしか
+        無いテストでは first と last が同じ**ため、既存のテストは全部通った
+        ままになる。帯だけが1日目の幅で描かれ、7日先まで同じ太さになる。
+
+        6日先まで割ってあるこの関数を分ける前に押さえる
+        （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+        """
+        meta = self._make_meta()
+        rows = [
+            self._make_row(
+                forecast_date=date(2026, 8, 31),
+                lower_price_per_gram=Decimal("4990.0000"),
+                upper_price_per_gram=Decimal("5030.0000"),
+            ),
+            self._make_row(
+                forecast_date=date(2026, 9, 5),
+                lower_price_per_gram=Decimal("4800.0000"),
+                upper_price_per_gram=Decimal("5300.0000"),
+            ),
+        ]
+        payload = forecast_service._forecast_payload_from_db(meta=meta, rows=rows)
+        gold = payload["forecast"]["gold"]
+
+        self.assertEqual(gold["projected_lower_per_gram"], 4800.0)
+        self.assertEqual(gold["projected_upper_per_gram"], 5300.0)
+        # 変化率も最終日基準（start_price=5000）
+        self.assertAlmostEqual(gold["projected_lower_change_pct"], -4.0, places=6)
+        self.assertAlmostEqual(gold["projected_upper_change_pct"], 6.0, places=6)
+
+    def test_rows_saved_before_the_interval_columns_keep_a_missing_band(self):
+        """区間列が NULL の古い行は、None のまま返すこと。
+
+        区間列は migration 0004 で足したので、それ以前に保存された行では
+        NULL になる。0.0 で埋めると**幅ゼロの帯**が描かれ、「予測が
+        ぴたりと当たる」ように見えてしまう。欠けていることは欠けている
+        まま渡し、フロントエンドが帯なしで描けるようにする。
+        """
+        meta = self._make_meta()
+        rows = [
+            self._make_row(
+                forecast_date=date(2026, 8, 31),
+                lower_price_per_gram=None,
+                upper_price_per_gram=None,
+            )
+        ]
+        payload = forecast_service._forecast_payload_from_db(meta=meta, rows=rows)
+        gold = payload["forecast"]["gold"]
+
+        self.assertIsNone(gold["daily"][0]["lower_price_per_gram"])
+        self.assertIsNone(gold["daily"][0]["upper_price_per_gram"])
+        self.assertIsNone(gold["projected_lower_per_gram"])
+        self.assertIsNone(gold["projected_upper_per_gram"])
+        self.assertIsNone(gold["projected_lower_change_pct"])
+        self.assertIsNone(gold["projected_upper_change_pct"])
+
+    def test_each_metal_gets_its_own_rows_and_its_own_text(self):
+        """金属ごとに、その金属の行・要約・内訳だけが入ること。
+
+        既存のテストは全部 gold 1種類だけで通してきた。金属をまたいで行が
+        混ざったり、要約が取り違えられたりしても**1種類しか無いテストでは
+        再現しない。** 画面には出るので、見た人が「金の要約がプラチナに
+        付いている」と気づくまで分からない。
+        """
+        headlines_payload = forecast_utils.json_dumps(
+            {
+                "sample_headlines": {},
+                "summaries": {"gold": "金の要約", "platinum": "プラチナの要約"},
+                "driver_breakdowns": {"gold": [{"label": "金"}], "platinum": [{"label": "白金"}]},
+            }
+        )
+        meta = self._make_meta(news_headlines_json=headlines_payload)
+        rows = [
+            self._make_row(metal_key="platinum", forecast_date=date(2026, 9, 2)),
+            self._make_row(metal_key="gold", forecast_date=date(2026, 9, 2)),
+            self._make_row(metal_key="gold", forecast_date=date(2026, 8, 31)),
+        ]
+        payload = forecast_service._forecast_payload_from_db(meta=meta, rows=rows)
+
+        self.assertEqual(set(payload["forecast"]), {"gold", "platinum"})
+        self.assertEqual([d["date"] for d in payload["forecast"]["gold"]["daily"]], ["2026-08-31", "2026-09-02"])
+        self.assertEqual([d["date"] for d in payload["forecast"]["platinum"]["daily"]], ["2026-09-02"])
+        self.assertEqual(payload["forecast"]["gold"]["summary"], "金の要約")
+        self.assertEqual(payload["forecast"]["platinum"]["summary"], "プラチナの要約")
+        self.assertEqual(payload["forecast"]["gold"]["driver_breakdown"], [{"label": "金"}])
+        self.assertEqual(payload["forecast"]["platinum"]["driver_breakdown"], [{"label": "白金"}])
+
     def test_trim_payload_to_days_noop_when_days_covers_full_horizon(self):
         payload = {"horizon_days": 7, "forecast": {"gold": {"daily": [{"price_per_gram": 1.0}] * 7}}}
         result = forecast_service._trim_payload_to_days(payload, 7)
