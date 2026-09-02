@@ -1,7 +1,7 @@
 import datetime
 import logging
 import re
-from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple, cast
 
 import aiohttp
 import discord
@@ -359,17 +359,31 @@ async def _run_vt_scans(
 # ==================================================
 # メッセージセキュリティ
 # ==================================================
-async def handle_security_for_message(bot: discord.Client, message: discord.Message):
-    """メッセージ1件に対する検査の入口。
+class _Findings(NamedTuple):
+    """1件のメッセージを見て集まった判定材料。
 
-    スパム・リンク過多・ユニコードトリック・VirusTotal・GPT判定・VC
-    レイドを順に確認し、危険と判定したら削除とロール剥奪を行う。
-    バイパス判定に失敗した場合は、危険と判定していても強制措置を
-    見送り、人が確認できるようログに大きく残す（信頼済みかどうか
-    分からないまま取り返しのつかない操作をしないため）。
+    危険かどうかの結論（danger）と、その根拠になった印（reason_flags）を
+    一緒に持つ。片方だけ渡すと、「危険だが理由が空」という報告が作れて
+    しまう。
+    """
+
+    danger: bool
+    reason_flags: List[str]
+    vt_results: List[Dict[str, Any]]
+    progress_msg: Optional[discord.Message]
+    gpt_result: str
+    spam_count: int
+
+
+def _is_examinable(message: discord.Message) -> bool:
+    """検査の対象になるメッセージか。
+
+    ボット自身の発言とDMは対象外。author が Member でない場合も外すが、
+    **黙って戻らないこと。** ここは危険な投稿を見つけるための経路で、
+    素通りしたことに気づけないのがいちばん困る。
     """
     if message.author.bot or message.guild is None:
-        return
+        return False
 
     if not isinstance(message.author, discord.Member):
         # 型を絞り込むために要る。以下でロールや参加日時（Member にしか無い）を
@@ -378,9 +392,6 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
         # ここへ来ることは通常無い。on_message で投稿しているのだから、その人は
         # まだギルドに居る。ただし discord.py は「ギルドを抜けたあとの投稿」など
         # いくつかの場合に User を返す仕様なので、絶対に来ないとは言い切れない。
-        #
-        # **黙って戻らないこと。** ここは危険な投稿を見つけるための関数で、
-        # 素通りしたことに気づけないのがいちばん困る。
         logger.warning(
             "[security] author が Member ではないため検査を飛ばします " "guild=%s channel=%s author=%s(%s)",
             message.guild.id,
@@ -388,54 +399,65 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
             message.author,
             type(message.author).__name__,
         )
-        return
+        return False
+    return True
 
-    member = message.author
-    content = message.content or ""
-    links = extract_links(content)
-    attachments: Sequence[discord.Attachment] = message.attachments or []
 
+def _is_plain_chat_post(message: discord.Message, guild_id: int, links: List[str], attachments: Sequence) -> bool:
+    """AI応答チャンネルへの、リンクも添付も無い発言か。
+
+    会話用のチャンネルは投稿が多いので、走査するものが何も無いなら見ない。
+    設定を読めなかったときは「普通のチャンネル」として扱う（検査する側へ
+    倒す）。
+    """
     try:
-        resp_ch_id = get_response_channel_id(message.guild.id)
-        is_chat_channel = bool(resp_ch_id and message.channel.id == resp_ch_id)
-        if is_chat_channel and not links and not attachments:
-            return
+        resp_ch_id = get_response_channel_id(guild_id)
     except Exception:
         logger.debug("failed to check response_channel_id", exc_info=True)
+        return False
+    return bool(resp_ch_id and message.channel.id == resp_ch_id) and not links and not attachments
 
-    logs: List[str] = [f"[{now_jst()}] スキャン開始"]
-    danger = False
 
-    bypass = is_security_bypassed(member)
-    if bypass.bypassed:
-        logs.append(f"バイパス適用: {bypass.reason}")
-        try:
-            await log_action(
-                bot,
-                message.guild.id,
-                "INFO",
-                "セキュリティ検査スキップ",
-                user=member,
-                fields={"理由": bypass.reason or "bypass"},
-            )
-        except Exception:
-            logger.debug("log_action failed", exc_info=True)
-        return
-    if bypass.check_failed:
-        logs.append("⚠️ バイパス判定に失敗（強制措置は行わない）")
+async def _announce_bypass(bot: discord.Client, guild_id: int, member: discord.Member, reason: str) -> None:
+    """バイパスで検査を飛ばしたことをログへ残す。"""
+    try:
+        await log_action(
+            bot,
+            guild_id,
+            "INFO",
+            "セキュリティ検査スキップ",
+            user=member,
+            fields={"理由": reason or "bypass"},
+        )
+    except Exception:
+        logger.debug("log_action failed", exc_info=True)
 
+
+async def _collect_findings(
+    bot: discord.Client,
+    guild_id: int,
+    member: discord.Member,
+    content: str,
+    links: List[str],
+    attachments: Sequence,
+    logs: List[str],
+) -> _Findings:
+    """スパム・リンク・VirusTotal・GPT・VCレイドを順に見て、材料をそろえる。
+
+    ここでは**判定するだけで、何も実行しない。** 消すか剥がすかを決めるのは
+    _enforce_or_withhold の仕事で、分けてあるのは「判定は正しいのに措置の
+    条件だけ壊れている」状態をテストで切り分けられるようにするため。
+    """
     member_is_new = is_new_member(member)
     reason_flags, flag_logs, spam_count, min_interval = _check_content_flags(member, content, links)
     logs.extend(flag_logs)
 
     # スパム単体でも SUSPICIOUS 扱い（危険判定の引き上げは gpt_assess に委ねる）
-    if "SPAM" in reason_flags:
-        danger = True
+    danger = "SPAM" in reason_flags
 
-    vt_results, progress_msg, vt_flags, vt_danger = await _run_vt_scans(bot, message.guild.id, links, attachments, logs)
+    vt_results, progress_msg, vt_flags, vt_danger = await _run_vt_scans(bot, guild_id, links, attachments, logs)
     reason_flags.extend(vt_flags)
-    if vt_danger:
-        danger = True
+    danger = danger or vt_danger
 
     gpt_result = await gpt_assess(
         content,
@@ -454,78 +476,168 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
         logs.append("新規メンバー")
 
     if member.voice and member.voice.channel:
-        channel_id = member.voice.channel.id
-        if check_vc_raid(member, channel_id):
+        if check_vc_raid(member, member.voice.channel.id):
             danger = True
             reason_flags.append("VC_RAID")
             logs.append("VCレイド検出")
 
-    if danger and bypass.check_failed:
-        # 信頼済みかどうかが分からないまま消したり剥がしたりしない。
-        # 見逃すより取り返しがつかないほうを避け、人が判断できるよう大きく残す。
-        logs.append("強制措置は見送った（バイパス判定に失敗しているため）")
-        logger.error(
-            "[SECURITY] guild=%s user=%s 危険と判定しましたが、バイパス判定に失敗している"
-            "ため強制措置（メッセージ削除・ロール剥奪）を見送りました。手動で確認してください。",
-            message.guild.id,
-            member.id,
+    return _Findings(
+        danger=danger,
+        reason_flags=reason_flags,
+        vt_results=vt_results,
+        progress_msg=progress_msg,
+        gpt_result=gpt_result,
+        spam_count=spam_count,
+    )
+
+
+async def _withhold_enforcement(
+    bot: discord.Client,
+    guild_id: int,
+    member: discord.Member,
+    findings: _Findings,
+    logs: List[str],
+) -> None:
+    """危険と判定したが、バイパス判定に失敗しているので何もしない。
+
+    信頼済みかどうかが分からないまま消したり剥がしたりしない。見逃すより
+    取り返しがつかないほうを避け、人が判断できるよう大きく残す。
+    """
+    logs.append("強制措置は見送った（バイパス判定に失敗しているため）")
+    logger.error(
+        "[SECURITY] guild=%s user=%s 危険と判定しましたが、バイパス判定に失敗している"
+        "ため強制措置（メッセージ削除・ロール剥奪）を見送りました。手動で確認してください。",
+        guild_id,
+        member.id,
+    )
+    try:
+        await log_action(
+            bot,
+            guild_id,
+            "ERROR",
+            "⚠️ 要確認: 強制措置を見送りました",
+            user=member,
+            fields={
+                "理由": "バイパス判定に失敗（設定を読めませんでした）",
+                "検出": "、".join(findings.reason_flags) or "不明",
+                "対応": "内容を確認し、必要なら手動で対処してください。",
+            },
+            embed_color=discord.Color.orange(),
         )
-        try:
-            await log_action(
-                bot,
-                message.guild.id,
-                "ERROR",
-                "⚠️ 要確認: 強制措置を見送りました",
-                user=member,
-                fields={
-                    "理由": "バイパス判定に失敗（設定を読めませんでした）",
-                    "検出": "、".join(reason_flags) or "不明",
-                    "対応": "内容を確認し、必要なら手動で対処してください。",
-                },
-                embed_color=discord.Color.orange(),
-            )
-        except Exception:
-            logger.debug("log_action failed", exc_info=True)
-    elif danger:
+    except Exception:
+        logger.debug("log_action failed", exc_info=True)
+
+
+async def _enforce_or_withhold(
+    bot: discord.Client,
+    message: discord.Message,
+    guild_id: int,
+    member: discord.Member,
+    findings: _Findings,
+    bypass: BypassResult,
+    logs: List[str],
+) -> None:
+    """危険なら消して剥がす。ただしバイパス判定に失敗しているなら見送る。
+
+    **見送りの判定を、削除・剥奪より先に置くこと。** 順序を入れ替えると、
+    設定を読めなかっただけでロールが消える。元に戻せない操作なので、
+    ここは「分からないなら触らない」に倒す。
+    """
+    if findings.danger and bypass.check_failed:
+        await _withhold_enforcement(bot, guild_id, member, findings, logs)
+    elif findings.danger:
         try:
             await message.delete()
         except discord.HTTPException as e:
             logger.warning("[security] message delete failed: %s", e)
         await strip_roles(member)
 
-    embed = build_final_embed(vt_results, gpt_result, reason_flags, logs)
 
-    # 検査結果はログチャンネルのみに送信（テキストチャンネルには送らない）
+async def _report_result(
+    bot: discord.Client,
+    guild_id: int,
+    member: discord.Member,
+    findings: _Findings,
+    links: List[str],
+    attachments: Sequence,
+    logs: List[str],
+) -> None:
+    """検査結果を、ログチャンネルへだけ送る（テキストチャンネルには送らない）。"""
+    embed = build_final_embed(findings.vt_results, findings.gpt_result, findings.reason_flags, logs)
+
     if links or attachments:
-        if progress_msg:
+        if findings.progress_msg:
             try:
-                await progress_msg.edit(embed=embed)
+                await findings.progress_msg.edit(embed=embed)
             except discord.HTTPException as e:
                 logger.warning("[security] progress_msg edit failed: %s", e)
         else:
-            await send_log_embed(bot, message.guild.id, "ERROR" if danger else "INFO", embed)
-    elif danger:
-        await send_log_embed(bot, message.guild.id, "ERROR", embed)
+            await send_log_embed(bot, guild_id, "ERROR" if findings.danger else "INFO", embed)
+    elif findings.danger:
+        await send_log_embed(bot, guild_id, "ERROR", embed)
 
     try:
         await log_action(
             bot,
-            message.guild.id,
-            "ERROR" if danger else "INFO",
+            guild_id,
+            "ERROR" if findings.danger else "INFO",
             "メッセージセキュリティ検査",
             user=member,
             fields={
-                "理由": ", ".join(reason_flags) or "なし",
-                "GPT判定": gpt_result,
+                "理由": ", ".join(findings.reason_flags) or "なし",
+                "GPT判定": findings.gpt_result,
                 "リンク数": str(len(links)),
-                "スパム回数": str(spam_count) if spam_count > 1 else "なし",
+                "スパム回数": str(findings.spam_count) if findings.spam_count > 1 else "なし",
             },
-            embed_color=discord.Color.red() if danger else discord.Color.green(),
+            embed_color=discord.Color.red() if findings.danger else discord.Color.green(),
         )
     except Exception:
         logger.debug("log_action failed", exc_info=True)
 
-    logger.info("[SECURITY] SAFE" if not danger else "[SECURITY] DANGER")
+    logger.info("[SECURITY] SAFE" if not findings.danger else "[SECURITY] DANGER")
+
+
+async def handle_security_for_message(bot: discord.Client, message: discord.Message):
+    """メッセージ1件に対する検査の入口。
+
+    スパム・リンク過多・ユニコードトリック・VirusTotal・GPT判定・VC
+    レイドを順に確認し、危険と判定したら削除とロール剥奪を行う。
+    バイパス判定に失敗した場合は、危険と判定していても強制措置を
+    見送り、人が確認できるようログに大きく残す（信頼済みかどうか
+    分からないまま取り返しのつかない操作をしないため）。
+
+    判定（_collect_findings）と措置（_enforce_or_withhold）と報告
+    （_report_result）を分けてある。結末は tests の
+    MessageSecurityOutcomeTests が4通り固定している。
+    """
+    if not _is_examinable(message):
+        return
+
+    # _is_examinable が Member であることを確認済み。assert は使わない
+    # （実行時に例外を投げうる文を、型検査のためだけに足さない）。
+    member = cast(discord.Member, message.author)
+    # message.guild も同様。関数をまたぐと mypy は絞り込みを引き継げないので、
+    # ここで一度だけ束ねて、以降は guild_id を配る。
+    guild_id = cast(discord.Guild, message.guild).id
+    content = message.content or ""
+    links = extract_links(content)
+    attachments: Sequence[discord.Attachment] = message.attachments or []
+    if _is_plain_chat_post(message, guild_id, links, attachments):
+        return
+
+    logs: List[str] = [f"[{now_jst()}] スキャン開始"]
+
+    bypass = is_security_bypassed(member)
+    if bypass.bypassed:
+        logs.append(f"バイパス適用: {bypass.reason}")
+        await _announce_bypass(bot, guild_id, member, bypass.reason or "")
+        return
+    if bypass.check_failed:
+        logs.append("⚠️ バイパス判定に失敗（強制措置は行わない）")
+
+    findings = await _collect_findings(bot, guild_id, member, content, links, attachments, logs)
+    await _enforce_or_withhold(bot, message, guild_id, member, findings, bypass, logs)
+    await _report_result(bot, guild_id, member, findings, links, attachments, logs)
 
 
 # ==================================================

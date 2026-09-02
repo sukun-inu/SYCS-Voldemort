@@ -24,7 +24,7 @@ import zipfile
 from collections import deque
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 # services/* は読み込み時に SETTINGS_DIR を解決するため、import より前に差し替える。
 os.environ.setdefault("SETTINGS_DIR", tempfile.mkdtemp(prefix="services-test-"))
@@ -3391,15 +3391,157 @@ class SecurityFailSafeTests(unittest.TestCase):
         self.assertEqual(logged, [])
 
     # ── メッセージ側 ─────────────────────────────────────────
+    #
+    # ここには `inspect.getsource()` でソースの文字列を調べるテストがあった。
+    # 「`if danger and bypass.check_failed:` が `await message.delete()` より
+    # 前に現れること」を見るもので、**振る舞いは何も見ていなかった。**
+    #
+    # 実際、変異を当てると次の3つを取り逃がしていた。
+    #
+    #     危険でもロールを剥がさない          → 落ちない
+    #     バイパス適用でも検査を続ける        → 落ちない
+    #     GPT の DANGEROUS を拾わない         → 落ちない
+    #
+    # 逆に、判定を別の関数へ移しただけ（振る舞いは同じ）で落ちる。
+    # 実際に走らせて結末を見る MessageSecurityOutcomeTests へ置き換えた。
 
-    def test_message_path_guards_the_destructive_branch(self):
-        import inspect
 
-        source = inspect.getsource(self.sec.handle_security_for_message)
-        self.assertIn("if danger and bypass.check_failed:", source)
-        # 見送りの分岐が、削除・剥奪より前に置かれていること
-        self.assertLess(source.index("if danger and bypass.check_failed:"), source.index("await message.delete()"))
-        self.assertIn("要確認", source)
+class MessageSecurityOutcomeTests(unittest.TestCase):
+    """handle_security_for_message を実際に通し、結末を固定する。
+
+    167行ある関数を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+
+    これまでこの経路を見ていたのは `inspect.getsource()` でソースの文字列を
+    調べるテスト1件だけだった。**あれは振る舞いを何も見ていない。** 判定の
+    分岐を別の関数へ移すだけで、中身が壊れていても通ってしまうし、逆に
+    正しく割っただけでも落ちる。実際に走らせて結末を見る形へ置き換える。
+
+    見るのは4つの結末。
+
+      危険 ＋ バイパス判定に失敗 … **削除も剥奪もしない**。要確認を残す
+      危険 ＋ 判定できた         … 削除して剥奪する
+      バイパス適用               … 検査そのものをしない（GPT も呼ばない）
+      安全                       … 何もしない
+
+    1つ目がこの関数のいちばん大事な性質で、**壊れても例外は出ず、ログも
+    出る**（消えるのは「消さなかった」という事実だけ）。
+    """
+
+    def setUp(self):
+        import services.security_service as security
+
+        self.sec = security
+        self.deleted = []
+        self.stripped = []
+        self.logged = []
+
+    def _message(self, content="ふつうの発言"):
+        """author が Member として通る、最小のメッセージ。"""
+        member = Mock(spec=discord.Member)
+        member.id = 5
+        member.bot = False
+        member.guild = Mock()
+        member.guild.id = 1
+        member.roles = []
+        member.mention = "@user"
+        member.voice = None
+        member.joined_at = None
+
+        message = Mock(spec=discord.Message)
+        message.author = member
+        message.guild = member.guild
+        message.channel = Mock()
+        message.channel.id = 77
+        message.content = content
+        message.attachments = []
+        message.delete = AsyncMock(side_effect=lambda: self.deleted.append(True))
+        return message
+
+    def _run(self, *, trusted, gpt="SAFE", content="ふつうの発言"):
+        """本物の handle_security_for_message を、外部呼び出しだけ差し替えて回す。"""
+
+        async def fake_strip(member):
+            self.stripped.append(member.id)
+            return True, "removed"
+
+        async def fake_log(bot, guild_id, level, message, **kwargs):
+            self.logged.append(message)
+
+        message = self._message(content)
+        with (
+            patch.object(self.sec, "get_trusted_user_ids", trusted),
+            patch.object(self.sec, "get_bypass_role_ids", lambda g: []),
+            patch.object(self.sec, "get_response_channel_id", lambda g: None),
+            patch.object(self.sec, "check_spam", lambda g, u: (False, 0, 0.0)),
+            patch.object(self.sec, "gpt_assess", AsyncMock(return_value=gpt)),
+            patch.object(self.sec, "check_vc_raid", lambda m, c: False),
+            patch.object(self.sec, "strip_roles", fake_strip),
+            patch.object(self.sec, "log_action", fake_log),
+            patch.object(self.sec, "send_log_embed", AsyncMock()),
+            patch.object(self.sec.logger, "error"),
+        ):
+            asyncio.run(self.sec.handle_security_for_message(Mock(), message))
+        return message
+
+    @staticmethod
+    def _boom(_):
+        raise RuntimeError("設定が読めない")
+
+    def test_a_dangerous_message_is_left_alone_when_the_bypass_check_failed(self):
+        """危険と判定しても、バイパス判定に失敗していれば消さない・剥がさない。
+
+        全ロール剥奪は元に戻せない。信頼済みかどうかが分からないまま実行すると、
+        設定を読めなかっただけで管理者のロールが消える。**壊れても例外は出ず、
+        ログも出る**ので、この検査が無いと気づけない。
+        """
+        self._run(trusted=self._boom, gpt="DANGEROUS")
+
+        self.assertEqual(self.deleted, [], "バイパス判定に失敗しているのに削除した")
+        self.assertEqual(self.stripped, [], "バイパス判定に失敗しているのにロールを剥がした")
+        self.assertTrue(any("要確認" in m for m in self.logged), self.logged)
+
+    def test_a_dangerous_message_is_removed_when_the_check_worked(self):
+        """判定できたうえで危険なら、削除して剥奪すること。
+
+        上の見送りを「常に見送る」に変えても、片方だけでは気づけない。
+        """
+        self._run(trusted=lambda g: [], gpt="DANGEROUS")
+
+        self.assertEqual(self.deleted, [True])
+        self.assertEqual(self.stripped, [5])
+        self.assertFalse(any("要確認" in m for m in self.logged), self.logged)
+
+    def test_a_bypassed_member_is_not_scanned_at_all(self):
+        """バイパス対象なら、GPT にも問い合わせずに戻ること。
+
+        バイパスは「信頼しているので見ない」であって「見たうえで許す」では
+        ない。外部への問い合わせが走っていたら、そこが崩れている。
+        """
+        with patch.object(self.sec, "gpt_assess", AsyncMock(return_value="SAFE")) as gpt:
+            with (
+                patch.object(self.sec, "get_trusted_user_ids", lambda g: [5]),
+                patch.object(self.sec, "get_bypass_role_ids", lambda g: []),
+                patch.object(self.sec, "get_response_channel_id", lambda g: None),
+                patch.object(self.sec, "log_action", AsyncMock(side_effect=self._remember)),
+            ):
+                asyncio.run(self.sec.handle_security_for_message(Mock(), self._message()))
+
+        gpt.assert_not_awaited()
+        self.assertEqual(self.deleted, [])
+        self.assertTrue(any("スキップ" in m for m in self.logged), self.logged)
+
+    def test_a_safe_message_is_left_alone(self):
+        """安全なら何もしないこと。"""
+        self._run(trusted=lambda g: [], gpt="SAFE")
+
+        self.assertEqual(self.deleted, [])
+        self.assertEqual(self.stripped, [])
+        self.assertFalse(any("要確認" in m for m in self.logged), self.logged)
+
+    async def _remember(self, bot, guild_id, level, message, **kwargs):
+        """log_action の代わり。呼ばれた見出しだけ控える。"""
+        self.logged.append(message)
 
 
 class GptUnknownReportingTests(unittest.TestCase):
