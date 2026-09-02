@@ -3282,6 +3282,112 @@ class TTLCacheTests(unittest.TestCase):
                 self.assertGreater(cache.max_entries, 0)
 
 
+class _FakeAiohttpSession:
+    """aiohttp.ClientSession の代わり。VT スキャンを差し替えるので中身は使わない。"""
+
+    def __init__(self, *a, **k):
+        """引数は受け取るだけ。"""
+
+    async def __aenter__(self):
+        """async with に入るための空実装。"""
+        return self
+
+    async def __aexit__(self, *exc):
+        """async with を抜けるための空実装。"""
+        return False
+
+
+class VirusTotalScanConcurrencyTests(unittest.TestCase):
+    """複数のリンクを、直列に1本ずつ待たないこと。
+
+    1リンクごとに VirusTotal を待つので、5本貼られたら待ち時間も5倍になる。
+    到達できないときは1本あたり制限いっぱい（30秒）かかるため、**リンクを
+    並べるだけで security ハンドラが返らなくなる。**
+
+    ただし無制限に並べてはいけない。スキャンは `asyncio.to_thread` の中で
+    走り、既定のスレッドプールは「CPU数 + 4、最大32本」しかない。ここを
+    埋めると設定の書き込みなど**他の to_thread が全部後ろに並ぶ**ので、
+    同時数に上限を置く。
+    """
+
+    def setUp(self):
+        import services.security_service as security
+
+        self.sec = security
+
+    def _scan_recorder(self, *, delay=0.05):
+        """スキャン1件の代わり。同時に何本走ったかを記録する。"""
+        state = {"running": 0, "peak": 0, "order": []}
+
+        async def scan(session, url):
+            state["running"] += 1
+            state["peak"] = max(state["peak"], state["running"])
+            await asyncio.sleep(delay)
+            state["running"] -= 1
+            state["order"].append(url)
+            return {"status": "ok", "malicious": 0, "suspicious": 0}
+
+        return scan, state
+
+    def _run(self, links, *, scan):
+        logs: list[str] = []
+        with (
+            patch.object(self.sec, "vt_scan_target", scan),
+            patch.object(self.sec, "send_log_embed", AsyncMock(return_value=None)),
+            patch.object(self.sec.aiohttp, "ClientSession", _FakeAiohttpSession),
+        ):
+            return asyncio.run(self.sec._run_vt_scans(Mock(), 1, links, [], logs)), logs
+
+    def test_several_links_are_scanned_at_the_same_time(self):
+        """5本のリンクが、1本ずつ順番待ちにならないこと。"""
+        scan, state = self._scan_recorder()
+        links = [f"https://example.com/{i}" for i in range(5)]
+        self._run(links, scan=scan)
+
+        self.assertGreater(state["peak"], 1, "1本ずつしか走っていない")
+
+    def test_the_number_running_at_once_is_capped(self):
+        """同時に走る本数に上限があること。
+
+        上限が無いと、リンクを並べただけでスレッドプールを食い尽くせる。
+        """
+        scan, state = self._scan_recorder()
+        links = [f"https://example.com/{i}" for i in range(20)]
+        self._run(links, scan=scan)
+
+        self.assertLessEqual(state["peak"], self.sec.VT_SCAN_CONCURRENCY)
+
+    def test_the_results_keep_the_order_of_the_links(self):
+        """結果の並びは、貼られた順のままであること。
+
+        ログの行と `vt_results` の順序が入れ替わると、「どのURLがどの結果か」
+        が読めなくなる。**終わった順ではなく、貼られた順**で並べる。
+        """
+
+        async def scan(session, url):
+            # 後ろのURLほど速く終わるようにして、完了順と入力順をずらす。
+            await asyncio.sleep(0.05 / (int(url[-1]) + 1))
+            return {"status": "ok", "malicious": int(url[-1]), "suspicious": 0}
+
+        links = [f"https://example.com/{i}" for i in range(4)]
+        (results, _, _, _), logs = self._run(links, scan=scan)
+
+        self.assertEqual([r["malicious"] for r in results], [0, 1, 2, 3])
+        self.assertEqual([line.split(" ")[1] for line in logs], links)
+
+    def test_one_dangerous_link_still_marks_the_whole_message(self):
+        """1本でも閾値を超えていれば、これまでどおり危険と判定すること。"""
+
+        async def scan(session, url):
+            return {"status": "ok", "malicious": 99 if url.endswith("2") else 0, "suspicious": 0}
+
+        links = [f"https://example.com/{i}" for i in range(4)]
+        (_, _, flags, danger), _ = self._run(links, scan=scan)
+
+        self.assertTrue(danger)
+        self.assertIn("VT_DANGEROUS", flags)
+
+
 class GptAssessCallReductionTests(unittest.TestCase):
     """LLM へ投げる回数を、判定を弱めずに減らすこと。
 
