@@ -25,7 +25,11 @@ select = ["E", "F", "W", "C90"]
 #   75 → register_server_commands（457行）を commands/server/ 7モジュールへ
 #        分割したので 35 へ。現在の最大は register_logging_commands と
 #        register_recording_commands（どちらも 35）。次はこの2つ。
-max-complexity = 31
+#      → その2つを割って 31 へ（当時の最大は create_app）。
+#      → create_app（323行・31）を6つに割ったので 29 へ。現在の最大は
+#        events/background_tasks.py の register と
+#        services/recording_service.py の _make_sink_class（どちらも 29）。
+max-complexity = 29
 
 [tool.ruff.lint.per-file-ignores]
 # テストは services/* が読み込み時に SETTINGS_DIR を解決する都合上、

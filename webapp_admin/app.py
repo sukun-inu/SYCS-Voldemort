@@ -162,33 +162,193 @@ def _register_legacy_redirects(app: FastAPI) -> None:
             app.add_api_route(panel.path, _make_handler(panel.id), methods=["GET"], include_in_schema=False)
 
 
-def create_app() -> FastAPI:
-    """FastAPI アプリ本体を組み立てる。ルーター・例外ハンドラ・ミドルウェアの登録順に意味がある。
+def _is_api(request: Request) -> bool:
+    """JSON で返すべき相手か。
 
-    ミドルウェアは `add_middleware` した順とは逆順（後で足したものが先に
-    リクエストを受ける）に実行される。session_serialization_guard は
-    SessionMiddleware より前に足してあるので、レスポンス側の処理では
-    SessionMiddleware が Cookie を書き出すより前にセッションを浄化できる。
-    ここを並べ替えると、この保証が崩れて未浄化のセッションがそのまま
-    Cookie 化されようとし、_sanitize_session_payload が存在する意味が
-    無くなる。
+    画面から fetch する先は /admin/api/ だけではない（配信の /dlaudio/ も
+    ミキサーが読む）。HTML のエラーページを返すと、fetch する側は本文を
+    読めず「HTTP 400」としか言えない。Accept を見て使い分ける。
+    ブラウザの遷移は text/html を要求するので、これまでどおり画面が出る。
     """
-    secret = resolve_session_secret()
+    from services.djaudio_cdn import wants_json
 
-    app = FastAPI(docs_url=None, redoc_url=None)
-    app.state.limiter = limiter
+    if request.url.path.startswith("/admin/api/"):
+        return True
+    return wants_json(request)
 
-    static_dir = Path(__file__).resolve().parent / "static"
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-    from webapp_admin.views.auth_views import router as auth_router
-    from webapp_admin.views.dashboard_views import router as dashboard_router
+def _error_response(
+    request: Request,
+    status_code: int,
+    message: str,
+    *,
+    detail: str | None = None,
+    description: str | None = None,
+    headers: dict | None = None,
+):
+    """エラーを、相手に応じて JSON か HTML で返す。
+
+    3箇所（レート制限・HTTPException・想定外の例外）が同じ振り分けを必要と
+    する。別々に書くと、片方だけ JSON を返さなくなっても気づけない。
+    """
+    if _is_api(request):
+        return JSONResponse({"detail": detail or message}, status_code=status_code, headers=headers)
+    return render(
+        request,
+        "error.html",
+        status_code=status_code,
+        code=status_code,
+        message=message,
+        description=description,
+    )
+
+
+def _http_exception_response(request: Request, exc: HTTPException):
+    """HTTPException を、コードごとの日本語メッセージ + detail の補足にする。
+
+    exc.detail をそのまま補足文として画面に出す。detail を渡さずに
+    `HTTPException(status_code=400)` とだけ書くと、starlette が既定で
+    detail へ "Bad Request" 等の英語フレーズを入れるため、それがそのまま
+    補足として日本語ページに出てしまう（detail が既定メッセージと完全一致
+    するときだけ二重表示を避けている。既定フレーズはここには一致しない）。
+
+    ExceptionGroup 経由の経路（_exception_group_response）からも呼ぶので、
+    ハンドラのクロージャではなく、ここに関数として置いてある。
+    """
+    msgs = {
+        400: "不正なリクエストです。",
+        403: "アクセス権限がありません。",
+        404: "ページが見つかりません。",
+        500: "サーバーエラーが発生しました。",
+    }
+    msg = msgs.get(exc.status_code, "エラーが発生しました。")
+    # 断った理由が書いてあるなら、そのまま見せる。「不正なリクエストです」
+    # だけでは、何を直せばいいのか分からない。
+    detail = exc.detail if isinstance(exc.detail, str) and exc.detail else ""
+    description = detail if detail and detail != msg else None
+    # API は JSON で返す。HTML のエラーページを返すと、fetch する側は本文を
+    # 読めず「HTTP 502」としか言えない。detail に入れた理由をそのまま渡す。
+    return _error_response(
+        request,
+        exc.status_code,
+        msg,
+        detail=detail or None,
+        description=description,
+        headers=getattr(exc, "headers", None),
+    )
+
+
+def _exception_group_response(request: Request, exc: ExceptionGroup):
+    """ExceptionGroup の中身を見て、他の応答へ振り分ける。
+
+    _NeedsLogin/_NeedsGuild/HTTPException を包んだ ExceptionGroup は
+    FastAPI が直接は拾わない（登録してあるのはそれぞれの生の型に対する
+    ハンドラのため）ので、ここで unwrap して手動で同じ処理に回す。
+    どれにも当たらない場合だけ、原因不明のバグとしてログへ残し 500 を返す。
+
+    最後の 500 だけは _error_response を通していない（＝ API にも HTML を
+    返す）。**分割前からそうなっている**ので、そのまま移してある。直すなら
+    別のコミットで、その振る舞いを見ているテストを足してから。
+    """
+    root = _unwrap_exception_group(exc)
+    if isinstance(root, _NeedsLogin):
+        return RedirectResponse("/admin/login", status_code=303)
+    if isinstance(root, _NeedsGuild):
+        return RedirectResponse("/admin/guilds", status_code=303)
+    if isinstance(root, HTTPException):
+        return _http_exception_response(request, root)
+
+    leaves = _flatten_exception_group(exc)
+    logger.error(
+        "Unhandled ExceptionGroup path=%s method=%s root=%s leaves=%s",
+        request.url.path,
+        request.method,
+        type(root).__name__,
+        [f"{type(leaf).__name__}: {leaf}" for leaf in leaves],
+        exc_info=exc,
+    )
+    return render(
+        request,
+        "error.html",
+        status_code=500,
+        code=500,
+        message="サーバーエラーが発生しました。",
+    )
+
+
+def _unhandled_request_response(request: Request, exc: Exception, snap: dict):
+    """どのハンドラにも拾われなかった例外を、記録してから応答にする。
+
+    ここに来るのは HTTPException / RateLimitExceeded / ExceptionGroup の
+    どれにも拾われなかった、想定していない例外（実装バグ）。それらは
+    内側の ExceptionMiddleware で先に Response へ変換されるため、
+    ここへは来ない ＝ 監視・ログはこれまでどおり動く。
+    """
+    record_exception(exc, snap)
+    root = _unwrap_exception_group(exc) if isinstance(exc, BaseExceptionGroup) else exc
+    logger.exception(
+        "Request failed method=%s path=%s root=%s detail=%s",
+        request.method,
+        request.url.path,
+        type(root).__name__,
+        root,
+    )
+    # raise すると Starlette の既定ハンドラがプレーンテキスト（デバッグ
+    # 時は HTML）を返し、fetch する側は本文を読めず「HTTP 500」としか
+    # 言えなくなる（実例: relkind が asyncpg で bytes として返り、
+    # JSONResponse の json.dumps がそのまま TypeError で落ちていた）。
+    return _error_response(request, 500, "サーバーエラーが発生しました。")
+
+
+def _apply_security_headers(request: Request, response) -> None:
+    """レスポンスへセキュリティヘッダを付ける。CSP はここが唯一の定義箇所。
+
+    埋め込み表示（iframe）は廃止済みなので X-Frame-Options は問答無用で
+    DENY にできる。CSP の許可リストを広げるときは、実際に読み込む外部
+    オリジンをここへ足すこと（黙って動かない・コンソールにブロックの
+    ログが出るだけで気付きにくい）。
+    """
+    secure = env_bool("FLASK_SECURE_COOKIES", False)
+    if request.url.path.startswith("/static"):
+        response.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    # iframe を使わなくなったので、埋め込みは全面的に拒否できる。
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if secure:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    # CDN からのスクリプト/スタイル読み込みは廃止した（アイコンも同梱スプライト）。
+    # 残る外部は Discord のアバター画像と、Cloudflare が注入する計測スクリプトのみ。
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' https://static.cloudflareinsights.com; "
+        "style-src 'self'; "
+        "img-src 'self' https://cdn.discordapp.com data:; "
+        "font-src 'self'; "
+        "connect-src 'self' https://static.cloudflareinsights.com; "
+        "base-uri 'none'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'"
+    )
+
+
+def _include_routers(app: FastAPI) -> None:
+    """画面と API のルーターを、それぞれの接頭辞の下へ入れる。
+
+    接頭辞を付け間違えても起動はする。落ちるのはその API を呼ぶ画面だけで、
+    しかも 404 が返るという形なので、開くまで分からない。並びごと
+    tests の CreateAppShapeTests が固定している。
+    """
+    from services.djaudio_cdn import dlaudio_router
     from webapp_admin.api.apps import router as apps_api_router
     from webapp_admin.api.dev import router as dev_api_router
     from webapp_admin.api.recording import router as recording_api_router
     from webapp_admin.api.sql import router as sql_api_router
     from webapp_admin.api.users import router as users_api_router
-    from services.djaudio_cdn import dlaudio_router
+    from webapp_admin.views.auth_views import router as auth_router
+    from webapp_admin.views.dashboard_views import router as dashboard_router
 
     app.include_router(auth_router, prefix="/admin")
     app.include_router(dashboard_router, prefix="/admin")
@@ -199,10 +359,9 @@ def create_app() -> FastAPI:
     app.include_router(sql_api_router, prefix="/admin/api/sql")
     app.include_router(dlaudio_router, prefix="/dlaudio")
 
-    # 旧ページのURL（/admin/settings/... など）はブックマークやリンクが残っているので、
-    # デスクトップ上の該当ウィンドウを開く形へ寄せる。対応表はパネル定義から作る。
-    _register_legacy_redirects(app)
 
+def _register_public_pages(app: FastAPI) -> None:
+    """ログイン不要で見えるページと、旧URLからの恒久リダイレクト。"""
     from webapp_admin.auth import DISCORD_CLIENT_ID, get_bot_guild_count
 
     def _invite_url() -> str | None:
@@ -264,12 +423,21 @@ def create_app() -> FastAPI:
         """旧 /admin/terms への恒久リダイレクト。理由は redirect_admin_guide と同じ。"""
         return RedirectResponse("/terms", status_code=301)
 
+
+def _register_exception_handlers(app: FastAPI) -> None:
+    """例外を、画面向け・API 向けの応答へ変換する係を登録する。
+
+    中身は module 直下の `_*_response` に置いてある。ExceptionGroup 経由の
+    経路が HTTPException の応答を呼び直すので、関数として取り出しておかないと
+    ハンドラ同士が互いのクロージャを参照することになる。
+    """
+
     @app.exception_handler(_NeedsLogin)
     async def needs_login_handler(request: Request, exc: _NeedsLogin):
         """check_login/check_guild が投げた _NeedsLogin を、ログイン画面への303へ変換する。
 
         anyio のタスクグループ経由で例外が ExceptionGroup に包まれて上がってくる
-        経路もあり、その場合はここではなく exception_group_handler 側の同じ判定が
+        経路もあり、その場合はここではなく _exception_group_response 側の同じ判定が
         効く。2箇所に同じ判定があるのはそのため（片方だけ直すとどちらか一方の
         経路だけ壊れたままになる）。
         """
@@ -280,106 +448,43 @@ def create_app() -> FastAPI:
         """check_guild が投げた _NeedsGuild を、ギルド選択画面への303へ変換する。
 
         needs_login_handler と同じ理由で、ExceptionGroup に包まれた経路は
-        exception_group_handler 側の同じ判定が担う。
+        _exception_group_response 側の同じ判定が担う。
         """
         return RedirectResponse("/admin/guilds", status_code=303)
-
-    def _is_api(request: Request) -> bool:
-        """JSON で返すべき相手か。
-
-        画面から fetch する先は /admin/api/ だけではない（配信の /dlaudio/ も
-        ミキサーが読む）。HTML のエラーページを返すと、fetch する側は本文を
-        読めず「HTTP 400」としか言えない。Accept を見て使い分ける。
-        ブラウザの遷移は text/html を要求するので、これまでどおり画面が出る。
-        """
-        from services.djaudio_cdn import wants_json
-
-        if request.url.path.startswith("/admin/api/"):
-            return True
-        return wants_json(request)
 
     @app.exception_handler(RateLimitExceeded)
     async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
         """slowapi のレート制限超過を、他のエラーと同じ見た目（JSON/HTML）で返す。
 
         素通しすると slowapi の既定ハンドラがプレーンテキストを返し、fetch 側は
-        本文を読めず「HTTP 429」としか分からない。_is_api() で振り分けるのは
+        本文を読めず「HTTP 429」としか分からない。_error_response で振り分けるのは
         他の例外ハンドラと同じ理由。
         """
-        message = "リクエストが多すぎます。しばらく待ってから再試行してください。"
-        if _is_api(request):
-            return JSONResponse({"detail": message}, status_code=429)
-        return render(request, "error.html", status_code=429, code=429, message=message)
+        return _error_response(request, 429, "リクエストが多すぎます。しばらく待ってから再試行してください。")
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
-        """HTTPException を、コードごとの日本語メッセージ + detail の補足で返す。
-
-        exc.detail をそのまま補足文として画面に出す。detail を渡さずに
-        `HTTPException(status_code=400)` とだけ書くと、starlette が既定で
-        detail へ "Bad Request" 等の英語フレーズを入れるため、それがそのまま
-        補足として日本語ページに出てしまう（detail が既定メッセージと完全一致
-        するときだけ二重表示を避けている。既定フレーズはここには一致しない）。
-        """
-        msgs = {
-            400: "不正なリクエストです。",
-            403: "アクセス権限がありません。",
-            404: "ページが見つかりません。",
-            500: "サーバーエラーが発生しました。",
-        }
-        msg = msgs.get(exc.status_code, "エラーが発生しました。")
-        # 断った理由が書いてあるなら、そのまま見せる。「不正なリクエストです」
-        # だけでは、何を直せばいいのか分からない。
-        detail = exc.detail if isinstance(exc.detail, str) and exc.detail else ""
-        description = detail if detail and detail != msg else None
-        # API は JSON で返す。HTML のエラーページを返すと、fetch する側は本文を
-        # 読めず「HTTP 502」としか言えない。detail に入れた理由をそのまま渡す。
-        if _is_api(request):
-            return JSONResponse(
-                {"detail": detail or msg}, status_code=exc.status_code, headers=getattr(exc, "headers", None)
-            )
-        return render(
-            request,
-            "error.html",
-            status_code=exc.status_code,
-            code=exc.status_code,
-            message=msg,
-            description=description,
-        )
+        """HTTPException を日本語のメッセージつきで返す（中身は _http_exception_response）。"""
+        return _http_exception_response(request, exc)
 
     @app.exception_handler(ExceptionGroup)
     async def exception_group_handler(request: Request, exc: ExceptionGroup):
-        """anyio のタスクグループ経由で来た例外の受け皿。中身を見て他のハンドラへ振り分ける。
+        """anyio のタスクグループ経由で来た例外の受け皿（中身は _exception_group_response）。"""
+        return _exception_group_response(request, exc)
 
-        _NeedsLogin/_NeedsGuild/HTTPException を包んだ ExceptionGroup は
-        FastAPI が直接は拾わない（登録してあるのはそれぞれの生の型に対する
-        ハンドラのため）ので、ここで unwrap して手動で同じ処理に回す。
-        どれにも当たらない場合だけ、原因不明のバグとしてログへ残し 500 を返す。
-        """
-        root = _unwrap_exception_group(exc)
-        if isinstance(root, _NeedsLogin):
-            return RedirectResponse("/admin/login", status_code=303)
-        if isinstance(root, _NeedsGuild):
-            return RedirectResponse("/admin/guilds", status_code=303)
-        if isinstance(root, HTTPException):
-            return await http_exception_handler(request, root)
 
-        leaves = _flatten_exception_group(exc)
-        logger.error(
-            "Unhandled ExceptionGroup path=%s method=%s root=%s leaves=%s",
-            request.url.path,
-            request.method,
-            type(root).__name__,
-            [f"{type(leaf).__name__}: {leaf}" for leaf in leaves],
-            exc_info=exc,
-        )
-        return render(
-            request,
-            "error.html",
-            status_code=500,
-            code=500,
-            message="サーバーエラーが発生しました。",
-        )
+def _register_middleware(app: FastAPI, secret: str) -> None:
+    """ミドルウェアを積む。**並べ替えないこと。**
+
+    ミドルウェアは `add_middleware` した順とは逆順（後で足したものが先に
+    リクエストを受ける）に実行される。session_serialization_guard は
+    SessionMiddleware より前に足してあるので、レスポンス側の処理では
+    SessionMiddleware が Cookie を書き出すより前にセッションを浄化できる。
+    ここを並べ替えると、この保証が崩れて未浄化のセッションがそのまま
+    Cookie 化されようとし、_sanitize_session_payload が存在する意味が
+    無くなる。**並べ替えても例外は出ず、画面も出る**ので、
+    tests の CreateAppShapeTests が順序ごと固定している。
+    """
 
     @app.middleware("http")
     async def metrics_middleware(request: Request, call_next):
@@ -387,9 +492,7 @@ def create_app() -> FastAPI:
 
         ここでの except は HTTPException/RateLimitExceeded/ExceptionGroup の
         いずれでもない例外（＝上のハンドラが対応していない実装バグ）しか
-        受け取らない。素の Exception を raise し直すと Starlette 既定の
-        プレーンテキスト応答になり fetch 側が読めなくなるため、ここでも
-        _is_api() に応じて JSON/HTML に整形してから返す。
+        受け取らない（詳しくは _unhandled_request_response）。
         """
         client_ip = request.headers.get("CF-Connecting-IP") or (request.client.host if request.client else "unknown")
         snap = {"method": request.method, "path": request.url.path, "endpoint": None, "remote_addr": client_ip}
@@ -399,72 +502,22 @@ def create_app() -> FastAPI:
                 record_request()
                 record_error_response(response.status_code, snap)
         except Exception as exc:
-            # ここに来るのは HTTPException / RateLimitExceeded / ExceptionGroup の
-            # どれにも拾われなかった、想定していない例外（実装バグ）。それらは
-            # 内側の ExceptionMiddleware で先に Response へ変換されるため、
-            # ここへは来ない ＝ 監視・ログはこれまでどおり動く。
-            record_exception(exc, snap)
-            root = _unwrap_exception_group(exc) if isinstance(exc, BaseExceptionGroup) else exc
-            logger.exception(
-                "Request failed method=%s path=%s root=%s detail=%s",
-                request.method,
-                request.url.path,
-                type(root).__name__,
-                root,
-            )
-            # raise すると Starlette の既定ハンドラがプレーンテキスト（デバッグ
-            # 時は HTML）を返し、fetch する側は本文を読めず「HTTP 500」としか
-            # 言えなくなる（実例: relkind が asyncpg で bytes として返り、
-            # JSONResponse の json.dumps がそのまま TypeError で落ちていた）。
-            message = "サーバーエラーが発生しました。"
-            if _is_api(request):
-                return JSONResponse({"detail": message}, status_code=500)
-            return render(request, "error.html", status_code=500, code=500, message=message)
+            return _unhandled_request_response(request, exc, snap)
         return response
 
     @app.middleware("http")
     async def security_headers_middleware(request: Request, call_next):
-        """全レスポンスへセキュリティヘッダを付ける。CSP はここが唯一の定義箇所。
-
-        埋め込み表示（iframe）は廃止済みなので X-Frame-Options は問答無用で
-        DENY にできる。CSP の許可リストを広げるときは、実際に読み込む外部
-        オリジンをここへ足すこと（黙って動かない・コンソールにブロックの
-        ログが出るだけで気付きにくい）。
-        """
+        """全レスポンスへセキュリティヘッダを付ける（中身は _apply_security_headers）。"""
         response = await call_next(request)
-        secure = env_bool("FLASK_SECURE_COOKIES", False)
-        if request.url.path.startswith("/static"):
-            response.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
-            response.headers["Pragma"] = "no-cache"
-            response.headers["Expires"] = "0"
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        # iframe を使わなくなったので、埋め込みは全面的に拒否できる。
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        if secure:
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        # CDN からのスクリプト/スタイル読み込みは廃止した（アイコンも同梱スプライト）。
-        # 残る外部は Discord のアバター画像と、Cloudflare が注入する計測スクリプトのみ。
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self' https://static.cloudflareinsights.com; "
-            "style-src 'self'; "
-            "img-src 'self' https://cdn.discordapp.com data:; "
-            "font-src 'self'; "
-            "connect-src 'self' https://static.cloudflareinsights.com; "
-            "base-uri 'none'; "
-            "form-action 'self'; "
-            "frame-ancestors 'none'"
-        )
+        _apply_security_headers(request, response)
         return response
 
     @app.middleware("http")
     async def session_serialization_guard_middleware(request: Request, call_next):
         """レスポンスを作り終えた後、Cookie化される前にセッションを浄化する。
 
-        create_app() の docstring にある登録順の理由により、この浄化は
-        SessionMiddleware が Cookie を書き出すより必ず先に走る。順序が崩れると
-        _sanitize_session_payload を呼んでも手遅れになる。
+        この関数の登録順の理由は _register_middleware の docstring にある。
+        順序が崩れると _sanitize_session_payload を呼んでも手遅れになる。
         """
         response = await call_next(request)
         session = getattr(request, "session", None)
@@ -481,6 +534,36 @@ def create_app() -> FastAPI:
         same_site="lax",
         https_only=env_bool("FLASK_SECURE_COOKIES", False),
     )
+
+
+def create_app() -> FastAPI:
+    """FastAPI アプリ本体を組み立てる。
+
+    **並べ替えないこと。** 登録の順序には意味がある。
+
+      - ルーターと公開ページの順序は、経路が重なったときにどちらが勝つかを決める
+      - ミドルウェアの順序は、セッションの浄化が Cookie の書き出しより先に
+        走ることを保証している（理由は _register_middleware の docstring）
+
+    どちらも**並べ替えても例外は出ず、画面も出る**。壊れるのは特定の経路だけ
+    なので、動かしてみるだけでは気づけない。tests の CreateAppShapeTests が
+    ここで組み上がる姿を丸ごと固定してある。
+    """
+    secret = resolve_session_secret()
+
+    app = FastAPI(docs_url=None, redoc_url=None)
+    app.state.limiter = limiter
+
+    static_dir = Path(__file__).resolve().parent / "static"
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+    _include_routers(app)
+    # 旧ページのURL（/admin/settings/... など）はブックマークやリンクが残っているので、
+    # デスクトップ上の該当ウィンドウを開く形へ寄せる。対応表はパネル定義から作る。
+    _register_legacy_redirects(app)
+    _register_public_pages(app)
+    _register_exception_handlers(app)
+    _register_middleware(app, secret)
 
     start_background_monitor(logger)
 
