@@ -15,7 +15,7 @@
    波形は「表示している範囲だけ」描く。6時間を 40px/秒 で並べると 86万px になり、
    キャンバスの幅の上限（ブラウザによって 32767px 前後）を超えるため。 */
 
-import { el, icon, clear, loading, append } from "../lib/dom.js";
+import { el, icon, clear, loading } from "../lib/dom.js";
 import { toast } from "../lib/toast.js";
 
 const LANE_HEIGHT = 72;
@@ -353,7 +353,7 @@ function createPanKnob(onChange) {
  *  代わりに録音パネルの中身を差し替えて使う。後片付けは呼び出し側が
  *  destroy() を呼んで行う。 */
 export async function createMixer(container, options = {}) {
-  const { manifestUrl, clipUrl, analysisUrl } = options;
+  const { manifestUrl, clipUrl } = options;
   const idle = { destroy() {} };
   if (!manifestUrl) {
     clear(container).append(el("div", { class: "empty", text: "録音が指定されていません。" }));
@@ -835,14 +835,7 @@ export async function createMixer(container, options = {}) {
               : null),
          el("div", { class: "daw-head-sub",
                      text: `発話 ${formatTime(track.stem.voiced_seconds || 0)}` })),
-      el("div", { class: "daw-head-buttons" }, mute, solo,
-         analysisUrl
-           ? (track.inspectButton = el("button", {
-               class: "daw-btn", type: "button", title: "声を調べる",
-               "aria-label": `${track.name} の声を調べる`,
-               onclick: () => inspect(track),
-             }, "?"))
-           : null));
+      el("div", { class: "daw-head-buttons" }, mute, solo));
     root.draggable = true;
     root.addEventListener("dragstart", (event) => {
       dragging = track;
@@ -937,155 +930,6 @@ export async function createMixer(container, options = {}) {
   tracks.forEach((track) => stripRow.append(buildStrip(track, track.name, track.color, false)));
   stripRow.append(buildStrip(master, "マスター", cssVar("--fg-subtle", "#8c959f"), true));
   const consoleView = el("div", { class: "daw-console", hidden: true }, stripRow);
-
-  // ── 声の解析 ────────────────────────────────────────────
-  // 「加工されているか」までを出す。「誰か」は出さない（出せない）。
-  const inspectBody = el("div", { class: "stack" });
-  const inspectPanel = el("div", { class: "daw-inspect", hidden: true },
-    el("div", { class: "daw-inspect-head" },
-       el("strong", { class: "grow", text: "声の解析" }),
-       el("button", { class: "btn btn-sm", type: "button",
-                      onclick: () => { inspectPanel.hidden = true; } }, "閉じる")),
-    inspectBody);
-
-  function row(label, value) {
-    return el("div", { class: "list-row" },
-              el("span", { class: "grow", text: label }),
-              el("span", { class: "mono", text: value }));
-  }
-
-  async function inspect(track) {
-    /* 押した時点の選択範囲を控える。応答を待つあいだに範囲を動かされても、
-       結果に添える「どこを調べたか」がずれないようにする。 */
-    const region = loopRegion ? { ...loopRegion } : null;
-
-    inspectPanel.hidden = false;
-    clear(inspectBody).append(loading(
-      region
-        ? `${formatTime(region.start)} 〜 ${formatTime(region.end)} の声を調べています…`
-        : "録音全体から抜き出して調べています…"));
-
-    /* 範囲を選んであればそこだけを調べる。自動で抜き出す方式は、長い録音
-       になるほど喋っている所へ当たらない（4時間の実録音では全トラックが
-       判定不能になった）。どこを見るかは、波形を見ている人が決めるのが
-       いちばん確かなので、選択範囲をそのまま渡す。 */
-    const query = region
-      ? `?start=${region.start.toFixed(3)}&end=${region.end.toFixed(3)}`
-      : "";
-
-    let result;
-    try {
-      const response = await fetch(`${analysisUrl}/${track.stem.index}${query}`, {
-        credentials: "same-origin", headers: { Accept: "application/json" },
-      });
-      /* 本文が JSON とは限らない（プロキシや前段が HTML のエラーページを
-         返すことがある）。先に json() を呼ぶと、断られた理由ではなく
-         「Unexpected token '<'」が利用者に出る。文字列で受けてから試す。 */
-      const body = await response.text();
-      try {
-        result = JSON.parse(body);
-      } catch {
-        throw new Error(response.ok ? "応答を解釈できませんでした" : `HTTP ${response.status}`);
-      }
-      if (!response.ok) throw new Error(result.detail || `HTTP ${response.status}`);
-    } catch (error) {
-      clear(inspectBody).append(
-        el("div", { class: "empty", text: `調べられませんでした（${error.message}）` }));
-      return;
-    }
-
-    const verdict = {
-      natural: ["加工の形跡なし", ""],
-      suspect: ["加工の形跡あり", "danger"],
-      // CSS 側の名前は .chip.warning（.chip.warn は存在しない）。
-      // 綴りが違うと、無色の既定チップとして出て注意色にならない。
-      unknown: ["判定できず", "warning"],
-    }[result.verdict] || ["判定できず", "warning"];
-
-    const rows = [];
-    // 「どこを調べたか」を最初に出す。結果だけ見せると、選び直せば変わる値
-    // だということが伝わらない。
-    if (result.range) {
-      rows.push(row("調べた区間",
-                    `${formatTime(result.range.start)} 〜 ${formatTime(result.range.end)}`
-                    + `（${result.analysed_seconds} 秒）`));
-    } else if (result.analysed_seconds) {
-      rows.push(row("調べた音", `録音全体から抜き出した ${result.analysed_seconds} 秒`));
-    }
-    if (result.f0_hz) rows.push(row("声の高さ（基本周波数）", `${result.f0_hz} Hz`));
-    if (result.formants_hz && result.formants_hz.length) {
-      rows.push(row("フォルマント", result.formants_hz.map((v) => `${v}`).join(" / ") + " Hz"));
-    }
-    if (result.formant_spacing_hz) {
-      rows.push(row("フォルマントの間隔", `${result.formant_spacing_hz} Hz`));
-    }
-    if (result.vocal_tract_cm) {
-      // 中央値だけを出すと、値の硬さが分からない。同じ区間の中でどこまで
-      // 散らばっていたかを併記する。
-      const band = (result.vocal_tract_low_cm && result.vocal_tract_high_cm)
-        ? `${result.vocal_tract_cm} cm`
-          + `（この区間では ${result.vocal_tract_low_cm}〜${result.vocal_tract_high_cm} cm）`
-        : `${result.vocal_tract_cm} cm`;
-      rows.push(row("そこから求めた声道長", band));
-    }
-    if (result.expected_vocal_tract_cm) {
-      rows.push(row("この声の高さなら", `${result.expected_vocal_tract_cm} cm 前後`));
-    }
-    if (result.frames) rows.push(row("調べたフレーム数", String(result.frames)));
-
-    // 範囲を選ばずに呼んだときは、次にどうすればよいかを添える。
-    const hint = result.range ? null : el("p", { class: "field-help", text:
-      "時間目盛りを横にドラッグしてその人が喋っている区間を選んでから調べると、"
-      + "確かな値が出ます。区間を選ばない場合は録音全体から少しずつ抜き出すため、"
-      + "長い録音ではほとんど当たりません。" });
-
-    // clear() が返すのは素の DOM ノードで、その append は null を文字列
-    // "null" にしてしまう。dom.js の append は飛ばしてくれる。
-    append(clear(inspectBody), [
-      el("div", { class: "row" },
-         el("strong", { text: result.name || track.name }),
-         el("span", { class: `chip ${verdict[1]}`, text: verdict[0] })),
-      el("p", { class: "field-help", text: result.reason || "" }),
-      hint,
-      rows.length ? el("div", { class: "list" }, rows) : null,
-      result.restorable ? restoreControls(track, result, region) : null,
-      el("p", { class: "field-help", text:
-        "この解析が言えるのは「加工されているか」までです。誰の声かは判定していません"
-        + "（できません）。RVC のように声質そのものを別人へ置き換える方式では、"
-        + "元の声は失われているため復元もできません。" }),
-    ]);
-  }
-
-  function restoreControls(track, result, region) {
-    const suggested = Math.min(2, Math.max(0.5, result.estimated_factor || 1));
-    const value = el("span", { class: "mono", text: suggested.toFixed(2) });
-    const slider = el("input", {
-      class: "input", type: "range", min: "50", max: "200",
-      "aria-label": "打ち消す倍率（百分率）",
-      value: String(Math.round(suggested * 100)),
-      oninput: () => { value.textContent = (slider.value / 100).toFixed(2); },
-    });
-    const play = el("button", { class: "btn btn-sm", type: "button", onclick: () => {
-      // 元のトラックと差し替えず、別に鳴らす（比べられるように）。
-      // 調べた区間と同じ所だけを返してもらう。全体を変換させると、4時間の
-      // 録音では数秒を聞くために長々と待つことになる。
-      const factor = (slider.value / 100).toFixed(3);
-      const span = region
-        ? `&start=${region.start.toFixed(3)}&end=${region.end.toFixed(3)}`
-        : "";
-      const audio = new Audio(`${result.restore_url}?factor=${factor}${span}`);
-      audio.play().catch((e) => toast(`再生できません（${e.message}）`, "danger"));
-      toast(region
-        ? `${formatTime(region.start)} 〜 ${formatTime(region.end)} を ${factor} 倍で打ち消して再生します`
-        : `${factor} 倍を打ち消して再生します`, "success", { duration: 3000 });
-    } }, icon("bi-play-fill"), "打ち消して聞く");
-
-    return el("div", { class: "stack" },
-      el("p", { class: "field-help", text:
-        "打ち消す倍率は耳で合わせてください。本人の地声が分からない以上、"
-        + "正しい倍率を機械が決めることはできません（下の値は出発点の目安です）。" }),
-      el("div", { class: "row" }, slider, value, play));
-  }
 
   // ── 表示の切り替え ──────────────────────────────────────
   let currentView = "arrange";
@@ -1192,23 +1036,6 @@ export async function createMixer(container, options = {}) {
     exportButton.title = loopRegion
       ? `${formatTime(loopRegion.start)} 〜 ${formatTime(loopRegion.end)} を ZIP で落とす`
       : "時間目盛りを横にドラッグして区間を決めると押せます";
-
-    /* 「声を調べる」は区間の有無で見るものが変わる。押す前に分かるように、
-       説明をここで書き換える（結果の中だけに書いても、押したあとにしか
-       読めない）。 */
-    const span = loopRegion
-      ? `${formatTime(loopRegion.start)} 〜 ${formatTime(loopRegion.end)}`
-      : null;
-    for (const track of tracks) {
-      if (!track.inspectButton) continue;
-      track.inspectButton.classList.toggle("is-armed", Boolean(loopRegion));
-      track.inspectButton.title = span
-        ? `${span} の声を調べる`
-        : "声を調べる（時間目盛りをドラッグして区間を選ぶと確かになります）";
-      track.inspectButton.setAttribute(
-        "aria-label",
-        span ? `${track.name} の ${span} の声を調べる` : `${track.name} の声を調べる`);
-    }
 
     if (!loopRegion) { loopBand.hidden = true; return; }
     loopBand.hidden = false;
@@ -1317,15 +1144,12 @@ export async function createMixer(container, options = {}) {
   clear(container).append(
     el("div", { class: "daw" },
        transport,
-       inspectPanel,
        arrange,
        consoleView,
        el("p", { class: "field-help", text:
          "スペースで再生／停止、←→ で移動、＋− で拡大。M＝ミュート、S＝ソロ。" +
          "フェーダーはダブルクリックで 0dB、つまみは上下ドラッグでパン。" +
          "時間目盛りを横にドラッグするとループ区間になり、その範囲だけ書き出せます。" +
-         "声を調べるときも同じ区間を見ます（その人がはっきり喋っている所を" +
-         "選んでから「?」を押してください）。" +
          "トラックの名前をドラッグすると並べ替えられます。" +
          "各トラックは同じ時間軸に揃えてあるので、途中から参加した人は冒頭が、" +
          "途中で抜けた人は末尾が無音になります。" }))

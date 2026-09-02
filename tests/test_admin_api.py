@@ -1327,8 +1327,8 @@ class RecordingClipTests(unittest.TestCase):
     def test_nothing_reads_a_whole_track_into_memory(self):
         """トラックを丸ごとメモリへ読まないこと。
 
-        6時間×8人の録音は 689MB になる。切り出し・解析・打ち消しはどれも
-        「トラック全体を bytes で読んでから ffmpeg の標準入力へ渡す」形だった
+        6時間×8人の録音は 689MB になる。切り出しも、かつてあった解析・打ち消しも、
+        どれも「トラック全体を bytes で読んでから ffmpeg の標準入力へ渡す」形だった
         ので、1リクエストで数百MB、同時に2つ来れば GB 単位になっていた。
         取り出しは一時ファイルへ流す。
         """
@@ -1451,79 +1451,6 @@ class RecordingClipTests(unittest.TestCase):
         self.assertEqual(client.get(f"{base}?start=0&length=0").status_code, 400)
         self.assertEqual(client.get(f"{base}?start=0&length=999").status_code, 400)
         self.assertEqual(client.get(f"/dlaudio/files/111/{self.token}/segment?start=0&length=1").status_code, 403)
-
-    def test_the_voice_analysis_endpoint_answers(self):
-        """解析の入出力をファイル経由に変えたので、通ることを確かめる。"""
-        response = TestClient(app).get(f"/dlaudio/files/{GUILD_ID}/{self.token}/analysis/0")
-        self.assertEqual(response.status_code, 200, response.text[:200])
-        payload = response.json()
-        # テストの音は 440Hz の純音なので unknown で正しい（倍音が無いため、
-        # 解析に使えるフレームが1つも取れない）。ここで見たいのは経路が
-        # 通ることと、誰かを特定する値を返さないこと。
-        self.assertIn(payload["verdict"], {"natural", "suspect", "unknown"})
-        self.assertFalse(payload.get("identifies_speaker", False))
-        self.assertNotIn("speaker_id", payload)
-        self.assertIn("/restored", payload["restore_url"])
-
-    def test_the_restore_endpoint_returns_audio(self):
-        """打ち消しの入出力もファイル経由。mp3 が返ること。"""
-        client = TestClient(app)
-        url = f"/dlaudio/files/{GUILD_ID}/{self.token}/stem/0/restored"
-        response = client.get(f"{url}?factor=1.2")
-        self.assertEqual(response.status_code, 200, response.text[:200])
-        self.assertEqual(response.headers["content-type"], "audio/mpeg")
-        self.assertGreater(len(response.content), 500)
-
-        # 範囲外の倍率は受け付けない
-        self.assertEqual(client.get(f"{url}?factor=9").status_code, 400)
-
-    def test_the_analysis_endpoint_takes_the_selected_range(self):
-        """ミキサーで選んだ区間を渡せること。
-
-        録音全体から自動で抜き出す方式は、長い録音ほど喋っている所へ当たらない。
-        どこを見るかは波形を見ている人が決める。
-        """
-        client = TestClient(app)
-        url = f"/dlaudio/files/{GUILD_ID}/{self.token}/analysis/0"
-
-        response = client.get(f"{url}?start=0.5&end=2.5")
-        self.assertEqual(response.status_code, 200, response.text[:200])
-        payload = response.json()
-        self.assertEqual(payload["scope"], "selection")
-        self.assertEqual(payload["range"], {"start": 0.5, "end": 2.5})
-
-        # 区間を渡さなければ、これまでどおり全体から抜き出す
-        whole = client.get(url).json()
-        self.assertEqual(whole["scope"], "whole")
-        self.assertNotIn("range", whole)
-
-        # 使えない区間は黙って全体へ広げない。広げると「選んだのに関係ない所の
-        # 結果が返る」うえ、見た目には成功したように見える。
-        # 断る理由は、ミキサーと同じ Accept を送って JSON で受け取れること。
-        json_headers = {"Accept": "application/json"}
-        for query, wanted in (("?start=5&end=1", "後にして"), ("?start=1&end=1.1", "短すぎます"), ("?start=1", "両方")):
-            with self.subTest(query=query):
-                refused = client.get(url + query, headers=json_headers)
-                self.assertEqual(refused.status_code, 400)
-                self.assertEqual(refused.headers["content-type"], "application/json")
-                self.assertIn(wanted, refused.json()["detail"])
-
-    def test_the_restore_endpoint_can_return_just_the_selected_range(self):
-        """調べた区間と同じ所だけを聞けること。
-
-        全体を変換させると、4時間の録音では数秒を聞くために長々と待つ。
-        """
-        client = TestClient(app)
-        url = f"/dlaudio/files/{GUILD_ID}/{self.token}/stem/0/restored"
-
-        part = client.get(f"{url}?factor=1.2&start=0.5&end=1.5")
-        self.assertEqual(part.status_code, 200, part.text[:200])
-        self.assertEqual(part.headers["content-type"], "audio/mpeg")
-
-        whole = client.get(f"{url}?factor=1.2")
-        self.assertEqual(whole.status_code, 200)
-        # 区間を指定したほうが短いこと（＝実際に切り出されている）
-        self.assertLess(len(part.content), len(whole.content))
 
 
 class TextContrastTests(unittest.TestCase):
@@ -1758,7 +1685,7 @@ class CdnErrorShapeTests(unittest.TestCase):
     """単体の配信プロセスでも、fetch する側には JSON で理由を返すこと。
 
     /dlaudio/files/ の下には2種類が同居している。ブラウザが直接開く配信リンクと、
-    ミキサーが fetch する索引・解析・切り出し。cdn_main.py はパスの接頭辞だけで
+    ミキサーが fetch する索引・切り出し。cdn_main.py はパスの接頭辞だけで
     「配信リンクだから HTML」と決めていたため、ミキサーが受け取るのも HTML に
     なり、断られた理由を読めなかった（JSON として解釈できず
     「Unexpected token '<'」としか言えない）。判定は Accept で行う。
@@ -1768,7 +1695,7 @@ class CdnErrorShapeTests(unittest.TestCase):
         from cdn_main import create_cdn_app
 
         self.client = TestClient(create_cdn_app())
-        self.url = f"/dlaudio/files/{GUILD_ID}/nosuchtoken/analysis/0"
+        self.url = f"/dlaudio/files/{GUILD_ID}/nosuchtoken/mixer"
 
     def test_a_fetching_client_gets_json(self):
         response = self.client.get(self.url, headers={"Accept": "application/json"})
