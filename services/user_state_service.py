@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Sequence
+from typing import Any, NamedTuple, Sequence
 
 from sqlalchemy import String, cast, delete, func, or_, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
@@ -809,6 +809,242 @@ async def repair_user_state_integrity(
     return stats
 
 
+class _SyncContext(NamedTuple):
+    """同期1回ぶんの、どの段でも同じ値。
+
+    メンバー・BAN・不在者の3段が同じギルド・同じ時刻・同じ source を見る。
+    別々に渡すと、途中の1段だけ違う時刻で書く事故が起こりうる。
+    """
+
+    guild_id: int
+    source: str
+    now: datetime
+    write_events: bool
+
+
+def _new_state_row(guild_id: int, user_id: int, *, is_banned: bool) -> UserStateCurrent:
+    """まだ行が無いユーザーのための、空の現在状態。
+
+    中身は直後に _update_current_state_fields が埋める。ここで status を
+    "unknown" にしておくのは、埋める前に落ちても「分からない」として残す
+    ため（"active" で作ると、埋まらなかった行が居るように見える）。
+    """
+    return UserStateCurrent(
+        guild_id=guild_id,
+        user_id=user_id,
+        status="unknown",
+        is_in_guild=False,
+        is_banned=is_banned,
+        is_timed_out=False,
+        roles_json="[]",
+        abilities_json="{}",
+    )
+
+
+def _sync_members(
+    session: Any,
+    rows_by_user_id: dict[int, UserStateCurrent],
+    stats: dict[str, int],
+    members: Sequence[Any],
+    ctx: _SyncContext,
+) -> set[int]:
+    """メンバー一覧をDBへ反映し、見えた user_id の集合を返す。
+
+    返す集合は、あとの「どちらの一覧にも居ない人を left にする」段が使う。
+    """
+    present_member_ids: set[int] = set()
+    for member in members:
+        try:
+            user_id = int(getattr(member, "id"))
+        except Exception:
+            continue
+
+        present_member_ids.add(user_id)
+        stats["members_seen"] += 1
+        current = rows_by_user_id.get(user_id)
+        created = False
+        if current is None:
+            current = _new_state_row(ctx.guild_id, user_id, is_banned=False)
+            session.add(current)
+            rows_by_user_id[user_id] = current
+            created = True
+            stats["created"] += 1
+        else:
+            stats["updated"] += 1
+
+        _update_current_state_fields(
+            current,
+            event_type=f"sync_member_{ctx.source}",
+            status_after="active",
+            now=ctx.now,
+            user_fields=_extract_user_fields(member),
+            in_guild=True,
+            is_banned=False,
+            timed_out_until=getattr(member, "timed_out_until", None),
+            role_snapshot=_extract_role_snapshot(member),
+            ability_snapshot=_extract_ability_snapshot(member, ctx.guild_id),
+        )
+
+        if created and ctx.write_events:
+            session.add(
+                _build_state_event(
+                    guild_id=ctx.guild_id,
+                    user_id=user_id,
+                    event_type="sync_discovered_member",
+                    status_after="active",
+                    now=ctx.now,
+                    payload={"source": ctx.source},
+                )
+            )
+            stats["events_written"] += 1
+    return present_member_ids
+
+
+def _sync_bans(
+    session: Any,
+    rows_by_user_id: dict[int, UserStateCurrent],
+    stats: dict[str, int],
+    banned_users: Sequence[Any],
+    ctx: _SyncContext,
+) -> set[int]:
+    """BAN 一覧をDBへ反映し、見えた user_id の集合を返す。
+
+    メンバー一覧のあとに走るので、同じ人が両方に居れば BAN が勝つ。
+    """
+    banned_user_ids: set[int] = set()
+    for banned_user in banned_users:
+        try:
+            user_id = int(getattr(banned_user, "id"))
+        except Exception:
+            continue
+
+        banned_user_ids.add(user_id)
+        stats["bans_seen"] += 1
+        current = rows_by_user_id.get(user_id)
+        created = False
+        before_status = None
+        before_banned = None
+
+        if current is None:
+            current = _new_state_row(ctx.guild_id, user_id, is_banned=True)
+            session.add(current)
+            rows_by_user_id[user_id] = current
+            created = True
+            stats["created"] += 1
+        else:
+            before_status = current.status
+            before_banned = bool(current.is_banned)
+            stats["updated"] += 1
+
+        _update_current_state_fields(
+            current,
+            event_type=f"sync_ban_{ctx.source}",
+            status_after="banned",
+            now=ctx.now,
+            user_fields=_extract_user_fields(banned_user),
+            in_guild=False,
+            is_banned=True,
+            timed_out_until=None,
+            role_snapshot=None,
+            ability_snapshot=None,
+        )
+
+        # 既に banned だった人に、同期のたびイベントを積まない。積むと起動の
+        # たびに同じ BAN が並び、履歴から「何回 BAN されたか」が読めなくなる。
+        if ctx.write_events and (created or before_status != "banned" or before_banned is False):
+            session.add(
+                _build_state_event(
+                    guild_id=ctx.guild_id,
+                    user_id=user_id,
+                    event_type="sync_discovered_ban",
+                    status_after="banned",
+                    now=ctx.now,
+                    payload={"source": ctx.source},
+                )
+            )
+            stats["events_written"] += 1
+    return banned_user_ids
+
+
+def _reconcile_absent(
+    session: Any,
+    rows_by_user_id: dict[int, UserStateCurrent],
+    stats: dict[str, int],
+    present_member_ids: set[int],
+    banned_user_ids: set[int],
+    ctx: _SyncContext,
+) -> None:
+    """どちらの一覧にも出てこなかった行を left にする。
+
+    BAN 済みの行は触らない（`should_mark_left` の条件でも弾かれるが、
+    「BAN を left で上書きしない」は意図として明示しておく）。
+    """
+    for user_id, current in rows_by_user_id.items():
+        if user_id in present_member_ids or user_id in banned_user_ids:
+            continue
+        if bool(current.is_banned):
+            continue
+
+        should_mark_left = bool(current.is_in_guild) or current.status in {"active", "unknown"}
+        if not should_mark_left:
+            continue
+
+        _update_current_state_fields(
+            current,
+            event_type=f"sync_left_{ctx.source}",
+            status_after="left",
+            now=ctx.now,
+            user_fields=_empty_user_fields(),
+            in_guild=False,
+            is_banned=False,
+            timed_out_until=None,
+            role_snapshot=None,
+            ability_snapshot=None,
+        )
+        stats["left_reconciled"] += 1
+
+        if ctx.write_events:
+            session.add(
+                _build_state_event(
+                    guild_id=ctx.guild_id,
+                    user_id=user_id,
+                    event_type="sync_mark_left",
+                    status_after="left",
+                    now=ctx.now,
+                    payload={"source": ctx.source},
+                )
+            )
+            stats["events_written"] += 1
+
+
+async def _run_sync_attempt(
+    session: Any,
+    ctx: _SyncContext,
+    stats: dict[str, int],
+    *,
+    members: Sequence[Any],
+    banned_users: Sequence[Any],
+    reconcile_missing: bool,
+) -> None:
+    """同期1回ぶん。3段を順に流して commit する。
+
+    **順序に意味がある。** メンバー → BAN の順なので、同じ人が両方に居れば
+    BAN が勝つ。不在者の整合は最後で、前の2段が見た user_id を除いて回す。
+    例外はそのまま外へ出す（retry と rollback は呼び出し側が持つ）。
+    """
+    existing_rows = (
+        await session.scalars(select(UserStateCurrent).where(UserStateCurrent.guild_id == ctx.guild_id))
+    ).all()
+    rows_by_user_id: dict[int, UserStateCurrent] = {int(row.user_id): row for row in existing_rows}
+
+    present_member_ids = _sync_members(session, rows_by_user_id, stats, members, ctx)
+    banned_user_ids = _sync_bans(session, rows_by_user_id, stats, banned_users, ctx)
+    if reconcile_missing:
+        _reconcile_absent(session, rows_by_user_id, stats, present_member_ids, banned_user_ids, ctx)
+
+    await session.commit()
+
+
 async def sync_guild_user_states(
     *,
     guild_id: int,
@@ -824,11 +1060,19 @@ async def sync_guild_user_states(
     Bot が落ちていた間の入退室・BANは個別イベントとして記録されない
     ため、このタイミングでまとめて追いつかせないと監査履歴に空白期間が
     できる。
+
+    中身は _run_sync_attempt（3段）にあり、ここが持つのは前準備と、
+    1回だけの再試行。結果は tests の SyncGuildUserStatesWholeRunTests が
+    統計と最終状態ごと固定している。
     """
     await ensure_user_state_db()
     now = _utc_now()
-    safe_guild_id = int(guild_id)
-    safe_source = str(source or "startup_sync")[:32]
+    ctx = _SyncContext(
+        guild_id=int(guild_id),
+        source=str(source or "startup_sync")[:32],
+        now=now,
+        write_events=write_events_on_sync,
+    )
     banned_users = banned_users or []
     empty_stats: dict[str, int] = {
         "members_seen": 0,
@@ -849,173 +1093,21 @@ async def sync_guild_user_states(
         stats = dict(empty_stats)
         async with SessionLocal() as session:
             try:
-                existing_rows = (
-                    await session.scalars(select(UserStateCurrent).where(UserStateCurrent.guild_id == safe_guild_id))
-                ).all()
-                rows_by_user_id: dict[int, UserStateCurrent] = {int(row.user_id): row for row in existing_rows}
-
-                present_member_ids: set[int] = set()
-                banned_user_ids: set[int] = set()
-
-                for member in members:
-                    try:
-                        user_id = int(getattr(member, "id"))
-                    except Exception:
-                        continue
-
-                    present_member_ids.add(user_id)
-                    stats["members_seen"] += 1
-                    current = rows_by_user_id.get(user_id)
-                    created = False
-                    if current is None:
-                        current = UserStateCurrent(
-                            guild_id=safe_guild_id,
-                            user_id=user_id,
-                            status="unknown",
-                            is_in_guild=False,
-                            is_banned=False,
-                            is_timed_out=False,
-                            roles_json="[]",
-                            abilities_json="{}",
-                        )
-                        session.add(current)
-                        rows_by_user_id[user_id] = current
-                        created = True
-                        stats["created"] += 1
-                    else:
-                        stats["updated"] += 1
-
-                    _update_current_state_fields(
-                        current,
-                        event_type=f"sync_member_{safe_source}",
-                        status_after="active",
-                        now=now,
-                        user_fields=_extract_user_fields(member),
-                        in_guild=True,
-                        is_banned=False,
-                        timed_out_until=getattr(member, "timed_out_until", None),
-                        role_snapshot=_extract_role_snapshot(member),
-                        ability_snapshot=_extract_ability_snapshot(member, safe_guild_id),
-                    )
-
-                    if created and write_events_on_sync:
-                        session.add(
-                            _build_state_event(
-                                guild_id=safe_guild_id,
-                                user_id=user_id,
-                                event_type="sync_discovered_member",
-                                status_after="active",
-                                now=now,
-                                payload={"source": safe_source},
-                            )
-                        )
-                        stats["events_written"] += 1
-
-                for banned_user in banned_users:
-                    try:
-                        user_id = int(getattr(banned_user, "id"))
-                    except Exception:
-                        continue
-
-                    banned_user_ids.add(user_id)
-                    stats["bans_seen"] += 1
-                    current = rows_by_user_id.get(user_id)
-                    created = False
-                    before_status = None
-                    before_banned = None
-
-                    if current is None:
-                        current = UserStateCurrent(
-                            guild_id=safe_guild_id,
-                            user_id=user_id,
-                            status="unknown",
-                            is_in_guild=False,
-                            is_banned=True,
-                            is_timed_out=False,
-                            roles_json="[]",
-                            abilities_json="{}",
-                        )
-                        session.add(current)
-                        rows_by_user_id[user_id] = current
-                        created = True
-                        stats["created"] += 1
-                    else:
-                        before_status = current.status
-                        before_banned = bool(current.is_banned)
-                        stats["updated"] += 1
-
-                    _update_current_state_fields(
-                        current,
-                        event_type=f"sync_ban_{safe_source}",
-                        status_after="banned",
-                        now=now,
-                        user_fields=_extract_user_fields(banned_user),
-                        in_guild=False,
-                        is_banned=True,
-                        timed_out_until=None,
-                        role_snapshot=None,
-                        ability_snapshot=None,
-                    )
-
-                    if write_events_on_sync and (created or before_status != "banned" or before_banned is False):
-                        session.add(
-                            _build_state_event(
-                                guild_id=safe_guild_id,
-                                user_id=user_id,
-                                event_type="sync_discovered_ban",
-                                status_after="banned",
-                                now=now,
-                                payload={"source": safe_source},
-                            )
-                        )
-                        stats["events_written"] += 1
-
-                if reconcile_missing:
-                    for user_id, current in rows_by_user_id.items():
-                        if user_id in present_member_ids or user_id in banned_user_ids:
-                            continue
-                        if bool(current.is_banned):
-                            continue
-
-                        should_mark_left = bool(current.is_in_guild) or current.status in {"active", "unknown"}
-                        if not should_mark_left:
-                            continue
-
-                        _update_current_state_fields(
-                            current,
-                            event_type=f"sync_left_{safe_source}",
-                            status_after="left",
-                            now=now,
-                            user_fields=_empty_user_fields(),
-                            in_guild=False,
-                            is_banned=False,
-                            timed_out_until=None,
-                            role_snapshot=None,
-                            ability_snapshot=None,
-                        )
-                        stats["left_reconciled"] += 1
-
-                        if write_events_on_sync:
-                            session.add(
-                                _build_state_event(
-                                    guild_id=safe_guild_id,
-                                    user_id=user_id,
-                                    event_type="sync_mark_left",
-                                    status_after="left",
-                                    now=now,
-                                    payload={"source": safe_source},
-                                )
-                            )
-                            stats["events_written"] += 1
-
-                await session.commit()
+                await _run_sync_attempt(
+                    session,
+                    ctx,
+                    stats,
+                    members=members,
+                    banned_users=banned_users,
+                    reconcile_missing=reconcile_missing,
+                )
                 return stats
             except Exception as e:
                 await session.rollback()
                 if attempt == 0 and await _try_db_self_heal(context="sync_guild_user_states", exc=e):
                     continue
                 logger.exception("[user_state_service] sync_guild_user_states failed guild_id=%s", guild_id)
-                # 0 を返す。stats はループの中で加算していくので、ここまで来ると
+                # 0 を返す。stats は段の中で加算していくので、ここまで来ると
                 # 「作成 1 件」などが入っている。しかし直前で rollback しており
                 # DB には1行も残っていない。加算済みの値を返すと、呼び出し元
                 # （events/user_state_sync.py の全ギルド同期）がそれを成功件数と

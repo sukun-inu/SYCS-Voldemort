@@ -850,6 +850,90 @@ class SyncGuildUserStatesTests(_DbBackedTestCase):
 # ---------------------------------------------------------------------------
 
 
+class SyncGuildUserStatesWholeRunTests(_DbBackedTestCase):
+    """1回の同期で、3つの段が同時に動いたときの結果を丸ごと固定する。
+
+    215行ある `sync_guild_user_states` を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+
+    上の SyncGuildUserStatesTests は「新規は created が増える」「BAN が勝つ」
+    のように**1つずつ**確かめている。割るときに怖いのはそこではなく、
+    **段どうしの噛み合わせ**である。
+
+      - 同じ人が members と bans の両方に居ると、updated が2回数えられないか
+      - BAN された人が、その後の「居ないので left」に巻き込まれないか
+      - イベント行が、必要なぶんだけ書かれているか（多くても少なくてもだめ）
+
+    数え間違いは例外を出さない。**監査ログの件数が静かにずれるだけ**で、
+    見ているのは後から数字を読む人だけになる。
+    """
+
+    def test_one_pass_over_members_bans_and_absentees_is_unchanged(self):
+        """メンバー・BAN・不在者が同時に出てくる同期の、統計と最終状態。
+
+        2回目の同期で次が同時に起きる。
+
+            user 1 … 居続けている（updated）
+            user 2 … 居なくなった（left へ整合）
+            user 3 … BAN された（members からも消えている）
+            user 4 … 新しく現れた（created）
+        """
+        first = [_member(id=1, name="a"), _member(id=2, name="b"), _member(id=3, name="c")]
+        _run(uss.sync_guild_user_states(guild_id=1, members=first, banned_users=[]))
+
+        stats = _run(
+            uss.sync_guild_user_states(
+                guild_id=1,
+                members=[_member(id=1, name="a"), _member(id=4, name="d")],
+                banned_users=[SimpleNamespace(id=3)],
+                source="mixed_sync",
+            )
+        )
+
+        self.assertEqual(
+            stats,
+            {
+                "members_seen": 2,
+                "bans_seen": 1,
+                "created": 1,
+                "updated": 2,
+                "left_reconciled": 1,
+                "events_written": 3,
+            },
+        )
+
+        actual = []
+        for user_id in (1, 2, 3, 4):
+            current = _run(uss.get_user_state_detail(1, user_id))["current"]
+            actual.append((user_id, current["status"], bool(current["is_in_guild"]), bool(current["is_banned"])))
+        self.assertEqual(
+            actual,
+            [
+                (1, "active", True, False),
+                (2, "left", False, False),
+                (3, "banned", False, True),
+                (4, "active", True, False),
+            ],
+        )
+
+    def test_re_syncing_the_same_ban_does_not_write_a_second_event(self):
+        """既に banned の人をもう一度 BAN 一覧で見ても、イベント行を増やさないこと。
+
+        監査履歴は「状態が変わったとき」に1行入る。同期のたびに1行入ると、
+        起動のたびに同じ BAN が積み上がり、**履歴を読んでも何回 BAN された
+        のか分からなくなる**。件数がずれるだけで例外は出ない。
+        """
+        _run(uss.sync_guild_user_states(guild_id=1, members=[_member(id=3, name="c")], banned_users=[]))
+        first = _run(uss.sync_guild_user_states(guild_id=1, members=[], banned_users=[SimpleNamespace(id=3)]))
+        again = _run(
+            uss.sync_guild_user_states(guild_id=1, members=[], banned_users=[SimpleNamespace(id=3)], source="again")
+        )
+
+        self.assertEqual(first["events_written"], 1, "BAN になった回はイベントを書く")
+        self.assertEqual(again["events_written"], 0, "同じ BAN でもう1行書いている")
+        self.assertEqual(again["updated"], 1)
+
+
 class RepairUserStateIntegrityTests(_DbBackedTestCase):
     def _insert_raw(self, **overrides):
         base = dict(
