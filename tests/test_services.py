@@ -455,6 +455,107 @@ class IntensityMapTests(unittest.TestCase):
             "弱い方が残って強い方を押しのけている",
         )
 
+    def _box(self, name):
+        """地名ラベルの寸法。_label_box は版（canvas）から字の幅を測るので、
+        測るためだけの小さな版を渡す（描画には使わない）。
+        """
+        from PIL import Image
+
+        return eq._label_box(Image.new("RGBA", (8, 8)), name)
+
+    def _labels_of(self, plot, lat, lon, *, zoom=9, centre=None):
+        """地名ラベルの置き場所を控えながら描く。[(x, y, 名前), ...] を返す。
+
+        画像から文字の位置を読み取るのは難しいので、描画の直前を捕まえる。
+        """
+        placed = []
+
+        def record(canvas, x, y, name):
+            """_draw_place_label の代わり。位置と名前だけ控える。"""
+            placed.append((x, y, name))
+
+        with patch.object(eq, "_draw_place_label", record):
+            self._render(plot, lat, lon, zoom=zoom, centre=centre)
+        return placed
+
+    def test_a_point_whose_badge_was_dropped_gets_no_name(self):
+        """札が置けなかった点に、地名だけを出さないこと。
+
+        重なりで札を落とした点の名前をそのまま描くと、**何も無い場所を
+        指す地名**が地図に残る。読む人には「そこに観測点がある」ように
+        見えるが、震度は書かれていない。画像としては成立してしまうので、
+        見ても気づけない。
+
+        144行あるこの関数を割る前に押さえる
+        （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+        """
+        # 札は重なって片方しか置けないが、**地名の置き場所は空いている**
+        # 配置にする（弱い方を左へ約40px）。同じ座標に重ねると地名の側も
+        # 重なり避けで落ちてしまい、placed_at の判定を通らずに緑になる。
+        plot = [(38.700, 141.000, 60, "つよい"), (38.700, 140.945, 10, "よわい")]
+        placed = self._labels_of(plot, 40.0, 143.0, centre=(38.70, 141.00))
+
+        names = [name for _, _, name in placed]
+        self.assertIn("つよい", names)
+        self.assertNotIn("よわい", names, "札の無い点に地名だけ出ている")
+
+    def test_a_name_is_placed_to_the_right_of_its_badge_when_there_is_room(self):
+        """空いていれば、地名は札の右へ置くこと。
+
+        右→左→上→下の順に空きを探す。左右だけを見ていたころは、震源印の
+        そばにある最大震度の地名がどちらにも置けず、**名前なしで**出ていた。
+        順序が変わっても図は成立するので、置き場所そのものを固定する。
+        """
+        # 震源は札から離す（震源の座は「空けておく枠」なので、重なると
+        # 右が埋まって別の向きが選ばれる）。
+        plot = [(38.70, 141.00, 40, "宮城県")]
+        placed = self._labels_of(plot, 36.00, 138.00, zoom=8, centre=(38.70, 141.00))
+
+        self.assertEqual(len(placed), 1, placed)
+        x, y, _ = placed[0]
+        cx, cy = eq._MAP_W * eq._MAP_SS / 2, eq._MAP_H * eq._MAP_SS / 2
+        self.assertGreater(x, cx, "地名が札の右へ置かれていない")
+        self.assertAlmostEqual(y + self._box("宮城県")[1] / 2, cy, delta=eq._MAP_SS * 8)
+
+    def test_a_name_never_runs_off_the_canvas(self):
+        """地名が画面の外へはみ出さないこと。
+
+        右へ置けない端の点で右を選ぶと、文字が切れて読めなくなる。
+        画像は出てくるので、切れていること自体は誰も検知しない。
+        """
+        # 右へ置くと版からはみ出す位置。ここで左が選ばれること自体を見る。
+        plot = [(38.70, 142.50, 40, "みぎはし")]
+        placed = self._labels_of(plot, 36.00, 138.00, centre=(38.70, 141.00))
+
+        self.assertEqual(len(placed), 1, placed)
+
+        for x, _, name in placed:
+            width = self._box(name)[0]
+            self.assertGreaterEqual(x, 0, f"左へはみ出している: {x}")
+            self.assertLessEqual(x + width, eq._MAP_W * eq._MAP_SS, f"右へはみ出している: {x}")
+
+    def test_the_badges_are_drawn_from_the_weakest_to_the_strongest(self):
+        """札は弱い順に描くこと。
+
+        札には落ち影が付いている。強い方を先に描くと、あとから描いた弱い札の
+        影が**強い札の上に乗って数字を暗くする。** 速報で最初に読む値なので、
+        そこだけは他の影に潰されてはいけない。順序を入れ替えても札は全部
+        出るため、枚数を数えるだけの検査では気づけない。
+        """
+        drawn = []
+        real = eq._scale_badge
+
+        def record(scale, size):
+            """_scale_badge の代わり。描く順に震度を控えてから本物を呼ぶ。"""
+            drawn.append(scale)
+            return real(scale, size)
+
+        plot = [(38.70, 141.00, 60, "つよい"), (36.30, 139.00, 20, "よわい"), (34.70, 135.50, 40, "なか")]
+        with patch.object(eq, "_scale_badge", record):
+            self._render(plot, 38.70, 141.00, zoom=6, centre=(36.5, 138.0))
+
+        self.assertEqual(drawn, sorted(drawn), f"弱い順に描いていない: {drawn}")
+
     def test_points_in_the_same_prefecture_keep_the_strongest(self):
         """観測点の座標は県庁所在地に丸めている。
 
