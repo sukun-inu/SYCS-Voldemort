@@ -3283,18 +3283,131 @@ class TTLCacheTests(unittest.TestCase):
 
 
 class _FakeAiohttpSession:
-    """aiohttp.ClientSession の代わり。VT スキャンを差し替えるので中身は使わない。"""
+    """使い回すセッションの代わり。VT スキャンを差し替えるので中身は使わない。"""
 
     def __init__(self, *a, **k):
         """引数は受け取るだけ。"""
 
-    async def __aenter__(self):
-        """async with に入るための空実装。"""
-        return self
 
-    async def __aexit__(self, *exc):
-        """async with を抜けるための空実装。"""
-        return False
+class SharedHttpSessionTests(unittest.TestCase):
+    """HTTP のセッションを使い回すこと。
+
+    呼び出しのたびに `aiohttp.ClientSession()` を作ると、毎回 DNS 解決・
+    TCP 接続・TLS ハンドシェイクからやり直す。手元で測ると1リクエストあたり
+    **49.3ms → 13.5ms**（HTTPS の外部相手・中央値）だった。読み上げ1発話、
+    ログ埋め込み1件、リンク1本ごとにこれが乗っていた。
+
+    使い回すぶん、閉じ方と作り直しの条件を間違えると**次の呼び出しが全部
+    落ちる**ので、そこを固定する。
+    """
+
+    def setUp(self):
+        from services import http_client
+
+        self.http = http_client
+        self.addCleanup(self._drop)
+
+    def _drop(self):
+        """テスト間でセッションを持ち越さない。"""
+        self.http._session = None
+        self.http._loop = None
+
+    def test_the_same_session_comes_back_within_one_loop(self):
+        """同じループの中では、同じセッションを返すこと。"""
+
+        async def twice():
+            first = self.http.get_session()
+            second = self.http.get_session()
+            await self.http.close_session()
+            return first is second
+
+        self.assertTrue(asyncio.run(twice()))
+
+    def test_a_new_loop_gets_a_new_session(self):
+        """ループが変わったら作り直すこと。
+
+        `aiohttp.ClientSession` は作られたときのループに縛られている。
+        別のループから使うと "attached to a different loop" で落ちるので、
+        使い回してはいけない。**閉じた覚えが無いのに落ちる**種類の壊れ方。
+        """
+
+        async def grab():
+            session = self.http.get_session()
+            # そのループの中で閉じておく。閉じずに捨てると
+            # "Unclosed client session" がテスト出力へ混ざる。
+            await self.http.close_session()
+            return session
+
+        first = asyncio.run(grab())
+        second = asyncio.run(grab())
+        self.assertIsNot(first, second)
+
+    def test_a_closed_session_is_replaced(self):
+        """閉じられていたら作り直すこと。
+
+        停止処理のあとに何かが呼ばれても、"Session is closed" にせず
+        新しいものを渡す。
+        """
+
+        async def close_then_get():
+            first = self.http.get_session()
+            await self.http.close_session()
+            second = self.http.get_session()
+            await self.http.close_session()
+            return first, second
+
+        first, second = asyncio.run(close_then_get())
+        self.assertIsNot(first, second)
+        self.assertTrue(first.closed)
+
+    def test_a_session_closed_from_outside_is_replaced(self):
+        """こちらを通さずに閉じられていても、次は新しいものを渡すこと。
+
+        `async with get_session()` と書くと、抜けるときに共有セッションが
+        閉じられる（docstring で禁じているが、書けてしまう）。そのあと
+        `_session` は None にならないので、**閉じたかどうかを見ていないと
+        以降の呼び出しが全部「Session is closed」で落ちる。**
+        """
+
+        async def close_from_outside():
+            first = self.http.get_session()
+            await first.close()  # close_session() を通さずに閉じる
+            second = self.http.get_session()
+            # 使える状態かどうかは**閉じる前に**見る（あとで見ると、後始末で
+            # 閉じたものを見ることになって必ず True になる）。
+            usable = not second.closed
+            await self.http.close_session()
+            return first is second, usable
+
+        same, usable = asyncio.run(close_from_outside())
+        self.assertFalse(same, "閉じられたセッションをそのまま返している")
+        self.assertTrue(usable, "作り直したのに閉じたままになっている")
+
+    def test_closing_twice_is_harmless(self):
+        """2回閉じても落ちないこと。停止経路が二重に走ることはある。"""
+
+        async def twice():
+            self.http.get_session()
+            await self.http.close_session()
+            await self.http.close_session()
+
+        asyncio.run(twice())
+
+    def test_a_failure_while_closing_does_not_escape(self):
+        """閉じるのに失敗しても、停止処理そのものは止めないこと。
+
+        後始末の失敗で、録音の書き出しなど本筋の後始末まで巻き添えにしない。
+        """
+
+        async def boom():
+            session = self.http.get_session()
+            with patch.object(session, "close", AsyncMock(side_effect=RuntimeError("閉じられない"))):
+                await self.http.close_session()  # 例外が外へ出たら失敗
+            # 実際には閉じられていないので、ここで閉じておく
+            # （放っておくと "Unclosed client session" がテスト出力へ混ざる）。
+            await session.close()
+
+        asyncio.run(boom())
 
 
 class VirusTotalScanConcurrencyTests(unittest.TestCase):
@@ -3334,7 +3447,7 @@ class VirusTotalScanConcurrencyTests(unittest.TestCase):
         with (
             patch.object(self.sec, "vt_scan_target", scan),
             patch.object(self.sec, "send_log_embed", AsyncMock(return_value=None)),
-            patch.object(self.sec.aiohttp, "ClientSession", _FakeAiohttpSession),
+            patch.object(self.sec, "get_session", lambda: _FakeAiohttpSession()),
         ):
             return asyncio.run(self.sec._run_vt_scans(Mock(), 1, links, [], logs)), logs
 
@@ -3558,7 +3671,7 @@ class TtsLatencyLoggingTests(unittest.TestCase):
         """合成が成功したら、URL と所要ミリ秒を返してログにも出すこと。"""
         FakeSession, clock = self._fake_session(elapsed=1.5)
         with (
-            patch.object(self.tts.aiohttp, "ClientSession", FakeSession),
+            patch.object(self.tts, "get_session", lambda: FakeSession()),
             patch.object(self.tts.time, "monotonic", clock),
             self.assertLogs(self.tts.logger, level="INFO") as captured,
         ):
@@ -3576,7 +3689,7 @@ class TtsLatencyLoggingTests(unittest.TestCase):
         """
         FakeSession, clock = self._fake_session(status=503, elapsed=4.0)
         with (
-            patch.object(self.tts.aiohttp, "ClientSession", FakeSession),
+            patch.object(self.tts, "get_session", lambda: FakeSession()),
             patch.object(self.tts.time, "monotonic", clock),
             self.assertLogs(self.tts.logger, level="ERROR") as captured,
         ):

@@ -565,6 +565,17 @@ def create_app() -> FastAPI:
     _register_exception_handlers(app)
     _register_middleware(app, secret)
 
+    @app.on_event("shutdown")
+    async def _close_http_session() -> None:
+        """使い回している HTTP セッションを、プロセス終了時に閉じる。
+
+        Bot 側は main.py の finally で閉じている。管理画面には同じ契機が
+        無く、閉じないまま落ちると "Unclosed client session" が出る。
+        """
+        from services.http_client import close_session
+
+        await close_session()
+
     start_background_monitor(logger)
 
     return app
