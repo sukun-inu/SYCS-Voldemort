@@ -303,63 +303,48 @@ async def fetch_news_signals(session: aiohttp.ClientSession) -> dict[str, Any]:
     }
 
 
-async def fetch_llm_signal(
-    *,
-    history_by_metal: dict[str, list[dict[str, Any]]],
-    fx_signal: dict[str, Any],
-    news_signal: dict[str, Any],
-    recent_accuracy: dict[str, float] | None = None,
-) -> dict[str, Any]:
-    """LLM(Groq)へ価格・為替・ニュースをまとめて渡し、金属ごとのスコア/確信度を得る。
+def _empty_llm_signal(comment: str) -> dict[str, Any]:
+    """LLM判定が使えなかったときに返す形。全金属を0で埋める。
 
-    無効化・APIキー未設定・呼び出し失敗・JSON解析失敗のいずれでも
-    例外を投げず、available=False かつ全金属スコア0のフォールバックを
-    返す。ここが例外を投げると週次予測の再計算全体が失敗し、LLM抜きの
-    統計モデルだけの予測にすら更新できなくなる。LLM判定は「効けば良い
-    追加シグナル」であって前提条件ではない。
-    recent_accuracy を渡すのは、直近の自分自身の予測誤差をLLMに
-    フィードバックし、外している時期ほど確信度を下げさせるため。
+    金属のキーは必ず3つとも揃えること。1つでも欠けると、呼び出し側が
+    `scores[metal_key]` を引いた時点で KeyError になる。
     """
-    _empty = {
+    return {
         "available": False,
         "source": "Groq",
         "model": FORECAST_LLM_MODEL,
         "scores": {key: 0.0 for key in METAL_COMMANDS.keys()},
         "confidences": {key: 0.0 for key in METAL_COMMANDS.keys()},
         "rationales": {key: "" for key in METAL_COMMANDS.keys()},
+        "global_comment": comment,
     }
 
-    if not FORECAST_LLM_ENABLED:
-        return {**_empty, "global_comment": "FORECAST_LLM_ENABLED=false"}
-    if not GROQ_API_KEY:
-        return {**_empty, "global_comment": "GROQ_API_KEY not configured"}
 
-    metal_input: dict[str, Any] = {}
-    for metal_key in METAL_COMMANDS.keys():
-        prices = extract_prices(history_by_metal.get(metal_key, []))
-        headlines = list((news_signal.get("sample_headlines", {}) or {}).get(metal_key, []))[:8]
-        recent_error = (recent_accuracy or {}).get(metal_key)
-        metal_input[metal_key] = {
-            "latest_price_per_gram": round(prices[-1], 2) if prices else None,
-            "trend_14d_pct_per_day": (round(daily_trend(prices) * 100, 4) if prices else 0.0),
-            "volatility_14d_pct": (round(daily_volatility(prices) * 100, 4) if prices else 0.0),
-            "news_sentiment": float((news_signal.get("sentiment", {}) or {}).get(metal_key, 0.0)),
-            "news_article_count": int((news_signal.get("article_counts", {}) or {}).get(metal_key, 0)),
-            "headlines": [clip_text(item, 140) for item in headlines],
-            # 直近の自分自身の予測誤差(平均絶対誤差%)。過去の判断がどれだけ外れて
-            # いたかを踏まえて確信度を調整させるためのフィードバック信号。
-            "recent_forecast_mean_abs_error_pct": (round(recent_error, 3) if recent_error is not None else None),
-        }
-
-    user_payload = {
-        "fx": {
-            "usd_jpy_weekly_change_pct": float(fx_signal.get("weekly_change_pct", 0.0)),
-            "usd_jpy_latest": fx_signal.get("latest"),
-            "available": bool(fx_signal.get("available")),
-        },
-        "metals": metal_input,
+def _llm_metal_input(
+    metal_key: str,
+    history_by_metal: dict[str, list[dict[str, Any]]],
+    news_signal: dict[str, Any],
+    recent_accuracy: dict[str, float] | None,
+) -> dict[str, Any]:
+    """1金属ぶんの入力。価格の傾き・ボラティリティ・ニュース・自分の誤差。"""
+    prices = extract_prices(history_by_metal.get(metal_key, []))
+    headlines = list((news_signal.get("sample_headlines", {}) or {}).get(metal_key, []))[:8]
+    recent_error = (recent_accuracy or {}).get(metal_key)
+    return {
+        "latest_price_per_gram": round(prices[-1], 2) if prices else None,
+        "trend_14d_pct_per_day": (round(daily_trend(prices) * 100, 4) if prices else 0.0),
+        "volatility_14d_pct": (round(daily_volatility(prices) * 100, 4) if prices else 0.0),
+        "news_sentiment": float((news_signal.get("sentiment", {}) or {}).get(metal_key, 0.0)),
+        "news_article_count": int((news_signal.get("article_counts", {}) or {}).get(metal_key, 0)),
+        "headlines": [clip_text(item, 140) for item in headlines],
+        # 直近の自分自身の予測誤差(平均絶対誤差%)。過去の判断がどれだけ外れて
+        # いたかを踏まえて確信度を調整させるためのフィードバック信号。
+        "recent_forecast_mean_abs_error_pct": (round(recent_error, 3) if recent_error is not None else None),
     }
 
+
+def _llm_prompts(user_payload: dict[str, Any]) -> tuple[str, str]:
+    """system と user の2つのプロンプトを返す。"""
     system_prompt = (
         "You are a conservative financial signal analyst for precious metals. "
         "Use only provided inputs. Return STRICT JSON only, no markdown. "
@@ -383,6 +368,76 @@ async def fetch_llm_signal(
         "}"
         "}"
     )
+    return system_prompt, user_prompt
+
+
+def _llm_scores(parsed: dict[str, Any]) -> dict[str, Any]:
+    """LLMの答えを、金属ごとのスコア・確信度・理由へ読み解く。
+
+    **必ず METAL_COMMANDS 側を回すこと。** 返ってきた金属だけを回すと、
+    LLM が1つ落としたときにキーごと欠け、呼び出し側が KeyError で落ちる。
+
+    数値は範囲へ丸める。LLM が素直に [-1,1] を守るとは限らず、5.0 を
+    そのまま通すと予測の中心が桁違いに傾く（例外は出ず、数字だけが変わる）。
+    """
+    metal_result = parsed.get("metals", {}) if isinstance(parsed.get("metals"), dict) else {}
+
+    scores: dict[str, float] = {}
+    confidences: dict[str, float] = {}
+    rationales: dict[str, str] = {}
+    for metal_key in METAL_COMMANDS.keys():
+        item = metal_result.get(metal_key, {}) if isinstance(metal_result.get(metal_key), dict) else {}
+        raw_score = safe_float(item.get("score")) or 0.0
+        raw_confidence = safe_float(item.get("confidence")) or 0.0
+        scores[metal_key] = round(clamp(raw_score, -1.0, 1.0), 4)
+        confidences[metal_key] = round(clamp(raw_confidence, 0.0, 1.0), 4)
+        rationales[metal_key] = clip_text(str(item.get("rationale", "")).strip(), 140)
+
+    return {
+        "available": True,
+        "source": "Groq",
+        "model": FORECAST_LLM_MODEL,
+        "scores": scores,
+        "confidences": confidences,
+        "rationales": rationales,
+        "global_comment": clip_text(str(parsed.get("global_comment", "")).strip(), 180),
+    }
+
+
+async def fetch_llm_signal(
+    *,
+    history_by_metal: dict[str, list[dict[str, Any]]],
+    fx_signal: dict[str, Any],
+    news_signal: dict[str, Any],
+    recent_accuracy: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    """LLM(Groq)へ価格・為替・ニュースをまとめて渡し、金属ごとのスコア/確信度を得る。
+
+    無効化・APIキー未設定・呼び出し失敗・JSON解析失敗のいずれでも
+    例外を投げず、available=False かつ全金属スコア0のフォールバックを
+    返す。ここが例外を投げると週次予測の再計算全体が失敗し、LLM抜きの
+    統計モデルだけの予測にすら更新できなくなる。LLM判定は「効けば良い
+    追加シグナル」であって前提条件ではない。
+    recent_accuracy を渡すのは、直近の自分自身の予測誤差をLLMに
+    フィードバックし、外している時期ほど確信度を下げさせるため。
+    """
+    if not FORECAST_LLM_ENABLED:
+        return _empty_llm_signal("FORECAST_LLM_ENABLED=false")
+    if not GROQ_API_KEY:
+        return _empty_llm_signal("GROQ_API_KEY not configured")
+
+    user_payload = {
+        "fx": {
+            "usd_jpy_weekly_change_pct": float(fx_signal.get("weekly_change_pct", 0.0)),
+            "usd_jpy_latest": fx_signal.get("latest"),
+            "available": bool(fx_signal.get("available")),
+        },
+        "metals": {
+            metal_key: _llm_metal_input(metal_key, history_by_metal, news_signal, recent_accuracy)
+            for metal_key in METAL_COMMANDS.keys()
+        },
+    }
+    system_prompt, user_prompt = _llm_prompts(user_payload)
 
     try:
         content, finish_reason = await create_json_chat_completion(
@@ -399,7 +454,7 @@ async def fetch_llm_signal(
         )
     except Exception as exc:
         logger.warning("LLM予測判定の取得に失敗: %s", exc)
-        return {**_empty, "global_comment": "LLM call failed"}
+        return _empty_llm_signal("LLM call failed")
 
     parsed = extract_first_json_object(content)
     if not parsed:
@@ -411,30 +466,9 @@ async def fetch_llm_signal(
             len(content),
             content[:200],
         )
-        return {**_empty, "global_comment": "LLM response not parseable"}
-    metal_result = parsed.get("metals", {}) if isinstance(parsed.get("metals"), dict) else {}
+        return _empty_llm_signal("LLM response not parseable")
 
-    scores: dict[str, float] = {}
-    confidences: dict[str, float] = {}
-    rationales: dict[str, str] = {}
-    for metal_key in METAL_COMMANDS.keys():
-        item = metal_result.get(metal_key, {}) if isinstance(metal_result.get(metal_key), dict) else {}
-        raw_score = safe_float(item.get("score")) or 0.0
-        raw_confidence = safe_float(item.get("confidence")) or 0.0
-        rationale = clip_text(str(item.get("rationale", "")).strip(), 140)
-        scores[metal_key] = round(clamp(raw_score, -1.0, 1.0), 4)
-        confidences[metal_key] = round(clamp(raw_confidence, 0.0, 1.0), 4)
-        rationales[metal_key] = rationale
-
-    return {
-        "available": True,
-        "source": "Groq",
-        "model": FORECAST_LLM_MODEL,
-        "scores": scores,
-        "confidences": confidences,
-        "rationales": rationales,
-        "global_comment": clip_text(str(parsed.get("global_comment", "")).strip(), 180),
-    }
+    return _llm_scores(parsed)
 
 
 # 予測レンジが「ほぼ横ばい」とみなせる閾値(7日間の変化率, %)。

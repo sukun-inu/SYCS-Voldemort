@@ -1104,6 +1104,146 @@ class StoreWeeklyForecastTests(unittest.TestCase):
             self._store(self._payload(metals=("unknown_metal",)))
 
 
+class FetchLlmSignalTests(unittest.IsolatedAsyncioTestCase):
+    """fetch_llm_signal が、何が起きても同じ形を返すことを固定する。
+
+    132行あるこの関数を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+    **この関数にもテストが1本も無かった。**
+
+      - 無効化・APIキー未設定・呼び出し失敗・JSON解析失敗のどれでも、
+        例外を投げず available=False の同じ形を返すこと
+      - 金属のキーが必ず3つとも揃うこと
+      - score は [-1,1]、confidence は [0,1] に丸めること
+      - JSON が読めなかったときは診断材料をログに残すこと
+
+    1つ目が崩れると **週次予測の再計算そのものが落ちる。** LLM判定は
+    「効けば良い追加シグナル」であって前提条件ではないのに、統計モデル
+    だけの予測にすら更新できなくなる。
+    """
+
+    def setUp(self):
+        self.sig = forecast_signals
+        self.metals = {"gold", "silver", "platinum"}
+
+    def _inputs(self):
+        """呼び出しに要る3つの引数。中身は最小限。"""
+        return dict(
+            history_by_metal={"gold": [], "silver": [], "platinum": []},
+            fx_signal={"available": True, "weekly_change_pct": 0.5, "latest": 150.0},
+            news_signal={"sentiment": {}, "article_counts": {}, "sample_headlines": {}},
+        )
+
+    def _assert_empty_shape(self, result, *, comment):
+        """フォールバックの形（available=False・全金属0埋め）であること。"""
+        self.assertFalse(result["available"])
+        self.assertEqual(result["global_comment"], comment)
+        self.assertEqual(set(result["scores"]), self.metals)
+        self.assertEqual(set(result["confidences"]), self.metals)
+        self.assertEqual(set(result["rationales"]), self.metals)
+        self.assertEqual(set(result["scores"].values()), {0.0})
+        self.assertEqual(set(result["confidences"].values()), {0.0})
+
+    async def test_disabled_returns_the_fallback_without_calling_groq(self):
+        """FORECAST_LLM_ENABLED=false なら、呼ばずにフォールバックを返すこと。"""
+        with (
+            patch.object(self.sig, "FORECAST_LLM_ENABLED", False),
+            patch.object(self.sig, "create_json_chat_completion", AsyncMock()) as call,
+        ):
+            result = await self.sig.fetch_llm_signal(**self._inputs())
+
+        call.assert_not_awaited()
+        self._assert_empty_shape(result, comment="FORECAST_LLM_ENABLED=false")
+
+    async def test_a_missing_api_key_returns_the_fallback_without_calling_groq(self):
+        """APIキーが無いなら、呼ばずにフォールバックを返すこと。"""
+        with (
+            patch.object(self.sig, "FORECAST_LLM_ENABLED", True),
+            patch.object(self.sig, "GROQ_API_KEY", ""),
+            patch.object(self.sig, "create_json_chat_completion", AsyncMock()) as call,
+        ):
+            result = await self.sig.fetch_llm_signal(**self._inputs())
+
+        call.assert_not_awaited()
+        self._assert_empty_shape(result, comment="GROQ_API_KEY not configured")
+
+    async def test_a_failed_call_does_not_escape(self):
+        """Groq の呼び出しが落ちても、例外を外へ出さないこと。
+
+        ここが例外を投げると**週次予測の再計算全体が失敗し**、LLM抜きの
+        統計モデルだけの予測にすら更新できなくなる。
+        """
+        with (
+            patch.object(self.sig, "FORECAST_LLM_ENABLED", True),
+            patch.object(self.sig, "GROQ_API_KEY", "dummy"),
+            patch.object(self.sig, "_get_groq_client", Mock()),
+            patch.object(self.sig, "create_json_chat_completion", AsyncMock(side_effect=RuntimeError("落ちた"))),
+            self.assertLogs(self.sig.logger, level="WARNING"),
+        ):
+            result = await self.sig.fetch_llm_signal(**self._inputs())
+
+        self._assert_empty_shape(result, comment="LLM call failed")
+
+    async def test_an_unparseable_answer_is_reported_with_diagnostics(self):
+        """JSON が読めなかったときは、診断材料を残してフォールバックすること。
+
+        静かに0を返すと「AI判定が効いていない」ことに気付けない。
+        finish_reason・content の長さ・先頭を必ずログへ残す。
+        """
+        with (
+            patch.object(self.sig, "FORECAST_LLM_ENABLED", True),
+            patch.object(self.sig, "GROQ_API_KEY", "dummy"),
+            patch.object(self.sig, "_get_groq_client", Mock()),
+            patch.object(
+                self.sig,
+                "create_json_chat_completion",
+                AsyncMock(return_value=("これはJSONではない", "length")),
+            ),
+            self.assertLogs(self.sig.logger, level="WARNING") as captured,
+        ):
+            result = await self.sig.fetch_llm_signal(**self._inputs())
+
+        self._assert_empty_shape(result, comment="LLM response not parseable")
+        logged = "\n".join(captured.output)
+        self.assertIn("length", logged)
+        self.assertIn("これはJSONではない", logged)
+
+    async def test_out_of_range_numbers_are_clamped_and_missing_metals_filled(self):
+        """範囲外の数値は丸め、返ってこなかった金属は0で埋めること。
+
+        LLM は素直に [-1,1] を守るとは限らない。5.0 をそのまま通すと、
+        予測の中心が**桁違いに傾く。** 例外は出ず、数字だけが変わる。
+        金属を1つ落としてくることもあり、その場合にキーが欠けると
+        呼び出し側が KeyError で落ちる。
+        """
+        answer = forecast_utils.json_dumps(
+            {
+                "global_comment": "コメント",
+                "metals": {
+                    "gold": {"score": 5.0, "confidence": 9.0, "rationale": "あ" * 300},
+                    "silver": {"score": -7.0, "confidence": -3.0, "rationale": "い"},
+                },
+            }
+        )
+        with (
+            patch.object(self.sig, "FORECAST_LLM_ENABLED", True),
+            patch.object(self.sig, "GROQ_API_KEY", "dummy"),
+            patch.object(self.sig, "_get_groq_client", Mock()),
+            patch.object(self.sig, "create_json_chat_completion", AsyncMock(return_value=(answer, "stop"))),
+        ):
+            result = await self.sig.fetch_llm_signal(**self._inputs())
+
+        self.assertTrue(result["available"])
+        self.assertEqual(result["scores"]["gold"], 1.0)
+        self.assertEqual(result["confidences"]["gold"], 1.0)
+        self.assertEqual(result["scores"]["silver"], -1.0)
+        self.assertEqual(result["confidences"]["silver"], 0.0)
+        # 返ってこなかった金属も、キーごと欠けさせない
+        self.assertEqual(result["scores"]["platinum"], 0.0)
+        self.assertEqual(result["rationales"]["platinum"], "")
+        self.assertLessEqual(len(result["rationales"]["gold"]), 140)
+
+
 class BuildWeeklyForecastTests(unittest.IsolatedAsyncioTestCase):
     """build_weekly_forecast の組み立て方を固定する。
 
