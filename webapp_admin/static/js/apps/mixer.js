@@ -72,7 +72,21 @@ function formatTime(seconds, withMillis = false) {
   return `${head}.${String(Math.floor((value - total) * 100)).padStart(2, "0")}`;
 }
 
-/** フェーダーの位置(0〜1)を dB に。0 は無音。 */
+/** "1:23.45" や "83.45" を秒に直す。読めなければ null。
+ *
+ *  formatTime の逆。書き出しの区間を手で打てるようにするために要る。
+ *  時:分:秒 と 分:秒 と 秒 のどれでも受ける（自分が出した形をそのまま
+ *  貼り直せないと、いちばんよくある使い方——少しだけずらす——ができない）。 */
+function parseTime(text) {
+  const value = String(text ?? "").trim();
+  if (!value) return null;
+  if (!/^\d+(:\d{1,2}){0,2}(\.\d+)?$/.test(value)) return null;
+  const parts = value.split(":").map(Number);
+  if (parts.some((n) => !Number.isFinite(n))) return null;
+  return parts.reduce((total, part) => total * 60 + part, 0);
+}
+
+/** dB の位置をフェーダーの位置へ。 */
 function positionToDb(position) {
   if (position <= 0.001) return -Infinity;
   const db = 40 * Math.log10(position / FADER_UNITY);
@@ -768,9 +782,91 @@ export async function createMixer(container, options = {}) {
 
   const exportButton = el("button", {
     class: "btn", type: "button", disabled: true,
-    title: "時間目盛りを横にドラッグして区間を決めると押せます",
+    title: "区間を決めると押せます（時間目盛りをドラッグ、または下の欄に入力）",
     onclick: () => exportRegion(),
   }, icon("bi-download"), "区間を書き出す");
+
+  /* 区間はドラッグでしか決められなかった。数時間の録音を全体表示にすると
+     1px が数秒になるので、ドラッグだけでは秒の単位で合わせられない。
+     打ち込みと、再生位置からの指定と、端のつまみを足す。 */
+  const regionStart = el("input", {
+    class: "daw-time mono", type: "text", inputMode: "decimal", placeholder: "0:00.00",
+    "aria-label": "区間の開始", onchange: () => applyTypedRegion(),
+  });
+  const regionEnd = el("input", {
+    class: "daw-time mono", type: "text", inputMode: "decimal", placeholder: "0:00.00",
+    "aria-label": "区間の終了", onchange: () => applyTypedRegion(),
+  });
+  const regionLength = el("span", { class: "daw-region-len mono" });
+  const regionFrom = el("button", {
+    class: "btn btn-sm", type: "button", title: "いまの再生位置を区間の開始にする（[）",
+    onclick: () => markRegion("start"),
+  }, "ここから");
+  const regionTo = el("button", {
+    class: "btn btn-sm", type: "button", title: "いまの再生位置を区間の終了にする（]）",
+    onclick: () => markRegion("end"),
+  }, "ここまで");
+  const regionClear = el("button", {
+    class: "btn btn-sm", type: "button", title: "区間を解除する",
+    onclick: () => setRegion(null),
+  }, "解除");
+
+  const regionRow = el("div", { class: "daw-region" },
+    el("span", { class: "daw-region-label" }, "区間"),
+    regionStart,
+    el("span", { class: "daw-region-tilde" }, "〜"),
+    regionEnd,
+    regionLength,
+    regionFrom, regionTo, regionClear);
+
+  /** 区間を決め直す。null で解除。
+   *
+   *  ドラッグ・打ち込み・再生位置・キーボードの4通りから呼ぶので、
+   *  丸めと下限の判断はここ1箇所に置く。散らすと「ドラッグでは選べないのに
+   *  打ち込みでは選べる」といった食い違いが出る。 */
+  function setRegion(region) {
+    if (!region) {
+      loopRegion = null;
+    } else {
+      const limit = duration || Math.max(region.start, region.end);
+      const start = Math.max(0, Math.min(region.start, region.end));
+      const end = Math.min(limit, Math.max(region.start, region.end));
+      // 0.05 秒未満は区間として扱わない。指が滑っただけのドラッグで
+      // 書き出しが押せるようになると、事故のもとになる。
+      loopRegion = end - start < 0.05 ? null : { start, end };
+    }
+    if (!loopRegion && looping) {
+      looping = false;
+      loopButton.classList.remove("is-on");
+    }
+    paintLoop();
+  }
+
+  /** 打ち込まれた2つの欄を区間にする。読めない値は捨てて表示へ戻す。 */
+  function applyTypedRegion() {
+    const start = parseTime(regionStart.value);
+    const end = parseTime(regionEnd.value);
+    if (start === null || end === null) {
+      // 直さずに黙って捨てると、打った本人には何が起きたか分からない。
+      // いまの区間を書き戻して、読めなかったことが見て分かるようにする。
+      paintLoop();
+      toast("区間は 1:23.45 か 83.45 の形で入れてください", "warn", { duration: 3000 });
+      return;
+    }
+    setRegion({ start, end });
+  }
+
+  /** いまの再生位置を区間の端にする。
+   *
+   *  区間がまだ無いときは、開始なら末尾まで・終了なら先頭からを選ぶ。
+   *  ここで長さ0の区間を作ると下限に引っかかって消え、「押しても何も
+   *  起きない」ボタンになる。 */
+  function markRegion(which) {
+    const at = positionOf();
+    const base = loopRegion || { start: 0, end: duration || at };
+    setRegion(which === "start" ? { start: at, end: Math.max(base.end, at) }
+                                : { start: Math.min(base.start, at), end: at });
+  }
 
   function exportRegion() {
     if (!loopRegion || !clipUrl) return;
@@ -804,7 +900,9 @@ export async function createMixer(container, options = {}) {
   // ── アレンジ ────────────────────────────────────────────
   const headColumn = el("div", { class: "daw-heads" });
   const rulerCanvas = el("canvas", { class: "daw-ruler-canvas" });
-  const loopBand = el("div", { class: "daw-loop", hidden: true });
+  const loopBand = el("div", { class: "daw-loop", hidden: true },
+    el("i", { class: "daw-loop-grip is-start" }),
+    el("i", { class: "daw-loop-grip is-end" }));
   const rulerArea = el("div", { class: "daw-ruler" }, rulerCanvas, loopBand);
   const laneStack = el("div", { class: "daw-lanes" });
   const playhead = el("div", { class: "daw-playhead" });
@@ -1015,19 +1113,40 @@ export async function createMixer(container, options = {}) {
     seek(timeAt(event, laneStack));
   });
 
+  // つまみは細いので、線そのものでなく前後この幅で拾う。
+  const EDGE_GRAB_PX = 7;
+
+  /** 区間の端をつかんだか。つかんだなら、動かさないほうの端の秒数を返す。 */
+  function grabbedEdge(event) {
+    if (!loopRegion) return null;
+    const x = event.clientX - rulerArea.getBoundingClientRect().left;
+    const startX = (loopRegion.start - view.start) * view.pxPerSecond;
+    const endX = (loopRegion.end - view.start) * view.pxPerSecond;
+    if (Math.abs(x - startX) <= EDGE_GRAB_PX) return loopRegion.end;
+    if (Math.abs(x - endX) <= EDGE_GRAB_PX) return loopRegion.start;
+    return null;
+  }
+
   let loopDrag = null;
   rulerArea.addEventListener("pointerdown", (event) => {
     rulerArea.setPointerCapture(event.pointerId);
+    // 端をつかんだときは、反対側を留め金にして伸縮する。ここで区間を
+    // 消してしまうと、少し伸ばしたいだけなのに引き直しになる。
+    const anchor = grabbedEdge(event);
+    if (anchor !== null) {
+      loopDrag = anchor;
+      return;
+    }
     loopDrag = timeAt(event, rulerArea);
-    loopRegion = null;
-    paintLoop();
+    setRegion(null);
   });
   rulerArea.addEventListener("pointermove", (event) => {
-    if (loopDrag === null || !rulerArea.hasPointerCapture(event.pointerId)) return;
-    const to = timeAt(event, rulerArea);
-    const region = { start: Math.min(loopDrag, to), end: Math.max(loopDrag, to) };
-    loopRegion = region.end - region.start < 0.05 ? null : region;
-    paintLoop();
+    if (loopDrag === null || !rulerArea.hasPointerCapture(event.pointerId)) {
+      // つかんでいないときは、端に来たら「伸ばせる」と分かるようにする。
+      rulerArea.classList.toggle("is-on-edge", grabbedEdge(event) !== null);
+      return;
+    }
+    setRegion({ start: loopDrag, end: timeAt(event, rulerArea) });
   });
   rulerArea.addEventListener("pointerup", (event) => {
     if (loopDrag !== null && loopRegion === null) seek(timeAt(event, rulerArea));
@@ -1039,7 +1158,17 @@ export async function createMixer(container, options = {}) {
     exportButton.disabled = !loopRegion || !clipUrl;
     exportButton.title = loopRegion
       ? `${formatTime(loopRegion.start)} 〜 ${formatTime(loopRegion.end)} を ZIP で落とす`
-      : "時間目盛りを横にドラッグして区間を決めると押せます";
+      : "区間を決めると押せます（時間目盛りをドラッグ、または下の欄に入力）";
+
+    /* 打っている最中の欄は書き換えない。1文字入れるたびに整形し直すと、
+       打ち終わる前に値が入れ替わって入力にならない。 */
+    for (const [input, value] of [[regionStart, loopRegion?.start], [regionEnd, loopRegion?.end]]) {
+      if (document.activeElement === input) continue;
+      input.value = value === undefined ? "" : formatTime(value, true);
+    }
+    regionLength.textContent =
+      loopRegion ? `（${(loopRegion.end - loopRegion.start).toFixed(2)} 秒）` : "";
+    regionClear.disabled = !loopRegion;
 
     if (!loopRegion) { loopBand.hidden = true; return; }
     loopBand.hidden = false;
@@ -1141,6 +1270,8 @@ export async function createMixer(container, options = {}) {
     else if (event.key === "ArrowRight") { seek(positionOf() + (event.shiftKey ? 10 : 2)); event.preventDefault(); }
     else if (event.key === "+" || event.key === "=") { zoomBy(1); event.preventDefault(); }
     else if (event.key === "-") { zoomBy(-1); event.preventDefault(); }
+    else if (event.key === "[") { markRegion("start"); event.preventDefault(); }
+    else if (event.key === "]") { markRegion("end"); event.preventDefault(); }
   }
   window.addEventListener("keydown", onKeyDown);
 
@@ -1148,12 +1279,15 @@ export async function createMixer(container, options = {}) {
   clear(container).append(
     el("div", { class: "daw" },
        transport,
+       regionRow,
        arrange,
        consoleView,
        el("p", { class: "field-help", text:
          "スペースで再生／停止、←→ で移動、＋− で拡大。M＝ミュート、S＝ソロ。" +
          "フェーダーはダブルクリックで 0dB、つまみは上下ドラッグでパン。" +
          "時間目盛りを横にドラッグするとループ区間になり、その範囲だけ書き出せます。" +
+         "区間は端をつまんで伸縮でき、[ ] で再生位置を端にできます。秒の単位で" +
+         "合わせたいときは「区間」の欄に直接入力してください。" +
          "トラックの名前をドラッグすると並べ替えられます。" +
          "各トラックは同じ時間軸に揃えてあるので、途中から参加した人は冒頭が、" +
          "途中で抜けた人は末尾が無音になります。" }))

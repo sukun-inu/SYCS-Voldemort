@@ -437,9 +437,9 @@ def main() -> int:
             page.evaluate("window.__mixer.destroy()")
 
             print()
-            print("== 5. 時間目盛りで選んだ区間が、帯として出ること ==")
-            # 区間は書き出し（/clip）がそのまま使う。帯が出なければ、どこを
-            # 書き出すのかが操作している側から見えない。
+            print("== 5. 区間を、ドラッグ・打ち込み・つまみのどれでも決められること ==")
+            # 区間は書き出し（/clip）がそのまま使う。全体表示では 1px が数秒に
+            # なるので、ドラッグだけでは秒の単位に届かない。
             open_mixer(page, play_token)
 
             # 時間目盛りを横にドラッグして区間を決める
@@ -462,6 +462,108 @@ def main() -> int:
             }"""
             )
             check("ドラッグした区間が帯として出る", dragged["shown"], f"幅={dragged['width']}")
+
+            # ドラッグの結果が数字でも読めること。1px が数秒になる倍率では、
+            # 帯を見ても何秒から何秒なのか分からない。
+            typed = page.evaluate(
+                """() => {
+              const [start, end] = [...document.querySelectorAll(".daw-time")];
+              return { start: start.value, end: end.value };
+            }"""
+            )
+            check(
+                "ドラッグした区間が、開始と終了の欄にも出る",
+                bool(typed["start"]) and bool(typed["end"]) and typed["start"] != typed["end"],
+                f"{typed['start']} 〜 {typed['end']}",
+            )
+
+            # 打ち込みで決められること（ドラッグでは秒の単位に届かない）
+            retyped = page.evaluate(
+                """async () => {
+              const [start, end] = [...document.querySelectorAll(".daw-time")];
+              start.value = "0:05.00";
+              end.value = "0:07.50";
+              end.dispatchEvent(new Event("change", { bubbles: true }));
+              await new Promise((r) => setTimeout(r, 50));
+              const band = document.querySelector(".daw-loop");
+              return {
+                length: document.querySelector(".daw-region-len").textContent,
+                width: parseFloat(band.style.width),
+                disabled: document.querySelector(".daw-transport .btn[disabled]") !== null,
+              };
+            }"""
+            )
+            check(
+                "欄に打ち込んだ区間が帯に反映される",
+                "2.50" in retyped["length"] and retyped["width"] > 0,
+                f"長さ={retyped['length'].strip()} 帯の幅={retyped['width']}px",
+            )
+
+            # 端をつまんで伸ばせること（引き直しにならないこと）
+            stretched_region = page.evaluate(
+                """async () => {
+              const ruler = document.querySelector(".daw-ruler");
+              const band = document.querySelector(".daw-loop");
+              const box = ruler.getBoundingClientRect();
+              const edge = band.getBoundingClientRect().right;
+              const at = (x) => ({ clientX: x, clientY: box.top + 10, bubbles: true, pointerId: 3 });
+              ruler.setPointerCapture = () => {};
+              ruler.hasPointerCapture = () => true;
+              ruler.dispatchEvent(new PointerEvent("pointerdown", at(edge - 1)));
+              ruler.dispatchEvent(new PointerEvent("pointermove", at(edge + 60)));
+              ruler.dispatchEvent(new PointerEvent("pointerup", at(edge + 60)));
+              await new Promise((r) => setTimeout(r, 50));
+              const [start, end] = [...document.querySelectorAll(".daw-time")];
+              return { start: start.value, end: end.value };
+            }"""
+            )
+            check(
+                "端をつまむと、反対側を動かさずに伸ばせる",
+                stretched_region["start"] == "0:05.00" and stretched_region["end"] != "0:07.50",
+                f"{stretched_region['start']} 〜 {stretched_region['end']}（開始は動かないこと）",
+            )
+
+            # 始端側も同じつまみであること（片側だけ効く、を作らない）
+            stretched_start = page.evaluate(
+                """async () => {
+              const ruler = document.querySelector(".daw-ruler");
+              const band = document.querySelector(".daw-loop");
+              const box = ruler.getBoundingClientRect();
+              const edge = band.getBoundingClientRect().left;
+              const at = (x) => ({ clientX: x, clientY: box.top + 10, bubbles: true, pointerId: 4 });
+              ruler.setPointerCapture = () => {};
+              ruler.hasPointerCapture = () => true;
+              ruler.dispatchEvent(new PointerEvent("pointerdown", at(edge + 1)));
+              ruler.dispatchEvent(new PointerEvent("pointermove", at(edge - 40)));
+              ruler.dispatchEvent(new PointerEvent("pointerup", at(edge - 40)));
+              await new Promise((r) => setTimeout(r, 50));
+              const [start, end] = [...document.querySelectorAll(".daw-time")];
+              return { start: start.value, end: end.value };
+            }"""
+            )
+            check(
+                "始端のつまみでも、反対側を動かさずに伸ばせる",
+                stretched_start["end"] == stretched_region["end"] and stretched_start["start"] != "0:05.00",
+                f"{stretched_start['start']} 〜 {stretched_start['end']}（終了は動かないこと）",
+            )
+
+            cleared = page.evaluate(
+                """async () => {
+              const buttons = [...document.querySelectorAll(".daw-region .btn")];
+              buttons[buttons.length - 1].click();   // 解除
+              await new Promise((r) => setTimeout(r, 50));
+              const [start] = [...document.querySelectorAll(".daw-time")];
+              const exportBtn = [...document.querySelectorAll(".daw-transport .btn")]
+                .find((b) => b.textContent.includes("書き出す"));
+              return { band: document.querySelector(".daw-loop").hidden,
+                       value: start.value, disabled: exportBtn.disabled };
+            }"""
+            )
+            check(
+                "解除すると帯も欄も消え、書き出しが押せなくなる",
+                cleared["band"] and cleared["value"] == "" and cleared["disabled"],
+                f"帯={cleared['band']} 欄={cleared['value']!r} 書き出し無効={cleared['disabled']}",
+            )
 
             # ミュートとソロが同じ色にならないこと（見出しの並びにボタンを
             # 1つ足したとき、:last-child で色を当てていたソロが赤に化けた）
