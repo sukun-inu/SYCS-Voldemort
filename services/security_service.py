@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import logging
 import re
@@ -6,6 +7,7 @@ from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple, cast
 import aiohttp
 import discord
 
+from envutil import env_int
 from services.content_moderation import gpt_assess
 from services.logging_service import log_action, send_log_embed
 from services.raid_detection import check_vc_raid
@@ -20,6 +22,18 @@ URL_REGEX = re.compile(r"https?://[^\s]+", re.IGNORECASE)
 UNICODE_TRICK_REGEX = re.compile(r"[‪-‮⁦-⁩]")
 
 logger = logging.getLogger(__name__)
+
+# VirusTotal を同時に何本まで走らせるか。
+#
+# 1リンクずつ待つと、5本貼られただけで待ち時間も5倍になる。到達できない
+# ときは1本あたり制限いっぱい（30秒）かかるため、リンクを並べるだけで
+# security ハンドラが返らなくなる。
+#
+# 一方で無制限にもできない。スキャンは asyncio.to_thread の中で走り、
+# 既定のスレッドプールは「CPU数 + 4、最大32本」しかない。ここを埋めると
+# 設定の書き込み（settings_store.awrite）など、他の to_thread が全部
+# 後ろに並ぶ。**速くするために別のものを詰まらせない**ための上限。
+VT_SCAN_CONCURRENCY = env_int("VT_SCAN_CONCURRENCY", 4, minimum=1)
 
 
 # ==================================================
@@ -319,33 +333,47 @@ async def _run_vt_scans(
     timeout = aiohttp.ClientTimeout(total=25)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         targets = links + [a.url for a in attachments]
-        for idx, url in enumerate(targets, 1):
-            res = await vt_scan_target(session, url)
-            vt_results.append(res)
-            mal = int(res.get("malicious", 0) or 0)
-            sus = int(res.get("suspicious", 0) or 0)
-            status = res.get("status") or "unknown"
-            icon = vt_icon(mal, sus, status)
-            vt_malicious_max = max(vt_malicious_max, mal)
-            vt_suspicious_max = max(vt_suspicious_max, sus)
-            log_line = f"{icon} {url} をスキャン: status={status} Malicious={mal} Suspicious={sus}"
-            if res.get("reason"):
-                log_line += f" reason={res.get('reason')}"
-            logs.append(log_line)
+        gate = asyncio.Semaphore(VT_SCAN_CONCURRENCY)
+        done = 0
 
+        async def scan_one(url: str) -> Dict[str, Any]:
+            """1件スキャンして、終わるたびに進捗を1つ進める。"""
+            nonlocal done, progress_msg
+            async with gate:
+                res = await vt_scan_target(session, url)
+            done += 1
             if progress_msg:
-                bar = build_progress_bar(idx, len(targets))
+                # 「何本終わったか」だけを出す。並列に走るので、どの行まで
+                # 進んだかは終わってからでないと分からない。
+                bar = build_progress_bar(done, len(targets))
                 try:
                     await progress_msg.edit(
                         embed=discord.Embed(
                             title="セキュリティ検査中",
-                            description="\n".join(logs) + f"\n{bar}",
+                            description="VirusTotal解析中… " + bar,
                             color=discord.Color.blurple(),
                         )
                     )
                 except Exception:
                     logger.debug("[SECURITY] プログレスメッセージ更新に失敗", exc_info=True)
                     progress_msg = None
+            return res
+
+        # gather は**渡した順**で結果を返す。終わった順に並べると、ログの行と
+        # 結果の対応が崩れて「どのURLがどの結果か」が読めなくなる。
+        vt_results = list(await asyncio.gather(*(scan_one(url) for url in targets)))
+
+    for url, res in zip(targets, vt_results):
+        mal = int(res.get("malicious", 0) or 0)
+        sus = int(res.get("suspicious", 0) or 0)
+        status = res.get("status") or "unknown"
+        icon = vt_icon(mal, sus, status)
+        vt_malicious_max = max(vt_malicious_max, mal)
+        vt_suspicious_max = max(vt_suspicious_max, sus)
+        log_line = f"{icon} {url} をスキャン: status={status} Malicious={mal} Suspicious={sus}"
+        if res.get("reason"):
+            log_line += f" reason={res.get('reason')}"
+        logs.append(log_line)
 
     if vt_malicious_max >= MALICIOUS_THRESHOLD:
         danger = True
