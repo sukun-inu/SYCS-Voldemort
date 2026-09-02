@@ -3282,6 +3282,114 @@ class TTLCacheTests(unittest.TestCase):
                 self.assertGreater(cache.max_entries, 0)
 
 
+class GptAssessCallReductionTests(unittest.TestCase):
+    """LLM へ投げる回数を、判定を弱めずに減らすこと。
+
+    `gpt_assess` は**メッセージ1件ごとに**呼ばれる。Groq 側は
+    「同時3件・最小間隔0.25秒」で絞ってあるので、混んだチャンネルでは
+    順番待ちが積み上がり、そのあいだ security ハンドラが返らない。
+
+    減らしてよいのは、**判定の中身が変わらない場合だけ**である。
+
+      1. 判じるものが何も無い（本文が空で、VirusTotal の結果も無い）
+      2. 直前とまったく同じ入力（連投・コピペ荒らしはこの形になる）
+
+    「短いから安全だろう」といった推測では減らさない。文字数の閾値を置くと
+    それは**判定を弱める設定**になり、どこで線を引いても根拠が無い。
+    """
+
+    def setUp(self):
+        import services.content_moderation as moderation
+
+        self.mod = moderation
+        # キーが無いと早期 return する。またクライアントの生成は
+        # create_chat_completion の「引数」なので、差し替えないと呼ぶ前に落ちる。
+        for target, value in (("GROQ_API_KEY", "dummy-key"), ("_get_groq_client", lambda: Mock())):
+            patcher = patch.object(moderation, target, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.mod._verdict_cache.clear()
+        self.addCleanup(self.mod._verdict_cache.clear)
+
+    def _reply(self, text="SAFE"):
+        """Groq の応答オブジェクトの代わり。"""
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=text))])
+
+    def test_an_empty_post_is_not_sent_to_the_llm(self):
+        """本文が空で VirusTotal の結果も無いなら、呼ばずに SAFE。
+
+        画像だけの投稿などで実際に起きる。空の本文を「危険か」と尋ねても
+        judgement の材料が無く、返ってくるのは常に SAFE である。
+        """
+        with patch.object(self.mod, "create_chat_completion", AsyncMock()) as call:
+            verdict = asyncio.run(self.mod.gpt_assess("   ", []))
+
+        call.assert_not_awaited()
+        self.assertEqual(verdict, "SAFE")
+
+    def test_an_empty_post_with_vt_results_still_goes_to_the_llm(self):
+        """VirusTotal の結果があるなら、本文が空でも判じさせること。
+
+        添付ファイルだけの投稿でも、スキャン結果は判断材料になる。
+        「本文が空なら呼ばない」を素朴に適用すると、ここが抜ける。
+        """
+        vt_results = [{"status": "ok", "malicious": 0, "suspicious": 0}]
+        with patch.object(self.mod, "create_chat_completion", AsyncMock(return_value=self._reply())) as call:
+            asyncio.run(self.mod.gpt_assess("", vt_results))
+
+        call.assert_awaited_once()
+
+    def test_the_same_post_is_judged_once(self):
+        """同じ入力なら、2回目は前の判定を使い回すこと。
+
+        連投・コピペ荒らしはまさにこの形で来る。同じ文字列に同じモデルが
+        違う答えを返す前提は置いていないので、**判定は変わらない**。
+        """
+        with patch.object(self.mod, "create_chat_completion", AsyncMock(return_value=self._reply("DANGEROUS"))) as call:
+            first = asyncio.run(self.mod.gpt_assess("儲かる話があります http://x", []))
+            second = asyncio.run(self.mod.gpt_assess("儲かる話があります http://x", []))
+
+        self.assertEqual(call.await_count, 1, "2回とも呼んでいる")
+        self.assertEqual(first, "DANGEROUS")
+        self.assertEqual(second, "DANGEROUS")
+
+    def test_a_different_signal_is_judged_again(self):
+        """同じ本文でも、付随する状況が変われば judge し直すこと。
+
+        スパム回数や新規メンバーかどうかはプロンプトに入る。同じ文でも
+        「新規メンバーの連投」なら別の答えが出うるので、使い回さない。
+        """
+        with patch.object(self.mod, "create_chat_completion", AsyncMock(return_value=self._reply())) as call:
+            asyncio.run(self.mod.gpt_assess("こんにちは", []))
+            asyncio.run(self.mod.gpt_assess("こんにちは", [], spam_count=5))
+
+        self.assertEqual(call.await_count, 2)
+
+    def test_a_failed_judgement_is_not_cached(self):
+        """判定できなかった（UNKNOWN）ものは覚えないこと。
+
+        一時的な失敗をキャッシュすると、**次の同じ投稿も判定されないまま
+        通る**。失敗は「判定を弱めない」原則に反するので持ち越さない。
+        """
+        with patch.object(self.mod, "create_chat_completion", AsyncMock(side_effect=RuntimeError("落ちた"))) as call:
+            first = asyncio.run(self.mod.gpt_assess("同じ本文", []))
+        self.assertEqual(first, "UNKNOWN")
+
+        with patch.object(self.mod, "create_chat_completion", AsyncMock(return_value=self._reply())) as call:
+            second = asyncio.run(self.mod.gpt_assess("同じ本文", []))
+
+        call.assert_awaited_once()
+        self.assertEqual(second, "SAFE")
+
+    def test_virustotal_still_short_circuits_before_everything(self):
+        """VirusTotal が既に危険と言っているなら、これまでどおり即断すること。"""
+        with patch.object(self.mod, "create_chat_completion", AsyncMock()) as call:
+            verdict = asyncio.run(self.mod.gpt_assess("なんでも", [{"malicious": 99, "suspicious": 0}]))
+
+        call.assert_not_awaited()
+        self.assertEqual(verdict, "DANGEROUS")
+
+
 class TtsLatencyLoggingTests(unittest.TestCase):
     """読み上げにかかった時間が、あとから読める形で残ること。
 

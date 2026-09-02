@@ -1,15 +1,44 @@
+import hashlib
 import logging
 from typing import Any, Dict, List
 
 from groq import AsyncGroq
 
 from config import GROQ_API_KEY
+from envutil import env_int
 from services.groq_client import create_chat_completion, get_groq_client
+from services.ttl_cache import TTLCache
 from services.virustotal_service import MALICIOUS_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
 _GROQ_BUCKET = "moderation"
+
+# 同じ入力に対する判定を短く覚えておく時間（秒）。
+#
+# gpt_assess は**メッセージ1件ごとに**呼ばれる。Groq 側は「同時3件・最小
+# 間隔0.25秒」で絞ってあるので、混んだチャンネルでは順番待ちが積み上がり、
+# そのあいだ security ハンドラが返らない。連投・コピペ荒らしはまったく同じ
+# 入力で来るので、そこだけでも呼ばずに済ませる。
+#
+# **判定は弱めない。** 同じ入力に同じモデルが違う答えを返す前提は置いて
+# いないので、使い回しても結論は変わらない。逆に「短いから安全だろう」と
+# いった推測では減らさない（どこで線を引いても根拠が無く、それは判定を
+# 弱める設定になる）。
+MODERATION_CACHE_TTL = env_int("MODERATION_CACHE_TTL_SECONDS", 300, minimum=10)
+_verdict_cache: TTLCache[str, str] = TTLCache(ttl=MODERATION_CACHE_TTL, max_entries=2000)
+
+
+def _verdict_key(text: str, vt_results: List[Dict[str, Any]], context_block: str) -> str:
+    """判定を使い回してよい範囲を表す鍵。
+
+    本文だけでは足りない。スパム回数・新規メンバーかどうかはプロンプトへ
+    入るので、同じ文でも状況が違えば別の答えが出うる（context_block が
+    そこを表している）。VirusTotal の結果も判断材料なので混ぜる。
+    """
+    vt_digest = "|".join(f"{r.get('malicious', 0)}/{r.get('suspicious', 0)}" for r in vt_results)
+    material = chr(0).join((context_block, vt_digest, text))
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
 def _get_groq_client() -> AsyncGroq:
@@ -55,6 +84,16 @@ async def gpt_assess(
 
     context_block = ("\n".join(context_lines) + "\n\n") if context_lines else ""
 
+    # 判じるものが何も無いなら呼ばない。画像だけの投稿などで実際に起きる。
+    # 空の本文を「危険か」と尋ねても材料が無く、返るのは常に SAFE である。
+    if not text.strip() and not vt_results:
+        return "SAFE"
+
+    cache_key = _verdict_key(text, vt_results, context_block)
+    cached = _verdict_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     prompt = (
         "あなたはDiscordサーバーのセキュリティモデレーションAIです。\n"
         "以下の情報をもとに投稿を判定し、DANGEROUS / SUSPICIOUS / SAFE のいずれか1語のみで回答してください。\n\n"
@@ -84,10 +123,14 @@ async def gpt_assess(
         reply = response.choices[0].message.content.upper()
     except Exception as e:
         logger.warning("[SECURITY] Groq判定失敗: %s", e)
+        # 失敗は覚えない。覚えると、次の同じ投稿も判定されないまま通る。
         return "UNKNOWN"
 
     if "DANGEROUS" in reply:
-        return "DANGEROUS"
-    if "SUSPICIOUS" in reply or "WARNING" in reply:
-        return "SUSPICIOUS"
-    return "SAFE"
+        verdict = "DANGEROUS"
+    elif "SUSPICIOUS" in reply or "WARNING" in reply:
+        verdict = "SUSPICIOUS"
+    else:
+        verdict = "SAFE"
+    _verdict_cache.set(cache_key, verdict)
+    return verdict
