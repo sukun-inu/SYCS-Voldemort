@@ -536,35 +536,33 @@ def _contradicts_direction(summary: str, direction: str) -> bool:
     return False
 
 
-async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str]:
-    """forecast_for_metalが確定させたdrivers(統計モデル内訳・トレンド・為替・ニュース・
-    AI判定感応の箇条書き)を、金融の専門知識が無い利用者にも伝わる短い日本語の説明文に
-    Groqで言い換えさせる。3金属分をまとめて1回の呼び出しにし、失敗時は空文字を返して
-    呼び出し元(フロントエンド)が従来通りdriversの箇条書き表示にフォールバックできる
-    ようにする。"""
-    empty = {key: "" for key in METAL_COMMANDS.keys()}
-    if not FORECAST_SUMMARY_ENABLED or not GROQ_API_KEY:
-        return empty
+def _summary_input(item: object) -> tuple[dict[str, Any], str] | None:
+    """1金属ぶんの問い合わせ入力と、レンジの向きを返す。材料が無ければ None。
 
-    metals_input: dict[str, Any] = {}
-    expected_direction: dict[str, str] = {}
-    for metal_key in METAL_COMMANDS.keys():
-        item = forecast.get(metal_key)
-        if not isinstance(item, dict):
-            continue
-        drivers = [str(driver) for driver in (item.get("drivers") or []) if str(driver).strip()]
-        if not drivers:
-            continue
-        lower_pct = safe_float(item.get("projected_lower_change_pct"))
-        upper_pct = safe_float(item.get("projected_upper_change_pct"))
-        if lower_pct is None or upper_pct is None:
-            continue
-        direction = _range_direction(lower_pct, upper_pct)
-        expected_direction[metal_key] = direction
-        # supporting_notes には内部の入力シグナルが混ざっており、レンジの結論と符号が
-        # 逆になることがある。結論と対等に並べるとLLMがシグナル側に引きずられて
-        # 事実と異なる断定を書くため、「結論」と「補足」を明確に分けて渡す。
-        metals_input[metal_key] = {
+    drivers が空、あるいは区間（lower/upper）が無い金属について尋ねても
+    書ける材料が無い。混ぜると **LLM が空欄を埋めようとして作り話を書く。**
+    出てきた文章は自然なので、読んだ人は気づけない。
+
+    supporting_notes には内部の入力シグナルが混ざっており、レンジの結論と
+    符号が逆になることがある。結論と対等に並べるとLLMがシグナル側に
+    引きずられて事実と異なる断定を書くため、「結論」と「補足」を明確に
+    分けて渡す。
+    """
+    # 引数が object なのは、forecast.get() が Any | None を返すため。dict と
+    # 決めつけると mypy が arg-type で落ち、isinstance の判定も無駄になる。
+    if not isinstance(item, dict):
+        return None
+    drivers = [str(driver) for driver in (item.get("drivers") or []) if str(driver).strip()]
+    if not drivers:
+        return None
+    lower_pct = safe_float(item.get("projected_lower_change_pct"))
+    upper_pct = safe_float(item.get("projected_upper_change_pct"))
+    if lower_pct is None or upper_pct is None:
+        return None
+
+    direction = _range_direction(lower_pct, upper_pct)
+    return (
+        {
             "conclusion": {
                 "range_low_pct_over_next_7_days": round(lower_pct, 2),
                 "range_high_pct_over_next_7_days": round(upper_pct, 2),
@@ -573,11 +571,13 @@ async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str
                 "confidence_0_to_1": safe_float(item.get("confidence")),
             },
             "supporting_notes": drivers,
-        }
+        },
+        direction,
+    )
 
-    if not metals_input:
-        return empty
 
+def _summary_prompts(metals_input: dict[str, Any]) -> tuple[str, str]:
+    """system と user の2つのプロンプトを返す。"""
     system_prompt = (
         "You are a friendly Japanese financial writer explaining a precious-metal price "
         "forecast to everyday retail users with no finance background.\n"
@@ -606,6 +606,62 @@ async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str
         '{"summaries":{"gold":"...","silver":"...","platinum":"..."}}\n'
         "Omit keys for metals not present in the input."
     )
+    return system_prompt, user_prompt
+
+
+def _accepted_summaries(parsed: dict[str, Any], expected_direction: dict[str, str]) -> dict[str, str]:
+    """返ってきた要約のうち、予測の向きと矛盾しないものだけを採る。
+
+    プロンプトで向きを守るよう強く指示しているが、LLMが従う保証は無い。
+    実際に「-2.97%の下落予測」に対して「上昇が期待できます」と真逆の要約が
+    出た事例があったため、コード側でも検査し、矛盾する要約は採用しない
+    (空文字にすればフロントエンドが従来のdrivers箇条書き表示へ戻る)。
+
+    捨てたことは必ず記録する。黙って捨てると、LLMがどれだけ外しているのか
+    が誰にも見えない。
+    """
+    raw_summaries = parsed.get("summaries", {}) if isinstance(parsed.get("summaries"), dict) else {}
+    summaries = {key: "" for key in METAL_COMMANDS.keys()}
+    for metal_key in METAL_COMMANDS.keys():
+        text = str(raw_summaries.get(metal_key, "")).strip()
+        if not text:
+            continue
+        direction = expected_direction.get(metal_key, "flat")
+        if _contradicts_direction(text, direction):
+            logger.warning(
+                "予測の向きと矛盾する要約を破棄した metal=%s direction=%s summary=%r",
+                metal_key,
+                direction,
+                text[:120],
+            )
+            continue
+        summaries[metal_key] = clip_text(text, 200)
+    return summaries
+
+
+async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str]:
+    """forecast_for_metalが確定させたdrivers(統計モデル内訳・トレンド・為替・ニュース・
+    AI判定感応の箇条書き)を、金融の専門知識が無い利用者にも伝わる短い日本語の説明文に
+    Groqで言い換えさせる。3金属分をまとめて1回の呼び出しにし、失敗時は空文字を返して
+    呼び出し元(フロントエンド)が従来通りdriversの箇条書き表示にフォールバックできる
+    ようにする。"""
+    empty = {key: "" for key in METAL_COMMANDS.keys()}
+    if not FORECAST_SUMMARY_ENABLED or not GROQ_API_KEY:
+        return empty
+
+    metals_input: dict[str, Any] = {}
+    expected_direction: dict[str, str] = {}
+    for metal_key in METAL_COMMANDS.keys():
+        prepared = _summary_input(forecast.get(metal_key))
+        if prepared is None:
+            continue
+        metals_input[metal_key], expected_direction[metal_key] = prepared
+
+    # 空の入力で問い合わせても、料金と待ち時間だけかかって何も得られない。
+    if not metals_input:
+        return empty
+
+    system_prompt, user_prompt = _summary_prompts(metals_input)
 
     try:
         content, finish_reason = await create_json_chat_completion(
@@ -633,24 +689,5 @@ async def fetch_forecast_summaries(*, forecast: dict[str, Any]) -> dict[str, str
             content[:200],
         )
         return empty
-    raw_summaries = parsed.get("summaries", {}) if isinstance(parsed.get("summaries"), dict) else {}
-    summaries = dict(empty)
-    for metal_key in METAL_COMMANDS.keys():
-        text = str(raw_summaries.get(metal_key, "")).strip()
-        if not text:
-            continue
-        # プロンプトで向きを守るよう強く指示しているが、LLMが従う保証は無い。
-        # 実際に「-2.97%の下落予測」に対して「上昇が期待できます」と真逆の要約が
-        # 出た事例があったため、コード側でも検査し、矛盾する要約は採用しない
-        # (空文字にすればフロントエンドが従来のdrivers箇条書き表示へ戻る)。
-        direction = expected_direction.get(metal_key, "flat")
-        if _contradicts_direction(text, direction):
-            logger.warning(
-                "予測の向きと矛盾する要約を破棄した metal=%s direction=%s summary=%r",
-                metal_key,
-                direction,
-                text[:120],
-            )
-            continue
-        summaries[metal_key] = clip_text(text, 200)
-    return summaries
+
+    return _accepted_summaries(parsed, expected_direction)
