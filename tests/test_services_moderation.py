@@ -753,6 +753,16 @@ class GptAssessVirusTotalTests(unittest.TestCase):
 class GptAssessGroqTests(unittest.TestCase):
     """VirusTotal だけでは決まらないとき、Groq の一言判定に委ねる経路。"""
 
+    def setUp(self):
+        """判定のキャッシュを毎回空にする。
+
+        gpt_assess は同じ入力の判定を使い回す（連投対策）。このクラスは
+        どのテストも `("hello", [])` を投げるので、消さないと**2件目以降が
+        1件目の答えを受け取る**。実際、キャッシュを入れた直後に7件が落ちた。
+        """
+        content_moderation._verdict_cache.clear()
+        self.addCleanup(content_moderation._verdict_cache.clear)
+
     def _mock_completion(self, reply: str):
         response = Mock()
         response.choices = [Mock(message=Mock(content=reply))]
