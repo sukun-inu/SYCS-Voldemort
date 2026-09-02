@@ -142,6 +142,11 @@ def env_path(key: str, default: Path) -> Path:
 
 
 def _clamp_int(key: str, value: int, minimum: Optional[int], maximum: Optional[int], *, from_default: bool) -> int:
+    """範囲へ丸める。丸めたときは理由をログへ残す。
+
+    黙って丸めると「設定した値と実際に効いている値が違う」状態が、どこにも
+    現れないまま続く。丸めたこと自体より、気づけないことのほうが問題になる。
+    """
     clamped = value
     if minimum is not None and clamped < minimum:
         clamped = minimum
@@ -155,6 +160,7 @@ def _clamp_int(key: str, value: int, minimum: Optional[int], maximum: Optional[i
 def _clamp_float(
     key: str, value: float, minimum: Optional[float], maximum: Optional[float], *, from_default: bool
 ) -> float:
+    """範囲へ丸める。丸めたときは理由をログへ残す（_clamp_int の float 版）。"""
     clamped = value
     if minimum is not None and clamped < minimum:
         clamped = minimum
@@ -166,6 +172,12 @@ def _clamp_float(
 
 
 def _log_clamp(key, value, clamped, minimum, maximum, *, from_default: bool) -> None:
+    """丸めた事実を、環境変数由来かコード上の既定値由来かを分けて記録する。
+
+    後者（from_default）は「コードに書いた既定値が、他の設定に連動した
+    上下限に阻まれて効いていない」という分かりにくい状態なので、文面を
+    分けて警告にしてある。詳しくは分岐の中のコメント。
+    """
     lo = "-" if minimum is None else minimum
     hi = "-" if maximum is None else maximum
     if from_default:

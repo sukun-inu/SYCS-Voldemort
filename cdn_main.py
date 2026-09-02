@@ -35,6 +35,12 @@ _ERROR_TITLES = {
 
 
 def _render_error_page(status_code: int, detail: object) -> str:
+    """配信リンクをブラウザで直接開いた人に見せる案内ページ。
+
+    リンクは Discord のメッセージから踏まれるので、期限切れや権限違いに
+    JSON を返すと生の文字列が表示される。detail が空でも「この操作を
+    完了できませんでした」に倒し、白紙を返さない。
+    """
     title = _ERROR_TITLES.get(status_code, "エラーが発生しました")
     message = detail if isinstance(detail, str) and detail else "この操作を完了できませんでした。"
     return f"""<!doctype html>
@@ -72,6 +78,11 @@ def _render_error_page(status_code: int, detail: object) -> str:
 
 
 def create_cdn_app() -> FastAPI:
+    """配信専用の FastAPI アプリを組み立てる。
+
+    docs_url / redoc_url を落としてあるのは、このプロセスが外部へ公開
+    される唯一の口で、内部のルート一覧を晒す必要が無いため。
+    """
     app = FastAPI(docs_url=None, redoc_url=None)
 
     from services.djaudio_cdn import dlaudio_router
@@ -80,6 +91,11 @@ def create_cdn_app() -> FastAPI:
 
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+        """エラーを、相手が読める形（HTML か JSON）で返し分ける。
+
+        返し分けを誤るとミキサー側が理由を読めなくなる。判定を置く場所に
+        ついては下のコメント。
+        """
         # ブラウザで直接開かれる配信リンクには簡易HTMLの案内ページを返す。
         # ただし /dlaudio/files/ の下には、ミキサーが fetch する索引・解析・
         # 切り出しも同居している。パスの接頭辞で決めていたころは、そちらにも
@@ -97,6 +113,7 @@ def create_cdn_app() -> FastAPI:
 
     @app.get("/")
     async def root():
+        """稼働確認用。配信そのものは /dlaudio 以下にある。"""
         return JSONResponse({"service": "DJAudio-DL CDN", "status": "ok"})
 
     return app
