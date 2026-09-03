@@ -59,6 +59,16 @@ jobs:
         # ここへ加えること。「入れたが素通り」は作らない。
         run: python -m mypy -p webapp -p events -p services -p webapp_admin -p commands
 
+      - name: シェルスクリプトの構文検査
+        # バックアップのスクリプトを compose の YAML の中ではなくファイルに
+        # 置いたのは、ここで検査に掛けられるようにするためでもある（YAML の中の
+        # シェルは構文検査に掛けられない）。検査できる形にしたなら、必ず検査する。
+        run: |
+          for f in docker/*.sh; do
+            echo "--- $f"
+            sh -n "$f"
+          done
+
       - name: 依存の固定が Docker と同じ条件で解けるか確認
         run: python tools/check_requirements.py
 
