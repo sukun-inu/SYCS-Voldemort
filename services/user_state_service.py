@@ -785,6 +785,119 @@ def _empty_repair_stats() -> dict[str, int]:
     }
 
 
+def _repair_status(row, stats: dict[str, int]) -> bool:
+    """status を正規化する。直したら True。"""
+    normalized = _sanitize_status(row.status)
+    if row.status == normalized:
+        return False
+    row.status = normalized
+    stats["status_fixed"] += 1
+    return True
+
+
+def _repair_json_columns(row, stats: dict[str, int]) -> bool:
+    """roles_json / abilities_json を、読める形と決まった書き方へ揃える。直したら True。
+
+    型が違う（配列のはずが文字列など）ものは空へ倒す。型は合っていても
+    書き方が違うものは書き直す。揃えておかないと、同じ中身なのに毎回
+    「直った」と数え続けることになる。
+    """
+    changed = False
+    for column, loader, empty in (
+        ("roles_json", list, "[]"),
+        ("abilities_json", dict, "{}"),
+    ):
+        raw = getattr(row, column)
+        value = _safe_json_loads(raw, [] if loader is list else {})
+        if not isinstance(value, loader):
+            setattr(row, column, empty)
+            stats["json_fixed"] += 1
+            changed = True
+            continue
+        normalized = _safe_json_dumps(value, empty)
+        if normalized != raw:
+            setattr(row, column, normalized)
+            stats["json_fixed"] += 1
+            changed = True
+    return changed
+
+
+def _repair_flags(row, stats: dict[str, int]) -> bool:
+    """status から導ける在室・BAN の旗を揃える。直したら True。
+
+    **active では在室に手を出さない。** 在室かどうかは同期
+    （sync_guild_user_states）が Discord に問い合わせて決めるもので、ここで
+    一緒に True へ倒すと、すでに抜けた人を「居る」ことにしてしまう。
+    """
+    expected_in_guild = bool(row.is_in_guild)
+    expected_banned = bool(row.is_banned)
+    if row.status == "banned":
+        expected_banned = True
+        expected_in_guild = False
+    elif row.status in {"left", "kicked"}:
+        expected_in_guild = False
+    elif row.status == "active":
+        expected_banned = False
+
+    changed = False
+    if bool(row.is_in_guild) != expected_in_guild:
+        row.is_in_guild = expected_in_guild
+        stats["flag_fixed"] += 1
+        changed = True
+    if bool(row.is_banned) != expected_banned:
+        row.is_banned = expected_banned
+        stats["flag_fixed"] += 1
+        changed = True
+    return changed
+
+
+def _repair_timeout(row, now: datetime, stats: dict[str, int]) -> bool:
+    """期限を過ぎたタイムアウトの旗を下ろす。直したら True。"""
+    expected = _is_timed_out_until(row.timed_out_until, now)
+    if bool(row.is_timed_out) == expected:
+        return False
+    row.is_timed_out = expected
+    stats["timeout_fixed"] += 1
+    return True
+
+
+def _repair_row(row, now: datetime, stats: dict[str, int]) -> None:
+    """1行ぶんを直す。**直した行だけ** updated_at を進める。
+
+    全行に触ると「最後に状態が変わった時刻」がバッチを回した時刻に揃い、
+    誰がいつ抜けたのかが読めなくなる（壊れた行が1つも無いのが通常なので、
+    これは毎回そうなる）。
+    """
+    changed = _repair_status(row, stats)
+    changed = _repair_json_columns(row, stats) or changed
+    changed = _repair_flags(row, stats) or changed
+    changed = _repair_timeout(row, now, stats) or changed
+    if changed:
+        row.updated_at = now
+        stats["rows_fixed"] += 1
+
+
+async def _repair_attempt(guild_id: int | None, safe_max_rows: int, now: datetime) -> dict[str, int]:
+    """走査と修復を1回ぶん。失敗したら例外を上げる（呼び出し側がやり直す）。"""
+    stats = _empty_repair_stats()
+    async with SessionLocal() as session:
+        try:
+            stmt = select(UserStateCurrent).order_by(UserStateCurrent.id.asc()).limit(safe_max_rows)
+            if guild_id is not None:
+                stmt = stmt.where(UserStateCurrent.guild_id == int(guild_id))
+
+            rows = (await session.scalars(stmt)).all()
+            stats["rows_scanned"] = len(rows)
+            for row in rows:
+                _repair_row(row, now, stats)
+
+            await session.commit()
+            return stats
+        except Exception:
+            await session.rollback()
+            raise
+
+
 async def repair_user_state_integrity(
     *,
     guild_id: int | None = None,
@@ -799,94 +912,22 @@ async def repair_user_state_integrity(
     await ensure_user_state_db()
     now = _utc_now()
     safe_max_rows = max(100, min(200000, int(max_rows)))
-    stats: dict[str, int] = _empty_repair_stats()
 
+    stats = _empty_repair_stats()
     for attempt in range(2):
-        # 数え直す。前の試行は rollback しているのに、そこで数えた分を残すと
-        # **直した件数が倍になって報告される**（無人で回るバッチなので、
-        # あとから読めるのはこの数字だけ）。
-        stats = _empty_repair_stats()
-        async with SessionLocal() as session:
-            try:
-                stmt = select(UserStateCurrent).order_by(UserStateCurrent.id.asc()).limit(safe_max_rows)
-                if guild_id is not None:
-                    stmt = stmt.where(UserStateCurrent.guild_id == int(guild_id))
-
-                rows = (await session.scalars(stmt)).all()
-                stats["rows_scanned"] = len(rows)
-
-                for row in rows:
-                    changed = False
-                    normalized_status = _sanitize_status(row.status)
-                    if row.status != normalized_status:
-                        row.status = normalized_status
-                        changed = True
-                        stats["status_fixed"] += 1
-
-                    roles = _safe_json_loads(row.roles_json, [])
-                    if not isinstance(roles, list):
-                        row.roles_json = "[]"
-                        changed = True
-                        stats["json_fixed"] += 1
-                    else:
-                        normalized_roles = _safe_json_dumps(roles, "[]")
-                        if normalized_roles != row.roles_json:
-                            row.roles_json = normalized_roles
-                            changed = True
-                            stats["json_fixed"] += 1
-
-                    abilities = _safe_json_loads(row.abilities_json, {})
-                    if not isinstance(abilities, dict):
-                        row.abilities_json = "{}"
-                        changed = True
-                        stats["json_fixed"] += 1
-                    else:
-                        normalized_abilities = _safe_json_dumps(abilities, "{}")
-                        if normalized_abilities != row.abilities_json:
-                            row.abilities_json = normalized_abilities
-                            changed = True
-                            stats["json_fixed"] += 1
-
-                    expected_in_guild = bool(row.is_in_guild)
-                    expected_banned = bool(row.is_banned)
-                    if row.status == "banned":
-                        expected_banned = True
-                        expected_in_guild = False
-                    elif row.status in {"left", "kicked"}:
-                        expected_in_guild = False
-                    elif row.status == "active":
-                        expected_banned = False
-
-                    if bool(row.is_in_guild) != expected_in_guild:
-                        row.is_in_guild = expected_in_guild
-                        changed = True
-                        stats["flag_fixed"] += 1
-                    if bool(row.is_banned) != expected_banned:
-                        row.is_banned = expected_banned
-                        changed = True
-                        stats["flag_fixed"] += 1
-
-                    expected_timed_out = _is_timed_out_until(row.timed_out_until, now)
-                    if bool(row.is_timed_out) != expected_timed_out:
-                        row.is_timed_out = expected_timed_out
-                        changed = True
-                        stats["timeout_fixed"] += 1
-
-                    if changed:
-                        row.updated_at = now
-                        stats["rows_fixed"] += 1
-
-                await session.commit()
-                return stats
-            except Exception as e:
-                await session.rollback()
-                if attempt == 0 and await _try_db_self_heal(context="repair_user_state_integrity", exc=e):
-                    continue
-                logger.exception(
-                    "[user_state_service] repair_user_state_integrity failed guild_id=%s",
-                    guild_id,
-                )
-                return stats
+        try:
+            # 数え直す。前の試行は rollback しているのに、そこで数えた分を
+            # 残すと**直した件数が倍になって報告される**（無人で回るバッチ
+            # なので、あとから読めるのはこの数字だけ）。
+            return await _repair_attempt(guild_id, safe_max_rows, now)
+        except Exception as e:
+            if attempt == 0 and await _try_db_self_heal(context="repair_user_state_integrity", exc=e):
+                continue
+            logger.exception(
+                "[user_state_service] repair_user_state_integrity failed guild_id=%s",
+                guild_id,
+            )
+            return stats
 
     return stats
 
