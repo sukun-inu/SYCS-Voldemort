@@ -213,6 +213,142 @@ class GuardHelperTests(unittest.TestCase):
         self.assertTrue(calls, "断った理由を返していない")
 
 
+class MetalRegistrationShapeTests(unittest.TestCase):
+    """register_metal_commands が何をどう登録するかを固定する。
+
+    107行あるこの関数を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+
+      - グループの名前・説明、コマンドの名前・説明・並び順
+      - 金属ごとのコマンドが、**その金属**を見ていること
+      - 監査ログより先に defer すること
+      - グループが bot のコマンドツリーへ渡されること
+
+    2つ目が要。ループの中で直接 `@group.command` を定義すると、Python の
+    クロージャは遅延束縛なので**全コマンドが最後の spec を共有する。**
+    /metal gold も /metal silver もプラチナの値段を返すことになるが、
+    コマンドは3つとも登録され、例外も出ず、値段もそれらしく返る。
+    """
+
+    def _register(self):
+        """名前・説明・関数を控える群へ登録し、bot も返す。"""
+        import commands.metal_commands as metal
+
+        registered = []
+        functions = {}
+
+        class RecordingGroup:
+            """作られ方と、渡されたコマンドを控えるだけの群。"""
+
+            def __init__(self, **kwargs):
+                """グループの作成引数を控える。"""
+                created.append(kwargs)
+
+            def command(self, *, name, description=""):
+                """デコレータを返す。関数はそのまま返す。"""
+
+                def wrap(fn):
+                    registered.append((name, description))
+                    functions[name] = fn
+                    return fn
+
+                return wrap
+
+        created = []
+        bot = Mock()
+        with patch.object(metal.app_commands, "Group", RecordingGroup):
+            metal.register_metal_commands(bot)
+        return metal, created, registered, functions, bot
+
+    def test_the_group_and_its_commands_are_registered(self):
+        """グループの作り方と、コマンドの名前・説明・並び順を固定する。"""
+        _, created, registered, _, _ = self._register()
+
+        self.assertEqual(created, [{"name": "metal", "description": "貴金属の現在価格"}])
+        self.assertEqual(
+            registered,
+            [
+                ("gold", "金の現在価格を表示します"),
+                ("silver", "銀の現在価格を表示します"),
+                ("platinum", "プラチナの現在価格を表示します"),
+                ("all", "金・銀・プラチナの現在価格をまとめて表示します"),
+            ],
+        )
+
+    def test_each_metal_command_looks_at_its_own_metal(self):
+        """/metal gold が金を、/metal silver が銀を見ること。
+
+        ループの中で直接コマンドを定義すると、遅延束縛で**全部が最後の
+        spec（プラチナ）を共有する。** 3つとも登録されるし例外も出ないし
+        値段もそれらしく返るので、打ってみて金額の桁が違うと気づくまで
+        分からない。
+        """
+        metal, _, _, functions, _ = self._register()
+        interaction, _ = make_interaction()
+
+        seen = []
+        with (
+            patch.object(metal, "_handle_single_metal", AsyncMock(side_effect=lambda i, g, s: seen.append(s.key))),
+            patch.object(metal, "log_action", AsyncMock()),
+            patch.object(metal, "_defer", AsyncMock()),
+        ):
+            for key in ("gold", "silver", "platinum"):
+                asyncio.run(functions[key](interaction, 1.0))
+
+        self.assertEqual(seen, ["gold", "silver", "platinum"])
+
+    def test_the_reply_is_deferred_before_the_audit_log_is_sent(self):
+        """監査ログを送る前に defer すること。
+
+        監査ログも Discord への往復で、混んでいれば待たされる。3秒の持ち時間を
+        そこで使い切ると、**コマンドそのものが「応答なし」で失敗する。**
+        ログが速い平常時には起きないので、順番を入れ替えても普段は誰も
+        気づかない。
+        """
+        metal, _, _, functions, _ = self._register()
+        interaction, _ = make_interaction()
+
+        order = []
+        with (
+            patch.object(metal, "_defer", AsyncMock(side_effect=lambda i: order.append("defer"))),
+            patch.object(metal, "log_action", AsyncMock(side_effect=lambda *a, **k: order.append("log"))),
+            patch.object(metal, "_handle_single_metal", AsyncMock()),
+        ):
+            asyncio.run(functions["gold"](interaction, 1.0))
+
+        self.assertEqual(order, ["defer", "log"])
+
+    def test_a_non_positive_gram_is_refused_before_deferring(self):
+        """0 以下のグラム数は、defer より前に断ること。
+
+        defer したあとでは ephemeral な初回応答を使えない。断り文句が
+        **全員に見える形**で出てしまう。
+        """
+        metal, _, _, functions, _ = self._register()
+        interaction, _ = make_interaction()
+
+        order = []
+        with (
+            patch.object(metal, "_defer", AsyncMock(side_effect=lambda i: order.append("defer"))),
+            patch.object(metal, "_respond_error", AsyncMock(side_effect=lambda *a: order.append("error"))),
+            patch.object(metal, "calculate_metal_value", AsyncMock()) as calc,
+        ):
+            asyncio.run(functions["all"](interaction, 0.0))
+
+        self.assertEqual(order, ["error"])
+        calc.assert_not_awaited()
+
+    def test_the_group_is_handed_to_the_command_tree(self):
+        """bot.tree.add_command(group) を呼ぶこと。
+
+        ここが抜けると Discord 側にコマンドが1つも現れない。関数の中では
+        全部組み上がっているので、**例外も出ず、単体テストも通る。**
+        """
+        _, _, _, _, bot = self._register()
+
+        bot.tree.add_command.assert_called_once()
+
+
 class MetalAllControlFlowTests(unittest.TestCase):
     """/metal all: 成功時に誤ってエラー文言を送らないこと、一人称が統一されていること。
 
