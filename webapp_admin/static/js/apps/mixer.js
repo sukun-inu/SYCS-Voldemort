@@ -104,7 +104,7 @@ function formatDb(db) {
 
 /** 目盛りの間隔を拡大率から決める（線が詰まりすぎないように）。 */
 function tickStep(pixelsPerSecond) {
-  for (const step of [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600]) {
+  for (const step of [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600]) {
     if (step * pixelsPerSecond >= 70) return step;
   }
   return 3600;
@@ -203,8 +203,12 @@ function drawRuler(canvas, view) {
   }
   ctx.stroke();
 
+  /* 目盛りの間隔が1秒を切ったら、秒の下も出す。出さないと **隣り合う
+     ラベルが同じ文字列**になり（10:33 の隣が 10:33）、どこを見ているのか
+     分からなくなる。 */
   ctx.fillStyle = ink;
-  labels.forEach(([x, t]) => ctx.fillText(formatTime(t), x + 4, height - 14));
+  const withMillis = step < 1;
+  labels.forEach(([x, t]) => ctx.fillText(formatTime(t, withMillis), x + 4, height - 14));
 }
 
 /* 索引の波形は base64 の1バイト列（0〜255）で来る。素の JSON 配列だと同じ
@@ -269,12 +273,10 @@ function drawWaveform(canvas, track, view) {
   ctx.stroke();
   ctx.globalAlpha = 1;
 
+  /* 中心線は引かない。音の無いところに横線が通ると、**無音なのか
+     ごく小さい音が入っているのか**が見分けられなくなる。声の切れ目は
+     何も無いのが正しい。 */
   const middle = height / 2;
-  ctx.beginPath();
-  ctx.moveTo(0, middle + 0.5);
-  ctx.lineTo(width, middle + 0.5);
-  ctx.stroke();
-
   if (!track.peaks.length) return;
 
   const { tops, cores } = columnise(track, view, width);
@@ -286,9 +288,8 @@ function drawWaveform(canvas, track, view) {
      薄い層が山、濃い層が実効値。山だけを塗ると、人の声は瞬間的な山が
      揃いやすいので**どこも同じ高さに見え**、密度の差が読めない。
 
-     無音の画素でも 1px は必ず引く。飛ばすと帯が途切れ、**波形ではなく
-     棒の羅列に見える**（前はここで飛ばしていた）。声のあいだの間合いは、
-     途切れではなく細い背骨として見えるのが正しい。 */
+     音の無い画素には何も描かない。背骨のつもりで 1px を通していたときは、
+     **無音とごく小さい音が見分けられなかった。** 声の切れ目は空白でよい。 */
   ctx.fillStyle = track.color;
 
   /* 山の層は 0.45。これより薄いと、暗い地の上では**汚れのように黒く**沈み、
@@ -296,14 +297,16 @@ function drawWaveform(canvas, track, view) {
      地から浮いて見える範囲がここ。 */
   ctx.globalAlpha = alpha * 0.45;
   for (let x = 0; x < width; x += 1) {
+    if (tops[x] <= 0) continue;
     const h = tops[x] * half;
-    ctx.fillRect(x, middle - h, 1, h * 2 + 1);
+    ctx.fillRect(x, middle - h, 1, Math.max(1, h * 2));
   }
 
   ctx.globalAlpha = alpha;
   for (let x = 0; x < width; x += 1) {
+    if (cores[x] <= 0) continue;
     const h = cores[x] * half;
-    ctx.fillRect(x, middle - h, 1, h * 2 + 1);
+    ctx.fillRect(x, middle - h, 1, Math.max(1, h * 2));
   }
   ctx.globalAlpha = 1;
 }

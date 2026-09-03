@@ -1141,6 +1141,33 @@ class RecordingMixerApiTests(unittest.TestCase):
         self.assertTrue(all(s["peaks_b64"] and s["rms_b64"] for s in manifest["stems"]))
         self.assertTrue(all("/stem/" in s["url"] for s in manifest["stems"]))
 
+    def test_the_manifest_is_compressed_when_the_browser_accepts_it(self):
+        """索引を gzip で返すこと。
+
+        波形を 0.05 秒刻みで持つので、2時間×5トラックだと素の JSON で 2MB 近く
+        なる。中身は base64 の1バイト列で無音が同じ文字の連なりになるため、
+        圧縮がよく効く（実測 1.98MB → 1.16MB）。**開くたびに毎回落ちてくる**
+        ものなので、ここを素で流すと待ち時間がそのまま増える。
+        """
+        response = self.client.get(self._mixer_url(), headers={"accept-encoding": "gzip"})
+        self.assertEqual(response.status_code, 200)
+        # httpx は透過的に展開するので、中身が読めることと宣言の両方を見る。
+        self.assertEqual(response.headers.get("content-encoding"), "gzip")
+        # セッション層が Cookie も足すので、含まれていることだけを見る。
+        self.assertIn("Accept-Encoding", response.headers.get("vary", ""))
+        self.assertIn("stems", response.json())
+
+    def test_the_manifest_stays_plain_for_clients_that_do_not_ask_for_gzip(self):
+        """gzip を受け付けない相手には、そのまま返すこと。
+
+        ヘッダを見ない道具（curl の既定など）に圧縮を送りつけると、
+        **読めない中身**が返ることになる。
+        """
+        response = self.client.get(self._mixer_url(), headers={"accept-encoding": "identity"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.headers.get("content-encoding"))
+        self.assertIn("stems", response.json())
+
     def test_stem_is_served_as_seekable_audio(self):
         url = self.client.get(self._mixer_url()).json()["stems"][0]["url"]
         response = self.client.get(url)
