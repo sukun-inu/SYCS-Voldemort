@@ -1,9 +1,212 @@
-import*as api from"../lib/api.js";import{el,icon,clear,loading}from"../lib/dom.js";import{toast}from"../lib/toast.js";const PAGE_SIZE=25;const EVENT_LIMIT=100;export function mount(win){let offset=0;let keyword="";let total=0;const searchInput=el("input",{class:"input",type:"search",placeholder:"ユーザー名 / 表示名 / ID","aria-label":"ユーザー検索",});const countChip=el("span",{class:"chip",text:"—"});const rowsEl=el("div",{class:"stack"});const pageLabel=el("span",{class:"list-sub",text:""});const prevButton=el("button",{class:"btn btn-sm",type:"button",disabled:true},icon("bi-chevron-left"),"前へ");const nextButton=el("button",{class:"btn btn-sm",type:"button",disabled:true},"次へ",icon("bi-chevron-right"));const detailEl=el("div",{class:"stack"});const detailSection=el("section",{class:"section",hidden:true},el("div",{class:"section-head row"},el("h2",{class:"section-title grow",text:"詳細"}),el("button",{class:"btn btn-sm btn-quiet",type:"button",onclick:()=>{detailSection.hidden=true;clear(detailEl);},},icon("bi-x"),"閉じる")),el("div",{class:"section-body"},detailEl));clear(win.body).append(el("div",{class:"stack"},el("section",{class:"section"},el("div",{class:"section-head row"},el("h2",{class:"section-title grow",text:"ユーザー一覧"}),countChip),el("div",{class:"section-body"},el("div",{class:"input-row"},el("div",{class:"field grow"},searchInput),el("button",{class:"btn",type:"button",onclick:()=>search()},icon("bi-search"),"検索")),rowsEl,el("div",{class:"row"},pageLabel,el("span",{class:"grow"}),prevButton,nextButton))),detailSection));searchInput.addEventListener("keydown",(event)=>{if(event.key==="Enter")search();});prevButton.addEventListener("click",()=>{offset=Math.max(0,offset-PAGE_SIZE);load();});nextButton.addEventListener("click",()=>{offset+=PAGE_SIZE;load();});function search(){keyword=searchInput.value.trim();offset=0;load();}
-function renderRows(rows){clear(rowsEl);if(!rows.length){rowsEl.append(el("div",{class:"empty",text:keyword?"一致するユーザーがいません。":"記録がまだありません。"}));return;}
-rowsEl.append(el("div",{class:"list"},rows.map((row)=>el("div",{class:"list-row"},row.avatar_url?el("img",{class:"tray-avatar",src:row.avatar_url,width:20,height:20,alt:""}):icon("bi-person"),el("div",{class:"grow list-main"},el("div",{class:"truncate",text:row.display_name||row.username||`ID: ${row.user_id}`}),el("div",{class:"list-sub truncate mono",text:row.user_id})),el("span",{class:`chip ${row.status_tone}`,text:row.status_label}),el("div",{class:"list-sub nowrap"},el("div",{text:row.last_event_label}),el("div",{text:row.last_event_at})),el("button",{class:"btn btn-sm",type:"button",onclick:()=>showDetail(row.user_id),},"詳細")))));}
-async function load(){rowsEl.replaceChildren(loading());try{const params=new URLSearchParams({limit:String(PAGE_SIZE),offset:String(offset)});if(keyword)params.set("q",keyword);const payload=await api.get(`/admin/api/users/state?${params}`);total=payload.total||0;renderRows(payload.rows||[]);countChip.textContent=`${total} 人`;const from=total===0?0:offset+1;const to=offset+(payload.rows||[]).length;pageLabel.textContent=`${from}–${to} / ${total} 人`;prevButton.disabled=offset===0;nextButton.disabled=!payload.has_more;}catch(error){clear(rowsEl).append(el("div",{class:"empty",text:`一覧を取得できませんでした（${error.message}）`}));countChip.textContent="取得失敗";prevButton.disabled=true;nextButton.disabled=true;}}
-function definition(label,value){return el("div",{class:"row"},el("span",{class:"list-sub",style:{minWidth:"120px"},text:label}),el("span",{class:"grow",text:value||"-"}));}
-async function showDetail(userId){detailSection.hidden=false;clear(detailEl).append(loading());try{const payload=await api.get(`/admin/api/users/state/${userId}?event_limit=${EVENT_LIMIT}`);const current=payload.current;clear(detailEl);if(current){detailEl.append(el("div",{class:"row"},el("strong",{class:"grow",text:current.display_name||current.username||`ID: ${userId}`}),el("span",{class:`chip ${current.status_tone}`,text:current.status_label})),definition("ユーザーID",current.user_id),definition("初回記録",current.first_seen_at),definition("最終参加",current.last_joined_at),definition("最終退出",current.last_left_at),definition("タイムアウト期限",current.is_timed_out?current.timed_out_until:"なし"),definition("ロール",current.roles.length?current.roles.join(" / "):"なし"),definition("権限",current.abilities.length?current.abilities.join(" / "):"なし"));}
-const events=payload.events||[];detailEl.append(el("h3",{class:"field-label",text:`履歴（${events.length} 件）`}));if(!events.length){detailEl.append(el("div",{class:"empty",text:"履歴はありません。"}));return;}
-detailEl.append(el("div",{class:"list"},events.map((event)=>el("div",{class:"list-row"},el("div",{class:"grow list-main"},el("div",{class:"truncate",text:event.event_label}),el("div",{class:"list-sub truncate",text:[event.actor_name&&`実行: ${event.actor_name}`,event.reason].filter(Boolean).join(" / ")})),el("span",{class:"chip",text:event.status_after_label}),el("span",{class:"list-sub nowrap",text:event.event_at})))));}catch(error){clear(detailEl).append(el("div",{class:"empty",text:`詳細を取得できませんでした（${error.message}）`}));if(error.status!==404)toast(`詳細の取得に失敗しました（${error.message}）`,"danger");}}
-load();}
+/* ユーザー状態監査。
+   絞り込みとページ送りはサーバ側（/admin/api/users/state）に任せ、
+   クライアントは受け取った行を並べるだけにする。 */
+
+import * as api from "../lib/api.js";
+import { el, icon, clear, loading } from "../lib/dom.js";
+import { toast } from "../lib/toast.js";
+
+const PAGE_SIZE = 25;
+const EVENT_LIMIT = 100;
+
+export function mount(win) {
+  let offset = 0;
+  let keyword = "";
+  let total = 0;
+
+  const searchInput = el("input", {
+    class: "input",
+    type: "search",
+    placeholder: "ユーザー名 / 表示名 / ID",
+    "aria-label": "ユーザー検索",
+  });
+  const countChip = el("span", { class: "chip", text: "—" });
+  const rowsEl = el("div", { class: "stack" });
+  const pageLabel = el("span", { class: "list-sub", text: "" });
+  const prevButton = el("button", { class: "btn btn-sm", type: "button", disabled: true },
+                        icon("bi-chevron-left"), "前へ");
+  const nextButton = el("button", { class: "btn btn-sm", type: "button", disabled: true },
+                        "次へ", icon("bi-chevron-right"));
+  const detailEl = el("div", { class: "stack" });
+
+  const detailSection = el(
+    "section",
+    { class: "section", hidden: true },
+    el("div", { class: "section-head row" },
+       el("h2", { class: "section-title grow", text: "詳細" }),
+       el("button", {
+         class: "btn btn-sm btn-quiet", type: "button",
+         onclick: () => { detailSection.hidden = true; clear(detailEl); },
+       }, icon("bi-x"), "閉じる")),
+    el("div", { class: "section-body" }, detailEl)
+  );
+
+  clear(win.body).append(
+    el(
+      "div",
+      { class: "stack" },
+      el(
+        "section",
+        { class: "section" },
+        el("div", { class: "section-head row" },
+           el("h2", { class: "section-title grow", text: "ユーザー一覧" }), countChip),
+        el(
+          "div",
+          { class: "section-body" },
+          el("div", { class: "input-row" },
+             el("div", { class: "field grow" }, searchInput),
+             el("button", { class: "btn", type: "button", onclick: () => search() },
+                icon("bi-search"), "検索")),
+          rowsEl,
+          el("div", { class: "row" }, pageLabel, el("span", { class: "grow" }), prevButton, nextButton)
+        )
+      ),
+      detailSection
+    )
+  );
+
+  searchInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") search();
+  });
+  prevButton.addEventListener("click", () => {
+    offset = Math.max(0, offset - PAGE_SIZE);
+    load();
+  });
+  nextButton.addEventListener("click", () => {
+    offset += PAGE_SIZE;
+    load();
+  });
+
+  function search() {
+    keyword = searchInput.value.trim();
+    offset = 0;
+    load();
+  }
+
+  function renderRows(rows) {
+    clear(rowsEl);
+    if (!rows.length) {
+      rowsEl.append(el("div", { class: "empty", text: keyword ? "一致するユーザーがいません。" : "記録がまだありません。" }));
+      return;
+    }
+
+    rowsEl.append(
+      el(
+        "div",
+        { class: "list" },
+        rows.map((row) =>
+          el(
+            "div",
+            { class: "list-row" },
+            row.avatar_url
+              ? el("img", { class: "tray-avatar", src: row.avatar_url, width: 20, height: 20, alt: "" })
+              : icon("bi-person"),
+            el(
+              "div",
+              { class: "grow list-main" },
+              el("div", { class: "truncate", text: row.display_name || row.username || `ID: ${row.user_id}` }),
+              el("div", { class: "list-sub truncate mono", text: row.user_id })
+            ),
+            el("span", { class: `chip ${row.status_tone}`, text: row.status_label }),
+            el("div", { class: "list-sub nowrap" },
+               el("div", { text: row.last_event_label }),
+               el("div", { text: row.last_event_at })),
+            el("button", {
+              class: "btn btn-sm", type: "button",
+              onclick: () => showDetail(row.user_id),
+            }, "詳細")
+          )
+        )
+      )
+    );
+  }
+
+  async function load() {
+    rowsEl.replaceChildren(loading());
+    try {
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
+      if (keyword) params.set("q", keyword);
+      const payload = await api.get(`/admin/api/users/state?${params}`);
+
+      total = payload.total || 0;
+      renderRows(payload.rows || []);
+      countChip.textContent = `${total} 人`;
+      const from = total === 0 ? 0 : offset + 1;
+      const to = offset + (payload.rows || []).length;
+      pageLabel.textContent = `${from}–${to} / ${total} 人`;
+      prevButton.disabled = offset === 0;
+      nextButton.disabled = !payload.has_more;
+    } catch (error) {
+      clear(rowsEl).append(el("div", { class: "empty", text: `一覧を取得できませんでした（${error.message}）` }));
+      countChip.textContent = "取得失敗";
+      prevButton.disabled = true;
+      nextButton.disabled = true;
+    }
+  }
+
+  function definition(label, value) {
+    return el("div", { class: "row" },
+              el("span", { class: "list-sub", style: { minWidth: "120px" }, text: label }),
+              el("span", { class: "grow", text: value || "-" }));
+  }
+
+  async function showDetail(userId) {
+    detailSection.hidden = false;
+    clear(detailEl).append(loading());
+    try {
+      const payload = await api.get(`/admin/api/users/state/${userId}?event_limit=${EVENT_LIMIT}`);
+      const current = payload.current;
+      clear(detailEl);
+
+      if (current) {
+        detailEl.append(
+          el("div", { class: "row" },
+             el("strong", { class: "grow", text: current.display_name || current.username || `ID: ${userId}` }),
+             el("span", { class: `chip ${current.status_tone}`, text: current.status_label })),
+          definition("ユーザーID", current.user_id),
+          definition("初回記録", current.first_seen_at),
+          definition("最終参加", current.last_joined_at),
+          definition("最終退出", current.last_left_at),
+          definition("タイムアウト期限", current.is_timed_out ? current.timed_out_until : "なし"),
+          definition("ロール", current.roles.length ? current.roles.join(" / ") : "なし"),
+          definition("権限", current.abilities.length ? current.abilities.join(" / ") : "なし")
+        );
+      }
+
+      const events = payload.events || [];
+      detailEl.append(el("h3", { class: "field-label", text: `履歴（${events.length} 件）` }));
+      if (!events.length) {
+        detailEl.append(el("div", { class: "empty", text: "履歴はありません。" }));
+        return;
+      }
+
+      detailEl.append(
+        el(
+          "div",
+          { class: "list" },
+          events.map((event) =>
+            el(
+              "div",
+              { class: "list-row" },
+              el(
+                "div",
+                { class: "grow list-main" },
+                el("div", { class: "truncate", text: event.event_label }),
+                el("div", { class: "list-sub truncate",
+                            text: [event.actor_name && `実行: ${event.actor_name}`, event.reason]
+                              .filter(Boolean).join(" / ") })
+              ),
+              el("span", { class: "chip", text: event.status_after_label }),
+              el("span", { class: "list-sub nowrap", text: event.event_at })
+            )
+          )
+        )
+      );
+    } catch (error) {
+      clear(detailEl).append(el("div", { class: "empty", text: `詳細を取得できませんでした（${error.message}）` }));
+      if (error.status !== 404) toast(`詳細の取得に失敗しました（${error.message}）`, "danger");
+    }
+  }
+
+  load();
+}

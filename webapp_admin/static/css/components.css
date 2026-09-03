@@ -1,1 +1,727 @@
-.lens{position:relative}.lens::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;background:var(--lens-rim);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;pointer-events:none;z-index:1}[data-specular]{--spec-x:50%;--spec-y:0%;position:relative}[data-specular]::after{content:"";position:absolute;inset:0;border-radius:inherit;background:radial-gradient(220px 140px at var(--spec-x) var(--spec-y),var(--spec),transparent 72%);opacity:0;transition:opacity var(--dur-3) ease;pointer-events:none}[data-specular]:hover::after{opacity:1}.desktop-hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;color:rgba(233,244,255,0.86);font-size:var(--text-md);line-height:2;text-shadow:0 1px 12px rgba(0,20,50,0.75);pointer-events:none}.desktop-hint strong{color:#fff}.desktop.has-windows .desktop-hint{display:none}.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--gap-icon);padding:5px 12px;min-height:32px;border:1px solid var(--border);border-radius:var(--radius);background:var(--canvas-subtle);color:var(--fg);font-size:var(--text-md);line-height:20px;font-weight:500;cursor:pointer;transition:background-color var(--dur-1) ease,border-color var(--dur-1) ease,color var(--dur-1) ease}.btn:hover:not(:disabled){background:var(--canvas-inset)}.btn:disabled{opacity:.55;cursor:not-allowed}.btn-primary{background:var(--success-emphasis);border-color:transparent;color:#fff}.btn-primary:hover:not(:disabled){background:var(--success)}.btn-danger{color:var(--danger)}.btn-danger:hover:not(:disabled){background:var(--danger-soft);border-color:var(--danger)}.btn-quiet{background:transparent;border-color:transparent;color:var(--fg-muted)}.btn-quiet:hover:not(:disabled){background:var(--canvas-inset);color:var(--fg)}.btn-sm{min-height:26px;padding:2px 8px;font-size:var(--text-sm);line-height:20px}.btn-icon{padding:4px 7px;min-height:28px}.field{display:flex;flex-direction:column;gap:5px}.field-label{font-size:var(--text-md);font-weight:600}.field-help{font-size:var(--text-sm);color:var(--fg-muted)}.field-error{font-size:var(--text-sm);color:var(--danger);display:none}.field.has-error .field-error{display:block}.field.is-disabled{opacity:.55}.input,.select,.textarea{width:100%;padding:5px 10px;min-height:32px;border:1px solid var(--border);border-radius:var(--radius);background:var(--canvas);color:var(--fg);font:inherit;font-size:var(--text-md);line-height:20px}.textarea{min-height:92px;resize:vertical;line-height:1.7}.input:focus,.select:focus,.textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}.field.has-error .input,.field.has-error .select,.field.has-error .textarea{border-color:var(--danger)}.input:disabled,.select:disabled,.textarea:disabled{background:var(--canvas-inset);cursor:not-allowed}.input-row{display:flex;gap:8px;align-items:flex-start}.input-row>.field{flex:1 1 0;min-width:0}.check{display:flex;align-items:flex-start;gap:8px;cursor:pointer}.check input{margin:4px 0 0;width:15px;height:15px;accent-color:var(--accent)}.check-text{font-size:var(--text-md)}.check-list{display:flex;flex-direction:column;gap:6px}.section{border:1px solid var(--border);border-radius:var(--radius);background:color-mix(in srgb,var(--canvas) 84%,transparent)}.section + .section{margin-top:var(--gap-section)}.section-head{position:relative;padding:10px 14px;border-bottom:1px solid var(--glass-edge);background:var(--rail-bg);-webkit-backdrop-filter:var(--rail-blur);backdrop-filter:var(--rail-blur);border-radius:var(--radius) var(--radius) 0 0;box-shadow:inset 0 1px 0 var(--rail-top),inset 0 -1px 0 var(--rail-shade)}@media (prefers-reduced-transparency:reduce){.section{background:var(--canvas)}.section-head{background:var(--canvas-subtle);-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:none;border-bottom-color:var(--border)}.section-head[data-specular]::after{display:none}}.section-head[data-specular]::after{z-index:0;background:radial-gradient(200px 46px at var(--spec-x) var(--spec-y),var(--spec),transparent 74%)}.section-head>*{position:relative;z-index:1}.section-title{font-size:var(--text-md)}.section-help{font-size:var(--text-sm);color:var(--fg-muted)}.section-body{padding:14px;display:flex;flex-direction:column;gap:var(--gap-stack)}.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);overflow-x:auto}.tab{padding:7px 12px;border:1px solid transparent;border-bottom:2px solid transparent;background:none;color:var(--fg-muted);font-size:var(--text-md);cursor:pointer;white-space:nowrap}.tab:hover{color:var(--fg)}.tab.is-active{color:var(--fg);font-weight:600;border-bottom-color:var(--accent)}.tabpanel{padding-top:14px}.list{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius)}.list-row{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:var(--text-md)}.list-row + .list-row{border-top:1px solid var(--border-muted)}.list-row:hover{background:var(--canvas-subtle)}.list-main{min-width:0}.list-sub{font-size:var(--text-sm);color:var(--fg-muted)}.empty{padding:18px 14px;text-align:center;color:var(--fg-muted);font-size:var(--text-md);border:1px dashed var(--border);border-radius:var(--radius)}.chip{display:inline-flex;align-items:center;gap:var(--gap-icon);padding:1px 8px;border:1px solid var(--border);border-radius:var(--radius-pill);font-size:var(--text-sm);color:var(--fg-muted);background:var(--canvas-subtle)}.chip.accent{color:var(--accent);border-color:transparent;background:var(--accent-soft)}.chip.danger{color:var(--danger);border-color:transparent;background:var(--danger-soft)}.chip.success{color:var(--success);border-color:transparent;background:var(--success-soft)}.chip.warning{color:var(--attention);border-color:transparent;background:var(--attention-soft)}.panel{display:flex;flex-direction:column;height:100%;min-height:0}.panel-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-gutter:stable}.aligns-with-scroll{margin-right:var(--scrollbar,0px)}.savebar{flex:none;margin-right:var(--scrollbar,0px);display:flex;align-items:center;gap:10px;padding:10px 14px;margin-top:14px;border-top:1px solid var(--border);background:var(--canvas-overlay)}.savebar-status{font-size:var(--text-md);color:var(--fg-muted)}.savebar-status.is-dirty{color:var(--attention)}.savebar-status.is-error{color:var(--danger)}.spinner{width:15px;height:15px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;flex:none}@keyframes spin{to{transform:rotate(360deg)}}.loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:32px;color:var(--fg-muted);font-size:var(--text-md)}.toast-stack{position:fixed;right:16px;bottom:calc(var(--taskbar-height) + 16px);z-index:var(--z-toast);display:flex;flex-direction:column;gap:8px;max-width:min(360px,calc(100vw - 32px))}.toast{position:relative;display:flex;align-items:flex-start;gap:8px;padding:11px 13px 11px 11px;border:1px solid var(--glass-edge);border-left:3px solid var(--border);border-radius:var(--radius-lg);background:var(--toast-bg);-webkit-backdrop-filter:var(--toast-blur);backdrop-filter:var(--toast-blur);box-shadow:var(--shadow-popover),inset 0 1px 0 var(--glass-highlight);font-size:var(--text-md);line-height:22px;animation:toast-in var(--dur-2) ease-out}@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.toast{background:var(--canvas-overlay)}}.toast>.grow{position:relative;z-index:1}.toast.success{border-left-color:var(--success)}.toast.danger{border-left-color:var(--danger)}.toast.info{border-left-color:var(--accent)}.toast>.icon{position:relative;z-index:1;width:14px;height:14px;margin-top:4px;flex:none}.toast.success>.icon{color:var(--success)}.toast.danger>.icon{color:var(--danger)}.toast.info>.icon{color:var(--accent)}.toast-close{margin-left:auto;position:relative;z-index:1;width:22px;height:22px;min-height:0;padding:0;color:var(--fg);opacity:.55}.toast-close:hover{opacity:1;background:var(--glass-highlight)}@keyframes toast-in{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}.metric{display:flex;flex-direction:column;gap:6px}.metric-label{font-size:var(--text-md);color:var(--fg-muted)}.metric-value{font-size:var(--text-lg);font-weight:600;font-variant-numeric:tabular-nums}.meter{height:6px;border-radius:var(--radius-pill);background:var(--canvas-inset);overflow:hidden}.meter-fill{display:block;height:100%;background:var(--accent);transition:width var(--dur-3) ease}.metric.tone-success .meter-fill{background:var(--success)}.metric.tone-warning .meter-fill{background:var(--attention)}.metric.tone-danger .meter-fill{background:var(--danger)}.metric.tone-info .meter-fill{background:var(--accent)}.metric.tone-danger .metric-value{color:var(--danger)}.list-row.severity-critical{border-left:3px solid var(--danger)}.list-row.severity-warning{border-left:3px solid var(--attention)}.list-row.severity-info{border-left:3px solid var(--accent)}.log-view{margin:0;padding:12px;max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--canvas-inset);font-family:var(--font-mono);font-size:var(--text-sm);line-height:1.6;white-space:pre;color:var(--fg)}.log-line{white-space:pre}.log-line.is-error{color:var(--danger)}.log-line.is-warn{color:var(--attention)}.log-line.is-debug{color:var(--fg-subtle)}.window-body.is-filled{display:flex;flex-direction:column;overflow:hidden}.dev-panel{flex:1 1 auto;min-height:0}.dev-panel>.tabbed{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}.dev-panel>.tabbed>.tabs{flex:none;margin-right:var(--scrollbar,0px)}.dev-panel>.tabbed>.tabpanel{flex:1 1 auto;min-height:0;overflow:auto;scrollbar-gutter:stable}.dev-panel>.row{flex:none}.log-pane{height:100%;min-height:0}.log-pane>.section{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}.log-pane>.section>.section-body{flex:1 1 auto;min-height:0}.log-pane .log-view{flex:1 1 auto;min-height:120px;max-height:none}.log-toolbar{flex:none;flex-wrap:wrap}.log-toolbar .select{width:auto;min-width:120px}.log-toolbar .input{width:84px}.log-follow{align-items:center;flex:none;white-space:nowrap}.log-follow input{margin:0}.log-status{font-variant-numeric:tabular-nums;white-space:nowrap}.daw{display:flex;flex-direction:column;gap:10px;min-height:0}.daw-transport{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius) var(--radius) 0 0;background:var(--canvas-subtle)}.daw-clock{font-variant-numeric:tabular-nums;font-size:var(--text-lg);letter-spacing:.02em;padding:2px 10px;border:1px solid var(--border-muted);border-radius:var(--radius);background:var(--canvas)}.daw-transport .btn.is-on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}.daw-region{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 10px;border:1px solid var(--border);border-top:0;border-radius:0 0 var(--radius) var(--radius);background:var(--canvas)}.daw-region-label{font-size:var(--text-md);color:var(--fg-muted)}.daw-region-tilde{color:var(--fg-subtle)}.daw-region-len{font-size:var(--text-md);color:var(--fg-muted);min-width:7em}.daw-time{width:8.5em;padding:3px 8px;font-variant-numeric:tabular-nums;border:1px solid var(--border-muted);border-radius:var(--radius);background:var(--canvas);color:var(--fg)}.daw-time:focus-visible{outline:2px solid var(--accent);outline-offset:1px}.daw-loop-grip{position:absolute;top:0;bottom:0;width:5px;background:var(--accent);opacity:.55}.daw-loop-grip.is-start{left:-1px;border-radius:2px 0 0 2px}.daw-loop-grip.is-end{right:-1px;border-radius:0 2px 2px 0}.daw-ruler.is-on-edge{cursor:col-resize}.daw-tabs{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}.daw-tab{appearance:none;border:0;cursor:pointer;padding:4px 14px;font-size:var(--text-md);background:var(--canvas);color:var(--fg-muted)}.daw-tab + .daw-tab{border-left:1px solid var(--border)}.daw-tab.is-on{background:var(--accent);color:#fff}.daw-zoom{display:inline-flex;gap:4px}.daw-zoom .btn{min-width:30px;padding:0 8px}.daw-arrange{display:flex;align-items:stretch;min-height:0;border:1px solid var(--border);border-radius:var(--radius);background:var(--canvas);overflow:hidden}.daw-head-col{flex:0 0 190px;border-right:1px solid var(--border);background:var(--canvas-subtle)}.daw-head-spacer{height:26px;border-bottom:1px solid var(--border)}.daw-heads{display:flex;flex-direction:column}.daw-head{display:flex;align-items:center;gap:8px;height:72px;padding:0 8px 0 0;border-bottom:1px solid var(--border-muted);transition:opacity var(--dur-1) ease}.daw-head.is-silenced{opacity:.45}.daw-head{cursor:grab}.daw-head.is-dragging{opacity:.4;cursor:grabbing}.daw-head.is-drop-target{box-shadow:inset 0 2px 0 var(--accent)}.daw-head-color{flex:0 0 4px;align-self:stretch}.daw-head-body{flex:1 1 auto;min-width:0}.daw-head-name{font-size:var(--text-md);font-weight:500;display:flex;align-items:center;gap:6px}.daw-head-sub{font-size:var(--text-xs);color:var(--fg-subtle);font-variant-numeric:tabular-nums}.daw-head-buttons{display:flex;gap:3px}.daw-btn{appearance:none;cursor:pointer;width:22px;height:22px;padding:0;font-size:var(--text-xs);font-weight:600;line-height:1;border:1px solid var(--border);border-radius:4px;background:var(--canvas);color:var(--fg-muted)}.daw-btn:hover{border-color:var(--fg-subtle)}.daw-btn.is-on{background:var(--danger);border-color:var(--danger);color:#fff}.daw-btn.is-solo.is-on{background:var(--attention);border-color:var(--attention)}.daw-track-area{flex:1 1 auto;min-width:0;position:relative}.daw-viewport{position:relative}.daw-ruler{position:relative;height:26px;border-bottom:1px solid var(--border);cursor:ew-resize}.daw-ruler-canvas{display:block;width:100%;height:26px}.daw-loop{position:absolute;top:0;bottom:0;background:var(--accent-soft);border-left:1px solid var(--accent);border-right:1px solid var(--accent);pointer-events:none}.daw-lanes{display:flex;flex-direction:column;cursor:text}.daw-lane{height:72px;border-bottom:1px solid var(--border-muted)}.daw-lane-canvas{display:block;width:100%;height:72px}.daw-playhead{position:absolute;top:0;bottom:0;left:0;width:1px;background:var(--danger);pointer-events:none}.daw-playhead::before{content:"";position:absolute;top:0;left:-4px;border-left:4px solid transparent;border-right:4px solid transparent;border-top:6px solid var(--danger)}.daw-scroll{overflow-x:auto;overflow-y:hidden;height:12px}.daw-spacer{height:1px}.daw-console{border:1px solid var(--border);border-radius:var(--radius);background:var(--canvas);overflow-x:auto}.daw-strips{display:flex;align-items:flex-start;gap:0}.daw-strip{flex:0 0 100px;display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 8px;border-right:1px solid var(--border-muted);transition:opacity var(--dur-1) ease}.daw-strip.is-silenced{opacity:.45}.daw-strip.is-master{flex:0 0 104px;position:sticky;right:0;border-left:2px solid var(--border);border-right:0;background:var(--canvas-subtle)}.daw-strip-top{display:flex;align-items:center;gap:5px;width:100%}.daw-strip-color{flex:0 0 8px;height:8px;border-radius:2px}.daw-strip-name{font-size:var(--text-sm);font-weight:500}.daw-strip-pan{display:flex;justify-content:center}.daw-strip-body{display:flex;align-items:stretch;gap:6px;height:220px}.daw-strip-db{font-size:var(--text-xs);font-variant-numeric:tabular-nums;color:var(--fg-muted);padding:1px 6px;border-radius:3px;background:var(--canvas-inset)}.daw-strip-buttons{display:flex;gap:4px}.daw-fader{position:relative;width:46px;display:flex;justify-content:flex-end;padding-right:8px;cursor:ns-resize}.daw-fader-scale{position:absolute;left:0;top:0;bottom:0;width:22px;pointer-events:none}.daw-fader-mark{position:absolute;right:0;font-size:var(--text-xs);line-height:1;color:var(--fg-subtle);font-variant-numeric:tabular-nums;transform:translateY(50%)}.daw-fader-mark.is-unity{color:var(--fg-muted);font-weight:600}.daw-fader:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}.daw-fader-track{position:relative;width:6px;height:100%;border-radius:3px;background:var(--canvas-inset);box-shadow:inset 0 0 0 1px var(--border-muted)}.daw-fader-fill{position:absolute;bottom:0;left:0;right:0;border-radius:3px;background:var(--accent);opacity:.55}.daw-fader-knob{position:absolute;left:50%;width:22px;height:12px;transform:translateX(-50%);border-radius:3px;border:1px solid var(--border);background:linear-gradient(180deg,var(--canvas) 0%,var(--canvas-subtle) 100%);box-shadow:var(--shadow-1)}.daw-fader-knob::after{content:"";position:absolute;left:3px;right:3px;top:50%;transform:translateY(-50%);height:1px;background:var(--fg-subtle)}.daw-meter{display:block;width:12px;height:100%;border-radius:2px;box-shadow:inset 0 0 0 1px var(--border-muted)}.daw-knob{position:relative;width:30px;height:30px;cursor:ns-resize;border-radius:50%;border:1px solid var(--border);background:radial-gradient(circle at 50% 35%,var(--canvas) 0%,var(--canvas-subtle) 100%);box-shadow:var(--shadow-1)}.daw-knob:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.daw-knob-pointer{position:absolute;inset:0;transition:transform var(--dur-0) linear}.daw-knob-pointer::before{content:"";position:absolute;left:50%;top:3px;width:2px;height:10px;margin-left:-1px;border-radius:1px;background:var(--accent)}.daw-warn{font-size:var(--text-xs);padding:0 5px}@media (max-width:720px){.daw-head-col{flex-basis:132px}.daw-strip{flex-basis:78px}}
+/* ==========================================================================
+   コンポーネント
+   フォーム・ボタン・一覧・タブ・トーストなど、ウィンドウの中身を作る部品。
+   Bootstrap の置き換えとして必要なものだけを持つ。
+   ========================================================================== */
+
+/* ── レンズの縁: 面ではなく縁だけを光らせる ────────────────
+   1px の枠を gradient で塗り、mask で中身を抜いて縁だけ残す。 */
+.lens { position: relative; }
+.lens::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--lens-rim);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── ポインタに追従する鏡面ハイライト ──────────────────────
+   座標は JS が --spec-x / --spec-y に入れる（wm/specular.js）。 */
+[data-specular] { --spec-x: 50%; --spec-y: 0%; position: relative; }
+[data-specular]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(220px 140px at var(--spec-x) var(--spec-y), var(--spec), transparent 72%);
+  opacity: 0;
+  transition: opacity var(--dur-3) ease;
+  pointer-events: none;
+}
+[data-specular]:hover::after { opacity: 1; }
+
+.desktop-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: rgba(233, 244, 255, 0.86);
+  font-size: var(--text-md);
+  line-height: 2;
+  text-shadow: 0 1px 12px rgba(0, 20, 50, 0.75);
+  pointer-events: none;
+}
+.desktop-hint strong { color: #fff; }
+.desktop.has-windows .desktop-hint { display: none; }
+
+/* ── ボタン ───────────────────────────────────────────────── */
+/* 高さは「行の高さ + 上下の余白 + 枠」で決まる。行の高さを整数で置き、
+   min-height と一致させる（body の 1.7 のままだと 34.1px になり、半端な
+   位置に枠が来て太さが揃わないうえ min-height が意味を持たない）。 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-icon);
+  padding: 5px 12px;
+  /* 入力欄と同じ 32px に揃える（20 + 5+5 + 1+1）。
+     以前は行送りが 18px で高さ 30px、入力欄は 32px だったので、同じ行に
+     ボタンと入力欄を並べると 2px 食い違って見えた。並ぶ部品の高さを揃えるのは
+     この手の画面でいちばん目に付く部分。 */
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--canvas-subtle);
+  color: var(--fg);
+  font-size: var(--text-md);
+  line-height: 20px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--dur-1) ease, border-color var(--dur-1) ease, color var(--dur-1) ease;
+}
+.btn:hover:not(:disabled) { background: var(--canvas-inset); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--success-emphasis);
+  border-color: transparent;
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) { background: var(--success); }
+
+.btn-danger { color: var(--danger); }
+.btn-danger:hover:not(:disabled) { background: var(--danger-soft); border-color: var(--danger); }
+
+.btn-quiet { background: transparent; border-color: transparent; color: var(--fg-muted); }
+.btn-quiet:hover:not(:disabled) { background: var(--canvas-inset); color: var(--fg); }
+
+.btn-sm { min-height: 26px; padding: 2px 8px; font-size: var(--text-sm); line-height: 20px; }
+.btn-icon { padding: 4px 7px; min-height: 28px; }
+
+/* ── フォーム ─────────────────────────────────────────────── */
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field-label { font-size: var(--text-md); font-weight: 600; }
+.field-help { font-size: var(--text-sm); color: var(--fg-muted); }
+.field-error { font-size: var(--text-sm); color: var(--danger); display: none; }
+.field.has-error .field-error { display: block; }
+.field.is-disabled { opacity: .55; }
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  padding: 5px 10px;
+  min-height: 32px;              /* 20 + 5+5 + 1+1 */
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--canvas);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-md);
+  line-height: 20px;
+}
+.textarea { min-height: 92px; resize: vertical; line-height: 1.7; }
+.input:focus, .select:focus, .textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.field.has-error .input,
+.field.has-error .select,
+.field.has-error .textarea { border-color: var(--danger); }
+.input:disabled, .select:disabled, .textarea:disabled { background: var(--canvas-inset); cursor: not-allowed; }
+
+.input-row { display: flex; gap: 8px; align-items: flex-start; }
+.input-row > .field { flex: 1 1 0; min-width: 0; }
+
+/* チェックボックス / スイッチ */
+.check { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+/* 箱を文字の1行目の中心に置く。行高 13.5px × 1.7 = 22.95px、箱 15px なので
+   上の余りは (22.95 - 15) / 2 ≒ 4px（.toast > .icon と同じ勘定）。
+   3px だと 1px 上に浮く。 */
+.check input { margin: 4px 0 0; width: 15px; height: 15px; accent-color: var(--accent); }
+.check-text { font-size: var(--text-md); }
+.check-list { display: flex; flex-direction: column; gap: 6px; }
+
+/* ── セクション ───────────────────────────────────────────── */
+/* 面をわずかに透かす。見出しをガラスにしても、背後が完全な不透明だと
+   曇らせる相手がおらず、ただの灰色の帯になるため（窓の本体 → 窓のガラス →
+   壁紙、と後ろへ抜ける道を作る）。 */
+.section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--canvas) 84%, transparent);
+}
+/* 節どうしは、節の中の項目どうし（--gap-stack 14px）より広く離す。
+   同じ 14px にしていたころは、「項目が並んでいる」のか「別の節が始まった」
+   のかが間隔から読み取れなかった。入れ子の外側ほど広く離すのが筋。 */
+.section + .section { margin-top: var(--gap-section); }
+/* 見出しはガラスの帯として置く。
+
+   白い grosgrain を上から塗ると Vista になる（前にそれで灰色の帯にした）。
+   Liquid Glass は「塗る」のではなく「背後を曇らせて色を拾う」材質なので、
+   塗りは薄く、backdrop-filter と縁の光で見せる。
+
+   - 面   … 薄い膜（--rail-bg）。背後の色が透ける
+   - 曇り … blur + saturate。後ろの色みを吸って、面が生きて見える
+   - 縁   … 上端に細い光、下端に影。板の厚みに見える
+   - 鏡面 … ポインタに追従する光（[data-specular]、panel.js が属性を付ける） */
+.section-head {
+  position: relative;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--glass-edge);
+  background: var(--rail-bg);
+  -webkit-backdrop-filter: var(--rail-blur);
+  backdrop-filter: var(--rail-blur);
+  border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: inset 0 1px 0 var(--rail-top), inset 0 -1px 0 var(--rail-shade);
+}
+/* 透明を抑える設定の環境では、材質をやめて平らな面に戻す。
+   曇りガラスは背後が透けるぶん、地と文字の境目が読みにくくなる人がいる。 */
+@media (prefers-reduced-transparency: reduce) {
+  .section { background: var(--canvas); }
+  .section-head {
+    background: var(--canvas-subtle);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+    border-bottom-color: var(--border);
+  }
+  .section-head[data-specular]::after { display: none; }
+}
+
+/* 鏡面は文字の下に敷く（上に乗せると見出しが白茶ける）。
+   既定の光は窓やタスクバーのような広い面に合わせた 220x140px で、高さ 38px の
+   帯では上の端だけしか掛からない。帯の形に合わせて平たくする。 */
+.section-head[data-specular]::after {
+  z-index: 0;
+  background: radial-gradient(200px 46px at var(--spec-x) var(--spec-y),
+                              var(--spec), transparent 74%);
+}
+.section-head > * { position: relative; z-index: 1; }
+.section-title { font-size: var(--text-md); }
+.section-help { font-size: var(--text-sm); color: var(--fg-muted); }
+.section-body { padding: 14px; display: flex; flex-direction: column;
+                gap: var(--gap-stack); }
+
+/* ── タブ ─────────────────────────────────────────────────── */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.tab {
+  padding: 7px 12px;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--fg-muted);
+  font-size: var(--text-md);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--fg); }
+.tab.is-active { color: var(--fg); font-weight: 600; border-bottom-color: var(--accent); }
+.tabpanel { padding-top: 14px; }
+
+/* ── 一覧（コレクション） ─────────────────────────────────── */
+.list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); }
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: var(--text-md);
+}
+.list-row + .list-row { border-top: 1px solid var(--border-muted); }
+.list-row:hover { background: var(--canvas-subtle); }
+.list-main { min-width: 0; }
+.list-sub { font-size: var(--text-sm); color: var(--fg-muted); }
+
+.empty {
+  padding: 18px 14px;
+  text-align: center;
+  color: var(--fg-muted);
+  font-size: var(--text-md);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+/* ── チップ・バッジ ───────────────────────────────────────── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-icon);
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  background: var(--canvas-subtle);
+}
+.chip.accent { color: var(--accent); border-color: transparent; background: var(--accent-soft); }
+.chip.danger { color: var(--danger); border-color: transparent; background: var(--danger-soft); }
+.chip.success { color: var(--success); border-color: transparent; background: var(--success-soft); }
+.chip.warning { color: var(--attention); border-color: transparent; background: var(--attention-soft); }
+
+/* ── 保存バー ─────────────────────────────────────────────── */
+/* 設定パネルは「送る中身」と「下に居座る保存バー」の2段。
+   バーを中身と一緒に流して sticky で貼り付けていたころは、開いた直後から
+   バーが次の項目に重なり、本体の下パディングぶん浮いた隙間からその項目が
+   覗いていた（＝途中で切れて見える）。バーを流れの外に出す。 */
+.panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+/* 送り代の有無で中身の幅が変わらないよう、溝は常に確保する
+   （項目が増えて縦に溢れた瞬間に、右端が 10px 飛ぶのを防ぐ）。 */
+.panel-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+
+/* 送り先の外に置いた要素を、送り先の中身と同じ右端に揃える。
+
+   スクロールバーが場所を取る環境（Windows の Chrome で実測 10px）では、
+   送り先の中身だけがその幅ぶん細くなる。外に置いた見出し帯や保存バーは
+   細くならないので、右端が 10px ずれる。headless は中身に重ねて描くので
+   0px になり、検査では気づけなかった。
+
+   使う側は、送り先に scrollbar-gutter: stable を付けて溝を常に確保し、
+   外の要素にこの class を付ける。--scrollbar は起動時に実測した値
+   （webapp_admin/static/js/lib/dom.js の measureScrollbar）。 */
+.aligns-with-scroll { margin-right: var(--scrollbar, 0px); }
+
+.savebar {
+  flex: none;
+  /* 保存バーは送り先（.panel-scroll）の外にある。→ .aligns-with-scroll と同じ扱い */
+  margin-right: var(--scrollbar, 0px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  background: var(--canvas-overlay);
+}
+.savebar-status { font-size: var(--text-md); color: var(--fg-muted); }
+.savebar-status.is-dirty { color: var(--attention); }
+.savebar-status.is-error { color: var(--danger); }
+
+/* ── 読み込み中 ───────────────────────────────────────────── */
+.spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  flex: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px;
+  color: var(--fg-muted);
+  font-size: var(--text-md);
+}
+
+/* ── トースト ─────────────────────────────────────────────── */
+.toast-stack {
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--taskbar-height) + 16px);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+}
+/* 通知もガラス。下の壁紙やウィンドウが透けるが、
+   文字が乗る面だけは彩度と明度を持ち上げて読めるようにしておく。 */
+/* 縦の位置は「1行目」を基準に組む。文章が2行以上になってもアイコンと
+   閉じるボタンは1行目に留めたいので align-items は flex-start のまま、
+   1行目の高さ（22px）の中でそれぞれを中央に置く。
+   左枠だけ 3px 太いぶん、左の余白を 2px 削って内側の余白を左右で揃える。 */
+.toast {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 11px 13px 11px 11px;
+  border: 1px solid var(--glass-edge);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--toast-bg);
+  -webkit-backdrop-filter: var(--toast-blur);
+  backdrop-filter: var(--toast-blur);
+  box-shadow: var(--shadow-popover), inset 0 1px 0 var(--glass-highlight);
+  font-size: var(--text-md);
+  line-height: 22px;
+  animation: toast-in var(--dur-2) ease-out;
+}
+/* backdrop-filter が使えない環境では透かさない（読めなくなるため） */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .toast { background: var(--canvas-overlay); }
+}
+.toast > .grow { position: relative; z-index: 1; }
+.toast.success { border-left-color: var(--success); }
+.toast.danger { border-left-color: var(--danger); }
+.toast.info { border-left-color: var(--accent); }
+/* 14px のアイコンを 22px の1行目の中央へ: (22 - 14) / 2 = 4px */
+.toast > .icon {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  margin-top: 4px;
+  flex: none;
+}
+.toast.success > .icon { color: var(--success); }
+.toast.danger > .icon { color: var(--danger); }
+.toast.info > .icon { color: var(--accent); }
+/* ガラスの上では薄い灰色が沈むので、地の文字色を使って少しだけ落とす。
+   大きさは1行目（22px）に収める。btn-sm の min-height:26px のままだと、
+   1行の通知でもこのボタンが箱の高さを決めてしまい、文章が上へ寄る。 */
+.toast-close {
+  margin-left: auto;
+  position: relative;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  color: var(--fg);
+  opacity: .55;
+}
+.toast-close:hover { opacity: 1; background: var(--glass-highlight); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+
+/* ── メトリクス（システム監視） ───────────────────────────── */
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.metric { display: flex; flex-direction: column; gap: 6px; }
+.metric-label { font-size: var(--text-md); color: var(--fg-muted); }
+.metric-value { font-size: var(--text-lg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.meter { height: 6px; border-radius: var(--radius-pill); background: var(--canvas-inset); overflow: hidden; }
+.meter-fill { display: block; height: 100%; background: var(--accent); transition: width var(--dur-3) ease; }
+.metric.tone-success .meter-fill { background: var(--success); }
+.metric.tone-warning .meter-fill { background: var(--attention); }
+.metric.tone-danger .meter-fill { background: var(--danger); }
+.metric.tone-info .meter-fill { background: var(--accent); }
+.metric.tone-danger .metric-value { color: var(--danger); }
+
+.list-row.severity-critical { border-left: 3px solid var(--danger); }
+.list-row.severity-warning { border-left: 3px solid var(--attention); }
+.list-row.severity-info { border-left: 3px solid var(--accent); }
+
+/* ── ログ / JSON ビューア ─────────────────────────────────── */
+.log-view {
+  margin: 0;
+  padding: 12px;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--canvas-inset);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  white-space: pre;
+  color: var(--fg);
+}
+/* 重大度で色を分ける。読める行数が増えても、目当ての行が沈まないように */
+.log-line { white-space: pre; }
+.log-line.is-error { color: var(--danger); }
+.log-line.is-warn { color: var(--attention); }
+.log-line.is-debug { color: var(--fg-subtle); }
+
+/* ── 窓いっぱいに広げる画面（開発者パネル） ───────────────────
+   窓 → タブ → タブの中身 → ログ、と順に高さを渡す。どこか1つでも
+   高さが決まらないと、ログは max-height の 320px のままになる。 */
+.window-body.is-filled { display: flex; flex-direction: column; overflow: hidden; }
+.dev-panel { flex: 1 1 auto; min-height: 0; }
+.dev-panel > .tabbed { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+/* タブの帯は縮めない。flex: none が無いと、下の中身に押されて潰れて消える */
+/* タブ帯は送り先の外にあるので、下線が中身より右へ伸びていた（実測 10px）。 */
+.dev-panel > .tabbed > .tabs { flex: none; margin-right: var(--scrollbar, 0px); }
+.dev-panel > .tabbed > .tabpanel {
+  flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-gutter: stable;
+}
+.dev-panel > .row { flex: none; }
+
+.log-pane { height: 100%; min-height: 0; }
+.log-pane > .section { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.log-pane > .section > .section-body { flex: 1 1 auto; min-height: 0; }
+.log-pane .log-view { flex: 1 1 auto; min-height: 120px; max-height: none; }
+.log-toolbar { flex: none; flex-wrap: wrap; }
+.log-toolbar .select { width: auto; min-width: 120px; }
+.log-toolbar .input { width: 84px; }
+.log-follow { align-items: center; flex: none; white-space: nowrap; }
+.log-follow input { margin: 0; }
+.log-status { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ── 録音ミキサー ─────────────────────────────────────────
+   トラックを縦に積み、右側の波形を同じ時間軸で並べる。
+   左の見出し幅を固定して、目盛りと波形の左端が揃うようにしている。 */
+
+/* ── 録音ミキサー（DAW）───────────────────────────────────────
+   アレンジ（波形＋時間軸）とミキサー（チャンネルストリップ）の2画面。
+   波形は表示範囲だけを描くので、キャンバスは常にビューポート幅。
+   横スクロールは別レイヤー（.daw-spacer）が作る。 */
+.daw { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+
+.daw-transport {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  /* 下に区間の列がくっつくので、角は上だけ丸める。 */
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--canvas-subtle);
+}
+.daw-clock {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-lg); letter-spacing: .02em;
+  padding: 2px 10px;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius);
+  background: var(--canvas);
+}
+.daw-transport .btn.is-on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ── 区間の操作列 ──
+   ドラッグだけだと、数時間の録音を全体表示にしたとき 1px が数秒になり、
+   秒の単位で合わせられない。打ち込みと再生位置からの指定を並べる。 */
+.daw-region {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--canvas);
+}
+.daw-region-label { font-size: var(--text-md); color: var(--fg-muted); }
+.daw-region-tilde { color: var(--fg-subtle); }
+.daw-region-len { font-size: var(--text-md); color: var(--fg-muted); min-width: 7em; }
+.daw-time {
+  width: 8.5em;
+  padding: 3px 8px;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius);
+  background: var(--canvas);
+  color: var(--fg);
+}
+.daw-time:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* 区間の端。つまめることが見て分かるようにする（判定は線そのものではなく
+   前後 7px。細い線をぴたりと狙わせない）。 */
+.daw-loop-grip {
+  position: absolute; top: 0; bottom: 0; width: 5px;
+  background: var(--accent);
+  opacity: .55;
+}
+.daw-loop-grip.is-start { left: -1px; border-radius: 2px 0 0 2px; }
+.daw-loop-grip.is-end { right: -1px; border-radius: 0 2px 2px 0; }
+.daw-ruler.is-on-edge { cursor: col-resize; }
+
+.daw-tabs { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.daw-tab {
+  appearance: none; border: 0; cursor: pointer;
+  padding: 4px 14px; font-size: var(--text-md);
+  background: var(--canvas); color: var(--fg-muted);
+}
+.daw-tab + .daw-tab { border-left: 1px solid var(--border); }
+.daw-tab.is-on { background: var(--accent); color: #fff; }
+
+.daw-zoom { display: inline-flex; gap: 4px; }
+.daw-zoom .btn { min-width: 30px; padding: 0 8px; }
+
+/* ── アレンジ ── */
+.daw-arrange {
+  display: flex; align-items: stretch; min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--canvas);
+  overflow: hidden;
+}
+.daw-head-col { flex: 0 0 190px; border-right: 1px solid var(--border); background: var(--canvas-subtle); }
+.daw-head-spacer { height: 26px; border-bottom: 1px solid var(--border); }
+.daw-heads { display: flex; flex-direction: column; }
+
+.daw-head {
+  display: flex; align-items: center; gap: 8px;
+  height: 72px; padding: 0 8px 0 0;
+  border-bottom: 1px solid var(--border-muted);
+  transition: opacity var(--dur-1) ease;
+}
+.daw-head.is-silenced { opacity: .45; }
+.daw-head { cursor: grab; }
+.daw-head.is-dragging { opacity: .4; cursor: grabbing; }
+.daw-head.is-drop-target { box-shadow: inset 0 2px 0 var(--accent); }
+.daw-head-color { flex: 0 0 4px; align-self: stretch; }
+.daw-head-body { flex: 1 1 auto; min-width: 0; }
+.daw-head-name { font-size: var(--text-md); font-weight: 500; display: flex; align-items: center; gap: 6px; }
+.daw-head-sub { font-size: var(--text-xs); color: var(--fg-subtle); font-variant-numeric: tabular-nums; }
+.daw-head-buttons { display: flex; gap: 3px; }
+
+.daw-btn {
+  appearance: none; cursor: pointer;
+  width: 22px; height: 22px; padding: 0;
+  font-size: var(--text-xs); font-weight: 600; line-height: 1;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--canvas); color: var(--fg-muted);
+}
+.daw-btn:hover { border-color: var(--fg-subtle); }
+/* ミュートは赤、ソロは橙。以前は「並びの最後がソロ」という前提で
+   :last-child に色を当てていたので、トラック見出しにボタンを1つ足した
+   （当時の「声を調べる」。今は無い）とたんソロが赤（ミュートと同じ
+   見た目）になり、押しても区別が付かなくなった。並び順ではなく役割で
+   決める。 */
+.daw-btn.is-on { background: var(--danger); border-color: var(--danger); color: #fff; }
+.daw-btn.is-solo.is-on { background: var(--attention); border-color: var(--attention); }
+
+.daw-track-area { flex: 1 1 auto; min-width: 0; position: relative; }
+.daw-viewport { position: relative; }
+.daw-ruler { position: relative; height: 26px; border-bottom: 1px solid var(--border); cursor: ew-resize; }
+.daw-ruler-canvas { display: block; width: 100%; height: 26px; }
+.daw-loop {
+  position: absolute; top: 0; bottom: 0;
+  background: var(--accent-soft);
+  border-left: 1px solid var(--accent);
+  border-right: 1px solid var(--accent);
+  pointer-events: none;
+}
+.daw-lanes { display: flex; flex-direction: column; cursor: text; }
+.daw-lane { height: 72px; border-bottom: 1px solid var(--border-muted); }
+.daw-lane-canvas { display: block; width: 100%; height: 72px; }
+
+.daw-playhead {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 1px;
+  background: var(--danger);
+  pointer-events: none;
+}
+.daw-playhead::before {
+  content: ""; position: absolute; top: 0; left: -4px;
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 6px solid var(--danger);
+}
+
+/* 横スクロールの見かけだけを作る帯。波形そのものは表示範囲しか描かない。 */
+.daw-scroll { overflow-x: auto; overflow-y: hidden; height: 12px; }
+.daw-spacer { height: 1px; }
+
+/* ── ミキサー ── */
+.daw-console {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--canvas);
+  overflow-x: auto;
+}
+.daw-strips { display: flex; align-items: flex-start; gap: 0; }
+
+.daw-strip {
+  flex: 0 0 100px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 10px 8px;
+  border-right: 1px solid var(--border-muted);
+  transition: opacity var(--dur-1) ease;
+}
+.daw-strip.is-silenced { opacity: .45; }
+/* マスターは右端に貼り付ける。トラックが多くて横に流れても、
+   出力の様子が常に見えているほうがいい。 */
+.daw-strip.is-master {
+  flex: 0 0 104px;
+  position: sticky;
+  right: 0;
+  border-left: 2px solid var(--border);
+  border-right: 0;
+  background: var(--canvas-subtle);
+}
+.daw-strip-top { display: flex; align-items: center; gap: 5px; width: 100%; }
+.daw-strip-color { flex: 0 0 8px; height: 8px; border-radius: 2px; }
+.daw-strip-name { font-size: var(--text-sm); font-weight: 500; }
+.daw-strip-pan { display: flex; justify-content: center; }
+/* 高さは確定値で持つ。パーセント指定を高さ未定の親にぶら下げると、
+   キャンバスの内在高さで親が伸び、次のフレームでさらに伸びる、という
+   増殖が起きる（実際にフェーダーが 1440px まで伸びた）。 */
+.daw-strip-body { display: flex; align-items: stretch; gap: 6px; height: 220px; }
+.daw-strip-db {
+  font-size: var(--text-xs); font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--canvas-inset);
+}
+.daw-strip-buttons { display: flex; gap: 4px; }
+
+/* フェーダー */
+.daw-fader { position: relative; width: 46px; display: flex; justify-content: flex-end;
+             padding-right: 8px; cursor: ns-resize; }
+.daw-fader-scale { position: absolute; left: 0; top: 0; bottom: 0; width: 22px; pointer-events: none; }
+.daw-fader-mark {
+  position: absolute; right: 0;
+  font-size: var(--text-xs); line-height: 1;
+  color: var(--fg-subtle);
+  font-variant-numeric: tabular-nums;
+  transform: translateY(50%);
+}
+.daw-fader-mark.is-unity { color: var(--fg-muted); font-weight: 600; }
+.daw-fader:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.daw-fader-track {
+  position: relative; width: 6px; height: 100%;
+  border-radius: 3px;
+  background: var(--canvas-inset);
+  box-shadow: inset 0 0 0 1px var(--border-muted);
+}
+.daw-fader-fill {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  border-radius: 3px;
+  background: var(--accent);
+  opacity: .55;
+}
+.daw-fader-knob {
+  position: absolute; left: 50%; width: 22px; height: 12px;
+  transform: translateX(-50%);
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--canvas) 0%, var(--canvas-subtle) 100%);
+  box-shadow: var(--shadow-1);
+}
+.daw-fader-knob::after {
+  content: ""; position: absolute; left: 3px; right: 3px; top: 50%;
+  /* top:50% だけだと線の上端が中心に来るので、線の太さのぶん下がる
+     （中身の高さ 10px に対して中心 5.5px、0.5px 下）。半分戻す。 */
+  transform: translateY(-50%);
+  height: 1px; background: var(--fg-subtle);
+}
+
+/* メーター */
+.daw-meter {
+  display: block; width: 12px; height: 100%;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px var(--border-muted);
+}
+
+/* パンつまみ */
+.daw-knob {
+  position: relative; width: 30px; height: 30px; cursor: ns-resize;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: radial-gradient(circle at 50% 35%, var(--canvas) 0%, var(--canvas-subtle) 100%);
+  box-shadow: var(--shadow-1);
+}
+.daw-knob:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.daw-knob-pointer {
+  position: absolute; inset: 0;
+  transition: transform var(--dur-0) linear;
+}
+.daw-knob-pointer::before {
+  content: ""; position: absolute; left: 50%; top: 3px;
+  width: 2px; height: 10px; margin-left: -1px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+.daw-warn { font-size: var(--text-xs); padding: 0 5px; }
+
+@media (max-width: 720px) {
+  .daw-head-col { flex-basis: 132px; }
+  .daw-strip { flex-basis: 78px; }
+}

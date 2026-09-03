@@ -1,5 +1,124 @@
-import*as api from"../lib/api.js";import{el,icon,clear}from"../lib/dom.js";const METRICS_INTERVAL=5000;const INCIDENTS_INTERVAL=15000;const SEVERITY_LABEL={critical:"重大",warning:"注意",info:"情報"};const KIND_ICON={downtime:"bi-power",exception:"bi-bug",http_error:"bi-exclamation-octagon",resource_alert:"bi-activity",};export function mount(win){const updatedEl=el("span",{class:"chip",text:"読み込み中"});const metricsEl=el("div",{class:"metric-grid"});const runtimeEl=el("p",{class:"field-help"});const countEl=el("span",{class:"chip",text:"読み込み中"});const incidentsEl=el("div",{class:"stack"});clear(win.body).append(el("div",{class:"stack"},el("section",{class:"section"},el("div",{class:"section-head row"},el("h2",{class:"section-title grow",text:"ホストメトリクス"}),updatedEl),el("div",{class:"section-body"},metricsEl,runtimeEl)),el("section",{class:"section"},el("div",{class:"section-head row"},el("h2",{class:"section-title grow",text:"監視履歴"}),countEl),el("div",{class:"section-body"},incidentsEl))));async function loadMetrics(){try{const payload=await api.get("/admin/api/metrics");clear(metricsEl);for(const[key,metric]of Object.entries(payload.metrics||{})){const percent=Math.max(0,Math.min(Number(metric.percent)||0,100));metricsEl.append(el("article",{class:`metric tone-${metric.tone || "accent"}`,dataset:{metric:key}},el("div",{class:"row"},el("span",{class:"metric-label grow",text:metric.label||key}),el("span",{class:"metric-value",text:metric.display||`${percent}%`})),el("div",{class:"meter"},el("span",{class:"meter-fill",style:{width:`${percent}%`}})),el("p",{class:"list-sub",text:metric.detail||""})));}
-updatedEl.textContent=`更新 ${payload.updated_at || "--:--:--"}`;updatedEl.classList.remove("danger");const runtime=payload.runtime||{};runtimeEl.textContent=`管理UI 稼働 ${runtime.admin_app || "-"} / ホスト稼働 ${runtime.host || "-"}`;}catch(error){updatedEl.textContent="取得失敗";updatedEl.classList.add("danger");}}
-async function loadIncidents(){try{const payload=await api.get("/admin/api/incidents");const incidents=Array.isArray(payload.incidents)?payload.incidents:[];countEl.textContent=`${incidents.length} 件`;countEl.classList.remove("danger");clear(incidentsEl);if(!incidents.length){incidentsEl.append(el("div",{class:"empty",text:"記録された異常はありません。"}));return;}
-const rows=incidents.slice(0,20).map((incident)=>el("div",{class:`list-row severity-${incident.severity || "info"}`},icon(KIND_ICON[incident.kind]||"bi-info-circle"),el("div",{class:"grow list-main"},el("div",{class:"truncate",text:incident.title||"Incident"}),el("div",{class:"list-sub",text:incident.message||""})),el("div",{class:"list-sub nowrap"},el("div",{text:SEVERITY_LABEL[incident.severity]||incident.severity||""}),el("div",{text:incident.duration?`${incident.created_at} / ${incident.duration}`:incident.created_at||""}))));incidentsEl.append(el("div",{class:"list"},rows));}catch(error){countEl.textContent="取得失敗";countEl.classList.add("danger");}}
-loadMetrics();loadIncidents();const metricsTimer=window.setInterval(loadMetrics,METRICS_INTERVAL);const incidentsTimer=window.setInterval(loadIncidents,INCIDENTS_INTERVAL);win.addCleanup(()=>{window.clearInterval(metricsTimer);window.clearInterval(incidentsTimer);});}
+/* システム監視。ホストメトリクスと監視履歴を定期取得して表示する。
+   旧デスクトップでは背景に貼り付いたウィジェットだったが、
+   他のアプリと同じくウィンドウの1つとして扱う。 */
+
+import * as api from "../lib/api.js";
+import { el, icon, clear } from "../lib/dom.js";
+
+const METRICS_INTERVAL = 5000;
+const INCIDENTS_INTERVAL = 15000;
+
+const SEVERITY_LABEL = { critical: "重大", warning: "注意", info: "情報" };
+const KIND_ICON = {
+  downtime: "bi-power",
+  exception: "bi-bug",
+  http_error: "bi-exclamation-octagon",
+  resource_alert: "bi-activity",
+};
+
+export function mount(win) {
+  const updatedEl = el("span", { class: "chip", text: "読み込み中" });
+  const metricsEl = el("div", { class: "metric-grid" });
+  const runtimeEl = el("p", { class: "field-help" });
+  const countEl = el("span", { class: "chip", text: "読み込み中" });
+  const incidentsEl = el("div", { class: "stack" });
+
+  clear(win.body).append(
+    el(
+      "div",
+      { class: "stack" },
+      el(
+        "section",
+        { class: "section" },
+        el("div", { class: "section-head row" },
+           el("h2", { class: "section-title grow", text: "ホストメトリクス" }), updatedEl),
+        el("div", { class: "section-body" }, metricsEl, runtimeEl)
+      ),
+      el(
+        "section",
+        { class: "section" },
+        el("div", { class: "section-head row" },
+           el("h2", { class: "section-title grow", text: "監視履歴" }), countEl),
+        el("div", { class: "section-body" }, incidentsEl)
+      )
+    )
+  );
+
+  async function loadMetrics() {
+    try {
+      const payload = await api.get("/admin/api/metrics");
+      clear(metricsEl);
+      for (const [key, metric] of Object.entries(payload.metrics || {})) {
+        const percent = Math.max(0, Math.min(Number(metric.percent) || 0, 100));
+        metricsEl.append(
+          el(
+            "article",
+            { class: `metric tone-${metric.tone || "accent"}`, dataset: { metric: key } },
+            el("div", { class: "row" },
+               el("span", { class: "metric-label grow", text: metric.label || key }),
+               el("span", { class: "metric-value", text: metric.display || `${percent}%` })),
+            el("div", { class: "meter" }, el("span", { class: "meter-fill", style: { width: `${percent}%` } })),
+            el("p", { class: "list-sub", text: metric.detail || "" })
+          )
+        );
+      }
+      updatedEl.textContent = `更新 ${payload.updated_at || "--:--:--"}`;
+      updatedEl.classList.remove("danger");
+      const runtime = payload.runtime || {};
+      runtimeEl.textContent = `管理UI 稼働 ${runtime.admin_app || "-"} / ホスト稼働 ${runtime.host || "-"}`;
+    } catch (error) {
+      updatedEl.textContent = "取得失敗";
+      updatedEl.classList.add("danger");
+    }
+  }
+
+  async function loadIncidents() {
+    try {
+      const payload = await api.get("/admin/api/incidents");
+      const incidents = Array.isArray(payload.incidents) ? payload.incidents : [];
+      countEl.textContent = `${incidents.length} 件`;
+      countEl.classList.remove("danger");
+      clear(incidentsEl);
+
+      if (!incidents.length) {
+        incidentsEl.append(el("div", { class: "empty", text: "記録された異常はありません。" }));
+        return;
+      }
+
+      const rows = incidents.slice(0, 20).map((incident) =>
+        el(
+          "div",
+          { class: `list-row severity-${incident.severity || "info"}` },
+          icon(KIND_ICON[incident.kind] || "bi-info-circle"),
+          el(
+            "div",
+            { class: "grow list-main" },
+            el("div", { class: "truncate", text: incident.title || "Incident" }),
+            el("div", { class: "list-sub", text: incident.message || "" })
+          ),
+          el(
+            "div",
+            { class: "list-sub nowrap" },
+            el("div", { text: SEVERITY_LABEL[incident.severity] || incident.severity || "" }),
+            el("div", { text: incident.duration ? `${incident.created_at} / ${incident.duration}` : incident.created_at || "" })
+          )
+        )
+      );
+      incidentsEl.append(el("div", { class: "list" }, rows));
+    } catch (error) {
+      countEl.textContent = "取得失敗";
+      countEl.classList.add("danger");
+    }
+  }
+
+  loadMetrics();
+  loadIncidents();
+  const metricsTimer = window.setInterval(loadMetrics, METRICS_INTERVAL);
+  const incidentsTimer = window.setInterval(loadIncidents, INCIDENTS_INTERVAL);
+
+  // ウィンドウを閉じたら取得を止める（閉じたのに裏で叩き続けないように）
+  win.addCleanup(() => {
+    window.clearInterval(metricsTimer);
+    window.clearInterval(incidentsTimer);
+  });
+}

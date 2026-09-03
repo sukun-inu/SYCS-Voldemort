@@ -1,1 +1,586 @@
-@font-face{font-family:"Geist";font-style:normal;font-weight:400;font-display:swap;src:url("/static/fonts/geist-latin-400.woff2") format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}@font-face{font-family:"Geist";font-style:normal;font-weight:500;font-display:swap;src:url("/static/fonts/geist-latin-500.woff2") format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}@font-face{font-family:"Geist";font-style:normal;font-weight:600;font-display:swap;src:url("/static/fonts/geist-latin-600.woff2") format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}@font-face{font-family:"Geist";font-style:normal;font-weight:700;font-display:swap;src:url("/static/fonts/geist-latin-700.woff2") format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}@font-face{font-family:"Geist";font-style:normal;font-weight:400;font-display:swap;src:url("/static/fonts/geist-latin-ext-400.woff2") format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}@font-face{font-family:"Geist";font-style:normal;font-weight:600;font-display:swap;src:url("/static/fonts/geist-latin-ext-600.woff2") format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}body.public{--bg:#ffffff;--bg-soft:#fafafa;--ink:#000000;--ink-2:#666666;--ink-3:#727272;--hair:#eaeaea;--hair-strong:#d4d4d4;--invert-bg:#000000;--invert-ink:#ffffff;--halo:radial-gradient(60% 100% at 50% 0%,rgba(0,112,243,0.16),transparent 70%);--grid-line:rgba(0,0,0,0.055);--tone-accent:#0060df;--tone-accent-edge:rgba(0,96,223,0.32);--tone-success:#0a7c3e;--tone-success-edge:rgba(10,124,62,0.32);--tone-danger:#c62a2f;--tone-danger-edge:rgba(198,42,47,0.32);background:var(--bg);color:var(--ink);font-family:"Geist","Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic UI",Meiryo,-apple-system,BlinkMacSystemFont,sans-serif;letter-spacing:-0.011em}@media (prefers-color-scheme:dark){body.public{--bg:#000000;--bg-soft:#0a0a0a;--ink:#ededed;--ink-2:#a1a1a1;--ink-3:#7d7d7d;--hair:#262626;--hair-strong:#3d3d3d;--invert-bg:#ffffff;--invert-ink:#000000;--halo:radial-gradient(60% 100% at 50% 0%,rgba(0,112,243,0.28),transparent 70%);--grid-line:rgba(255,255,255,0.06);--tone-accent:#52a8ff;--tone-accent-edge:rgba(82,168,255,0.34);--tone-success:#4cc38a;--tone-success-edge:rgba(76,195,138,0.34);--tone-danger:#ff6369;--tone-danger-edge:rgba(255,99,105,0.34)}}body.public a{color:var(--ink);text-decoration:none}body.public a:hover{text-decoration:underline;text-underline-offset:3px}body.public .btn{border:1px solid var(--hair-strong);border-radius:8px;background:transparent;color:var(--ink);font-size:14px;font-weight:500;line-height:20px;min-height:38px;padding:8px 16px;letter-spacing:-0.01em;transition:background-color .15s ease,border-color .15s ease,color .15s ease,opacity .15s ease}body.public .btn:hover:not(:disabled){background:var(--bg-soft);border-color:var(--ink);text-decoration:none}body.public .btn-primary{background:var(--invert-bg);border-color:var(--invert-bg);color:var(--invert-ink)}body.public .btn-primary:hover:not(:disabled){opacity:.85;background:var(--invert-bg)}body.public .btn-lg{min-height:46px;padding:12px 22px;font-size:15px;line-height:20px}.topbar{position:sticky;top:0;z-index:100;border-bottom:1px solid var(--hair);background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}.topbar-inner{max-width:1100px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:12px}.topbar-actions{margin-left:auto;display:flex;align-items:center;gap:8px}.brand-link{display:flex;align-items:center;gap:10px;color:var(--ink)}.brand-link:hover{text-decoration:none}.brand-mark-image{display:block;border-radius:7px}.brand-name{font-weight:600;font-size:15px;letter-spacing:-0.02em}.landing-menu-toggle{margin-left:auto;display:none;padding:7px 10px;border:1px solid var(--hair-strong);border-radius:8px;background:transparent;color:var(--ink);cursor:pointer}.landing-mobile-nav{display:none;border-bottom:1px solid var(--hair);background:var(--bg)}.landing-mobile-nav-inner{max-width:1100px;margin:0 auto;padding:10px 24px;display:flex;flex-direction:column;gap:2px}.landing-mobile-nav-item{display:flex;align-items:center;gap:10px;padding:12px;border-radius:8px;color:var(--ink-2);font-size:14.5px}.landing-mobile-nav-item:hover{background:var(--bg-soft);color:var(--ink);text-decoration:none}.landing-mobile-nav-item.accent{color:var(--ink);font-weight:500}@media (max-width:820px){.landing-nav-desktop{display:none}.landing-menu-toggle{display:block}.landing-mobile-nav.is-open{display:block}}@media (max-width:560px){.topbar-inner{flex-wrap:wrap;padding:12px 16px;gap:10px}.topbar-actions{width:100%;margin-left:0}.topbar-actions .btn{flex:1 1 0;min-width:0}}.landing-inner{max-width:1100px;margin:0 auto;padding:0 24px}.landing-hero{position:relative;text-align:center;padding:116px 24px 92px;overflow:hidden}.landing-hero::before{content:"";position:absolute;inset:-40% 0 0;background:var(--halo);pointer-events:none}.landing-hero::after{content:"";position:absolute;inset:0;background-image:linear-gradient(to right,var(--grid-line) 1px,transparent 1px),linear-gradient(to bottom,var(--grid-line) 1px,transparent 1px);background-size:56px 56px;-webkit-mask-image:radial-gradient(72% 60% at 50% 32%,#000 0%,transparent 78%);mask-image:radial-gradient(72% 60% at 50% 32%,#000 0%,transparent 78%);pointer-events:none}.landing-hero>*{position:relative}.landing-hero-logo img{display:block;margin:0 auto;border-radius:22px;box-shadow:0 12px 40px rgba(0,0,0,.28)}.landing-hero h1{font-size:clamp(40px,7.2vw,76px);font-weight:600;line-height:1.05;letter-spacing:-0.045em;margin:28px 0 20px;text-wrap:balance}.landing-hero-sub{color:var(--ink-2);font-size:clamp(15px,2vw,19px);line-height:1.75;max-width:44ch;margin:0 auto;letter-spacing:-0.015em}.landing-stat{display:inline-flex;align-items:center;gap:7px;margin-top:26px;padding:5px 13px;border:1px solid var(--hair);border-radius:var(--radius-pill);background:var(--bg-soft);color:var(--ink-2);font-size:13px}.landing-cta{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:34px}.landing-section{padding:96px 0;border-top:1px solid var(--hair)}.landing-section h2{font-size:clamp(26px,3.6vw,38px);font-weight:600;letter-spacing:-0.035em;margin-bottom:12px}body.public h2 .icon,body.public h3 .icon{width:0.72em;height:0.72em;color:var(--ink-3);margin-right:.5em;vertical-align:baseline}body.public h2,body.public h3{text-wrap:balance}.landing-section-kicker,.page-kicker{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-bottom:10px}.step-list{list-style:none;padding:0;margin-top:18px;counter-reset:step}.step-list li{position:relative;padding-left:34px;font-size:15px;color:var(--ink-2);line-height:1.85}.step-list li::before{counter-increment:step;content:counter(step,decimal-leading-zero);position:absolute;left:0;top:0;line-height:27.75px;font-family:var(--font-mono);font-size:12px;color:var(--ink-3)}.step-list strong{color:var(--ink);font-weight:500}.step-list>li + li{margin-top:12px}.landing-steps{margin-top:28px;border-top:1px solid var(--hair)}.landing-steps li{padding:22px 0 22px 34px;border-bottom:1px solid var(--hair);line-height:1.8}.landing-steps li::before{left:0;top:22px}.landing-steps>li + li{margin-top:0}.landing-footer{border-top:1px solid var(--hair)}.landing-footer-links{display:flex;flex-wrap:wrap;gap:10px 20px;align-items:center;justify-content:center;padding:34px 24px 40px;font-size:13.5px;color:var(--ink-3)}.landing-footer-links a{color:var(--ink-3)}.landing-footer-links a:hover{color:var(--ink)}.feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:1px;margin-top:32px;border:1px solid var(--hair);border-radius:12px;background:var(--hair);overflow:hidden}.feature-grid>*{min-width:0}.feature-grid>:last-child{grid-column:1 / -1}.feature-grid>:nth-last-child(2):nth-child(3n + 1),.feature-grid>:nth-last-child(2):nth-child(2n + 1){grid-column:1 / -1}.feature-grid>:nth-last-child(2):nth-child(3n + 1) p,.feature-grid>:nth-last-child(2):nth-child(2n + 1) p{max-width:64ch}.feature-card{height:100%;padding:26px 24px;background:var(--bg);transition:background-color .15s ease}.feature-card:hover{background:var(--bg-soft)}@media (min-width:600px){.feature-grid>.feature-card:last-child{display:flex;align-items:center;gap:20px}.feature-grid>.feature-card:last-child .feature-card-icon{margin-bottom:0;flex:none}.feature-grid>.feature-card:last-child h3{margin-bottom:4px}.feature-grid>.feature-card:last-child .feature-card-body{flex:1 1 auto;min-width:0}.feature-grid>.feature-card:last-child .feature-card-link{flex:none;margin-top:0}}.feature-card-link{display:inline-flex;align-items:center;gap:6px;margin-top:12px;font-size:14px;font-weight:500}.feature-card-link .icon{width:14px;height:14px}.feature-card h3{font-size:16px;font-weight:600;letter-spacing:-0.02em;margin-bottom:8px}.feature-card p{color:var(--ink-2);font-size:14px;line-height:1.75}.feature-card-icon{display:grid;place-items:center;width:36px;height:36px;margin-bottom:16px;border:1px solid var(--hair-strong);border-radius:9px;color:var(--ink);font-size:17px}.feature-card-icon .icon{width:17px;height:17px}.doc-wrap{max-width:780px;margin:0 auto;padding:0 24px 64px}.doc-hero{text-align:center;padding:84px 0 48px}.doc-hero-logo{margin-bottom:22px}.doc-hero-logo img{display:block;margin:0 auto;border-radius:18px}.doc-hero h1{font-size:clamp(30px,5vw,48px);font-weight:600;letter-spacing:-0.04em;margin:22px 0 14px}.doc-lead{color:var(--ink-2);font-size:16px;line-height:1.85;letter-spacing:-0.012em}.doc-updated{color:var(--ink-3);font-size:12.5px;margin-top:12px;font-family:var(--font-mono)}.doc-section{padding:44px 0;border-top:1px solid var(--hair)}.doc-section h2{font-size:22px;font-weight:600;letter-spacing:-0.03em;margin-bottom:14px;display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px}body.public .doc-section h2 .icon{margin-right:0;width:17px;height:17px}.doc-section h3{font-size:16px;font-weight:600;margin:26px 0 10px;letter-spacing:-0.02em}.doc-section p{color:var(--ink-2);font-size:15px;line-height:1.9;margin-bottom:14px}.doc-section ul{list-style:none;padding:0;color:var(--ink-2);font-size:15px;line-height:1.9}.doc-section ul>li{position:relative;padding-left:18px;margin-bottom:8px}.doc-section ul>li::before{content:"";position:absolute;left:0;top:13px;width:5px;height:1px;background:var(--hair-strong)}.doc-section strong{color:var(--ink);font-weight:500}.doc-section code{background:var(--bg-soft);border:1px solid var(--hair);color:var(--ink);border-radius:5px;padding:1px 6px;font-size:13px}.doc-cmd{display:flex;flex-direction:column;margin-top:18px;border-top:1px solid var(--hair)}.doc-cmd-entry{display:flex;flex-wrap:wrap;align-items:baseline;gap:14px;padding:16px 0;border-bottom:1px solid var(--hair)}.doc-cmd-name{font-family:var(--font-mono);font-size:13.5px;color:var(--ink);font-weight:500}.doc-cmd-desc{color:var(--ink-2);font-size:14px;flex:1 1 320px}.doc-cmd-entry:last-child{border-bottom:none;padding-bottom:0}body.public .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--hair);background:var(--bg-soft);color:var(--ink-2);border-radius:var(--radius-pill);font-size:12.5px;font-weight:400;letter-spacing:0;padding:3px 11px;white-space:nowrap}body.public .chip::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.8;flex:none}body.public .chip.accent{color:var(--tone-accent);border-color:var(--tone-accent-edge)}body.public .chip.success{color:var(--tone-success);border-color:var(--tone-success-edge)}body.public .chip.danger{color:var(--tone-danger);border-color:var(--tone-danger-edge)}body.public h2 .chip,body.public h3 .chip{font-size:12px}.doc-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:16px}.doc-links{display:flex;flex-wrap:wrap;gap:16px;margin-top:26px;font-size:14px}.doc-legal{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:44px;padding:32px 24px 0;border-top:1px solid var(--hair);color:var(--ink-3);font-size:12.5px}.doc-legal-sep{color:var(--ink-3);opacity:.6}.info-panel{padding:18px 20px;border:1px solid var(--hair);border-radius:12px;background:var(--bg-soft);font-size:14px;line-height:1.85;color:var(--ink-2);margin:18px 0}.info-panel-title{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:600;color:var(--ink);margin-bottom:6px}body.public .empty{border:1px dashed var(--hair-strong);border-radius:12px;color:var(--ink-2);background:var(--bg-soft)}
+/* ==========================================================================
+   公開ページ（ランディング / 使い方ガイド / プライバシー / 利用規約）
+
+   管理画面（Aero）とは別の言語で組む。極端なコントラスト、大きく詰めた見出し、
+   髪の毛のような境界線、面ではなく発光で立体を作る — Vercel / Next.js 系の質感。
+   欧文は同梱の Geist、和文はOS標準に委ねる。
+   ========================================================================== */
+
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/geist-latin-400.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/static/fonts/geist-latin-500.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/static/fonts/geist-latin-600.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/static/fonts/geist-latin-700.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/geist-latin-ext-400.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/static/fonts/geist-latin-ext-600.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ── 公開ページ専用の配色（管理画面とは独立） ───────────── */
+body.public {
+  --bg: #ffffff;
+  --bg-soft: #fafafa;
+  --ink: #000000;
+  --ink-2: #666666;
+  --ink-3: #727272;
+  --hair: #eaeaea;
+  --hair-strong: #d4d4d4;
+  --invert-bg: #000000;
+  --invert-ink: #ffffff;
+  --halo: radial-gradient(60% 100% at 50% 0%, rgba(0, 112, 243, 0.16), transparent 70%);
+  --grid-line: rgba(0, 0, 0, 0.055);
+  --tone-accent: #0060df;
+  --tone-accent-edge: rgba(0, 96, 223, 0.32);
+  --tone-success: #0a7c3e;
+  --tone-success-edge: rgba(10, 124, 62, 0.32);
+  --tone-danger: #c62a2f;
+  --tone-danger-edge: rgba(198, 42, 47, 0.32);
+
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Geist", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI", Meiryo,
+    -apple-system, BlinkMacSystemFont, sans-serif;
+  letter-spacing: -0.011em;
+}
+
+@media (prefers-color-scheme: dark) {
+  body.public {
+    --bg: #000000;
+    --bg-soft: #0a0a0a;
+    --ink: #ededed;
+    --ink-2: #a1a1a1;
+    --ink-3: #7d7d7d;
+    --hair: #262626;
+    --hair-strong: #3d3d3d;
+    --invert-bg: #ffffff;
+    --invert-ink: #000000;
+    --halo: radial-gradient(60% 100% at 50% 0%, rgba(0, 112, 243, 0.28), transparent 70%);
+    --grid-line: rgba(255, 255, 255, 0.06);
+    --tone-accent: #52a8ff;
+    --tone-accent-edge: rgba(82, 168, 255, 0.34);
+    --tone-success: #4cc38a;
+    --tone-success-edge: rgba(76, 195, 138, 0.34);
+    --tone-danger: #ff6369;
+    --tone-danger-edge: rgba(255, 99, 105, 0.34);
+  }
+}
+
+body.public a { color: var(--ink); text-decoration: none; }
+body.public a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* ── ボタン（反転が主、枠線が従） ─────────────────────────── */
+body.public .btn {
+  border: 1px solid var(--hair-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  /* 行の高さを整数で決める。1.7 のままだと 23.8 + 余白16 + 枠2 = 41.8px となり、
+     min-height:38px は効かないうえ、上下の枠が半端な位置に来て太さが揃わない。 */
+  line-height: 20px;
+  min-height: 38px;
+  padding: 8px 16px;
+  letter-spacing: -0.01em;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease, opacity .15s ease;
+}
+body.public .btn:hover:not(:disabled) { background: var(--bg-soft); border-color: var(--ink); text-decoration: none; }
+body.public .btn-primary {
+  background: var(--invert-bg);
+  border-color: var(--invert-bg);
+  color: var(--invert-ink);
+}
+body.public .btn-primary:hover:not(:disabled) { opacity: .85; background: var(--invert-bg); }
+body.public .btn-lg { min-height: 46px; padding: 12px 22px; font-size: 15px; line-height: 20px; }
+
+/* ── 上部バー ─────────────────────────────────────────────── */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid var(--hair);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.topbar-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+.brand-link { display: flex; align-items: center; gap: 10px; color: var(--ink); }
+.brand-link:hover { text-decoration: none; }
+/* 画像はブロックにする。インラインのままだと入れ物の <span> に文字の下端ぶん
+   （14px × 1.7 の行boxの descent ≒ 7.8px）が余り、その半分だけマークが
+   文字より上へずれる。 */
+.brand-mark-image { display: block; border-radius: 7px; }
+.brand-name { font-weight: 600; font-size: 15px; letter-spacing: -0.02em; }
+
+.landing-menu-toggle {
+  margin-left: auto;
+  display: none;
+  padding: 7px 10px;
+  border: 1px solid var(--hair-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.landing-mobile-nav { display: none; border-bottom: 1px solid var(--hair); background: var(--bg); }
+.landing-mobile-nav-inner { max-width: 1100px; margin: 0 auto; padding: 10px 24px; display: flex; flex-direction: column; gap: 2px; }
+.landing-mobile-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  color: var(--ink-2);
+  font-size: 14.5px;
+}
+.landing-mobile-nav-item:hover { background: var(--bg-soft); color: var(--ink); text-decoration: none; }
+.landing-mobile-nav-item.accent { color: var(--ink); font-weight: 500; }
+
+@media (max-width: 820px) {
+  .landing-nav-desktop { display: none; }
+  .landing-menu-toggle { display: block; }
+  /* 開いたまま画面を広げても残らないよう、開く指定もこの幅の中だけに閉じ込める */
+  .landing-mobile-nav.is-open { display: block; }
+}
+
+/* 狭い画面では上部バーのボタンを次の行へ送る。
+   ランディングはハンバーガーに畳まれるが、ガイド・利用規約・プライバシーの
+   バーはボタンが出たままで、横に詰めると「管理画面」が縦に折れて読めなくなる。 */
+@media (max-width: 560px) {
+  .topbar-inner { flex-wrap: wrap; padding: 12px 16px; gap: 10px; }
+  .topbar-actions { width: 100%; margin-left: 0; }
+  .topbar-actions .btn { flex: 1 1 0; min-width: 0; }
+}
+
+/* ── ヒーロー ─────────────────────────────────────────────── */
+.landing-inner { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+.landing-hero {
+  position: relative;
+  text-align: center;
+  padding: 116px 24px 92px;
+  overflow: hidden;
+}
+/* 背後の発光と、消えていくグリッド */
+.landing-hero::before {
+  content: "";
+  position: absolute;
+  inset: -40% 0 0;
+  background: var(--halo);
+  pointer-events: none;
+}
+.landing-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(72% 60% at 50% 32%, #000 0%, transparent 78%);
+  mask-image: radial-gradient(72% 60% at 50% 32%, #000 0%, transparent 78%);
+  pointer-events: none;
+}
+.landing-hero > * { position: relative; }
+
+.landing-hero-logo img {
+  display: block;              /* 下に行boxの隙間を作らない（見出しとの間隔が狂う） */
+  margin: 0 auto;
+  border-radius: 22px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .28);
+}
+.landing-hero h1 {
+  font-size: clamp(40px, 7.2vw, 76px);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.045em;
+  margin: 28px 0 20px;
+  text-wrap: balance;
+}
+.landing-hero-sub {
+  color: var(--ink-2);
+  font-size: clamp(15px, 2vw, 19px);
+  line-height: 1.75;
+  max-width: 44ch;
+  margin: 0 auto;
+  letter-spacing: -0.015em;
+}
+.landing-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 26px;
+  padding: 5px 13px;
+  border: 1px solid var(--hair);
+  border-radius: var(--radius-pill);
+  background: var(--bg-soft);
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.landing-cta { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 34px; }
+
+/* ── セクション ───────────────────────────────────────────── */
+.landing-section { padding: 96px 0; border-top: 1px solid var(--hair); }
+.landing-section h2 {
+  font-size: clamp(26px, 3.6vw, 38px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  margin-bottom: 12px;
+}
+
+/* 見出しのアイコンは主役ではない。小さく、文字より薄く。
+   （読み物ページの見出しは flex で組むので、下の .doc-section 側で上書きする） */
+body.public h2 .icon,
+body.public h3 .icon {
+  width: 0.72em;
+  height: 0.72em;
+  color: var(--ink-3);
+  margin-right: .5em;
+  vertical-align: baseline;
+}
+body.public h2,
+body.public h3 { text-wrap: balance; }
+.landing-section-kicker,
+.page-kicker {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 10px;
+}
+
+/* 手順リスト。番号は絶対配置の ::before で置く。
+   li を flex にすると、中の <strong> や地の文がそれぞれ列に分かれてしまう。 */
+.step-list {
+  list-style: none;
+  padding: 0;
+  margin-top: 18px;
+  counter-reset: step;
+}
+.step-list li {
+  position: relative;
+  padding-left: 34px;
+  font-size: 15px;
+  color: var(--ink-2);
+  line-height: 1.85;
+}
+.step-list li::before {
+  counter-increment: step;
+  content: counter(step, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 0;
+  /* 番号を本文の1行目と同じ高さに乗せる。
+     line-height を数値で継承すると、番号側の font-size（12px）に掛かって
+     12 × 1.85 = 22.2px の行になり、本文の 15 × 1.85 = 27.75px と中心が
+     (27.75 - 22.2) / 2 ≒ 2.8px ずれる。本文の行高をそのまま指定する。 */
+  line-height: 27.75px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.step-list strong { color: var(--ink); font-weight: 500; }
+.step-list > li + li { margin-top: 12px; }
+
+/* ランディングでは1手順ずつ罫線で区切る。
+   罫線が全幅で引かれるので、番号と文章は本文と同じ左端（0）から始める。 */
+.landing-steps { margin-top: 28px; border-top: 1px solid var(--hair); }
+.landing-steps li {
+  padding: 22px 0 22px 34px;
+  border-bottom: 1px solid var(--hair);
+  line-height: 1.8;
+}
+.landing-steps li::before { left: 0; top: 22px; }
+.landing-steps > li + li { margin-top: 0; }
+
+.landing-footer { border-top: 1px solid var(--hair); }
+.landing-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 34px 24px 40px;
+  font-size: 13.5px;
+  color: var(--ink-3);
+}
+.landing-footer-links a { color: var(--ink-3); }
+.landing-footer-links a:hover { color: var(--ink); }
+
+/* ── カード ───────────────────────────────────────────────── */
+/* base.css の .row（汎用の横並び）とは別物なので、名前を分ける。
+   内側の罫線は 1px の隙間から下地（--hair）を覗かせて引く。カードの影では引けない。
+   グリッド項目は文書順に一枚ずつ描かれるため、右隣・真下のカードの背景が、
+   手前のカードの影をそのまま塗りつぶしてしまう。 */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(272px, 1fr));
+  gap: 1px;
+  margin-top: 32px;
+  border: 1px solid var(--hair);
+  border-radius: 12px;
+  background: var(--hair);
+  overflow: hidden;
+}
+.feature-grid > * { min-width: 0; }
+/* 隙間で罫線を引く以上、埋まらないセルは罫線色の塊として出る。最後の1枚に
+   残りの列を張らせて必ず埋める（tools/check_admin_ui.py が実測で見張る） */
+.feature-grid > :last-child { grid-column: 1 / -1; }
+/* さらに、最後から2枚目が行の先頭に来てしまったとき（＝カード枚数が列数の
+   倍数でないとき）も、その1枚で行を埋める。ここが無いと、カードを1枚足した
+   だけで空きセルが出る。枚数を数えて調整させない。
+   auto-fit なので列数は幅で変わる。3列・2列それぞれの折り返し位置を見る。 */
+.feature-grid > :nth-last-child(2):nth-child(3n + 1),
+.feature-grid > :nth-last-child(2):nth-child(2n + 1) { grid-column: 1 / -1; }
+/* 行いっぱいに広がったカードは、本文だけが極端に長い行になって読みにくい。
+   1行の長さを他のカードと同じくらいで止める。 */
+.feature-grid > :nth-last-child(2):nth-child(3n + 1) p,
+.feature-grid > :nth-last-child(2):nth-child(2n + 1) p { max-width: 64ch; }
+
+.feature-card {
+  height: 100%;
+  padding: 26px 24px;
+  background: var(--bg);
+  transition: background-color .15s ease;
+}
+.feature-card:hover { background: var(--bg-soft); }
+/* 全幅になる最後の1枚だけは横組みにする（縦組みだと右側が間延びする） */
+@media (min-width: 600px) {
+  .feature-grid > .feature-card:last-child {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .feature-grid > .feature-card:last-child .feature-card-icon { margin-bottom: 0; flex: none; }
+  .feature-grid > .feature-card:last-child h3 { margin-bottom: 4px; }
+  .feature-grid > .feature-card:last-child .feature-card-body { flex: 1 1 auto; min-width: 0; }
+  .feature-grid > .feature-card:last-child .feature-card-link { flex: none; margin-top: 0; }
+}
+.feature-card-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 14px; font-weight: 500; }
+.feature-card-link .icon { width: 14px; height: 14px; }
+.feature-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+.feature-card p { color: var(--ink-2); font-size: 14px; line-height: 1.75; }
+.feature-card-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 16px;
+  border: 1px solid var(--hair-strong);
+  border-radius: 9px;
+  color: var(--ink);
+  font-size: 17px;
+}
+.feature-card-icon .icon { width: 17px; height: 17px; }
+
+/* ── 読み物ページ ─────────────────────────────────────────── */
+.doc-wrap { max-width: 780px; margin: 0 auto; padding: 0 24px 64px; }
+.doc-hero { text-align: center; padding: 84px 0 48px; }
+.doc-hero-logo { margin-bottom: 22px; }
+/* インラインのままだと画像の下に行boxの descent ぶんの隙間が残り、
+   下の余白が 22px ではなく 32px 前後になる（見出しとの間だけ広く見える）。 */
+.doc-hero-logo img { display: block; margin: 0 auto; border-radius: 18px; }
+.doc-hero h1 {
+  font-size: clamp(30px, 5vw, 48px);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  margin: 22px 0 14px;
+}
+.doc-lead { color: var(--ink-2); font-size: 16px; line-height: 1.85; letter-spacing: -0.012em; }
+.doc-updated { color: var(--ink-3); font-size: 12.5px; margin-top: 12px; font-family: var(--font-mono); }
+
+.doc-section { padding: 44px 0; border-top: 1px solid var(--hair); }
+.doc-section h2 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+/* body.public h2 .icon（詳細度 0-2-2）に負けないよう body.public から書く。
+   前は .doc-section h2 .icon（0-2-1）で、幅も右余白も上書きできておらず、
+   0.72em のアイコンが flex の隙間 10px + margin 11px＝21px も離れていた。 */
+body.public .doc-section h2 .icon { margin-right: 0; width: 17px; height: 17px; }
+.doc-section h3 { font-size: 16px; font-weight: 600; margin: 26px 0 10px; letter-spacing: -0.02em; }
+.doc-section p { color: var(--ink-2); font-size: 15px; line-height: 1.9; margin-bottom: 14px; }
+.doc-section ul { list-style: none; padding: 0; color: var(--ink-2); font-size: 15px; line-height: 1.9; }
+/* ダッシュの行頭記号は ul のみ。ol（手順リスト）は番号を出すので巻き込まない */
+.doc-section ul > li { position: relative; padding-left: 18px; margin-bottom: 8px; }
+.doc-section ul > li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 13px;
+  width: 5px;
+  height: 1px;
+  background: var(--hair-strong);
+}
+.doc-section strong { color: var(--ink); font-weight: 500; }
+.doc-section code {
+  background: var(--bg-soft);
+  border: 1px solid var(--hair);
+  color: var(--ink);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-size: 13px;
+}
+
+.doc-cmd { display: flex; flex-direction: column; margin-top: 18px; border-top: 1px solid var(--hair); }
+/* 横の余白は 0。4px 入れると、罫線は全幅なのに中身だけ右へ寄って、
+   見出し・本文・箇条書きと左端が揃わなくなる。 */
+.doc-cmd-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--hair);
+}
+.doc-cmd-name { font-family: var(--font-mono); font-size: 13.5px; color: var(--ink); font-weight: 500; }
+.doc-cmd-desc { color: var(--ink-2); font-size: 14px; flex: 1 1 320px; }
+/* 直後にセクションの罫線が来るので、リスト末尾の線は引かない（二重線に見える） */
+.doc-cmd-entry:last-child { border-bottom: none; padding-bottom: 0; }
+
+/* チップ。components.css の .chip は管理画面の配色なので、公開ページ側で塗り直す */
+body.public .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--hair);
+  background: var(--bg-soft);
+  color: var(--ink-2);
+  border-radius: var(--radius-pill);
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  padding: 3px 11px;
+  white-space: nowrap;
+}
+/* 状態は左の点で示す。面を塗り分けると誌面がうるさくなる */
+body.public .chip::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .8;
+  flex: none;
+}
+body.public .chip.accent { color: var(--tone-accent); border-color: var(--tone-accent-edge); }
+body.public .chip.success { color: var(--tone-success); border-color: var(--tone-success-edge); }
+body.public .chip.danger { color: var(--tone-danger); border-color: var(--tone-danger-edge); }
+/* 見出しの中のチップは、見出しに引きずられて太らないように。
+   見出しは flex で組んであり縦位置は align-items が合わせるので、
+   ここで 1px 下げると逆に文字の中心から外れる。 */
+body.public h2 .chip,
+body.public h3 .chip { font-size: 12px; }
+
+.doc-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
+.doc-links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 26px; font-size: 14px; }
+/* 罫線を持つのはこの帯なので、上の余白もここで取る。
+   0 のままだと直前のボタンの下端に線が接して、ボタンが線の上に載って見える。
+   セクションの区切り（padding 44px + 罫線）と同じ間合いに揃える。 */
+.doc-legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 44px;
+  padding: 32px 24px 0;
+  border-top: 1px solid var(--hair);
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+.doc-legal-sep { color: var(--ink-3); opacity: .6; }
+
+.info-panel {
+  padding: 18px 20px;
+  border: 1px solid var(--hair);
+  border-radius: 12px;
+  background: var(--bg-soft);
+  font-size: 14px;
+  line-height: 1.85;
+  color: var(--ink-2);
+  margin: 18px 0;
+}
+.info-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+body.public .empty {
+  border: 1px dashed var(--hair-strong);
+  border-radius: 12px;
+  color: var(--ink-2);
+  background: var(--bg-soft);
+}

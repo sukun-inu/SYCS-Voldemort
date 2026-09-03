@@ -1,1 +1,503 @@
-body.desktop-body{overflow:hidden}.desktop{position:fixed;inset:0 0 var(--taskbar-height) 0;overflow:hidden;overflow:clip;background:radial-gradient(1100px 620px at 12% -12%,rgba(126,208,255,0.55),transparent 62%),radial-gradient(900px 560px at 88% 4%,rgba(72,236,208,0.30),transparent 60%),radial-gradient(1200px 900px at 52% 118%,rgba(24,70,150,0.72),transparent 64%),linear-gradient(163deg,#0c2f66 0%,#06203f 46%,#04122a 100%);background-color:#06203f}.desktop::before,.desktop::after{content:"";position:absolute;pointer-events:none;border-radius:50%;filter:blur(60px);opacity:0.55}.desktop::before{left:-10%;top:8%;width:90%;height:46%;background:linear-gradient(105deg,rgba(120,214,255,0.55),rgba(70,130,255,0.12) 60%,transparent);transform:rotate(-9deg)}.desktop::after{right:-14%;bottom:4%;width:78%;height:42%;background:linear-gradient(285deg,rgba(90,255,226,0.32),rgba(40,120,220,0.10) 62%,transparent);transform:rotate(7deg)}#window-layer{position:absolute;inset:0}.window{position:absolute;display:flex;flex-direction:column;min-width:320px;min-height:200px;padding:0 7px 7px;border:1px solid var(--glass-edge);border-radius:var(--radius-glass);background:var(--glass-bg);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--shadow-aero),inset 0 1px 0 var(--glass-highlight);z-index:var(--z-window)}.window.is-focused{box-shadow:var(--shadow-aero),var(--glow-focus),inset 0 1px 0 var(--glass-highlight)}.window.is-minimized{display:none}.window.is-maximized{inset:0!important;width:auto!important;height:auto!important;padding:0;border-radius:0;border-width:0}.window-titlebar{display:flex;align-items:center;gap:8px;margin:0 -7px;padding:0 13px 0 22px;height:var(--titlebar-height);flex:none;background:var(--gloss);border-radius:calc(var(--radius-glass) - 1px) calc(var(--radius-glass) - 1px) 0 0;cursor:grab;user-select:none;text-shadow:0 1px 0 rgba(255,255,255,0.55)}.window.is-maximized .window-titlebar{cursor:default;border-radius:0;margin:0;padding:0 5px 0 14px}@media (prefers-color-scheme:dark){.window-titlebar{text-shadow:none}.window-body{box-shadow:inset 0 1px 0 rgba(255,255,255,0.06)}}.window-icon{color:var(--fg-muted);font-size:var(--text-md)}.window-title{font-size:var(--text-md);font-weight:600;line-height:20px}.window-dirty{width:7px;height:7px;border-radius:50%;flex:none;font-size:0;color:var(--attention);background:currentColor}.window-controls{margin-left:auto;display:flex;gap:2px}.window-control{display:grid;place-items:center;width:30px;height:26px;border:1px solid transparent;border-radius:var(--radius-pill);background:none;color:var(--fg-muted);cursor:pointer;font-size:var(--text-sm);transition:background-color var(--dur-1) ease,box-shadow var(--dur-1) ease,color var(--dur-1) ease}.window-control:hover{background:linear-gradient(180deg,rgba(255,255,255,0.7),rgba(255,255,255,0.25));border-color:var(--glass-highlight);box-shadow:var(--glow-soft);color:var(--fg)}.window-control.close:hover{background:linear-gradient(180deg,#f4756a,#d33b2c);border-color:rgba(255,255,255,0.5);box-shadow:0 0 12px rgba(220,70,60,0.6);color:#fff}.window-body{flex:1 1 auto;overflow:auto;padding:14px;margin-top:7px;border:1px solid var(--glass-edge);border-radius:var(--radius-pane);background:color-mix(in srgb,var(--canvas-subtle) 94%,transparent);box-shadow:inset 0 1px 0 rgba(255,255,255,0.5)}.window.is-maximized .window-body{margin-top:0;border-radius:0;border-width:1px 0 0}.window-body.is-plain{padding:0}.window-body iframe{width:100%;height:100%;border:0;display:block;background:var(--canvas)}.window-resize{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize}.window-resize::after{content:"";position:absolute;right:4px;bottom:4px;width:7px;height:7px;border-right:2px solid var(--glass-edge);border-bottom:2px solid var(--glass-edge)}.window-resize:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:4px}.window.is-maximized .window-resize{display:none}.desktop.is-interacting .window-body{pointer-events:none}.taskbar{position:fixed;left:0;right:0;bottom:0;height:var(--taskbar-height);z-index:var(--z-taskbar);display:flex;align-items:center;gap:8px;padding:0 10px 1px;color:var(--taskbar-ink);background:linear-gradient(180deg,rgba(28,52,88,0.72) 0%,rgba(10,22,44,0.86) 100%);-webkit-backdrop-filter:blur(20px) saturate(160%);backdrop-filter:blur(20px) saturate(160%);border-top:1px solid rgba(255,255,255,0.28);box-shadow:inset 0 1px 0 rgba(255,255,255,0.22),0 -3px 16px rgba(0,12,30,0.45)}.start-button{display:flex;align-items:center;gap:7px;flex:none;white-space:nowrap;padding:5px 14px;min-height:32px;border:1px solid rgba(255,255,255,0.42);border-radius:var(--radius-pill);background:linear-gradient(180deg,rgba(255,255,255,0.34),rgba(255,255,255,0.06));color:#fff;font-size:var(--text-md);line-height:20px;font-weight:600;text-shadow:0 1px 2px rgba(0,16,40,0.6);cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,0.55),var(--glow-soft);transition:box-shadow var(--dur-1) ease,background-color var(--dur-1) ease}.start-button img{border-radius:5px}.start-button:hover,.start-button[aria-expanded="true"]{background:linear-gradient(180deg,rgba(150,215,255,0.55),rgba(60,140,230,0.35));box-shadow:inset 0 1px 0 rgba(255,255,255,0.7),var(--glow-strong)}.taskbar-apps{display:flex;align-items:center;gap:6px;overflow-x:auto;flex:1 1 auto;min-width:0;scrollbar-width:none;padding:9px 6px;margin:-9px -6px}.taskbar-apps::-webkit-scrollbar{display:none}.taskbar-app{display:flex;align-items:center;gap:6px;max-width:190px;padding:5px 13px;border:1px solid transparent;border-radius:var(--radius-pill);background:rgba(255,255,255,0.08);color:var(--taskbar-ink-muted);font-size:var(--text-md);line-height:20px;cursor:pointer;transition:background-color var(--dur-1) ease,box-shadow var(--dur-1) ease,color var(--dur-1) ease}.taskbar-app:hover{color:#fff;background:rgba(255,255,255,0.18)}.taskbar-app.is-active{color:#fff;border-color:rgba(255,255,255,0.45);background:linear-gradient(180deg,rgba(255,255,255,0.32),rgba(255,255,255,0.10));box-shadow:inset 0 1px 0 rgba(255,255,255,0.5),var(--glow-soft);font-weight:600}.taskbar-app.is-minimized{opacity:.6}.taskbar-app span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.taskbar-tray{display:flex;align-items:center;gap:6px;margin-left:auto;flex:none}.taskbar[data-specular]::after{inset:-26px 0 0 0;border-radius:0}.tray-button{display:flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid transparent;border-radius:var(--radius-pill);background:none;color:var(--taskbar-ink-muted);font-size:var(--text-md);line-height:20px;cursor:pointer}.tray-button:hover{color:#fff;background:rgba(255,255,255,0.16);border-color:rgba(255,255,255,0.3);text-decoration:none}.tray-avatar{width:20px;height:20px;border-radius:50%}.tray-fallback{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,0.22);color:#fff;font-size:var(--text-xs);font-weight:600}.taskbar-clock{font-variant-numeric:tabular-nums;font-size:var(--text-md);line-height:20px;color:var(--taskbar-ink);padding:0 6px;text-shadow:0 1px 2px rgba(0,16,40,0.5)}.menu-backdrop{position:fixed;inset:0;z-index:var(--z-menu);background:transparent}.start-menu{position:fixed;left:10px;bottom:calc(var(--taskbar-height) + 8px);z-index:calc(var(--z-menu) + 1);width:min(470px,calc(100vw - 20px));max-height:min(560px,calc(100vh - var(--taskbar-height) - 24px));display:flex;flex-direction:column;padding:6px;border:1px solid var(--glass-edge);border-radius:var(--radius-glass);background:var(--glass-bg-strong);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--shadow-aero),inset 0 1px 0 var(--glass-highlight);overflow:hidden}.start-search{padding:8px}.start-groups{overflow-y:auto;scrollbar-gutter:stable;padding:10px;display:flex;flex-direction:column;gap:14px;border-radius:var(--radius-pane);background:color-mix(in srgb,var(--canvas-subtle) 92%,transparent);border:1px solid var(--glass-edge)}.start-group-label{font-size:var(--text-xs);letter-spacing:.06em;color:var(--fg-subtle);padding:0 4px 6px}.start-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:6px}.app-tile{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;padding:13px 8px;border:1px solid transparent;border-radius:14px;background:none;color:var(--fg);font-size:var(--text-sm);text-align:center;cursor:pointer;transition:background-color var(--dur-1) ease,box-shadow var(--dur-1) ease,transform var(--dur-1) ease}.app-tile:hover,.app-tile:focus-visible{background:linear-gradient(180deg,rgba(255,255,255,0.75),rgba(190,225,255,0.35));border-color:rgba(120,190,255,0.7);box-shadow:inset 0 1px 0 rgba(255,255,255,0.8),var(--glow-strong);transform:translateY(-1px)}.app-tile-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:13px;background:linear-gradient(180deg,rgba(255,255,255,0.9),rgba(214,235,255,0.55));border:1px solid rgba(120,170,220,0.5);box-shadow:inset 0 1px 0 rgba(255,255,255,0.9),0 1px 3px rgba(20,50,90,0.2);color:#1d6fb8;font-size:var(--text-xl);position:relative}.app-tile-icon .icon{width:19px;height:19px}.app-tile-badge{position:absolute;top:-6px;right:-8px;min-width:17px;padding:0 5px;border-radius:var(--radius-pill);background:linear-gradient(180deg,#ff7a6d,#d8342a);border:1px solid rgba(255,255,255,0.6);color:#fff;font-size:var(--text-xs);line-height:16px;box-shadow:0 1px 4px rgba(140,20,10,0.5)}.start-empty{padding:24px 12px;text-align:center;color:var(--fg-muted);font-size:var(--text-md)}.menu{position:fixed;z-index:calc(var(--z-menu) + 1);min-width:210px;padding:6px;border:1px solid var(--glass-edge);border-radius:16px;background:var(--glass-bg-strong);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--shadow-aero),inset 0 1px 0 var(--glass-highlight)}.menu-header{padding:6px 10px;font-size:var(--text-sm);color:var(--fg-subtle)}.menu-item{display:flex;align-items:center;gap:var(--gap-icon);width:100%;padding:8px 10px;border:1px solid transparent;border-radius:9px;background:none;color:var(--fg);font-size:var(--text-md);text-align:left;cursor:pointer}.menu-item:hover{background:linear-gradient(180deg,rgba(255,255,255,0.8),rgba(200,228,255,0.4));border-color:rgba(120,190,255,0.6);text-decoration:none}@media (max-width:760px){.taskbar-tray .tray-button>.truncate{display:none}.taskbar-app{max-width:128px}.window-control.maximize{display:none}.window{inset:0!important;width:auto!important;height:auto!important;padding:0;border-radius:0;border-width:0}.window-body{border-radius:0;border-width:1px 0 0}.window-resize{display:none}.desktop-hint .small{display:none}.start-menu{left:0;right:0;width:auto;border-radius:0}}@media (prefers-reduced-motion:reduce){.app-tile:hover{transform:none}}@media (max-width:430px){.start-button{padding:5px 10px}.start-button>span{display:none}.taskbar-clock{display:none}}
+/* ==========================================================================
+   デスクトップ・ウィンドウ・タスクバー・スタートメニュー（Aero）
+
+   枠はガラス（半透明 + ぼかし + 上端のハイライト）、中身の面は不透明。
+   Aero の見た目であり、文字の可読性も落ちない。
+   ========================================================================== */
+
+body.desktop-body { overflow: hidden; }
+
+.desktop {
+  position: fixed;
+  inset: 0 0 var(--taskbar-height) 0;
+  overflow: hidden;
+  /* hidden は「見た目を隠す」だけで scrollLeft の変更自体は防がない。
+     タブなど内側でフォーカスが移ると、ブラウザが hidden な祖先まで
+     不可視スクロールさせ、常に画面いっぱいのはずの窓が左にずれて見えた
+     （狭い画面でタブを押した直後に発生）。clip は対応ブラウザでスクロール
+     そのものを禁止できるので、対応していれば hidden を上書きする。 */
+  overflow: clip;
+  background:
+    radial-gradient(1100px 620px at 12% -12%, rgba(126, 208, 255, 0.55), transparent 62%),
+    radial-gradient(900px 560px at 88% 4%, rgba(72, 236, 208, 0.30), transparent 60%),
+    radial-gradient(1200px 900px at 52% 118%, rgba(24, 70, 150, 0.72), transparent 64%),
+    linear-gradient(163deg, #0c2f66 0%, #06203f 46%, #04122a 100%);
+  background-color: #06203f;
+}
+
+/* Aero のオーロラ帯 */
+.desktop::before,
+.desktop::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.55;
+}
+.desktop::before {
+  left: -10%;
+  top: 8%;
+  width: 90%;
+  height: 46%;
+  background: linear-gradient(105deg, rgba(120, 214, 255, 0.55), rgba(70, 130, 255, 0.12) 60%, transparent);
+  transform: rotate(-9deg);
+}
+.desktop::after {
+  right: -14%;
+  bottom: 4%;
+  width: 78%;
+  height: 42%;
+  background: linear-gradient(285deg, rgba(90, 255, 226, 0.32), rgba(40, 120, 220, 0.10) 62%, transparent);
+  transform: rotate(7deg);
+}
+
+#window-layer { position: absolute; inset: 0; }
+
+/* ── ウィンドウ ───────────────────────────────────────────── */
+.window {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  min-width: 320px;
+  min-height: 200px;
+  padding: 0 7px 7px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-glass);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-aero), inset 0 1px 0 var(--glass-highlight);
+  z-index: var(--z-window);
+}
+.window.is-focused {
+  box-shadow: var(--shadow-aero), var(--glow-focus), inset 0 1px 0 var(--glass-highlight);
+}
+.window.is-minimized { display: none; }
+.window.is-maximized {
+  inset: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 0;
+  border-radius: 0;
+  border-width: 0;
+}
+
+.window-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* 横方向のガラス枠を打ち消して上端いっぱいに広げ、角をウィンドウと揃える */
+  margin: 0 -7px;
+  /* 左は本文の1行目の頭と揃える。ウィンドウ左端から本文の文字までは
+     枠1 + ガラス余白7 + 本文の枠1 + 本文の余白14 = 23px。この帯は
+     負のマージンで枠の内側（1px）から始まるので 23 - 1 = 22px。
+     右は ✕ の字面が本文の右端に来るよう、ボタンの余白ぶん(9px)を引く。 */
+  padding: 0 13px 0 22px;
+  height: var(--titlebar-height);
+  flex: none;
+  background: var(--gloss);
+  border-radius: calc(var(--radius-glass) - 1px) calc(var(--radius-glass) - 1px) 0 0;
+  cursor: grab;
+  user-select: none;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+/* 最大化するとガラスの枠と余白が無くなるので、本文の頭も 14px に寄る */
+.window.is-maximized .window-titlebar {
+  cursor: default;
+  border-radius: 0;
+  margin: 0;
+  padding: 0 5px 0 14px;
+}
+
+/* 暗い面では白い文字影が滲むので外す */
+@media (prefers-color-scheme: dark) {
+  .window-titlebar { text-shadow: none; }
+  .window-body { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+}
+.window-icon { color: var(--fg-muted); font-size: var(--text-md); }
+.window-title { font-size: var(--text-md); font-weight: 600; line-height: 20px; }
+/* ● の字面は書体ごとに上下するので、丸は自分で描いて中心を確定させる */
+.window-dirty {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  font-size: 0;
+  color: var(--attention);
+  background: currentColor;
+}
+.window-controls { margin-left: auto; display: flex; gap: 2px; }
+.window-control {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  transition: background-color var(--dur-1) ease, box-shadow var(--dur-1) ease, color var(--dur-1) ease;
+}
+.window-control:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.25));
+  border-color: var(--glass-highlight);
+  box-shadow: var(--glow-soft);
+  color: var(--fg);
+}
+.window-control.close:hover {
+  background: linear-gradient(180deg, #f4756a, #d33b2c);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 12px rgba(220, 70, 60, 0.6);
+  color: #fff;
+}
+
+/* 中身の面は不透明。ガラスの上に載った1枚の紙として見せる */
+.window-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 14px;
+  margin-top: 7px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-pane);
+  background: color-mix(in srgb, var(--canvas-subtle) 94%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+.window.is-maximized .window-body { margin-top: 0; border-radius: 0; border-width: 1px 0 0; }
+.window-body.is-plain { padding: 0; }
+.window-body iframe { width: 100%; height: 100%; border: 0; display: block; background: var(--canvas); }
+
+.window-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+}
+.window-resize::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--glass-edge);
+  border-bottom: 2px solid var(--glass-edge);
+}
+/* キーボードで掴めるようにしたので、当たっている位置が見えること。
+   フェーダーやパンつまみと同じ出し方に揃える。 */
+.window-resize:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
+/* 最大化中は大きさが画面に固定されるので、つまみごと消す
+   （消えていれば焦点も当たらない）。 */
+.window.is-maximized .window-resize { display: none; }
+
+.desktop.is-interacting .window-body { pointer-events: none; }
+
+/* ── タスクバー ───────────────────────────────────────────── */
+.taskbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--taskbar-height);
+  z-index: var(--z-taskbar);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* 上端の 1px の枠は内容の入る領域を 1px 下げる。同じ 1px を下に足して
+     戻さないと、中身は帯の中心より 0.5px 下に置かれる（上下の余白が
+     6px と 4px に割れて、ピルが下寄りに見えていた）。 */
+  padding: 0 10px 1px;
+  color: var(--taskbar-ink);
+  background: linear-gradient(180deg, rgba(28, 52, 88, 0.72) 0%, rgba(10, 22, 44, 0.86) 100%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  border-top: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 -3px 16px rgba(0, 12, 30, 0.45);
+}
+
+/* 帯の中のピルはすべて行の高さを 20px で揃える。1.7 のままだと 34.09px /
+   33.25px / 31.25px と半端になり、上下の余白が 1px ずれて見える。 */
+.start-button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;            /* 縮むと「スタート」が縦に折れてしまう */
+  white-space: nowrap;
+  padding: 5px 14px;
+  /* 文字を落としてアイコンだけになる幅（430px 未満）でも、
+     開いている窓のピルと高さを揃える */
+  min-height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.06));
+  color: #fff;
+  font-size: var(--text-md);
+  line-height: 20px;     /* 20 + 5+5 + 1+1 = 32px */
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 16, 40, 0.6);
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), var(--glow-soft);
+  transition: box-shadow var(--dur-1) ease, background-color var(--dur-1) ease;
+}
+/* 帯の中で唯一の直角だと異物に見えるので、他のアイコンと同じく角を丸める */
+.start-button img { border-radius: 5px; }
+.start-button:hover,
+.start-button[aria-expanded="true"] {
+  background: linear-gradient(180deg, rgba(150, 215, 255, 0.55), rgba(60, 140, 230, 0.35));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), var(--glow-strong);
+}
+
+/* min-width:0 が無いと flex アイテムが縮まず、overflow-x が効かないまま
+   両隣（スタートボタン・トレイ）を画面外へ押し出す */
+.taskbar-apps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  scrollbar-width: none;
+  /* overflow-x を付けると上下も切り取られ、ピルの光が枠で断ち切られる。
+     内側に余白を作って光の逃げ場を確保し、負のマージンで見た目の位置は保つ。 */
+  padding: 9px 6px;
+  margin: -9px -6px;
+}
+.taskbar-apps::-webkit-scrollbar { display: none; }
+.taskbar-app {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 190px;
+  padding: 5px 13px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--taskbar-ink-muted);
+  font-size: var(--text-md);
+  line-height: 20px;     /* 20 + 5+5 + 1+1 = 32px（スタートと同じ高さ） */
+  cursor: pointer;
+  transition: background-color var(--dur-1) ease, box-shadow var(--dur-1) ease, color var(--dur-1) ease;
+}
+.taskbar-app:hover { color: #fff; background: rgba(255, 255, 255, 0.18); }
+.taskbar-app.is-active {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.45);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.10));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), var(--glow-soft);
+  font-weight: 600;
+}
+.taskbar-app.is-minimized { opacity: .6; }
+.taskbar-app span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.taskbar-tray { display: flex; align-items: center; gap: 6px; margin-left: auto; flex: none; }
+
+/* 帯の中で光が断ち切られると板に見える。上へ少しだけ溢れさせる */
+.taskbar[data-specular]::after {
+  inset: -26px 0 0 0;
+  border-radius: 0;
+}
+.tray-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--taskbar-ink-muted);
+  font-size: var(--text-md);
+  line-height: 20px;     /* 20 + 4+4 + 1+1 = 30px */
+  cursor: pointer;
+}
+.tray-button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.3);
+  text-decoration: none;
+}
+.tray-avatar { width: 20px; height: 20px; border-radius: 50%; }
+.tray-fallback {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.taskbar-clock {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-md);
+  line-height: 20px;
+  color: var(--taskbar-ink);
+  padding: 0 6px;
+  text-shadow: 0 1px 2px rgba(0, 16, 40, 0.5);
+}
+
+/* ── メニュー（スタート / ユーザー） ──────────────────────── */
+.menu-backdrop { position: fixed; inset: 0; z-index: var(--z-menu); background: transparent; }
+
+.start-menu {
+  position: fixed;
+  left: 10px;
+  bottom: calc(var(--taskbar-height) + 8px);
+  z-index: calc(var(--z-menu) + 1);
+  width: min(470px, calc(100vw - 20px));
+  max-height: min(560px, calc(100vh - var(--taskbar-height) - 24px));
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-glass);
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-aero), inset 0 1px 0 var(--glass-highlight);
+  overflow: hidden;
+}
+.start-search { padding: 8px; }
+.start-groups {
+  overflow-y: auto;
+  /* 溝を常に確保する。アプリが1つ増えて縦に溢れた瞬間に、タイルが
+     まとめて 12px 左へ飛ぶのを防ぐ。 */
+  scrollbar-gutter: stable;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-radius: var(--radius-pane);
+  background: color-mix(in srgb, var(--canvas-subtle) 92%, transparent);
+  border: 1px solid var(--glass-edge);
+}
+.start-group-label {
+  font-size: var(--text-xs);
+  letter-spacing: .06em;
+  color: var(--fg-subtle);
+  padding: 0 4px 6px;
+}
+.start-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(122px, 1fr)); gap: 6px; }
+.app-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 8px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: none;
+  color: var(--fg);
+  font-size: var(--text-sm);
+  text-align: center;
+  cursor: pointer;
+  transition: background-color var(--dur-1) ease, box-shadow var(--dur-1) ease, transform var(--dur-1) ease;
+}
+.app-tile:hover,
+.app-tile:focus-visible {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(190, 225, 255, 0.35));
+  border-color: rgba(120, 190, 255, 0.7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), var(--glow-strong);
+  transform: translateY(-1px);
+}
+.app-tile-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(214, 235, 255, 0.55));
+  border: 1px solid rgba(120, 170, 220, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 3px rgba(20, 50, 90, 0.2);
+  color: #1d6fb8;
+  font-size: var(--text-xl);
+  position: relative;
+}
+.app-tile-icon .icon { width: 19px; height: 19px; }
+.app-tile-badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 17px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #ff7a6d, #d8342a);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  color: #fff;
+  font-size: var(--text-xs);
+  line-height: 16px;
+  box-shadow: 0 1px 4px rgba(140, 20, 10, 0.5);
+}
+.start-empty { padding: 24px 12px; text-align: center; color: var(--fg-muted); font-size: var(--text-md); }
+
+.menu {
+  position: fixed;
+  z-index: calc(var(--z-menu) + 1);
+  min-width: 210px;
+  padding: 6px;
+  border: 1px solid var(--glass-edge);
+  border-radius: 16px;
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--shadow-aero), inset 0 1px 0 var(--glass-highlight);
+}
+.menu-header { padding: 6px 10px; font-size: var(--text-sm); color: var(--fg-subtle); }
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-icon);
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: none;
+  color: var(--fg);
+  font-size: var(--text-md);
+  text-align: left;
+  cursor: pointer;
+}
+.menu-item:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(200, 228, 255, 0.4));
+  border-color: rgba(120, 190, 255, 0.6);
+  text-decoration: none;
+}
+
+/* ── 狭い画面: ウィンドウ比喩をやめて1画面1アプリにする ───── */
+@media (max-width: 760px) {
+  /* 画面幅が足りないので、意味の薄いものから畳む */
+  .taskbar-tray .tray-button > .truncate { display: none; }   /* サーバー名 */
+  .taskbar-app { max-width: 128px; }
+  /* 常に最大化されるため、最大化ボタンは押しても何も起きない */
+  .window-control.maximize { display: none; }
+
+  .window {
+    inset: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    padding: 0;
+    border-radius: 0;
+    border-width: 0;
+  }
+  .window-body { border-radius: 0; border-width: 1px 0 0; }
+  .window-resize { display: none; }
+  /* この画面には移動もリサイズも無い。無い操作を案内しない */
+  .desktop-hint .small { display: none; }
+  .start-menu { left: 0; right: 0; width: auto; border-radius: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-tile:hover { transform: none; }
+}
+
+@media (max-width: 430px) {
+  /* さらに狭い場合はスタートの文字を落としてアイコンだけにする */
+  .start-button { padding: 5px 10px; }
+  .start-button > span { display: none; }
+  .taskbar-clock { display: none; }
+}
