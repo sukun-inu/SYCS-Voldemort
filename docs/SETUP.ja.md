@@ -14,6 +14,29 @@ docker compose up -d --build
 - 管理 UI: `5001`
 - Web トラッカー: `8001`
 
+### プロセス間で共有する状態（Valkey）
+
+`valkey` が、3つのアプリで共有したい状態を持ちます。ホストへポートは出しません。
+
+| 用途 | DB 番号 | 無いとどうなるか |
+|---|---|---|
+| API 応答のキャッシュ | 0 | `WEB_WORKERS` の数だけ同じ DB クエリと同じ予測計算が走る |
+| 管理画面のレート制限 | 1 | `ADMIN_WORKERS` の数だけ独立して数えるので、上限が実質その倍になる |
+
+**無くても動きます。** `VALKEY_URL` を空にすると、今までどおりプロセス内の
+キャッシュだけで動きます。Valkey が動作中に落ちた場合も、遮断器が働いて
+プロセス内キャッシュだけの動作へ落ちます（`services/shared_cache.py` の冒頭に
+その3つの決まりが書いてあります）。`depends_on` を `service_healthy` に
+していないのも同じ理由です。
+
+| 変数 | 既定 | 意味 |
+|---|---|---|
+| `VALKEY_URL` | `redis://valkey:6379/0` | 空にすると共有キャッシュを使わない |
+| `VALKEY_TIMEOUT_SECONDS` | `0.5` | 1操作の待ち上限。**長くしないこと**（応答しない Valkey を待つのは、無いより悪い） |
+| `VALKEY_BREAKER_COOLDOWN_SECONDS` | `30` | 失敗したあと、次に試すまでの秒数 |
+| `VALKEY_MAXMEMORY` | `256mb` | 上限に当たったら古いものから捨てる（`allkeys-lru`） |
+| `ADMIN_LIMITER_STORAGE_URI` | `redis://valkey:6379/1?socket_timeout=0.5&...` | `memory://` にするとワーカーごとの計数へ戻る |
+
 ### バックアップ
 
 `postgres-backup` が毎日 4 時（JST）に Postgres の 2 つの DB と、Postgres に

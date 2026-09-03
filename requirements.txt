@@ -39,6 +39,18 @@ itsdangerous==2.2.0
 python-multipart==0.0.32
 slowapi==0.1.10
 
+# --- プロセス間で共有する状態（Valkey） ---
+# Valkey へも同じプロトコルで話すので、クライアントは redis-py を使う。
+#
+# **8.0 系へ上げてはいけない。** slowapi が使う limits の redis ストレージが
+# `redis!=4.5.2,!=4.5.3,<8.0.0` を要求するため、8 系にすると管理画面の
+# レート制限を Valkey へ載せられなくなる（tools/check_requirements.py が
+# この食い違いを検出する）。7.4.1 は制約を満たす最新版。
+#
+# 同期版（limits が使う）と非同期版（redis.asyncio、webapp のキャッシュが使う）が
+# 同じパッケージに入っているので、ピンは1つで足りる。
+redis==7.4.1
+
 # --- DB ---
 SQLAlchemy==2.0.52
 asyncpg==0.31.0
