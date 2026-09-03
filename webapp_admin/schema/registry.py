@@ -12,6 +12,7 @@ from typing import Any
 from webapp_admin.schema.panels.custom import DEV, MONITORING, RECORDING, SQL, USER_STATE
 from webapp_admin.schema.panels.djaudio import PANEL as DJAUDIO
 from webapp_admin.schema.panels.earthquake import PANEL as EARTHQUAKE
+from webapp_admin.schema.panels.guild_data import PANEL as GUILD_DATA
 from webapp_admin.schema.panels.logging import PANEL as LOGGING
 from webapp_admin.schema.panels.news_feeds import PANEL as NEWS_FEEDS
 from webapp_admin.schema.panels.reaction_roles import PANEL as REACTION_ROLES
@@ -28,6 +29,7 @@ PANELS: tuple[Panel, ...] = (
     LOGGING,
     WELCOME,
     VC_NOTIFY,
+    GUILD_DATA,
     EARTHQUAKE,
     NEWS_FEEDS,
     STICKY,

@@ -681,6 +681,53 @@ def main():
         page.locator('.window[data-app-id="recording"] .window-control').last.click()
         page.wait_for_timeout(400)
 
+        # ── サーバーのデータ（取り消しの効かない操作の入口） ──
+        # 消す口（DELETE /admin/api/guild-data）だけ先に入っていて、叩く画面が
+        # 無い状態が一度あった。画面があること自体をここで押さえる。
+        #
+        # **実際には押さない。** この検査用の SETTINGS_DIR ごと消えるのは構わない
+        # が、あとの検査がこのギルドの設定を読むので、消すと以降が総崩れになる。
+        # 「本当に消えるか」は tests/test_admin_api.py が API 側で見ている。
+        # ここで見るのは、押せるようになる条件だけ。
+        page.click("#start-button")
+        page.click('.app-tile[data-app-id="guild-data"]')
+        page.wait_for_selector('.window[data-app-id="guild-data"] .guild-id', timeout=8000)
+        gd_window = '.window[data-app-id="guild-data"] '
+        check(
+            "削除の確認に、いま開いているサーバーIDが出ている",
+            page.locator(gd_window + ".guild-id").inner_text().strip() == str(GUILD_ID),
+            page.locator(gd_window + ".guild-id").inner_text(),
+        )
+
+        gate = page.evaluate(
+            """(id) => {
+          const win = document.querySelector('.window[data-app-id="guild-data"]');
+          const input = win.querySelector(".section.is-danger input");
+          const button = win.querySelector(".section.is-danger .btn-danger");
+          const type = (value) => {
+            input.value = value;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            return button.disabled;
+          };
+          return {
+            empty: button.disabled,
+            wrong: type(id.slice(0, -1)),   // 1桁足りない
+            // 桁数は同じで別のサーバー。末尾を必ず別の数字へ差し替える
+            // （決め打ちの数字を足すと、末尾がその数字のIDでは同じ値になる）
+            other: type(id.slice(0, -1) + (id.slice(-1) === "9" ? "8" : "9")),
+            exact: type(id),
+          };
+        }""",
+            str(GUILD_ID),
+        )
+        check("何も打たないうちは削除を押せない", gate["empty"])
+        check("桁が足りないIDでは押せない", gate["wrong"])
+        check("桁数が同じでも別のIDなら押せない", gate["other"])
+        check("IDが一致したときだけ押せる", gate["exact"] is False, f"押せる={not gate['exact']}")
+
+        page.locator(gd_window + ".window-control").last.click()
+        page.wait_for_timeout(400)
+
         # ── ウィンドウの移動とリサイズ ──
         # ここが壊れても画面は正常に見えるため、必ず実際に動かして確かめる
         win = page.locator('.window[data-app-id="logging"]')

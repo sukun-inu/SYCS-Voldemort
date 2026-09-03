@@ -75,6 +75,10 @@
   line-height: 20px;
   font-weight: 500;
   cursor: pointer;
+  /* <a class="btn"> も同じ見た目にする。ボタンに見せた <a> だけ下線が
+     残っていて、押せる物の見た目が2種類ある状態だった（録音一覧の
+     「ダウンロード」など）。 */
+  text-decoration: none;
   transition: background-color var(--dur-1) ease, border-color var(--dur-1) ease, color var(--dur-1) ease;
 }
 .btn:hover:not(:disabled) { background: var(--canvas-inset); }
@@ -201,6 +205,25 @@
 .section-help { font-size: var(--text-sm); color: var(--fg-muted); }
 .section-body { padding: 14px; display: flex; flex-direction: column;
                 gap: var(--gap-stack); }
+
+/* 取り消しの効かない操作を置く節。枠と見出しだけを赤にし、中身は塗らない。
+   面まで赤くすると、注意を促す色ではなく「いま壊れている」表示に見える
+   （危険色は状態を表す色でもあるので、置いてあるだけの状態に使わない）。 */
+.section.is-danger { border-color: var(--danger); }
+.section.is-danger > .section-head {
+  border-bottom-color: var(--danger);
+  background: var(--danger-soft);
+}
+.section.is-danger .section-title { color: var(--danger); }
+/* 写して打たせる番号。周りの文と同じ字面だと、写すときに桁を数え直せない。 */
+.guild-id {
+  padding: 1px 8px;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius);
+  background: var(--canvas-inset);
+  font-size: var(--text-md);
+  user-select: all;
+}
 
 /* ── タブ ─────────────────────────────────────────────────── */
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); overflow-x: auto; }
