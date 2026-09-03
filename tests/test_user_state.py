@@ -35,7 +35,7 @@ os.environ.setdefault("DJAUDIO_CACHE_DIR", tempfile.mkdtemp(prefix="user-state-t
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy import create_engine, select  # noqa: E402
 from sqlalchemy.exc import OperationalError  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
@@ -183,6 +183,15 @@ def _member(
 
 def _role(role_id: int, name: str, position: int, *, is_default: bool = False):
     return SimpleNamespace(id=role_id, name=name, position=position, is_default=lambda: is_default)
+
+
+def _naive_utc(value):
+    """SQLite から返る datetime を naive UTC に揃える。
+
+    インメモリ SQLite は timezone を落として返すことがある。比較のたびに
+    その場で分岐を書くと、落ちたときに原因がぼやける。
+    """
+    return value.replace(tzinfo=None) if value.tzinfo is not None else value
 
 
 class _DbBackedTestCase(unittest.TestCase):
@@ -1073,6 +1082,79 @@ class RepairUserStateIntegrityTests(_DbBackedTestCase):
         self.assertEqual(stats["timeout_fixed"], 1)
         detail = _run(uss.get_user_state_detail(1, 1))
         self.assertFalse(detail["current"]["is_timed_out"])
+
+    def test_active_status_clears_the_ban_but_leaves_presence_alone(self):
+        """active は BAN を外すだけで、在室かどうかには手を出さないこと。
+
+        在室の判定は同期（sync_guild_user_states）が Discord に問い合わせて
+        決める。ここで一緒に True へ倒すと、**すでに抜けた人を「居る」ことに
+        してしまう。** 直した結果は画面にそのまま出るので、BAN を外したついで
+        に在室まで書き換えると、誰も気づかないまま名簿が狂う。
+
+        107行あるこの関数を割る前に押さえる
+        （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+        """
+        self._insert_raw(status="active", is_banned=True, is_in_guild=False)
+
+        stats = _run(uss.repair_user_state_integrity(guild_id=1))
+
+        self.assertEqual(stats["flag_fixed"], 1, "在室まで書き換えている")
+        detail = _run(uss.get_user_state_detail(1, 1))
+        self.assertFalse(detail["current"]["is_banned"])
+        self.assertFalse(detail["current"]["is_in_guild"], "抜けた人を居ることにしている")
+
+    def test_kicked_is_treated_like_left(self):
+        """kicked も left と同じく、在室を False に倒すこと。
+
+        追い出された人が名簿に残る。left だけを見ていると通ってしまうので、
+        両方を1つの集合で扱っていること自体をここで押さえる。
+        """
+        self._insert_raw(status="kicked", is_in_guild=True)
+
+        stats = _run(uss.repair_user_state_integrity(guild_id=1))
+
+        self.assertEqual(stats["flag_fixed"], 1)
+        self.assertFalse(_run(uss.get_user_state_detail(1, 1))["current"]["is_in_guild"])
+
+    def test_untouched_rows_keep_their_updated_at(self):
+        """直さなかった行の updated_at は、そのままにすること。
+
+        全行に触ると「最後に状態が変わった時刻」が**バッチを回した時刻**に
+        揃ってしまい、誰がいつ抜けたのかが読めなくなる。壊れた行が1つも
+        無いのが通常なので、これは毎回そうなる。
+        """
+        old = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        self._insert_raw(guild_id=1, user_id=1, status="active", updated_at=old)  # 直すところが無い
+        self._insert_raw(guild_id=1, user_id=2, status="  ACTIVE  ", updated_at=old)  # 直る
+
+        stats = _run(uss.repair_user_state_integrity(guild_id=1))
+
+        self.assertEqual(stats["rows_scanned"], 2)
+        self.assertEqual(stats["rows_fixed"], 1)
+        with self._sync_session() as session:
+            rows = {r.user_id: r for r in session.scalars(select(UserStateCurrent)).all()}
+        self.assertEqual(_naive_utc(rows[1].updated_at), old.replace(tzinfo=None), "触っていない行の時刻が動いた")
+        self.assertNotEqual(_naive_utc(rows[2].updated_at), old.replace(tzinfo=None))
+
+    def test_a_transient_db_error_is_retried_after_self_heal(self):
+        """コミット時に1回だけ落ちても、自己修復してやり直すこと。
+
+        整合性の修復は無人で回るバッチなので、諦めた回はそのまま忘れられる。
+        **壊れた行が直らないまま何日も残る**ことになる。
+        """
+        controller = _FailureController(fail_times=1)
+        self._insert_raw(status="  ACTIVE  ")
+        ensure_mock = AsyncMock(return_value=None)
+        with (
+            patch.object(uss, "SessionLocal", _make_flaky_session_local(self.engine, controller, op="commit")),
+            patch.object(uss, "ensure_user_state_db", ensure_mock),
+        ):
+            stats = _run(uss.repair_user_state_integrity(guild_id=1))
+
+        self.assertEqual(controller.calls, 1)
+        ensure_mock.assert_any_call(force=True)
+        self.assertEqual(stats["status_fixed"], 1)
+        self.assertEqual(_run(uss.get_user_state_detail(1, 1))["current"]["status"], "active")
 
     def test_only_target_guild_rows_are_touched(self):
         """guild_id を指定した場合、他ギルドの壊れた行には手を出さないことを確認する。"""

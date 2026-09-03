@@ -773,6 +773,18 @@ def _build_state_event(
     )
 
 
+def _empty_repair_stats() -> dict[str, int]:
+    """整合性の修復で数える項目。試行ごとに新しいものを使う。"""
+    return {
+        "rows_scanned": 0,
+        "rows_fixed": 0,
+        "status_fixed": 0,
+        "json_fixed": 0,
+        "flag_fixed": 0,
+        "timeout_fixed": 0,
+    }
+
+
 async def repair_user_state_integrity(
     *,
     guild_id: int | None = None,
@@ -787,16 +799,13 @@ async def repair_user_state_integrity(
     await ensure_user_state_db()
     now = _utc_now()
     safe_max_rows = max(100, min(200000, int(max_rows)))
-    stats: dict[str, int] = {
-        "rows_scanned": 0,
-        "rows_fixed": 0,
-        "status_fixed": 0,
-        "json_fixed": 0,
-        "flag_fixed": 0,
-        "timeout_fixed": 0,
-    }
+    stats: dict[str, int] = _empty_repair_stats()
 
     for attempt in range(2):
+        # 数え直す。前の試行は rollback しているのに、そこで数えた分を残すと
+        # **直した件数が倍になって報告される**（無人で回るバッチなので、
+        # あとから読めるのはこの数字だけ）。
+        stats = _empty_repair_stats()
         async with SessionLocal() as session:
             try:
                 stmt = select(UserStateCurrent).order_by(UserStateCurrent.id.asc()).limit(safe_max_rows)
