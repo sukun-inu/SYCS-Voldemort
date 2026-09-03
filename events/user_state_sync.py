@@ -312,6 +312,24 @@ async def _sync_user_state_on_ready(bot: Bot, lock: asyncio.Lock) -> None:
         logger.exception("[BOT_SETUP] user_state sync fatal error: %s", e)
 
 
+async def _purge_abandoned_guild_settings(bot: Bot) -> None:
+    """放棄されたギルドの設定を掃除する。失敗しても修復ループは止めない。
+
+    消してよいのは「Bot がもう居ない」かつ「長く触られていない」ものだけ
+    （判断は services/guild_retention.py）。**居るギルドは1つも渡さない**
+    ——ここで渡す集合が空になると、現役のサーバーまで対象になる。
+
+    掃除の失敗で定期修復ごと止めない。掃除は付随処理で、本筋は同期と修復の
+    ほうである。
+    """
+    from services.guild_retention import purge_abandoned_guilds
+
+    try:
+        await purge_abandoned_guilds({guild.id for guild in bot.guilds})
+    except Exception as e:
+        logger.exception("[BOT_SETUP] 放棄ギルドの設定掃除に失敗: %s", e)
+
+
 async def _user_state_auto_repair_loop(bot: Bot, lock: asyncio.Lock) -> None:
     """@tasks.loopではなく手書きのwhileループにしているのは、開始遅延
     (_USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS)を挟んでから無限ループに
@@ -332,6 +350,7 @@ async def _user_state_auto_repair_loop(bot: Bot, lock: asyncio.Lock) -> None:
                 run_integrity_repair=True,
                 lock=lock,
             )
+            await _purge_abandoned_guild_settings(bot)
             await asyncio.sleep(_USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS)
     except asyncio.CancelledError:
         logger.info("[BOT_SETUP] user_state auto_repair loop cancelled")

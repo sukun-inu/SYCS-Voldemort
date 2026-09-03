@@ -1,11 +1,12 @@
 import logging
+from datetime import datetime, timezone
 import os
 import time
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, TypeVar, cast
+from typing import Any, Callable, Optional, TypeVar, cast
 
 from envutil import env_float, env_path
 
@@ -201,6 +202,84 @@ def _save_all(data: dict[str, Any]) -> None:
     _cache_sig = _file_signature()
 
 
+# ギルド設定に押す「最後に触られた時刻」の鍵。放棄された設定を見分けるのに使う
+# （services/guild_retention.py）。設定そのものと同じ入れ物に置くのは、
+# 設定を消したときに時刻だけ残らないようにするため。
+TOUCHED_AT_KEY = "_updated_at"
+
+
+def _stamp_touched(data: dict[str, Any], before: dict[str, Any]) -> None:
+    """この書き込みで中身が変わったギルドに、いまの時刻を押す。
+
+    **変わっていないギルドには押さない。** 全ギルドへ毎回押すと、
+    「10年触られていない」がどのギルドについても成立しなくなり、放棄された
+    設定を見分けられなくなる（＝掃除が永久に動かない）。
+
+    比較は「時刻の鍵を除いた中身」で行う。押した時刻そのものを比較に入れると、
+    1回書くたびに差が出て、次の書き込みでまた押すことになる。
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    guilds = data.get("guilds")
+    if not isinstance(guilds, dict):
+        return
+    for guild_id, current in guilds.items():
+        if not isinstance(current, dict):
+            continue
+        previous = before.get(guild_id)
+        was: dict[str, Any] = previous if isinstance(previous, dict) else {}
+        if _without_stamp(current) != _without_stamp(was):
+            current[TOUCHED_AT_KEY] = now
+
+
+def _without_stamp(settings: dict[str, Any]) -> dict[str, Any]:
+    """時刻の鍵を除いた設定。中身が変わったかどうかの比較に使う。"""
+    return {key: value for key, value in settings.items() if key != TOUCHED_AT_KEY}
+
+
+def touched_at(guild_id: int) -> Optional[str]:
+    """そのギルドの設定が最後に触られた時刻（ISO 8601 / UTC）。無ければ None。
+
+    None が返るのは、この仕組みを入れる前から在る設定。**無いものを
+    「ずっと前」と読んではいけない**（読むと、古い設定が一斉に消える）。
+    次に何か書き換えられた時点で時刻が入る。
+    """
+    value = get_guild_settings(guild_id).get(TOUCHED_AT_KEY)
+    return str(value) if value else None
+
+
+def delete_guild_settings(guild_id: int) -> bool:
+    """1ギルドぶんの設定を丸ごと消す。消すものが無ければ False。
+
+    ここは**利用者が自分で消すための口**であって、掃除の口ではない。
+    自動で消してよいのは「Bot がもう居ない」かつ「長く触られていない」
+    ものだけで、その判断は services/guild_retention.py が持つ。
+    """
+
+    def _mutator(data: dict[str, Any]) -> bool:
+        """guilds から1件抜く。"""
+        guilds = data.get("guilds")
+        if not isinstance(guilds, dict):
+            return False
+        return guilds.pop(str(guild_id), None) is not None
+
+    return _mutate_settings(_mutator)
+
+
+def known_guild_ids() -> list[int]:
+    """設定を持っているギルドの一覧。掃除が走査に使う。
+
+    数値に読めない鍵は飛ばす（手で編集された settings.json でも落ちない）。
+    """
+    guilds = _load_all().get("guilds", {})
+    out: list[int] = []
+    for key in guilds if isinstance(guilds, dict) else {}:
+        try:
+            out.append(int(key))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 def _mutate_settings(mutator: Callable[[dict[str, Any]], _T]) -> _T:
     """ロックを取り、ディスクから読み直してから mutator を適用して保存する。
 
@@ -208,10 +287,15 @@ def _mutate_settings(mutator: Callable[[dict[str, Any]], _T]) -> _T:
     ロックを取るまでの間に他プロセスが書き込んでいる可能性があるため。
     キャッシュ経由で読むと、他プロセスの直前の変更を mutator が知らずに
     上書きしてしまう。
+
+    保存の直前に「触られた時刻」を押す。全てのセッターがここを通るので、
+    1箇所で足りる（個別のセッターへ足す方式は、次に足すセッターで忘れる）。
     """
     with _settings_file_lock():
         data = _load_all_from_disk()
+        before = {key: dict(value) for key, value in (data.get("guilds") or {}).items() if isinstance(value, dict)}
         result = mutator(data)
+        _stamp_touched(data, before)
         _save_all(data)
         return result
 

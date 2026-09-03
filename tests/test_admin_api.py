@@ -17,7 +17,7 @@ import time
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 # services/* はモジュール読み込み時に SETTINGS_DIR を解決するため、
 # プロジェクトの import より前に一時ディレクトリへ差し替える。
@@ -2042,6 +2042,86 @@ class GuildSelectFormTests(unittest.TestCase):
         self.assertEqual(request.session["_flashes"], [["danger", "アクセス権限がありません。"]])
 
 
+class DeleteGuildDataApiTests(unittest.TestCase):
+    """「このサーバーのデータを削除」の口。
+
+    保管方針の主役は**利用者が自分で消せること**で、自動削除は放棄された
+    ものだけに限る（services/guild_retention.py）。ここはその手動側の入口。
+
+      - 確認にサーバーIDそのものを打たせること
+      - 管理者でなくなった人には消させないこと
+      - 設定と監査履歴をまとめて消すこと
+      - CSRF なしでは通らないこと
+
+    1つ目が要。取り消しが効かない操作なので、「はい」を1回押すだけでは
+    足りない。**番号を写して打つあいだに、どのサーバーを消そうとしている
+    のかを見ることになる。**
+    """
+
+    def setUp(self):
+        self.client = make_client()
+
+    def _delete(self, client, *, confirm, csrf=True):
+        """削除の口を叩く。"""
+        headers = dict(CSRF_HEADER) if csrf else {}
+        return client.request("DELETE", "/admin/api/guild-data", params={"confirm": confirm}, headers=headers)
+
+    def test_a_wrong_confirmation_deletes_nothing(self):
+        """サーバーIDが一致しなければ、何も消さないこと。
+
+        押し間違いで消えるなら、確認の意味が無い。
+        """
+        with patch("services.guild_retention.delete_guild_data", AsyncMock()) as purge:
+            response = self._delete(self.client, confirm="ちがう")
+
+        self.assertEqual(response.status_code, 400)
+        purge.assert_not_awaited()
+
+    def test_the_right_confirmation_removes_settings_and_history_together(self):
+        """IDが一致したら、設定と監査履歴をまとめて消すこと。
+
+        別々の口にすると、消したつもりの人に**消し残しがあることを覚えて
+        いてもらう**ことになる。
+        """
+        removed = {"settings": 1, "events": 42, "states": 5}
+        with (
+            patch("services.guild_retention.delete_guild_data", AsyncMock(return_value=removed)) as purge,
+            patch("webapp_admin.auth.user_still_admin", AsyncMock(return_value=True)),
+        ):
+            response = self._delete(self.client, confirm=str(GUILD_ID))
+
+        self.assertEqual(response.status_code, 200)
+        purge.assert_awaited_once_with(GUILD_ID)
+        self.assertEqual(response.json()["removed"], removed)
+
+    def test_someone_who_lost_admin_cannot_delete(self):
+        """管理者でなくなった人には消させないこと。
+
+        セッションはログインした時点のもので、そのあと権限を外されても
+        残っている。**取り消しの効かない操作を、外された人が実行できて
+        しまう。**
+        """
+        with (
+            patch("services.guild_retention.delete_guild_data", AsyncMock()) as purge,
+            patch("webapp_admin.auth.user_still_admin", AsyncMock(return_value=False)),
+        ):
+            response = self._delete(self.client, confirm=str(GUILD_ID))
+
+        self.assertEqual(response.status_code, 403)
+        purge.assert_not_awaited()
+
+    def test_it_is_refused_without_the_csrf_header(self):
+        """CSRF ヘッダ無しでは通らないこと。
+
+        踏んだだけで他人のサーバーの設定が消えるようでは困る。
+        """
+        with patch("services.guild_retention.delete_guild_data", AsyncMock()) as purge:
+            response = self._delete(self.client, confirm=str(GUILD_ID), csrf=False)
+
+        self.assertEqual(response.status_code, 403)
+        purge.assert_not_awaited()
+
+
 class CreateAppShapeTests(unittest.TestCase):
     """create_app() が組み立てたものと、その順序を丸ごと固定する。
 
@@ -2104,6 +2184,9 @@ class CreateAppShapeTests(unittest.TestCase):
         ("/admin/api/apps/{app_id}", "get,put"),
         ("/admin/api/apps/{app_id}/collections/{key}", "post"),
         ("/admin/api/apps/{app_id}/collections/{key}/{item_id}", "delete,put"),
+        # 保管方針の「消すのは利用者が決める」側の入口。設定と監査履歴を
+        # まとめて消す（services/guild_retention.py）。
+        ("/admin/api/guild-data", "delete"),
         ("/admin/api/users/state", "get"),
         ("/admin/api/users/state/{user_id}", "get"),
         ("/admin/api/recording", "get"),

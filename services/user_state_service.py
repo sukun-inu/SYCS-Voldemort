@@ -898,6 +898,40 @@ async def _repair_attempt(guild_id: int | None, safe_max_rows: int, now: datetim
             raise
 
 
+async def delete_guild_user_states(guild_id: int) -> dict[str, int]:
+    """1ギルドぶんの監査履歴と現在状態を消す。消した件数を返す。
+
+    利用者が「このサーバーのデータを削除」を選んだときの片側
+    （services/guild_retention.py が呼ぶ）。**保管期間の掃除とは別の口**で、
+    こちらは期間を見ずに全部消す。
+
+    履歴と現在状態は同じトランザクションで消す。片方だけ残ると、
+    **誰も居ないのに「BAN されている人が1人」といった表示が残る。**
+    """
+    await ensure_user_state_db()
+    for attempt in range(2):
+        async with SessionLocal() as session:
+            try:
+                events = await session.execute(delete(UserStateEvent).where(UserStateEvent.guild_id == int(guild_id)))
+                states = await session.execute(
+                    delete(UserStateCurrent).where(UserStateCurrent.guild_id == int(guild_id))
+                )
+                await session.commit()
+                # rowcount は DELETE を返す CursorResult にしか無い。Result で
+                # 受けている型の上では見えないので、実体から取り出す。
+                return {
+                    "events": int(getattr(events, "rowcount", 0) or 0),
+                    "states": int(getattr(states, "rowcount", 0) or 0),
+                }
+            except Exception as e:
+                await session.rollback()
+                if attempt == 0 and await _try_db_self_heal(context="delete_guild_user_states", exc=e):
+                    continue
+                raise
+
+    return {"events": 0, "states": 0}
+
+
 async def repair_user_state_integrity(
     *,
     guild_id: int | None = None,

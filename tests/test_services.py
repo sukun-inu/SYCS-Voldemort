@@ -16,6 +16,7 @@ import contextlib
 import io
 import gzip
 import json
+from datetime import datetime, timedelta, timezone
 import logging
 import os
 import re
@@ -278,6 +279,153 @@ class BadgeTests(unittest.TestCase):
             asyncio.run(eq._notify_all_guilds(bot, QUAKE_FOREIGN))
 
         self.assertEqual(made, [])
+
+
+class GuildRetentionTests(unittest.TestCase):
+    """ギルドのデータをいつ消すか。
+
+    方針は**「消すのは利用者が決める」**。使っている限り、何年経っても
+    勝手には消えない。自動で消すのは放棄されたものだけで、条件は
+    「Bot がもう居ない」かつ「最終更新から10年」の**両方**である。
+
+      - 片方だけでは消さないこと
+      - 触られた時刻の無い設定は消さないこと
+      - 中身が変わったギルドにだけ時刻を押すこと
+      - 利用者の削除では、設定と監査履歴をまとめて消すこと
+      - 監査履歴を消せなくても、設定は消すこと
+
+    2つ目が要。この仕組みを入れる前から在る設定には時刻が無い。**無いものを
+    「ずっと前」と読むと、既存の設定が条件を満たした瞬間に一斉に消える。**
+    """
+
+    def setUp(self):
+        import services.guild_retention as retention
+
+        self.retention = retention
+        self.store = store
+        # 設定ファイルはテスト間で持ち越さない。
+        for guild_id in self.store.known_guild_ids():
+            self.store.delete_guild_settings(guild_id)
+        self.addCleanup(self._clear)
+
+    def _clear(self):
+        """このテストで作った設定を片付ける。"""
+        for guild_id in self.store.known_guild_ids():
+            self.store.delete_guild_settings(guild_id)
+
+    def _aged(self, guild_id, days_ago):
+        """指定した日数前に触られたことにする。"""
+        self.store.update_guild_settings(guild_id, {"log_channel_id": 1})
+        stamp = (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
+        self.store.update_guild_settings(guild_id, {store.TOUCHED_AT_KEY: stamp})
+
+    def test_a_guild_the_bot_still_belongs_to_is_never_purged(self):
+        """Bot が居るギルドは、何年経っても消さないこと。
+
+        設定して放置しているだけの現役サーバーがある。**触っていない＝
+        使っていない、ではない。**
+        """
+        self._aged(1, days_ago=365 * 50)
+
+        self.assertFalse(self.retention.is_abandoned(1, present=True))
+        self.assertTrue(self.retention.is_abandoned(1, present=False))
+
+    def test_a_guild_left_recently_is_not_purged_either(self):
+        """退出済みでも、最近触られていれば消さないこと。
+
+        「一時的に外して入れ直す」運用がある。退出しただけで消すと、
+        戻したときに設定が初期化されている。
+        """
+        self._aged(2, days_ago=30)
+
+        self.assertFalse(self.retention.is_abandoned(2, present=False))
+
+    def test_settings_without_a_timestamp_are_left_alone(self):
+        """触られた時刻の無い設定は消さないこと。
+
+        この仕組みより前から在る設定には時刻が無い。**無いものを
+        「ずっと前」と読むと、既存の設定が一斉に消える。** 次に何か
+        書き換えられた時点で時刻が入る。
+        """
+        self.store.update_guild_settings(3, {"log_channel_id": 1})
+        self.store.update_guild_settings(3, {store.TOUCHED_AT_KEY: None})
+
+        self.assertIsNone(self.store.touched_at(3))
+        self.assertFalse(self.retention.is_abandoned(3, present=False))
+
+    def test_only_the_guild_that_changed_gets_a_fresh_timestamp(self):
+        """中身が変わったギルドにだけ時刻を押すこと。
+
+        全ギルドへ毎回押すと「10年触られていない」がどのギルドについても
+        成立しなくなり、**掃除が永久に動かない。**
+        """
+        self._aged(4, days_ago=365 * 20)
+        old = self.store.touched_at(4)
+
+        self.store.update_guild_settings(5, {"log_channel_id": 9})
+
+        self.assertEqual(self.store.touched_at(4), old, "触っていないギルドの時刻が動いた")
+        self.assertIsNotNone(self.store.touched_at(5))
+
+    def test_writing_the_same_value_does_not_move_the_timestamp(self):
+        """同じ値で上書きしても、時刻は動かさないこと。
+
+        値が変わっていないなら触られていない。定期ジョブが同じ値を
+        書き戻すだけで**永久に「最近触られた」ことになる。**
+        """
+        self.store.update_guild_settings(6, {"log_channel_id": 1})
+        first = self.store.touched_at(6)
+
+        self.store.update_guild_settings(6, {"log_channel_id": 1})
+
+        self.assertEqual(self.store.touched_at(6), first)
+
+    def test_purging_skips_every_guild_the_bot_is_in(self):
+        """掃除は、Bot が居るギルドを1つも消さないこと。"""
+        self._aged(10, days_ago=365 * 20)
+        self._aged(11, days_ago=365 * 20)
+
+        removed = asyncio.run(self.retention.purge_abandoned_guilds({10}))
+
+        self.assertEqual(removed, [11])
+        self.assertNotEqual(self.store.get_guild_settings(10), {})
+        self.assertEqual(self.store.get_guild_settings(11), {})
+
+    def test_the_user_delete_takes_the_audit_history_with_it(self):
+        """利用者の削除では、設定と監査履歴をまとめて消すこと。
+
+        別々の口にすると、「このサーバーのデータを消したい」と思った人に
+        **消し残しがあることを覚えていてもらう**ことになる。
+        """
+        self.store.update_guild_settings(20, {"log_channel_id": 1})
+        with patch(
+            "services.user_state_service.delete_guild_user_states",
+            AsyncMock(return_value={"events": 7, "states": 3}),
+        ) as purge:
+            removed = asyncio.run(self.retention.delete_guild_data(20))
+
+        purge.assert_awaited_once_with(20)
+        self.assertEqual(removed, {"settings": 1, "events": 7, "states": 3})
+        self.assertEqual(self.store.get_guild_settings(20), {})
+
+    def test_the_settings_go_even_if_the_history_cannot_be_deleted(self):
+        """監査履歴を消せなくても、設定は消すこと。
+
+        逆にすると、**DB が落ちているあいだは設定も消せない。**
+        「消してくれ」と言われて何も消えないより、消せるほうから消す。
+        """
+        self.store.update_guild_settings(21, {"log_channel_id": 1})
+        with (
+            patch(
+                "services.user_state_service.delete_guild_user_states",
+                AsyncMock(side_effect=RuntimeError("DBが落ちている")),
+            ),
+            self.assertLogs("services.guild_retention", level="ERROR"),
+        ):
+            removed = asyncio.run(self.retention.delete_guild_data(21))
+
+        self.assertEqual(removed["settings"], 1)
+        self.assertEqual(self.store.get_guild_settings(21), {})
 
 
 class TrustedProxyTests(unittest.TestCase):

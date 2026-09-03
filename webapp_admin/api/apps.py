@@ -352,3 +352,48 @@ async def remove_item(
         )
 
     return JSONResponse({"items": collection.list(guild_id)})
+
+
+@router.delete("/guild-data")
+async def delete_guild_data_endpoint(
+    request: Request,
+    confirm: str = "",
+    _=Depends(check_guild),
+    _csrf=Depends(check_csrf),
+):
+    """いま選んでいるサーバーのデータを、残っているところ全部から消す。
+
+    保管方針の「消すのは利用者が決める」側の入口（services/guild_retention.py）。
+    設定と監査履歴をまとめて消す——別々の口にすると、消したつもりの人に
+    消し残しがあることを覚えていてもらうことになる。
+
+    **確認にサーバーIDそのものを打たせる。** 取り消しが効かない操作なので、
+    「はい」を1回押すだけでは足りない。番号を写して打つあいだに、どのサーバー
+    を消そうとしているのかを見ることになる。
+
+    管理者かどうかをここで確かめ直すのは、セッションを取ったあとに権限を
+    外された人が消せてしまわないようにするため（check_guild は
+    「セッションにギルドが入っているか」しか見ない）。
+    """
+    from webapp_admin.auth import user_still_admin
+
+    guild_id = _guild_id(request)
+    if confirm.strip() != str(guild_id):
+        raise HTTPException(status_code=400, detail="確認のためサーバーIDを入力してください。")
+
+    user_id = int((request.session.get("user") or {}).get("id") or 0)
+    if await user_still_admin(guild_id, user_id) is False:
+        raise HTTPException(status_code=403, detail="このサーバーの管理者ではありません。")
+
+    from services.guild_retention import delete_guild_data
+
+    removed = await delete_guild_data(guild_id)
+    logger.warning(
+        "サーバーのデータを削除 guild=%s user=%s 設定=%d 履歴=%d 現在状態=%d",
+        guild_id,
+        user_id,
+        removed["settings"],
+        removed["events"],
+        removed["states"],
+    )
+    return JSONResponse({"removed": removed})
