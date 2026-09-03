@@ -72,6 +72,40 @@ jobs:
       - name: 依存の固定が Docker と同じ条件で解けるか確認
         run: python tools/check_requirements.py
 
+      - name: 依存に既知の脆弱性が無いか確認（pip-audit）
+        # requirements.txt を全部 == で固定しているのと対で要る。固定は「勝手に
+        # 動かない」ことしか保証せず、固定したまま古くなったものが放置される側の
+        # 危険は増える。入れた初回で Pillow 12.2.0 の勧告11件を見つけた。
+        #
+        # PYTHONUTF8=1 が必要。pip-audit の requirements パーサは
+        # locale.getpreferredencoding() でファイルを復号するため、日本語ロケールの
+        # Windows（cp932）だと requirements.txt の日本語コメントで
+        # UnicodeDecodeError になる。CI（ubuntu）だけ通って手元で通らない状態は
+        # 「手元と CI を同じ条件にする」方針に反するので、両方で効く形にしておく。
+        #
+        # --strict は「監査できなかった依存があったら落とす」。黙って飛ばされると
+        # 緑なのに何も見ていない状態になる（CONTRIBUTING 8. と同じ理由）。
+        #
+        # --ignore-vuln を足すときは、**必ずここに理由と外せる条件を書くこと。**
+        # 書かずに足すと、次に見る人には「無視してよい」と「無視するしかない」の
+        # 区別が付かない。
+        #
+        #   PYSEC-2026-3002（PyNaCl 1.5.0 / CVE-2025-69277）
+        #     同梱 libsodium の crypto_core_ed25519_is_valid_point が、主部分群に
+        #     無い点を通すことがある。CVSS は AV:L/AC:H/C:L/I:L。
+        #     このリポジトリは PyNaCl を discord.py の音声暗号化経由でしか使わず、
+        #     この関数を呼ぶ経路が無い。
+        #     **直せない。** discord.py[voice] が PyNaCl<1.6 を要求し、修正版は
+        #     1.6.2 から。しかも discord.py 2.7.1 は現時点の最新で、制約を緩めた
+        #     版がまだ無い（requirements.txt の PyNaCl のコメントも参照）。
+        #     外せる条件: discord.py が PyNaCl 1.6 系を許す版を出したとき。
+        #     そのときは音声の送受信と録音の動作確認をしてから上げること。
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          python -m pip_audit -r requirements.txt --strict \
+            --ignore-vuln PYSEC-2026-3002
+
       - name: 管理UIの設定スキーマを検証
         run: python tools/check_admin_schema.py
 

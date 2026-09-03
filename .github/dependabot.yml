@@ -1,0 +1,69 @@
+# 依存の更新を Dependabot に見張らせる。
+#
+# ■ なぜ要るか
+#
+# requirements.txt は再現性のために全部 == で固定してある。固定は「コードを1行も
+# 触っていないのに docker build が壊れる」を防ぐが、代わりに**上げどきを知る手段が
+# 無くなる。** 誰も気づかないまま古くなり、放置されている期間だけ危険が積む。
+# 固定する方針と、上げどきを教える仕組みは対で置く必要がある。
+#
+# 脆弱性そのものは CI の pip-audit が落とす。こちらは「落ちる前に上げる」ための口。
+#
+# ■ まとめて1つの PR にしている理由
+#
+# 29 個の依存を個別に PR にすると、そのたびに CI が8条件ぶん回り、履歴も
+# 「chore(deps): bump X」で埋まる。このリポジトリでいちばん価値があるのは原因まで
+# 書いてある履歴なので、そこを薄めたくない。まとめて受け取って、上げるときは
+# requirements.txt のコメントに理由を書いた1コミットにする（CONTRIBUTING 3.）。
+version: 2
+
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 3
+    groups:
+      # 本番の依存。上げると Bot と Web の挙動が変わりうるので、まとめて1つ。
+      production:
+        patterns: ["*"]
+        exclude-patterns: ["ruff", "black", "mypy", "coverage", "pip-audit"]
+      # 開発用。落ちても本番には出ないので、まとめて受け取ってよい。
+      development:
+        patterns: ["ruff", "black", "mypy", "coverage", "pip-audit"]
+    commit-message:
+      prefix: "chore"
+      include: scope
+    ignore:
+      # discord.py[voice] が PyNaCl<1.6 を要求するため、1.6 系へは上げられない。
+      # PR が来ても解決不能なので、開かせない。
+      #
+      # 外せる条件: discord.py が PyNaCl 1.6 系を許す版を出したとき。詳細は
+      # requirements.txt の PyNaCl のコメントと、tests.yml の pip-audit の
+      # --ignore-vuln の説明にある。
+      - dependency-name: PyNaCl
+        versions: [">=1.6"]
+      # discord.py 本体を上げると音声接続と録音の検証が必須になる（DAVE の鍵交換と
+      # voice_recv の組み合わせが版に依存する）。手動で上げる前提にして、自動 PR は
+      # メジャー・マイナーだけ抑える。パッチは受け取る。
+      - dependency-name: discord.py
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # discord-ext-voice-recv は上流がまだ alpha で、上げるたびに録音の動作確認が
+      # 要る（requirements.txt のコメント参照）。自動では上げない。
+      - dependency-name: discord-ext-voice-recv
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+      include: scope
