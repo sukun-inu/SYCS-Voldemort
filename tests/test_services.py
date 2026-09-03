@@ -1978,7 +1978,7 @@ class RecordingTests(unittest.TestCase):
         self.assertEqual(manifest["bucket_seconds"], self.rec.PEAK_BUCKET_SECONDS)
         self.assertEqual([s["index"] for s in manifest["stems"]], [0, 1])
         self.assertEqual({s["name"] for s in manifest["stems"]}, {"すずき", "たなか"})
-        self.assertTrue(all(s["peaks"] for s in manifest["stems"]))
+        self.assertTrue(all(self._series(s["peaks_b64"]) for s in manifest["stems"]))
         self.assertTrue(all(s["size_bytes"] > 0 for s in manifest["stems"]))
 
     def test_waveform_covers_the_whole_recording_however_long_it_is(self):
@@ -2019,7 +2019,7 @@ class RecordingTests(unittest.TestCase):
         stems = manifest["stems"]
         bucket = manifest["bucket_seconds"]
         self.assertGreater(bucket, self.rec.PEAK_BUCKET_SECONDS)  # 間引かれている
-        lengths = {len(s["peaks"]) for s in stems}
+        lengths = {len(self._series(s["peaks_b64"])) for s in stems}
         self.assertEqual(len(lengths), 1, "トラックごとに点数が違うと縮尺がずれる")
         points = lengths.pop()
         self.assertLessEqual(points, self.rec.PEAK_MAX_POINTS)
@@ -2027,6 +2027,102 @@ class RecordingTests(unittest.TestCase):
         # 直す前はここが 12.4 分ぶんにしかならなかった。
         self.assertAlmostEqual(points * bucket, duration, delta=bucket)
         self.assertTrue(all(s["bucket_seconds"] == bucket for s in stems))
+
+    def _series(self, encoded):
+        """索引の base64 を 0.0〜1.0 の並びへ戻す。"""
+        import base64
+
+        return [value / 255 for value in base64.b64decode(encoded)]
+
+    def test_the_waveform_keeps_a_point_for_every_screen_pixel(self):
+        """短い録音では、間引かずに 0.05 秒ごとの点を残すこと。
+
+        以前は 0.25 秒目盛りで最大 3,000 点だったため、2時間の録音では
+        **1点が 2.75 秒**になり、相槌が丸ごと1つの塊に収まっていた。
+        波形が数秒単位のかたまりにしか見えないのはこれが原因で、描画側を
+        いくら直しても、元データにその細かさが無ければ出ない。
+
+        1画面に1分を出す幅 1200px なら 1画素 0.05 秒。目盛りがそれ以上
+        粗いと、画素より大きい階段が見える。
+        """
+        session = self._session()
+        session.feed(Mock(id=1, display_name="すずき"), self._tone(2.0))
+        result = self.rec._finalize(session, 4.0, "テスト")
+        manifest, _, _ = self._manifest_of(result)
+
+        self.assertLessEqual(manifest["bucket_seconds"], 0.05)
+        # 4秒 ÷ 0.05秒 = 80点。末尾まで揃っていること。
+        self.assertEqual(len(self._series(manifest["stems"][0]["peaks_b64"])), 80)
+
+    def test_each_track_carries_both_a_peak_and_an_rms_series(self):
+        """山と実効値の2本を、同じ長さで持つこと。
+
+        山だけの波形は**どこも同じ高さに見える**。人の声は瞬間的な山が
+        揃いやすく、密度の差が出ないためで、DAW の波形が濃淡2層に見えるのは
+        薄い層が山・濃い層が実効値だから。長さがずれると2層が横にずれる。
+        """
+        session = self._session()
+        for user_id, name in ((1, "すずき"), (2, "たなか")):
+            session.feed(Mock(id=user_id, display_name=name), self._tone(0.5))
+        result = self.rec._finalize(session, 2.0, "テスト")
+        manifest, _, _ = self._manifest_of(result)
+
+        for stem in manifest["stems"]:
+            peaks = self._series(stem["peaks_b64"])
+            rms = self._series(stem["rms_b64"])
+            self.assertEqual(len(peaks), len(rms), stem["name"])
+            self.assertEqual(len(peaks), stem["point_count"])
+
+    def test_the_rms_never_rises_above_the_peak(self):
+        """実効値が山を超えないこと。
+
+        超えると濃い層が薄い層からはみ出し、**波形が二重の輪郭**に見える。
+        二乗和を目盛りごとに足してから割らないと、目盛りをまたぐときに
+        平均の平均になってこれが起きる。
+        """
+        session = self._session()
+        session.feed(Mock(id=1, display_name="すずき"), self._tone(1.0))
+        result = self.rec._finalize(session, 2.0, "テスト")
+        manifest, _, _ = self._manifest_of(result)
+
+        stem = manifest["stems"][0]
+        peaks = self._series(stem["peaks_b64"])
+        rms = self._series(stem["rms_b64"])
+        over = [(i, p, r) for i, (p, r) in enumerate(zip(peaks, rms)) if r > p + 1 / 255]
+        self.assertEqual(over, [], f"実効値が山を超えている: {over[:5]}")
+        # 声が入っている区間では、実効値が 0 ではないこと（層が1枚に見えない）
+        self.assertTrue(any(value > 0 for value in rms))
+
+    def test_the_rms_series_is_downsampled_and_padded_like_the_peaks(self):
+        """実効値も、山とまったく同じ間引き幅・点数・穴埋めで揃えること。
+
+        2層は1画素ずつ重ねて描くので、片方だけ長さが違うと**濃い層が横に
+        ずれて別の場所を指す。** 途中で書き込みに失敗して短く終わった
+        トラックは実際に短くなるので、末尾は無音で埋める（0 以外で埋めると、
+        喋っていない区間に薄い帯が残る）。
+
+        山の側は test_peak_series_downsamples_and_pads_as_told が見ている。
+        実効値は別の器に貯めているため、そちらだけ直し忘れても気づけない。
+        """
+        track = self.rec._TrackWriter(1, "A", self.work / "rms.mp3", time.monotonic())
+        track.write(self._tone(0.5), 0.0)
+
+        long_series = track.rms_series(group=1, points=2000)
+        self.assertEqual(len(long_series), 2000)
+        self.assertTrue(any(v > 0 for v in long_series), "声のある区間で 0 になっている")
+        self.assertEqual(set(long_series[100:]), {0.0}, "末尾が無音で埋まっていない")
+
+        def last_sound(series):
+            """音の入っている最後の点。2層がここで揃っていないと横にずれる。"""
+            return max((i for i, v in enumerate(series) if v > 0), default=-1)
+
+        for group in (1, 4):
+            with self.subTest(group=group):
+                rms = track.rms_series(group=group, points=2000)
+                peaks = track.peak_series(group=group, points=2000)
+                self.assertEqual(len(rms), len(peaks))
+                self.assertAlmostEqual(last_sound(rms), last_sound(peaks), delta=1)
+        track.close(0.0)
 
     def test_mp3_go_in_uncompressed_so_the_mixer_can_seek(self):
         """ZIP を展開せずに Range で読むため、mp3 は無圧縮で入れる。"""
@@ -4673,10 +4769,11 @@ class WaveformTests(unittest.TestCase):
         track.close(4.0)
 
         peaks = track.peak_series()
-        self.assertEqual(len(peaks), int(4.0 / self.rec.PEAK_BUCKET_SECONDS))
+        per_second = int(1 / self.rec.PEAK_BUCKET_SECONDS)
+        self.assertEqual(len(peaks), 4 * per_second)
         self.assertGreater(peaks[0], 0.2)  # 冒頭は鳴っている
-        self.assertEqual(peaks[4], 0.0)  # 1.0秒地点は無音
-        self.assertGreater(peaks[8], peaks[0])  # 2.0秒地点のほうが大きい
+        self.assertEqual(peaks[1 * per_second], 0.0)  # 1.0秒地点は無音
+        self.assertGreater(peaks[2 * per_second], peaks[0])  # 2.0秒地点のほうが大きい
 
     def test_silence_only_track_is_flat(self):
         track = self.rec._TrackWriter(2, "B", self.work / "b.mp3", time.monotonic())
