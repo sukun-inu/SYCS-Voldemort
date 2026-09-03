@@ -14,6 +14,7 @@ import ast
 import asyncio
 import contextlib
 import io
+import gzip
 import json
 import logging
 import os
@@ -277,6 +278,221 @@ class BadgeTests(unittest.TestCase):
             asyncio.run(eq._notify_all_guilds(bot, QUAKE_FOREIGN))
 
         self.assertEqual(made, [])
+
+
+class TrustedProxyTests(unittest.TestCase):
+    """リバースプロキシの向こう側にいる、本当のアクセス元が分かること。
+
+    プロキシ経由だと TCP の接続元はプロキシ自身（127.0.0.1）になる。
+    **アクセスログもレート制限も全部 127.0.0.1 として記録されていた。**
+    攻撃元も、よく使っている人も、区別が付かない。
+
+    直し方は `X-Forwarded-For` を見ることだが、**そのヘッダは誰でも自分で
+    付けられる。** 直接つないできた相手が信頼する帯域に入っているときだけ
+    見ること。ここを緩めると、外から直接叩いてヘッダを偽装するだけで
+    別人になりすませる（レート制限もIPで数えている）。
+    """
+
+    def setUp(self):
+        from services import log_setup
+
+        self.log_setup = log_setup
+
+    def test_the_default_trusts_only_the_loopback(self):
+        """既定はループバックのみを信頼すること。
+
+        `*` にすると誰の X-Forwarded-For でも信じる。以前 web_main.py が
+        そうなっていた。
+        """
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("TRUSTED_PROXY_CIDRS", None)
+            allow = self.log_setup.trusted_proxies()
+
+        self.assertEqual(allow, "127.0.0.1/32,::1/128")
+        self.assertNotIn("*", allow)
+
+    def test_the_same_env_var_as_the_rate_limiter_is_used(self):
+        """レート制限と同じ環境変数を読むこと。
+
+        片方だけ広げると、**レート制限とアクセスログが別のIPを見る**。
+        どちらが本当の接続元なのか、後から突き合わせられなくなる。
+        """
+        from webapp.security import load_trusted_proxy_cidrs
+
+        with patch.dict(os.environ, {"TRUSTED_PROXY_CIDRS": "10.0.0.0/8"}):
+            self.assertEqual(self.log_setup.trusted_proxies(), "10.0.0.0/8")
+            self.assertEqual(load_trusted_proxy_cidrs(), ["10.0.0.0/8"])
+
+    def test_an_empty_setting_still_trusts_something_concrete(self):
+        """空文字を渡されても `*` にはしないこと。
+
+        「誰も信頼しない」つもりの空指定が「全員を信頼する」に化けると、
+        設定を厳しくしたつもりが**いちばん緩い状態**になる。
+        """
+        with patch.dict(os.environ, {"TRUSTED_PROXY_CIDRS": "   "}):
+            allow = self.log_setup.trusted_proxies()
+
+        self.assertEqual(allow, "127.0.0.1")
+
+    def test_uvicorn_accepts_the_cidr_form(self):
+        """uvicorn 側が、CIDR の書き方をそのまま受け取れること。
+
+        `forwarded_allow_ips` に IP しか書けない版だと、`10.0.0.0/8` は
+        「そういう名前のホスト」として扱われて**一致しなくなる**。
+        黙って全部のヘッダが捨てられ、また 127.0.0.1 に戻る。
+        """
+        from uvicorn.middleware.proxy_headers import _TrustedHosts
+
+        hosts = _TrustedHosts(self.log_setup.trusted_proxies())
+        self.assertIn("127.0.0.1", hosts)
+
+        with patch.dict(os.environ, {"TRUSTED_PROXY_CIDRS": "10.0.0.0/8"}):
+            hosts = _TrustedHosts(self.log_setup.trusted_proxies())
+        self.assertIn("10.1.2.3", hosts)
+        self.assertNotIn("192.0.2.1", hosts)
+
+    def test_every_web_facing_entry_point_turns_proxy_headers_on(self):
+        """3つの入口すべてで proxy_headers を有効にしていること。
+
+        1つでも忘れると、そのプロセスのログだけ 127.0.0.1 のまま残る。
+        入口は独立したファイルなので、片方を直したときにもう片方を
+        忘れやすい。原文を読んで確かめる。
+        """
+        for name in ("admin_main.py", "cdn_main.py", "web_main.py"):
+            with self.subTest(entry=name):
+                lines = Path(name).read_text(encoding="utf-8").splitlines()
+                # コメントは落とす。「以前はこう書いていた」という説明が
+                # 本文と同じ扱いになると、直した証拠が読めなくなる。
+                source = chr(10).join(line for line in lines if not line.lstrip().startswith("#"))
+                self.assertIn("proxy_headers=True", source)
+                self.assertIn("forwarded_allow_ips=allow", source)
+                self.assertIn("trusted_proxies()", source)
+                self.assertNotIn('forwarded_allow_ips="*"', source)
+
+
+class LogRetentionTests(unittest.TestCase):
+    """ログを日付で回して10年保管すること。
+
+    以前は 1MB × 4世代のサイズ回転で、**混んだ日は半日ぶんも残らなかった。**
+    落ちた原因を翌日調べようとしても、そのころにはもう流れている。
+
+      - 日付で回すこと（サイズではなく）
+      - 既定で 3,650 日ぶん保管すること
+      - 回したファイルを gzip で畳むこと
+      - **畳んだ名前と、掃除が探す名前が一致すること**
+      - 同じファイルへ二重にハンドラを付けないこと
+
+    4つ目が要。畳んだ結果が `bot.log.2026-09-03.gz` なのに掃除が
+    `bot.log.2026-09-03` を探すと、**1件も見つからず10年ぶんが永久に残る。**
+    ディスクが埋まるまで誰も気づかない。
+    """
+
+    def setUp(self):
+        from services import log_setup
+
+        self.log_setup = log_setup
+        self.dir = Path(tempfile.mkdtemp(prefix="logtest-"))
+        self._root_handlers = list(logging.getLogger().handlers)
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        """テストで足したハンドラを外す。残すと以後のテストの出力が混ざる。"""
+        root = logging.getLogger()
+        for handler in list(root.handlers):
+            if handler not in self._root_handlers:
+                handler.close()
+                root.removeHandler(handler)
+
+    def _installed(self):
+        """いま足したハンドラを取り出す。"""
+        from logging.handlers import TimedRotatingFileHandler
+
+        root = logging.getLogger()
+        return [h for h in root.handlers if isinstance(h, TimedRotatingFileHandler)][-1]
+
+    def test_the_log_rolls_by_date_and_keeps_ten_years(self):
+        """日付で回し、既定で 3,650 世代を保つこと。
+
+        サイズで回すと、混んだ日ほど短い期間しか残らない。**いちばん
+        調べたい日のログが、いちばん先に消える。**
+        """
+        from logging.handlers import TimedRotatingFileHandler
+
+        path = self.log_setup.install_file_logging(self.dir, "bot.log")
+        handler = self._installed()
+
+        self.assertEqual(path, self.dir / "bot.log")
+        self.assertIsInstance(handler, TimedRotatingFileHandler)
+        self.assertEqual(handler.when, "MIDNIGHT")
+        self.assertEqual(handler.backupCount, 3650)
+
+    def test_the_retention_can_be_shortened_by_env(self):
+        """LOG_RETENTION_DAYS で日数を変えられること。"""
+        with patch.dict(os.environ, {"LOG_RETENTION_DAYS": "30"}):
+            self.log_setup.install_file_logging(self.dir, "bot.log")
+
+        self.assertEqual(self._installed().backupCount, 30)
+
+    def test_a_rolled_file_is_gzipped_and_the_live_one_is_not(self):
+        """回したファイルは畳み、いま書いているものは畳まないこと。
+
+        いま書いているファイルまで畳むと `tail -f` で追えなくなる。
+        """
+        self.log_setup.install_file_logging(self.dir, "bot.log")
+        handler = self._installed()
+        # root の既定は WARNING。INFO を落とすには logger 側も開けておく。
+        writer = logging.getLogger("logtest")
+        writer.setLevel(logging.INFO)
+        self.addCleanup(writer.setLevel, logging.NOTSET)
+        writer.info("いちにち目")
+        handler.doRollover()
+        writer.info("ふつか目")
+        handler.flush()
+
+        packed = sorted(self.dir.glob("bot.log.*.gz"))
+        self.assertEqual(len(packed), 1, sorted(p.name for p in self.dir.iterdir()))
+        self.assertIn("いちにち目", gzip.open(packed[0], "rt", encoding="utf-8").read())
+        # 素のまま残っていないこと（畳んだあとに元を消している）
+        self.assertEqual(sorted(p.name for p in self.dir.glob("bot.log.2*") if p.suffix != ".gz"), [])
+        self.assertIn("ふつか目", (self.dir / "bot.log").read_text(encoding="utf-8"))
+
+    def test_the_cleanup_finds_the_gzipped_files(self):
+        """掃除が、畳んだファイルを見つけられること。
+
+        `getFilesToDelete()` は「namer が付けた名前」でディスクを探す。
+        畳んだ結果が `.gz` なのに namer が `.gz` を返さないと、**1件も
+        見つからず、保管日数を過ぎても消えない。** ディスクが埋まるまで
+        誰も気づかない。
+        """
+        with patch.dict(os.environ, {"LOG_RETENTION_DAYS": "1"}):
+            self.log_setup.install_file_logging(self.dir, "bot.log")
+        handler = self._installed()
+
+        for day in ("2026-09-01", "2026-09-02", "2026-09-03"):
+            with gzip.open(self.dir / f"bot.log.{day}.gz", "wt", encoding="utf-8") as f:
+                f.write("古いログ\n")
+
+        doomed = [Path(p).name for p in handler.getFilesToDelete()]
+        self.assertEqual(doomed, ["bot.log.2026-09-01.gz", "bot.log.2026-09-02.gz"], doomed)
+
+    def test_installing_twice_does_not_double_up(self):
+        """同じファイルへ2回入れても、ハンドラは1つのままであること。
+
+        二重に付くと**同じ行が2度書かれる。** uvicorn の reload や、
+        テストでの再 import で実際に起きる。
+        """
+        from logging.handlers import TimedRotatingFileHandler
+
+        self.log_setup.install_file_logging(self.dir, "bot.log")
+        self.log_setup.install_file_logging(self.dir, "bot.log")
+
+        root = logging.getLogger()
+        mine = [
+            h
+            for h in root.handlers
+            if isinstance(h, TimedRotatingFileHandler) and Path(h.baseFilename).parent == self.dir
+        ]
+        self.assertEqual(len(mine), 1)
 
 
 class NotifyAllGuildsTests(unittest.TestCase):

@@ -53,6 +53,8 @@ docker compose up -d --build
 | `USER_STATE_AUTO_REPAIR_WRITE_EVENTS` | 任意 | 定期修復時にも同期イベントを書き込む（既定 `false`） |
 | `USER_STATE_RETENTION_DAYS` | 任意 | 状態監査履歴の保持日数（既定 `3650` ＝10年）。**10年は下限でもあり、これより短くはできない**（監査履歴のため）。短い値を設定しても `3650` に丸められ、警告がログに出る |
 | `USER_STATE_CLEANUP_INTERVAL_SECONDS` | 任意 | 古い履歴削除の実行間隔秒（既定 `21600`） |
+| `LOG_RETENTION_DAYS` | 任意 | `data/logs/` の保管日数（既定 `3650` ＝10年）。日付で1日1ファイルに回し、回した分は gzip で畳む。減らしても即座には消えず、次に日付が変わったときの掃除で超過分がまとめて消える |
+| `TRUSTED_PROXY_CIDRS` | 任意 | `X-Forwarded-For` を信じてよいプロキシの帯域（既定 `127.0.0.1/32,::1/128`）。リバースプロキシ経由だと接続元が `127.0.0.1` になるので、ここに書いた相手から来たときだけヘッダを見て**本当のアクセス元**をログとレート制限に使う。**広げると、外から直接ヘッダを偽装するだけで別人になりすませる** |
 | `DJAUDIO_BASE_URL` | DJAudio時推奨 | MP3 配信 URL ベース。未設定時は `http://localhost:5001` になり配信リンクが外部から開けなくなるため、本番では必ず外部到達可能な URL を設定すること（未設定/localhostのままだと起動時ログと `/djaudio status` に警告が出る） |
 | `DJAUDIO_FFMPEG_PATH` | 任意 | ffmpeg 実行ファイルを明示指定 |
 | `DJAUDIO_AUTO_INSTALL_FFMPEG` | 任意 | `true/false`（既定 `true`） |

@@ -12,18 +12,18 @@ webadmin とは独立したプロセスで動き、MP3 ファイルの配信の�
 """
 
 import logging
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from envutil import env_int
+from envutil import env_int, env_path
+from services.log_setup import LOG_FORMAT, install_file_logging, trusted_proxies
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+install_file_logging(env_path("SETTINGS_DIR", Path(__file__).resolve().parent / "data") / "logs", "cdn.log")
 
 logger = logging.getLogger(__name__)
 
@@ -127,5 +127,14 @@ if __name__ == "__main__":
     # 落ちる。envutil 経由にして安全側（既定値へフォールバック）に倒す。
     port = env_int("CDN_PORT", 5002, minimum=1, maximum=65535)
     workers = env_int("CDN_WORKERS", 2, minimum=1)
-    logger.info("CDN サーバーを起動します: port=%d workers=%d", port, workers)
-    uvicorn.run("cdn_main:app", host="0.0.0.0", port=port, reload=False, workers=workers)
+    allow = trusted_proxies()
+    logger.info("CDN サーバーを起動します: port=%d workers=%d 信頼するプロキシ=%s", port, workers, allow)
+    uvicorn.run(
+        "cdn_main:app",
+        host="0.0.0.0",
+        port=port,
+        reload=False,
+        workers=workers,
+        proxy_headers=True,
+        forwarded_allow_ips=allow,
+    )
