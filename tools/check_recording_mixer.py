@@ -182,9 +182,6 @@ def inked_ratio(page) -> list[float]:
     常に 1.0 になり、検査が何も見ていなかった）。罫線は灰色、波形はトラックの
     色なので、彩度で選り分ける。
 
-    **細さも見る。** 波形は無音の画素にも 1px の背骨を引く（飛ばすと帯が
-    途切れ、波形ではなく棒の羅列に見える）ので、色があるかどうかだけでは
-    無音と発話を区別できない。背骨より太い柱が立っている列だけを数える。
     """
     return page.evaluate(
         """() => {
@@ -196,14 +193,12 @@ def inked_ratio(page) -> list[float]:
         const data = ctx.getImageData(0, 0, width, height).data;
         let inked = 0;
         for (let x = 0; x < width; x += 1) {
-          let hits = 0;
           for (let y = 0; y < height; y += 2) {
             const i = (y * width + x) * 4;
             if (data[i + 3] < 40) continue;
             const r = data[i], g = data[i + 1], b = data[i + 2];
-            if (Math.max(r, g, b) - Math.min(r, g, b) > 30) hits += 1;
+            if (Math.max(r, g, b) - Math.min(r, g, b) > 30) { inked += 1; break; }
           }
-          if (hits >= 2) inked += 1;  // 背骨(1px)だけの列は数えない
         }
         out.push(inked / width);
       }

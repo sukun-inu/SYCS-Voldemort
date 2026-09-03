@@ -2054,6 +2054,32 @@ class RecordingTests(unittest.TestCase):
         # 4秒 ÷ 0.05秒 = 80点。末尾まで揃っていること。
         self.assertEqual(len(self._series(manifest["stems"][0]["peaks_b64"])), 80)
 
+    def test_a_two_hour_recording_is_not_downsampled(self):
+        """2時間でも 0.05 秒の目盛りをそのまま残すこと。
+
+        上限が 60,000 点だったときは、2時間で1点 0.15 秒まで間引かれていた。
+        ミキサーを 0.1 秒/画素あたりまで拡大すると1画素に1〜2点しか無くなり、
+        **画素より粗い目盛りがそのまま階段として見える。**
+
+        実音声を2時間ぶん流すのは重いので、目盛りだけ直接置いて書き出しを
+        通す（見たいのは縮尺だけ）。
+        """
+        session = self._session()
+        session.feed(Mock(id=1, display_name="すずき"), self._tone(0.3))
+        duration = 2 * 3600.0
+        buckets = int(duration / self.rec.PEAK_BUCKET_SECONDS)
+        list(session.tracks.values())[0].peaks = [32767] * buckets
+
+        with (
+            patch.object(self.rec._TrackWriter, "pad_until", lambda self, *a, **k: None),
+            patch.object(self.rec, "measure_voice", return_value=None),
+        ):
+            result = self.rec._finalize(session, duration, "テスト")
+        manifest, _, _ = self._manifest_of(result)
+
+        self.assertEqual(manifest["bucket_seconds"], self.rec.PEAK_BUCKET_SECONDS)
+        self.assertEqual(len(self._series(manifest["stems"][0]["peaks_b64"])), buckets)
+
     def test_each_track_carries_both_a_peak_and_an_rms_series(self):
         """山と実効値の2本を、同じ長さで持つこと。
 
