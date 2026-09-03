@@ -72,20 +72,6 @@ function formatTime(seconds, withMillis = false) {
   return `${head}.${String(Math.floor((value - total) * 100)).padStart(2, "0")}`;
 }
 
-/** "1:23.45" や "83.45" を秒に直す。読めなければ null。
- *
- *  formatTime の逆。書き出しの区間を手で打てるようにするために要る。
- *  時:分:秒 と 分:秒 と 秒 のどれでも受ける（自分が出した形をそのまま
- *  貼り直せないと、いちばんよくある使い方——少しだけずらす——ができない）。 */
-function parseTime(text) {
-  const value = String(text ?? "").trim();
-  if (!value) return null;
-  if (!/^\d+(:\d{1,2}){0,2}(\.\d+)?$/.test(value)) return null;
-  const parts = value.split(":").map(Number);
-  if (parts.some((n) => !Number.isFinite(n))) return null;
-  return parts.reduce((total, part) => total * 60 + part, 0);
-}
-
 /** dB の位置をフェーダーの位置へ。 */
 function positionToDb(position) {
   if (position <= 0.001) return -Infinity;
@@ -148,12 +134,15 @@ function helpPanel() {
       item("← →", "移動（Shift で10秒）"),
       item("＋ −", "拡大・縮小"),
       item("[ ]", "再生位置を区間の端にする"),
+      item("Esc", "区間を解除"),
       item("M / S", "ミュート／ソロ"),
       item("ドラッグ", "時間目盛りを横にドラッグすると区間になる")),
     el("p", { class: "daw-help-note", text:
-      "区間は端をつまんで伸縮でき、その範囲だけ書き出せます。秒の単位で合わせたい" +
-      "ときは「区間」の欄に直接入力してください。フェーダーはダブルクリックで 0dB、" +
-      "つまみは上下ドラッグでパン。トラックの名前をドラッグすると並べ替えられます。" }),
+      "区間は端をつまんで伸縮でき、その範囲だけ書き出せます。解除は時間目盛りの上を" +
+      "1回クリック（または Esc）。秒の単位で合わせたいときは ＋ で拡大してから" +
+      "ドラッグするか、聞きながら [ ] で端を置いてください。フェーダーはダブル" +
+      "クリックで 0dB、つまみは上下ドラッグでパン。トラックの名前をドラッグすると" +
+      "並べ替えられます。" }),
     el("p", { class: "daw-help-note", text:
       "各トラックは同じ時間軸に揃えてあるので、途中から参加した人は冒頭が、" +
       "途中で抜けた人は末尾が無音になります。" }));
@@ -868,42 +857,34 @@ export async function createMixer(container, options = {}) {
 
   const exportButton = el("button", {
     class: "btn", type: "button", disabled: true,
-    title: "区間を決めると押せます（時間目盛りをドラッグ、または下の欄に入力）",
+    title: "区間を決めると押せます（時間目盛りを横にドラッグ）",
     onclick: () => exportRegion(),
   }, icon("bi-download"), "区間を書き出す");
 
-  /* 区間はドラッグでしか決められなかった。数時間の録音を全体表示にすると
-     1px が数秒になるので、ドラッグだけでは秒の単位で合わせられない。
-     打ち込みと、再生位置からの指定と、端のつまみを足す。 */
-  const regionStart = el("input", {
-    class: "daw-time mono", type: "text", inputMode: "decimal", placeholder: "0:00.00",
-    "aria-label": "区間の開始", onchange: () => applyTypedRegion(),
-  });
-  const regionEnd = el("input", {
-    class: "daw-time mono", type: "text", inputMode: "decimal", placeholder: "0:00.00",
-    "aria-label": "区間の終了", onchange: () => applyTypedRegion(),
-  });
-  const regionLength = el("span", { class: "daw-region-len mono" });
-  const regionFrom = el("button", {
-    class: "btn btn-sm", type: "button", title: "いまの再生位置を区間の開始にする（[）",
-    onclick: () => markRegion("start"),
-  }, "ここから");
-  const regionTo = el("button", {
-    class: "btn btn-sm", type: "button", title: "いまの再生位置を区間の終了にする（]）",
-    onclick: () => markRegion("end"),
-  }, "ここまで");
-  const regionClear = el("button", {
-    class: "btn btn-sm", type: "button", title: "区間を解除する",
-    onclick: () => setRegion(null),
-  }, "解除");
+  /* 区間は「読むもの」であって、打ち込む欄ではない。
 
-  const regionRow = el("div", { class: "daw-region" },
-    el("span", { class: "daw-region-label" }, "区間"),
-    regionStart,
-    el("span", { class: "daw-region-tilde" }, "〜"),
-    regionEnd,
-    regionLength,
-    regionFrom, regionTo, regionClear);
+     以前はここに専用の列が1本あった——開始と終了の入力欄、それに
+     「ここから」「ここまで」「解除」の3つのボタン。全部、時間目盛りの上で
+     ドラッグ・端をつまむ・クリックで消す、で既にできることの言い換えで、
+     **画面の上から2段目を丸ごと占めていた。** 消して、決まった区間を読む
+     ためのひとかたまりだけを操作列の中へ入れる。
+
+     打ち込みの代わりは拡大（＋）と [ ] のキー。全体表示で 1px が数秒になる
+     のは倍率の問題なので、倍率で解く。 */
+  const regionStartText = el("span", { class: "daw-region-time is-start mono" });
+  const regionEndText = el("span", { class: "daw-region-time is-end mono" });
+  const regionLength = el("span", { class: "daw-region-len mono" });
+  const regionChip = el("span", {
+    class: "chip accent daw-region-chip", hidden: true,
+    title: "時間目盛りの上を1回クリックすると解除できます（Esc）",
+    // 空白で離さない。inline-flex の中では、要素と要素の間の空白テキストが
+    // 落ちて「区間0:05.00〜0:12.00」と地続きになる（実際にそう出た）。
+    // 離すのは CSS の gap で行う。
+  }, el("span", { class: "daw-region-label", text: "区間" }),
+     regionStartText,
+     el("span", { class: "daw-region-tilde", text: "〜" }),
+     regionEndText,
+     regionLength);
 
   /** 区間を決め直す。null で解除。
    *
@@ -928,20 +909,6 @@ export async function createMixer(container, options = {}) {
     paintLoop();
   }
 
-  /** 打ち込まれた2つの欄を区間にする。読めない値は捨てて表示へ戻す。 */
-  function applyTypedRegion() {
-    const start = parseTime(regionStart.value);
-    const end = parseTime(regionEnd.value);
-    if (start === null || end === null) {
-      // 直さずに黙って捨てると、打った本人には何が起きたか分からない。
-      // いまの区間を書き戻して、読めなかったことが見て分かるようにする。
-      paintLoop();
-      toast("区間は 1:23.45 か 83.45 の形で入れてください", "warn", { duration: 3000 });
-      return;
-    }
-    setRegion({ start, end });
-  }
-
   /** いまの再生位置を区間の端にする。
    *
    *  区間がまだ無いときは、開始なら末尾まで・終了なら先頭からを選ぶ。
@@ -964,11 +931,15 @@ export async function createMixer(container, options = {}) {
           "success", { duration: 4000 });
   }
 
-  const zoomOut = el("button", { class: "btn btn-sm", type: "button",
-                                 title: "縮小", onclick: () => zoomBy(-1) }, "−");
-  const zoomIn = el("button", { class: "btn btn-sm", type: "button",
-                                title: "拡大", onclick: () => zoomBy(1) }, "＋");
-  const zoomFit = el("button", { class: "btn btn-sm", type: "button",
+  /* 拡大・縮小は btn-sm（26px）で、隣の再生・停止は 30px、その隣のタブは
+     32px だった。同じ列に3種類の高さが並ぶと、押せる物の集まりではなく
+     出来合いの部品を寄せ集めた列に見える。全部 .btn の既定（32px）に揃え、
+     大きさを変えるのは「幅」だけにする。 */
+  const zoomOut = el("button", { class: "btn btn-icon", type: "button", "aria-label": "縮小",
+                                 title: "縮小（−）", onclick: () => zoomBy(-1) }, icon("bi-dash-lg"));
+  const zoomIn = el("button", { class: "btn btn-icon", type: "button", "aria-label": "拡大",
+                                title: "拡大（＋）", onclick: () => zoomBy(1) }, icon("bi-plus-lg"));
+  const zoomFit = el("button", { class: "btn", type: "button",
                                  title: "全体を表示", onclick: () => zoomToFit() }, "全体");
 
   const tabArrange = el("button", { class: "daw-tab is-on", type: "button",
@@ -976,12 +947,19 @@ export async function createMixer(container, options = {}) {
   const tabConsole = el("button", { class: "daw-tab", type: "button",
                                     onclick: () => showView("console") }, "ミキサー");
 
+  /* 役割ごとに包む。この列は狭い窓では折り返す（flex-wrap）ので、包まずに
+     並べると「停止」と「ループ」の間で切れるようなことが起きる。同じことを
+     する物どうしが離れないようにする。
+
+     並びは 送る → いまどこ → 区間でする事 → 見え方。 */
   const transport = el("div", { class: "daw-transport" },
-    playButton, stopButton, loopButton, exportButton,
+    el("div", { class: "daw-group" }, playButton, stopButton, loopButton),
     clock,
     el("span", { class: "grow" }),
-    el("div", { class: "daw-tabs" }, tabArrange, tabConsole),
-    el("div", { class: "daw-zoom" }, zoomOut, zoomFit, zoomIn));
+    el("div", { class: "daw-group" }, regionChip, exportButton),
+    el("div", { class: "daw-group" },
+       el("div", { class: "daw-tabs" }, tabArrange, tabConsole),
+       el("div", { class: "daw-zoom" }, zoomOut, zoomFit, zoomIn)));
 
   // ── アレンジ ────────────────────────────────────────────
   const headColumn = el("div", { class: "daw-heads" });
@@ -1244,17 +1222,16 @@ export async function createMixer(container, options = {}) {
     exportButton.disabled = !loopRegion || !clipUrl;
     exportButton.title = loopRegion
       ? `${formatTime(loopRegion.start)} 〜 ${formatTime(loopRegion.end)} を ZIP で落とす`
-      : "区間を決めると押せます（時間目盛りをドラッグ、または下の欄に入力）";
+      : "区間を決めると押せます（時間目盛りを横にドラッグ）";
 
-    /* 打っている最中の欄は書き換えない。1文字入れるたびに整形し直すと、
-       打ち終わる前に値が入れ替わって入力にならない。 */
-    for (const [input, value] of [[regionStart, loopRegion?.start], [regionEnd, loopRegion?.end]]) {
-      if (document.activeElement === input) continue;
-      input.value = value === undefined ? "" : formatTime(value, true);
+    /* 区間が無いときは丸ごと隠す。「0:00.00 〜 0:00.00」を出しておくと、
+       長さ0の区間が決まっているように読めてしまう。 */
+    regionChip.hidden = !loopRegion;
+    if (loopRegion) {
+      regionStartText.textContent = formatTime(loopRegion.start, true);
+      regionEndText.textContent = formatTime(loopRegion.end, true);
+      regionLength.textContent = `（${(loopRegion.end - loopRegion.start).toFixed(2)} 秒）`;
     }
-    regionLength.textContent =
-      loopRegion ? `（${(loopRegion.end - loopRegion.start).toFixed(2)} 秒）` : "";
-    regionClear.disabled = !loopRegion;
 
     if (!loopRegion) { loopBand.hidden = true; return; }
     loopBand.hidden = false;
@@ -1358,6 +1335,9 @@ export async function createMixer(container, options = {}) {
     else if (event.key === "-") { zoomBy(-1); event.preventDefault(); }
     else if (event.key === "[") { markRegion("start"); event.preventDefault(); }
     else if (event.key === "]") { markRegion("end"); event.preventDefault(); }
+    // 「解除」のボタンを消したので、目盛りを1回クリックする以外の道も残す。
+    // 消し方が1つしか無い操作は、その1つを知らない人には消せない操作になる。
+    else if (event.key === "Escape" && loopRegion) { setRegion(null); event.preventDefault(); }
   }
   window.addEventListener("keydown", onKeyDown);
 
@@ -1365,7 +1345,6 @@ export async function createMixer(container, options = {}) {
   clear(container).append(
     el("div", { class: "daw" },
        transport,
-       regionRow,
        arrange,
        consoleView,
        helpPanel())

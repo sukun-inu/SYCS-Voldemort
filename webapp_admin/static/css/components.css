@@ -485,59 +485,55 @@
    横スクロールは別レイヤー（.daw-spacer）が作る。 */
 .daw { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 
+/* 操作列は1本だけ。以前はこの下に「区間」の列がもう1本あり、開始と終了の
+   入力欄と、ここから／ここまで／解除の3ボタンが並んでいた。全部、時間目盛りの
+   上でできることの言い換えで、画面の上から2段目を丸ごと使っていた。 */
 .daw-transport {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: var(--gap-inline); flex-wrap: wrap;
   padding: 8px 10px;
   border: 1px solid var(--border);
-  /* 下に区間の列がくっつくので、角は上だけ丸める。 */
-  border-radius: var(--radius) var(--radius) 0 0;
+  border-radius: var(--radius);
   background: var(--canvas-subtle);
 }
-/* 時計は画面でいちばん見る数字なので、ボタンより一段大きく置く。
-   周りのボタンと同じ字面だと、目が毎回探し直すことになる。 */
-.daw-clock {
-  font-variant-numeric: tabular-nums;
-  font-size: var(--text-xl); font-weight: 600; letter-spacing: .01em;
-  padding: 3px 12px;
-  border: 1px solid var(--border-muted);
-  border-radius: var(--radius);
-  background: var(--canvas-inset);
-  color: var(--fg);
-}
-/* 押せる操作のうち、実際によく押すのは再生・停止・ループの3つだけ。
-   区間の書き出しは結果が重い（ファイルが増える）ので、同じ重さで
-   並べない。 */
-.daw-transport .btn { min-height: 30px; }
+/* 役割ごとのかたまり。折り返しても、同じことをする物どうしが離れない。 */
+.daw-group { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+
+/* この列に並ぶ物は、押せる・読める にかかわらず高さを 32px で揃える。
+
+   もとは 再生・停止が 30px（.daw-transport .btn の上書き）、拡大・縮小が
+   btn-sm の 26px、タブが 32px、時計が 40px と4種類あった。役割の違いは
+   高さではなく、色（primary/is-on）と字の大きさ（時計）で出す。 */
+.daw-transport .btn,
+.daw-transport .daw-tabs,
+.daw-transport .daw-clock { min-height: 32px; }
 .daw-transport .btn.is-on {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-soft);
 }
-
-/* ── 区間の操作列 ──
-   ドラッグだけだと、数時間の録音を全体表示にしたとき 1px が数秒になり、
-   秒の単位で合わせられない。打ち込みと再生位置からの指定を並べる。 */
-.daw-region {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-top: 0;
-  border-radius: 0 0 var(--radius) var(--radius);
-  background: var(--canvas);
-}
-.daw-region-label { font-size: var(--text-md); color: var(--fg-muted); }
-.daw-region-tilde { color: var(--fg-subtle); }
-.daw-region-len { font-size: var(--text-md); color: var(--fg-muted); min-width: 7em; }
-.daw-time {
-  width: 8.5em;
-  padding: 3px 8px;
+/* 時計は画面でいちばん見る数字なので、字だけ一段大きく置く。周りのボタンと
+   同じ字面だと、目が毎回探し直すことになる。行送りを 1 に落として、字を
+   大きくしても列の高さが 32px から動かないようにする。 */
+.daw-clock {
+  display: inline-flex; align-items: center;
   font-variant-numeric: tabular-nums;
+  font-size: var(--text-xl); font-weight: 600; letter-spacing: .01em;
+  line-height: 1;
+  padding: 0 12px;
   border: 1px solid var(--border-muted);
   border-radius: var(--radius);
-  background: var(--canvas);
+  background: var(--canvas-inset);
   color: var(--fg);
 }
-.daw-time:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ── 決まった区間 ──
+   操作するものではなく読むもの。書き出しボタンの隣に置き、区間が無いときは
+   丸ごと隠す（長さ0の区間が決まっているように読ませない）。 */
+.daw-region-chip { gap: 5px; padding: 0 10px; align-self: stretch; }
+.daw-region-label { color: var(--fg-muted); }
+.daw-region-tilde { color: var(--fg-subtle); }
+.daw-region-time { color: var(--fg); font-variant-numeric: tabular-nums; }
+.daw-region-len { color: var(--fg-muted); }
 
 /* 区間の端。つまめることが見て分かるようにする（判定は線そのものではなく
    前後 7px。細い線をぴたりと狙わせない）。 */
@@ -551,16 +547,21 @@
 .daw-ruler.is-on-edge { cursor: col-resize; }
 
 .daw-tabs { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+/* 中は 30px。外の枠 1px を上下に足して、隣の .btn（32px）と揃う。 */
 .daw-tab {
   appearance: none; border: 0; cursor: pointer;
-  padding: 4px 14px; font-size: var(--text-md);
+  display: inline-flex; align-items: center;
+  min-height: 30px; padding: 0 14px;
+  font-size: var(--text-md); line-height: 20px;
   background: var(--canvas); color: var(--fg-muted);
 }
 .daw-tab + .daw-tab { border-left: 1px solid var(--border); }
 .daw-tab.is-on { background: var(--accent); color: #fff; }
 
+/* 高さは .btn のまま。ここで決めるのは幅だけ（アイコン1つのボタンが、
+   文字の入ったボタンと同じ幅まで広がらないように）。 */
 .daw-zoom { display: inline-flex; gap: 4px; }
-.daw-zoom .btn { min-width: 30px; padding: 0 8px; }
+.daw-zoom .btn { min-width: 32px; }
 
 /* ── アレンジ ── */
 .daw-arrange {
