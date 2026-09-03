@@ -51,7 +51,7 @@
 | `static/js/wm/` | ウィンドウマネージャ |
 | `static/js/lib/motion.js` | 位置を測ってから動かすアニメーション（最小化・最大化・開閉） |
 | `static/js/forms/` | スキーマ → DOM のレンダラと明示保存 |
-| `static/js/apps/` | 専用画面（monitor / user_state / dev） |
+| `static/js/apps/` | 専用画面（monitor / user_state / dev / sql / recording / mixer / guild_data） |
 
 ## 4. 設定を1つ増やすとき
 
@@ -118,6 +118,12 @@ python tools/check_admin_ui.py              # 実ブラウザで開く・保存�
 - TTS の `watch_channel_ids` は `int` のリストで保存する。JSON 経由で文字列になることがあるため、
   比較の前に `int()` へ寄せる（`tts_store.py` が担保している）。
 - TTS API へのリクエストは `format=wav`（サーバ側に ffmpeg を要求しないため）。
+- 「サーバーのデータ」（`guild_data`）は設定項目ではなく操作なので、Field では表せない。
+  custom パネルにして、`DELETE /admin/api/guild-data` を叩く画面を JS で組む。確認は
+  **サーバーIDを打たせる**。はい/いいえの窓を重ねない（読まずに押す確認を足しても強く
+  ならない）。押せるかどうかの判定は補助で、突き合わせは API 側がやり直す。
+- シェルは `<meta name="guild-id">` / `<meta name="guild-name">` にいま選んでいる
+  サーバーを埋める。**表示のためだけの値**で、API はセッションの guild_id しか見ない。
 - 旧UI（Bootstrap + サイドバー + iframe + autosave）は 2026-08 に全廃した。
   `admin.css` / `admin.js` / `base.html` / `views/settings_views.py` などは存在しない。
 
