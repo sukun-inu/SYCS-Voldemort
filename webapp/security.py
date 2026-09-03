@@ -1,5 +1,6 @@
 import asyncio
 import ipaddress
+import uuid
 import os
 import time
 from collections import defaultdict, deque
@@ -12,6 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from envutil import env_bool
 
 from services.log_setup import DEFAULT_TRUSTED_PROXIES, warn_if_forwarded_ignored
+from services.shared_cache import shared_cache
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -48,6 +50,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "form-action 'self'"
         )
         return response
+
+
+# 共有のレート制限を置く名前空間。管理画面の slowapi は Valkey の 1 番 DB を
+# 使い、こちらは共有キャッシュと同じ 0 番の中の別の名前空間を使う。
+# 混ぜないのは、キャッシュを消したいときにレート制限まで消さないため。
+RATE_LIMIT_NAMESPACE = "ratelimit:api"
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -199,6 +207,57 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         return remote_ip, False
 
+    async def _allow_shared(self, bucket_key: str, now: float, limit: int) -> bool | None:
+        """Valkey で数えて通すか決める。使えなければ None（プロセス内へ落ちる）。
+
+        **WEB_WORKERS の既定は 2 なので、これが無いと上限が実質2倍になる。**
+        ワーカーごとに別のプロセスが別の deque で数えていた。
+
+        member に uuid4 を足しているのは、同じ時刻に来た複数のリクエストを
+        別物として数えるため。時刻だけだと、同じ score の同じメンバーとして
+        上書きされ、1件しか数えられない。
+
+        断るときは足した1件を取り消す。取り消さないと、断られたリクエストが
+        窓を押し続けて、叩いている相手がいつまでも解除されない（元の実装は
+        上限に達した時点で deque へ積まずに返していた）。
+        """
+        shared = shared_cache()
+        if not shared.available:
+            return None
+        member = f"{now}:{uuid.uuid4().hex}"
+        count = await shared.sliding_window_hit(
+            RATE_LIMIT_NAMESPACE,
+            bucket_key,
+            window_seconds=self.window_seconds,
+            now=now,
+            member=member,
+        )
+        if count is None:
+            return None
+        if count > limit:
+            await shared.sliding_window_undo(RATE_LIMIT_NAMESPACE, bucket_key, member)
+            return False
+        return True
+
+    async def _allow_local(self, bucket_key: str, now: float, limit: int) -> bool:
+        """プロセス内の deque で数えて通すか決める。Valkey が使えないときの受け皿。
+
+        Valkey を入れたあとも残してある。**共有だけにすると、Valkey が落ちた
+        瞬間にレート制限が丸ごと無くなる。** 緩くはなるが効いている状態を保つ
+        （管理画面側の slowapi に in_memory_fallback を付けたのと同じ考え方）。
+
+        中身は元の実装のまま。上限に達していたら deque へ積まずに False を返す。
+        """
+        async with self._lock:
+            self._cleanup(now)
+            queue = self._hits[bucket_key]
+            while queue and now - queue[0] > self.window_seconds:
+                queue.popleft()
+            if len(queue) >= limit:
+                return False
+            queue.append(now)
+            return True
+
     async def dispatch(self, request: Request, call_next):
         """スライディングウィンドウ方式でIPごとに件数を数え、上限超過なら429を返す。
 
@@ -206,6 +265,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         取れなかった場合は、レート制限をすり抜けさせず 403 で弾く
         （Cloudflareを必ず経由する構成のとき、直アクセスや偽装を
         締め出す用途）。
+
+        数える場所は Valkey（全ワーカー共通）を優先し、使えないときだけ
+        プロセス内へ落ちる。**どちらの経路も「通した件数」だけを窓に残す**
+        （断ったぶんは残さない）。片方だけ残す作りにすると、Valkey が落ちた
+        前後で解除までの時間が変わる。
         """
         if request.url.path.startswith("/api/"):
             now = time.monotonic()
@@ -218,18 +282,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             limit = self.calculate_requests_per_window if is_calculate else self.requests_per_window
             bucket_key = f"{'calculate' if is_calculate else 'default'}:{client_ip}"
 
-            async with self._lock:
-                self._cleanup(now)
-                queue = self._hits[bucket_key]
-                while queue and now - queue[0] > self.window_seconds:
-                    queue.popleft()
-                if len(queue) >= limit:
-                    return JSONResponse(
-                        {"detail": "Too Many Requests"},
-                        status_code=429,
-                        headers={"Retry-After": str(self.window_seconds)},
-                    )
-                queue.append(now)
+            allowed = await self._allow_shared(bucket_key, now, limit)
+            if allowed is None:
+                allowed = await self._allow_local(bucket_key, now, limit)
+
+            if not allowed:
+                return JSONResponse(
+                    {"detail": "Too Many Requests"},
+                    status_code=429,
+                    headers={"Retry-After": str(self.window_seconds)},
+                )
 
         return await call_next(request)
 

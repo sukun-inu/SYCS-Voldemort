@@ -53,6 +53,8 @@ class FakeValkey:
         # 鍵 → 付けられた期限（秒）。期限切れは模していない（時間を進める
         # テストは書いていない）。「期限が付いたかどうか」の検証にだけ使う。
         self.expires: dict[str, int] = {}
+        # ソート済み集合。鍵 → {メンバー: score}。
+        self.zsets: dict[str, dict[str, float]] = {}
 
     def _record(self, name: str) -> None:
         """呼ばれた操作を記録し、fail_on に入っていれば投げる。"""
@@ -119,10 +121,87 @@ class FakeValkey:
                 removed += 1
         return removed
 
+    # ---- ソート済み集合（レート制限の移動窓で使う） ----
+
+    def pipeline(self, transaction: bool = False) -> "FakePipeline":
+        """パイプラインを返す。実物と同じく、execute() まで実行しない。"""
+        self._record("pipeline")
+        return FakePipeline(self)
+
+    def _zset(self, key: str) -> dict[str, float]:
+        """鍵のソート済み集合（メンバー→score）。無ければ作る。"""
+        return self.zsets.setdefault(key, {})
+
+    async def zrem(self, key: str, member: str) -> int:
+        """メンバーを1つ取り除く。"""
+        self._record("zrem")
+        return 1 if self._zset(key).pop(member, None) is not None else 0
+
     async def aclose(self) -> None:
         """記録して閉じる。"""
         self._record("aclose")
         self.closed = True
+
+
+class FakePipeline:
+    """FakeValkey のパイプライン。
+
+    **実物と同じく、命令を積んで execute() でまとめて実行する。** 積んだ時点で
+    実行する偽物にすると、パイプラインを使わずに1つずつ await する実装でも
+    テストが通ってしまう（往復の回数を減らしている意味が検証できない）。
+    """
+
+    def __init__(self, backend: FakeValkey) -> None:
+        """積む先の偽 Valkey を控える。"""
+        self._backend = backend
+        self._queued: list[tuple[str, tuple[Any, ...]]] = []
+
+    def zremrangebyscore(self, key: str, low: Any, high: Any) -> "FakePipeline":
+        """score が範囲内のメンバーを消す命令を積む。"""
+        self._queued.append(("zremrangebyscore", (key, low, high)))
+        return self
+
+    def zcard(self, key: str) -> "FakePipeline":
+        """件数を数える命令を積む。"""
+        self._queued.append(("zcard", (key,)))
+        return self
+
+    def zadd(self, key: str, mapping: dict[str, float]) -> "FakePipeline":
+        """メンバーを足す命令を積む。"""
+        self._queued.append(("zadd", (key, mapping)))
+        return self
+
+    def expire(self, key: str, seconds: int) -> "FakePipeline":
+        """期限を付ける命令を積む。"""
+        self._queued.append(("expire", (key, seconds)))
+        return self
+
+    async def execute(self) -> list[Any]:
+        """積んだ命令を順に実行して、結果を並べて返す。"""
+        self._backend._record("pipeline.execute")
+        results: list[Any] = []
+        for name, args in self._queued:
+            if name == "zremrangebyscore":
+                key, low, high = args
+                target = self._backend._zset(key)
+                limit = float("-inf") if low == "-inf" else float(low)
+                top = float("inf") if high == "+inf" else float(high)
+                doomed = [m for m, score in target.items() if limit <= score <= top]
+                for member in doomed:
+                    target.pop(member, None)
+                results.append(len(doomed))
+            elif name == "zcard":
+                results.append(len(self._backend._zset(args[0])))
+            elif name == "zadd":
+                key, mapping = args
+                self._backend._zset(key).update(mapping)
+                results.append(len(mapping))
+            elif name == "expire":
+                key, seconds = args
+                self._backend.expires[key] = seconds
+                results.append(True)
+        self._queued.clear()
+        return results
 
 
 def make_cache(fake: FakeValkey | None = None, **kwargs: Any) -> SharedCache:
