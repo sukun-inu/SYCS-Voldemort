@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 os.environ.setdefault("SETTINGS_DIR", tempfile.mkdtemp(prefix="commands-test-"))
@@ -631,6 +632,195 @@ class ServerNewsListTests(unittest.TestCase):
         with patch.object(sc, "get_news_feeds", Mock(return_value=feeds)):
             asyncio.run(registry["list"](interaction))
         self.assertLessEqual(len(sent["content"]), 2000)
+
+
+class BotOverviewRegistrationShapeTests(unittest.TestCase):
+    """commands/settings/overview.py の register が何をどう登録するかを固定する。
+
+    105行あるこの関数を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+    既存のテストは /bot settings の丸め方1点だけを見ている。
+
+      - コマンドの名前・説明・並び順
+      - /bot help がコマンドを**打てる形**（qualified_name）で並べること
+      - グループ自身は一覧に入れないこと
+      - 20件ごとに embed を分け、見出しは最初の1枚だけに付けること
+      - /bot settings は管理者限定であること
+    """
+
+    def _register(self, bot=None):
+        """overview.register() だけを、名前と説明を控える群へ流す。"""
+        import commands.settings.overview as overview
+
+        registered = []
+        functions = {}
+
+        class RecordingGroup:
+            """`bot_group.command` に渡された名前・説明・関数を控えるだけの群。"""
+
+            def command(self, *, name, description=""):
+                """デコレータを返す。関数はそのまま返す。"""
+
+                def wrap(fn):
+                    registered.append((name, description))
+                    functions[name] = fn
+                    return fn
+
+                return wrap
+
+        overview.register(bot or Mock(), RecordingGroup())
+        return overview, registered, functions
+
+    def _tree_with(self, *commands):
+        """walk_commands() が指定の並びを返すだけの bot。"""
+        bot = Mock()
+        bot.tree.walk_commands = Mock(return_value=list(commands))
+        return bot
+
+    def _leaf(self, qualified_name, description="説明"):
+        """葉のコマンド1つぶん。name は葉の名前しか持たない。"""
+        return SimpleNamespace(
+            qualified_name=qualified_name, name=qualified_name.split(" ")[-1], description=description
+        )
+
+    def test_the_two_commands_are_registered(self):
+        """settings と help が、この名前・この説明・この順で並ぶこと。"""
+        _, registered, _ = self._register()
+
+        self.assertEqual(
+            registered,
+            [
+                ("settings", "【管理者】Bot設定を一覧表示します"),
+                ("help", "利用可能なスラッシュコマンド一覧を表示します"),
+            ],
+        )
+
+    def test_help_lists_commands_by_the_name_you_actually_type(self):
+        """同じ葉の名前を持つコマンドが、両方とも一覧に出ること。
+
+        walk_commands() が返す cmd.name は**葉の名前しか持たない。** 素直に
+        name で集めると `/log channel` と `/quake channel` が同じ鍵になり、
+        **片方が黙って消える。** 一覧は出るし件数も自然なので、無くなった
+        コマンドを探しに来た人が困るまで気づけない。
+        """
+        import discord
+
+        bot = self._tree_with(
+            self._leaf("log channel", "ログの投稿先"),
+            self._leaf("quake channel", "地震の投稿先"),
+        )
+        _, _, functions = self._register(bot)
+
+        interaction, _ = make_interaction()
+        sent = {}
+
+        async def fake_send(*a, **k):
+            """送られた embeds を控える。"""
+            sent["embeds"] = k.get("embeds")
+
+        interaction.response.send_message = fake_send
+        asyncio.run(functions["help"](interaction))
+
+        body = "\n".join(e.description or "" for e in sent["embeds"])
+        self.assertIn("/log channel", body)
+        self.assertIn("/quake channel", body)
+        self.assertIsInstance(sent["embeds"][0], discord.Embed)
+
+    def test_help_leaves_the_groups_themselves_out(self):
+        """グループ自身は一覧に入れないこと。
+
+        walk_commands() はグループも返す。混ぜると `/log` のように**打っても
+        何も起きない行**が並び、一覧の信用が落ちる。
+        """
+        from discord import app_commands
+
+        group = Mock(spec=app_commands.Group)
+        group.qualified_name = "log"
+        group.description = "ログの設定"
+        bot = self._tree_with(group, self._leaf("log channel"))
+        _, _, functions = self._register(bot)
+
+        interaction, _ = make_interaction()
+        sent = {}
+
+        async def fake_send(*a, **k):
+            """送られた embeds を控える。"""
+            sent["embeds"] = k.get("embeds")
+
+        interaction.response.send_message = fake_send
+        asyncio.run(functions["help"](interaction))
+
+        body = "\n".join(e.description or "" for e in sent["embeds"])
+        self.assertIn("/log channel", body)
+        self.assertNotIn("`/log`", body)
+
+    def test_help_splits_into_pages_of_twenty_with_one_heading(self):
+        """20件ごとに embed を分け、見出しは最初の1枚だけに付けること。
+
+        embed の description は4096文字までで、コマンドが増えるとそのうち
+        超える。分けずに1枚へ詰めると、**ある日を境に /bot help が丸ごと
+        失敗する。** 見出しを全ページに付けると、同じ題が何度も並ぶ。
+        """
+        bot = self._tree_with(*[self._leaf(f"cmd{i:02d}") for i in range(45)])
+        _, _, functions = self._register(bot)
+
+        interaction, _ = make_interaction()
+        sent = {}
+
+        async def fake_send(*a, **k):
+            """送られた embeds を控える。"""
+            sent["embeds"] = k.get("embeds")
+
+        interaction.response.send_message = fake_send
+        asyncio.run(functions["help"](interaction))
+
+        embeds = sent["embeds"]
+        self.assertEqual(len(embeds), 3)  # 45件 → 20 + 20 + 5
+        self.assertEqual(embeds[0].title, "余が授けたコマンドの一覧")
+        self.assertIsNone(embeds[1].title)
+        self.assertIsNone(embeds[2].title)
+
+    def test_settings_refuses_non_admins(self):
+        """/bot settings は管理者限定であること。
+
+        ログの投稿先も信頼済みユーザーも並ぶので、誰でも読めると
+        **監視の抜け道がそのまま見える。**
+        """
+        overview, _, functions = self._register()
+        interaction, calls = make_interaction(administrator=False)
+
+        with patch.object(overview, "get_log_settings", Mock(return_value={})) as getter:
+            asyncio.run(functions["settings"](interaction))
+
+        getter.assert_not_called()
+        self.assertTrue(calls)
+
+    def test_bypass_roles_are_capped_the_same_way_as_trusted_users(self):
+        """バイパスロールも、信頼済みユーザーと同じ丸め方をすること。
+
+        embed の1フィールドは1024文字まで。片方だけ丸めても、もう片方が
+        多いギルドでは**そのフィールドだけ落ちて表示が壊れる。**
+        """
+        overview, _, functions = self._register()
+        interaction, _ = make_interaction(administrator=True)
+        sent = {}
+
+        async def fake_send(*a, **k):
+            """送られた embed を控える。"""
+            sent["embed"] = k.get("embed")
+
+        interaction.response.send_message = fake_send
+        with (
+            patch.object(overview, "get_log_settings", Mock(return_value={})),
+            patch.object(overview, "get_response_channel_id", Mock(return_value=None)),
+            patch.object(overview, "get_trusted_user_ids", Mock(return_value=[])),
+            patch.object(overview, "get_bypass_role_ids", Mock(return_value=list(range(20)))),
+        ):
+            asyncio.run(functions["settings"](interaction))
+
+        field = next(f for f in sent["embed"].fields if "バイパスロール" in f.name)
+        self.assertIn("…他5個", field.value)
+        self.assertIn("（20個）", field.name)
 
 
 class LoggingSettingsListDedupTests(unittest.TestCase):
