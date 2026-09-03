@@ -8,9 +8,9 @@
 coverage==7.16.0
 
 # Linting and formatting
-ruff==0.10.0
-black==24.10.0
-mypy==1.14.0
+ruff==0.16.5
+black==26.5.1
+mypy==2.3.1
 
 # 依存の脆弱性検査。requirements.txt は再現性のために全部 == で固定してあるが、
 # 固定は「勝手に動かない」ことしか保証せず、固定したまま古くなったものが放置
