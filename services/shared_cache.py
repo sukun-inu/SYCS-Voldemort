@@ -135,6 +135,89 @@ class SharedCache:
         ttl = max(1, int(ttl_seconds))
         await self._run(lambda c: c.set(self._compose_key(namespace, key), raw, ex=ttl))
 
+    async def get_value(self, namespace: str, key: str) -> str | None:
+        """文字列を1つ取り出す。JSON を通さない値（メトリクスの数値など）用。"""
+        if not self.available:
+            return None
+        raw = await self._run(lambda c: c.get(self._compose_key(namespace, key)))
+        return None if raw is None else str(raw)
+
+    async def set_value(self, namespace: str, key: str, value: str, ttl_seconds: int | None = None) -> None:
+        """文字列を1つ書き込む。ttl_seconds が None なら期限を付けない。
+
+        期限を付けない選択肢を残しているのは、メトリクスの計数（カウンタ）が
+        単調増加でなければならないため。途中で消えると、読む側は「減った」と
+        解釈して差分がおかしくなる。
+        """
+        if not self.available:
+            return
+        composed = self._compose_key(namespace, key)
+        if ttl_seconds is None:
+            await self._run(lambda c: c.set(composed, value))
+            return
+        ttl = max(1, int(ttl_seconds))
+        await self._run(lambda c: c.set(composed, value, ex=ttl))
+
+    async def incr(self, namespace: str, key: str, amount: int = 1, ttl_seconds: int | None = None) -> int | None:
+        """1つの値を原子的に増やして、増やした後の値を返す（失敗なら None）。
+
+        **読んで足して書き戻す形にしてはいけない。** 複数のプロセスとワーカーが
+        同時に呼ぶので、その形だと数え落ちる。ここが数え落ちると、レート制限では
+        「上限より多く通る」、メトリクスでは「実際より少なく見える」ことになる。
+
+        ttl_seconds を渡すと、鍵が新しく作られたときだけ期限を付ける
+        （既にある鍵の期限を延ばさない。延ばすと、窓が永久にずれ続ける）。
+        """
+        if not self.available:
+            return None
+        composed = self._compose_key(namespace, key)
+
+        async def _incr(client: Any) -> int:
+            """INCRBY で増やし、この呼び出しで鍵が作られたときだけ期限を付ける。"""
+            value = int(await client.incrby(composed, amount))
+            # 戻り値が amount と等しい＝この呼び出しで作られた鍵。ここでだけ
+            # 期限を付ける。毎回付けると窓の終わりが後ろへずれ続ける。
+            if ttl_seconds is not None and value == amount:
+                await client.expire(composed, max(1, int(ttl_seconds)))
+            return value
+
+        result = await self._run(_incr)
+        return None if result is None else int(result)
+
+    async def scan_values(self, namespace: str) -> dict[str, str]:
+        """名前空間の中身を「鍵（接頭辞を外したもの）→ 値」で全部返す。
+
+        メトリクスを組み立てるときに使う。繋がらなければ空の辞書を返すので、
+        呼び出し側は「何も報告されていない」ものとして扱えばよい。
+
+        KEYS ではなく SCAN で回す（clear_namespace と同じ理由）。
+        """
+        if not self.available:
+            return {}
+        prefix = self._compose_key(namespace, "")
+        pattern = f"{prefix}*"
+        found: dict[str, str] = {}
+
+        async def _scan_get(client: Any) -> None:
+            """cursor が 0 に戻るまで回し、1ページぶんを MGET でまとめて取る。
+
+            1件ずつ GET しない。鍵の数だけ往復すると、メトリクスが増えるほど
+            スクレイプ1回の時間が伸びる。
+            """
+            cursor = 0
+            while True:
+                cursor, keys = await client.scan(cursor=cursor, match=pattern, count=256)
+                if keys:
+                    values = await client.mget(keys)
+                    for key, value in zip(keys, values):
+                        if value is not None:
+                            found[str(key)[len(prefix) :]] = str(value)
+                if cursor == 0:
+                    return
+
+        await self._run(_scan_get)
+        return found
+
     async def clear_namespace(self, namespace: str) -> None:
         """その名前空間の鍵を全部消す。
 

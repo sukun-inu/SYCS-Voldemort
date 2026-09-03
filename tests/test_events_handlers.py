@@ -492,6 +492,7 @@ def _make_loops(*, running=False):
         news_feed_task=_make_loop(running=running),
         pending_sticky_task=_make_loop(running=running),
         dev_signal_task=_make_loop(running=running),
+        metrics_task=_make_loop(running=running),
     )
 
 
@@ -532,6 +533,7 @@ class OnReadyTests(unittest.TestCase):
         self.bot.tree.sync.assert_awaited_once()
         self.loops.update_status.start.assert_called_once()
         self.loops.dev_signal_task.start.assert_called_once()
+        self.loops.metrics_task.start.assert_called_once()
 
     def test_does_not_restart_loops_that_are_already_running(self):
         loops = _make_loops(running=True)
@@ -543,6 +545,7 @@ class OnReadyTests(unittest.TestCase):
         loops.news_feed_task.start.assert_not_called()
         loops.pending_sticky_task.start.assert_not_called()
         loops.dev_signal_task.start.assert_not_called()
+        loops.metrics_task.start.assert_not_called()
 
     def test_background_worker_disabled_skips_the_periodic_background_jobs(self):
         with (
@@ -553,9 +556,13 @@ class OnReadyTests(unittest.TestCase):
             patch.object(ready, "_user_state_auto_repair_loop", AsyncMock()),
         ):
             _run(self._invoke_and_settle())
-        # 常時オンの2本は動く
+        # 常時オンの3本は動く。**metrics_task がここに居ることが重要。**
+        # BOT_BACKGROUND_WORKER=false のインスタンスでこれが止まると、
+        # 生きているのに sycs_up{app="bot"} が 0 になり、Netdata が
+        # 「Bot が落ちた」と誤って報せる。
         self.loops.update_status.start.assert_called_once()
         self.loops.dev_signal_task.start.assert_called_once()
+        self.loops.metrics_task.start.assert_called_once()
         # BOT_BACKGROUND_WORKER=false のあいだ止まる3本
         self.loops.news_feed_task.start.assert_not_called()
         self.loops.pending_sticky_task.start.assert_not_called()
@@ -919,11 +926,17 @@ class MemberBanUnbanTests(unittest.TestCase):
 
 
 class RegisterBackgroundTasksTests(unittest.TestCase):
-    def test_returns_four_unstarted_loops(self):
+    def test_returns_five_unstarted_loops(self):
         from discord.ext import tasks
 
         loops = bg.register(SimpleNamespace(), EventState())
-        for loop in (loops.update_status, loops.news_feed_task, loops.pending_sticky_task, loops.dev_signal_task):
+        for loop in (
+            loops.update_status,
+            loops.news_feed_task,
+            loops.pending_sticky_task,
+            loops.dev_signal_task,
+            loops.metrics_task,
+        ):
             self.assertIsInstance(loop, tasks.Loop)
             self.assertFalse(loop.is_running())
 
@@ -1048,7 +1061,7 @@ def _sig_file(name, content="", *, read_error=None):
 
 
 class RegisterBackgroundTasksShapeTests(unittest.TestCase):
-    """register() が組み立てる4本のループを、間隔ごと固定する。
+    """register() が組み立てる5本のループを、間隔ごと固定する。
 
     214行ある `register` を割る前に、外から見た姿を押さえるためのテスト
     （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
@@ -1068,10 +1081,14 @@ class RegisterBackgroundTasksShapeTests(unittest.TestCase):
         ("news_feed_task", 0.0, 5.0, 0.0, "news_feed_task"),
         ("pending_sticky_task", 30.0, 0.0, 0.0, "pending_sticky_task"),
         ("dev_signal_task", 30.0, 0.0, 0.0, "dev_signal_task"),
+        # メトリクスの報告。**この間隔を延ばすと、Bot が死んでから Netdata が
+        # 気づくまでの時間がそのまま延びる**（sycs_up は心拍の古さで決まる）。
+        # METRICS_STALE_AFTER_SECONDS（既定90秒）より十分短く保つこと。
+        ("metrics_task", 30.0, 0.0, 0.0, "metrics_task"),
     ]
 
     def test_every_loop_keeps_its_interval(self):
-        """4本とも、同じ名前・同じ間隔で作られること。"""
+        """5本とも、同じ名前・同じ間隔で作られること。"""
         loops = bg.register(SimpleNamespace(), EventState())
         actual = [
             (name, loop.seconds, loop.minutes, loop.hours, loop.coro.__name__)

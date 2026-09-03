@@ -11,6 +11,7 @@ from typing import Any
 import psutil
 
 from envutil import env_float
+from services.metrics_registry import counters
 
 
 _APP_STARTED_AT = time.time()
@@ -38,6 +39,10 @@ def record_request() -> None:
     now = time.time()
     _REQUEST_TIMESTAMPS.append(now)
     _prune_requests(now)
+    # Netdata へ出すための累積。ここで Valkey へは行かない（プロセス内に溜めて
+    # services/metrics_reporter.py が定期的に流す）。数えるためにリクエストを
+    # 遅くするのは順序が逆なので、critical path には何も足さない。
+    counters().add("requests_total", {"app": "admin"})
 
 
 def record_error_response(status_code: int, request_info: dict[str, Any]) -> None:
@@ -46,6 +51,9 @@ def record_error_response(status_code: int, request_info: dict[str, Any]) -> Non
     4xx（未認証・入力ミスなど日常的に起きるもの）まで拾うとインシデント
     一覧がノイズで埋もれ、本当に見るべき障害が流れてしまう。
     """
+    # 4xx も数える（一覧には出さないが、増え方は見たい）。インシデントに
+    # するかどうかと、数えるかどうかは別の判断。
+    counters().add("http_responses_total", {"app": "admin", "code": str(status_code)})
     if status_code < 500:
         return
     record_incident(
@@ -64,6 +72,9 @@ def record_exception(exception: BaseException, request_info: dict[str, Any]) -> 
     （長いクエリやスタック情報を埋め込んだメッセージ等）を返すことがあり、
     それを丸ごと jsonl に書くとインシデント一覧の1行が異常に重くなるため。
     """
+    # 例外の種類ごとに数える。**ここが Netdata 側で「初めて出た例外」に
+    # 気づくための唯一の口。** ログファイルに埋もれると誰も見ない。
+    counters().add("exceptions_total", {"app": "admin", "type": type(exception).__name__})
     record_incident(
         kind="exception",
         severity="critical",
@@ -128,6 +139,22 @@ def sla_tone(percent: float) -> str:
     if percent >= 99.0:
         return "warning"
     return "danger"
+
+
+def request_tps() -> float:
+    """直近の秒間リクエスト数。/metrics から読むための公開口。
+
+    collect_host_metrics() を呼ぶと psutil.cpu_percent(interval=0.1) で 0.1 秒
+    ブロックする。**スクレイプごとにイベントループを 0.1 秒止めるのは論外**
+    なので、TPS だけを取り出せる口を分けた。ホストの CPU とメモリは Netdata
+    自身が測るので、こちらから出す必要は無い。
+    """
+    return _request_tps(time.time())
+
+
+def uptime_seconds() -> float:
+    """このプロセスが起きてからの秒数。"""
+    return max(0.0, time.time() - _APP_STARTED_AT)
 
 
 def collect_host_metrics() -> dict:

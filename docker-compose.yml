@@ -201,8 +201,17 @@ services:
         condition: service_completed_successfully
       postgres-user-state-init:
         condition: service_completed_successfully
+      # web / admin と同じ理由で service_started（healthy を待たない）。
+      valkey:
+        condition: service_started
     environment:
       - TZ=Asia/Tokyo
+      # Bot は HTTP サーバーを持たないので、Netdata から直接は測れない。
+      # 30秒ごとに Valkey へ心拍と数値を置き、管理画面の /metrics が出す。
+      # **ここを空にすると sycs_up{app="bot"} が出なくなる**（Bot の死活が
+      # 分からなくなる。キャッシュと違って、無くても困らない類ではない）。
+      - VALKEY_URL=${VALKEY_URL:-redis://valkey:6379/0}
+      - METRICS_REPORT_INTERVAL_SECONDS=${METRICS_REPORT_INTERVAL_SECONDS:-30}
       # Discord Bot は環境変数でトークンを渡す
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - METALPRICE_API_KEY=${METALPRICE_API_KEY}
@@ -307,7 +316,21 @@ services:
       # 共有キャッシュとメトリクスは 0 番、レート制限は 1 番を使う。分けているのは
       # レート制限の状態を消したいときに、キャッシュまで消さずに済むようにするため。
       - VALKEY_URL=${VALKEY_URL:-redis://valkey:6379/0}
+      # Netdata が読む /metrics の設定。
+      #
+      # 認証の代わりに接続元 IP で絞る（Netdata はログインできない）。既定は
+      # ループバックと Docker のブリッジ帯。**転送ヘッダは一切見ていない**ので、
+      # ここを広げた範囲からしか読めない（webapp_admin/prometheus_view.py 参照）。
+      - METRICS_ALLOWED_CIDRS=${METRICS_ALLOWED_CIDRS:-127.0.0.1/32,::1/128,172.16.0.0/12}
+      - METRICS_REPORT_INTERVAL_SECONDS=${METRICS_REPORT_INTERVAL_SECONDS:-30}
+      # 心拍がこれより古いアプリは sycs_up=0 になる。報告間隔の3倍を目安にする。
+      - METRICS_STALE_AFTER_SECONDS=${METRICS_STALE_AFTER_SECONDS:-90}
+      - BACKUP_STATUS_FILE=/backups/status.json
       # メトリクスと監視スレッドはワーカーごとに独立するため、既定は1。
+      # **/metrics はこのプロセスから出るので、ここを2以上にすると Netdata の
+      # スクレイプがワーカー1個にしか当たらなくなる**（Valkey に集めた値は
+      # どのワーカーからでも同じに見えるが、admin_request_tps だけは
+      # そのワーカーぶんになる）。
       - ADMIN_WORKERS=${ADMIN_WORKERS:-1}
       - ADMIN_TPS_TARGET=${ADMIN_TPS_TARGET:-50}
       - ADMIN_MONITOR_INTERVAL_SECONDS=${ADMIN_MONITOR_INTERVAL_SECONDS:-30}
@@ -337,6 +360,9 @@ services:
     volumes:
       - app_data:/app/data
       - shared_secrets:/shared:ro
+      # status.json を読んで sycs_backup_age_seconds を出すためだけ。読み取り
+      # 専用で付ける（バックアップを消せる必要は無い）。
+      - postgres_backups:/backups:ro
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -380,6 +406,9 @@ services:
       # WEB_WORKERS が2以上のとき、これが無いとワーカーごとに別のキャッシュを
       # 持つ（同じ問い合わせに DB クエリと予測計算が2回走る）。
       - VALKEY_URL=${VALKEY_URL:-redis://valkey:6379/0}
+      # ワーカーごとに web-<PID> という名前で報告する。どのワーカーが落ちたかを
+      # 区別できるようにするため（advisory lock とは無関係に全ワーカーが報告する）。
+      - METRICS_REPORT_INTERVAL_SECONDS=${METRICS_REPORT_INTERVAL_SECONDS:-30}
       - API_RATE_LIMIT_PER_MINUTE=${API_RATE_LIMIT_PER_MINUTE:-120}
       - API_CALCULATE_RATE_LIMIT_PER_MINUTE=${API_CALCULATE_RATE_LIMIT_PER_MINUTE:-60}
       - API_RESPONSE_CACHE_SECONDS=${API_RESPONSE_CACHE_SECONDS:-20}

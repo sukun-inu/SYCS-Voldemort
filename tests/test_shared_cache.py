@@ -50,6 +50,9 @@ class FakeValkey:
         self.fail_on = fail_on or set()
         self.closed = False
         self._scan_snapshot: list[str] = []
+        # 鍵 → 付けられた期限（秒）。期限切れは模していない（時間を進める
+        # テストは書いていない）。「期限が付いたかどうか」の検証にだけ使う。
+        self.expires: dict[str, int] = {}
 
     def _record(self, name: str) -> None:
         """呼ばれた操作を記録し、fail_on に入っていれば投げる。"""
@@ -85,6 +88,27 @@ class FakeValkey:
             return 0, []
         next_cursor = cursor + 1
         return (0 if next_cursor >= len(keys) else next_cursor), [keys[cursor]]
+
+    async def mget(self, keys: list[str]) -> list[str | None]:
+        """複数の鍵をまとめて取る。scan_values が使う。"""
+        self._record("mget")
+        return [self.data.get(key) for key in keys]
+
+    async def incrby(self, key: str, amount: int) -> int:
+        """原子的に増やす。実物と同じく、無い鍵は 0 から始める。"""
+        self._record("incrby")
+        current = int(self.data.get(key, "0")) + amount
+        self.data[key] = str(current)
+        return current
+
+    async def expire(self, key: str, seconds: int) -> bool:
+        """期限を付ける。**付いたことを記録に残す。** カウンタに期限が付いて
+        いないことを検証したいテストがあるため（付くと読む側が「減った」と
+        解釈して差分が壊れる）。
+        """
+        self._record("expire")
+        self.expires[key] = seconds
+        return key in self.data
 
     async def delete(self, *keys: str) -> int:
         """記録して消す。"""

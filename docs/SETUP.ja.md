@@ -37,6 +37,15 @@ docker compose up -d --build
 | `VALKEY_MAXMEMORY` | `256mb` | 上限に当たったら古いものから捨てる（`allkeys-lru`） |
 | `ADMIN_LIMITER_STORAGE_URI` | `redis://valkey:6379/1?socket_timeout=0.5&...` | `memory://` にするとワーカーごとの計数へ戻る |
 
+### 監視
+
+ホストの Netdata が管理画面の `/metrics`（Prometheus 形式）を読みます。3 プロセス
+ぶんの死活・例外・バックアップの鮮度が 1 つのエンドポイントから出ます。設定と
+読み方は [docs/MONITORING.ja.md](MONITORING.ja.md) にまとめました。
+
+**`ADMIN_WORKERS` は 1 のままにしてください。** `/metrics` は管理画面のプロセスから
+出るので、2 以上にするとスクレイプがワーカー 1 個にしか当たりません。
+
 ### バックアップ
 
 `postgres-backup` が毎日 4 時（JST）に Postgres の 2 つの DB と、Postgres に
