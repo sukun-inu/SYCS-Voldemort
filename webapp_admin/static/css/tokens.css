@@ -1,1 +1,228 @@
-:root{color-scheme:light dark;--font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic UI","Yu Gothic",Meiryo,Arial,sans-serif;--font-mono:ui-monospace,"Cascadia Mono","Cascadia Code",Consolas,"SFMono-Regular","Yu Gothic UI",monospace;--canvas:#ffffff;--canvas-subtle:#f6f8fa;--canvas-inset:#eef1f4;--canvas-overlay:#ffffff;--border:#d0d7de;--border-muted:#dce1e6;--fg:#1f2328;--fg-muted:#636c76;--fg-subtle:#68727d;--accent:#0969da;--accent-hover:#0550ae;--accent-soft:rgba(9,105,218,0.08);--success:#1a7f37;--success-emphasis:#1f883d;--success-soft:rgba(26,127,55,0.10);--danger:#d1242f;--danger-soft:rgba(209,36,47,0.10);--attention:#9a6700;--attention-soft:rgba(154,103,0,0.12);--shadow-window:0 10px 28px rgba(31,35,40,0.16);--shadow-popover:0 8px 24px rgba(140,149,159,0.22);--radius:6px;--radius-lg:10px;--radius-pill:999px;--glass-bg:rgba(255,255,255,0.42);--glass-bg-strong:rgba(255,255,255,0.66);--glass-highlight:rgba(255,255,255,0.9);--glass-edge:rgba(120,155,195,0.32);--glass-blur:blur(30px) saturate(190%) brightness(1.04);--toast-bg:rgba(255,255,255,0.46);--toast-blur:blur(26px) saturate(180%) brightness(1.55);--lens-rim:linear-gradient(135deg,rgba(255,255,255,0.95) 0%,rgba(255,255,255,0.28) 18%,rgba(255,255,255,0.04) 42%,rgba(255,255,255,0.10) 62%,rgba(255,255,255,0.75) 100%);--gloss:linear-gradient(180deg,rgba(255,255,255,0.42) 0%,rgba(255,255,255,0.10) 55%,rgba(255,255,255,0.02) 100%);--spec:rgba(255,255,255,0.30);--rail-bg:rgba(255,255,255,0.50);--rail-blur:blur(20px) saturate(180%);--rail-top:rgba(255,255,255,0.85);--rail-shade:rgba(90,120,160,0.10);--glow-focus:0 0 0 1px rgba(90,180,255,0.5),0 0 28px rgba(80,170,255,0.4);--shadow-aero:0 32px 64px -16px rgba(4,20,50,0.45),0 10px 26px -10px rgba(4,20,50,0.35);--shadow-1:0 1px 2px rgba(0,0,0,0.18);--shadow-2:0 6px 18px rgba(4,18,40,0.32);--glow-soft:0 0 14px rgba(110,190,255,0.42);--glow-strong:0 0 22px rgba(120,200,255,0.62);--taskbar-ink:#eaf3ff;--taskbar-ink-muted:rgba(234,243,255,0.72);--radius-glass:18px;--text-xs:11px;--text-sm:12px;--text-md:13px;--text-lg:15px;--text-xl:19px;--text-2xl:22px;--gap-icon:6px;--gap-inline:8px;--gap-stack:14px;--gap-section:20px;--radius-pane:12px;--radius-control:10px;--dur-0:60ms;--dur-1:120ms;--dur-2:180ms;--dur-3:260ms;--ease-out:cubic-bezier(.16,1,.3,1);--ease-in:cubic-bezier(.4,0,.9,.6);--taskbar-height:44px;--titlebar-height:36px;--z-window:10;--z-taskbar:1000;--z-menu:1100;--z-toast:1200}@media (prefers-color-scheme:dark){:root{--canvas:#0d1117;--canvas-subtle:#161b22;--canvas-inset:#010409;--canvas-overlay:#161b22;--border:#30363d;--border-muted:#21262d;--fg:#e6edf3;--fg-muted:#9198a1;--fg-subtle:#7a838e;--accent:#4493f8;--accent-hover:#6cb6ff;--accent-soft:rgba(68,147,248,0.14);--success:#3fb950;--success-emphasis:#238636;--success-soft:rgba(63,185,80,0.14);--danger:#f85149;--danger-soft:rgba(248,81,73,0.14);--attention:#d29922;--attention-soft:rgba(210,153,34,0.16);--glass-bg:rgba(16,24,36,0.52);--glass-bg-strong:rgba(14,21,32,0.74);--toast-bg:rgba(18,26,38,0.52);--toast-blur:blur(26px) saturate(170%) brightness(0.72);--glass-highlight:rgba(255,255,255,0.22);--glass-edge:rgba(140,180,225,0.20);--lens-rim:linear-gradient(135deg,rgba(190,225,255,0.55) 0%,rgba(190,225,255,0.14) 20%,rgba(255,255,255,0.02) 45%,rgba(190,225,255,0.08) 65%,rgba(190,225,255,0.42) 100%);--gloss:linear-gradient(180deg,rgba(255,255,255,0.14) 0%,rgba(255,255,255,0.04) 55%,rgba(255,255,255,0.01) 100%);--spec:rgba(180,220,255,0.18);--rail-bg:rgba(190,225,255,0.075);--rail-blur:blur(20px) saturate(150%);--rail-top:rgba(205,232,255,0.26);--rail-shade:rgba(0,0,0,0.22);--shadow-aero:0 34px 68px -16px rgba(0,0,0,0.72),0 10px 26px -10px rgba(0,0,0,0.5);--shadow-1:0 1px 3px rgba(0,0,0,0.5);--shadow-2:0 8px 22px rgba(0,0,0,0.55);--shadow-window:0 10px 28px rgba(1,4,9,0.6);--shadow-popover:0 8px 24px rgba(1,4,9,0.6)}}
+/* ==========================================================================
+   デザイントークン
+   配色は従来の管理コンソール（GitHub Primer 準拠のフラットな配色）を引き継ぐ。
+   Bootstrap には依存しない。色・余白・角丸・重なり順はすべてここで定義する。
+   ========================================================================== */
+
+:root {
+  color-scheme: light dark;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN",
+    "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", Meiryo, Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "Cascadia Code", Consolas, "SFMono-Regular",
+    "Yu Gothic UI", monospace;
+
+  /* 面 */
+  --canvas: #ffffff;
+  --canvas-subtle: #f6f8fa;
+  --canvas-inset: #eef1f4;
+  --canvas-overlay: #ffffff;
+
+  /* 線 */
+  --border: #d0d7de;
+  --border-muted: #dce1e6;
+
+  /* 文字 */
+  --fg: #1f2328;
+  --fg-muted: #636c76;
+  --fg-subtle: #68727d;
+
+  /* 意味を持つ色 */
+  --accent: #0969da;
+  --accent-hover: #0550ae;
+  --accent-soft: rgba(9, 105, 218, 0.08);
+  --success: #1a7f37;
+  --success-emphasis: #1f883d;
+  --success-soft: rgba(26, 127, 55, 0.10);
+  --danger: #d1242f;
+  --danger-soft: rgba(209, 36, 47, 0.10);
+  --attention: #9a6700;
+  --attention-soft: rgba(154, 103, 0, 0.12);
+
+  /* 立体 */
+  --shadow-window: 0 10px 28px rgba(31, 35, 40, 0.16);
+  --shadow-popover: 0 8px 24px rgba(140, 149, 159, 0.22);
+
+  --radius: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+
+  /* ── ガラス表現（Aero の骨格 + Liquid Glass の光り方） ────
+     枠はガラス、中身の面は不透明。そのうえで、縁だけが光る鏡面リムと
+     彩度を持ち上げたぼかしで、板ガラスではなくレンズのように見せる。 */
+  --glass-bg: rgba(255, 255, 255, 0.42);
+  --glass-bg-strong: rgba(255, 255, 255, 0.66);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+  --glass-edge: rgba(120, 155, 195, 0.32);
+  --glass-blur: blur(30px) saturate(190%) brightness(1.04);
+  /* 通知（トースト）は壁紙の上に浮くので、面はより薄く、
+     そのぶん背後を明るく持ち上げて文字が沈まないようにする */
+  --toast-bg: rgba(255, 255, 255, 0.46);
+  --toast-blur: blur(26px) saturate(180%) brightness(1.55);
+
+  /* レンズの縁。左上と右下だけが強く光る（面全体は光らせない） */
+  --lens-rim: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(255, 255, 255, 0.28) 18%,
+    rgba(255, 255, 255, 0.04) 42%,
+    rgba(255, 255, 255, 0.10) 62%,
+    rgba(255, 255, 255, 0.75) 100%
+  );
+  /* 上端の緩やかな艶。Aero の硬い分割線は使わない */
+  --gloss: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(255, 255, 255, 0.10) 55%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  --spec: rgba(255, 255, 255, 0.30);
+
+  /* 見出しの膜（Liquid Glass）。
+     面を白く塗るのではなく、背後を blur+saturate で曇らせて色を拾わせる。
+     塗り自体は薄くし、縁の光と鏡面で material に見せる。
+     ライトとダークで必ず別の値を持つこと——ここを固定値にすると、
+     ダークで明るい灰色の帯になる（実際に一度そうなった）。 */
+  --rail-bg: rgba(255, 255, 255, 0.50);
+  --rail-blur: blur(20px) saturate(180%);
+  --rail-top: rgba(255, 255, 255, 0.85);
+  --rail-shade: rgba(90, 120, 160, 0.10);
+  --glow-focus: 0 0 0 1px rgba(90, 180, 255, 0.5), 0 0 28px rgba(80, 170, 255, 0.4);
+  --shadow-aero: 0 32px 64px -16px rgba(4, 20, 50, 0.45), 0 10px 26px -10px rgba(4, 20, 50, 0.35);
+
+  /* 浮きの段階。
+     もとは 0 1px 2px(.18) / 0 1px 2px(.16) / 0 1px 3px / 0 6px 18px /
+     0 6px 20px … と、同じ役割に近い値が並んでいた。つまみが2種類あって
+     片方だけ .16、カードが2種類あって片方だけ 20px、という具合で、
+     どれが基準なのか分からない。高さで2段に整理する。
+     これより上（吹き出し・窓）は --shadow-popover / --shadow-window /
+     --shadow-aero が受け持つ。 */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.18);          /* つまみ・小さな面 */
+  --shadow-2: 0 6px 18px rgba(4, 18, 40, 0.32);       /* カードが浮く */
+
+  /* 光り。Aero の見た目を作っている要素なので残すが、強さは2段に絞る。
+     もとは 10 / 14 / 16 / 20 / 22px と半端に散っていた。
+     置いてあるだけの状態は soft、指を乗せた状態は strong。 */
+  --glow-soft: 0 0 14px rgba(110, 190, 255, 0.42);
+  --glow-strong: 0 0 22px rgba(120, 200, 255, 0.62);
+  --taskbar-ink: #eaf3ff;
+  --taskbar-ink-muted: rgba(234, 243, 255, 0.72);
+
+  /* 連続的な角丸（外側ほど大きく） */
+  --radius-glass: 18px;
+
+  /* 字の大きさの段階。
+     もとは 8/10/10.5/11/11.5/12/12.5/13/13.5/14/18/19/22 と13段あり、
+     しかも 0.5px 刻みが混ざっていた。役割が同じ字が 12.5 と 13 に分かれて
+     いる、という状態で、揃える基準が無い。
+     macOS は操作部品の字を 13px に置き、そこから 11 / 12 / 15 / 19 / 22 と
+     段を作る。それに合わせて 6 段へまとめた。0.5px は使わない
+     （端末によって丸め方が違い、行の高さが揃わない）。 */
+  --text-xs: 11px;      /* 補助・タイムスタンプ・凡例 */
+  --text-sm: 12px;      /* 副次的な文字 */
+  --text-md: 13px;      /* 既定。ボタン・入力欄・本文 */
+  --text-lg: 15px;      /* 小見出し */
+  --text-xl: 19px;      /* 見出し */
+  --text-2xl: 22px;     /* 大見出し */
+
+  /* 余白の尺度。
+     数字を格子へ丸めること自体が目的ではない。役割が同じなのに値が違う所を
+     無くすのが目的なので、役割で名前を付ける。
+
+     実際に集計すると、アイコンと文字の間が .btn 6px / .chip 5px /
+     .menu-item 8px と三通りあった。同じ関係を三つの値で書いていて、
+     どれが正しいのかコードからは分からない状態。--gap-icon に寄せる。 */
+  --gap-icon: 6px;      /* アイコンと、その文字の間 */
+  --gap-inline: 8px;    /* 横に並ぶ部品どうし（ボタン列・入力欄の行） */
+  --gap-stack: 14px;    /* 節の中で、項目どうしを離す幅 */
+  --gap-section: 20px;  /* 節どうしを離す幅。項目どうしより広くする */
+  --radius-pane: 12px;
+  --radius-control: 10px;
+
+  /* ── 動き ────────────────────────────────────────────────
+     3段の時間と2種のイージングだけで揃える。長さは「何が動くか」で決める:
+     1 = 手触り（押す・光る）、2 = 現れる/消える、3 = 位置と大きさが変わる。
+     動きを抑える設定では base.css が一括で無効化する。 */
+  /* 押した手応えのように、気づかせず即座に返す長さ。
+     もとは .05s（つまみの追従）と 60ms（押し込み）が別々に書かれていた。 */
+  --dur-0: 60ms;
+  --dur-1: 120ms;
+  --dur-2: 180ms;
+  --dur-3: 260ms;
+  /* 減速（出現）と加速（退場）。ガラスは重さを感じるよう、出現を長めに引く */
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-in: cubic-bezier(.4, 0, .9, .6);
+
+  --taskbar-height: 44px;
+  --titlebar-height: 36px;
+
+  --z-window: 10;
+  --z-taskbar: 1000;
+  --z-menu: 1100;
+  --z-toast: 1200;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #0d1117;
+    --canvas-subtle: #161b22;
+    --canvas-inset: #010409;
+    --canvas-overlay: #161b22;
+
+    --border: #30363d;
+    --border-muted: #21262d;
+
+    --fg: #e6edf3;
+    --fg-muted: #9198a1;
+    --fg-subtle: #7a838e;
+
+    --accent: #4493f8;
+    --accent-hover: #6cb6ff;
+    --accent-soft: rgba(68, 147, 248, 0.14);
+    --success: #3fb950;
+    --success-emphasis: #238636;
+    --success-soft: rgba(63, 185, 80, 0.14);
+    --danger: #f85149;
+    --danger-soft: rgba(248, 81, 73, 0.14);
+    --attention: #d29922;
+    --attention-soft: rgba(210, 153, 34, 0.16);
+
+
+    --glass-bg: rgba(16, 24, 36, 0.52);
+    --glass-bg-strong: rgba(14, 21, 32, 0.74);
+    --toast-bg: rgba(18, 26, 38, 0.52);
+    --toast-blur: blur(26px) saturate(170%) brightness(0.72);
+    --glass-highlight: rgba(255, 255, 255, 0.22);
+    --glass-edge: rgba(140, 180, 225, 0.20);
+    --lens-rim: linear-gradient(
+      135deg,
+      rgba(190, 225, 255, 0.55) 0%,
+      rgba(190, 225, 255, 0.14) 20%,
+      rgba(255, 255, 255, 0.02) 45%,
+      rgba(190, 225, 255, 0.08) 65%,
+      rgba(190, 225, 255, 0.42) 100%
+    );
+    --gloss: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.14) 0%,
+      rgba(255, 255, 255, 0.04) 55%,
+      rgba(255, 255, 255, 0.01) 100%
+    );
+    --spec: rgba(180, 220, 255, 0.18);
+
+    /* ダークでは白をほとんど乗せない。曇らせて背後の色を拾うだけにする。 */
+    --rail-bg: rgba(190, 225, 255, 0.075);
+    --rail-blur: blur(20px) saturate(150%);
+    --rail-top: rgba(205, 232, 255, 0.26);
+    --rail-shade: rgba(0, 0, 0, 0.22);
+    --shadow-aero: 0 34px 68px -16px rgba(0, 0, 0, 0.72), 0 10px 26px -10px rgba(0, 0, 0, 0.5);
+    /* 暗い地では影が見えにくいので濃くする（光りは地が暗いぶんよく出るので
+       そのまま使う）。 */
+    --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.5);
+    --shadow-2: 0 8px 22px rgba(0, 0, 0, 0.55);
+
+    --shadow-window: 0 10px 28px rgba(1, 4, 9, 0.6);
+    --shadow-popover: 0 8px 24px rgba(1, 4, 9, 0.6);
+  }
+}
