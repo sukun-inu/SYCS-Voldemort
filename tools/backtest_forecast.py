@@ -43,7 +43,11 @@ def load_history(url: str | None, path: str | None) -> dict:
     if path:
         return dict(json.loads(Path(path).read_text(encoding="utf-8")))
     assert url is not None
-    endpoint = f"{url.rstrip("/")}/api/prices/history?all=true"
+    # f-string の中で外側と同じ引用符を使わないこと。`f"{url.rstrip("/")}"` は
+    # PEP 701 の構文で、**Python 3.12 以降でしか解釈できない。** 本番と CI は
+    # 3.11（Dockerfile と揃えてある）なので、そちらでは import した時点で
+    # SyntaxError になる。手元が 3.13 だと動いてしまうため気づけない。
+    endpoint = f"{url.rstrip('/')}/api/prices/history?all=true"
     with urllib.request.urlopen(endpoint, timeout=30) as response:  # noqa: S310 - 運用者が指定したURL
         return dict(json.loads(response.read().decode("utf-8")))
 

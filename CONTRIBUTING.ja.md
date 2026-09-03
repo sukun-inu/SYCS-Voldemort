@@ -277,7 +277,7 @@ return discord.Color.dark_grey()
 
 ---
 
-## 8. CI が落とす10個の条件
+## 8. CI が落とす11個の条件
 
 `.github/workflows/tests.yml`。`main` への push と、すべての pull request で
 走ります。
@@ -290,14 +290,29 @@ return discord.Color.dark_grey()
 6. `tools/check_requirements.py`（依存の固定が Docker と同じ条件で解けるか）
 7. `tools/check_admin_schema.py` と `tools/generate_admin_docs.py --check`
 8. `tools/check_docstrings.py`（本体の関数に docstring があるか。下限 100）
-9. `sh -n docker/*.sh`（シェルスクリプトの構文）
-10. `pip-audit -r requirements.txt --strict`（依存に既知の脆弱性が無いか）
+9. `python -m compileall -q .`（全ファイルが CI の Python 3.11 で構文が通るか）
+10. `sh -n docker/*.sh`（シェルスクリプトの構文）
+11. `pip-audit -r requirements.txt --strict`（依存に既知の脆弱性が無いか）
 
-9. があるのは、`docker/postgres-backup.sh` を compose の YAML の中ではなく
+9. は `tools/backtest_forecast.py` が **Python 3.11 では SyntaxError になる状態で
+main に入っていた**ために足しました（f-string の中で外側と同じ引用符を使う
+PEP 701 の構文。3.12 以降でしか解釈できません）。気づけなかった理由が3つ重なって
+います。
+
+- `tools/` は mypy の対象外（CI の `-p` に入っていない）
+- `tools/` はテストが import しない（`.coveragerc` でも除外）
+- 当時の ruff 0.10.0 はこの構文を指摘しなかった
+
+**手元（3.13）では動くので、本番の 3.11 で初めて落ちます。** 見つかったのは
+Dependabot が ruff を上げる PR を出したときでした。`compileall` なら、テストが
+import しないファイルも含めて全部をこのジョブの Python（＝Dockerfile と同じ
+3.11）で検査できます。
+
+10. があるのは、`docker/postgres-backup.sh` を compose の YAML の中ではなく
 ファイルに置いた理由の一つがこれだからです。YAML の中のシェルは構文検査に
 掛けられません。検査できる形にしたなら、必ず検査します。
 
-10. は固定（全部 `==`）と対です。固定は「勝手に動かない」ことしか保証せず、
+11. は固定（全部 `==`）と対です。固定は「勝手に動かない」ことしか保証せず、
 固定したまま古くなったものが放置される側の危険は増えます。入れた初回で
 Pillow 12.2.0 の勧告11件が出ました。
 

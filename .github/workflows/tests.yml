@@ -59,6 +59,24 @@ jobs:
         # ここへ加えること。「入れたが素通り」は作らない。
         run: python -m mypy -p webapp -p events -p services -p webapp_admin -p commands
 
+      - name: Python 3.11 で構文が通るか確認（全ファイル）
+        # **なぜ要るか。** tools/backtest_forecast.py が
+        # `f"{url.rstrip("/")}"`（PEP 701、Python 3.12 以降の構文）を含んでいて、
+        # 3.11 では import した時点で SyntaxError になる状態が残っていた。
+        # 気づけなかった理由が3つ重なっている。
+        #
+        #   - tools/ は mypy の対象外（CI の -p に入っていない）
+        #   - tools/ はテストが import しない（.coveragerc でも除外）
+        #   - 当時の ruff 0.10.0 はこの構文を指摘しなかった
+        #
+        # 手元（3.13）では動くので、**本番の 3.11 で初めて落ちる。** 見つけたのは
+        # Dependabot が ruff を 0.16.5 へ上げる PR を出したときで、それまで
+        # 誰も踏んでいなかった。
+        #
+        # compileall なら、テストが import しないファイルも含めて全部を
+        # このジョブの Python（＝Dockerfile と同じ 3.11）で構文検査できる。
+        run: python -m compileall -q .
+
       - name: シェルスクリプトの構文検査
         # バックアップのスクリプトを compose の YAML の中ではなくファイルに
         # 置いたのは、ここで検査に掛けられるようにするためでもある（YAML の中の

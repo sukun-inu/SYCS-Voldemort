@@ -38,14 +38,47 @@ updates:
       prefix: "chore"
       include: scope
     ignore:
+      # ここに足すときは、**必ず理由と外せる条件を書くこと。** 書かずに足すと、
+      # 次に見る人には「上げてはいけない」と「まだ上げられない」の区別が付かない。
+      #
+      # なお、ここに書き忘れても CI は落ちる（tools/check_requirements.py が
+      # Python の対応版と依存の衝突を検出する）。**この ignore は「解決不能な PR を
+      # 開かせない」ためのもので、守りの本体ではない。** 守りは CI 側にある。
+
       # discord.py[voice] が PyNaCl<1.6 を要求するため、1.6 系へは上げられない。
-      # PR が来ても解決不能なので、開かせない。
       #
       # 外せる条件: discord.py が PyNaCl 1.6 系を許す版を出したとき。詳細は
       # requirements.txt の PyNaCl のコメントと、tests.yml の pip-audit の
       # --ignore-vuln の説明にある。
       - dependency-name: PyNaCl
         versions: [">=1.6"]
+
+      # numpy 2.5 系は Requires-Python >=3.12。本番と CI は 3.11（Dockerfile と
+      # 揃えてある）なので、pip install が「No matching distribution found」で
+      # 落ちる。**実際に最初の Dependabot PR がこれで落ちた。**
+      #
+      # Dependabot は Dockerfile の FROM を読まないので、対象の Python が
+      # 3.11 だと知らない。.python-version を置いて伝えてはあるが、確実なのは
+      # こちらの明示なので両方入れてある。
+      #
+      # 外せる条件: Dockerfile の Python を 3.12 以上へ上げたとき。そのときは
+      # tests.yml の setup-python と pyproject.toml の target-version /
+      # python_version も同時に上げること（片方だけ動かすと、このリポジトリが
+      # 何度も踏んできた「手元では通るのに本番だけ壊れる」に戻る）。
+      - dependency-name: numpy
+        versions: [">=2.5"]
+
+      # redis 8 系は limits の redis ストレージ（`redis<8.0.0`）と衝突する。
+      # 上げると管理画面のレート制限を Valkey へ載せられなくなる。
+      #
+      # **これも実際に最初の PR に入っていた。** しかも当時は pip install も
+      # テストも check_requirements も通ってしまい、本番でレート制限が Valkey を
+      # 触った瞬間にだけ壊れる形だった。requirements.txt へ limits[redis] を
+      # 明示したので、今は CI が検出する。
+      #
+      # 外せる条件: limits が redis 8 系を許す版を出したとき。
+      - dependency-name: redis
+        versions: [">=8"]
       # discord.py 本体を上げると音声接続と録音の検証が必須になる（DAVE の鍵交換と
       # voice_recv の組み合わせが版に依存する）。手動で上げる前提にして、自動 PR は
       # メジャー・マイナーだけ抑える。パッチは受け取る。
