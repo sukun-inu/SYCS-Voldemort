@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -28,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 from config import METAL_COMMANDS
 from envutil import env_int
+from services.metrics_reporter import report_forever
 from services.url_safety import URLSafetyError, validate_public_http_url
 from .cache import TTLCache
 from .asset_version import render_index_html, render_service_worker
@@ -778,6 +780,25 @@ async def _release_scheduler_lock() -> None:
         await conn.close()
 
 
+def _web_gauges() -> dict[str, float]:
+    """Netdata へ出す web 固有の瞬間値。
+
+    **重い処理を入れないこと。** ここは報告ループから毎回呼ばれる同期関数で、
+    DB へ問い合わせたり psutil を呼んだりすると、そのぶんイベントループが止まる。
+    ホストの CPU とメモリは Netdata 自身が測るので出さない。
+
+    キャッシュの入り具合を出しているのは、共有キャッシュが効いているかを外から
+    確かめる手段がこれしか無いため（ワーカーごとに別プロセスなので、ログを
+    見比べても分からない）。
+    """
+    return {
+        "web_cache_items_history": float(len(history_cache._data)),
+        "web_cache_items_latest": float(len(latest_prices_cache._data)),
+        "web_cache_items_calculate": float(len(calculate_cache._data)),
+        "web_cache_items_forecast": float(len(forecast_cache._data)),
+    }
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """DB初期化とスケジューラ起動を行い、終了時に後始末する。
@@ -862,9 +883,26 @@ async def lifespan(_: FastAPI):
     else:
         logger.info("WEB_SCHEDULER_ENABLED=false: startup jobs and scheduler are disabled")
 
+    # メトリクスの報告。**advisory lock とは無関係に、全ワーカーで動かす。**
+    # スケジューラ担当だけにすると、担当でないワーカーが死んでも Netdata から
+    # 見えない。ワーカーごとに別のアプリ名で報告するので、どれが落ちたかも分かる。
+    metrics_task = asyncio.create_task(
+        report_forever(
+            f"web-{os.getpid()}",
+            interval_seconds=env_int("METRICS_REPORT_INTERVAL_SECONDS", 30, minimum=1),
+            gauge_source=_web_gauges,
+        )
+    )
+
     try:
         yield
     finally:
+        # 先に止める。DB を閉じたあとに報告が走ると、ゲージの収集が例外になる。
+        metrics_task.cancel()
+        try:
+            await metrics_task
+        except asyncio.CancelledError:
+            pass
         if scheduler is not None:
             scheduler.shutdown(wait=False)
         if has_scheduler_lock:

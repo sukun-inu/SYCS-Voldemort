@@ -2165,6 +2165,11 @@ class CreateAppShapeTests(unittest.TestCase):
         ("/admin/guide", "GET", "redirect_admin_guide"),
         ("/admin/privacy", "GET", "redirect_admin_privacy"),
         ("/admin/terms", "GET", "redirect_admin_terms"),
+        # Netdata が読む Prometheus 形式の出力。**公開ページの後、ミドルウェアの
+        # 前**に登録されている（位置に意味がある。SlowAPIMiddleware より後に足すと
+        # 既定のレート制限 300/分 が掛かり、スクレイプ間隔を詰めたときに黙って
+        # 429 になる）。並び順が変わったらここで落ちる。
+        ("/metrics", "GET", "metrics_endpoint"),
     ]
 
     # 8本のルーターが、どの接頭辞の下に入ったか。中身（各ルーターの経路）まで
@@ -2227,6 +2232,9 @@ class CreateAppShapeTests(unittest.TestCase):
         ("/admin/guide", "get"),
         ("/admin/privacy", "get"),
         ("/admin/terms", "get"),
+        # /metrics はここに出ない。include_in_schema=False で登録しているので、
+        # OpenAPI のスキーマには載らない（載せると、認証の要らない経路の存在が
+        # スキーマから読める）。経路そのものは DIRECT の側で固定してある。
     ]
 
     # 外側から順。add_middleware したものが前に、@app.middleware したものが後ろに来る。

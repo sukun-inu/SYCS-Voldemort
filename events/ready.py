@@ -66,6 +66,11 @@ def register(bot: Bot, state: EventState, loops: BackgroundLoops) -> None:
             loops.update_status.start()
         if not loops.dev_signal_task.is_running():
             loops.dev_signal_task.start()
+        # **BOT_BACKGROUND_WORKER の内側に入れないこと。** これが止まると
+        # sycs_up{app="bot"} が 0 になり、Netdata から見て Bot が死んだことに
+        # なる。背景ジョブ担当かどうかとは無関係に、全インスタンスで回す。
+        if not loops.metrics_task.is_running():
+            loops.metrics_task.start()
         if _BOT_BACKGROUND_WORKER:
             if not loops.news_feed_task.is_running():
                 loops.news_feed_task.start()

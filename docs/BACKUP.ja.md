@@ -51,8 +51,9 @@ docker compose exec postgres-backup cat /backups/status.json
 ```
 
 `status.json` の `result` が `error` なら `error` に失敗したものの名前が入って
-います。`finished_at_epoch` は「最後に成功してから何秒経ったか」を外から測れる
-ようにするために置いてあります。
+います。`finished_at_epoch` は Netdata が `sycs_backup_age_seconds` として読み、
+「48 時間バックアップが取れていない」で鳴らせるようにするために置いてあります
+（[docs/MONITORING.ja.md](MONITORING.ja.md)）。
 
 失敗した回でも、**成功したファイルはそのまま残ります。** 3 つ取れて 1 つ落ちた
 なら、その 3 つは使えます。`status.json` の `files` に入っているものが、その回に

@@ -23,6 +23,7 @@ from discord.ext import tasks
 from discord.ext.commands import Bot
 from envutil import env_int
 from services import dev_signals
+from services.metrics_reporter import report_once
 from services.earthquake_service import run_earthquake_ws
 from services.news_service import run_news_feeds
 from services.sticky_service import process_pending_stickies
@@ -52,18 +53,19 @@ def _format_status_text(cpu: float, mem: float, latency_raw) -> str:
 
 
 class BackgroundLoops:
-    """register() が定義した4本の tasks.Loop をまとめて返すための入れ物。
+    """register() が定義した5本の tasks.Loop をまとめて返すための入れ物。
 
     ready.py が on_ready の中で .is_running() / .start() を呼べるようにする
     以外の役割は無い（namedtuple でも良いが、フィールド名で読めるようこの形）。
     """
 
-    def __init__(self, update_status, news_feed_task, pending_sticky_task, dev_signal_task):
-        """受け取った4本の tasks.Loop をそのまま同名フィールドへ保持するだけ。"""
+    def __init__(self, update_status, news_feed_task, pending_sticky_task, dev_signal_task, metrics_task):
+        """受け取った5本の tasks.Loop をそのまま同名フィールドへ保持するだけ。"""
         self.update_status = update_status
         self.news_feed_task = news_feed_task
         self.pending_sticky_task = pending_sticky_task
         self.dev_signal_task = dev_signal_task
+        self.metrics_task = metrics_task
 
 
 async def _update_status(bot: Bot, state: EventState) -> None:
@@ -284,6 +286,31 @@ async def _process_dev_signals(bot: Bot, state: EventState) -> None:
             logger.exception("[DEV] シグナル実行エラー %s: %s", task_name, e)
 
 
+async def _report_metrics(bot: Bot) -> None:
+    """Bot の心拍とアプリ固有の瞬間値を Valkey へ流す。
+
+    出すのは「Netdata が自分では測れないもの」だけにしてある。CPU とメモリは
+    Netdata がホスト側で測るので重ねない。ここで psutil を呼ぶと、そのぶん
+    イベントループが止まる。
+
+    レイテンシ（bot.latency）は Discord のゲートウェイまでの往復で、秒で来る。
+    ミリ秒へ直さずそのまま出す（Prometheus の作法では基本単位の秒で出す）。
+    """
+    guilds = bot.guilds if hasattr(bot, "guilds") else []
+    latency = getattr(bot, "latency", float("nan"))
+    gauges = {
+        "bot_guilds": float(len(guilds)),
+        "bot_members_visible": float(sum(getattr(g, "member_count", 0) or 0 for g in guilds)),
+        # 声の接続数。落ちているのに気づきにくい機能なので数を出す。
+        "bot_voice_clients": float(len(getattr(bot, "voice_clients", []) or [])),
+    }
+    # latency は接続前に nan になる。nan を出すと Netdata 側で系列が壊れるので、
+    # 数値として妥当なときだけ載せる。
+    if isinstance(latency, (int, float)) and latency == latency and latency != float("inf"):
+        gauges["bot_gateway_latency_seconds"] = float(latency)
+    await report_once("bot", gauges=gauges)
+
+
 def register(bot: Bot, state: EventState) -> BackgroundLoops:
     """4本の @tasks.loop をクロージャとして定義し、BackgroundLoops にまとめて
     返す（詳細と分割の経緯はモジュール docstring 参照）。ここでは定義する
@@ -326,9 +353,20 @@ def register(bot: Bot, state: EventState) -> BackgroundLoops:
         """開発者シグナルファイルの監視（中身は _process_dev_signals）。"""
         await _process_dev_signals(bot, state)
 
+    # Bot は HTTP サーバーを持たないので、Netdata から直接は測れない。ここで
+    # Valkey へ心拍と数値を置き、管理画面の /metrics がまとめて出す
+    # （services/metrics_registry.py の冒頭）。**このループが止まると
+    # sycs_up{app="bot"} が 0 になる。** つまり Bot の死活そのものになるので、
+    # 他のループと違って BOT_BACKGROUND_WORKER に関係なく常に回す。
+    @tasks.loop(seconds=30)
+    async def metrics_task():
+        """メトリクスの報告（中身は _report_metrics）。"""
+        await _report_metrics(bot)
+
     return BackgroundLoops(
         update_status=update_status,
         news_feed_task=news_feed_task,
         pending_sticky_task=pending_sticky_task,
         dev_signal_task=dev_signal_task,
+        metrics_task=metrics_task,
     )

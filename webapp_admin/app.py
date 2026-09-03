@@ -1,8 +1,9 @@
+import asyncio
 import json
 import logging
 from pathlib import Path
 
-from envutil import env_bool
+from envutil import env_bool, env_float
 from services.log_setup import install_file_logging
 from webapp_admin.core.config import resolve_session_secret, settings_dir
 
@@ -419,6 +420,58 @@ def _register_public_pages(app: FastAPI) -> None:
         return RedirectResponse("/terms", status_code=301)
 
 
+def _register_metrics_endpoint(app: FastAPI) -> None:
+    """Netdata が読む /metrics を登録する。
+
+    _register_public_pages の後・_register_middleware の前に呼ぶ。位置に意味が
+    あるのは、SlowAPIMiddleware より後に足すと既定のレート制限（300/分）が
+    掛かるため。10秒間隔のスクレイプなら足りるが、**Netdata 側の間隔を詰めた
+    ときに黙って 429 になる**のは避けたい。認証の代わりに接続元で絞っている
+    経路なので、回数で守る必要は無い。
+    """
+    from webapp_admin.prometheus_view import metrics_path, render_metrics
+
+    @app.get(metrics_path(), include_in_schema=False)
+    async def metrics_endpoint(request: Request):
+        """Prometheus 形式のメトリクス。許可された接続元だけに返す。
+
+        中身は webapp_admin/prometheus_view.py。ここに直接書かないのは、
+        接続元の判定を単体でテストできる形にしておきたいため。
+        """
+        return await render_metrics(request)
+
+
+def _register_metrics_reporter(app: FastAPI) -> None:
+    """管理画面自身のメトリクスを Valkey へ流す背景タスクを起動する。
+
+    ここで起動するのは管理画面のぶんだけ。bot と web はそれぞれの背景処理から
+    同じ services/metrics_reporter.py を呼ぶ。
+
+    停止時にきちんと cancel して待つ。待たずに落とすと "Task was destroyed but
+    it is pending" が出るうえ、その回のぶんの計数が Valkey へ届かない。
+    """
+    from services.metrics_reporter import report_forever
+
+    @app.on_event("startup")
+    async def _start_metrics_reporter() -> None:
+        """報告ループを Task として動かし、app.state に控える。"""
+        app.state.metrics_reporter_task = asyncio.create_task(
+            report_forever("admin", interval_seconds=env_float("METRICS_REPORT_INTERVAL_SECONDS", 30.0, minimum=1.0))
+        )
+
+    @app.on_event("shutdown")
+    async def _stop_metrics_reporter() -> None:
+        """報告ループを止める。CancelledError はここで受け止める。"""
+        task = getattr(app.state, "metrics_reporter_task", None)
+        if task is None:
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
 def _register_exception_handlers(app: FastAPI) -> None:
     """例外を、画面向け・API 向けの応答へ変換する係を登録する。
 
@@ -562,8 +615,10 @@ def create_app() -> FastAPI:
     # デスクトップ上の該当ウィンドウを開く形へ寄せる。対応表はパネル定義から作る。
     _register_legacy_redirects(app)
     _register_public_pages(app)
+    _register_metrics_endpoint(app)
     _register_exception_handlers(app)
     _register_middleware(app, secret)
+    _register_metrics_reporter(app)
 
     @app.on_event("shutdown")
     async def _close_http_session() -> None:
