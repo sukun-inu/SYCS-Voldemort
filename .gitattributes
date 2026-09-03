@@ -14,3 +14,8 @@
 # `* text=auto` を書いていないのは、既存167ファイルの正規化が一度に走って
 # 巨大な差分になり、git blame が読めなくなるため。必要なものだけ指定する。
 *.sh text eol=lf
+
+# .python-version も LF で取り出す。CRLF になると、読む側（pyenv や
+# Dependabot）が版名を "3.11" として扱い、一致するものが無いと判断する。
+# 中身が1行しか無いぶん、壊れていても目で見て気づけない。
+.python-version text eol=lf
