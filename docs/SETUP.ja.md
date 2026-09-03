@@ -14,6 +14,16 @@ docker compose up -d --build
 - 管理 UI: `5001`
 - Web トラッカー: `8001`
 
+### バックアップ
+
+`postgres-backup` が毎日 4 時（JST）に Postgres の 2 つの DB と、Postgres に
+入っていない `settings.json`・VAPID の鍵を取ります。設定値と戻し方は
+[docs/BACKUP.ja.md](BACKUP.ja.md) にまとめました。
+
+**取ったものはホスト内の `postgres_backups` ボリュームにしかありません。**
+ホストの外へ運ぶ手順は同じ文書の 5. にあります。ここをやらない限り、ディスクが
+死んだ日にバックアップも一緒に死にます。
+
 ---
 
 ---

@@ -94,6 +94,7 @@ modules nothing ever imports still count as 0%, keeping the number honest.
 | [docs/COMMANDS.ja.md](docs/COMMANDS.ja.md) | Slash command reference |
 | [docs/SETUP.ja.md](docs/SETUP.ja.md) | Docker Compose, environment variables, multi-instance setups |
 | [docs/ADMIN.ja.md](docs/ADMIN.ja.md) | Using the admin panel, where data is stored |
+| [docs/BACKUP.ja.md](docs/BACKUP.ja.md) | What is and is not protected, how to restore, restore rehearsal |
 | [docs/TROUBLESHOOTING.ja.md](docs/TROUBLESHOOTING.ja.md) | Common problems, directory overview |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to work on this repository (summary; full guide in Japanese) |
 

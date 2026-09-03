@@ -72,6 +72,65 @@ services:
     volumes:
       - shared_secrets:/shared:ro
 
+  # Postgres の日次バックアップ。中身は docker/postgres-backup.sh（なぜ YAML の
+  # 中に直接書かなかったか、なぜ専用イメージを使わないかは、そちらの冒頭に書いた）。
+  #
+  # 取ったものは postgres_backups ボリュームに入る。**ホストの外へ運ぶ仕組みは
+  # ここには無い。** 同じディスクにしか無いバックアップは、ディスクが死んだ日に
+  # 一緒に死ぬ。ボリュームを別の場所へ持ち出す手順は docs/BACKUP.ja.md に書いた。
+  postgres-backup:
+    image: postgres:16-alpine
+    container_name: sycs-voldemort-postgres-backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-secret-init:
+        condition: service_completed_successfully
+      postgres-user-state-init:
+        condition: service_completed_successfully
+    # postgres イメージの既定の entrypoint（docker-entrypoint.sh）は「サーバーを
+    # 起動する」ためのものなので、command だけ差し替えても意図通りにならない。
+    entrypoint: ["/bin/sh", "/usr/local/bin/postgres-backup.sh"]
+    environment:
+      - TZ=Asia/Tokyo
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-metal_user}
+      - POSTGRES_DB=${POSTGRES_DB:-metal_prices}
+      - USER_STATE_POSTGRES_DB=${USER_STATE_POSTGRES_DB:-user_state_audit}
+      - POSTGRES_PASSWORD_FILE=/shared/postgres_password
+      - BACKUP_DIR=/backups
+      # 14日分。1日あたりのダンプは3ファイル（本体・利用者状態・ロール）。
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-14}
+      - BACKUP_HOUR_JST=${BACKUP_HOUR_JST:-4}
+      # if-stale / always / never。既定は if-stale で、最新のダンプが
+      # BACKUP_STALE_HOURS より古いときだけ起動時にも1本取る。
+      - BACKUP_RUN_ON_START=${BACKUP_RUN_ON_START:-if-stale}
+      - BACKUP_STALE_HOURS=${BACKUP_STALE_HOURS:-20}
+      # settings.json（app_data）と VAPID の鍵（shared_secrets）も一緒に取る。
+      # どちらも Postgres に入っておらず、失うと作り直せない（詳細は
+      # docker/postgres-backup.sh の dump_files のコメント）。
+      - BACKUP_FILES=${BACKUP_FILES:-true}
+      - DATA_DIR=/app/data
+      - SECRETS_DIR=/shared
+    volumes:
+      - postgres_backups:/backups
+      - shared_secrets:/shared:ro
+      # 読み取り専用で付ける。バックアップを取る側が書けてしまう必要は無く、
+      # 付け間違いで本番の設定を壊す余地を残さない。
+      - app_data:/app/data:ro
+      # スクリプトは読み取り専用で渡す。イメージに焼かないのは、直したときに
+      # docker build をせず compose の再作成だけで反映させたいため。
+      - ./docker/postgres-backup.sh:/usr/local/bin/postgres-backup.sh:ro
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 64
+    mem_limit: 256m
+
   sycs-voldemort:
     build:
       context: .
@@ -294,3 +353,7 @@ volumes:
   postgres_data:
   shared_secrets:
   app_data:
+  # バックアップは postgres_data と別のボリュームに置く。同じボリュームに
+  # 入れると、消える理由（ボリューム破損・誤った docker volume rm）が
+  # そのままバックアップにも当たるので、あってもなくても同じになる。
+  postgres_backups:
