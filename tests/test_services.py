@@ -446,18 +446,68 @@ class TrustedProxyTests(unittest.TestCase):
 
         self.log_setup = log_setup
 
-    def test_the_default_trusts_only_the_loopback(self):
-        """既定はループバックのみを信頼すること。
+    def test_the_default_covers_the_docker_bridge_but_not_the_lan(self):
+        """既定はループバック＋Docker のブリッジ帯域。LAN は入れないこと。
 
-        `*` にすると誰の X-Forwarded-For でも信じる。以前 web_main.py が
-        そうなっていた。
+        ループバックだけでは**足りなかった。** compose 構成では、プロキシから
+        見た接続元は Docker のブリッジゲートウェイ（172.19.0.1 など）になる。
+        127.0.0.1/32 しか信頼していなかったので uvicorn が X-Forwarded-For を
+        捨て、**アクセスログが 172.19.0.1 で埋まっていた**（直す前と同じ状態）。
+
+        LAN でよく使う 192.168/16 と 10/8 は入れない。このアプリはポートを
+        公開するので、同じ LAN から直接叩いて偽装できてしまう。
         """
+        from uvicorn.middleware.proxy_headers import _TrustedHosts
+
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("TRUSTED_PROXY_CIDRS", None)
             allow = self.log_setup.trusted_proxies()
 
-        self.assertEqual(allow, "127.0.0.1/32,::1/128")
         self.assertNotIn("*", allow)
+        hosts = _TrustedHosts(allow)
+        self.assertIn("172.19.0.1", hosts)  # Docker のブリッジゲートウェイ
+        self.assertIn("172.18.0.5", hosts)  # 同じネットワーク上の別コンテナ
+        self.assertIn("127.0.0.1", hosts)
+        self.assertNotIn("192.168.1.5", hosts)
+        self.assertNotIn("10.1.2.3", hosts)
+        self.assertNotIn("8.8.8.8", hosts)
+
+    def test_an_ignored_forwarded_header_says_what_to_add(self):
+        """信頼していない相手からのヘッダを捨てたら、1回だけ警告を出すこと。
+
+        **この設定の間違いは、黙って元に戻る形で失敗する。** ヘッダが
+        捨てられるだけで例外も出ず、ログにはプロキシのIPが並び続ける。
+        実際に「直したはずなのに変わらない」状態になった。何を足せばよいかを
+        名指しで出す。
+
+        同じ相手では1回しか出さない。毎リクエスト出すと本当の異常が埋もれる。
+        """
+        self.log_setup._WARNED_PEERS.clear()
+        self.addCleanup(self.log_setup._WARNED_PEERS.clear)
+
+        with self.assertLogs("services.log_setup", level="WARNING") as captured:
+            self.log_setup.warn_if_forwarded_ignored("172.19.0.1", "203.0.113.9")
+        line = captured.output[0]
+        self.assertIn("172.19.0.1", line)
+        self.assertIn("TRUSTED_PROXY_CIDRS", line)
+
+        # 2回目は出さない（assertLogs は1行も出ないと落ちる）
+        with self.assertRaises(AssertionError):
+            with self.assertLogs("services.log_setup", level="WARNING"):
+                self.log_setup.warn_if_forwarded_ignored("172.19.0.1", "203.0.113.9")
+
+    def test_no_warning_when_there_is_no_forwarded_header(self):
+        """ヘッダが来ていない相手には警告しないこと。
+
+        直に叩いている利用者は普通に居る。**それを毎回「設定が間違って
+        いる」と言うと、本当に間違っているときに読まれなくなる。**
+        """
+        self.log_setup._WARNED_PEERS.clear()
+        self.addCleanup(self.log_setup._WARNED_PEERS.clear)
+
+        with self.assertRaises(AssertionError):
+            with self.assertLogs("services.log_setup", level="WARNING"):
+                self.log_setup.warn_if_forwarded_ignored("203.0.113.9", None)
 
     def test_the_same_env_var_as_the_rate_limiter_is_used(self):
         """レート制限と同じ環境変数を読むこと。

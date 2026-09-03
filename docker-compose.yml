@@ -186,7 +186,7 @@ services:
       # リバースプロキシ経由だと接続元が 127.0.0.1 になる。ここに書いた帯域から
       # 来たときだけ X-Forwarded-For を信じ、本当のアクセス元をログに残す。
       # **広げると、外から直接ヘッダを偽装するだけで別人になりすませる。**
-      - TRUSTED_PROXY_CIDRS=${TRUSTED_PROXY_CIDRS:-127.0.0.1/32,::1/128}
+      - TRUSTED_PROXY_CIDRS=${TRUSTED_PROXY_CIDRS:-127.0.0.1/32,::1/128,172.16.0.0/12}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_DB=${POSTGRES_DB:-metal_prices}
@@ -270,7 +270,7 @@ services:
       - PUSH_ALLOWED_ENDPOINT_SUFFIXES=${PUSH_ALLOWED_ENDPOINT_SUFFIXES:-}
       - TRUST_CF_HEADERS=${TRUST_CF_HEADERS:-false}
       - REQUIRE_CF_CONNECTING_IP=${REQUIRE_CF_CONNECTING_IP:-false}
-      - TRUSTED_PROXY_CIDRS=${TRUSTED_PROXY_CIDRS:-127.0.0.1/32,::1/128}
+      - TRUSTED_PROXY_CIDRS=${TRUSTED_PROXY_CIDRS:-127.0.0.1/32,::1/128,172.16.0.0/12}
       - LOG_RETENTION_DAYS=${LOG_RETENTION_DAYS:-3650}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-metals.kawasaki-n3t.f5.si,localhost,127.0.0.1,::1}
       # 起動時テスト機能（HTTP公開なし・環境変数指定時のみ）
