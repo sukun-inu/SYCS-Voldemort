@@ -131,37 +131,80 @@ function fitCanvas(canvas, height) {
   return { ctx, width, height };
 }
 
-/** 時間目盛り。表示している範囲だけ描く。 */
+/** 操作の説明。畳んでおく。
+
+    以前は本文としてキャンバスの下に常時置いていたが、8行の小さな文字が
+    毎回目に入るだけで、**読むのは最初の1回**である。畳んでおけば、
+    要るときに開ける場所が1つあるという情報だけが残る。 */
+function helpPanel() {
+  const item = (key, text) => el("div", { class: "daw-help-row" },
+    el("kbd", { class: "daw-key", text: key }),
+    el("span", { text }));
+
+  return el("details", { class: "daw-help" },
+    el("summary", { text: "操作のしかた" }),
+    el("div", { class: "daw-help-grid" },
+      item("Space", "再生／停止"),
+      item("← →", "移動（Shift で10秒）"),
+      item("＋ −", "拡大・縮小"),
+      item("[ ]", "再生位置を区間の端にする"),
+      item("M / S", "ミュート／ソロ"),
+      item("ドラッグ", "時間目盛りを横にドラッグすると区間になる")),
+    el("p", { class: "daw-help-note", text:
+      "区間は端をつまんで伸縮でき、その範囲だけ書き出せます。秒の単位で合わせたい" +
+      "ときは「区間」の欄に直接入力してください。フェーダーはダブルクリックで 0dB、" +
+      "つまみは上下ドラッグでパン。トラックの名前をドラッグすると並べ替えられます。" }),
+    el("p", { class: "daw-help-note", text:
+      "各トラックは同じ時間軸に揃えてあるので、途中から参加した人は冒頭が、" +
+      "途中で抜けた人は末尾が無音になります。" }));
+}
+
+/** 時間目盛り。表示している範囲だけ描く。
+
+    主目盛り（ラベル付き・長い線）と副目盛り（短い線）を分ける。線の長さが
+    1種類しかないと、**ラベルとラベルのあいだのどこを見ているのかが分からない。**
+    副目盛りは主目盛りを5等分した位置に置く。 */
 function drawRuler(canvas, view) {
   const { ctx, width, height } = fitCanvas(canvas, RULER_HEIGHT);
   ctx.clearRect(0, 0, width, height);
 
-  const ink = cssVar("--fg-subtle", "#8c959f");
-  const rule = cssVar("--border-muted", "#dce1e6");
+  const ink = cssVar("--fg-muted", "#57606a");
+  const rule = cssVar("--border", "#d0d7de");
+  const faint = cssVar("--border-muted", "#dce1e6");
   const step = tickStep(view.pxPerSecond);
-  const first = Math.floor(view.start / step) * step;
+  const minor = step / 5;
+  const first = Math.floor(view.start / minor) * minor;
 
-  ctx.font = "10px ui-monospace, monospace";
-  ctx.textBaseline = "bottom";
+  ctx.font = "600 10px ui-monospace, SFMono-Regular, monospace";
+  ctx.textBaseline = "alphabetic";
 
-  for (let t = first; t <= view.end + step; t += step) {
+  ctx.beginPath();
+  ctx.strokeStyle = faint;
+  for (let t = first; t <= view.end + step; t += minor) {
+    if (t < 0) continue;
+    if (Math.abs(t % step) < minor / 2) continue;  // 主目盛りは下で引く
+    const x = Math.round((t - view.start) * view.pxPerSecond) + 0.5;
+    if (x < 0 || x > width) continue;
+    ctx.moveTo(x, height - 5);
+    ctx.lineTo(x, height);
+  }
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.strokeStyle = rule;
+  const labels = [];
+  for (let t = Math.floor(view.start / step) * step; t <= view.end + step; t += step) {
     if (t < 0) continue;
     const x = Math.round((t - view.start) * view.pxPerSecond) + 0.5;
-    if (x < -40 || x > width + 40) continue;
-
-    // 主目盛りと副目盛りで長さを変える
-    const major = Math.abs(t % (step * 5)) < 1e-6;
-    ctx.strokeStyle = rule;
-    ctx.beginPath();
-    ctx.moveTo(x, major ? height - 14 : height - 7);
+    if (x < -60 || x > width + 60) continue;
+    ctx.moveTo(x, height - 11);
     ctx.lineTo(x, height);
-    ctx.stroke();
-
-    if (major || step * view.pxPerSecond >= 110) {
-      ctx.fillStyle = ink;
-      ctx.fillText(formatTime(t), x + 4, height - 15);
-    }
+    labels.push([x, t]);
   }
+  ctx.stroke();
+
+  ctx.fillStyle = ink;
+  labels.forEach(([x, t]) => ctx.fillText(formatTime(t), x + 4, height - 14));
 }
 
 /* 索引の波形は base64 の1バイト列（0〜255）で来る。素の JSON 配列だと同じ
@@ -235,42 +278,33 @@ function drawWaveform(canvas, track, view) {
   if (!track.peaks.length) return;
 
   const { tops, cores } = columnise(track, view, width);
-  const usable = height - 10;
-  const half = usable / 2;
-  ctx.globalAlpha = track.dimmed ? 0.25 : 1;
+  const half = (height - 12) / 2;
+  const alpha = track.dimmed ? 0.3 : 1;
 
-  /* 濃淡の2層で描く。薄い層が山、濃い層が実効値。
-     山だけを塗ると、人の声は瞬間的な山が揃いやすいので**どこも同じ高さに
-     見え**、密度の差が読めない。DAW の波形が2層に見えるのはこのため。
-     1画素ずつ縦線で描く（多角形を1本の path で塗ると、隣り合う画素の
-     あいだが補間されて山が鈍る）。 */
+  /* 濃淡の2層を、1画素ずつの縦線で塗る。
+
+     薄い層が山、濃い層が実効値。山だけを塗ると、人の声は瞬間的な山が
+     揃いやすいので**どこも同じ高さに見え**、密度の差が読めない。
+
+     無音の画素でも 1px は必ず引く。飛ばすと帯が途切れ、**波形ではなく
+     棒の羅列に見える**（前はここで飛ばしていた）。声のあいだの間合いは、
+     途切れではなく細い背骨として見えるのが正しい。 */
   ctx.fillStyle = track.color;
-  ctx.globalAlpha *= 0.42;
+
+  /* 山の層は 0.45。これより薄いと、暗い地の上では**汚れのように黒く**沈み、
+     明るい地の上では消える。濃い層（実効値）との差が付いて、かつどちらも
+     地から浮いて見える範囲がここ。 */
+  ctx.globalAlpha = alpha * 0.45;
   for (let x = 0; x < width; x += 1) {
     const h = tops[x] * half;
-    if (h <= 0) continue;
-    ctx.fillRect(x, middle - h, 1, Math.max(1, h * 2));
+    ctx.fillRect(x, middle - h, 1, h * 2 + 1);
   }
 
-  ctx.globalAlpha = track.dimmed ? 0.25 : 1;
+  ctx.globalAlpha = alpha;
   for (let x = 0; x < width; x += 1) {
     const h = cores[x] * half;
-    if (h <= 0) continue;
-    ctx.fillRect(x, middle - h, 1, Math.max(1, h * 2));
+    ctx.fillRect(x, middle - h, 1, h * 2 + 1);
   }
-
-  /* 音のある区間の輪郭。潰れて見えないほど小さい音でも、
-     線が1本あれば「そこに音がある」ことは分かる。 */
-  ctx.globalAlpha = track.dimmed ? 0.35 : 0.9;
-  ctx.strokeStyle = track.color;
-  ctx.beginPath();
-  for (let x = 0; x < width; x += 1) {
-    if (tops[x] <= 0) continue;
-    const y = middle - tops[x] * half;
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + 1, y);
-  }
-  ctx.stroke();
   ctx.globalAlpha = 1;
 }
 
@@ -1331,15 +1365,7 @@ export async function createMixer(container, options = {}) {
        regionRow,
        arrange,
        consoleView,
-       el("p", { class: "field-help", text:
-         "スペースで再生／停止、←→ で移動、＋− で拡大。M＝ミュート、S＝ソロ。" +
-         "フェーダーはダブルクリックで 0dB、つまみは上下ドラッグでパン。" +
-         "時間目盛りを横にドラッグするとループ区間になり、その範囲だけ書き出せます。" +
-         "区間は端をつまんで伸縮でき、[ ] で再生位置を端にできます。秒の単位で" +
-         "合わせたいときは「区間」の欄に直接入力してください。" +
-         "トラックの名前をドラッグすると並べ替えられます。" +
-         "各トラックは同じ時間軸に揃えてあるので、途中から参加した人は冒頭が、" +
-         "途中で抜けた人は末尾が無音になります。" }))
+       helpPanel())
   );
 
   const onResize = () => layout();
