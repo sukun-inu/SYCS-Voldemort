@@ -4,6 +4,7 @@ from pathlib import Path
 
 from bot_setup import create_bot, setup_events
 from commands import register_all_commands
+from commands.activity_log import install_command_activity_logging
 from commands.interaction_utils import install_global_app_command_error_handler
 from config import DISCORD_BOT_TOKEN
 from envutil import env_path
@@ -28,6 +29,9 @@ async def main():
     setup_events(bot)
     loaded_modules = register_all_commands(bot)
     install_global_app_command_error_handler(bot)
+    # 打たれたコマンドを1行ずつ残す。172個へ個別に書き足す方式は次に足す
+    # コマンドで必ず忘れるので、入口で1箇所にしてある。
+    install_command_activity_logging(bot)
 
     logging.getLogger(__name__).info(
         "Slash command modules loaded: %s",

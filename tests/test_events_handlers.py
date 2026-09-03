@@ -52,6 +52,9 @@ class _FakeBot:
     ここもそれだけを持たせる。テストごとに必要な属性は個別に足す。
     """
 
+    # on_ready が起動サマリで読む。本物の Bot は常に持っている。
+    guilds: list = []
+
     def event(self, coro):
         setattr(self, coro.__name__, coro)
         return coro

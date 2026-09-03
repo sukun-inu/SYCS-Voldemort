@@ -3,6 +3,8 @@ from collections.abc import Sequence
 
 import discord
 from discord import app_commands
+
+from commands.activity_log import describe, elapsed_ms
 from discord.ext.commands import Bot
 
 from config import ADMIN_SITE_URL, METALS_SITE_URL
@@ -191,18 +193,27 @@ def install_global_app_command_error_handler(bot: Bot) -> None:
         if isinstance(error, app_commands.CommandNotFound):
             return
 
+        # 成功したコマンドは activity_log が1行残す。失敗もここで同じ形にして
+        # おかないと、**打たれた記録が成功したものだけになる。** 断られた
+        # 回数が見えないと、権限設定の誤りに気づけない。
+        name = getattr(interaction.command, "qualified_name", "?")
+        where = describe(interaction)
+        took = elapsed_ms(interaction)
+
         if isinstance(error, app_commands.MissingPermissions):
+            logger.info("[CMD] /%s %s 権限なしで拒否 %dms", name, where, took)
             await send_ephemeral(interaction, "❌ 余のコマンドを使う権限が貴様にはない。")
             return
 
         if isinstance(error, app_commands.CheckFailure):
+            logger.info("[CMD] /%s %s 条件を満たさず拒否 %dms", name, where, took)
             await send_ephemeral(interaction, "❌ 条件を満たしておらぬ。出直してこい。")
             return
 
         if isinstance(error, app_commands.CommandInvokeError):
-            logger.exception("スラッシュコマンド実行エラー: %s", error.original)
+            logger.exception("[CMD] /%s %s 実行エラー %dms: %s", name, where, took, error.original)
             await send_ephemeral(interaction, "❌ 余の力をもってしても処理できなかった。しばし待って試せ。")
             return
 
-        logger.exception("スラッシュコマンドエラー: %s", error)
+        logger.exception("[CMD] /%s %s エラー %dms: %s", name, where, took, error)
         await send_ephemeral(interaction, "❌ 予期せぬ障害が生じた。しばし待て。")

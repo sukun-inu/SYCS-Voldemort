@@ -51,7 +51,17 @@ def register(bot: Bot, state: EventState, loops: BackgroundLoops) -> None:
         dev_signal_taskは常時起動）。
         """
         logger.info("[BOT] Logged in as %s", bot.user)
-        await bot.tree.sync()
+        synced = await bot.tree.sync()
+        # 何を持って上がったのかを1行に出す。以前は "Logged in as X" だけで、
+        # **コマンドが何個 Discord に載ったのか、どのサーバーに居るのかが
+        # ログから分からなかった。** 同期に失敗して0個になっていても、
+        # 「コマンドが出ない」と言われるまで気づけない。
+        logger.info(
+            "[BOT] 同期したコマンド %d 個 / 参加ギルド %d / 見えている人 %d",
+            len(synced),
+            len(bot.guilds),
+            sum(g.member_count or 0 for g in bot.guilds),
+        )
         if not loops.update_status.is_running():
             loops.update_status.start()
         if not loops.dev_signal_task.is_running():

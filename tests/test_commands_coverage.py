@@ -44,6 +44,12 @@ def make_interaction(*, administrator: bool = True, guild: bool = True):
             "user",
             "client",
             "channel",
+            # 実行のログ（commands/activity_log.py）が読む3つ。本物の
+            # Interaction は必ず持っているので、帳票にも揃えておく。
+            "channel_id",
+            "id",
+            "command",
+            "type",
             "response",
             "followup",
         ]
@@ -55,6 +61,10 @@ def make_interaction(*, administrator: bool = True, guild: bool = True):
     interaction.user.voice = None
     interaction.client = Mock()
     interaction.channel = Mock(mention="#general")
+    interaction.channel_id = 555
+    interaction.id = 123456789
+    interaction.command = Mock(qualified_name="test cmd")
+    interaction.type = discord.InteractionType.application_command
 
     done = {"value": False}
     response = Mock()
@@ -1459,6 +1469,156 @@ class BindPermissionErrorHandlerTests(unittest.TestCase):
         ):
             asyncio.run(self.cmd.error_handler(interaction, RuntimeError("想定外")))
         self.assertIn("何かが邪魔をした", sent["message"])
+
+
+class CommandActivityLogTests(unittest.TestCase):
+    """打たれたスラッシュコマンドが、プロセスのログに残ること。
+
+    `commands/` には172個の関数があるのに、ログを出しているのは**4箇所**
+    だけだった。**/record start も /log channel も、打たれた事実が
+    bot.log に1行も残らない。** 「さっき誰かが何かした直後からおかしい」
+    という報告に対して、手がかりが無かった。
+
+    一部のコマンドは log_action() で Discord の監査チャンネルへ流している
+    が、あれは**設定したギルドにしか出ない**うえ Discord 側に消される。
+
+      - 成功したコマンドが1行残ること（名前・ギルド・ユーザー・所要ms）
+      - **引数の中身は書かないこと**
+      - 断られたコマンドも残ること
+      - 172個へ個別に足すのではなく、入口で1箇所にしていること
+      - 完了イベントが来なかった分が溜まり続けないこと
+    """
+
+    def setUp(self):
+        from commands import activity_log
+
+        self.activity_log = activity_log
+        self.activity_log._STARTED.clear()
+        self.addCleanup(self.activity_log._STARTED.clear)
+
+    def _listeners(self):
+        """install_command_activity_logging が足した listener を名前で拾う。"""
+        added = {}
+        bot = Mock()
+        bot.add_listener = lambda coro, name: added.__setitem__(name, coro)
+        self.activity_log.install_command_activity_logging(bot)
+        return added
+
+    def test_it_hooks_the_entry_point_rather_than_each_command(self):
+        """コマンドごとではなく、入口の2つのイベントに乗ること。
+
+        172個へ1行ずつ足す方式は、**次に足すコマンドで必ず忘れる。**
+        `@bot.event` ではなく add_listener を使うのは、同じ名前の既存
+        ハンドラを置き換えてしまわないため。
+        """
+        added = self._listeners()
+
+        self.assertEqual(set(added), {"on_interaction", "on_app_command_completion"})
+
+    def test_a_finished_command_leaves_one_line(self):
+        """成功したコマンドが、名前・ギルド・ユーザー・所要ミリ秒で1行残ること。"""
+        added = self._listeners()
+        interaction, _ = make_interaction()
+        interaction.id = 42
+        command = Mock(qualified_name="record start")
+
+        with self.assertLogs(self.activity_log.logger, level="INFO") as captured:
+            asyncio.run(added["on_interaction"](interaction))
+            asyncio.run(added["on_app_command_completion"](interaction, command))
+
+        line = captured.output[0]
+        self.assertIn("/record start", line)
+        self.assertIn("guild=999", line)
+        self.assertIn("tester(1)", line)
+        self.assertIn("ok", line)
+        self.assertRegex(line, r"\d+ms")
+
+    def test_the_arguments_are_not_written_to_disk(self):
+        """引数の中身は書かないこと。
+
+        読み上げの辞書やチャットの本文がそのまま**10年ぶんディスクに残る**
+        （保管期間は services/log_setup.py）。値まで要る操作は log_action で
+        監査チャンネルへ出している。
+        """
+        added = self._listeners()
+        interaction, _ = make_interaction()
+        command = Mock(qualified_name="tts dict add")
+
+        with self.assertLogs(self.activity_log.logger, level="INFO") as captured:
+            asyncio.run(added["on_app_command_completion"](interaction, command))
+
+        line = captured.output[0]
+        self.assertIn("/tts dict add", line)
+        # 引数を取り出そうとした形跡が無いこと（値が入る余地を作らない）
+        self.assertLess(len(line), 200, line)
+
+    def test_only_application_commands_are_timed(self):
+        """ボタンやモーダルの操作では時刻を控えないこと。
+
+        押すたびに控えると、**完了イベントの来ない分が溜まり続ける。**
+        """
+        import discord
+
+        added = self._listeners()
+        interaction, _ = make_interaction()
+        interaction.id = 7
+        interaction.type = discord.InteractionType.component
+
+        asyncio.run(added["on_interaction"](interaction))
+
+        self.assertIsNone(self.activity_log._STARTED.get(7))
+
+    def test_the_pending_marks_expire_instead_of_piling_up(self):
+        """完了イベントが来なかった分は、期限で落ちること。
+
+        コマンドが失敗すると完了イベントは来ない。控えを消す口が無いと、
+        **落ちた回数だけメモリが増え続ける。** 応答期限は15分なので、
+        それを過ぎたものはもう来ない。
+        """
+        cache = self.activity_log._STARTED
+
+        self.assertGreaterEqual(cache.ttl, 15 * 60)
+        self.assertLessEqual(cache.max_entries, 8192)
+
+    def test_the_startup_path_actually_installs_it(self):
+        """main.py が起動時に組み込んでいること。
+
+        この仕組みは**入口で1箇所**にまとめてあるので、その1箇所を呼び
+        忘れると**全コマンドのログが丸ごと消える。** 例外も出ないし、
+        コマンドは普通に動くので、bot.log を見るまで気づけない。
+        原文を読んで確かめる（起動そのものは Discord に繋がないと通せない）。
+        """
+        source = Path("main.py").read_text(encoding="utf-8")
+        lines = [line for line in source.splitlines() if not line.lstrip().startswith("#")]
+        body = chr(10).join(lines)
+
+        self.assertIn("from commands.activity_log import install_command_activity_logging", body)
+        self.assertIn("install_command_activity_logging(bot)", body)
+        # コマンドが出揃ったあとに入れること（登録前だと拾い漏らす）
+        self.assertLess(body.index("register_all_commands(bot)"), body.index("install_command_activity_logging(bot)"))
+
+    def test_a_refused_command_is_logged_too(self):
+        """権限で断られたコマンドも1行残ること。
+
+        成功したものだけを残すと、**断られた回数が見えない。** 権限設定を
+        間違えていても「使えない」と言われるまで気づけない。
+        """
+        from commands.interaction_utils import install_global_app_command_error_handler
+        from discord import app_commands
+
+        handler = {}
+        bot = Mock()
+        bot.tree.error = lambda fn: handler.setdefault("fn", fn)
+        install_global_app_command_error_handler(bot)
+
+        interaction, _ = make_interaction()
+        interaction.command = Mock(qualified_name="log channel")
+        with self.assertLogs("commands.interaction_utils", level="INFO") as captured:
+            asyncio.run(handler["fn"](interaction, app_commands.MissingPermissions(["administrator"])))
+
+        line = "\n".join(captured.output)
+        self.assertIn("/log channel", line)
+        self.assertIn("権限なしで拒否", line)
 
 
 class GlobalAppCommandErrorHandlerTests(unittest.TestCase):
