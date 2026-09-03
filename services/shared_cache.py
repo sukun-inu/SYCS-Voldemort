@@ -184,6 +184,74 @@ class SharedCache:
         result = await self._run(_incr)
         return None if result is None else int(result)
 
+    async def sliding_window_hit(
+        self,
+        namespace: str,
+        key: str,
+        *,
+        window_seconds: float,
+        now: float,
+        member: str,
+    ) -> int | None:
+        """1件記録して、直近 window_seconds に入っている件数を返す（失敗なら None）。
+
+        ■ なぜ ZSET なのか
+
+        レート制限に必要なのは「直近N秒に何件来たか」で、素直な INCR + EXPIRE では
+        固定窓になる。固定窓は窓の切り替わりをまたいで上限の2倍まで通せる
+        （窓の末尾で上限ぶん、切り替わった直後にもう一度上限ぶん）。
+        ソート済み集合に時刻を入れて古いものを落とす形なら、プロセス内の
+        deque と同じ移動窓になり、置き換えても振る舞いが変わらない。
+
+        ■ 原子性について
+
+        古いものを落とす・数える・足す、をパイプラインで1往復にまとめている。
+        Valkey 側では1つずつ実行されるので、**同時に来た2件が互いの追加を
+        見ないまま数える余地は残る**（上限付近で数件多く通りうる）。厳密にする
+        には Lua を持ち込むことになるが、レート制限の目的は「桁で抑える」ことで、
+        1件の誤差のために本番へスクリプトを1つ増やす価値は無いと判断した。
+
+        member は同じ時刻の複数リクエストを別物として数えるための識別子。
+        **時刻だけを member にしてはいけない。** 同じミリ秒に来た2件が同じ
+        メンバーとして上書きされ、1件しか数えられなくなる。
+        """
+        if not self.available:
+            return None
+        composed = self._compose_key(namespace, key)
+        cutoff = now - max(0.001, float(window_seconds))
+
+        async def _hit(client: Any) -> int:
+            """古いものを落として数え、今回のぶんを足す（1往復）。"""
+            pipe = client.pipeline(transaction=False)
+            pipe.zremrangebyscore(composed, "-inf", cutoff)
+            pipe.zcard(composed)
+            pipe.zadd(composed, {member: now})
+            # 期限を毎回付け直す。ここは INCR と違って延ばして構わない
+            # （窓の中身は score で判定しているので、鍵の寿命は掃除のためだけ）。
+            pipe.expire(composed, int(max(1.0, float(window_seconds))) + 1)
+            results = await pipe.execute()
+            # zcard の結果は「今回のぶんを足す前」の件数。呼び出し側は
+            # 「自分を含めた件数」で上限と比べるので、1 を足して返す。
+            return int(results[1]) + 1
+
+        result = await self._run(_hit)
+        return None if result is None else int(result)
+
+    async def sliding_window_undo(self, namespace: str, key: str, member: str) -> None:
+        """sliding_window_hit で足した1件を取り消す。
+
+        **上限を超えて断ったリクエストは、窓に残してはいけない。** 残すと
+        「断られたリクエストが窓を押し続ける」形になり、叩き続けている相手が
+        いつまでも解除されない。元のプロセス内実装は上限に達した時点で
+        deque へ積まずに返していたので、そこと振る舞いを揃える。
+
+        取り消しに失敗しても何もしない。窓の寿命（EXPIRE）でいずれ消える。
+        """
+        if not self.available:
+            return
+        composed = self._compose_key(namespace, key)
+        await self._run(lambda c: c.zrem(composed, member))
+
     async def scan_values(self, namespace: str) -> dict[str, str]:
         """名前空間の中身を「鍵（接頭辞を外したもの）→ 値」で全部返す。
 
