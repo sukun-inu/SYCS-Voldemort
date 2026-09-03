@@ -25,7 +25,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 # services/* は読み込み時に SETTINGS_DIR を解決するため、import より前に差し替える。
 os.environ.setdefault("SETTINGS_DIR", tempfile.mkdtemp(prefix="user-state-test-"))
@@ -649,6 +649,83 @@ class RecordUserStateEventTests(_DbBackedTestCase):
         )
         detail = _run(uss.get_user_state_detail(1, 10))
         self.assertEqual(len(detail["events"][0]["reason"]), 2000)
+
+    def test_a_failing_retention_cleanup_does_not_lose_the_event(self):
+        """保持期間の掃除が失敗しても、イベントは記録すること。
+
+        掃除は「古い履歴を捨てる」だけの付随処理で、本筋は目の前のイベントを
+        残すこと。ここで例外が抜けると、**掃除が失敗している間じゅう
+        BAN も入退室も1件も残らない。** 掃除が壊れるのは DB が不調なときだけ
+        なので、平常時のテストでは再現しない。
+
+        109行あるこの関数を割る前に押さえる
+        （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+        """
+        with (
+            patch.object(uss, "_cleanup_old_events_if_needed", AsyncMock(side_effect=RuntimeError("掃除が落ちた"))),
+            self.assertLogs(uss.logger, level="ERROR"),
+        ):
+            _run(uss.record_user_state_event(guild_id=1, user_id=10, event_type="member_join", status_after="active"))
+
+        detail = _run(uss.get_user_state_detail(1, 10))
+        self.assertEqual(len(detail["events"]), 1)
+
+    def test_the_timeout_deadline_is_kept_in_the_event_payload(self):
+        """タイムアウトの期限を、履歴の payload にも残すこと。
+
+        最新状態（UserStateCurrent）にも入るが、そちらは**次のイベントで
+        上書きされる**。「いつまでの制限だったか」を後から辿れるのは履歴側
+        だけなので、ここが抜けると解除後に何も分からなくなる。
+        """
+        until = datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc)
+        _run(
+            uss.record_user_state_event(
+                guild_id=1,
+                user_id=10,
+                event_type="member_timeout",
+                status_after="timeout",
+                timed_out_until=until,
+            )
+        )
+
+        detail = _run(uss.get_user_state_detail(1, 10))
+        self.assertEqual(detail["events"][0]["payload"]["timed_out_until"], until.isoformat())
+
+    def test_a_user_with_only_one_member_attribute_is_not_treated_as_a_member(self):
+        """roles と guild_permissions の**両方**が揃ってはじめて Member 扱いにすること。
+
+        片方だけで通すと、権限を持たない相手に対して権限の一覧を組み立てに
+        行き、payload に空の abilities が入る。**役職が無いのか、調べられ
+        なかったのかが区別できなくなる。** webhook 経由の投稿者など、
+        属性が欠けた相手は実際に来る。
+        """
+        half = SimpleNamespace(id=10, name="taro", display_name="Taro", bot=False, roles=[])
+        _run(
+            uss.record_user_state_event(
+                guild_id=1, user_id=10, event_type="member_join", status_after="active", user=half
+            )
+        )
+
+        payload = _run(uss.get_user_state_detail(1, 10))["events"][0]["payload"]
+        self.assertNotIn("roles", payload)
+        self.assertNotIn("abilities", payload)
+
+    def test_the_history_and_the_current_state_are_written_together(self):
+        """履歴と最新状態は、同じトランザクションで書くこと。
+
+        別々にコミットすると、あいだで落ちたときに**履歴には残っているのに
+        最新状態が古いまま**という食い違いが残る。管理画面はこの2つを並べて
+        出すので、見た人はどちらを信じるか分からない。
+
+        最新状態の更新だけを落として、履歴も残っていないことを見る。
+        """
+        with (
+            patch.object(uss, "_update_current_state_fields", Mock(side_effect=RuntimeError("更新が落ちた"))),
+            self.assertLogs(uss.logger, level="ERROR"),
+        ):
+            _run(uss.record_user_state_event(guild_id=1, user_id=10, event_type="member_join", status_after="active"))
+
+        self.assertIsNone(_run(uss.get_user_state_detail(1, 10)), "履歴だけが残っている")
 
     def test_transient_db_error_is_retried_after_self_heal_and_event_is_recorded(self):
         """コミット時に1回だけ DB エラーが起きても、自己修復してリトライし記録が完了することを確認する。
