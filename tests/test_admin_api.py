@@ -1138,7 +1138,7 @@ class RecordingMixerApiTests(unittest.TestCase):
         self.assertAlmostEqual(manifest["duration_seconds"], 2.0, delta=0.1)
         self.assertEqual(len(manifest["stems"]), 2)
         self.assertEqual({s["name"] for s in manifest["stems"]}, {"すずき", "たなか"})
-        self.assertTrue(all(s["peaks"] for s in manifest["stems"]))
+        self.assertTrue(all(s["peaks_b64"] and s["rms_b64"] for s in manifest["stems"]))
         self.assertTrue(all("/stem/" in s["url"] for s in manifest["stems"]))
 
     def test_stem_is_served_as_seekable_audio(self):

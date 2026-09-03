@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import array
+import base64
 import asyncio
 import json
 import logging
@@ -55,16 +56,78 @@ _SILENCE_CHUNK = b"\x00" * (BYTES_PER_SECOND // 10)  # 100ms
 _MAX_PAD_SECONDS = 3600 * 8  # これを超える穴埋めは異常値として切り捨てる
 
 # 波形表示用のデータ。書き出したあとに mp3 を読み直すより、書きながら拾うほうが安い。
-# 1目盛りの長さ。細かくしすぎても画面では潰れるので 0.25 秒。
-PEAK_BUCKET_SECONDS = 0.25
+#
+# 1目盛りの長さ。以前は 0.25 秒だったが、2時間の録音では間引きが効いて
+# 1点 2.75 秒になり、**波形が数秒単位の塊にしか見えなかった**（1つの塊の中に
+# 相槌が丸ごと収まってしまう）。DAW と同じ「1画素ごとに山と谷」を出すには、
+# 画面の画素より細かい目盛りが要る。0.05 秒なら、1画面に1分を出す幅
+# 1200px でも 1画素あたり 1点を下回らない。
+PEAK_BUCKET_SECONDS = 0.05
 PEAK_BUCKET_BYTES = int(PEAK_BUCKET_SECONDS * BYTES_PER_SECOND)
-# 書き出し時に、この点数まで間引く（6時間だと 86,400 目盛りになり JSON が重い）
-PEAK_MAX_POINTS = 3000
+# 書き出し時に、この点数まで間引く。6時間なら 432,000 目盛りになるので、
+# 60,000 点（＝1点 0.36 秒）で頭打ちにする。2時間なら 144,000 → 48,000 点で
+# 1点 0.15 秒。**間引いた結果は索引の bucket_seconds に必ず書く**
+# （書かないと波形が時間軸の先頭へ圧縮される。過去に実際そうなっていた）。
+PEAK_MAX_POINTS = 60000
 # 振幅を見るときにサンプルを間引く間隔。表示用なので全部は見ない。
 _PEAK_STRIDE = 32
 
 # ZIP に入れる索引の名前。ミキサー（管理画面）がこれを読んでトラックを並べる。
 MANIFEST_NAME = "mixer.json"
+
+
+def _peak_and_energy(pcm: bytes) -> tuple[int, float, int]:
+    """PCM 断片の (最大振幅, 二乗和, 見たサンプル数) を1度の走査で返す。
+
+    実効値（RMS）を別に測るのは、山だけの波形が**どこも同じ高さに見える**
+    ため。人の声は瞬間的な山が揃いやすく、山だけ塗ると密度の差が出ない。
+    DAW の波形が濃淡2層に見えるのは、薄い層が山・濃い層が実効値だから。
+
+    表示用なので全サンプルは見ず、_peak_of と同じ間隔で拾う。書き込みの
+    たびに走るので、安いことを優先する。
+    """
+    usable = len(pcm) - (len(pcm) % 2)
+    if usable <= 0:
+        return 0, 0.0, 0
+    samples = array.array("h")
+    samples.frombytes(pcm[:usable])
+    picked = samples[::_PEAK_STRIDE]
+    if not picked:
+        return 0, 0.0, 0
+    peak = 0
+    energy = 0.0
+    for value in picked:
+        magnitude = -value if value < 0 else value
+        if magnitude > peak:
+            peak = magnitude
+        energy += float(value) * float(value)
+    return peak, energy, len(picked)
+
+
+def _grouped(values: list[int], group: int, points: int | None) -> list[float]:
+    """目盛りをまとめて 0.0〜1.0 に均す。points を渡すと末尾を無音で揃える。
+
+    書き込みに失敗して途中で終わったトラックは短い。末尾を揃えないと、
+    そのトラックだけ横に引き伸ばされて表示される。
+    """
+    if group > 1:
+        values = [max(values[i : i + group]) for i in range(0, len(values), group)]
+    series = [round(min(1.0, value / 32767.0), 4) for value in values]
+    if points is not None:
+        del series[points:]
+        series.extend([0.0] * (points - len(series)))
+    return series
+
+
+def _encode_series(values: list[float]) -> str:
+    """0.0〜1.0 の並びを base64 の1バイト列にする。
+
+    素の JSON 配列（"0.1234," の形）だと1点あたり 7 文字前後になり、
+    2時間×5トラックで数MBの索引になってしまう。表示は高さ数十画素なので
+    256 段階あれば足り、1点1バイトなら**同じ点数でも 1/7 以下**に収まる。
+    """
+    raw = bytes(min(255, max(0, int(round(value * 255)))) for value in values)
+    return base64.b64encode(raw).decode("ascii")
 
 
 def _peak_of(pcm: bytes) -> int:
@@ -122,6 +185,10 @@ class _TrackWriter:
         self.written_bytes = 0
         self.voiced_bytes = 0  # 実際に声が入っていた分（無音埋めを除く）
         self.peaks: list[int] = []  # 波形表示用（目盛りごとの最大振幅）
+        # 目盛りごとの二乗和と、見たサンプル数。割って平方根を取ると実効値になる。
+        # 山と別に持つのは、山だけの波形ではどこも同じ高さに見えるため。
+        self._energy: list[float] = []
+        self._energy_n: list[int] = []
         self.failed = False
         self._process = subprocess.Popen(
             [
@@ -182,11 +249,15 @@ class _TrackWriter:
 
             while len(self.peaks) <= bucket:
                 self.peaks.append(0)
+                self._energy.append(0.0)
+                self._energy_n.append(0)
             if not silence:
                 piece = payload[position - self.written_bytes : stop - self.written_bytes]
-                value = _peak_of(piece)
+                value, energy, count = _peak_and_energy(piece)
                 if value > self.peaks[bucket]:
                     self.peaks[bucket] = value
+                self._energy[bucket] += energy
+                self._energy_n[bucket] += count
 
             position = stop
 
@@ -199,13 +270,23 @@ class _TrackWriter:
         同じ時間軸に並べられなくなっていた（間引いたことを索引にも書いて
         いなかったので、12.5分を超える録音では波形が先頭へ圧縮された）。
         """
-        peaks = self.peaks
-        if group > 1:
-            peaks = [max(peaks[i : i + group]) for i in range(0, len(peaks), group)]
-        series = [round(min(1.0, value / 32767.0), 4) for value in peaks]
+        return _grouped(self.peaks, group, points)
+
+    def rms_series(self, *, group: int = 1, points: int | None = None) -> list[float]:
+        """0.0〜1.0 に均した実効値（RMS）。点の並びは peak_series と1対1で対応する。
+
+        山だけの波形は**どこも同じ高さに見える**。人の声は瞬間的な山が
+        揃いやすく、密度の差が出ないためで、濃淡2層にするとそこが読める。
+        目盛りをまたぐときは二乗和ごと足してから割る（平均の平均にすると、
+        目盛りごとのサンプル数が違うときにずれる）。
+        """
+        rms: list[float] = []
+        for index in range(0, len(self._energy), max(1, group)):
+            energy = sum(self._energy[index : index + group])
+            count = sum(self._energy_n[index : index + group])
+            rms.append(math.sqrt(energy / count) if count else 0.0)
+        series = [round(min(1.0, value / 32767.0), 4) for value in rms]
         if points is not None:
-            # 書き込みに失敗して途中で終わったトラックは短い。末尾を無音で
-            # 揃えないと、そのトラックだけ横に引き伸ばされて表示される。
             del series[points:]
             series.extend([0.0] * (points - len(series)))
         return series
@@ -1550,7 +1631,12 @@ def _build_stems(
                 "user_id": track.user_id,
                 "voiced_seconds": round(track.voiced_seconds, 2),
                 "size_bytes": track.out_path.stat().st_size,
-                "peaks": track.peak_series(group=peak_group, points=peak_points),
+                # 波形は base64 の1バイト列で持つ（素の JSON 配列だと同じ
+                # 点数で7倍以上になる）。読み手が古い索引も開けるよう、
+                # 名前を分けてある（旧 "peaks" は float の配列だった）。
+                "peaks_b64": _encode_series(track.peak_series(group=peak_group, points=peak_points)),
+                "rms_b64": _encode_series(track.rms_series(group=peak_group, points=peak_points)),
+                "point_count": peak_points,
                 # 1点が何秒ぶんか。索引全体の bucket_seconds と同じ値だが、
                 # トラック単位で読めるほうが読み手が迷わない。
                 "bucket_seconds": peak_seconds,
