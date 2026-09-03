@@ -285,8 +285,10 @@ export async function mount(win) {
     clear(win.body).append(
       el("div", { class: "stack" },
          el("div", { class: "row" },
+            // ミキサーの操作列（32px）のすぐ上に来るので、btn-sm（26px）に
+            // しない。1つだけ小さいボタンが乗っていると、列が2段とも半端に見える。
             el("button", {
-              class: "btn btn-sm", type: "button", onclick: () => closeMixer(),
+              class: "btn", type: "button", onclick: () => closeMixer(),
             }, icon("bi-arrow-left"), "録音一覧へ戻る"),
             el("span", { class: "list-sub grow truncate", text: recording.title })),
          stage)
