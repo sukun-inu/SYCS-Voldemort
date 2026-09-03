@@ -82,6 +82,11 @@ module = [
     "py_vapid.*",
     "pywebpush.*",
     "rcssmin.*",
+    # redis-py（Valkey へも同じプロトコルで話す）。型情報を同梱していないため、
+    # types-redis を入れない限り import 時点で落ちる。services/shared_cache.py は
+    # redis を「入っていなくても import できる」形（関数内 import）にしてあるので、
+    # 型検査もそれに合わせてここで黙らせる。
+    "redis.*",
     "rjsmin.*",
     "vt.*",
     "yt_dlp.*",

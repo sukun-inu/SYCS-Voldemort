@@ -150,10 +150,24 @@ METAL_AUTO_REPAIR_ENABLED = read_env_bool("METAL_AUTO_REPAIR_ENABLED", True)
 METAL_AUTO_REPAIR_INTERVAL_MINUTES = env_int("METAL_AUTO_REPAIR_INTERVAL_MINUTES", 30, minimum=5)
 METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH = read_env_bool("METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH", False)
 
-history_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=64)
-latest_prices_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=8)
-calculate_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=1024)
-forecast_cache: TTLCache[dict] = TTLCache(default_ttl_seconds=FORECAST_CACHE_SECONDS, max_items=32)
+# namespace を渡した TTLCache は、プロセス内の一次キャッシュに加えて Valkey も
+# 使う（VALKEY_URL が未設定なら一次だけで動く。webapp/cache.py の冒頭を参照）。
+#
+# WEB_WORKERS の既定は 2 なので、これが無いと同じ問い合わせに対して同じ DB
+# クエリと同じ予測計算がワーカーの数だけ走っていた。4つとも中身は素の JSON
+# （価格は桁を落とさないため文字列のまま）なので、そのまま共有に載せられる。
+history_cache: TTLCache[dict] = TTLCache(
+    default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=64, namespace="web:history"
+)
+latest_prices_cache: TTLCache[dict] = TTLCache(
+    default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=8, namespace="web:latest"
+)
+calculate_cache: TTLCache[dict] = TTLCache(
+    default_ttl_seconds=API_RESPONSE_CACHE_SECONDS, max_items=1024, namespace="web:calculate"
+)
+forecast_cache: TTLCache[dict] = TTLCache(
+    default_ttl_seconds=FORECAST_CACHE_SECONDS, max_items=32, namespace="web:forecast"
+)
 PURITY_OPTIONS_PAYLOAD = {
     "metals": {
         key: {

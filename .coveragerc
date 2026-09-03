@@ -37,7 +37,9 @@ precision = 2
 #   → user_state / api.sql / server_commands / djaudio へテストを足して
 #     58.34% になったので 56 へ
 #   → webapp / events へテストを足して 66.13% になったので 64 へ
-fail_under = 69
+#   → 共有キャッシュ（services/shared_cache.py 93.20% / webapp/cache.py 98.53%）
+#     のテストを足して 75.12% になったので 73 へ
+fail_under = 73
 
 [html]
 directory = htmlcov

@@ -72,6 +72,64 @@ services:
     volumes:
       - shared_secrets:/shared:ro
 
+  # プロセスをまたいで共有する状態の置き場。
+  #
+  # ■ なぜ要るか
+  #
+  # 3つのアプリ（bot / admin / web）が別プロセスで、web は既定で2ワーカー動く。
+  # そのため次の3つが「プロセスごとに独立」していた。
+  #
+  #   API 応答のキャッシュ  同じ問い合わせに対して同じ DB クエリと同じ予測計算が
+  #                         ワーカーの数だけ走り、期限切れの時刻もずれる。
+  #   レート制限            memory:// だとワーカーごとに数えるので、2ワーカーなら
+  #                         実質2倍通る。ADMIN_WORKERS のコメントに「2以上にする
+  #                         場合は Redis を指定すること」とだけ書かれていた。
+  #   メトリクス            スクレイプがワーカー1個にしか当たらず取りこぼす。
+  #
+  # ■ なぜ Redis ではなく Valkey なのか
+  #
+  # BSD ライセンス。Redis は 7.4 系で RSALv2/SSPL へ変わった経緯があり、8 系で
+  # AGPLv3 に戻っている。このリポジトリは LICENSES/ と THIRD_PARTY_NOTICES.md を
+  # 維持しているので、追記が要らない側を選んだ。プロトコルは互換なので、
+  # アプリ側は redis-py のまま。
+  #
+  # ■ 永続化しない理由
+  #
+  # ここに入るのは全部「消えても作り直せるもの」だけ。appendonly を有効にすると
+  # 消えて困るものをここへ置きたくなり、バックアップで守る対象が増える。消えて
+  # 困るものは Postgres に入れること。
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: sycs-voldemort-valkey
+    restart: unless-stopped
+    command:
+      - valkey-server
+      - --appendonly
+      - "no"
+      - --save
+      - ""
+      # 上限に当たったら古いものから捨てる。これを付けないと、上限に達した
+      # 時点で書き込みがエラーになる（キャッシュとしては捨ててほしい）。
+      - --maxmemory
+      - ${VALKEY_MAXMEMORY:-256mb}
+      - --maxmemory-policy
+      - allkeys-lru
+    environment:
+      - TZ=Asia/Tokyo
+    # ポートはホストへ出さない。同じ compose ネットワークの中からしか触らせない。
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 128
+    mem_limit: 384m
+
   # Postgres の日次バックアップ。中身は docker/postgres-backup.sh（なぜ YAML の
   # 中に直接書かなかったか、なぜ専用イメージを使わないかは、そちらの冒頭に書いた）。
   #
@@ -209,6 +267,11 @@ services:
         condition: service_completed_successfully
       postgres-user-state-init:
         condition: service_completed_successfully
+      # web と同じ理由で service_started（healthy を待たない）。レート制限は
+      # swallow_errors と in_memory_fallback で degrade するようにしてあるので、
+      # Valkey が無くても管理画面は使える。
+      valkey:
+        condition: service_started
     ports:
       - "${ADMIN_HOST_PORT:-5001}:5001"
     environment:
@@ -228,9 +291,23 @@ services:
       - TTS_BASE_URL=${TTS_BASE_URL:-http://localhost:8080}
       - FLASK_SECURE_COOKIES=${FLASK_SECURE_COOKIES:-false}
       - ADMIN_ASSET_VERSION=${ADMIN_ASSET_VERSION:-20260509-favicon-seo}
-      - ADMIN_LIMITER_STORAGE_URI=${ADMIN_LIMITER_STORAGE_URI:-memory://}
-      # メトリクス・監視スレッド・レート制限はワーカーごとに独立するため、既定は1。
-      # 2以上にする場合は ADMIN_LIMITER_STORAGE_URI に Redis を指定すること。
+      # レート制限は Valkey に置く。memory:// だとワーカーごとに数えるので、
+      # ADMIN_WORKERS を2以上にした瞬間に実質2倍通る。
+      #
+      # slowapi 0.1.10 は非同期ストレージに対応していないので、ここで指定した
+      # Redis への読み書きは同期呼び出しになり、そのぶんイベントループが止まる。
+      # ローカルの Valkey なら1回あたり1ミリ秒未満で、ADMIN_TPS_TARGET=50 の
+      # 規模では問題にならない。**外部の Redis を指定すると、往復のぶん全部の
+      # リクエストが遅くなる。** ここは同じホストの中に置くこと。
+      #
+      # クエリの socket_timeout を消さないこと。redis-py はこれを float として
+      # 解釈する。省くと、Valkey が「繋がったまま応答しない」状態になったときに
+      # 全リクエストがそこで止まる（繋がらないより、この状態のほうが危ない）。
+      - ADMIN_LIMITER_STORAGE_URI=${ADMIN_LIMITER_STORAGE_URI:-redis://valkey:6379/1?socket_timeout=0.5&socket_connect_timeout=0.5}
+      # 共有キャッシュとメトリクスは 0 番、レート制限は 1 番を使う。分けているのは
+      # レート制限の状態を消したいときに、キャッシュまで消さずに済むようにするため。
+      - VALKEY_URL=${VALKEY_URL:-redis://valkey:6379/0}
+      # メトリクスと監視スレッドはワーカーごとに独立するため、既定は1。
       - ADMIN_WORKERS=${ADMIN_WORKERS:-1}
       - ADMIN_TPS_TARGET=${ADMIN_TPS_TARGET:-50}
       - ADMIN_MONITOR_INTERVAL_SECONDS=${ADMIN_MONITOR_INTERVAL_SECONDS:-30}
@@ -277,6 +354,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # **service_healthy にしないこと。** 共有キャッシュは無くても正しく動く層
+      # として作ってある（services/shared_cache.py の冒頭）。healthy を待つ形に
+      # すると、Valkey が上がらないだけで web が起動できなくなり、「キャッシュの
+      # 故障が、キャッシュが無ければ起きなかった障害を作る」ことになる。
+      # 起動順だけ揃えて、繋がらない場合は遮断器に任せる。
+      valkey:
+        condition: service_started
     ports:
       - "${WEB_HOST_PORT:-8001}:8000"
     environment:
@@ -293,6 +377,9 @@ services:
       - DB_MAX_OVERFLOW=${DB_MAX_OVERFLOW:-10}
       - DB_POOL_TIMEOUT=${DB_POOL_TIMEOUT:-30}
       - DB_POOL_RECYCLE=${DB_POOL_RECYCLE:-1800}
+      # WEB_WORKERS が2以上のとき、これが無いとワーカーごとに別のキャッシュを
+      # 持つ（同じ問い合わせに DB クエリと予測計算が2回走る）。
+      - VALKEY_URL=${VALKEY_URL:-redis://valkey:6379/0}
       - API_RATE_LIMIT_PER_MINUTE=${API_RATE_LIMIT_PER_MINUTE:-120}
       - API_CALCULATE_RATE_LIMIT_PER_MINUTE=${API_CALCULATE_RATE_LIMIT_PER_MINUTE:-60}
       - API_RESPONSE_CACHE_SECONDS=${API_RESPONSE_CACHE_SECONDS:-20}
