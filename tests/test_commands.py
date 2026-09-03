@@ -33,6 +33,12 @@ def make_interaction(*, administrator: bool = True, guild: bool = True):
             "user",
             "client",
             "channel",
+            # 実行のログ（commands/activity_log.py）が読む3つ。本物の
+            # Interaction は必ず持っているので、帳票にも揃えておく。
+            "channel_id",
+            "id",
+            "command",
+            "type",
             "response",
             "followup",
         ]
@@ -43,6 +49,10 @@ def make_interaction(*, administrator: bool = True, guild: bool = True):
     interaction.user.guild_permissions = Mock(administrator=administrator)
     interaction.client = Mock()
     interaction.channel = Mock(mention="#general")
+    interaction.channel_id = 555
+    interaction.id = 123456789
+    interaction.command = Mock(qualified_name="test cmd")
+    interaction.type = discord.InteractionType.application_command
 
     done = {"value": False}
     response = Mock()

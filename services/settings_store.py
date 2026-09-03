@@ -237,7 +237,17 @@ async def awrite(func: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
     """
     import asyncio
 
-    return await asyncio.to_thread(lambda: func(*args, **kwargs))
+    result = await asyncio.to_thread(lambda: func(*args, **kwargs))
+    # 設定がいつ・どのギルドで・どの経路で変わったかを残す。値は書かない
+    # （読み上げの辞書やチャットの本文がそのまま10年ディスクに残るため。
+    # 値まで要る操作は log_action で監査チャンネルへ出している）。
+    # 第1引数はどのセッターも guild_id で揃えてあるので、それだけ添える。
+    logger.info(
+        "[settings] %s guild=%s",
+        getattr(func, "__name__", func),
+        args[0] if args else "-",
+    )
+    return result
 
 
 async def amutate_settings(mutator: Callable[[dict[str, Any]], _T]) -> _T:
