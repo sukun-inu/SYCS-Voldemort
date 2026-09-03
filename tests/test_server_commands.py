@@ -669,6 +669,151 @@ class ReactionRoleAdminGuardTests(unittest.TestCase):
         self.assertIn("123", sent["content"])
 
 
+class NewsRegistrationShapeTests(unittest.TestCase):
+    """commands/server/news.py の register が何をどう登録するかを固定する。
+
+    106行あるこの関数を割る前に押さえるためのテスト
+    （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+
+    下の NewsFeedAdminGuardTests は**登録されたあとの中身**を呼ぶだけで、
+    **登録そのもの**は誰も見ていない。中身を関数の外へ出すと、コマンドの
+    名前・説明・並び順、引数の名前と既定値と長さ制限、describe の文、
+    autocomplete の有無が黙って変わりうる。どれも例外は出ない。
+
+    query の長さ制限（Range[str, 1, 100]）は特に効く。外れても /news add は
+    通り、**壊れるのは後から /news list を打ったとき**（本文がメッセージ
+    上限の2000文字を超える）で、原因が別のコマンドにあると気づきにくい。
+    """
+
+    def _register(self):
+        """news.register() だけを、登録の形を控える群へ流す。"""
+        import commands.server.news as sc
+
+        created: list[dict] = []
+        registered: list[tuple[str, str]] = []
+        functions: dict[str, object] = {}
+        autocompletes: list[tuple[str, str]] = []
+
+        class RecordingGroup:
+            """作られ方と、渡されたコマンド・autocomplete を控えるだけの群。"""
+
+            def __init__(self, **kwargs):
+                """グループの作成引数を控える。"""
+                created.append(kwargs)
+
+            def command(self, *, name, description=""):
+                """デコレータを返す。関数はそのまま返し、包み直さない。"""
+
+                def wrap(fn):
+                    registered.append((name, description))
+                    functions[name] = fn
+
+                    def autocomplete(param_name):
+                        """`@cmd.autocomplete("x")` の受け皿。"""
+
+                        def deco(g):
+                            autocompletes.append((name, param_name))
+                            return g
+
+                        return deco
+
+                    fn.autocomplete = autocomplete
+                    return fn
+
+                return wrap
+
+        bot = Mock()
+        with patch.object(sc.app_commands, "Group", RecordingGroup):
+            sc.register(bot)
+        return SimpleNamespace(
+            created=created,
+            registered=registered,
+            functions=functions,
+            autocompletes=autocompletes,
+            bot=bot,
+        )
+
+    def test_the_group_and_its_three_commands_are_registered(self):
+        """グループの作り方と、コマンドの名前・説明・並び順を固定する。"""
+        shape = self._register()
+
+        self.assertEqual(
+            shape.created,
+            [{"name": "news", "description": "ニュースフィードの配信設定", "guild_only": True}],
+        )
+        self.assertEqual(
+            shape.registered,
+            [
+                ("add", "【管理者】Google Newsフィードを追加します"),
+                ("remove", "【管理者】ニュースフィードを削除します"),
+                ("list", "ニュースフィード一覧を表示します"),
+            ],
+        )
+
+    def test_the_query_keeps_its_length_cap_and_the_interval_its_default(self):
+        """query の長さ制限と interval の既定値が変わらないこと。
+
+        query の上限が外れても /news add は通る。**壊れるのは後から
+        /news list を打ったとき**で、本文がメッセージ上限（2000文字）を
+        超える。原因が別のコマンドにあるので気づきにくい。
+        """
+        import inspect
+
+        shape = self._register()
+        params = inspect.signature(shape.functions["add"]).parameters
+
+        self.assertEqual(list(params), ["interaction", "channel", "query", "interval"])
+        # Range[...] は呼ぶたびに別の Transformer になるので、同一性ではなく
+        # 型・下限・上限で見る。
+        annotation = params["query"].annotation
+        self.assertEqual(annotation.type.name, "string")
+        self.assertEqual((annotation.min_value, annotation.max_value), (1, 100))
+        self.assertEqual(params["interval"].default, 60)
+
+    def test_each_argument_keeps_its_description(self):
+        """describe の文が、引数ごとに付いたままであること。
+
+        本体を関数の外へ出すとき `@app_commands.describe` を運び忘れると
+        説明が消える。**動作は何も変わらない**ので気づけない。
+        """
+        shape = self._register()
+        described = {
+            name: getattr(fn, "__discord_app_commands_param_description__", None)
+            for name, fn in shape.functions.items()
+        }
+
+        self.assertEqual(
+            described["add"],
+            {
+                "channel": "ニュースを投稿するチャンネル",
+                "query": "検索キーワード（例: AI技術、最大100文字）",
+                "interval": "チェック間隔（分、最小5）",
+            },
+        )
+        self.assertEqual(described["remove"], {"feed_id": "削除するフィード（候補から選択できる）"})
+        self.assertIsNone(described["list"])
+
+    def test_remove_keeps_its_autocomplete(self):
+        """remove の feed_id に候補が付くこと。
+
+        候補が外れても**コマンドは動く**（IDを手で打てば通る）ので、
+        テストでも例外でも気づけない。8桁の16進を暗記している人はいない。
+        """
+        shape = self._register()
+
+        self.assertEqual(shape.autocompletes, [("remove", "feed_id")])
+
+    def test_the_group_is_handed_to_the_command_tree(self):
+        """bot.tree.add_command(group) を呼ぶこと。
+
+        ここが抜けると Discord 側にコマンドが1つも現れない。関数の中では
+        全部組み上がっているので、**例外も出ず、単体テストも通る。**
+        """
+        shape = self._register()
+
+        shape.bot.tree.add_command.assert_called_once()
+
+
 class NewsFeedAdminGuardTests(unittest.TestCase):
     """news add/remove は【管理者】限定。間隔・件数の検証も確認する。"""
 
