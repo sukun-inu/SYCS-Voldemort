@@ -372,6 +372,123 @@ def _update_current_state_fields(
         current.last_left_at = now
 
 
+def _member_snapshot(user: Any, guild_id: int) -> tuple[list, dict] | None:
+    """discord.Member 相当なら (ロール一覧, 権限の一覧) を返す。違えば None。
+
+    **roles と guild_permissions の両方**が揃ってはじめて Member 扱いにする。
+    片方だけで通すと、権限を持たない相手に対して権限の一覧を組み立てに行き、
+    payload に空の abilities が入って「役職が無い」のか「調べられなかった」
+    のかが区別できなくなる。webhook 経由の投稿者など、属性が欠けた相手は
+    実際に来る。
+    """
+    if not (hasattr(user, "guild_permissions") and hasattr(user, "roles")):
+        return None
+    return _extract_role_snapshot(user), _extract_ability_snapshot(user, guild_id)
+
+
+def _event_payload_for(
+    payload: dict[str, Any] | None,
+    snapshot: tuple[list, dict] | None,
+    timed_out_until: datetime | None,
+) -> dict[str, Any]:
+    """履歴に残す payload を組み立てる。
+
+    タイムアウトの期限は最新状態にも入るが、そちらは**次のイベントで
+    上書きされる**。「いつまでの制限だったか」を後から辿れるのは履歴側だけ。
+    """
+    event_payload: dict[str, Any] = dict(payload or {})
+    if snapshot is not None:
+        event_payload["roles"], event_payload["abilities"] = snapshot
+    if timed_out_until is not None:
+        event_payload["timed_out_until"] = _to_aware_utc(timed_out_until).isoformat()
+    return event_payload
+
+
+def _find_or_create_current(session, guild_id: int, user_id: int, rows):
+    """最新状態の行を取り出す。無ければ空の行を作って session へ足す。"""
+    current = rows.first()
+    if current is not None:
+        return current
+    current = UserStateCurrent(
+        guild_id=int(guild_id),
+        user_id=int(user_id),
+        status="unknown",
+        is_in_guild=False,
+        is_banned=False,
+        is_timed_out=False,
+        roles_json="[]",
+        abilities_json="{}",
+    )
+    session.add(current)
+    return current
+
+
+async def _write_state_event(
+    *,
+    guild_id: int,
+    user_id: int,
+    event_type: str,
+    status_after: str,
+    now: datetime,
+    actor: Any | None,
+    actor_fields: dict[str, Any],
+    reason: str | None,
+    event_payload: dict[str, Any],
+    user_fields: dict[str, Any],
+    in_guild: bool | None,
+    is_banned: bool | None,
+    timed_out_until: datetime | None,
+    snapshot: tuple[list, dict] | None,
+) -> None:
+    """履歴と最新状態を1つのトランザクションで書く。失敗したら例外を上げる。
+
+    **2つを同じコミットに入れること。** 別々にすると、あいだで落ちたときに
+    履歴には残っているのに最新状態が古いまま、という食い違いが残る。管理画面は
+    この2つを並べて出すので、見た人はどちらを信じるか分からない。
+    """
+    async with SessionLocal() as session:
+        try:
+            session.add(
+                UserStateEvent(
+                    guild_id=int(guild_id),
+                    user_id=int(user_id),
+                    event_type=event_type,
+                    status_after=status_after,
+                    actor_user_id=int(getattr(actor, "id", 0) or 0) or None,
+                    actor_name=actor_fields.get("display_name") or actor_fields.get("username"),
+                    reason=(str(reason)[:2000] if reason else None),
+                    payload_json=_safe_json_dumps(event_payload, "{}"),
+                    event_at=now,
+                )
+            )
+
+            rows = await session.scalars(
+                select(UserStateCurrent).where(
+                    UserStateCurrent.guild_id == int(guild_id),
+                    UserStateCurrent.user_id == int(user_id),
+                )
+            )
+            current = _find_or_create_current(session, guild_id, user_id, rows)
+
+            _update_current_state_fields(
+                current,
+                event_type=event_type,
+                status_after=status_after,
+                now=now,
+                user_fields=user_fields,
+                in_guild=in_guild,
+                is_banned=is_banned,
+                timed_out_until=timed_out_until,
+                role_snapshot=snapshot[0] if snapshot is not None else None,
+                ability_snapshot=snapshot[1] if snapshot is not None else None,
+            )
+
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+
 async def record_user_state_event(
     *,
     guild_id: int,
@@ -398,89 +515,45 @@ async def record_user_state_event(
     status_after = _sanitize_status(status_after)
     event_type = str(event_type).strip().lower()[:48]
 
-    user_fields = _extract_user_fields(user)
-    actor_fields = _extract_user_fields(actor)
-    has_member_context = hasattr(user, "guild_permissions") and hasattr(user, "roles")
-    role_snapshot = _extract_role_snapshot(user) if has_member_context else []
-    ability_snapshot = _extract_ability_snapshot(user, guild_id) if has_member_context else {}
+    snapshot = _member_snapshot(user, guild_id)
+    event_payload = _event_payload_for(payload, snapshot, timed_out_until)
 
-    event_payload: dict[str, Any] = dict(payload or {})
-    if has_member_context:
-        event_payload["roles"] = role_snapshot
-    if has_member_context:
-        event_payload["abilities"] = ability_snapshot
-    if timed_out_until is not None:
-        event_payload["timed_out_until"] = _to_aware_utc(timed_out_until).isoformat()
-
+    # 掃除は付随処理。ここで例外が抜けると、掃除が失敗しているあいだじゅう
+    # BAN も入退室も1件も残らなくなる。
     try:
         await _cleanup_old_events_if_needed(now)
     except Exception:
         logger.exception("[user_state_service] retention cleanup failed")
 
     for attempt in range(2):
-        async with SessionLocal() as session:
-            try:
-                event_row = UserStateEvent(
-                    guild_id=int(guild_id),
-                    user_id=int(user_id),
-                    event_type=event_type,
-                    status_after=status_after,
-                    actor_user_id=int(getattr(actor, "id", 0) or 0) or None,
-                    actor_name=actor_fields.get("display_name") or actor_fields.get("username"),
-                    reason=(str(reason)[:2000] if reason else None),
-                    payload_json=_safe_json_dumps(event_payload, "{}"),
-                    event_at=now,
-                )
-                session.add(event_row)
-
-                current = (
-                    await session.scalars(
-                        select(UserStateCurrent).where(
-                            UserStateCurrent.guild_id == int(guild_id),
-                            UserStateCurrent.user_id == int(user_id),
-                        )
-                    )
-                ).first()
-
-                if current is None:
-                    current = UserStateCurrent(
-                        guild_id=int(guild_id),
-                        user_id=int(user_id),
-                        status="unknown",
-                        is_in_guild=False,
-                        is_banned=False,
-                        is_timed_out=False,
-                        roles_json="[]",
-                        abilities_json="{}",
-                    )
-                    session.add(current)
-
-                _update_current_state_fields(
-                    current,
-                    event_type=event_type,
-                    status_after=status_after,
-                    now=now,
-                    user_fields=user_fields,
-                    in_guild=in_guild,
-                    is_banned=is_banned,
-                    timed_out_until=timed_out_until,
-                    role_snapshot=role_snapshot if has_member_context else None,
-                    ability_snapshot=ability_snapshot if has_member_context else None,
-                )
-
-                await session.commit()
-                return
-            except Exception as e:
-                await session.rollback()
-                if attempt == 0 and await _try_db_self_heal(context="record_user_state_event", exc=e):
-                    continue
-                logger.exception(
-                    "[user_state_service] failed to record event guild_id=%s user_id=%s event_type=%s",
-                    guild_id,
-                    user_id,
-                    event_type,
-                )
-                return
+        try:
+            await _write_state_event(
+                guild_id=guild_id,
+                user_id=user_id,
+                event_type=event_type,
+                status_after=status_after,
+                now=now,
+                actor=actor,
+                actor_fields=_extract_user_fields(actor),
+                reason=reason,
+                event_payload=event_payload,
+                user_fields=_extract_user_fields(user),
+                in_guild=in_guild,
+                is_banned=is_banned,
+                timed_out_until=timed_out_until,
+                snapshot=snapshot,
+            )
+            return
+        except Exception as e:
+            if attempt == 0 and await _try_db_self_heal(context="record_user_state_event", exc=e):
+                continue
+            logger.exception(
+                "[user_state_service] failed to record event guild_id=%s user_id=%s event_type=%s",
+                guild_id,
+                user_id,
+                event_type,
+            )
+            return
 
 
 def _row_to_state_payload(row: UserStateCurrent) -> dict[str, Any]:
