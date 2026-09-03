@@ -55,7 +55,7 @@ docker compose up -d --build
 | `USER_STATE_CLEANUP_INTERVAL_SECONDS` | 任意 | 古い履歴削除の実行間隔秒（既定 `21600`） |
 | `GUILD_SETTINGS_ABANDONED_AFTER_DAYS` | 任意 | 放棄されたギルド設定を掃除するまでの日数（既定 `3650` ＝10年）。**Bot がそのサーバーに居ないこと**と併せて両方を満たしたときだけ消す。居るサーバーの設定は何年経っても消えない |
 | `LOG_RETENTION_DAYS` | 任意 | `data/logs/` の保管日数（既定 `3650` ＝10年）。日付で1日1ファイルに回し、回した分は gzip で畳む。減らしても即座には消えず、次に日付が変わったときの掃除で超過分がまとめて消える |
-| `TRUSTED_PROXY_CIDRS` | 任意 | `X-Forwarded-For` を信じてよいプロキシの帯域（既定 `127.0.0.1/32,::1/128`）。リバースプロキシ経由だと接続元が `127.0.0.1` になるので、ここに書いた相手から来たときだけヘッダを見て**本当のアクセス元**をログとレート制限に使う。**広げると、外から直接ヘッダを偽装するだけで別人になりすませる** |
+| `TRUSTED_PROXY_CIDRS` | 任意 | `X-Forwarded-For` を信じてよいプロキシの帯域（既定 `127.0.0.1/32,::1/128,172.16.0.0/12`）。既定に Docker のブリッジ帯域が入っているのは、compose 構成ではプロキシから見た接続元がブリッジゲートウェイ（`172.19.0.1` 等）になるため。**LAN でよく使う `192.168.0.0/16` と `10.0.0.0/8` は入れていません**（ポートを公開するので、同じ LAN から直接叩いて偽装できてしまうため）。その構成なら明示してください。信頼していない相手から `X-Forwarded-For` が来たときは、何を足せばよいかを1回だけ警告に出します。|
 | `DJAUDIO_BASE_URL` | DJAudio時推奨 | MP3 配信 URL ベース。未設定時は `http://localhost:5001` になり配信リンクが外部から開けなくなるため、本番では必ず外部到達可能な URL を設定すること（未設定/localhostのままだと起動時ログと `/djaudio status` に警告が出る） |
 | `DJAUDIO_FFMPEG_PATH` | 任意 | ffmpeg 実行ファイルを明示指定 |
 | `DJAUDIO_AUTO_INSTALL_FFMPEG` | 任意 | `true/false`（既定 `true`） |
@@ -108,7 +108,7 @@ docker compose up -d --build
 | `FORECAST_CONFIDENCE_CAP_WITHOUT_ACCURACY` | 任意 | 答え合わせ実績がまだ無い金属の信頼度上限（既定 `0.75`）。実績ゼロで高い信頼度を出す過信を防ぐ |
 | `TRUST_CF_HEADERS` | 任意 | `true/false`。CFヘッダを信頼するか（既定 `false`） |
 | `REQUIRE_CF_CONNECTING_IP` | 任意 | `true/false`。CFヘッダ必須化（既定 `false`） |
-| `TRUSTED_PROXY_CIDRS` | 任意 | Forwardedヘッダを信頼するプロキシCIDR（既定 `127.0.0.1/32,::1/128`） |
+| `TRUSTED_PROXY_CIDRS` | 任意 | Forwardedヘッダを信頼するプロキシCIDR（既定 `127.0.0.1/32,::1/128,172.16.0.0/12`。上の表を参照） |
 | `ALLOWED_HOSTS` | 推奨 | 受け付けるHost（例: `example.com,www.example.com`） |
 | `PUSH_MAX_SUBSCRIPTIONS` | 任意 | Push購読上限（既定 `50000`） |
 | `PUSH_ALLOWED_ENDPOINT_SUFFIXES` | 任意 | Push endpoint 許可ドメインサフィックス（カンマ区切り） |

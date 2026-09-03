@@ -1987,9 +1987,33 @@ class SecurityEnvHelpersTests(unittest.TestCase):
             self.assertEqual(security_module.load_allowed_hosts(), ["localhost", "127.0.0.1", "::1"])
 
     def test_load_trusted_proxy_cidrs_default_when_unset(self):
+        """既定はループバック＋Docker のブリッジ帯域。
+
+        ループバックだけにしていたときは、compose 構成でプロキシから見た
+        接続元がブリッジゲートウェイ（172.19.0.1 など）になり、
+        **X-Forwarded-For が捨てられてアクセスログがそのIP1つに寄っていた。**
+        """
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("TRUSTED_PROXY_CIDRS", None)
-            self.assertEqual(security_module.load_trusted_proxy_cidrs(), ["127.0.0.1/32", "::1/128"])
+            self.assertEqual(
+                security_module.load_trusted_proxy_cidrs(),
+                ["127.0.0.1/32", "::1/128", "172.16.0.0/12"],
+            )
+
+    def test_the_default_does_not_trust_the_lan(self):
+        """LAN でよく使う帯域は既定に入れないこと。
+
+        このアプリはポートを公開するので、**同じ LAN から直接叩いて
+        X-Forwarded-For を偽装できてしまう**（レート制限もIPで数えている）。
+        その構成で使うなら明示させる。
+        """
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("TRUSTED_PROXY_CIDRS", None)
+            cidrs = security_module.load_trusted_proxy_cidrs()
+
+        self.assertNotIn("192.168.0.0/16", cidrs)
+        self.assertNotIn("10.0.0.0/8", cidrs)
+        self.assertNotIn("*", cidrs)
 
     def test_load_trusted_proxy_cidrs_empty_string_means_no_trusted_proxies(self):
         with patch.dict(os.environ, {"TRUSTED_PROXY_CIDRS": ""}, clear=False):

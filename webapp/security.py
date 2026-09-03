@@ -11,6 +11,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from envutil import env_bool
 
+from services.log_setup import DEFAULT_TRUSTED_PROXIES, warn_if_forwarded_ignored
+
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -174,6 +176,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         """
         remote_ip = self._parse_ip_token(request.client.host if request.client else None) or "unknown"
         from_trusted_proxy = self._is_trusted_proxy(remote_ip)
+        if not from_trusted_proxy:
+            # 設定の間違いは黙って元に戻る形で失敗する。何を足せばよいかを出す。
+            warn_if_forwarded_ignored(remote_ip, request.headers.get("x-forwarded-for"))
 
         if from_trusted_proxy and self.trust_cf_headers:
             cf_ip = self._parse_ip_token(request.headers.get("cf-connecting-ip"))
@@ -257,13 +262,21 @@ def load_allowed_hosts() -> list[str]:
 def load_trusted_proxy_cidrs() -> list[str]:
     """既定はループバックのみ信頼する。空文字を明示指定すれば「誰も信頼しない」にできる。
 
-    既定を空にせずループバックだけにしているのは、コンテナ内部からの
-    ヘルスチェック等がループバック越しに来る構成を壊さないため。逆に
-    デフォルトを甘く（例えば0.0.0.0/0)すると、外部から直接
+    既定はループバックに加えて Docker のブリッジ帯域（172.16.0.0/12）。
+    ループバックだけにしていたときは、compose 構成でプロキシから見た接続元が
+    ブリッジゲートウェイ（172.19.0.1 など）になり、**X-Forwarded-For が
+    捨てられてアクセスログもレート制限もそのIP1つに寄っていた。**
+
+    LAN でよく使う 192.168.0.0/16 と 10.0.0.0/8 は入れない——このアプリは
+    ポートを公開するので、同じ LAN から直接叩いてヘッダを偽装できてしまう。
+    逆にデフォルトを甘く（例えば0.0.0.0/0)すると、外部から直接
     X-Forwarded-For を偽装したリクエストがそのまま信頼され、
     レート制限もIP偽装で回避できてしまう。
+
+    services/log_setup.py の trusted_proxies() と同じ環境変数・同じ既定。
+    片方だけ変えると、レート制限とアクセスログが別のIPを見ることになる。
     """
-    raw = os.getenv("TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128").strip()
+    raw = os.getenv("TRUSTED_PROXY_CIDRS", DEFAULT_TRUSTED_PROXIES).strip()
     if not raw:
         return []
     return [item.strip() for item in raw.split(",") if item.strip()]
