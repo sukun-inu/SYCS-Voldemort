@@ -163,6 +163,80 @@ async def _fetch_guild_bans_for_sync(guild: discord.Guild) -> list[discord.abc.U
     return users
 
 
+_SYNC_TOTALS = ("members_seen", "bans_seen", "created", "updated", "left_reconciled", "events_written")
+
+
+async def _sync_one_guild(
+    guild,
+    *,
+    source: str,
+    write_events_on_sync: bool,
+    run_integrity_repair: bool,
+) -> dict[str, int]:
+    """1ギルドぶんを同期し、そのギルドの数を返す。
+
+    整合性の修復は頼まれたときだけ回す。全行を走査するので、毎回の同期で
+    回すと重い（逆に頼んだのに呼ばないと、壊れた行が何日も残る）。
+    """
+    members, fetched_all = await _fetch_guild_members_for_sync(guild)
+    banned_users = await _fetch_guild_bans_for_sync(guild)
+
+    stats = await sync_guild_user_states(
+        guild_id=guild.id,
+        members=members,
+        banned_users=banned_users,
+        source=source,
+        reconcile_missing=fetched_all,
+        write_events_on_sync=write_events_on_sync,
+    )
+
+    repair_stats: dict[str, int] = {}
+    if run_integrity_repair:
+        repair_stats = await repair_user_state_integrity(
+            guild_id=guild.id,
+            max_rows=_USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD,
+        )
+
+    logger.info(
+        "[BOT_SETUP] user_state sync guild=%s source=%s members=%s bans=%s "
+        "created=%s updated=%s left=%s events=%s fetched_all=%s "
+        "repaired_rows=%s repaired_fixed=%s",
+        guild.id,
+        source,
+        stats.get("members_seen", 0),
+        stats.get("bans_seen", 0),
+        stats.get("created", 0),
+        stats.get("updated", 0),
+        stats.get("left_reconciled", 0),
+        stats.get("events_written", 0),
+        fetched_all,
+        repair_stats.get("rows_scanned", 0),
+        repair_stats.get("rows_fixed", 0),
+    )
+
+    counted = {key: int(stats.get(key, 0)) for key in _SYNC_TOTALS}
+    counted["repair_rows"] = int(repair_stats.get("rows_scanned", 0))
+    counted["repair_fixed"] = int(repair_stats.get("rows_fixed", 0))
+    return counted
+
+
+def _log_sync_completed(source: str, totals: dict[str, int]) -> None:
+    """終わりの1行。無人で回るので、あとから読めるのはここだけ。"""
+    logger.info(
+        "[BOT_SETUP] user_state sync completed source=%s members=%s bans=%s "
+        "created=%s updated=%s left=%s events=%s repaired_rows=%s repaired_fixed=%s",
+        source,
+        totals["members_seen"],
+        totals["bans_seen"],
+        totals["created"],
+        totals["updated"],
+        totals["left_reconciled"],
+        totals["events_written"],
+        totals["repair_rows"],
+        totals["repair_fixed"],
+    )
+
+
 async def _sync_user_state_all_guilds(
     bot: Bot,
     *,
@@ -180,6 +254,10 @@ async def _sync_user_state_all_guilds(
     lockで全体を囲むのは、on_ready起点の同期(_sync_user_state_on_ready)と
     定期修復ループ(_user_state_auto_repair_loop)が同時に走って同じDBへ
     二重に書き込むのを防ぐため。
+
+    **待機は try の外**に置く。失敗したときだけ待たずに次へ行くと、調子が
+    悪いときに限って最速で叩き続けることになる（レート制限に当たっている
+    最中がまさにそれ）。
     """
     async with lock:
         logger.info(
@@ -187,60 +265,18 @@ async def _sync_user_state_all_guilds(
             source,
             len(bot.guilds),
         )
-        total_members = 0
-        total_bans = 0
-        total_created = 0
-        total_updated = 0
-        total_left = 0
-        total_events = 0
-        total_repair_rows = 0
-        total_repair_fixed = 0
+        totals = dict.fromkeys((*_SYNC_TOTALS, "repair_rows", "repair_fixed"), 0)
 
         for guild in bot.guilds:
             try:
-                members, fetched_all = await _fetch_guild_members_for_sync(guild)
-                banned_users = await _fetch_guild_bans_for_sync(guild)
-
-                stats = await sync_guild_user_states(
-                    guild_id=guild.id,
-                    members=members,
-                    banned_users=banned_users,
+                counted = await _sync_one_guild(
+                    guild,
                     source=source,
-                    reconcile_missing=fetched_all,
                     write_events_on_sync=write_events_on_sync,
+                    run_integrity_repair=run_integrity_repair,
                 )
-                total_members += stats.get("members_seen", 0)
-                total_bans += stats.get("bans_seen", 0)
-                total_created += stats.get("created", 0)
-                total_updated += stats.get("updated", 0)
-                total_left += stats.get("left_reconciled", 0)
-                total_events += stats.get("events_written", 0)
-
-                repair_stats: dict[str, int] | None = None
-                if run_integrity_repair:
-                    repair_stats = await repair_user_state_integrity(
-                        guild_id=guild.id,
-                        max_rows=_USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD,
-                    )
-                    total_repair_rows += repair_stats.get("rows_scanned", 0)
-                    total_repair_fixed += repair_stats.get("rows_fixed", 0)
-
-                logger.info(
-                    "[BOT_SETUP] user_state sync guild=%s source=%s members=%s bans=%s "
-                    "created=%s updated=%s left=%s events=%s fetched_all=%s "
-                    "repaired_rows=%s repaired_fixed=%s",
-                    guild.id,
-                    source,
-                    stats.get("members_seen", 0),
-                    stats.get("bans_seen", 0),
-                    stats.get("created", 0),
-                    stats.get("updated", 0),
-                    stats.get("left_reconciled", 0),
-                    stats.get("events_written", 0),
-                    fetched_all,
-                    0 if repair_stats is None else repair_stats.get("rows_scanned", 0),
-                    0 if repair_stats is None else repair_stats.get("rows_fixed", 0),
-                )
+                for key, value in counted.items():
+                    totals[key] += value
             except Exception as e:
                 logger.exception(
                     "[BOT_SETUP] user_state sync failed guild=%s source=%s err=%s",
@@ -252,19 +288,7 @@ async def _sync_user_state_all_guilds(
             if _USER_STATE_SYNC_GUILD_PAUSE_SECONDS > 0:
                 await asyncio.sleep(_USER_STATE_SYNC_GUILD_PAUSE_SECONDS)
 
-        logger.info(
-            "[BOT_SETUP] user_state sync completed source=%s members=%s bans=%s "
-            "created=%s updated=%s left=%s events=%s repaired_rows=%s repaired_fixed=%s",
-            source,
-            total_members,
-            total_bans,
-            total_created,
-            total_updated,
-            total_left,
-            total_events,
-            total_repair_rows,
-            total_repair_fixed,
-        )
+        _log_sync_completed(source, totals)
 
 
 async def _sync_user_state_on_ready(bot: Bot, lock: asyncio.Lock) -> None:

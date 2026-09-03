@@ -13,6 +13,7 @@ DB を触るサービス関数は unittest.mock.patch で差し替える。
 """
 
 import asyncio
+import contextlib
 import os
 import sys
 import tempfile
@@ -246,6 +247,158 @@ class SyncUserStateAllGuildsTests(unittest.TestCase):
         self.assertEqual(len(calls[0]["members"]), 1)
         self.assertEqual(len(calls[0]["banned_users"]), 0)
         self.assertEqual(len(calls[1]["banned_users"]), 1)
+
+    def _stats(self, **overrides):
+        """sync_guild_user_states が返す形。"""
+        base = {
+            "members_seen": 0,
+            "bans_seen": 0,
+            "created": 0,
+            "updated": 0,
+            "left_reconciled": 0,
+            "events_written": 0,
+        }
+        base.update(overrides)
+        return base
+
+    def _run_sync(self, bot, *, sync, repair=None, pause=0, lock=None, sleep=None):
+        """同期を1回流す。差し替えるのは DB 側と待機だけ。"""
+        stack = contextlib.ExitStack()
+        with stack:
+            stack.enter_context(patch("events.user_state_sync.sync_guild_user_states", side_effect=sync))
+            stack.enter_context(patch("events.user_state_sync._USER_STATE_SYNC_GUILD_PAUSE_SECONDS", pause))
+            if repair is not None:
+                stack.enter_context(patch("events.user_state_sync.repair_user_state_integrity", side_effect=repair))
+            if sleep is not None:
+                stack.enter_context(patch("events.user_state_sync.asyncio.sleep", side_effect=sleep))
+            asyncio.run(
+                uss._sync_user_state_all_guilds(
+                    bot,
+                    source="test",
+                    write_events_on_sync=False,
+                    run_integrity_repair=repair is not None,
+                    lock=lock or asyncio.Lock(),
+                )
+            )
+
+    def test_two_runs_never_overlap(self):
+        """同時に走らせても、片方が終わるまでもう片方は入らないこと。
+
+        on_ready 起点の同期と定期修復ループは**同時に起きうる。** 囲いが
+        外れると同じギルドの同じ行へ二重に書き込み、作成と更新の数え方も
+        壊れる。片方が速く終わる平常時には重ならないので、外しても
+        普段は何も起きない。
+
+        102行あるこの関数を割る前に押さえる
+        （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
+        """
+        bot = SimpleNamespace(guilds=[self._guild(1)])
+        lock = asyncio.Lock()
+        order = []
+
+        async def slow_sync(**kwargs):
+            """入ってから出るまでを控える。あいだで他へ譲る。"""
+            order.append("in")
+            await asyncio.sleep(0)
+            order.append("out")
+            return self._stats()
+
+        async def both():
+            """2本を同時に走らせる。"""
+            with (
+                patch("events.user_state_sync.sync_guild_user_states", side_effect=slow_sync),
+                patch("events.user_state_sync._USER_STATE_SYNC_GUILD_PAUSE_SECONDS", 0),
+            ):
+                await asyncio.gather(
+                    *[
+                        uss._sync_user_state_all_guilds(
+                            bot,
+                            source="test",
+                            write_events_on_sync=False,
+                            run_integrity_repair=False,
+                            lock=lock,
+                        )
+                        for _ in range(2)
+                    ]
+                )
+
+        asyncio.run(both())
+
+        self.assertEqual(order, ["in", "out", "in", "out"], "2本が重なって走っている")
+
+    def test_the_pause_between_guilds_happens_even_after_a_failure(self):
+        """失敗したギルドのあとでも、次へ行く前に待つこと。
+
+        待つのは fetch_members / bans のレート制限を避けるため。失敗した
+        ときだけ待たずに次へ行くと、**調子が悪いときに限って最速で叩き
+        続ける**ことになる（レート制限に当たっている最中がまさにそれ）。
+        """
+        bot = SimpleNamespace(guilds=[self._guild(1), self._guild(2)])
+        slept = []
+
+        async def sync(**kwargs):
+            """1つ目のギルドだけ落ちる。"""
+            if kwargs["guild_id"] == 1:
+                raise RuntimeError("boom")
+            return self._stats()
+
+        async def sleep(seconds):
+            """待った回数を控える。"""
+            slept.append(seconds)
+
+        with self.assertLogs("events.user_state_sync", level="ERROR"):
+            self._run_sync(bot, sync=sync, pause=0.5, sleep=sleep)
+
+        self.assertEqual(slept, [0.5, 0.5], "失敗したギルドのあとで待っていない")
+
+    def test_the_integrity_repair_runs_once_per_guild_only_when_asked(self):
+        """整合性の修復は、頼まれたときだけギルドごとに1回呼ぶこと。
+
+        修復は全行を走査するので、毎回の同期で回すと重い。逆に頼んだのに
+        呼ばれないと、**壊れた行が何日も残る。** どちらも例外は出ない。
+        """
+        bot = SimpleNamespace(guilds=[self._guild(1), self._guild(2)])
+        called = []
+
+        async def sync(**kwargs):
+            """数字は使わない。"""
+            return self._stats()
+
+        async def repair(*, guild_id, max_rows):
+            """呼ばれた guild_id と上限を控える。"""
+            called.append((guild_id, max_rows))
+            return {"rows_scanned": 3, "rows_fixed": 1}
+
+        self._run_sync(bot, sync=sync, repair=repair)
+        self.assertEqual(
+            called,
+            [(1, uss._USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD), (2, uss._USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD)],
+        )
+
+        called.clear()
+        with patch("events.user_state_sync.repair_user_state_integrity", side_effect=repair):
+            self._run_sync(bot, sync=sync)
+        self.assertEqual(called, [], "頼んでいないのに修復が走っている")
+
+    def test_the_closing_line_sums_every_guild(self):
+        """終わりのログに、全ギルドを足した数が出ること。
+
+        無人で回るので、**あとから読めるのはこの1行だけ。** ギルドごとの
+        数をそのまま最後の行にも書いてしまうと（＝足し忘れると）、最後の
+        ギルドの数だけが全体の数として残る。
+        """
+        bot = SimpleNamespace(guilds=[self._guild(1), self._guild(2)])
+
+        async def sync(**kwargs):
+            """ギルドごとに違う数を返す。"""
+            return self._stats(members_seen=kwargs["guild_id"] * 10, created=kwargs["guild_id"])
+
+        with self.assertLogs("events.user_state_sync", level="INFO") as captured:
+            self._run_sync(bot, sync=sync)
+
+        closing = next(line for line in captured.output if "sync completed" in line)
+        self.assertIn("members=30", closing)  # 10 + 20
+        self.assertIn("created=3", closing)  # 1 + 2
 
     def test_one_guild_failing_does_not_stop_the_others(self):
         """1ギルドの同期失敗が他ギルドまで止めないこと。
