@@ -310,8 +310,15 @@ pgAdmin を別に立てずに Postgres を見て触るための画面です。`D
 
 - `settings.json`: ギルドごとの Bot 設定
 - `data/.admin_session_secret`: 管理UI セッション署名キー（`ADMIN_FLASK_SECRET_KEY` 未設定時に初回起動で自動生成）
-- `data/logs/bot.log`: Discord Bot のログ（最大 1MB × 3世代）
-- `data/logs/admin.log`: 管理 UI のログ（最大 1MB × 3世代）
+- `data/logs/bot.log`: Discord Bot のログ
+- `data/logs/admin.log`: 管理 UI のログ
+- `data/logs/web.log`: 公開サイトのログ
+- `data/logs/cdn.log`: 配信サーバーのログ
+
+> ログは**日付で1日1ファイル**に回し、既定で **3,650 日（10年）** 保管します
+> （`LOG_RETENTION_DAYS` で変更可）。回した分は `bot.log.2026-09-03.gz` のように
+> gzip で畳まれます（いま書いているファイルは畳まないので `tail -f` で追えます）。
+> 以前は 1MB × 3世代のサイズ回転で、**混んだ日は半日ぶんも残りませんでした。**
 - `data/admin_monitor/`: 監視のハートビートとインシデント記録
 - `data/_dev_signals/`: 開発者パネルから Bot へ渡す実行シグナル
 - `data/djaudio_cache`: DJAudio の一時 MP3 キャッシュ

@@ -132,7 +132,7 @@ import 時に ffmpeg の解決をするので、共通の置き場にはでき�
 | `data/_recording_state.json` | 録音中の状況 | Bot が書き、Admin が読む |
 | `data/admin_monitor/heartbeat.json` | 管理画面の死活 | Admin |
 | `data/.admin_session_secret` | セッション署名キー | Admin（無ければ生成する） |
-| `data/logs/` | 各プロセスのログ（`RotatingFileHandler`） | それぞれ |
+| `data/logs/` | 各プロセスのログ（日付で1日1ファイル・既定10年保管・回した分は gzip。`services/log_setup.py`） | それぞれ |
 
 `data/` は Docker のボリューム `app_data` として3つのコンテナすべてに
 `/app/data` でマウントされる。場所の解決は必ず `SETTINGS_DIR` を通す。

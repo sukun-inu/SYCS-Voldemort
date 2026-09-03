@@ -1,17 +1,12 @@
 import json
 import logging
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from envutil import env_bool
+from services.log_setup import install_file_logging
 from webapp_admin.core.config import resolve_session_secret, settings_dir
 
-_LOG_FMT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-_log_dir = settings_dir() / "logs"
-_log_dir.mkdir(parents=True, exist_ok=True)
-_fh = RotatingFileHandler(_log_dir / "admin.log", maxBytes=1_000_000, backupCount=3, encoding="utf-8")
-_fh.setFormatter(logging.Formatter(_LOG_FMT))
-logging.getLogger().addHandler(_fh)
+install_file_logging(settings_dir() / "logs", "admin.log")
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
@@ -494,6 +489,11 @@ def _register_middleware(app: FastAPI, secret: str) -> None:
         いずれでもない例外（＝上のハンドラが対応していない実装バグ）しか
         受け取らない（詳しくは _unhandled_request_response）。
         """
+        # request.client.host は uvicorn の proxy_headers が X-Forwarded-For
+        # から直したあとの値（admin_main.py で有効にしている）。信頼する
+        # プロキシ以外から来たヘッダは uvicorn が捨てるので、ここでは
+        # そのまま使ってよい。CF-Connecting-IP はそれより手前にある
+        # Cloudflare が付けるもので、より確からしいので優先する。
         client_ip = request.headers.get("CF-Connecting-IP") or (request.client.host if request.client else "unknown")
         snap = {"method": request.method, "path": request.url.path, "endpoint": None, "remote_addr": client_ip}
         try:

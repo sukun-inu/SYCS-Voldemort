@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from bot_setup import create_bot, setup_events
@@ -8,17 +7,14 @@ from commands import register_all_commands
 from commands.interaction_utils import install_global_app_command_error_handler
 from config import DISCORD_BOT_TOKEN
 from envutil import env_path
+from services.log_setup import LOG_FORMAT, install_file_logging
 
-_LOG_FMT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-logging.basicConfig(level=logging.INFO, format=_LOG_FMT)
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 # 素の os.getenv("SETTINGS_DIR", 既定値) は SETTINGS_DIR="" のとき Path("") =
 # カレントディレクトリになり、ログだけ data/ の外へ出ていた。envutil に揃える。
 _log_dir = env_path("SETTINGS_DIR", Path(__file__).resolve().parent / "data") / "logs"
-_log_dir.mkdir(parents=True, exist_ok=True)
-_fh = RotatingFileHandler(_log_dir / "bot.log", maxBytes=1_000_000, backupCount=3, encoding="utf-8")
-_fh.setFormatter(logging.Formatter(_LOG_FMT))
-logging.getLogger().addHandler(_fh)
+install_file_logging(_log_dir, "bot.log")
 
 
 async def main():
