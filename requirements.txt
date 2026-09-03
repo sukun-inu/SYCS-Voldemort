@@ -52,7 +52,11 @@ pywebpush==2.4.0
 cryptography==50.0.0
 
 # --- 画像・音声 ---
-Pillow==12.2.0
+# 12.2.0 は 11 件の勧告に該当していた（PcfFontFile の glyph 寸法、ImageCms の
+# apply、PdfParser の展開爆弾など）。12.3.0 で全部修正されている。地震画像は
+# 自分で描くだけだが、colorthief がサーバーのロゴ画像を読むので、復号側の
+# 欠陥は外から与えられたデータに当たる。CI の pip-audit がこれを見つけた。
+Pillow==12.3.0
 mutagen==1.48.1
 
 # --- 監視 ---

@@ -200,6 +200,21 @@ python -m mypy -p webapp -p events -p services -p webapp_admin -p commands
 
 設定は `pyproject.toml`。CI が3つとも回し、落ちたらジョブが落ちます。
 
+依存の脆弱性検査も手元で回せます。
+
+```bash
+PYTHONUTF8=1 python -m pip_audit -r requirements.txt --strict --ignore-vuln PYSEC-2026-3002
+```
+
+`PYTHONUTF8=1` を外さないでください。pip-audit の requirements パーサは
+`locale.getpreferredencoding()` でファイルを復号するので、日本語ロケールの
+Windows（cp932）だと `requirements.txt` の日本語コメントで `UnicodeDecodeError`
+になります。CI（ubuntu）だけ通って手元で通らない状態を作らないための指定です。
+
+`--ignore-vuln` を増やすときは、**`.github/workflows/tests.yml` に理由と外せる条件を
+必ず書いてください。** 書かずに足すと、次に見る人には「無視してよい」と「無視する
+しかない」の区別が付きません。
+
 **型検査を通すために、実行時の防御を外さないこと。** これが最も重大な禁止事項
 です。実際に起きた事故:
 
@@ -251,6 +266,7 @@ return discord.Color.dark_grey()
 | `pyproject.toml` の `max-complexity` | 23 | 現在の最大値に合わせた天井（`_build_search_queries` と `handle_security_for_message`） |
 | CI の `mypy -p ...` | 本体5パッケージ全部 | 147ファイル |
 | `tools/check_docstrings.py` の `FLOOR_PERCENT` | 100 | 本体の関数 1287 本すべてに docstring がある状態を保つ |
+| `tests.yml` の pip-audit `--ignore-vuln` | 1 件 | 無視している勧告の数。増やすときは理由と外せる条件を必ず併記する |
 
 どれも「今より悪くしない」ための歯止めです。**テストを足したり関数を割ったり
 したら、この数字も一緒に締めてください。** 緩めたままにすると、その分だけ静かに
@@ -261,7 +277,7 @@ return discord.Color.dark_grey()
 
 ---
 
-## 8. CI が落とす8つの条件
+## 8. CI が落とす10個の条件
 
 `.github/workflows/tests.yml`。`main` への push と、すべての pull request で
 走ります。
@@ -274,6 +290,16 @@ return discord.Color.dark_grey()
 6. `tools/check_requirements.py`（依存の固定が Docker と同じ条件で解けるか）
 7. `tools/check_admin_schema.py` と `tools/generate_admin_docs.py --check`
 8. `tools/check_docstrings.py`（本体の関数に docstring があるか。下限 100）
+9. `sh -n docker/*.sh`（シェルスクリプトの構文）
+10. `pip-audit -r requirements.txt --strict`（依存に既知の脆弱性が無いか）
+
+9. があるのは、`docker/postgres-backup.sh` を compose の YAML の中ではなく
+ファイルに置いた理由の一つがこれだからです。YAML の中のシェルは構文検査に
+掛けられません。検査できる形にしたなら、必ず検査します。
+
+10. は固定（全部 `==`）と対です。固定は「勝手に動かない」ことしか保証せず、
+固定したまま古くなったものが放置される側の危険は増えます。入れた初回で
+Pillow 12.2.0 の勧告11件が出ました。
 
 8. は**数しか見ていません。** 空でない文字列が書いてあれば通るので、「読めば
 分かることを書き写しただけの docstring」は素通りします。緑であることは、4. を
