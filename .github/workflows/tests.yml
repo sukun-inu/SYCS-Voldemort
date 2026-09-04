@@ -1,12 +1,27 @@
 name: テスト
 
-# main への push と、すべての pull request で実行する。
+# main への push と、すべての pull request で実行する。手で回すこともできる。
 # pytest は入っていない前提のリポジトリなので、テストは必ず unittest で回す。
 on:
   push:
     branches:
       - main
   pull_request:
+  # 手で回せるようにしてある（gh workflow run テスト --ref main）。
+  #
+  # **なぜ要るか。** push が通ったのに CI が走らないことが実際に起きた。
+  # push が ref のロック確認と競合し（`remote rejected ... is at <その commit>
+  # but expected <一つ前>`）、**ref の更新は通ったが GitHub が push イベントを
+  # 発火しなかった。** 結果、main の先頭に check run が0件の commit が残った。
+  #
+  # そうなると gh からは手が無い。`gh run rerun` は既存の run を回し直す
+  # コマンドなので、run が存在しない commit には使えない。空コミットを積んで
+  # 履歴を汚すか、次の push まで未検証のまま放置するかしか選べなくなる。
+  #
+  # 手元で全部通していても、この検査の値打ちは「CI の Python 3.11 で通ること」に
+  # ある（手元は 3.13）。実際、直前に直したのは 3.13 では通って 3.11 で落ちる
+  # 種類のバグだった。未検証のまま残せる状態にしておかない。
+  workflow_dispatch:
 
 jobs:
   test:

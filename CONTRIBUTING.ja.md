@@ -280,7 +280,18 @@ return discord.Color.dark_grey()
 ## 8. CI が落とす11個の条件
 
 `.github/workflows/tests.yml`。`main` への push と、すべての pull request で
-走ります。
+走ります。手で回すこともできます。
+
+```bash
+gh workflow run テスト --ref main
+```
+
+手で回す口を用意してあるのは、**push が通ったのに CI が走らないことが実際に
+起きた**からです。push が ref のロック確認と競合して、ref の更新は通ったのに
+GitHub が push イベントを発火せず、`main` の先頭に検査結果ゼロの commit が
+残りました。`gh run rerun` は既存の run を回し直すコマンドなので、run が無い
+commit には使えません。理由の詳細はワークフローの `workflow_dispatch` の
+コメントにあります。
 
 1. `python -m unittest discover -s tests -t .`
 2. カバレッジが `fail_under` を下回らないこと
