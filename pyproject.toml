@@ -68,6 +68,13 @@ follow_imports = "silent"
 
 # 型情報を持たない外部ライブラリ。ここに挙げたものは import できなくても
 # 型検査を止めない（discord.py などは py.typed を出していない）。
+#
+# mypy 2 系は、この一覧のうち3つを「unused section(s)」として報告する
+# （imageio_ffmpeg / rcssmin / rjsmin）。**消さないこと。** 使われていないのは
+# CI の `-p` に入っていない場所からしか import していないからで、
+# imageio_ffmpeg は config.py、rcssmin と rjsmin は scripts/minify_assets.py が
+# 使っている。型検査の対象をそこまで広げた時点で必要になる。
+# なお報告は note であって error ではないので、CI は落ちない。
 [[tool.mypy.overrides]]
 module = [
     "aiohttp.*",

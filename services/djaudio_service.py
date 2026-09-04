@@ -95,7 +95,13 @@ def _sync_fetch_sc_client_id_via_ytdlp() -> str | None:
             ie = SoundcloudIE(ydl)
             ie._real_initialize()
 
-        cid = SoundcloudIE._CLIENT_ID
+        # 注釈を付けているのは mypy のため。yt-dlp は型情報を持たない
+        # （pyproject.toml の overrides で ignore_missing_imports にしてある）ので
+        # _CLIENT_ID は Any になり、warn_return_any が「Any を str | None として
+        # 返している」と指摘する。mypy 2 系から出るようになった。
+        # **下の `if cid:` を消して型を通す、という直し方をしないこと。**
+        # 空文字のときにログだけ出して None を返す振る舞いが失われる。
+        cid: str | None = SoundcloudIE._CLIENT_ID
         if cid:
             logger.info("yt-dlp Python API で client_id 取得成功: %s…", str(cid)[:8])
             return cid
