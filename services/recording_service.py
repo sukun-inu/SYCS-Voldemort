@@ -514,6 +514,48 @@ def strip_rtp_padding(packet, payload: bytes | None) -> bytes | None:
     return payload[:-count]
 
 
+# Opus の TOC（先頭バイト）から、1フレームのサンプル数を引く表。
+# RFC 6716 の config が、モードと帯域と**フレーム長**をまとめて表す。
+#   config  0〜11 SILK   : 10 / 20 / 40 / 60 ms
+#   config 12〜15 Hybrid : 10 / 20 ms
+#   config 16〜31 CELT   : 2.5 / 5 / 10 / 20 ms
+_OPUS_CONFIG_MS = (
+    [(10, 20, 40, 60)[c % 4] for c in range(12)]
+    + [(10, 20)[c % 2] for c in range(12, 16)]
+    + [(2.5, 5, 10, 20)[c % 4] for c in range(16, 32)]
+)
+
+
+def opus_frame_samples(packet: bytes | None) -> int | None:
+    """Opus パケットが何サンプルぶんかを TOC から読む。読めなければ None。
+
+    **TOC に入っているのは「長さ」だけで、位置は入っていない。** タイムスタンプも
+    連番も無い（Opus は時間情報を持たない素の符号器で、だから RTP 側が運ぶ）。
+    ここで読むのは位置を決めるためではなく、**位置を決める式の前提を見張るため**。
+
+    _FRAME_SAMPLES = 960（20ms）が欠落補間の位置計算に埋め込まれている。
+    Discord は 20ms 固定だが、それはクライアントの実装であってプロトコルの
+    保証ではない。Opus は1パケットに 60ms まで入れられる（実測で確認した）。
+    崩れたときに黙って位置がずれるのではなく、数として出るようにする。
+    """
+    if not packet:
+        return None
+    toc = packet[0]
+    config = toc >> 3
+    code = toc & 0b11
+    if code == 0:
+        frames = 1
+    elif code in (1, 2):
+        frames = 2
+    else:
+        if len(packet) < 2:
+            return None
+        frames = packet[1] & 0b00111111
+    if frames <= 0:
+        return None
+    return int(_OPUS_CONFIG_MS[config] * frames * SAMPLE_RATE / 1000)
+
+
 # ── 受信ストリームの組み立て ──────────────────────────────────
 
 # 順番待ちで抱えておく上限。これを過ぎたら穴は諦めて先へ進む。
@@ -586,6 +628,9 @@ class _StreamAssembler:
         self.rebased = 0  # 時計が飛んで起点を張り直した回数
         self.unknown = 0  # 誰の音か分からないまま受け取った数
         self.overflow = 0  # 抱えきれずに捨てた数
+        self.jumped = 0  # 時計が飛んだだけで、落ちてはいない番号の数
+        self.odd_frames = 0  # 20ms でない長さのパケット
+        self._last_ts: int | None = None  # 直前に出したパケットの RTP タイムスタンプ
         self.lost = 0  # 待っても来なかったパケット数
         self.late = 0  # 出したあとに届いた／溢れて捨てたパケット数
         self.silence = 0  # 発話の切れ目に来る無音パケット（並べ直しには入れない）
@@ -721,6 +766,7 @@ class _StreamAssembler:
             item = self._pending.pop(self._next_seq, None)
             if item is not None:
                 out.append((item[1], item[2], item[0]))
+                self._last_ts = item[1]
                 self._next_seq = (self._next_seq + 1) % _SEQ_MOD
                 continue
             # 穴が空いている。少しだけ待ち、それでも来なければ諦めて飛ばす。
@@ -739,11 +785,36 @@ class _StreamAssembler:
                 if 0 <= _wrapped_delta(seq, next_seq, _SEQ_MOD) < gap:
                     self._skipped.discard(seq)
                     known += 1
-            self.lost += gap - known
-            # 欠けたぶんは Opus に「無かった」と伝えて補間させる。
+            missing = gap - known
             next_ts = self._pending[skipped][1]
             # 欠けたぶんには受信時刻が無い。次に届いたものの時刻で代用する。
             next_at = self._pending[skipped][0]
+
+            # **その番号のパケットが本当に送られていたのかを確かめる。**
+            #
+            # 番号が飛んでいても、原因は2つある。片方は本物の損失、もう片方は
+            # 送信側の連番が振り直されたとき（再接続）。番号の差だけでは区別が
+            # 付かず、まとめて欠落に数えていたので、本番の損失率に「本当に
+            # 落ちた」と「再接続で飛んだ」が混ざっていた。
+            #
+            # タイムスタンプの進みを見れば分かる。落ちたパケットが本当に
+            # 送られていたなら、その数ぶんの時間が進んでいるはず。**Opus は
+            # 1パケットに 60ms しか入らない**ので、欠けた数で説明できないほど
+            # 時刻が進んでいる（または戻っている）なら、落ちたのではなく
+            # 時計が変わったということ。
+            expected = (gap + 1) * _FRAME_SAMPLES
+            ts_gap = None if self._last_ts is None else _wrapped_delta(next_ts, self._last_ts, _TS_MOD)
+            if ts_gap is not None and not 0 < ts_gap <= expected * 3 + _FRAME_SAMPLES:
+                # 時計が変わった。欠落には数えず、**補間も作らない**
+                # （位置の計算が next_ts を基準にするので、飛んだ時刻から
+                # 引くと、まったく無関係な場所に無い音を置くことになる）。
+                self.jumped += missing
+                self._last_ts = None
+                self._next_seq = skipped
+                continue
+
+            self.lost += missing
+            # 欠けたぶんは Opus に「無かった」と伝えて補間させる。
             for i in range(min(gap, _PLC_MAX_FRAMES)):
                 out.append(((next_ts - (gap - i) * _FRAME_SAMPLES) % _TS_MOD, None, next_at))
             self._next_seq = skipped
@@ -922,6 +993,11 @@ class _RecordingSinkBase:
             stream.decrypted += 1
         if encoded and sequence >= 0:
             stream.received += 1
+            # 位置の計算は 20ms 固定を前提にしている（_FRAME_SAMPLES）。
+            # 崩れたら黙ってずれるのではなく、数として出す。
+            samples = opus_frame_samples(encoded)
+            if samples is not None and samples != _FRAME_SAMPLES:
+                stream.odd_frames += 1
             stream.push(sequence, int(packet.timestamp), encoded, now)
         elif encoded:
             # voice_recv の SilencePacket は sequence が常に -1（rtp.py）。
@@ -1022,7 +1098,7 @@ class _RecordingSinkBase:
             logger.info(
                 "[recording] ssrc=%s (%s) 受信=%d 成功=%d 失敗=%d "
                 "E2EE復号=%d E2EE不可=%d 詰め物=%d 欠落=%d 手遅れ=%d 無音=%d "
-                "張り直し=%d 不明=%d 溢れ=%d "
+                "張り直し=%d 不明=%d 溢れ=%d 飛び=%d 異長=%d "
                 "RTP種別=%s",
                 ssrc,
                 name,
@@ -1038,6 +1114,8 @@ class _RecordingSinkBase:
                 stream.rebased,
                 stream.unknown,
                 stream.overflow,
+                stream.jumped,
+                stream.odd_frames,
                 stream.payload_types,
             )
 

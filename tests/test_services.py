@@ -3106,6 +3106,41 @@ class StreamAssemblerTests(unittest.TestCase):
         got = self._seqs(self.stream.drain(1.0))
         self.assertEqual(got, [8, 9, 10])
 
+    def test_a_gap_with_matching_timestamps_is_real_loss(self):
+        """時刻の進みが欠けた数と合っていれば、本物の損失として数えること。
+
+        20ms のパケットが3個ぶん飛んで、時刻もちょうど3個ぶん進んでいる。
+        これは本当に送られて届かなかったということ。
+        """
+        self.stream.push(1, 960 * 1, b"\xfc\xff\xfe", 0.0)
+        self.stream.push(5, 960 * 5, b"\xfc\xff\xfe", 0.0)
+        self.stream.flush()
+        self.assertEqual(self.stream.lost, 3)
+        self.assertEqual(self.stream.jumped, 0)
+
+    def test_a_gap_whose_timestamps_jumped_is_not_counted_as_loss(self):
+        """**時計が変わっただけのものを、損失に数えないこと。**
+
+        再接続で送信側の連番とタイムスタンプが振り直されると、番号の差だけ
+        見れば巨大な穴に見える。まとめて欠落に数えていたので、本番の損失率に
+        「本当に落ちた」と「再接続で飛んだ」が混ざっていた。Opus は1パケットに
+        60ms しか入らないので、欠けた数で説明できない時刻の進みは損失ではない。
+
+        補間も作らないこと。位置は次のパケットの時刻から引いて決めるので、
+        飛んだ時刻から引くと、まったく無関係な場所に無い音を置くことになる。
+        """
+        self.stream.push(1, 960 * 1, b"\xfc\xff\xfe", 0.0)
+        # 番号は3個ぶんしか飛んでいないのに、時刻は1時間ぶん進んでいる
+        self.stream.push(5, 960 * 5 + 48000 * 3600, b"\xfc\xff\xfe", 0.0)
+        drained = self.stream.flush()
+        self.assertEqual(self.stream.lost, 0, "時計の飛びを損失に数えている")
+        self.assertEqual(self.stream.jumped, 3)
+        self.assertEqual(
+            [payload for _ts, payload, _at in drained].count(None),
+            0,
+            "飛んだ時刻を基準に補間を作っている",
+        )
+
     def test_a_packet_without_audio_is_not_counted_as_loss(self):
         """音声が入っていないパケットの番号を、欠落として数えないこと。
 
@@ -3450,6 +3485,36 @@ class OpusResilienceTests(unittest.TestCase):
         self._drain()
         self.assertEqual(self.session.tracks, {})
 
+    def test_the_toc_gives_the_frame_length(self):
+        """Opus の TOC から、そのパケットが何サンプルぶんかを読めること。
+
+        位置の計算は 20ms 固定（_FRAME_SAMPLES=960）を前提にしている。
+        Opus は1パケットに 60ms まで入れられるので、前提が崩れたときに
+        黙ってずれるのではなく数として出せるようにしておく。
+        """
+        import math
+        import struct
+
+        for ms in (10, 20, 40, 60):
+            n = int(self.rec.SAMPLE_RATE * ms / 1000)
+            pcm = bytearray()
+            for i in range(n):
+                v = int(9000 * math.sin(2 * math.pi * 300 * i / self.rec.SAMPLE_RATE))
+                pcm += struct.pack("<hh", v, v)
+            packet = self.opus.Encoder().encode(bytes(pcm), n)
+            self.assertEqual(self.rec.opus_frame_samples(packet), n, f"{ms}ms のパケットを読み違えている")
+
+    def test_the_toc_of_the_silence_packet_is_one_frame(self):
+        """voice_recv が無音として使う3バイトも 20ms 1フレームであること。"""
+        from discord.ext.voice_recv.rtp import OPUS_SILENCE
+
+        self.assertEqual(self.rec.opus_frame_samples(OPUS_SILENCE), 960)
+
+    def test_a_broken_toc_never_raises(self):
+        """読めない中身で例外を出さないこと（受信スレッドごと落ちる）。"""
+        for bad in (None, b"", b"\xff"):
+            self.rec.opus_frame_samples(bad)
+
     def test_library_is_not_asked_to_decode(self):
         """wants_opus() が False だと、壊れたパケットで受信スレッドごと落ちる。"""
         self.assertTrue(self.sink.wants_opus())
@@ -3618,7 +3683,7 @@ class RecordingSinkShapeTests(unittest.TestCase):
         self.assertIn(
             "ssrc=18295 (すずき) 受信=2 成功=2 失敗=0 E2EE復号=0 E2EE不可=0 "
             "詰め物=0 欠落=0 手遅れ=0 無音=0 張り直し=0 不明=0 溢れ=0 "
-            "RTP種別={120: 2}",
+            "飛び=0 異長=0 RTP種別={120: 2}",
             summary[0],
         )
 
