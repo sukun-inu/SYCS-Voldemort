@@ -5632,6 +5632,132 @@ class DaveDecryptionTests(unittest.TestCase):
         for track in session.tracks.values():
             track.close(1.0)
 
+    def test_an_undecryptable_frame_is_concealed_not_silenced(self):
+        """復号できなかった 20ms を、無音ではなく欠落補間で埋めること。
+
+        復号できないフレームを skip() していたころは、番号だけ進んで
+        **その 20ms がまるごと無音**になっていた。詰め物と同じ扱いにして
+        いたのが理由だが、詰め物は「はじめから音が無い」のに対しこちらは
+        「音はあったが取り出せなかった」なので、意味が違う。sporadic に
+        起きると発話の途中に穴が開き、途切れ途切れに聞こえる。
+
+        欠落として数えれば Opus の欠落補間が前後を繋ぐ。連続して失敗した
+        場合は _PLC_MAX_FRAMES で頭打ちになるので、無い音を作り続けることも
+        ない。
+        """
+        import services.recording_service as recording
+
+        session = recording.RecordingSession(
+            guild_id=999,
+            channel_id=1,
+            channel_name="VC",
+            started_by_id=1,
+            started_by_name="t",
+            started_at=time.monotonic(),
+            max_seconds=0,
+            retention_days=1,
+        )
+        sink = recording._make_sink_class()(session)
+        user = Mock(id=1, display_name="すずき")
+        plain = _opus_frame(self)
+        encrypted = bytes(87) + bytes.fromhex("c8db040cfafa")
+
+        # 3枚目だけ復号に失敗させる
+        attempts = {"n": 0}
+
+        def flaky(client, user_id, payload):
+            attempts["n"] += 1
+            return None if attempts["n"] == 3 else plain
+
+        data = SimpleNamespace(
+            packet=SimpleNamespace(ssrc=1, sequence=100, timestamp=48000, payload=120, padding=False), opus=encrypted
+        )
+        with patch.object(recording.dave, "decrypt_opus", flaky):
+            for i in range(5):
+                data.packet.sequence = 100 + i
+                data.packet.timestamp = 48000 + i * 960
+                sink.write(user, data)
+            sink.flush_pending()
+
+        stream = sink._streams[1]
+        self.assertEqual(stream.encrypted, 1, "復号の失敗を数えていない")
+        self.assertEqual(stream.lost, 1, "復号できなかった 20ms を欠落として扱っていない")
+        track = session.tracks[1]
+        track.close(track.written_bytes / recording.BYTES_PER_SECOND)
+        self.assertEqual(
+            track.voiced_bytes,
+            5 * recording.FRAME_BYTES,
+            "復号できなかった 20ms が無音で埋められている（＝途切れている）",
+        )
+
+    def test_a_dave_frame_arriving_before_the_speaker_is_known_does_not_crash(self):
+        """誰の音か分かる前に暗号化フレームが来ても、受信スレッドを落とさないこと。
+
+        user_id は `if user is not None:` の中でしか代入されないのに、復号は
+        その外で user_id を使っていた。音は UDP で届くのに「その SSRC が誰か」
+        はゲートウェイの SPEAKING イベントで届くので、再接続直後には実際に
+        user=None のまま音が来る。そこで UnboundLocalError を投げると、
+        voice_recv の router スレッドごと死んで**そこから先が全部無音**になる。
+        """
+        import services.recording_service as recording
+
+        session = recording.RecordingSession(
+            guild_id=999,
+            channel_id=1,
+            channel_name="VC",
+            started_by_id=1,
+            started_by_name="t",
+            started_at=time.monotonic(),
+            max_seconds=0,
+            retention_days=1,
+        )
+        sink = recording._make_sink_class()(session)
+        encrypted = bytes(87) + bytes.fromhex("c8db040cfafa")
+        data = SimpleNamespace(
+            packet=SimpleNamespace(ssrc=1, sequence=100, timestamp=48000, payload=120, padding=False), opus=encrypted
+        )
+        sink.write(None, data)  # 例外が出ないこと自体が検証
+        self.assertEqual(sink._streams[1].unknown, 1)
+
+
+def _opus_frame(test, hz: int = 440) -> bytes:
+    """20ms ぶんの本物の Opus パケット。作れない環境ではテストを飛ばす。
+
+    合成した「それらしいバイト列」では、捨てられずに残ったあと本当に音として
+    デコードできるのかが確かめられない。
+    """
+    import math
+    import struct
+
+    import discord.opus as opus
+
+    import services.recording_service as recording
+
+    if not opus.is_loaded():
+        try:
+            opus._load_default()
+        except Exception:
+            test.skipTest("libopus が読み込めない環境です")
+    pcm = bytearray()
+    for i in range(960):
+        v = int(12000 * math.sin(2 * math.pi * hz * i / recording.SAMPLE_RATE))
+        pcm += struct.pack("<hh", v, v)
+    return opus.Encoder().encode(bytes(pcm), 960)
+
+
+def _opus_frame_that_looks_like_padding(test) -> bytes:
+    """「最終バイト＝全体の長さ」になってしまう、本物の音声パケット。
+
+    決め打ちの周波数を書かずに探すのは、libopus の版で符号長が変わるため。
+    合成したバイト列で代用してはいけない。**捨てられずに残ったあと本当に
+    音になること**まで確かめたいので、デコードできる本物が要る。
+    """
+    for hz in range(100, 4000):
+        frame = _opus_frame(test, hz)
+        if frame[-1] == len(frame):
+            return frame
+    test.skipTest("この libopus では偶然の一致が作れませんでした")
+
 
 class RtpPaddingTests(unittest.TestCase):
     """RTP のパディングを取り除くこと。
@@ -5752,6 +5878,62 @@ class RtpPaddingTests(unittest.TestCase):
         stream = sink._streams[1]
         self.assertEqual(stream.padding_only, 1)
         self.assertEqual(stream.lost, 0, "詰め物を欠落として二重に数えている")
+
+    def test_a_voice_packet_is_kept_even_if_its_last_byte_equals_its_length(self):
+        """最終バイトが偶然「全体の長さ」と一致しただけの音声を捨てないこと。
+
+        長さの一致だけで詰め物と決めていたころ、普通の音声パケットが 1/256 で
+        巻き込まれていた。捨てられた番号は drain() から穴に見えるが、skip()
+        されているので**欠落補間も作られず**、その 20ms がまるごと無音になる。
+        毎秒50パケットなので 2〜4秒に1回。これが「音が途切れ途切れになる」の
+        正体だった（実録音を Discord と同じ条件で載せ直して 1097 枚中
+        64kbps で 5枚 / 96kbps で 10枚が消えていた）。
+
+        本物の詰め物は全バイトが同じ値だったので、そこまで見れば分けられる。
+        """
+        payload = bytes(range(1, 20)) + bytes([20])  # 20バイト、末尾も 20
+        self.assertEqual(len(payload), 20)
+        self.assertEqual(
+            self.rec.strip_rtp_padding(self._packet(padding=False), payload),
+            payload,
+            "偶然の一致だけで音声を捨てている",
+        )
+
+    def test_a_voice_packet_that_looks_like_padding_leaves_no_hole(self):
+        """その音声が、無音の穴ではなく音として書かれること。
+
+        単体で捨てないことより、**トラックに 20ms の穴が開かないこと**が
+        目的なので、sink まで通して確かめる。
+        """
+        session = self.rec.RecordingSession(
+            guild_id=999,
+            channel_id=1,
+            channel_name="VC",
+            started_by_id=1,
+            started_by_name="t",
+            started_at=time.monotonic(),
+            max_seconds=0,
+            retention_days=1,
+        )
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=1, display_name="すずき")
+        frames = [_opus_frame(self, 440)] * 5
+        frames[2] = _opus_frame_that_looks_like_padding(self)
+
+        for i, payload in enumerate(frames):
+            packet = SimpleNamespace(ssrc=1, sequence=100 + i, timestamp=48000 + i * 960, payload=120, padding=False)
+            sink.write(user, SimpleNamespace(packet=packet, opus=payload))
+        sink.flush_pending()
+
+        stream = sink._streams[1]
+        self.assertEqual(stream.padding_only, 0, "音声を詰め物として捨てている")
+        track = session.tracks[1]
+        track.close(track.written_bytes / self.rec.BYTES_PER_SECOND)
+        self.assertEqual(
+            track.voiced_bytes,
+            5 * self.rec.FRAME_BYTES,
+            "20ms ぶんが無音で埋められている（＝途切れている）",
+        )
 
     def test_an_empty_payload_is_treated_as_having_no_audio(self):
         """空のペイロードを「音声あり」として扱わないこと。
