@@ -495,6 +495,19 @@ def strip_rtp_padding(packet, payload: bytes | None) -> bytes | None:
 
     パディングが一部だけの場合もある。E2EE のフレームでは、末尾のマーカーが
     パディングに隠れて見えなくなる（本番で ... 010dfafa0202 として観測した）。
+
+    **ヘッダのビットが立っていないときは、長さの一致だけで決めないこと。**
+    もとは「最終バイト＝全体の長さ」だけで詰め物と決めていて、「平文の Opus が
+    そうなる確率は無視できる」と書いてあったが、無視できなかった。最終バイトは
+    レンジ符号器の出力でほぼ一様なので 1/256 で一致する。毎秒50パケットなら
+    2〜4秒に1回、**普通の音声パケットが捨てられる**。捨てられた番号は skip()
+    されるので drain() が欠落補間も作らず、その 20ms がまるごと無音になり、
+    録音が途切れ途切れになっていた（実録音を Discord と同じ条件で載せ直すと
+    1097枚中 64kbps で5枚 / 96kbps で10枚が消えていた）。
+
+    上に載せた本番の実測 2 件は、どちらも**全バイトが同じ値**だった。そこまで
+    見れば偶然の一致と分けられる（誤認 0 件になることを同じ 1097 枚で確認）。
+    ビットが立っているときは RFC どおりに信じてよいので、そちらは変えない。
     """
     # 空も「音声が入っていない」に含める。b"" を素通しすると、呼び出し側の
     # `if encoded` が偽になってどのカウンタにも入らず、番号だけ消費した状態で
@@ -502,10 +515,8 @@ def strip_rtp_padding(packet, payload: bytes | None) -> bytes | None:
     if not payload:
         return None
     count = payload[-1]
-    # ヘッダのビットが立っていなくても、長さが一致するならパディングとみなす。
-    # 平文の Opus が「最終バイト＝自身の長さ」になる確率は無視できる。
     flagged = bool(getattr(packet, "padding", False))
-    if not flagged and count != len(payload):
+    if not flagged and (count != len(payload) or payload.count(payload[0]) != len(payload)):
         return payload
     if count <= 0 or count > len(payload):
         return payload  # 壊れた値。触らないでおく。
@@ -958,6 +969,18 @@ class _RecordingSinkBase:
                 self._users.pop(ssrc, None)
                 return
             self._users[ssrc] = user
+        else:
+            # **ここで必ず束縛すること。** user_id は上の分岐の中でしか
+            # 代入されないのに、下の DAVE 復号はその外で使っている。user=None
+            # のまま暗号化フレームが来ると UnboundLocalError になり、例外は
+            # voice_recv の router スレッドまで抜けてスレッドごと死ぬ
+            # （＝そこから先が全員ぶん無音になる）。再接続直後は SSRC の
+            # 対応が付く前に音が届くので、実際に起こりうる並びである。
+            #
+            # 直前まで同じ SSRC で喋っていた人が分かっていれば、その id で
+            # 復号できる。分からなければ 0 を渡し、復号は失敗して欠落として
+            # 扱われる（下の分岐）。
+            user_id = int(getattr(self._users.get(ssrc), "id", 0) or 0)
 
         stream = self._stream_for(ssrc)
         if user is None:
@@ -986,8 +1009,17 @@ class _RecordingSinkBase:
                 stream.received += 1
                 stream.encrypted += 1
                 self.session.note_encrypted()
-                if sequence >= 0:
-                    stream.skip(sequence)  # 番号は消費されている（詰め物と同じ）
+                # **skip() しないこと。** 詰め物と同じ扱いにしていたが、
+                # 意味が違う。詰め物は「はじめから音が入っていない」ので
+                # 飛ばすのが正しいが、こちらは「音はあったのに取り出せ
+                # なかった」である。skip() すると drain() が穴と見なさず、
+                # 欠落補間も作らないまま番号だけ進むので、その 20ms が
+                # pad_until でまるごと無音になる。ぽつぽつ失敗すると発話の
+                # 途中に 20ms の穴が開き、途切れ途切れに聞こえていた。
+                #
+                # 何も伝えなければ drain() が穴として扱い、欠落に数えたうえで
+                # Opus に前後を繋がせる。連続して失敗しても _PLC_MAX_FRAMES で
+                # 頭打ちになるので、無い音を作り続けることはない。
                 return
             encoded = plain
             stream.decrypted += 1
