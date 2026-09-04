@@ -37,7 +37,6 @@ import services.raid_detection as raid_detection  # noqa: E402
 import services.reaction_role_service as reaction_role_service  # noqa: E402
 import services.spam_detection as spam_detection  # noqa: E402
 
-
 # ──────────────────────────────────────────────
 # logging_service
 # ──────────────────────────────────────────────

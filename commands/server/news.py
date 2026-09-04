@@ -15,7 +15,6 @@ from commands.guards import ensure_admin as _ensure_admin
 from commands.interaction_utils import MESSAGE_BUDGET, cap_list_for_message
 from services.settings_store import add_news_feed, awrite, get_news_feeds, remove_news_feed
 
-
 MAX_FEEDS = 10
 MIN_INTERVAL_MINUTES = 5
 

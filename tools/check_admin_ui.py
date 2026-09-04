@@ -376,19 +376,16 @@ def main():
         # それを上限に clamp した値をそのまま style へ書いていたため、窓が
         # 端に当たると height:572.594px のような小数になり、枠と文字がにじんだ。
         # ここでは置き場をわざと小数にして、窓が整数に収まることを見る。
-        page.evaluate(
-            """() => {
+        page.evaluate("""() => {
           const d = document.getElementById("desktop");
           d.style.height = "612.6px"; d.style.width = "999.4px";
-        }"""
-        )
+        }""")
         page.wait_for_timeout(200)
         page.click("#start-button")
         page.click('.app-tile[data-app-id="djaudio"]')
         page.wait_for_selector('.window[data-app-id="djaudio"]', timeout=6000)
         page.wait_for_timeout(1100)
-        boxes = page.evaluate(
-            """() => {
+        boxes = page.evaluate("""() => {
           const out = [];
           for (const w of document.querySelectorAll(".window")) {
             for (const key of ["left", "top", "width", "height"]) {
@@ -401,15 +398,12 @@ def main():
             }
           }
           return out;
-        }"""
-        )
+        }""")
         check("窓の座標と大きさが小数にならない", boxes == [], f"小数: {boxes}")
-        page.evaluate(
-            """() => {
+        page.evaluate("""() => {
           const d = document.getElementById("desktop");
           d.style.height = ""; d.style.width = "";
-        }"""
-        )
+        }""")
         page.click('.window[data-app-id="djaudio"] .window-control.close')
         page.wait_for_timeout(200)
 
@@ -468,13 +462,11 @@ def main():
             " ".join(page.locator(".toast").last.inner_text().split()),
         )
 
-        limit = page.evaluate(
-            """async () => {
+        limit = page.evaluate("""async () => {
           const r = await fetch('/admin/api/apps/news-feeds', { headers: { Accept: 'application/json' } });
           const j = await r.json();
           return j.sections.flatMap(s => s.collections)[0].max_items;
-        }"""
-        )
+        }""")
         for i in range(2, limit + 1):
             page.fill(feed_window + '.field[data-key="channel_id"] input', f"12345678901234567{i % 10}")
             page.fill(feed_window + '.field[data-key="query"] input', f"埋め{i}")
@@ -560,8 +552,7 @@ def main():
         # ── ウィンドウの大きさをキーボードで変えられること ──
         # つまみは pointerdown だけで動いていたので、マウス以外の利用者は
         # 任意の大きさにできなかった（最大化・最小化はボタンで押せる）。
-        resized = page.evaluate(
-            """() => {
+        resized = page.evaluate("""() => {
           const win = document.querySelector('.window[data-app-id="recording"]');
           const grip = win.querySelector(".window-resize");
           const before = { w: win.offsetWidth, h: win.offsetHeight };
@@ -585,8 +576,7 @@ def main():
           const box = win.getBoundingClientRect();
           const inside = box.right <= layer.right + 1 && box.bottom <= layer.bottom + 1;
           return { focused, before, shrunk, grown, inside };
-        }"""
-        )
+        }""")
         check("リサイズのつまみに焦点を当てられる", resized["focused"])
         check(
             "矢印キーでウィンドウが小さくなる",
@@ -602,13 +592,11 @@ def main():
 
         # select.value に一覧へ無い値を入れても、ブラウザは黙って無視して空欄にする。
         # そのまま保存すると設定が消える（実際に起きた）。
-        picked = page.evaluate(
-            """() => Array.from(
+        picked = page.evaluate("""() => Array.from(
                  document.querySelectorAll('.window[data-app-id="recording"] select'))
                  .filter((s) => !s.hidden)
                  .map((s) => ({ value: s.value,
-                                text: s.selectedOptions[0] ? s.selectedOptions[0].textContent : "" }))"""
-        )
+                                text: s.selectedOptions[0] ? s.selectedOptions[0].textContent : "" }))""")
         orphan = next((x for x in picked if x["value"] == _ORPHAN_CHANNEL), None)
         check("一覧に無いチャンネルでもプルダウンが空にならない", orphan is not None, str([x["value"] for x in picked]))
         check(
@@ -644,13 +632,11 @@ def main():
         page.wait_for_selector('.window[data-app-id="recording"]', timeout=8000)
         page.wait_for_timeout(1500)
 
-        picked = page.evaluate(
-            """() => Array.from(
+        picked = page.evaluate("""() => Array.from(
                  document.querySelectorAll('.window[data-app-id="recording"] select'))
                  .filter((s) => !s.hidden)
                  .map((s) => ({ value: s.value,
-                                text: s.selectedOptions[0] ? s.selectedOptions[0].textContent : "" }))"""
-        )
+                                text: s.selectedOptions[0] ? s.selectedOptions[0].textContent : "" }))""")
         check(
             "19桁のIDが桁落ちせず名前で出る",
             any(x["value"] == _LISTED_CHANNEL and "雑談VC" in x["text"] for x in picked),
@@ -658,8 +644,7 @@ def main():
         )
 
         # チェックボックスは、スキーマ駆動の画面と同じ並びにする
-        boxes = page.evaluate(
-            """() => Array.from(
+        boxes = page.evaluate("""() => Array.from(
                  document.querySelectorAll('.window[data-app-id="recording"] input[type=checkbox]'))
                  .map((b) => {
                    const label = b.closest('label.check');
@@ -668,8 +653,7 @@ def main():
                    const bb = b.getBoundingClientRect(), tb = text.getBoundingClientRect();
                    return { paired: true, sameRow: Math.abs(bb.top - tb.top) < 12,
                             left: Math.round(bb.left) };
-                 })"""
-        )
+                 })""")
         check(
             "チェックと文字が横並びになっている",
             bool(boxes) and all(b["paired"] and b["sameRow"] for b in boxes),
@@ -872,10 +856,8 @@ def main():
             page.locator(us + ".list-row .chip").first.inner_text(),
         )
         # 状態ごとの色をサーバが返しているのに、クライアントが青と赤に潰していた
-        tones = page.evaluate(
-            f"""() => [...document.querySelectorAll('{us.strip()} .list-row .chip')]
-          .map(c => c.className.replace('chip', '').trim())"""
-        )
+        tones = page.evaluate(f"""() => [...document.querySelectorAll('{us.strip()} .list-row .chip')]
+          .map(c => c.className.replace('chip', '').trim())""")
         check("状態の色が状態ごとに分かれている", "success" in tones, " / ".join(tones) or "色なし")
 
         page.fill(us + 'input[type="search"]', "花子")
@@ -928,8 +910,7 @@ def main():
             f'{page.locator(dev + ".log-pane .log-line").count()} 行',
         )
 
-        shape = page.evaluate(
-            """() => {
+        shape = page.evaluate("""() => {
           const view = document.querySelector('.log-pane .log-view').getBoundingClientRect();
           const body = document.querySelector('.window[data-app-id="dev"] .window-body').getBoundingClientRect();
           const tabs = document.querySelector('.dev-panel > .tabbed > .tabs').getBoundingClientRect();
@@ -942,8 +923,7 @@ def main():
             levels: ['is-error', 'is-warn', 'is-debug']
               .map(c => document.querySelectorAll('.log-line.' + c).length),
           };
-        }"""
-        )
+        }""")
         check(
             "ログが窓の高さに合わせて伸びる",
             shape["ratio"] >= 55 and shape["spare"] < 40,
@@ -990,22 +970,19 @@ def main():
         )
         page.fill(sql + ".sql-input", "select 1, 'a' -- c")
         page.wait_for_timeout(200)
-        painted = page.evaluate(
-            """() => ({
+        painted = page.evaluate("""() => ({
           keywords: document.querySelectorAll('.sql-highlight .tok-k').length,
           strings: document.querySelectorAll('.sql-highlight .tok-s').length,
           comments: document.querySelectorAll('.sql-highlight .tok-c').length,
           lines: document.querySelectorAll('.sql-gutter-line').length,
-        })"""
-        )
+        })""")
         check(
             "SQL が色分けされ、行番号が出る",
             painted["keywords"] >= 1 and painted["strings"] == 1 and painted["comments"] == 1 and painted["lines"] == 1,
             json.dumps(painted),
         )
         # 下地（色付き）と入力欄がずれると、二重写しに見えて字が読めなくなる
-        overlay = page.evaluate(
-            """() => {
+        overlay = page.evaluate("""() => {
           const pre = document.querySelector('.sql-highlight');
           const ta = document.querySelector('.sql-input');
           const a = pre.getBoundingClientRect(), b = ta.getBoundingClientRect();
@@ -1017,8 +994,7 @@ def main():
                   && s.lineHeight === t.lineHeight && s.paddingLeft === t.paddingLeft
                   && s.paddingTop === t.paddingTop,
           };
-        }"""
-        )
+        }""")
         check(
             "色分けの層と入力欄がぴったり重なる",
             abs(overlay["dx"]) < 0.5 and abs(overlay["dy"]) < 0.5 and overlay["same"],
@@ -1036,12 +1012,10 @@ def main():
         # いちばん手前の窓（開発者パネル）を最小化して、保存された配置を見る
         page.locator('.window[data-app-id="dev"] .window-control').first.click()
         page.wait_for_selector(".taskbar-app.is-minimized", timeout=3000)
-        saved = page.evaluate(
-            """() => {
+        saved = page.evaluate("""() => {
           const layout = JSON.parse(window.localStorage.getItem('voldemort.desktop.layout.v1'));
           return layout.windows.find(w => w.appId === 'dev') || null;
-        }"""
-        )
+        }""")
         check(
             "最小化中でも元の大きさを保存する",
             bool(saved) and saved["minimized"] and saved["w"] >= 320 and saved["h"] >= 200,
@@ -1055,8 +1029,7 @@ def main():
         page.click("#start-button")
         page.click('.app-tile[data-app-id="reaction-roles"]')
         page.wait_for_selector('.window[data-app-id="reaction-roles"] .field', timeout=8000)
-        notes = page.evaluate(
-            """() => {
+        notes = page.evaluate("""() => {
           const out = {};
           for (const field of document.querySelectorAll('.window[data-app-id="reaction-roles"] .field')) {
             const key = field.dataset.key || '';
@@ -1064,8 +1037,7 @@ def main():
               .some(p => p.textContent.includes('取得できませんでした'));
           }
           return out;
-        }"""
-        )
+        }""")
         check(
             "一覧を引かない項目に取得失敗の断りを出さない",
             notes.get("message_id") is False and notes.get("role_id") is True,
@@ -1075,8 +1047,7 @@ def main():
         # ── タスクバーの中身が帯の中心に来るか ──
         # 上端の 1px の枠は内容の領域を 1px 下げる。行の高さが 1.7 のままだと
         # ピルの高さも 34.09px のような半端な値になり、上下の余白が 1px 割れる。
-        pills = page.evaluate(
-            """() => {
+        pills = page.evaluate("""() => {
           const bar = document.querySelector('.taskbar').getBoundingClientRect();
           const mid = r => (r.top + r.bottom) / 2;
           const out = {};
@@ -1087,8 +1058,7 @@ def main():
             out[sel] = { d: Math.round((mid(r) - mid(bar)) * 100) / 100, h: r.height };
           }
           return out;
-        }"""
-        )
+        }""")
         check(
             "タスクバーのピルが帯の中心に整数の高さで並ぶ",
             bool(pills) and all(abs(v["d"]) <= 0.5 and v["h"] % 1 == 0 for v in pills.values()),
@@ -1125,8 +1095,7 @@ def main():
         )
 
         # ── 通知（トースト） ──
-        toast = page.evaluate(
-            """async () => {
+        toast = page.evaluate("""async () => {
           const m = await import('/static/js/lib/toast.js');
           const node = m.toast('設定を保存しました', 'success', { duration: 0 });
           const s = getComputedStyle(node);
@@ -1149,8 +1118,7 @@ def main():
             above: round(line.top - box.top),
             below: round(box.bottom - line.bottom),
           };
-        }"""
-        )
+        }""")
         check(
             "通知がガラス（背後が透ける）",
             toast["glass"] and toast["alpha"] < 0.9 and toast["lens"],
@@ -1178,8 +1146,7 @@ def main():
             # ブランドのマークと文字は中心を揃える。<img> をインラインのまま
             # <span> に入れると、行boxの descent ぶん（14px × 1.7 で約 7.8px）
             # 入れ物だけ背が高くなり、マークが文字より約 4px 上へずれる。
-            brand = page.evaluate(
-                """() => {
+            brand = page.evaluate("""() => {
               const link = document.querySelector('.brand-link');
               const img = link.querySelector('.brand-mark-image').getBoundingClientRect();
               const r = document.createRange();
@@ -1187,8 +1154,7 @@ def main():
               const t = r.getBoundingClientRect();
               const mid = b => (b.top + b.bottom) / 2;
               return Math.round((mid(img) - mid(t)) * 100) / 100;
-            }"""
-            )
+            }""")
             check(f"ブランドのマークと文字の中心が揃う {path_}", abs(brand) <= 1, f"{brand:+g}px")
 
             if path_ == "/":
@@ -1198,8 +1164,7 @@ def main():
                 #   - セルが埋まっていないと、そこだけ罫線色の塊が出る
                 #   - 隙間が無いと、罫線そのものが1本も見えない（実際にそうなっていた）
                 # の両方を実測で見る。
-                grid = page.evaluate(
-                    """() => {
+                grid = page.evaluate("""() => {
                   const grid = document.querySelector('.feature-grid');
                   const cs = getComputedStyle(grid);
                   const g = grid.getBoundingClientRect();
@@ -1220,8 +1185,7 @@ def main():
                     seams,
                     ruled: cs.backgroundColor !== getComputedStyle(grid.firstElementChild).backgroundColor,
                   };
-                }"""
-                )
+                }""")
                 check(
                     "機能カードの枠に空きセルが残らない",
                     grid["coverage"] > 0.985,
@@ -1256,8 +1220,7 @@ def main():
                 # 読み物ページは1本の柱で組む。見出し・本文・コマンド一覧・
                 # 箇条書き・ボタンの左端がすべて同じ位置から始まること。
                 # （コマンド一覧だけ 4px 内側に入り、罫線だけ全幅で伸びていた）
-                doc = page.evaluate(
-                    """() => {
+                doc = page.evaluate("""() => {
                   const wrap = document.querySelector('.doc-wrap');
                   const L = wrap.getBoundingClientRect().left
                           + parseFloat(getComputedStyle(wrap).paddingLeft);
@@ -1279,8 +1242,7 @@ def main():
                     gap: Math.round((legal.top - links.bottom) * 10) / 10,
                     iconWidth: Math.round(icon.width * 10) / 10,
                   };
-                }"""
-                )
+                }""")
                 check(
                     "読み物ページの左端が1本に揃う",
                     set(doc["cols"].values()) == {0},
@@ -1294,8 +1256,7 @@ def main():
             if path_ in ("/", "/guide"):
                 # 手順リスト。li を flex にすると、地の文と <strong> が
                 # それぞれ別の列に分かれて文章が崩れる（実際に壊れていた）。
-                steps = page.evaluate(
-                    """() => {
+                steps = page.evaluate("""() => {
                   const li = document.querySelector('.step-list li');
                   if (!li) return null;
                   const s = getComputedStyle(li);
@@ -1306,8 +1267,7 @@ def main():
                     markerPosition: marker.position,
                     lines: li.getClientRects().length,
                   };
-                }"""
-                )
+                }""")
                 check(
                     f"{path_} の手順が1つの文として流れる",
                     steps is not None
@@ -1337,13 +1297,11 @@ def main():
         mpage.wait_for_selector(".app-tile", timeout=8000)
         mpage.click('.app-tile[data-app-id="logging"]')
         mpage.wait_for_selector(".window", timeout=8000)
-        moving = mpage.evaluate(
-            """() => {
+        moving = mpage.evaluate("""() => {
           const s = getComputedStyle(document.querySelector('.window'));
           const bar = getComputedStyle(document.querySelector('.taskbar'));
           return { window: s.animationName, duration: s.animationDuration, taskbar: bar.animationName };
-        }"""
-        )
+        }""")
         check(
             "ウィンドウとタスクバーに動きが付いている",
             moving["window"] == "window-open"
@@ -1360,12 +1318,10 @@ def main():
         cpage.wait_for_selector(".app-tile", timeout=8000)
         cpage.click('.app-tile[data-app-id="logging"]')
         cpage.wait_for_selector(".window", timeout=8000)
-        duration = cpage.evaluate(
-            """() => {
+        duration = cpage.evaluate("""() => {
           const value = getComputedStyle(document.querySelector('.window')).animationDuration;
           return parseFloat(value) * (value.endsWith('ms') ? 0.001 : 1);
-        }"""
-        )
+        }""")
         check("動きを抑える設定では動かさない（CSS）", duration < 0.01, f"{duration}s")
         cpage.locator(".window-control").first.click()  # 最小化
         # play() が降りていれば、待たずに最小化が確定する
@@ -1411,8 +1367,7 @@ def main():
         # 出たまま。横に詰めると文字が縦に折れて読めなくなる（実際にそうなっていた）。
         for path_ in ("/", "/guide", "/terms", "/privacy"):
             npage.goto(f"{BASE}{path_}", wait_until="networkidle")
-            bar = npage.evaluate(
-                """() => {
+            bar = npage.evaluate("""() => {
               const visible = el => el && el.getClientRects().length > 0;
               const brand = document.querySelector('.brand-name');
               const btns = [...document.querySelectorAll('.topbar-actions .btn')].filter(visible);
@@ -1421,8 +1376,7 @@ def main():
                 btns: btns.map(b => Math.round(b.getBoundingClientRect().height)),
                 overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
               };
-            }"""
-            )
+            }""")
             check(
                 f"狭い画面の上部バーが折れない {path_}",
                 bar["brand"] <= 30 and all(h <= 44 for h in bar["btns"]) and not bar["overflow"],

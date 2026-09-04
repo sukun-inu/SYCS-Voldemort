@@ -4,6 +4,7 @@
 css/ と js/ の下は入れ子になっているため rglob で再帰的に探す。
 （glob のままだと直下のファイルしか圧縮されない）
 """
+
 import sys
 from pathlib import Path
 

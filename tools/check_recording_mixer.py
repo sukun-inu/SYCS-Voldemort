@@ -183,8 +183,7 @@ def inked_ratio(page) -> list[float]:
     色なので、彩度で選り分ける。
 
     """
-    return page.evaluate(
-        """() => {
+    return page.evaluate("""() => {
       const out = [];
       for (const canvas of document.querySelectorAll(".daw-lane-canvas")) {
         const ctx = canvas.getContext("2d");
@@ -203,8 +202,7 @@ def inked_ratio(page) -> list[float]:
         out.push(inked / width);
       }
       return out;
-    }"""
-    )
+    }""")
 
 
 def scroll_to(page, seconds_fraction: float) -> None:
@@ -276,8 +274,7 @@ def main() -> int:
 
             print("\n== 2. 区切り配信での再生（時計が1つ） ==")
             open_mixer(page, play_token)
-            played = page.evaluate(
-                r"""async () => {
+            played = page.evaluate(r"""async () => {
               const stage = document.getElementById("stage");
               const clockText = () => stage.querySelector(".daw-clock").textContent || "";
               const clock = () => {
@@ -302,8 +299,7 @@ def main() -> int:
               await new Promise((r) => setTimeout(r, 2000));
               return { afterSeek, whilePlaying: clock(), raw: clockText(),
                        audios: document.querySelectorAll("audio").length };
-            }"""
-            )
+            }""")
             check(
                 "トラックごとの <audio> を持たない（音源が1つ）",
                 played["audios"] == 0,
@@ -337,8 +333,7 @@ def main() -> int:
             page.route(f"{BASE}/dlaudio/files/{GUILD_ID}/{play_token}/mixer", strip_segment)
             page.route(f"{BASE}/dlaudio/files/{GUILD_ID}/{play_token}/stem/1", slow_first)
             open_mixer(page, play_token)
-            late = page.evaluate(
-                """async () => {
+            late = page.evaluate("""async () => {
               const audios = [...document.querySelectorAll("audio")];
               const stage = document.getElementById("stage");
               const lane = document.querySelector(".daw-lanes");
@@ -351,8 +346,7 @@ def main() -> int:
               await new Promise((r) => setTimeout(r, 2500));
               return { at: audios.map((a) => a.currentTime),
                        paused: audios.map((a) => a.paused) };
-            }"""
-            )
+            }""")
             check("従来経路に落ちている", bool(late["at"]), f"<audio> が {len(late['at'])} 本")
             check(
                 "遅れて読めたトラックも 0 秒から始まっていない",
@@ -373,12 +367,10 @@ def main() -> int:
             # 分ける経路。順序が入れ替わると「別人の声にフェーダーが効く」ので、
             # トラックごとに違う高さの音を入れて、ソロにして確かめる。
             open_mixer(page, play_token)
-            mode = page.evaluate(
-                """() => ({
+            mode = page.evaluate("""() => ({
               segment: document.querySelectorAll('audio').length === 0,
               audios: document.querySelectorAll('audio').length,
-            })"""
-            )
+            })""")
             check("区切り配信の経路が選ばれている", mode["segment"], f"<audio> が {mode['audios']} 本ある")
 
             if mode["segment"]:
@@ -387,8 +379,7 @@ def main() -> int:
                 #   - 多チャンネル WAV がブラウザで順序を保つこと（8ch で確認）
                 # ここで見るのは「分けたあとが各トラックに配線されているか」。
                 # ソロにしたトラックのメーターだけが振れること。
-                levels = page.evaluate(
-                    """async () => {
+                levels = page.evaluate("""async () => {
                   const stage = document.getElementById("stage");
                   const buttons = [...stage.querySelectorAll("button")];
                   buttons.find((b) => b.textContent.includes("再生")).click();
@@ -422,8 +413,7 @@ def main() -> int:
                     out.push(strips.map((s) => inked(s.querySelector(".daw-meter"))));
                   }
                   return out;
-                }"""
-                )
+                }""")
                 ok = True
                 for i, row in enumerate(levels or []):
                     loud = [j for j, v in enumerate(row) if v > 0]
@@ -448,8 +438,7 @@ def main() -> int:
             open_mixer(page, play_token)
 
             # 時間目盛りを横にドラッグして区間を決める
-            dragged = page.evaluate(
-                """async () => {
+            dragged = page.evaluate("""async () => {
               const ruler = document.querySelector(".daw-ruler");
               const box = ruler.getBoundingClientRect();
               const at = (fx) => ({
@@ -464,14 +453,12 @@ def main() -> int:
               await new Promise((r) => setTimeout(r, 200));
               const band = document.querySelector(".daw-loop");
               return { shown: !band.hidden, width: band.style.width };
-            }"""
-            )
+            }""")
             check("ドラッグした区間が帯として出る", dragged["shown"], f"幅={dragged['width']}")
 
             # ドラッグの結果が数字でも読めること。1px が数秒になる倍率では、
             # 帯を見ても何秒から何秒なのか分からない。
-            shown = page.evaluate(
-                """() => {
+            shown = page.evaluate("""() => {
               const chip = document.querySelector(".daw-region-chip");
               return {
                 hidden: chip.hidden,
@@ -479,8 +466,7 @@ def main() -> int:
                 end: chip.querySelector(".is-end").textContent,
                 length: document.querySelector(".daw-region-len").textContent,
               };
-            }"""
-            )
+            }""")
             check(
                 "ドラッグした区間が、開始と終了の数字でも読める",
                 not shown["hidden"] and bool(shown["start"]) and shown["start"] != shown["end"],
@@ -488,8 +474,7 @@ def main() -> int:
             )
 
             # 端をつまんで伸ばせること（引き直しにならないこと）
-            stretched_region = page.evaluate(
-                """async () => {
+            stretched_region = page.evaluate("""async () => {
               const ruler = document.querySelector(".daw-ruler");
               const band = document.querySelector(".daw-loop");
               const box = ruler.getBoundingClientRect();
@@ -504,8 +489,7 @@ def main() -> int:
               const chip = document.querySelector(".daw-region-chip");
               return { start: chip.querySelector(".is-start").textContent,
                        end: chip.querySelector(".is-end").textContent };
-            }"""
-            )
+            }""")
             check(
                 "端をつまむと、反対側を動かさずに伸ばせる",
                 stretched_region["start"] == shown["start"] and stretched_region["end"] != shown["end"],
@@ -513,8 +497,7 @@ def main() -> int:
             )
 
             # 始端側も同じつまみであること（片側だけ効く、を作らない）
-            stretched_start = page.evaluate(
-                """async () => {
+            stretched_start = page.evaluate("""async () => {
               const ruler = document.querySelector(".daw-ruler");
               const band = document.querySelector(".daw-loop");
               const box = ruler.getBoundingClientRect();
@@ -529,8 +512,7 @@ def main() -> int:
               const chip = document.querySelector(".daw-region-chip");
               return { start: chip.querySelector(".is-start").textContent,
                        end: chip.querySelector(".is-end").textContent };
-            }"""
-            )
+            }""")
             check(
                 "始端のつまみでも、反対側を動かさずに伸ばせる",
                 stretched_start["end"] == stretched_region["end"]
@@ -541,8 +523,7 @@ def main() -> int:
             # 「解除」ボタンを消したので、消し方が両方とも生きていることを見る。
             # 消し方が1つも無いのは論外だが、**知っている1つが効かない**のも
             # 同じくらい困る（もう片方があることに気づけない）。
-            cleared = page.evaluate(
-                """async () => {
+            cleared = page.evaluate("""async () => {
               const ruler = document.querySelector(".daw-ruler");
               const box = ruler.getBoundingClientRect();
               const at = (fx) => ({
@@ -560,16 +541,14 @@ def main() -> int:
               return { band: document.querySelector(".daw-loop").hidden,
                        chip: document.querySelector(".daw-region-chip").hidden,
                        disabled: exportBtn.disabled };
-            }"""
-            )
+            }""")
             check(
                 "目盛りを1回クリックすると帯も表示も消え、書き出しが押せなくなる",
                 cleared["band"] and cleared["chip"] and cleared["disabled"],
                 f"帯={cleared['band']} 表示={cleared['chip']} 書き出し無効={cleared['disabled']}",
             )
 
-            by_escape = page.evaluate(
-                """async () => {
+            by_escape = page.evaluate("""async () => {
               const ruler = document.querySelector(".daw-ruler");
               const box = ruler.getBoundingClientRect();
               const at = (fx) => ({
@@ -587,8 +566,7 @@ def main() -> int:
               await new Promise((r) => setTimeout(r, 100));
               return { drawn, band: document.querySelector(".daw-loop").hidden,
                        chip: document.querySelector(".daw-region-chip").hidden };
-            }"""
-            )
+            }""")
             check(
                 "Esc でも区間を解除できる",
                 by_escape["drawn"] and by_escape["band"] and by_escape["chip"],
@@ -597,16 +575,14 @@ def main() -> int:
 
             # ミュートとソロが同じ色にならないこと（見出しの並びにボタンを
             # 1つ足したとき、:last-child で色を当てていたソロが赤に化けた）
-            colours = page.evaluate(
-                """async () => {
+            colours = page.evaluate("""async () => {
               const head = document.querySelector(".daw-head-buttons");
               const [mute, solo] = [...head.querySelectorAll("button")];
               mute.click(); solo.click();
               await new Promise((r) => setTimeout(r, 100));
               const bg = (b) => getComputedStyle(b).backgroundColor;
               return { mute: bg(mute), solo: bg(solo) };
-            }"""
-            )
+            }""")
             check(
                 "ミュートとソロが違う色で点く",
                 colours["mute"] != colours["solo"],
@@ -620,8 +596,7 @@ def main() -> int:
             # 40px。同じ列に4種類の高さが並ぶと、押せる物の集まりではなく
             # 部品の寄せ集めに見える。見た目の話なので、単体テストでは
             # 捕まえられない（計算された高さはブラウザの中にしか無い）。
-            heights = page.evaluate(
-                """() => {
+            heights = page.evaluate("""() => {
               const bar = document.querySelector(".daw-transport");
               const out = {};
               for (const node of bar.querySelectorAll(".btn, .daw-tabs, .daw-clock")) {
@@ -629,8 +604,7 @@ def main() -> int:
                 out[label || "?"] = Math.round(node.getBoundingClientRect().height);
               }
               return out;
-            }"""
-            )
+            }""")
             check(
                 "操作列に並ぶ物の高さが1種類に揃っている",
                 len(set(heights.values())) == 1,
@@ -644,8 +618,7 @@ def main() -> int:
             # window の resize は起きない。中の窓は class と style を書き換える
             # だけなので、要素を見張っていないと気づけない。
             open_mixer(page, play_token)
-            stretched = page.evaluate(
-                """async () => {
+            stretched = page.evaluate("""async () => {
               const stage = document.getElementById("stage");
               const canvas = document.querySelector(".daw-lane-canvas");
               const dpr = window.devicePixelRatio || 1;
@@ -658,8 +631,7 @@ def main() -> int:
 
               const css = canvas.getBoundingClientRect().width;
               return { before, css, bitmap: canvas.width, want: Math.floor(Math.floor(css) * dpr) };
-            }"""
-            )
+            }""")
             check(
                 "広げたぶんだけキャンバスも広がる",
                 stretched["css"] > stretched["before"]["css"] and stretched["bitmap"] == stretched["want"],
