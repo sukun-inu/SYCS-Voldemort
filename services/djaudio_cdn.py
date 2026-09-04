@@ -426,6 +426,12 @@ SEGMENT_RATE = 48000
 _SEGMENT_PREROLL = 2.0
 
 
+def _gzip_file(src: Path, dst: Path) -> None:
+    """gzip で固める。水準は1で足りる（→ recording_segment のコメント）。"""
+    with open(src, "rb") as fin, gzip.open(dst, "wb", compresslevel=1) as fout:
+        shutil.copyfileobj(fin, fout, 1024 * 1024)
+
+
 def _segment_pcm(zip_path: Path, stems: list[dict], start: float, length: float, destination: Path) -> bool:
     """全トラックの同じ区間を、1トラック＝1チャンネルの生 PCM にまとめる。
 
@@ -502,8 +508,29 @@ def _segment_pcm(zip_path: Path, stems: list[dict], start: float, length: float,
 
 
 @dlaudio_router.get("/files/{guild_id}/{token}/segment")
-async def recording_segment(guild_id: str, token: str, start: float = 0.0, length: float = 10.0):
-    """再生用の区切り。全トラックを1つの多チャンネル WAV にまとめて返す。"""
+async def recording_segment(guild_id: str, token: str, request: Request, start: float = 0.0, length: float = 10.0):
+    """再生用の区切り。全トラックを1トラック1チャンネルの生 PCM にまとめて返す。
+
+    ■ なぜ gzip で返すか
+
+    生の PCM は**中身に関係なく帯域を食う**。1トラック 48kHz/16bit なので、
+    5トラックで 3.84Mbps、32トラックなら 24.6Mbps。再生に間に合わせるには
+    これを常時流し続ける必要がある。
+
+    ところが中身はほとんど無音で、gzip が極端に効く。実際の録音（5時間・
+    5トラック）の20秒ぶんで実測すると:
+
+        10分地点  9.16MB → 1.86MB (20.3%)   実効 0.78Mbps
+        2時間     9.16MB → 1.45MB (15.9%)   実効 0.61Mbps
+        4時間     9.16MB → 0.11MB ( 1.2%)   実効 0.04Mbps
+
+    水準は1にしてある。実測 0.03〜0.10秒で、水準6は4倍かかって数%しか
+    縮まない。区切りの生成そのものが 0.7〜1.6秒かかるので、そちらに対して
+    無視できる大きさに抑える。
+
+    受け取る側は何も変えなくてよい。ブラウザが透過的に解くので、
+    arrayBuffer() には生の PCM が入る。
+    """
     zip_path = _recording_zip(guild_id, token)
     stems = _read_manifest(zip_path).get("stems", [])
     if not stems:
@@ -526,10 +553,18 @@ async def recording_segment(guild_id: str, token: str, start: float = 0.0, lengt
         shutil.rmtree(work, ignore_errors=True)
         raise HTTPException(status_code=500, detail="区切りを作れませんでした。")
 
+    headers = {"Cache-Control": "private, max-age=600"}
+    body = out_path
+    # 受け取れない相手には生のまま返す。ブラウザは必ず gzip を受け取れるが、
+    # curl などで直に叩かれたときに壊れた中身を渡さない。
+    if "gzip" in request.headers.get("accept-encoding", "").lower():
+        body = work / "segment.pcm.gz"
+        await asyncio.to_thread(_gzip_file, out_path, body)
+        headers["Content-Encoding"] = "gzip"
     return FileResponse(
-        out_path,
+        body,
         media_type="application/octet-stream",
-        headers={"Cache-Control": "private, max-age=600"},
+        headers=headers,
         background=BackgroundTask(shutil.rmtree, work, ignore_errors=True),
     )
 

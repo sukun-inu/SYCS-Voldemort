@@ -520,6 +520,10 @@ def strip_rtp_padding(packet, payload: bytes | None) -> bytes | None:
 _REORDER_HOLD_SEC = 0.2
 # 一度に抱える上限（異常時に無制限へ膨らませない）
 _REORDER_MAX = 100
+# 誰の音か分かるまで抱えておける上限（→ _RecordingSinkBase.write）。
+# 20秒ぶん。_REORDER_MAX より十分大きくすること（あちらは「穴を待つ」上限、
+# こちらは「持ち主が分かるのを待つ」上限で、役割が違う）。
+_PENDING_MAX = 1000
 # 「音声が入っていない」と覚えておく番号の上限（→ _StreamAssembler.skip）。
 # 並べ直しの窓を十分に覆えればよく、超えたら捨てる（捨てても今までの
 # 振る舞いに戻るだけで、悪化はしない）。
@@ -580,6 +584,8 @@ class _StreamAssembler:
         self._skipped: set[int] = set()
         self._last_offset: float | None = None  # 直前に返した位置（戻りの判定に使う）
         self.rebased = 0  # 時計が飛んで起点を張り直した回数
+        self.unknown = 0  # 誰の音か分からないまま受け取った数
+        self.overflow = 0  # 抱えきれずに捨てた数
         self.lost = 0  # 待っても来なかったパケット数
         self.late = 0  # 出したあとに届いた／溢れて捨てたパケット数
         self.silence = 0  # 発話の切れ目に来る無音パケット（並べ直しには入れない）
@@ -652,6 +658,13 @@ class _StreamAssembler:
         if self._next_seq is not None and _wrapped_delta(sequence, self._next_seq, _SEQ_MOD) < 0:
             self.late += 1  # 既に出したところより後ろ。今さら差し込めない。
             return
+        if len(self._pending) >= _PENDING_MAX:
+            # 持ち主が分からないまま溜め込み続けないための上限。**古いほうから
+            # 捨てる。** 新しいほうを捨てると、対応が付いた瞬間に直近の発話が
+            # 欠ける（いちばん失いたくないところが消える）。
+            oldest = min(self._pending, key=lambda k: self._pending[k][0])
+            del self._pending[oldest]
+            self.overflow += 1
         self._pending[sequence] = (now, timestamp, encoded)
 
     def skip(self, sequence: int) -> None:
@@ -802,6 +815,35 @@ class _RecordingSinkBase:
             self._streams[ssrc] = stream
         return stream
 
+    def _resolve_user(self, ssrc: int):
+        """この SSRC が誰かを返す。分からなければ None。
+
+        直近に渡された相手を覚えておき（_users）、まだなら voice_recv の
+        対応表を直接引く。**引くほうも要る。** 覚えているほうは「対応が
+        付いたあとに1つでもパケットが来た」ときにしか埋まらないので、
+        発話の終わり際に対応が付いた場合は最後まで空のままになる。
+        """
+        user = self._users.get(ssrc)
+        if user is not None:
+            return user
+        client = self._client()
+        if client is None:
+            return None
+        # ライブラリ内部の対応表を読む。形が変わっても録音は止めない。
+        try:
+            user_id = client._get_id_from_ssrc(ssrc)
+            guild = getattr(client, "guild", None)
+            found = guild.get_member(int(user_id)) if user_id and guild is not None else None
+        except Exception:
+            return None
+        if found is None:
+            return None
+        if int(getattr(found, "id", 0) or 0) in self.session.excluded_user_ids:
+            self._streams.pop(ssrc, None)
+            return None
+        self._users[ssrc] = found
+        return found
+
     def write(self, user, data) -> None:
         # voice_recv の受信スレッドから呼ばれる。ここでイベントループには触らない。
         """1パケット受信のたびに voice_recv から呼ばれる（別スレッド、イベント
@@ -812,16 +854,43 @@ class _RecordingSinkBase:
         stop_listening() まで呼ばれて録音全体が止まる。
         """
         packet = getattr(data, "packet", None)
-        if user is None or packet is None:
+        if packet is None:
             return
-
-        user_id = int(getattr(user, "id", 0) or 0)
-        if not user_id or user_id in self.session.excluded_user_ids:
-            return
-
         ssrc = int(getattr(packet, "ssrc", 0) or 0)
-        self._users[ssrc] = user
+        if not ssrc:
+            return
+
+        # **user が None でも捨てないこと。**
+        #
+        # 音そのものは UDP で届くが、「その SSRC が誰か」はゲートウェイの
+        # SPEAKING イベントという別経路で届く。対応が付くまで voice_recv は
+        # user=None で渡してくる（opus.py の _get_cached_member）。ここで
+        # 捨てると3つ同時に起きる。
+        #
+        #   1. その音は録音から永久に失われる（届いているのに捨てている）
+        #   2. 番号だけ消費されるので drain() から穴に見え、**欠落として
+        #      計上される**
+        #   3. payload_types に入れる前に返すので、どのカウンタにも現れず、
+        #      起きていること自体が分からない
+        #
+        # 対応が外れるのは主に再接続（SSRC が振り直され、次にその人が喋り
+        # 出すまで対応が付かない）と CLIENT_DISCONNECT。本番では 0.7〜4.5 秒の
+        # 穴が数十回という形で出ていた。発話の途中で起きると、その発言の
+        # 残り全部が消える。
+        if user is not None:
+            user_id = int(getattr(user, "id", 0) or 0)
+            if not user_id:
+                return
+            if user_id in self.session.excluded_user_ids:
+                # 除外された人。抱えていたぶんごと捨てる。
+                self._streams.pop(ssrc, None)
+                self._users.pop(ssrc, None)
+                return
+            self._users[ssrc] = user
+
         stream = self._stream_for(ssrc)
+        if user is None:
+            stream.unknown += 1
         # Discord の音声は 120。別の番号が混ざっているなら、音声以外の
         # パケットが音声として流れてきている。
         ptype = getattr(packet, "payload", None)
@@ -864,6 +933,11 @@ class _RecordingSinkBase:
         # 抱えている全ストリームを見る。喋り終えた人の最後のぶんが
         # 出されないまま残り続けないように。
         for other_ssrc, other in list(self._streams.items()):
+            # まだ持ち主が分からないものは出さずに抱えておく。ここで drain
+            # すると、書き込み先が無いまま _pending から消えて、捨てるのと
+            # 同じになる。対応が付いた時点でまとめて出る。
+            if self._resolve_user(other_ssrc) is None:
+                continue
             self._emit(other_ssrc, other, other.drain(now))
 
     def _emit(self, ssrc: int, stream: _StreamAssembler, ready) -> None:
@@ -920,6 +994,12 @@ class _RecordingSinkBase:
     def flush_pending(self) -> None:
         """停止時に、抱えたままのパケットを書き出す。"""
         for ssrc, stream in list(self._streams.items()):
+            # 最後にもう一度、持ち主が分かるか試す。ここまで分からなければ
+            # 書き出す先が無いので、抱えていた数を溢れとして残して捨てる。
+            if self._resolve_user(ssrc) is None:
+                stream.overflow += len(stream._pending)
+                stream._pending.clear()
+                continue
             self._emit(ssrc, stream, stream.flush())
         self.log_summary()
 
@@ -942,7 +1022,8 @@ class _RecordingSinkBase:
             logger.info(
                 "[recording] ssrc=%s (%s) 受信=%d 成功=%d 失敗=%d "
                 "E2EE復号=%d E2EE不可=%d 詰め物=%d 欠落=%d 手遅れ=%d 無音=%d "
-                "張り直し=%d RTP種別=%s",
+                "張り直し=%d 不明=%d 溢れ=%d "
+                "RTP種別=%s",
                 ssrc,
                 name,
                 stream.received,
@@ -955,6 +1036,8 @@ class _RecordingSinkBase:
                 stream.late,
                 stream.silence,
                 stream.rebased,
+                stream.unknown,
+                stream.overflow,
                 stream.payload_types,
             )
 

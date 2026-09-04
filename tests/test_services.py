@@ -3406,6 +3406,50 @@ class OpusResilienceTests(unittest.TestCase):
         """並べ直しを待たずに、抱えているぶんを書き出させる。"""
         self.sink.flush_pending()
 
+    def test_audio_from_an_unknown_ssrc_is_kept_until_the_user_is_known(self):
+        """**誰の音か分かる前に届いた音を、捨てないこと。**
+
+        音そのものは UDP で届くが、「その SSRC が誰か」は別経路（ゲートウェイの
+        SPEAKING イベント）で届く。対応が付くまで voice_recv は user=None で
+        渡してくる（opus.py の _get_cached_member）。捨てていたので、
+
+          - その音は録音から永久に失われる
+          - 番号だけ消費されるので、あとで**欠落として計上される**
+          - どのカウンタにも現れないので、起きていることが分からない
+
+        再接続では SSRC が振り直され、対応はその人が次に喋り始めるまで
+        付かない。本番では 0.7〜4.5 秒の穴が数十回という形で出ていた。
+        """
+        for _ in range(3):
+            self.sink.write(None, self._packet(self._frame()))  # まだ誰か分からない
+        self.sink.write(self.user, self._packet(self._frame()))  # ここで対応が付く
+        self._drain()
+        stream = self.sink._streams[18295]
+        self.assertEqual(stream.lost, 0, "分かる前の音を欠落として数えている")
+        self.assertEqual(stream.unknown, 3, "分からないまま受け取った数が出ていない")
+        self.assertIn(1, self.session.tracks)
+        self.assertEqual(stream.decoded, 4, "抱えていたぶんが書き出されていない")
+
+    def test_an_unknown_ssrc_does_not_grow_without_bound(self):
+        """誰か分からないまま溜め込み続けないこと。
+
+        対応が永久に付かない SSRC（別の録音の残り、壊れたパケット）で
+        メモリを食い潰さない。溢れたぶんは数える。
+        """
+        for _ in range(self.rec._PENDING_MAX + 50):
+            self.sink.write(None, self._packet(self._frame()))
+        stream = self.sink._streams[18295]
+        self.assertLessEqual(len(stream._pending), self.rec._PENDING_MAX)
+        self.assertGreaterEqual(stream.overflow, 50)
+
+    def test_an_excluded_user_is_still_dropped(self):
+        """抱える仕組みを入れても、除外した人は録らないこと。"""
+        self.session.excluded_user_ids.add(1)
+        self.sink.write(None, self._packet(self._frame()))
+        self.sink.write(self.user, self._packet(self._frame()))
+        self._drain()
+        self.assertEqual(self.session.tracks, {})
+
     def test_library_is_not_asked_to_decode(self):
         """wants_opus() が False だと、壊れたパケットで受信スレッドごと落ちる。"""
         self.assertTrue(self.sink.wants_opus())
@@ -3573,7 +3617,8 @@ class RecordingSinkShapeTests(unittest.TestCase):
         self.assertEqual(len(summary), 1, captured.output)
         self.assertIn(
             "ssrc=18295 (すずき) 受信=2 成功=2 失敗=0 E2EE復号=0 E2EE不可=0 "
-            "詰め物=0 欠落=0 手遅れ=0 無音=0 張り直し=0 RTP種別={120: 2}",
+            "詰め物=0 欠落=0 手遅れ=0 無音=0 張り直し=0 不明=0 溢れ=0 "
+            "RTP種別={120: 2}",
             summary[0],
         )
 

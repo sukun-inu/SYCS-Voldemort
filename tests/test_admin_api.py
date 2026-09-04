@@ -1493,6 +1493,32 @@ class RecordingClipTests(unittest.TestCase):
                     first / 48000, 0.01, f"{start} 秒を要求したのに先頭が " f"{first / 48000 * 1000:.1f} ms ずれている"
                 )
 
+    def test_the_segment_is_compressed_but_still_raw_pcm(self):
+        """gzip で返しても、解いた中身は生の PCM のままであること。
+
+        生の PCM は中身に関係なく帯域を食う（5トラックで 3.84Mbps、32なら
+        24.6Mbps）。中身はほとんど無音なので gzip が極端に効き、実測では
+        1.2〜21.9% まで縮んだ。**縮めた結果が別物になっていないこと**を
+        ここで固定する。取得が再生に間に合わなくなると、クライアントは
+        間に合わなかったぶんを飛ばして鳴らすので、帯域は音の欠けに直結する。
+        """
+        import gzip as gziplib
+
+        client = TestClient(app)
+        url = f"/dlaudio/files/{GUILD_ID}/{self.token}/segment?start=0&length=1"
+
+        plain = client.get(url, headers={"Accept-Encoding": "identity"})
+        self.assertEqual(plain.status_code, 200)
+        self.assertNotIn("content-encoding", plain.headers)
+
+        packed = client.get(url, headers={"Accept-Encoding": "gzip"})
+        self.assertEqual(packed.status_code, 200)
+        raw = packed.content
+        # TestClient は透過的に解くことがあるので、どちらでも通るようにする。
+        if packed.headers.get("content-encoding") == "gzip" and raw[:2] == b"\x1f\x8b":
+            raw = gziplib.decompress(raw)
+        self.assertEqual(raw, plain.content, "gzip を解いた中身が生の PCM と違う")
+
     def test_the_segment_rejects_impossible_requests(self):
         client = TestClient(app)
         base = f"/dlaudio/files/{GUILD_ID}/{self.token}/segment"
