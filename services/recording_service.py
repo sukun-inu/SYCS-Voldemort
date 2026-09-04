@@ -524,6 +524,11 @@ _REORDER_MAX = 100
 # 並べ直しの窓を十分に覆えればよく、超えたら捨てる（捨てても今までの
 # 振る舞いに戻るだけで、悪化はしない）。
 _SKIP_MAX = 1000
+# これ以上うしろへ戻る位置を渡されたら、相手の時計が飛んだとみなす。
+# 欠落補間は次のパケットの手前へ置くので、わずかな戻りは正常に起きる。
+_BACKWARD_TOLERANCE_SEC = 1.0
+# 張り直しの警告を出す上限（あとは数だけ log_summary に残す）。
+_REBASE_SAMPLES = 5
 _FRAME_SAMPLES = 960  # 20ms ぶんのサンプル数（RTP タイムスタンプの刻み）
 # 欠けたぶんを Opus の欠落補間で埋める上限。これを超える穴は無音のままにする。
 _PLC_MAX_FRAMES = 5
@@ -573,6 +578,8 @@ class _StreamAssembler:
         self._anchor_elapsed: float = 0.0  # そのときの録音経過秒
         # 音声が入っていないと分かっている番号（→ skip）。穴と区別するために持つ。
         self._skipped: set[int] = set()
+        self._last_offset: float | None = None  # 直前に返した位置（戻りの判定に使う）
+        self.rebased = 0  # 時計が飛んで起点を張り直した回数
         self.lost = 0  # 待っても来なかったパケット数
         self.late = 0  # 出したあとに届いた／溢れて捨てたパケット数
         self.silence = 0  # 発話の切れ目に来る無音パケット（並べ直しには入れない）
@@ -599,17 +606,41 @@ class _StreamAssembler:
         return cast(bytes, self.decoder.decode(encoded, fec=False))
 
     def offset_for(self, timestamp: int, elapsed: float) -> float:
-        """RTP タイムスタンプを、録音開始からの秒数に直す。"""
+        """RTP タイムスタンプを、録音開始からの秒数に直す。
+
+        **前と後ろの両方を見ること。** もとは offset<0 と offset>elapsed+60 しか
+        見ておらず、再接続で相手のタイムスタンプ基準が下がった場合は素通り
+        していた。素通りすると pad_until は前にしか進まないので、そのトラックは
+        無音を書かなくなって発話が詰まって並び、追い付いたあとは残りの録音ぶん
+        ずっと手前に置かれ続ける。ずれ幅はトラックごとに違い、録音の途中から
+        始まる。しかも**何も記録が残らない**ので、ログを見ても分からなかった。
+
+        戻りに 1 秒の遊びを持たせているのは、欠落補間を次のパケットの手前へ
+        置くため（drain）。そこで毎回張り直すと、到着時刻を起点にすることに
+        なってジッタのぶん時間軸が歪む。
+        """
         if self._anchor_ts is None:
             self._anchor_ts = timestamp
             self._anchor_elapsed = elapsed
         offset = self._anchor_elapsed + _wrapped_delta(timestamp, self._anchor_ts, _TS_MOD) / SAMPLE_RATE
-        # 相手側の時計が飛んだときに、何時間ぶんもの無音を書かないようにする。
-        if offset < 0 or offset > elapsed + 60.0:
-            logger.warning("[recording] ssrc=%s タイムスタンプが飛んだので現在時刻に合わせ直します", self.ssrc)
+        jumped_ahead = offset < 0 or offset > elapsed + 60.0
+        jumped_back = self._last_offset is not None and offset < self._last_offset - _BACKWARD_TOLERANCE_SEC
+        if jumped_ahead or jumped_back:
+            self.rebased += 1
+            if self.rebased <= _REBASE_SAMPLES:
+                logger.warning(
+                    "[recording] ssrc=%s タイムスタンプが%sへ飛んだので現在時刻に合わせ直します"
+                    " (要求 %.2f 秒 / 直前 %s / 経過 %.2f 秒)",
+                    self.ssrc,
+                    "うしろ" if jumped_back else "まえ",
+                    offset,
+                    "-" if self._last_offset is None else f"{self._last_offset:.2f} 秒",
+                    elapsed,
+                )
             self._anchor_ts = timestamp
             self._anchor_elapsed = elapsed
             offset = elapsed
+        self._last_offset = offset
         return offset
 
     def push(self, sequence: int, timestamp: int, encoded: bytes, now: float) -> None:
@@ -911,7 +942,7 @@ class _RecordingSinkBase:
             logger.info(
                 "[recording] ssrc=%s (%s) 受信=%d 成功=%d 失敗=%d "
                 "E2EE復号=%d E2EE不可=%d 詰め物=%d 欠落=%d 手遅れ=%d 無音=%d "
-                "RTP種別=%s",
+                "張り直し=%d RTP種別=%s",
                 ssrc,
                 name,
                 stream.received,
@@ -923,6 +954,7 @@ class _RecordingSinkBase:
                 stream.lost,
                 stream.late,
                 stream.silence,
+                stream.rebased,
                 stream.payload_types,
             )
 
