@@ -131,13 +131,19 @@ services:
     mem_limit: 384m
 
   # Postgres の日次バックアップ。中身は docker/postgres-backup.sh（なぜ YAML の
-  # 中に直接書かなかったか、なぜ専用イメージを使わないかは、そちらの冒頭に書いた）。
+  # 中に直接書かなかったかは、そちらの冒頭に書いた）。
   #
   # 取ったものは postgres_backups ボリュームに入る。**ホストの外へ運ぶ仕組みは
   # ここには無い。** 同じディスクにしか無いバックアップは、ディスクが死んだ日に
   # 一緒に死ぬ。ボリュームを別の場所へ持ち出す手順は docs/BACKUP.ja.md に書いた。
   postgres-backup:
-    image: postgres:16-alpine
+    # スクリプトはイメージに焼く。**ホストのファイルをバインドマウントしては
+    # いけない**（理由は docker/postgres-backup.Dockerfile の冒頭。要約すると、
+    # デプロイ先にファイルが無いと Docker が空のディレクトリを作って黙って
+    # マウントし、バックアップが1度も動かないまま再起動を繰り返す）。
+    build:
+      context: .
+      dockerfile: docker/postgres-backup.Dockerfile
     container_name: sycs-voldemort-postgres-backup
     restart: unless-stopped
     depends_on:
@@ -147,9 +153,6 @@ services:
         condition: service_completed_successfully
       postgres-user-state-init:
         condition: service_completed_successfully
-    # postgres イメージの既定の entrypoint（docker-entrypoint.sh）は「サーバーを
-    # 起動する」ためのものなので、command だけ差し替えても意図通りにならない。
-    entrypoint: ["/bin/sh", "/usr/local/bin/postgres-backup.sh"]
     environment:
       - TZ=Asia/Tokyo
       - POSTGRES_HOST=postgres
@@ -178,9 +181,6 @@ services:
       # 読み取り専用で付ける。バックアップを取る側が書けてしまう必要は無く、
       # 付け間違いで本番の設定を壊す余地を残さない。
       - app_data:/app/data:ro
-      # スクリプトは読み取り専用で渡す。イメージに焼かないのは、直したときに
-      # docker build をせず compose の再作成だけで反映させたいため。
-      - ./docker/postgres-backup.sh:/usr/local/bin/postgres-backup.sh:ro
     security_opt:
       - no-new-privileges:true
     read_only: true
