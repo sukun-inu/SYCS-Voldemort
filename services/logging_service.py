@@ -89,9 +89,15 @@ def _level_color(level: str) -> discord.Color:
         # dark_gray ではなく dark_grey を呼ぶ。値は同じ（どちらも 0x607d8b）で、
         # dark_gray は discord.py のクラス本体での別名代入（dark_gray = dark_grey）。
         # mypy はこの代入を classmethod と見なせず誤検知するうえ、**その
-        # エラーコードが mypy や Python のバージョンで変わる**（手元の 3.13 では
-        # call-arg、CI の 3.11 では misc）。type: ignore で押さえると環境ごとに
-        # 書き分けが要るので、素直に正規の綴りを呼ぶ。下の light_grey とも揃う。
+        # エラーコードが mypy や Python のバージョンで変わる**（手元が 3.13 で
+        # CI が 3.11 だった頃、前者では call-arg、後者では misc が出た）。
+        # Python は 3.13 へ揃えたが、mypy 自身の版でも変わるので事情は残る。
+        # 無視の指示で押さえると環境ごとに書き分けが要るので、素直に正規の
+        # 綴りを呼ぶ。下の light_grey とも揃う。
+        #
+        # （この段落で `type: ignore` を行頭に書かないこと。mypy はコメントの
+        #  先頭がそれだと指示として解釈し、後ろの日本語を見て
+        #  「Invalid "type: ignore" comment」で落ちる。実際に踏んだ。）
         return discord.Color.dark_grey()
     return discord.Color.light_grey()
 

@@ -74,9 +74,10 @@ Never change a condition, a statement order, an exception handler, a default, or
 signature. When in doubt, choose `# type: ignore` — nothing changes at runtime.
 
 Before reaching for `# type: ignore`, look for an equivalent spelling that is not
-flagged at all. **Error codes differ between environments** — a `[call-arg]` locally
-(Python 3.13) can surface as `[misc]` in CI (3.11), and that has already broken a
-build here. A local `Success` from mypy is not proof that CI will pass.
+flagged at all. **Error codes differ between environments** — a `[call-arg]` under one Python or
+mypy release can surface as `[misc]` under another, and that has already broken a
+build here (it happened when local was 3.13 and CI was 3.11; the Python versions
+are unified at 3.13 now, but mypy's own releases still shift codes). A local `Success` from mypy is not proof that CI will pass.
 
 ## Thresholds are ceilings, not targets
 

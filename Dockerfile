@@ -1,5 +1,16 @@
 # Python の公式イメージ
-FROM python:3.11-slim
+#
+# **ここを変えるときは、同時に4箇所を揃えること。** ずれると、このリポジトリが
+# 何度も踏んできた「手元では通るのに本番だけ壊れる」に戻る。
+#
+#   .python-version                       手元と Dependabot が読む
+#   .github/workflows/tests.yml           setup-python と compileall の対象
+#   pyproject.toml                        black / ruff の target-version、mypy の python_version
+#   tools/check_requirements.py           ここの FROM を自分で読むので、変更は不要
+#
+# 3.11 → 3.13 にした（2026-09-04）。固定している31個すべてに 3.13 で使える配布物が
+# あることを PyPI のメタデータで1つずつ確認してから上げた。
+FROM python:3.13-slim
 
 # 作業ディレクトリ
 WORKDIR /app

@@ -8,11 +8,11 @@
 
 [tool.black]
 line-length = 120
-target-version = ["py311"]
+target-version = ["py313"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 # E/W: pycodestyle、F: pyflakes（未使用の import や変数）、C90: 循環的複雑度。
@@ -48,7 +48,7 @@ max-complexity = 23
 "webapp_admin/app.py" = ["E402"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true

@@ -53,20 +53,10 @@ updates:
       - dependency-name: PyNaCl
         versions: [">=1.6"]
 
-      # numpy 2.5 系は Requires-Python >=3.12。本番と CI は 3.11（Dockerfile と
-      # 揃えてある）なので、pip install が「No matching distribution found」で
-      # 落ちる。**実際に最初の Dependabot PR がこれで落ちた。**
-      #
-      # Dependabot は Dockerfile の FROM を読まないので、対象の Python が
-      # 3.11 だと知らない。.python-version を置いて伝えてはあるが、確実なのは
-      # こちらの明示なので両方入れてある。
-      #
-      # 外せる条件: Dockerfile の Python を 3.12 以上へ上げたとき。そのときは
-      # tests.yml の setup-python と pyproject.toml の target-version /
-      # python_version も同時に上げること（片方だけ動かすと、このリポジトリが
-      # 何度も踏んできた「手元では通るのに本番だけ壊れる」に戻る）。
-      - dependency-name: numpy
-        versions: [">=2.5"]
+      # numpy の除外は外した。3.11 のあいだは 2.5 系（Requires-Python >=3.12）が
+      # 入らず、Dependabot が提案するたびに CI が落ちていたが、本番を 3.13 へ
+      # 上げたので条件が消えた。**「外せる条件」を書いておいたから外せた**ので、
+      # 以降ここへ足すときも必ず書くこと。
 
       # redis 8 系は limits の redis ストレージ（`redis<8.0.0`）と衝突する。
       # 上げると管理画面のレート制限を Valkey へ載せられなくなる。
