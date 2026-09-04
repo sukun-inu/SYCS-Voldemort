@@ -496,8 +496,11 @@ def strip_rtp_padding(packet, payload: bytes | None) -> bytes | None:
     パディングが一部だけの場合もある。E2EE のフレームでは、末尾のマーカーが
     パディングに隠れて見えなくなる（本番で ... 010dfafa0202 として観測した）。
     """
+    # 空も「音声が入っていない」に含める。b"" を素通しすると、呼び出し側の
+    # `if encoded` が偽になってどのカウンタにも入らず、番号だけ消費した状態で
+    # 消える。**その番号は drain() から穴に見えるので、欠落として数えられる。**
     if not payload:
-        return payload
+        return None
     count = payload[-1]
     # ヘッダのビットが立っていなくても、長さが一致するならパディングとみなす。
     # 平文の Opus が「最終バイト＝自身の長さ」になる確率は無視できる。
@@ -517,6 +520,10 @@ def strip_rtp_padding(packet, payload: bytes | None) -> bytes | None:
 _REORDER_HOLD_SEC = 0.2
 # 一度に抱える上限（異常時に無制限へ膨らませない）
 _REORDER_MAX = 100
+# 「音声が入っていない」と覚えておく番号の上限（→ _StreamAssembler.skip）。
+# 並べ直しの窓を十分に覆えればよく、超えたら捨てる（捨てても今までの
+# 振る舞いに戻るだけで、悪化はしない）。
+_SKIP_MAX = 1000
 _FRAME_SAMPLES = 960  # 20ms ぶんのサンプル数（RTP タイムスタンプの刻み）
 # 欠けたぶんを Opus の欠落補間で埋める上限。これを超える穴は無音のままにする。
 _PLC_MAX_FRAMES = 5
@@ -564,6 +571,8 @@ class _StreamAssembler:
         self._next_seq: int | None = None
         self._anchor_ts: int | None = None  # 最初のパケットの RTP タイムスタンプ
         self._anchor_elapsed: float = 0.0  # そのときの録音経過秒
+        # 音声が入っていないと分かっている番号（→ skip）。穴と区別するために持つ。
+        self._skipped: set[int] = set()
         self.lost = 0  # 待っても来なかったパケット数
         self.late = 0  # 出したあとに届いた／溢れて捨てたパケット数
         self.silence = 0  # 発話の切れ目に来る無音パケット（並べ直しには入れない）
@@ -614,6 +623,21 @@ class _StreamAssembler:
             return
         self._pending[sequence] = (now, timestamp, encoded)
 
+    def skip(self, sequence: int) -> None:
+        """音声が入っていないパケットの番号を、穴として数えないよう覚える。
+
+        詰め物（帯域推定の探査）と、復号できなかった E2EE フレームは push()
+        しない。**番号だけは消費されている**ので、伝えないと drain() が
+        「届かなかった」と見なし、欠落に数えたうえで Opus に無い音を作らせる
+        （欠落補間）。本番では、報告される欠落のおよそ半分がこれだった
+        （受信637,109 に対し報告17,323 / うち詰め物由来8,548）。
+        """
+        if self._next_seq is not None and _wrapped_delta(sequence, self._next_seq, _SEQ_MOD) < 0:
+            return  # もう通り過ぎた番号。覚えても使わない。
+        self._skipped.add(sequence)
+        if len(self._skipped) > _SKIP_MAX:
+            self._skipped.clear()
+
     def _hold_expired(self, now: float) -> bool:
         """順番待ちを打ち切るか。
 
@@ -644,6 +668,12 @@ class _StreamAssembler:
                 if not self._hold_expired(now):
                     break
                 self._next_seq = self._earliest_seq()
+            # 音声が入っていないと分かっている番号は、穴ではない（→ skip）。
+            # 欠落に数えず、欠落補間も作らずに次へ進む。
+            if self._next_seq in self._skipped:
+                self._skipped.discard(self._next_seq)
+                self._next_seq = (self._next_seq + 1) % _SEQ_MOD
+                continue
             item = self._pending.pop(self._next_seq, None)
             if item is not None:
                 out.append((item[1], item[2], item[0]))
@@ -657,7 +687,15 @@ class _StreamAssembler:
             assert next_seq is not None
             skipped = min(self._pending, key=lambda k: _wrapped_delta(k, next_seq, _SEQ_MOD))
             gap = _wrapped_delta(skipped, next_seq, _SEQ_MOD)
-            self.lost += gap
+            # 飛ばす範囲に「音声が入っていない」と分かっている番号が混じって
+            # いれば、そのぶんは届かなかったのではない。範囲の側ではなく
+            # 覚えている側を回す（再接続で gap が数万になることがあるため）。
+            known = 0
+            for seq in list(self._skipped):
+                if 0 <= _wrapped_delta(seq, next_seq, _SEQ_MOD) < gap:
+                    self._skipped.discard(seq)
+                    known += 1
+            self.lost += gap - known
             # 欠けたぶんは Opus に「無かった」と伝えて補間させる。
             next_ts = self._pending[skipped][1]
             # 欠けたぶんには受信時刻が無い。次に届いたものの時刻で代用する。
@@ -759,13 +797,16 @@ class _RecordingSinkBase:
         if ptype is not None:
             stream.payload_types[ptype] = stream.payload_types.get(ptype, 0) + 1
 
-        encoded = strip_rtp_padding(packet, data.opus)
-        if encoded is None:
-            # 中身がパディングだけ（帯域推定の探査）。音声ではない。
-            stream.padding_only += 1
-            return
         now = time.monotonic()
         sequence = int(getattr(packet, "sequence", -1))
+        encoded = strip_rtp_padding(packet, data.opus)
+        if encoded is None:
+            # 中身がパディングだけ（帯域推定の探査）か、そもそも空。音声ではない。
+            # **番号は消費されているので、組み立て側へ必ず伝えること。**
+            stream.padding_only += 1
+            if sequence >= 0:
+                stream.skip(sequence)
+            return
         if encoded and dave.is_dave_frame(encoded):
             # 端から端まで暗号化されている。復号してから渡す。
             # 暗号文のまま Opus に食わせると、例外にならず雑音が返る。
@@ -774,6 +815,8 @@ class _RecordingSinkBase:
                 stream.received += 1
                 stream.encrypted += 1
                 self.session.note_encrypted()
+                if sequence >= 0:
+                    stream.skip(sequence)  # 番号は消費されている（詰め物と同じ）
                 return
             encoded = plain
             stream.decrypted += 1

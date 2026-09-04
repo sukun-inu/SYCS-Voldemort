@@ -3106,6 +3106,53 @@ class StreamAssemblerTests(unittest.TestCase):
         got = self._seqs(self.stream.drain(1.0))
         self.assertEqual(got, [8, 9, 10])
 
+    def test_a_packet_without_audio_is_not_counted_as_loss(self):
+        """音声が入っていないパケットの番号を、欠落として数えないこと。
+
+        詰め物（帯域推定の探査）や復号できなかった E2EE フレームは、番号だけ
+        消費して push() されない。何もしないと drain() が「届かなかった」と
+        見なし、**欠落に数えたうえで Opus に無い音を作らせる**（欠落補間）。
+        本番のログでは、報告される欠落のおよそ半分がこれだった。
+        """
+        for seq in (1, 2):
+            self._push(seq)
+        self.stream.skip(3)  # ここは詰め物だった
+        for seq in (4, 5):
+            self._push(seq)
+        drained = self.stream.flush()
+        self.assertEqual(self._seqs(drained), [1, 2, 4, 5])
+        self.assertEqual(self.stream.lost, 0, "音声でないパケットを欠落に数えている")
+        self.assertEqual(
+            [payload for _ts, payload, _at in drained].count(None),
+            0,
+            "音声でないパケットのぶんまで欠落補間を作っている",
+        )
+
+    def test_a_real_gap_is_still_counted_as_loss(self):
+        """**本物の欠落まで数えなくなっていないこと。**
+
+        欠落を数えなくする方向の直しは、やりすぎると「損失がゼロになった」
+        ように見えて、本当に届いていない状態を隠す。skip() を教えていない
+        穴は、今までどおり欠落として数え、補間を作ること。
+        """
+        for seq in (1, 2, 4, 5):
+            self._push(seq)
+        drained = self.stream.flush()
+        self.assertEqual(self.stream.lost, 1)
+        self.assertEqual([payload for _ts, payload, _at in drained].count(None), 1)
+
+    def test_a_gap_containing_a_probe_counts_only_the_real_loss(self):
+        """穴と詰め物が混ざったとき、本物の欠落だけを数えること。
+
+        3 は詰め物（音声なし）、4 と 5 は本当に届かなかった。3 まで欠落に
+        数えると損失が水増しされ、逆に穴ごと数えないと本物の損失が消える。
+        """
+        self._push(1, now=0.0)
+        self.stream.skip(4)  # 4 は詰め物。2・3・5 は本当に届かなかった
+        self._push(6, now=0.0)
+        self.stream.flush()
+        self.assertEqual(self.stream.lost, 3)
+
     def test_a_gap_is_given_up_on_after_the_hold_window(self):
         self._push(1, now=0.0)
         self._push(3, now=0.0)
@@ -5507,7 +5554,6 @@ class RtpPaddingTests(unittest.TestCase):
         """壊れた値で音を削らない。"""
         payload = bytes(20) + bytes([200])  # 長さより大きいパディング長
         self.assertEqual(self.rec.strip_rtp_padding(self._packet(), payload), payload)
-        self.assertEqual(self.rec.strip_rtp_padding(self._packet(), b""), b"")
 
     def test_probe_packets_never_reach_a_track(self):
         session = self.rec.RecordingSession(
@@ -5529,6 +5575,49 @@ class RtpPaddingTests(unittest.TestCase):
         self.assertEqual(session.tracks, {}, "詰め物からトラックが作られている")
         self.assertEqual(session.dropped_packets, 0, "詰め物をデコードしている")
         self.assertEqual(sink._streams[1].padding_only, 8)
+
+    def test_a_probe_between_two_voices_does_not_inflate_the_loss(self):
+        """詰め物が挟まっても、その番号を欠落に数えないこと。
+
+        詰め物は番号を消費するが push() されない。数えていたころは
+        **詰め物1個につき欠落も1個**増え、報告される損失が実際の倍近くに
+        なっていた（本番: 受信637,109 に対し報告17,323 / 実質8,775）。
+        """
+        session = self.rec.RecordingSession(
+            guild_id=999,
+            channel_id=1,
+            channel_name="VC",
+            started_by_id=1,
+            started_by_name="t",
+            started_at=time.monotonic(),
+            max_seconds=0,
+            retention_days=1,
+        )
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=1, display_name="すずき")
+
+        def send(sequence, payload, padding=False):
+            packet = SimpleNamespace(ssrc=1, sequence=sequence, timestamp=sequence * 960, payload=120, padding=padding)
+            sink.write(user, SimpleNamespace(packet=packet, opus=payload))
+
+        send(10, bytes(20))
+        send(11, bytes([255]) * 255, padding=True)  # 帯域推定の探査
+        send(12, bytes(20))
+        sink.flush_pending()
+
+        stream = sink._streams[1]
+        self.assertEqual(stream.padding_only, 1)
+        self.assertEqual(stream.lost, 0, "詰め物を欠落として二重に数えている")
+
+    def test_an_empty_payload_is_treated_as_having_no_audio(self):
+        """空のペイロードを「音声あり」として扱わないこと。
+
+        None ではないので詰め物にも数えられず、`if encoded` が偽なので受信
+        にも無音にも数えられない。**どのカウンタにも現れないまま番号だけ
+        消費し、欠落として数えられていた。**
+        """
+        self.assertIsNone(self.rec.strip_rtp_padding(self._packet(padding=False), b""))
+        self.assertIsNone(self.rec.strip_rtp_padding(self._packet(), None))
 
 
 class SettingsWriteOffloadTests(unittest.TestCase):
