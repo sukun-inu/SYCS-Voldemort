@@ -780,6 +780,89 @@ async def _release_scheduler_lock() -> None:
         await conn.close()
 
 
+async def _run_startup_jobs() -> None:
+    """ロックを取れたワーカーだけが起動時に1回走らせる処理。
+
+    **並べ替えないこと。順序に意味がある。**
+
+      日次取得   → その日のぶんの価格と予測を作る
+      自動修復   → 取得の結果を見て欠損を埋める。取得より先だと古い行を見る
+      Push 通知  → 取得より先に送ると、その日のぶんが無い状態で配信する
+      起動時テスト
+
+    tests/test_webapp_lifespan.py の LifespanShapeTests がこの並びを固定している。
+    """
+    await collect_daily_data()
+    if METAL_AUTO_REPAIR_ENABLED:
+        await auto_repair_metalprice_data(force_forecast_refresh=METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH)
+    await dispatch_top_delta_notification(enforce_schedule_time=True)
+    await _run_startup_test_jobs()
+
+
+def _build_scheduler() -> AsyncIOScheduler:
+    """定期ジョブを登録したスケジューラを作って返す（start はしない）。
+
+    start を呼ばずに返すのは、呼び出し側でロックの確認とログ出力の順を保つため。
+
+    4本すべてに coalesce と max_instances=1 を付けている。付けないと、遅れて
+    溜まった実行がまとめて走る。**金属価格の取得は MetalpriceAPI の無料枠
+    （月100回）を消費するので、二重に走ると枠を食う。**
+
+    id を書き間違えても replace_existing=True なので例外は出ず、黙って別の
+    ジョブとして増える。トリガの時刻を間違えても、動かして丸一日待つまで
+    分からない。**そのため tests/test_webapp_lifespan.py が id・トリガの引数・
+    misfire_grace_time を字面ごと固定している。**
+    """
+    scheduler = AsyncIOScheduler(timezone=JST)
+    scheduler.add_job(
+        collect_daily_data,
+        CronTrigger(hour=0, minute=0, timezone=JST),
+        id="jst_daily_metal_snapshot_and_forecast",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
+    if FORECAST_REFRESH_EXTRA_HOURS_JST:
+        # JST 00:00分はjst_daily_metal_snapshot_and_forecastで既にカバー済みのため、
+        # ここでは日中の追加リフレッシュ(既定6/12/18時)のみを強制更新する。
+        scheduler.add_job(
+            collect_weekly_forecast_cache,
+            CronTrigger(
+                hour=",".join(FORECAST_REFRESH_EXTRA_HOURS_JST),
+                minute=FORECAST_REFRESH_MINUTE_JST,
+                timezone=JST,
+            ),
+            kwargs={"force_refresh": True},
+            id="jst_intraday_forecast_refresh",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+            misfire_grace_time=1800,
+        )
+    scheduler.add_job(
+        dispatch_top_delta_notification,
+        CronTrigger(hour=PUSH_NOTIFY_HOUR_JST, minute=PUSH_NOTIFY_MINUTE_JST, timezone=JST),
+        id="jst_daily_top_delta_push_notify",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=7200,
+    )
+    if METAL_AUTO_REPAIR_ENABLED:
+        scheduler.add_job(
+            auto_repair_metalprice_data,
+            IntervalTrigger(minutes=METAL_AUTO_REPAIR_INTERVAL_MINUTES, timezone=JST),
+            kwargs={"force_forecast_refresh": METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH},
+            id="jst_metalprice_auto_repair",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+            misfire_grace_time=max(300, METAL_AUTO_REPAIR_INTERVAL_MINUTES * 60),
+        )
+    return scheduler
+
+
 def _web_gauges() -> dict[str, float]:
     """Netdata へ出す web 固有の瞬間値。
 
@@ -820,59 +903,9 @@ async def lifespan(_: FastAPI):
         has_scheduler_lock = await _try_acquire_scheduler_lock()
 
     if WEB_SCHEDULER_ENABLED and has_scheduler_lock:
-        await collect_daily_data()
-        if METAL_AUTO_REPAIR_ENABLED:
-            await auto_repair_metalprice_data(force_forecast_refresh=METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH)
-        await dispatch_top_delta_notification(enforce_schedule_time=True)
-        await _run_startup_test_jobs()
+        await _run_startup_jobs()
 
-        scheduler = AsyncIOScheduler(timezone=JST)
-        scheduler.add_job(
-            collect_daily_data,
-            CronTrigger(hour=0, minute=0, timezone=JST),
-            id="jst_daily_metal_snapshot_and_forecast",
-            replace_existing=True,
-            coalesce=True,
-            max_instances=1,
-            misfire_grace_time=3600,
-        )
-        if FORECAST_REFRESH_EXTRA_HOURS_JST:
-            # JST 00:00分はjst_daily_metal_snapshot_and_forecastで既にカバー済みのため、
-            # ここでは日中の追加リフレッシュ(既定6/12/18時)のみを強制更新する。
-            scheduler.add_job(
-                collect_weekly_forecast_cache,
-                CronTrigger(
-                    hour=",".join(FORECAST_REFRESH_EXTRA_HOURS_JST),
-                    minute=FORECAST_REFRESH_MINUTE_JST,
-                    timezone=JST,
-                ),
-                kwargs={"force_refresh": True},
-                id="jst_intraday_forecast_refresh",
-                replace_existing=True,
-                coalesce=True,
-                max_instances=1,
-                misfire_grace_time=1800,
-            )
-        scheduler.add_job(
-            dispatch_top_delta_notification,
-            CronTrigger(hour=PUSH_NOTIFY_HOUR_JST, minute=PUSH_NOTIFY_MINUTE_JST, timezone=JST),
-            id="jst_daily_top_delta_push_notify",
-            replace_existing=True,
-            coalesce=True,
-            max_instances=1,
-            misfire_grace_time=7200,
-        )
-        if METAL_AUTO_REPAIR_ENABLED:
-            scheduler.add_job(
-                auto_repair_metalprice_data,
-                IntervalTrigger(minutes=METAL_AUTO_REPAIR_INTERVAL_MINUTES, timezone=JST),
-                kwargs={"force_forecast_refresh": METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH},
-                id="jst_metalprice_auto_repair",
-                replace_existing=True,
-                coalesce=True,
-                max_instances=1,
-                misfire_grace_time=max(300, METAL_AUTO_REPAIR_INTERVAL_MINUTES * 60),
-            )
+        scheduler = _build_scheduler()
         scheduler.start()
         logger.info("WEB_SCHEDULER_ENABLED=true: background scheduler started (advisory lock acquired)")
     elif WEB_SCHEDULER_ENABLED:
