@@ -8,9 +8,28 @@
 coverage==7.16.0
 
 # Linting and formatting
-ruff==0.10.0
-black==24.10.0
-mypy==1.14.0
+#
+# 3つを同時に上げた（2026-09-04）。上げた結果として起きたことを残しておく。
+#
+# ruff 0.10.0 → 0.16.5
+#   **tools/backtest_forecast.py が Python 3.11 では SyntaxError になる状態を
+#   見つけたのがこの版。** f-string の中で外側と同じ引用符を使う PEP 701 の構文で、
+#   0.10.0 は指摘しなかった。同じ種類を今後は CI の compileall が捕まえる。
+#
+# black 24.10.0 → 26.5.1
+#   8ファイルが整形し直された。中身は2種類だけで、どちらも意味は変わらない。
+#     - docstring や import の後の空行の扱い
+#     - 単独引数の複数行文字列を、括弧で包まずそのまま畳む
+#       （page.evaluate("""...""") の形。tools/ の playwright 呼び出しが大半）
+#
+# mypy 1.14.0 → 2.3.1
+#   指摘は1件だけだった（services/djaudio_service.py が Any を返している箇所）。
+#   ローカルへ注釈を足して直した。**実行時の防御は外していない**（CONTRIBUTING 6.）。
+#   あわせて overrides の3つを unused と報告するようになったが、これは note で
+#   error ではないので CI は落ちない。消してはいけない理由は pyproject.toml に書いた。
+ruff==0.16.5
+black==26.5.1
+mypy==2.3.1
 
 # 依存の脆弱性検査。requirements.txt は再現性のために全部 == で固定してあるが、
 # 固定は「勝手に動かない」ことしか保証せず、固定したまま古くなったものが放置

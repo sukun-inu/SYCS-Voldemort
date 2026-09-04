@@ -13,7 +13,6 @@ import psutil
 from envutil import env_float
 from services.metrics_registry import counters
 
-
 _APP_STARTED_AT = time.time()
 _REQUEST_TIMESTAMPS: deque[float] = deque()
 _REQUEST_HISTORY_SECONDS = 60

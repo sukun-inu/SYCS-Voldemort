@@ -16,7 +16,6 @@ from commands.interaction_utils import EMBED_FIELD_BUDGET, admin_site_view, cap_
 from services.logging_service import get_log_settings
 from services.settings_store import get_bypass_role_ids, get_response_channel_id, get_trusted_user_ids
 
-
 # /bot help を1枚の embed へ詰める件数。embed の description は4096文字まで
 # なので、コマンドが増えるといつか超える。超えた日に /bot help が丸ごと失敗
 # するので、件数で先に切る。

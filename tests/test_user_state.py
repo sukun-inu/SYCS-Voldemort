@@ -42,7 +42,6 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 import services.user_state_service as uss  # noqa: E402
 from webapp.models import UserStateCurrent, UserStateEvent  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # インメモリ SQLite を services.user_state_service.SessionLocal の代わりに使うための細工。
 # ---------------------------------------------------------------------------
