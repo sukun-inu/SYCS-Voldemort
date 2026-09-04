@@ -660,8 +660,28 @@ export async function createMixer(container, options = {}) {
      先の区間を少しずつ取ってきて、AudioContext の時計の上に並べる。
      位置は「鳴らし始めた時刻からの経過」で持つので、トラックごとの
      時計を突き合わせる必要が無い。 */
-  const SEGMENT_SECONDS = 6;        // 1回に取る長さ
-  const SEGMENT_LOOKAHEAD = 12;     // これだけ先まで用意しておく
+  /* 1回に取る長さ。**短くすると、長い録音の後半で再生が間に合わなくなる。**
+
+     区切り1本の値段は「ffmpeg の起動 + 全トラックの頭出し」がほとんどで、
+     長さにはあまり比例しない。しかも頭出しの値段は録音の深い位置ほど高い。
+     5時間の録音（5トラック・約90MB/本）を手元で実測するとこうなる。
+
+                 6秒ずつ   30秒ずつ   （再生時間に対する計算時間）
+       30分地点      4%       1%
+        2時間        11%       3%
+        4時間        22%       5%
+        5時間        26%       6%
+
+     まとめて取るほうが同じ再生時間あたり 4.7 倍安い。100% を超えると
+     取得が再生に追い越され、下の late の分岐で**音が飛ぶ**。手元では
+     26% でも、本番はネットワーク越しのディスクに載った VM なので
+     余裕は見かけほど無い。
+
+     初回だけ短くするのは、頭出しのたびに満量を待たせると鳴り始めが
+     遅くなるため。1本目が鳴っているあいだに2本目を満量で取りにいく。 */
+  const SEGMENT_FIRST_SECONDS = 6;  // 鳴り始めを早くするための1本目
+  const SEGMENT_SECONDS = 20;       // 2本目以降。サーバー側の上限は 30
+  const SEGMENT_LOOKAHEAD = 45;     // これだけ先まで用意しておく
   const SEGMENT_RETRY_MS = 1500;
   const segmentFormat = manifest.segment_format || {};
   const segmentRate = Number(segmentFormat.sample_rate) || 48000;
@@ -691,6 +711,7 @@ export async function createMixer(container, options = {}) {
     base: 0,            // そのときの再生位置
     filled: 0,          // どこまで並べ終えたか（再生位置）
     playing: false,
+    dropped: 0,          // 取得が間に合わず飛ばした秒数（累計）
     sources: new Set(),
     fetching: false,
     generation: 0,      // 頭出しのたびに増やす。古い取得結果を捨てるため
@@ -740,8 +761,9 @@ export async function createMixer(container, options = {}) {
 
       const generation = this.generation;
       const start = this.filled;
-      const length = Math.min(SEGMENT_SECONDS,
-                              duration ? duration - start : SEGMENT_SECONDS);
+      // 頭出し直後の1本目だけ短くする（→ SEGMENT_FIRST_SECONDS）。
+      const want = this.filled === this.base ? SEGMENT_FIRST_SECONDS : SEGMENT_SECONDS;
+      const length = Math.min(want, duration ? duration - start : want);
       if (length <= 0.01) return;
 
       this.fetching = true;
@@ -760,8 +782,18 @@ export async function createMixer(container, options = {}) {
         // 並べる位置。既に過ぎていたら、その場から鳴らす（取得が間に合わなかった）
         const when = this.origin + (start - this.base);
         const late = context.currentTime - when;
-        if (late > 0) source.start(context.currentTime, Math.min(late, buffer.duration));
-        else source.start(when);
+        if (late > 0) {
+          // **黙って飛ばさないこと。** 飛ばしたぶんは会話が欠けるので、
+          // 聞いている側には「話が繋がらない」としか分からない。ログにも
+          // 何も出ないと、原因が再生側にあること自体に気づけない。
+          this.dropped += Math.min(late, buffer.duration);
+          console.warn(
+            `[mixer] 区切りの取得が再生に間に合わず ${Math.min(late, buffer.duration).toFixed(2)} 秒ぶん飛ばしました`
+            + `（位置 ${start.toFixed(1)}s / 累計 ${this.dropped.toFixed(1)}s）`);
+          source.start(context.currentTime, Math.min(late, buffer.duration));
+        } else {
+          source.start(when);
+        }
         source.onended = () => { this.sources.delete(source); };
         this.sources.add(source);
         this.filled = start + buffer.duration;
