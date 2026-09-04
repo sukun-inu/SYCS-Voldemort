@@ -3247,6 +3247,40 @@ class StreamAssemblerTests(unittest.TestCase):
             offset = self.stream.offset_for(1_000_000 + 48000 * 9999, 5.02)
         self.assertAlmostEqual(offset, 5.02, delta=0.001)
 
+    def test_a_backward_jump_also_falls_back_to_the_clock(self):
+        """**後ろ向きの飛びも止めること。**
+
+        門は offset<0 と offset>elapsed+60 しか見ていなかったので、再接続で
+        相手のタイムスタンプ基準が下がった場合は素通りしていた。素通りすると、
+        pad_until は前にしか進まないのでそのトラックは無音を書かなくなり、
+        発話が詰まって並ぶ。やがて追い付いたあとは、残りの録音ぶんずっと
+        手前に置かれ続ける。**トラックごとにずれ幅が違い、録音の途中から
+        始まる**という、報告されていた症状そのものの形になる。
+        """
+        self.stream.offset_for(1_000_000, 100.0)
+        with self.assertLogs("services.recording_service", level="WARNING"):
+            offset = self.stream.offset_for(1_000_000 - 48000 * 50, 100.02)
+        self.assertAlmostEqual(offset, 100.02, delta=0.001)
+        self.assertEqual(self.stream.rebased, 1)
+
+    def test_normal_progress_never_rebases(self):
+        """**普通に進んでいるあいだは張り直さないこと。**
+
+        張り直しは到着時刻を起点にするので、毎回やるとジッタのぶん時間軸が
+        歪む。捕まえたいのは飛びだけで、通常の進みではない。
+        """
+        base = 1_000_000
+        for k in range(50):
+            self.stream.offset_for(base + 960 * k, 10.0 + 0.02 * k)
+        self.assertEqual(self.stream.rebased, 0)
+
+    def test_a_small_step_back_is_tolerated(self):
+        """わずかな戻りで張り直さないこと（欠落補間は次のパケットの手前に置く）。"""
+        base = 1_000_000
+        self.stream.offset_for(base + 48000, 11.0)
+        self.stream.offset_for(base + 48000 - 9600, 11.02)  # 0.2 秒手前
+        self.assertEqual(self.stream.rebased, 0)
+
     def test_the_timeline_starts_from_when_the_packet_arrived(self):
         """並べ直しで抱えていたぶん、トラックまるごとずれないこと。
 
@@ -3539,7 +3573,7 @@ class RecordingSinkShapeTests(unittest.TestCase):
         self.assertEqual(len(summary), 1, captured.output)
         self.assertIn(
             "ssrc=18295 (すずき) 受信=2 成功=2 失敗=0 E2EE復号=0 E2EE不可=0 "
-            "詰め物=0 欠落=0 手遅れ=0 無音=0 RTP種別={120: 2}",
+            "詰め物=0 欠落=0 手遅れ=0 無音=0 張り直し=0 RTP種別={120: 2}",
             summary[0],
         )
 
