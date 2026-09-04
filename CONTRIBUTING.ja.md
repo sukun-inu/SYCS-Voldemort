@@ -240,8 +240,9 @@ mypy が指摘したのは `.rowcount` の方なのに、外されたのは `or 
 
 ### `# type: ignore` より、指摘されない書き方を先に探す
 
-**エラーコードは環境で変わります。** 手元（Python 3.13）で通っても、CI（3.11）で
-別のコードが出て落ちることがあります。実際に踏みました。
+**エラーコードは環境で変わります。** 手元と CI の Python は 3.13 に揃えましたが、
+それでも mypy 自身の版で変わります（実際 mypy 1 → 2 で新しい指摘が1件出ました）。
+下の例は Python の版で踏んだときのものです。
 
 ```python
 # 手元では call-arg、CI では misc が出る。書き分けが要るうえ、
@@ -262,7 +263,7 @@ return discord.Color.dark_grey()
 
 | 場所 | 値 | 意味 |
 |---|---|---|
-| `.coveragerc` の `fail_under` | 73 | これを割ると CI が落ちる（実測 75.45%） |
+| `.coveragerc` の `fail_under` | 74 | これを割ると CI が落ちる（実測 75.45%） |
 | `pyproject.toml` の `max-complexity` | 23 | 現在の最大値に合わせた天井（`_build_search_queries` と `handle_security_for_message`） |
 | CI の `mypy -p ...` | 本体5パッケージ全部 | 147ファイル |
 | `tools/check_docstrings.py` の `FLOOR_PERCENT` | 100 | 本体の関数 1353 本すべてに docstring がある状態を保つ |
@@ -301,12 +302,12 @@ commit には使えません。理由の詳細はワークフローの `workflow
 6. `tools/check_requirements.py`（依存の固定が Docker と同じ条件で解けるか）
 7. `tools/check_admin_schema.py` と `tools/generate_admin_docs.py --check`
 8. `tools/check_docstrings.py`（本体の関数に docstring があるか。下限 100）
-9. `python -m compileall -q .`（全ファイルが CI の Python 3.11 で構文が通るか）
+9. `python -m compileall -q .`（全ファイルが CI の Python 3.13 で構文が通るか）
 10. `sh -n docker/*.sh`（シェルスクリプトの構文）
 11. `pip-audit -r requirements.txt --strict`（依存に既知の脆弱性が無いか）
 
-9. は `tools/backtest_forecast.py` が **Python 3.11 では SyntaxError になる状態で
-main に入っていた**ために足しました（f-string の中で外側と同じ引用符を使う
+9. は `tools/backtest_forecast.py` が **当時の対象だった Python 3.11 では
+SyntaxError になる状態で main に入っていた**ために足しました（f-string の中で外側と同じ引用符を使う
 PEP 701 の構文。3.12 以降でしか解釈できません）。気づけなかった理由が3つ重なって
 います。
 
@@ -314,10 +315,13 @@ PEP 701 の構文。3.12 以降でしか解釈できません）。気づけな�
 - `tools/` はテストが import しない（`.coveragerc` でも除外）
 - 当時の ruff 0.10.0 はこの構文を指摘しなかった
 
-**手元（3.13）では動くので、本番の 3.11 で初めて落ちます。** 見つかったのは
-Dependabot が ruff を上げる PR を出したときでした。`compileall` なら、テストが
-import しないファイルも含めて全部をこのジョブの Python（＝Dockerfile と同じ
-3.11）で検査できます。
+**手元（3.13）では動くので、本番の 3.11 で初めて落ちる**形でした。見つかったのは
+Dependabot が ruff を上げる PR を出したときです。
+
+その後 Python を 3.13 へ揃えたので、この食い違いそのものは無くなりました。
+**それでもこの検査は外しません。** `tools/` `scripts/` `migrations/` は mypy の
+対象外でテストも import しないので、ここだけが構文を見ています。対象の Python を
+将来また動かしたときにも同じ事故を捕まえます。
 
 10. があるのは、`docker/postgres-backup.sh` を compose の YAML の中ではなく
 ファイルに置いた理由の一つがこれだからです。YAML の中のシェルは構文検査に

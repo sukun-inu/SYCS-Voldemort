@@ -24,9 +24,14 @@ def _unwrap_ipv4_mapped(
     「IPv4-mapped の is_private は、埋め込まれた IPv4 の意味で決まる」と
     明記された（IPv6Address.is_private の docstring）。
 
-    手元（3.13）で通るのに本番・CI（3.11）だけ弾かれる、という形になる。
+    手元（3.13）で通るのに本番・CI（3.11）だけ弾かれる、という形だった。
     実際に VirusTotal のスキャンが non_public_ip で落ちる事例が出ている。
-    バージョンに依存させないため、判定の前に IPv4 へ開いておく。
+
+    **本番を 3.13 へ揃えたあとも、この関数を消さないこと。** 3.13 の挙動が
+    望むものだから要らない、という判断は2つの点で誤る。対象の Python を
+    下げ戻したとき（あるいは古い版で動かしたとき）に同じ事故へ戻るうえ、
+    「埋め込まれた IPv4 で判定する」という意図がコードから消える。
+    判定の前に IPv4 へ開くのは、版に関わらず正しい。
     """
     mapped = getattr(ip, "ipv4_mapped", None)
     return mapped if mapped is not None else ip

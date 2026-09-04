@@ -18,9 +18,11 @@ on:
   # コマンドなので、run が存在しない commit には使えない。空コミットを積んで
   # 履歴を汚すか、次の push まで未検証のまま放置するかしか選べなくなる。
   #
-  # 手元で全部通していても、この検査の値打ちは「CI の Python 3.11 で通ること」に
-  # ある（手元は 3.13）。実際、直前に直したのは 3.13 では通って 3.11 で落ちる
-  # 種類のバグだった。未検証のまま残せる状態にしておかない。
+  # 未検証のまま main の先頭に残せる状態にしておかない。
+  #
+  # （かつては「手元 3.13 / CI 3.11」の食い違いがこの検査の主な値打ちだった。
+  #  3.13 へ揃えたのでその食い違いは無くなったが、CI で通っていない commit を
+  #  残さないという理由は変わらない。）
   workflow_dispatch:
 
 jobs:
@@ -31,12 +33,13 @@ jobs:
       - name: リポジトリを取得
         uses: actions/checkout@v7
 
-      - name: Python 3.11 をセットアップ
-        # Dockerfile（python:3.11-slim）とバージョンを揃える。ここがずれると
+      - name: Python 3.13 をセットアップ
+        # Dockerfile（python:3.13-slim）とバージョンを揃える。ここがずれると
         # 「ローカル・CI では通るのに本番だけ壊れる」が起きうる。
+        # .python-version と pyproject.toml も同じ版を指していること。
         uses: actions/setup-python@v7
         with:
-          python-version: "3.11"
+          python-version: "3.13"
           cache: pip
           cache-dependency-path: |
             requirements.txt
@@ -74,22 +77,24 @@ jobs:
         # ここへ加えること。「入れたが素通り」は作らない。
         run: python -m mypy -p webapp -p events -p services -p webapp_admin -p commands
 
-      - name: Python 3.11 で構文が通るか確認（全ファイル）
+      - name: Python 3.13 で構文が通るか確認（全ファイル）
         # **なぜ要るか。** tools/backtest_forecast.py が
         # `f"{url.rstrip("/")}"`（PEP 701、Python 3.12 以降の構文）を含んでいて、
-        # 3.11 では import した時点で SyntaxError になる状態が残っていた。
+        # 当時の対象だった 3.11 では import した時点で SyntaxError になっていた。
         # 気づけなかった理由が3つ重なっている。
         #
         #   - tools/ は mypy の対象外（CI の -p に入っていない）
         #   - tools/ はテストが import しない（.coveragerc でも除外）
         #   - 当時の ruff 0.10.0 はこの構文を指摘しなかった
         #
-        # 手元（3.13）では動くので、**本番の 3.11 で初めて落ちる。** 見つけたのは
-        # Dependabot が ruff を 0.16.5 へ上げる PR を出したときで、それまで
-        # 誰も踏んでいなかった。
+        # 手元（3.13）では動くので、**本番の 3.11 で初めて落ちる**形だった。
+        # 見つけたのは Dependabot が ruff を 0.16.5 へ上げる PR を出したときで、
+        # それまで誰も踏んでいなかった。
         #
-        # compileall なら、テストが import しないファイルも含めて全部を
-        # このジョブの Python（＝Dockerfile と同じ 3.11）で構文検査できる。
+        # **その後 3.13 へ揃えたので、この食い違い自体は無くなった。それでも
+        # この検査は外さない。** テストが import しないファイル（tools/ scripts/ と
+        # migrations/）は mypy の対象外でもあり、ここだけが構文を見ている。
+        # 対象の Python を将来また動かしたときにも、同じ事故を捕まえる。
         run: python -m compileall -q .
 
       - name: シェルスクリプトの構文検査

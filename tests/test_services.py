@@ -1795,7 +1795,7 @@ class UrlSafetyTests(unittest.TestCase):
 
         この1行が無いと、判定が Python のバージョンに依存する。3.12.4 未満の
         ipaddress は ::ffff:0:0/96 を丸ごと private に数えるため、公開IPv4を
-        指すアドレスが is_global=False になる。手元(3.13)では通り、本番・
+        指すアドレスが is_global=False になる。手元(3.13)では通り、当時の本番・
         CI(3.11)だけ non_public_ip で落ちる——という最も追いにくい形になり、
         実際に VirusTotal のスキャンが黙ってスキップされていた。
         """

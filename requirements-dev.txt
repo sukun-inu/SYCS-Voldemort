@@ -4,7 +4,7 @@
 #
 # coverage==7.16.0
 # 2026年8月時点の最新安定版。7.x 系は Python 3.9〜3.14 に対応しており、
-# ローカル（3.13）・CI（3.11、Dockerfile と揃える）のどちらでも動く。
+# ローカル・CI・本番はすべて 3.13（Dockerfile と揃えてある）。
 coverage==7.16.0
 
 # Linting and formatting
@@ -12,8 +12,8 @@ coverage==7.16.0
 # 3つを同時に上げた（2026-09-04）。上げた結果として起きたことを残しておく。
 #
 # ruff 0.10.0 → 0.16.5
-#   **tools/backtest_forecast.py が Python 3.11 では SyntaxError になる状態を
-#   見つけたのがこの版。** f-string の中で外側と同じ引用符を使う PEP 701 の構文で、
+#   **tools/backtest_forecast.py が、当時の対象だった Python 3.11 では
+#   SyntaxError になる状態を見つけたのがこの版。** f-string の中で外側と同じ引用符を使う PEP 701 の構文で、
 #   0.10.0 は指摘しなかった。同じ種類を今後は CI の compileall が捕まえる。
 #
 # black 24.10.0 → 26.5.1
