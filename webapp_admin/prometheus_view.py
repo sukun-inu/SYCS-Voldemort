@@ -110,6 +110,23 @@ def backup_age_seconds() -> float | None:
     return max(0.0, time.time() - float(finished))
 
 
+def backup_is_configured() -> bool:
+    """バックアップの状態ファイルを見る構成かどうか。
+
+    **「読めない」と「そもそも見ていない」を分けるために要る。** 状態ファイルを
+    マウントしない構成（手元での起動や、バックアップを別の場所で回す構成）で
+    sycs_backup_status 0 を出すと、直しようのないアラートが鳴り続ける。逆に
+    マウントしてあるのに読めないのは本当の異常なので、そちらは 0 を出す。
+
+    判断はファイルの有無ではなく、**置き場のディレクトリの有無**で行う。
+    1度も成功していないときは status.json が無く、それこそがいちばん知りたい
+    状態だから（2026-09-04、バックアップのコンテナが exit 0 で18回再起動し
+    続けたのに、status.json が無いせいで系列ごと出ず、閾値のアラートに
+    掛からなかった）。
+    """
+    return env_path("BACKUP_STATUS_FILE", Path("/backups/status.json")).parent.is_dir()
+
+
 def _extra_series() -> list[tuple[str, dict[str, str] | None, float, str, str]]:
     """このプロセスでその場で測れるものを組み立てる。
 
@@ -145,6 +162,20 @@ def _extra_series() -> list[tuple[str, dict[str, str] | None, float, str, str]]:
                 age,
                 "gauge",
                 "最後に成功した Postgres バックアップからの経過秒数",
+            )
+        )
+    # **こちらは age と違って、失敗していても読めなくても必ず出す。** 系列が
+    # 消えると、Netdata から見て「古い」ではなく「無い」になり、閾値のアラート
+    # に掛からない。0 か 1 が常に出ていれば、欠測そのものを検知できる。
+    # 1 になる条件は sycs_backup_age_seconds が出る条件と厳密に同じ。
+    if backup_is_configured():
+        extra.append(
+            (
+                "backup_status",
+                None,
+                1.0 if age is not None else 0.0,
+                "gauge",
+                "最後の Postgres バックアップが成功していれば 1、それ以外は 0",
             )
         )
     return extra

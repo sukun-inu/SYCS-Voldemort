@@ -60,7 +60,8 @@ sudo -u netdata /usr/libexec/netdata/plugins.d/go.d.plugin -d -m prometheus
 | `sycs_up{app}` | gauge | **1 なら報告が届いている、0 なら止まっている** |
 | `sycs_heartbeat_age_seconds{app}` | gauge | 最後の報告からの経過秒数 |
 | `sycs_shared_cache_available` | gauge | Valkey へ書き読みできているか |
-| `sycs_backup_age_seconds` | gauge | 最後に**成功した**バックアップからの経過秒数 |
+| `sycs_backup_status` | gauge | **1 なら最後のバックアップが成功、0 ならそれ以外**（失敗・1 度も動いていない・状態ファイルが読めない）。バックアップを見る構成でだけ出る |
+| `sycs_backup_age_seconds` | gauge | 最後に**成功した**バックアップからの経過秒数。`sycs_backup_status == 1` のときだけ出る |
 | `sycs_exceptions_total{app,type}` | counter | 未捕捉例外の型ごとの累積 |
 | `sycs_http_responses_total{app,code}` | counter | 応答コードごとの累積 |
 | `sycs_requests_total{app}` | counter | リクエストの累積 |
@@ -94,8 +95,15 @@ Netdata 側（`/etc/netdata/health.d/` か Netdata Cloud）で設定します。
 | 条件 | なぜ |
 |---|---|
 | `sycs_up == 0` が 2 分続く | プロセスが死んでいる。**これが無いと、落ちたことに誰も気づかない** |
-| `sycs_backup_age_seconds > 172800`（48 時間） | バックアップが 2 日取れていない。日次なので、1 回の失敗では鳴らない |
+| `sycs_backup_status == 0` が 48 時間続く | バックアップが取れていない。**`sycs_backup_age_seconds` ではなくこちらで鳴らすこと**（下記） |
 | `sycs_exceptions_total` の増加 | 例外が出ている。今までログファイルに埋もれていて誰も見ていなかった |
+
+**バックアップは `sycs_backup_status` で見ます。** `sycs_backup_age_seconds` は
+成功した回があるときしか出ないので、1 度も成功していない間は「値が大きい」では
+なく**系列が存在しない**状態になり、閾値の条件が成立しません。2026-09-04 に
+バックアップのコンテナが exit 0 で 18 回再起動し続けたのを誰も検知できなかった
+のがこれです。`sycs_backup_status` は 0 か 1 が必ず出るので、欠測そのものを
+捕まえられます。
 
 `sycs_shared_cache_available == 0` も見る価値があります。0 の間はキャッシュが
 ワーカーごとに分かれ、レート制限も緩くなりますが、**アプリは動き続けます**
@@ -155,4 +163,4 @@ docker compose logs sycs-voldemort | tail -30
 | `METRICS_STALE_AFTER_SECONDS` | `90` | これより古い心拍は `sycs_up=0`。報告間隔の 3 倍が目安 |
 | `METRICS_GAUGE_TTL_SECONDS` | `120` | ゲージの寿命。過ぎると系列が消える |
 | `METRICS_PATH` | `/metrics` | 公開パス |
-| `BACKUP_STATUS_FILE` | `/backups/status.json` | `sycs_backup_age_seconds` の元 |
+| `BACKUP_STATUS_FILE` | `/backups/status.json` | `sycs_backup_status` と `sycs_backup_age_seconds` の元。**置き場のディレクトリが無いときは、どちらも出さない**（バックアップを見ない構成で鳴らしようのないアラートを作らないため） |

@@ -12,7 +12,9 @@ webapp_admin/prometheus_view.py）のテスト。
      ラベル値がエスケープされていること。**形式が壊れると Netdata 側からは
      「メトリクスが1つ欠けた」ではなく「読めない」に見える**ので、原因を追い
      にくい。
-  3. 生存が「消える」ではなく 0/1 で出ること。
+  3. 生存が「消える」ではなく 0/1 で出ること。**バックアップの成否も同じ**
+     （系列が消えると、読む側からは「古い」ではなく「無い」になり、閾値の
+     アラートに掛からない）。
   4. 報告に失敗したときにカウンタを捨てないこと。
   5. カウンタに期限が付かないこと（付くと、読む側が「減った」と解釈する）。
 
@@ -438,6 +440,64 @@ class BackupAgeTests(unittest.TestCase):
     def test_a_non_numeric_epoch_reports_nothing(self):
         """時刻が数値でなければ None。"""
         self.assertIsNone(self._with_status({"result": "ok", "finished_at_epoch": "きのう"}))
+
+
+class BackupStatusTests(unittest.TestCase):
+    """sycs_backup_status。**成功していないときに系列ごと消えないこと。**
+
+    2026-09-04、バックアップのコンテナが exit 0 で18回再起動し続けたのに、
+    誰も気づけなかった。status.json が1度も書かれず sycs_backup_age_seconds が
+    系列ごと出なかったため、Netdata から見て「古い」ではなく「無い」になり、
+    閾値のアラートに掛からなかった。0 を出していれば鳴っていた。
+    """
+
+    def _values(self, status_file: Path) -> dict[str, float]:
+        """その設定で /metrics に足される系列を {名前: 値} で返す。"""
+        with patch.dict("os.environ", {"BACKUP_STATUS_FILE": str(status_file)}, clear=False):
+            return {name: value for name, _labels, value, _kind, _help in prometheus_view._extra_series()}
+
+    def test_a_successful_backup_reports_one(self):
+        """成功していれば 1。経過秒数も一緒に出ること。"""
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "status.json"
+            path.write_text(json.dumps({"result": "ok", "finished_at_epoch": time.time()}), encoding="utf-8")
+            values = self._values(path)
+        self.assertEqual(values["backup_status"], 1.0)
+        self.assertIn("backup_age_seconds", values)
+
+    def test_a_failed_backup_reports_zero_instead_of_disappearing(self):
+        """失敗した回は 0。**経過秒数のほうは出さない**（成功した時刻ではないため）。"""
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "status.json"
+            path.write_text(json.dumps({"result": "error", "finished_at_epoch": time.time()}), encoding="utf-8")
+            values = self._values(path)
+        self.assertEqual(values["backup_status"], 0.0)
+        self.assertNotIn("backup_age_seconds", values)
+
+    def test_a_backup_that_never_ran_reports_zero(self):
+        """**今回の事故そのもの。** status.json が1度も書かれていなくても 0 を出す。
+
+        置き場はあるのにファイルが無い、が「1度も成功していない」状態。ここで
+        黙ると、バックアップが最初から動いていない構成を誰も検知できない。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            values = self._values(Path(tmp) / "status.json")
+        self.assertEqual(values["backup_status"], 0.0)
+        self.assertNotIn("backup_age_seconds", values)
+
+    def test_an_unmounted_setup_reports_nothing(self):
+        """置き場ごと無い構成では系列を出さないこと。
+
+        バックアップを見ない構成（手元での起動など）で 0 を出すと、直しようの
+        ないアラートが鳴り続ける。「読めない」と「見ていない」は別。
+        """
+        values = self._values(Path("/does/not/exist/status.json"))
+        self.assertNotIn("backup_status", values)
+        self.assertNotIn("backup_age_seconds", values)
 
 
 class MetricsEndpointTests(QuietSharedCacheLog, unittest.IsolatedAsyncioTestCase):
