@@ -708,7 +708,9 @@ class _StreamAssembler:
         self._anchor_ts: int | None = None  # 最初のパケットの RTP タイムスタンプ
         self._anchor_elapsed: float = 0.0  # そのときの録音経過秒
         # 音声が入っていないと分かっている番号（→ skip）。穴と区別するために持つ。
-        self._skipped: set[int] = set()
+        # **set ではなく dict。** 上限に当たったとき古いほうから捨てたいので、
+        # 入れた順が要る（値は使わない。_capture_awaiting と同じ持ち方）。
+        self._skipped: dict[int, None] = {}
         self._last_offset: float | None = None  # 直前に返した位置（戻りの判定に使う）
         self.rebased = 0  # 時計が飛んで起点を張り直した回数
         self.unknown = 0  # 誰の音か分からないまま受け取った数
@@ -915,9 +917,14 @@ class _StreamAssembler:
         """
         if self._next_seq is not None and _wrapped_delta(sequence, self._next_seq, _SEQ_MOD) < 0:
             return  # もう通り過ぎた番号。覚えても使わない。
-        self._skipped.add(sequence)
+        self._skipped[sequence] = None
         if len(self._skipped) > _SKIP_MAX:
-            self._skipped.clear()
+            # **古いほうから1つだけ捨てる。** 丸ごと消すと、いま入れたばかりの
+            # これから使う番号まで一緒に消える。消えた詰め物は drain() から穴に
+            # 見えるので、欠落として数えたうえで Opus に無い音を作らせる
+            # ——skip() を入れて止めたはずの壊れ方へ、上限の瞬間だけ戻っていた。
+            # 古いほうは _next_seq が既に通り過ぎていて、二度と参照されない。
+            self._skipped.pop(next(iter(self._skipped)))
 
     def _forget_passed(self, seq: int) -> None:
         """seq より手前の「音声なし」の記憶を捨てる。
@@ -935,7 +942,7 @@ class _StreamAssembler:
         （2026-09-05 / 221分36秒）では、冒頭の詰め物14枚を持つ話者だけ
         `時計の飛び=-14` と負の値で出ていた。詰め物の枚数とちょうど一致する。
         """
-        self._skipped = {s for s in self._skipped if _wrapped_delta(s, seq, _SEQ_MOD) >= 0}
+        self._skipped = {s: None for s in self._skipped if _wrapped_delta(s, seq, _SEQ_MOD) >= 0}
 
     def _hold_expired(self, now: float) -> bool:
         """順番待ちを打ち切るか。
@@ -971,7 +978,7 @@ class _StreamAssembler:
             # 音声が入っていないと分かっている番号は、穴ではない（→ skip）。
             # 欠落に数えず、欠落補間も作らずに次へ進む。
             if self._next_seq in self._skipped:
-                self._skipped.discard(self._next_seq)
+                self._skipped.pop(self._next_seq, None)
                 self._next_seq = (self._next_seq + 1) % _SEQ_MOD
                 continue
             item = self._pending.pop(self._next_seq, None)
@@ -994,7 +1001,7 @@ class _StreamAssembler:
             known = 0
             for seq in list(self._skipped):
                 if 0 <= _wrapped_delta(seq, next_seq, _SEQ_MOD) < gap:
-                    self._skipped.discard(seq)
+                    self._skipped.pop(seq, None)
                     known += 1
             missing = gap - known
             next_ts = self._pending[skipped][1]
