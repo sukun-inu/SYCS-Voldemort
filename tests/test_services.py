@@ -2612,6 +2612,40 @@ class RecordingTests(unittest.TestCase):
         self.assertLess(by_name["たなか"]["periodicity"], manifest["periodicity_min"], by_name["たなか"])
         self.assertGreaterEqual(by_name["すずき"]["periodicity"], manifest["periodicity_min"], by_name["すずき"])
 
+    def test_a_long_mostly_silent_track_is_still_measured(self):
+        """**抜き出す場所は、鳴っているところから選ぶこと。**
+
+        声の判定は録音の各所から 0.5 秒ずつ 8 箇所だけ抜いて測る。位置を
+        「録音全体を等分」で決めていたので、長い録音ほど無音に当たる。
+
+        実録音（2026-09-05 / 221分36秒）で実際にこうなっていた。
+
+            シロウP: 鳴っている窓  2 / 全窓 99 -> 0.577  （80ms で出した数字）
+            佃煮  : 鳴っている窓  9 / 全窓 99 -> 0.384  （全体を測ると 0.738）
+            Achi  : 鳴っている窓  0 / 全窓 99 -> None   （判定不能）
+
+        しかも `_finalize` の suspect_tracks は None を除いて絞るので、**測れ
+        なかったトラックは黙って合格として通る。** 雑音になった録音を落として
+        聞く前に捕まえる、という検査の目的そのものが失われる。
+
+        ここでは 60 秒の録音の 4.0〜5.0 秒だけに音を置く。等分だと
+        0 / 8.5 / 17 / 25.5 / 34 / 42.5 / 51 / 59.5 秒を見るので、8 箇所とも
+        外れる。
+        """
+        session = self._session()
+        session.feed(Mock(id=1, display_name="すずき"), self._tone(1.0), at=4.0)
+        result = self.rec._finalize(session, 60.0, "テスト")
+
+        from services.djaudio_cache import get_meta, payload_path
+
+        meta = get_meta(result["token"])
+        with zipfile.ZipFile(payload_path(result["token"], meta)) as archive:
+            manifest = json.loads(archive.read(self.rec.MANIFEST_NAME).decode("utf-8"))
+        stem = manifest["stems"][0]
+        self.assertIsNotNone(stem["periodicity"], "鳴っているところを外して測れずに終わっている")
+        self.assertGreaterEqual(stem["periodicity"], manifest["periodicity_min"], stem)
+        self.assertEqual(result["suspect_tracks"], [])
+
     def test_a_silent_track_is_not_called_broken(self):
         """無音しか入っていないトラックは、良し悪しを判定できない。
 
@@ -3057,6 +3091,63 @@ class GuildChannelCacheTests(unittest.TestCase):
         with self._patch_session():
             asyncio.run(self.auth.get_guild_channels(1))
         self.assertNotIn(1, self.auth._guild_channels_cooldown)
+
+
+class ProbePositionsTests(unittest.TestCase):
+    """声の判定で「どこを抜き出すか」を波形から決めること。
+
+    抜けるのは 0.5 秒 × 8 箇所だけ。録音全体を等分すると、長い録音ほど無音に
+    当たる。実録音（221分36秒）では 3 人のうち 1 人が判定不能になっていた。
+    """
+
+    def setUp(self):
+        import services.recording_service as recording
+
+        self.rec = recording
+        self.bucket = recording.PEAK_BUCKET_SECONDS
+
+    def test_positions_come_from_the_parts_that_sound(self):
+        """無音の目盛りは候補に入れないこと。"""
+        peaks = [0] * 1200  # 60 秒ぶん
+        for i in range(80, 100):  # 4.0〜5.0 秒だけ鳴っている
+            peaks[i] = 20000
+        got = self.rec.probe_positions(peaks, self.bucket, 60.0)
+        self.assertTrue(got)
+        for at in got:
+            self.assertGreaterEqual(at, 4.0 - 1e-9, got)
+            self.assertLess(at, 5.0, got)
+
+    def test_positions_do_not_sit_on_top_of_each_other(self):
+        """近すぎると同じ音を二度見ることになる。
+
+        _periodicity は鳴っている窓を _VOICE_MAX_WINDOWS までしか使わないので、
+        重なったぶんで枠が埋まると、実際に見る箇所がそのぶん減る。
+        """
+        # 鳴っているのが 1 秒ぶんだけ。等分すると 8 箇所が 0.1 秒刻みで並ぶ。
+        peaks = [0] * 1200
+        for i in range(80, 100):
+            peaks[i] = 20000
+        got = self.rec.probe_positions(peaks, self.bucket, 60.0)
+        gaps = [b - a for a, b in zip(got, got[1:])]
+        self.assertTrue(gaps)
+        self.assertTrue(
+            all(gap >= self.rec._VOICE_PROBE_SECONDS for gap in gaps),
+            f"抜き出す長さより近い位置が混ざっている: {got}",
+        )
+
+    def test_positions_stay_inside_the_recording(self):
+        """目盛りは録音より長くなることがある（_peak_scale が長いほうに揃える）。
+
+        末尾を越えた位置から頭出しすると、その1箇所は何も抜けずに無駄になる。
+        """
+        peaks = [20000] * 2000  # 100 秒ぶんの目盛りだが、録音は 60 秒
+        got = self.rec.probe_positions(peaks, self.bucket, 60.0)
+        self.assertTrue(got)
+        self.assertLessEqual(max(got), 60.0 - self.rec._VOICE_PROBE_SECONDS)
+
+    def test_a_silent_track_falls_back_to_even_spacing(self):
+        """鳴っているところが無いなら選びようがない。等分へ落とす（空を返す）。"""
+        self.assertEqual(self.rec.probe_positions([0] * 1200, self.bucket, 60.0), [])
 
 
 class StreamAssemblerTests(unittest.TestCase):

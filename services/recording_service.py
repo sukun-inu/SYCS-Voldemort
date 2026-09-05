@@ -373,15 +373,46 @@ _VOICE_MAX_WINDOWS = 16
 _VOICE_FLOOR = 900  # これを下回る窓は無音とみなす
 
 
-def _probe_samples(path: Path, duration: float) -> array.array:
+def probe_positions(peaks: list[int], bucket_seconds: float, duration: float) -> list[float]:
+    """波形から、抜き出す位置（秒）を選ぶ。鳴っている目盛りが無ければ空。
+
+    **録音全体を等分してはいけない。** 抜けるのは 0.5 秒 × 8 箇所だけなので、
+    長い録音ほど無音に当たる。実録音（2026-09-05 / 221分36秒）では、等分だと
+    99 窓のうち鳴っていたのが 2 窓・9 窓・0 窓で、3人目は判定不能になっていた。
+    しかも判定できなかったトラックは suspect_tracks から外れて黙って通るので、
+    「落として聞く前に雑音を捕まえる」という検査の目的が失われる。
+
+    鳴っている目盛りのほうを等分する。位置が近すぎると同じ音を二度見ることに
+    なるので、抜き出す長さぶんは離す。
+    """
+    loud = [i for i, value in enumerate(peaks) if value >= _VOICE_FLOOR]
+    if not loud:
+        return []
+    limit = max(duration - _VOICE_PROBE_SECONDS, 0.0)
+    step = len(loud) / _VOICE_PROBES
+    picked: list[float] = []
+    for i in range(_VOICE_PROBES):
+        at = min(loud[int(i * step)] * bucket_seconds, limit)
+        if picked and at - picked[-1] < _VOICE_PROBE_SECONDS:
+            continue
+        picked.append(at)
+    return picked
+
+
+def _probe_samples(path: Path, duration: float, positions: list[float] | None = None) -> array.array:
     """録音の各所から少しずつ抜き出して 8kHz モノラルで返す。
 
     全体をデコードすると 6 時間で 2GB 近くになる。測るのに全部は要らない。
+
+    positions を渡さなかったときだけ全体を等分する。等分は「どこが鳴っている
+    か分からない」ときの最後の手段で、長い録音では無音ばかり当たる
+    （→ probe_positions）。
     """
     samples = array.array("h")
     span = max(duration - _VOICE_PROBE_SECONDS, 0.0)
-    for i in range(_VOICE_PROBES):
-        at = 0.0 if _VOICE_PROBES == 1 else span * i / (_VOICE_PROBES - 1)
+    if not positions:
+        positions = [0.0 if _VOICE_PROBES == 1 else span * i / (_VOICE_PROBES - 1) for i in range(_VOICE_PROBES)]
+    for at in positions:
         try:
             result = subprocess.run(
                 [
@@ -447,14 +478,17 @@ def _periodicity(samples: array.array) -> float | None:
     return round(statistics.median(scores), 3)
 
 
-def measure_voice(path: Path, duration: float) -> float | None:
+def measure_voice(path: Path, duration: float, positions: list[float] | None = None) -> float | None:
     """書き出したトラックが声として成立しているかを測る。
 
     戻り値は 0〜1。VOICE_PERIODICITY_MIN を下回るなら雑音の疑いがある。
     無音しか入っていない、または測れなかった場合は None。
+
+    positions には「鳴っている位置」を渡す（→ probe_positions）。渡さないと
+    録音全体を等分することになり、長い録音では無音ばかり抜いて測れなくなる。
     """
     try:
-        return _periodicity(_probe_samples(path, duration))
+        return _periodicity(_probe_samples(path, duration, positions))
     except Exception as e:
         # 測れないことが録音の失敗になってはいけない。
         logger.warning("[recording] 音の確認に失敗 %s: %s", path.name, e)
@@ -2238,7 +2272,14 @@ def _build_stems(
     for index, track in enumerate(session.tracks.values()):
         if not _has_audio(track):
             continue
-        voice = measure_voice(track.out_path, total_elapsed)
+        # 位置は波形から選ぶ。ここの peaks は間引く前のもの（1目盛り
+        # PEAK_BUCKET_SECONDS）で、書き込みながら拾ってあるので mp3 を
+        # 読み直す必要がない。
+        voice = measure_voice(
+            track.out_path,
+            total_elapsed,
+            probe_positions(track.peaks, PEAK_BUCKET_SECONDS, total_elapsed),
+        )
         if voice is not None and voice < VOICE_PERIODICITY_MIN:
             logger.warning(
                 "[recording] guild=%s %s のトラックが声として成立していない可能性" "（周期性 %.3f < %.2f）",
