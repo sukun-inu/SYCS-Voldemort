@@ -871,6 +871,24 @@ class _StreamAssembler:
         if len(self._skipped) > _SKIP_MAX:
             self._skipped.clear()
 
+    def _forget_passed(self, seq: int) -> None:
+        """seq より手前の「音声なし」の記憶を捨てる。
+
+        **ここで捨てないと、連番が1周したときに本物の音声を食う。**
+
+        ストリームの冒頭は帯域推定の探査（詰め物）から始まることがある。その
+        あいだ _next_seq はまだ決まっておらず、skip() は渡された番号を無条件に
+        覚える。ところが起点は「抱えているうちで最も若い音声の番号」で決まる
+        （→ _earliest_seq）ので、覚えた番号がその手前に落ちることがある。drain()
+        は前へしか進まないので誰も消費せず、_SKIP_MAX にも当たらないまま残る。
+
+        16bit の連番は 65536枚（発話 22分ぶん）で1周する。戻ってきた同じ番号は
+        今度は本物の音声だが、覚えている番号に当たって捨てられていた。実録音
+        （2026-09-05 / 221分36秒）では、冒頭の詰め物14枚を持つ話者だけ
+        `時計の飛び=-14` と負の値で出ていた。詰め物の枚数とちょうど一致する。
+        """
+        self._skipped = {s for s in self._skipped if _wrapped_delta(s, seq, _SEQ_MOD) >= 0}
+
     def _hold_expired(self, now: float) -> bool:
         """順番待ちを打ち切るか。
 
@@ -901,6 +919,7 @@ class _StreamAssembler:
                 if not self._hold_expired(now):
                     break
                 self._next_seq = self._earliest_seq()
+                self._forget_passed(self._next_seq)
             # 音声が入っていないと分かっている番号は、穴ではない（→ skip）。
             # 欠落に数えず、欠落補間も作らずに次へ進む。
             if self._next_seq in self._skipped:
