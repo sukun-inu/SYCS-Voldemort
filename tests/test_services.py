@@ -6241,6 +6241,52 @@ class ReceiveBreakdownTests(unittest.TestCase):
         self.assertEqual(speaker["詰め物"], 50, "詰め物そのものは残すこと（見えないと探査の多さが分からない）")
         self.assertEqual(speaker["取り出せなかった割合(%)"], 0.89)
 
+    def test_packets_thrown_away_after_arriving_count_as_missed(self):
+        """**届いたのに書けなかったぶんも「取り出せなかった」に入れること。**
+
+        手遅れ（late）は、並べ直しの位置をもう出し終えたあとに届いたもの。
+        溢れ（overflow）は、持ち主が分からないまま抱えきれずに捨てたものと、
+        停止時まで持ち主が分からなかったもの。**どちらも音は届いている**のに
+        トラックへは1バイトも書かれない。
+
+        分子に入れないと、届いているのに捨てた音が「損失ゼロ」に見える。実録音
+        （2026-09-05 / 221分36秒）の Achi は 手遅れ=10 を抱えたまま 1.04% と
+        出ていた。詰め物を除いたのは「はじめから音が入っていない」からで、
+        こちらは理由が逆になる。
+
+        分母はそのままでよい。received は push() へ渡す前に数えるので、
+        手遅れも溢れも既に入っている。
+        """
+        session = self._session()
+        base = {
+            "ssrc": 8210,
+            "user_id": 7,
+            "name": "すーくん",
+            "received": 990,
+            "decoded": 980,
+            "failed": 0,
+            "decrypted": 0,
+            "encrypted": 0,
+            "padding_only": 0,
+            "lost": 10,
+            "late": 0,
+            "silence": 0,
+            "rebased": 0,
+            "unknown": 0,
+            "overflow": 0,
+            "jumped": 0,
+            "odd_frames": 0,
+            "payload_types": {120: 990},
+        }
+        session.receive_stats = [dict(base)]
+        self.assertEqual(self.rec._receive_breakdown(session)["話者別"][0]["取り出せなかった割合(%)"], 1.0)
+
+        session.receive_stats = [dict(base, late=5, overflow=5)]
+        speaker = self.rec._receive_breakdown(session)["話者別"][0]
+        self.assertEqual(speaker["手遅れ"], 5)
+        self.assertEqual(speaker["溢れ"], 5)
+        self.assertEqual(speaker["取り出せなかった割合(%)"], 2.0, "届いたのに捨てたぶんが割合に入っていない")
+
     def test_info_txt_names_the_counters_that_are_not_zero(self):
         """人が開く info.txt に、0 でないものだけが出ること。
 
