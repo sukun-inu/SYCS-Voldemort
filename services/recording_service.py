@@ -605,7 +605,16 @@ _FAILURE_SAMPLES = 3
 _CAPTURE_HEAD = 80  # 冒頭のこの枚数は種類を問わず控える
 _CAPTURE_MAX = 280  # ストリームごとの上限。超えたぶんは数だけ残す
 # 「普通に扱えた」とみなす種別。冒頭を過ぎたらこれは控えない。
-_CAPTURE_ORDINARY = frozenset({"音声", "E2EE復号"})
+#
+# **"E2EE" を必ず入れること。** 復号は取り出すときまで遅らせているので、
+# 受信の時点では「暗号文だった」までしか分からない。DAVE が必須になった今、
+# 音声フレームは全部が暗号文で来るので、これを異常扱いすると普通の音声で枠が
+# 埋まる。本番実測では、控えた 280 枚に対し 1579 枚が上限に当たって省かれ、
+# 55秒の録音のうち冒頭6秒ぶんしか残っていなかった。
+_CAPTURE_ORDINARY = frozenset({"音声", "E2EE", "E2EE復号"})
+# 復号の結果が出るまで、控えるかどうかを保留にしておける枚数。並べ直しの窓を
+# 覆えればよい（_REORDER_HOLD_SEC は 0.2 秒 ＝ 10 枚ぶん）ので十分な余裕がある。
+_CAPTURE_AWAITING_MAX = 100
 CAPTURE_NAME = "packets.jsonl"
 
 _SEQ_MOD = 1 << 16  # RTP シーケンス番号は 16bit
@@ -674,7 +683,7 @@ class _StreamAssembler:
         self._capture_seen = 0  # capture() に来た総数（冒頭かどうかの判定用）
         # 復号の結果待ちの控え。RTP タイムスタンプ -> 控えた記録（→ stamp_capture）。
         # 控えた数が上限で頭打ちになるので、こちらも際限なくは増えない。
-        self._capture_awaiting: dict[int, dict] = {}
+        self._capture_awaiting: dict[int, tuple[dict, bool]] = {}
         self.undecryptable_run = 0  # 続けて復号できなかった数（→ _emit）
 
     def capture(self, packet, payload: bytes | None, kind: str, *, user_known: bool, awaiting: bool = False) -> None:
@@ -691,12 +700,6 @@ class _StreamAssembler:
         手がかりが無い。
         """
         self._capture_seen += 1
-        if self._capture_seen > _CAPTURE_HEAD and kind in _CAPTURE_ORDINARY:
-            return
-        if len(self.captured) >= _CAPTURE_MAX:
-            # 黙って打ち切ると、読んだ人が「これで全部」と受け取る。
-            self.capture_skipped += 1
-            return
         extension = getattr(packet, "extension_data", None) or {}
         # 突き合わせの鍵にも使うので、entry から読み直さず先に整数で持つ
         # （entry は値の型が混ざるので、そこから取ると鍵として使えない）。
@@ -712,9 +715,27 @@ class _StreamAssembler:
             "user_known": user_known,
             "opus_b64": base64.b64encode(payload or b"").decode("ascii"),
         }
-        self.captured.append(entry)
+        keep = self._capture_seen <= _CAPTURE_HEAD or kind not in _CAPTURE_ORDINARY
+        kept = self._keep(entry) if keep else False
         if awaiting:
-            self._capture_awaiting[timestamp] = entry
+            # 種別が確定するのは復号のあと（→ stamp_capture）。控えたかどうかも
+            # 一緒に覚えておき、結果が「普通ではなかった」ならそのときに拾う。
+            # 拾えるようにしておかないと、冒頭を過ぎてから起きた本物の鍵の
+            # 問題が、数としてしか残らない。
+            if len(self._capture_awaiting) >= _CAPTURE_AWAITING_MAX:
+                # 結果が出ないまま溜まっている。古いほうから捨てる
+                # （dict は入れた順を保つ）。
+                self._capture_awaiting.pop(next(iter(self._capture_awaiting)))
+            self._capture_awaiting[timestamp] = (entry, kept)
+
+    def _keep(self, entry: dict) -> bool:
+        """控えの列へ入れる。上限に当たったら False。"""
+        if len(self.captured) >= _CAPTURE_MAX:
+            # 黙って打ち切ると、読んだ人が「これで全部」と受け取る。
+            self.capture_skipped += 1
+            return False
+        self.captured.append(entry)
+        return True
 
     def stamp_capture(self, timestamp: int, kind: str) -> None:
         """控えた記録に、あとから分かった結果を書き入れる。
@@ -728,9 +749,15 @@ class _StreamAssembler:
         1ストリーム内で重ならない（探査パケットは重なるが、あちらは暗号文
         ではないのでここには来ない）。
         """
-        entry = self._capture_awaiting.pop(timestamp, None)
-        if entry is not None:
-            entry["kind"] = kind
+        found = self._capture_awaiting.pop(timestamp, None)
+        if found is None:
+            return
+        entry, kept = found
+        entry["kind"] = kind
+        if not kept and kind not in _CAPTURE_ORDINARY:
+            # 受信の時点では普通に見えたので控えていなかった。結果が出て
+            # はじめて「普通ではなかった」と分かったので、ここで拾う。
+            self._keep(entry)
 
     def snapshot(self) -> dict[str, Any]:
         """このストリームの内訳。ログと info.json の**唯一の出どころ**。
