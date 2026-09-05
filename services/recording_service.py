@@ -1939,11 +1939,18 @@ def _receive_breakdown(session: RecordingSession) -> dict:
 
     speakers = []
     for row in by_speaker.values():
-        received = row["受信"]
-        # 取り出せなかったぶんの割合。received は「音声として受け取った数」
-        # なので、届かなかった欠落はそこに入っていない。分母に足して出す。
-        missed = row["欠落"] + row["詰め物"] + row["E2EE不可"] + row["デコード失敗"]
-        total = received + row["欠落"]
+        # 「音があったのに使えなかった」割合。
+        #
+        # **詰め物を入れないこと。** 詰め物（帯域推定の探査）にははじめから
+        # 音が入っていないので、取り出し損ねたのではない。数えると健全な
+        # 録音が壊れて見える。本番の実測では、接続直後に探査が 50 枚まとめて
+        # 届いた録音が 7.28%（詰め物込み）と 0.89%（詰め物なし）で 8 倍
+        # ちがった。読んだ人が回線を疑うところから始めてしまう。
+        #
+        # 分母には欠落を足す。received は「音声として受け取った数」なので、
+        # 届かなかったぶんはそこに入っていない。
+        missed = row["欠落"] + row["E2EE不可"] + row["デコード失敗"]
+        total = row["受信"] + row["欠落"]
         row["取り出せなかった割合(%)"] = round(missed / total * 100, 2) if total else 0.0
         speakers.append(row)
 

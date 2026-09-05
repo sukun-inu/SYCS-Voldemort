@@ -5862,7 +5862,45 @@ class ReceiveBreakdownTests(unittest.TestCase):
         # received は「音声として受け取った数」なので、届かなかった欠落は
         # そこに入っていない。分母に足さないと割合が実際より大きく出る。
         self.assertEqual(speaker["受信"], 4)
-        self.assertEqual(speaker["取り出せなかった割合(%)"], 40.0)
+        self.assertEqual(speaker["取り出せなかった割合(%)"], 20.0)
+
+    def test_probes_do_not_count_as_audio_we_failed_to_extract(self):
+        """詰め物を「取り出せなかった」に数えないこと。
+
+        詰め物（帯域推定の探査）には、はじめから音が入っていない。取り出し
+        損ねたのではないので、割合の分子に入れると健全な録音が壊れて見える。
+
+        本番の実測: 接続直後に探査が 50 枚まとめて届く（RTP 拡張 {9,3}、
+        いずれも直前の音声パケットと同じタイムスタンプ）。これを数えると
+        受信 783 / E2EE不可 7 の録音が 7.28%、数えなければ 0.89% になる。
+        8倍ちがうので、次に読む人が回線を疑うところから始めてしまう。
+        """
+        session = self._session()
+        session.receive_stats = [
+            {
+                "ssrc": 8210,
+                "user_id": 7,
+                "name": "すーくん",
+                "received": 783,
+                "decoded": 776,
+                "failed": 0,
+                "decrypted": 725,
+                "encrypted": 7,
+                "padding_only": 50,
+                "lost": 0,
+                "late": 0,
+                "silence": 0,
+                "rebased": 0,
+                "unknown": 57,
+                "overflow": 0,
+                "jumped": 0,
+                "odd_frames": 0,
+                "payload_types": {120: 833},
+            }
+        ]
+        speaker = self.rec._receive_breakdown(session)["話者別"][0]
+        self.assertEqual(speaker["詰め物"], 50, "詰め物そのものは残すこと（見えないと探査の多さが分からない）")
+        self.assertEqual(speaker["取り出せなかった割合(%)"], 0.89)
 
     def test_info_txt_names_the_counters_that_are_not_zero(self):
         """人が開く info.txt に、0 でないものだけが出ること。
