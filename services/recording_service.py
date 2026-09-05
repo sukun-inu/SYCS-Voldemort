@@ -2168,6 +2168,10 @@ def _receive_breakdown(session: RecordingSession) -> dict:
         # 溢れも既に入っている。
         missed = row["欠落"] + row["E2EE不可"] + row["デコード失敗"] + row["手遅れ"] + row["溢れ"]
         total = row["受信"] + row["欠落"]
+        # 枚数そのものも残す。**足し算をやり直させないこと。** 停止時の知らせも
+        # 同じ数を出すので、二度組み立てると片方だけ直したときに黙って食い違う
+        # （→ _StreamAssembler.snapshot に同じ理由が書いてある）。
+        row["取り出せなかった"] = missed
         row["取り出せなかった割合(%)"] = round(missed / total * 100, 2) if total else 0.0
         speakers.append(row)
 
@@ -2183,6 +2187,27 @@ def _receive_breakdown(session: RecordingSession) -> dict:
             "ファイル": CAPTURE_NAME if kept else None,
         },
         "話者別": speakers,
+    }
+
+
+def _missed_summary(info: dict) -> dict:
+    """取り出せなかった音の合計。停止時の知らせに出す。
+
+    **知らせる側が、測る側と同じものを見ていること。** 停止時の embed は
+    dropped_packets（デコード失敗＝壊れたパケットで例外になった数）しか見て
+    いなかったので、回線で落ちたぶんが1枚も出ていなかった。実録音では ZIP の
+    中に 2,992枚（約60秒）の欠落があるのに、Discord の知らせは無言だった。
+    """
+    rows = cast("list[dict[str, Any]]", (info.get("受信の内訳") or {}).get("話者別") or [])
+    packets = sum(int(row.get("取り出せなかった", 0) or 0) for row in rows)
+    return {
+        "packets": packets,
+        "seconds": round(packets * _FRAME_SAMPLES / SAMPLE_RATE, 1),
+        "speakers": [
+            {"name": row["名前"], "ratio": row["取り出せなかった割合(%)"]}
+            for row in rows
+            if row.get("取り出せなかった")
+        ],
     }
 
 
@@ -2399,6 +2424,7 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
 
     zip_path = _write_archive(session, manifest, info)
 
+    missed = _missed_summary(info)
     size_bytes = zip_path.stat().st_size
     token = register_file(
         zip_path,
@@ -2421,6 +2447,11 @@ def _finalize(session: RecordingSession, total_elapsed: float, reason: str) -> d
         "channel_name": session.channel_name,
         "reason": reason or "手動停止",
         "dropped_packets": session.dropped_packets,
+        # 取り出せなかった音の合計。停止の知らせはこれを出す（dropped_packets は
+        # デコード失敗だけなので、回線で落ちたぶんが1枚も入らない）。
+        "missed_packets": missed["packets"],
+        "missed_seconds": missed["seconds"],
+        "missed_by_speaker": missed["speakers"],
         "speakers": [t.display_name for t in session.tracks.values()],
         # 声として成立していないトラック。黙って渡すと、落として聞くまで
         # 気づけない。
@@ -2453,13 +2484,19 @@ def build_result_embed(guild_id: int, result: dict) -> discord.Embed:
     if result["speakers"]:
         embed.add_field(name="参加者", value="、".join(result["speakers"][:20]), inline=False)
     # 取りこぼしがあったなら黙っていない。音が欠けている可能性を伝える。
-    dropped = result.get("dropped_packets", 0)
-    if dropped:
-        embed.add_field(
-            name="⚠️ 取りこぼし",
-            value=f"{dropped} パケットを復元できませんでした（その分だけ音が欠けています）。",
-            inline=False,
-        )
+    #
+    # **dropped_packets ではなく missed_packets を見ること。** あちらはデコード
+    # 失敗（壊れたパケットで例外になった数）だけなので、回線で落ちたぶんが1枚も
+    # 入らない。実録音では ZIP の中に 2,992枚（約60秒）の欠落があるのに
+    # dropped_packets は 0 で、Discord の知らせは無言だった。missed_packets は
+    # デコード失敗も含む合計なので、ここ1つで足りる。
+    missed = result.get("missed_packets", 0)
+    if missed:
+        lines = [f"{missed:,} パケット（約 {result.get('missed_seconds', 0)} 秒ぶん）を取り出せませんでした。"]
+        by_speaker = result.get("missed_by_speaker") or []
+        if by_speaker:
+            lines.append(" / ".join(f"{row['name']} {row['ratio']}%" for row in by_speaker[:10]))
+        embed.add_field(name="⚠️ 取りこぼし", value="\n".join(lines), inline=False)
     suspects = result.get("suspect_tracks") or []
     if suspects:
         embed.add_field(

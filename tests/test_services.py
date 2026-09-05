@@ -2646,6 +2646,43 @@ class RecordingTests(unittest.TestCase):
         self.assertGreaterEqual(stem["periodicity"], manifest["periodicity_min"], stem)
         self.assertEqual(result["suspect_tracks"], [])
 
+    def test_the_result_carries_how_much_was_lost(self):
+        """欠落の合計を、書き出しの結果セットまで持って出ること。
+
+        停止の知らせ（build_result_embed）はこの結果セットしか見ない。ZIP の
+        中に内訳を書いても、ここへ載せないと Discord には何も出ない。
+        """
+        session = self._session()
+        session.feed(Mock(id=1, display_name="すずき"), self._tone(0.3))
+        session.receive_stats = [
+            {
+                "ssrc": 1,
+                "user_id": 1,
+                "name": "すずき",
+                "received": 990,
+                "decoded": 980,
+                "failed": 0,
+                "decrypted": 0,
+                "encrypted": 0,
+                "padding_only": 0,
+                "lost": 10,
+                "late": 5,
+                "silence": 0,
+                "rebased": 0,
+                "unknown": 0,
+                "overflow": 0,
+                "jumped": 0,
+                "odd_frames": 0,
+                "payload_types": {120: 990},
+            }
+        ]
+        result = self.rec._finalize(session, 2.0, "テスト")
+
+        self.assertEqual(result["missed_packets"], 15)
+        # 1パケット 20ms
+        self.assertAlmostEqual(result["missed_seconds"], 0.3, delta=0.01)
+        self.assertEqual(result["missed_by_speaker"], [{"name": "すずき", "ratio": 1.5}])
+
     def test_a_silent_track_is_not_called_broken(self):
         """無音しか入っていないトラックは、良し悪しを判定できない。
 
@@ -3550,6 +3587,25 @@ class StreamAssemblerTests(unittest.TestCase):
             )
 
 
+def base_result_for_embed() -> dict:
+    """停止時の embed に渡す結果セットの、当たり障りのない土台。
+
+    見たいのは警告の出方だけなので、それ以外の欄はここへ固めておく。
+    """
+    return {
+        "token": "t" * 32,
+        "title": "x",
+        "track_count": 1,
+        "duration_seconds": 60,
+        "size_bytes": 1024,
+        "retention_days": 7,
+        "channel_id": 1,
+        "channel_name": "雑談VC",
+        "reason": "手動停止",
+        "speakers": ["A"],
+    }
+
+
 class OpusResilienceTests(unittest.TestCase):
     """壊れた Opus パケットで録音が止まらないこと。
 
@@ -3738,22 +3794,43 @@ class OpusResilienceTests(unittest.TestCase):
         self.assertEqual(result["dropped_packets"], 1)
 
     def test_result_embed_warns_only_when_something_was_lost(self):
-        base = {
-            "token": "t" * 32,
-            "title": "x",
-            "track_count": 1,
-            "duration_seconds": 60,
-            "size_bytes": 1024,
-            "retention_days": 7,
-            "channel_id": 1,
-            "channel_name": "雑談VC",
-            "reason": "手動停止",
-            "speakers": ["A"],
-        }
-        quiet = self.rec.build_result_embed(1, {**base, "dropped_packets": 0})
-        noisy = self.rec.build_result_embed(1, {**base, "dropped_packets": 42})
+        base = base_result_for_embed()
+        quiet = self.rec.build_result_embed(1, {**base, "dropped_packets": 0, "missed_packets": 0})
+        noisy = self.rec.build_result_embed(1, {**base, "dropped_packets": 42, "missed_packets": 42})
         self.assertFalse(any("取りこぼし" in f.name for f in quiet.fields))
         self.assertTrue(any("取りこぼし" in f.name for f in noisy.fields))
+
+    def test_result_embed_reports_loss_not_just_decode_failures(self):
+        """**停止の知らせに、欠落まで出すこと。**
+
+        embed は dropped_packets（デコード失敗）しか見ていなかった。これは
+        「壊れたパケットを Opus に渡して例外になった数」で、回線で落ちたぶんは
+        1枚も入らない。
+
+        実録音（2026-09-05 / 221分36秒）がまさにその形だった。ZIP の中では
+        3人合わせて 2,992枚（約60秒）が欠落していたのに、dropped_packets は 0。
+        **Discord に出た知らせには何も書かれず、ZIP を開かない限り誰も気づけない。**
+        測る側を厚くしても、知らせる側が同じものを見ていないと届かない。
+        """
+        embed = self.rec.build_result_embed(
+            1,
+            {
+                **base_result_for_embed(),
+                "dropped_packets": 0,  # デコード失敗はゼロ
+                "missed_packets": 2992,
+                "missed_seconds": 59.8,
+                "missed_by_speaker": [
+                    {"name": "シロウP", "ratio": 1.07},
+                    {"name": "佃煮", "ratio": 0.67},
+                    {"name": "Achi", "ratio": 1.05},
+                ],
+            },
+        )
+        field = next((f for f in embed.fields if "取りこぼし" in f.name), None)
+        self.assertIsNotNone(field, "欠落があるのに知らせに出ていない")
+        self.assertIn("2,992", field.value)
+        self.assertIn("59.8", field.value)
+        self.assertIn("シロウP 1.07%", field.value)
 
 
 class RecordingSinkShapeTests(unittest.TestCase):
