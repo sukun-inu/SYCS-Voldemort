@@ -2295,6 +2295,33 @@ class RecordingTests(unittest.TestCase):
         track.close(6.0)
         self.assertAlmostEqual(track.voiced_seconds, 2.0, delta=0.05)
 
+    def test_voiced_time_excludes_the_frames_that_decode_to_silence(self):
+        """**Opus の無音フレームを「発話」に数えないこと。**
+
+        Discord は喋っていないあいだ 3 バイトの無音フレーム（f8 ff fe）を送る。
+        Opus はこれを 20ms ぶんのゼロへ復号するので、届いた枚数としては音声で
+        あっても、トラックに書かれるのは digital silence である。
+
+        書かれた枚数をそのまま数えていたため、info.txt / info.json / ミキサーの
+        「発話時間」が実際の発話とかけ離れていた。実録音（221分36秒）を索引の
+        波形と突き合わせると、こうなっていた。
+
+            シロウP  発話 3006.9秒  /  山が立っている 1964.8秒  （差 1042.1）
+            佃煮    発話 1075.3秒  /  山が立っている  766.2秒  （差  309.1）
+            Achi   発話 1901.2秒  /  山が立っている  411.5秒  （差 1489.7）
+
+        Achi は 4.6 倍。info.txt の見出しに並ぶ数字なので、読む人の印象を
+        いちばん左右する。
+        """
+        started = time.monotonic()
+        track = self.rec._TrackWriter(1, "A", self.work / "silence.mp3", started)
+        track.write(self._tone(1.0), 0.0)
+        # Opus の無音フレームを復号したもの＝まるごとゼロの 20ms
+        for i in range(50):  # 1 秒ぶん
+            track.write(bytes(self.rec.FRAME_BYTES), 1.0 + i * 0.02)
+        track.close(6.0)
+        self.assertAlmostEqual(track.voiced_seconds, 1.0, delta=0.05, msg="無音フレームを発話に数えている")
+
     def _session(self, **kwargs):
         defaults = dict(
             guild_id=999,
@@ -5788,14 +5815,14 @@ class EndToEndEncryptionTests(unittest.TestCase):
 
         self.assertEqual(session.encrypted_frames, 10, "復号を諦めた数が合っていない")
         self.assertEqual(session.dropped_packets, 0, "暗号文をデコードしている")
-        track = session.tracks.get(1)
-        if track is not None:
-            track.close(track.written_bytes / self.rec.BYTES_PER_SECOND)
-            self.assertEqual(
-                track.voiced_bytes,
-                self.rec._PLC_MAX_FRAMES * self.rec.FRAME_BYTES,
-                "鍵が無いのに欠落補間で音を作り続けている",
-            )
+        # 作った枚数はデコードの回数で見る。**voiced_bytes では見られない** —
+        # 状態を持たないデコーダの欠落補間はまるごとゼロを返すので、無音フレームを
+        # 発話から外して以降、ここは常に 0 になる。
+        self.assertEqual(
+            session.receive_stats[0]["decoded"],
+            self.rec._PLC_MAX_FRAMES,
+            "鍵が無いのに欠落補間で音を作り続けている",
+        )
 
 
 class DaveDecryptionTests(unittest.TestCase):
