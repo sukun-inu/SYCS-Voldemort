@@ -653,6 +653,33 @@ class _StreamAssembler:
         self.received = 0  # 受け取った音声フレームの総数
         self.payload_types: dict[int, int] = {}  # RTP のペイロードタイプ別の数
 
+    def snapshot(self) -> dict[str, Any]:
+        """このストリームの内訳。ログと info.json の**唯一の出どころ**。
+
+        以前はログの書式文字列に直接カウンタを並べていた。ZIP へも同じ数字を
+        載せるにあたって二度書くと、片方だけ足したときに黙って食い違う。
+        読み手が「ログと ZIP のどちらが正しいのか」を判断できなくなるので、
+        組み立てはここ1箇所に寄せる。
+        """
+        return {
+            "ssrc": self.ssrc,
+            "received": self.received,
+            "decoded": self.decoded,
+            "failed": self.failed,
+            "decrypted": self.decrypted,
+            "encrypted": self.encrypted,
+            "padding_only": self.padding_only,
+            "lost": self.lost,
+            "late": self.late,
+            "silence": self.silence,
+            "rebased": self.rebased,
+            "unknown": self.unknown,
+            "overflow": self.overflow,
+            "jumped": self.jumped,
+            "odd_frames": self.odd_frames,
+            "payload_types": dict(self.payload_types),
+        }
+
     def decode(self, encoded: bytes | None) -> bytes:
         """encoded が None のときは欠落補間（PLC）。
 
@@ -1109,10 +1136,35 @@ class _RecordingSinkBase:
                 stream._pending.clear()
                 continue
             self._emit(ssrc, stream, stream.flush())
+        self._collect_stats()
         self.log_summary()
 
+    def _collect_stats(self) -> None:
+        """ストリームごとの内訳をセッションへ写す。
+
+        **sink から直接読ませないこと。** 停止時、voice_recv の
+        `AudioReader.stop()` は cleanup() を別スレッドで起こす（reader.py）
+        ので、cleanup() は flush_pending() と競走する。書き出し（_finalize）は
+        さらにそのあと別スレッドで走るため、そこで sink を見に行くと空の
+        ことがある。負けた側が空で上書きしないよう、中身があるときだけ書く。
+        """
+        if not self._streams:
+            return
+        stats = []
+        for ssrc, stream in self._streams.items():
+            entry = stream.snapshot()
+            user = self._users.get(ssrc)
+            entry["user_id"] = int(getattr(user, "id", 0) or 0)
+            entry["name"] = str(getattr(user, "display_name", "") or "")
+            stats.append(entry)
+        self.session.receive_stats = stats
+
     def log_summary(self) -> None:
-        """ストリームごとの内訳。数だけでは何が起きたか分からないため。"""
+        """ストリームごとの内訳。数だけでは何が起きたか分からないため。
+
+        数字は _collect_stats() が集めたものをそのまま出す。ログと ZIP で
+        別々に組み立てると、片方だけ直したときに黙って食い違う。
+        """
         jitter = voice_jitter.stats()
         if not jitter["installed"]:
             # 差し替えに失敗している。穴が空くたびにライブラリ側が
@@ -1124,37 +1176,39 @@ class _RecordingSinkBase:
                 "[recording] 遅すぎて受け取れなかったパケット=%d（プロセス全体の累計）",
                 jitter["late_rejected"],
             )
-        for ssrc, stream in self._streams.items():
-            user = self._users.get(ssrc)
-            name = getattr(user, "display_name", ssrc)
+        for entry in self.session.receive_stats:
             logger.info(
                 "[recording] ssrc=%s (%s) 受信=%d 成功=%d 失敗=%d "
                 "E2EE復号=%d E2EE不可=%d 詰め物=%d 欠落=%d 手遅れ=%d 無音=%d "
                 "張り直し=%d 不明=%d 溢れ=%d 飛び=%d 異長=%d "
                 "RTP種別=%s",
-                ssrc,
-                name,
-                stream.received,
-                stream.decoded,
-                stream.failed,
-                stream.decrypted,
-                stream.encrypted,
-                stream.padding_only,
-                stream.lost,
-                stream.late,
-                stream.silence,
-                stream.rebased,
-                stream.unknown,
-                stream.overflow,
-                stream.jumped,
-                stream.odd_frames,
-                stream.payload_types,
+                entry["ssrc"],
+                entry["name"] or entry["ssrc"],
+                entry["received"],
+                entry["decoded"],
+                entry["failed"],
+                entry["decrypted"],
+                entry["encrypted"],
+                entry["padding_only"],
+                entry["lost"],
+                entry["late"],
+                entry["silence"],
+                entry["rebased"],
+                entry["unknown"],
+                entry["overflow"],
+                entry["jumped"],
+                entry["odd_frames"],
+                entry["payload_types"],
             )
 
     def cleanup(self) -> None:
         """録音停止後にストリーム状態を解放する。参照を残すとセッションのたびに
         メモリが積み上がる。
+
+        捨てる前に内訳を写す。flush_pending() より先にここへ来ることがある
+        （→ _collect_stats）ので、写さずに捨てると内訳がまるごと消える。
         """
+        self._collect_stats()
         self._streams.clear()
         self._users.clear()
 
@@ -1195,6 +1249,9 @@ class RecordingSession:
     dropped_packets: int = 0  # デコードできず捨てたパケット数
     encrypted_frames: int = 0  # E2EE（DAVE）で復号できなかったフレーム数
     voice_frames: int = 0  # 受け取った音声フレームの総数
+    # ストリーム（SSRC）ごとの受信の内訳。停止時に sink から写す（→ _collect_stats）。
+    # sink 側に置いたままだと、書き出しの時点では解放済みかもしれない。
+    receive_stats: list[dict] = field(default_factory=list)
     announce_message: discord.Message | None = None
     sink: object | None = None  # 停止時に、並べ直し待ちのパケットを書き出す
     _guard_task: asyncio.Task | None = None
@@ -1832,6 +1889,97 @@ def _has_audio(track: _TrackWriter) -> bool:
     return track.out_path.exists() and track.out_path.stat().st_size > 0
 
 
+# 受信カウンタの日本語名。並び順がそのまま info.json と info.txt の並びになる。
+# 先に来るものほど、途切れの原因を切り分けるときに先に見たいもの。
+_STAT_LABELS = (
+    ("received", "受信"),
+    # decoded は欠落補間で作ったぶんも数えるので、「受信」より多くなることが
+    # ある。ラベルにそう書いておかないと、読んだ人が数え違いを疑う。
+    ("decoded", "デコードできた(補間込み)"),
+    ("lost", "欠落"),
+    ("padding_only", "詰め物"),
+    ("encrypted", "E2EE不可"),
+    ("decrypted", "E2EE復号"),
+    ("failed", "デコード失敗"),
+    ("late", "手遅れ"),
+    ("silence", "無音"),
+    ("rebased", "起点の張り直し"),
+    ("jumped", "時計の飛び"),
+    ("unknown", "持ち主不明のまま受信"),
+    ("overflow", "溢れ"),
+    ("odd_frames", "20msでない長さ"),
+)
+# info.txt に出す価値がない（0 でなくても正常な）カウンタ。
+# 「無音」は発話の切れ目ごとに必ず来るし、「受信」「復号できた」は多いのが
+# 正常なので、並べると本当に見るべきものが埋もれる。
+_STAT_QUIET = frozenset({"received", "decoded", "silence", "decrypted"})
+
+
+def _receive_breakdown(session: RecordingSession) -> dict:
+    """info.json に載せる「受信の内訳」。
+
+    これまで内訳はログの `[recording] ssrc=…` 行にしか出ていなかった。実際に
+    「音が途切れ途切れになる」を追ったとき、本番のログが手元に無く、書き出した
+    mp3 の波形を測って穴の幅と間隔から原因を絞り込む羽目になった。**録音を
+    受け取った人の手元にある ZIP だけで切り分けられる**ようにしておく。
+
+    話者ごとにまとめるのは、再接続すると同じ人に別の SSRC が振られるため。
+    SSRC のまま並べると、1人が複数行に散って読み手が足し算をすることになる。
+    持ち主が分からないまま終わったストリームは、混ぜずに別立てで残す
+    （そこに数が溜まっていること自体が、対応が付いていないという情報になる）。
+    """
+    jitter = voice_jitter.stats()
+    by_speaker: dict[int, dict] = {}
+    for entry in session.receive_stats:
+        user_id = int(entry.get("user_id", 0) or 0)
+        name = entry.get("name") or f"（不明 ssrc={entry['ssrc']}）"
+        row = by_speaker.setdefault(user_id, {"名前": name})
+        for key, label in _STAT_LABELS:
+            row[label] = row.get(label, 0) + int(entry.get(key, 0) or 0)
+
+    speakers = []
+    for row in by_speaker.values():
+        received = row["受信"]
+        # 取り出せなかったぶんの割合。received は「音声として受け取った数」
+        # なので、届かなかった欠落はそこに入っていない。分母に足して出す。
+        missed = row["欠落"] + row["詰め物"] + row["E2EE不可"] + row["デコード失敗"]
+        total = received + row["欠落"]
+        row["取り出せなかった割合(%)"] = round(missed / total * 100, 2) if total else 0.0
+        speakers.append(row)
+
+    return {
+        "ジッタバッファ": {
+            "差し替え済み": bool(jitter["installed"]),
+            "手遅れで受け取れなかった": int(jitter["late_rejected"]),
+        },
+        "話者別": speakers,
+    }
+
+
+def _breakdown_lines(info: dict) -> list[str]:
+    """info.txt へ出す、内訳のうち 0 でないものだけ。
+
+    全部並べると健全な録音でも十数行になり、読み飛ばされる。**行が出て
+    いること自体が「見るべきものがある」の合図**になるようにしておく。
+    """
+    breakdown = cast("dict[str, Any]", info.get("受信の内訳") or {})
+    jitter = cast("dict[str, Any]", breakdown.get("ジッタバッファ") or {})
+    lines: list[str] = []
+    for row in cast("list[dict[str, Any]]", breakdown.get("話者別") or []):
+        noted = [f"{label}={row[label]}" for key, label in _STAT_LABELS if key not in _STAT_QUIET and row.get(label)]
+        if noted:
+            lines.append(
+                f"  {row['名前']}  " + " ".join(noted) + f"  取り出せなかった割合 {row['取り出せなかった割合(%)']}%"
+            )
+    if not jitter.get("差し替え済み", True):
+        lines.append("  ジッタバッファを差し替えられていません（損失が増えます）")
+    elif jitter.get("手遅れで受け取れなかった"):
+        lines.append(f"  遅すぎて受け取れなかったパケット {jitter['手遅れで受け取れなかった']}（プロセス全体の累計）")
+    if not lines:
+        return []
+    return ["", "受信の内訳（0 のものは省いています。詳細は info.json）:", *lines]
+
+
 def _finalize_info(session: RecordingSession, total_elapsed: float, reason: str, started_jst: datetime) -> dict:
     """ZIP へ同梱する info.json の中身（人が読む要約の元でもある）。"""
     return {
@@ -1842,6 +1990,7 @@ def _finalize_info(session: RecordingSession, total_elapsed: float, reason: str,
         "長さ": f"{int(total_elapsed // 60)}分{int(total_elapsed % 60)}秒",
         "停止理由": reason or "手動停止",
         "取りこぼしたパケット": session.dropped_packets,
+        "受信の内訳": _receive_breakdown(session),
         "トラック": [
             {"ファイル": t.out_path.name, "名前": t.display_name, "発話時間(秒)": round(t.voiced_seconds, 1)}
             for t in session.tracks.values()
@@ -1932,6 +2081,7 @@ def _info_text(session: RecordingSession, info: dict) -> str:
                 f"  {t['ファイル']}  {t['名前']}  発話 {t['発話時間(秒)']}秒"
                 for t in cast("list[dict[str, Any]]", info["トラック"])
             ],
+            *_breakdown_lines(info),
         ]
     )
 
