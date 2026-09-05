@@ -978,8 +978,15 @@ class _StreamAssembler:
 
             self.lost += missing
             # 欠けたぶんは Opus に「無かった」と伝えて補間させる。
-            for i in range(min(gap, _PLC_MAX_FRAMES)):
-                out.append(((next_ts - (gap - i) * _FRAME_SAMPLES) % _TS_MOD, None, next_at))
+            #
+            # **枚数も位置も gap ではなく missing で決めること。** gap には詰め物の
+            # ぶんが入っているが、**詰め物は RTP タイムスタンプを進めない**（実録音
+            # では探査パケットが直前の音声と同じ時刻で17枚続いていた）。gap で数えると
+            # 落ちていないぶんまで無い音を作り、しかも次のパケットからその枚数ぶん
+            # 遡るので、直前に書いたばかりの音より手前を指す。pad_until は前へしか
+            # 進まないのでそれはその場に追記され、発話中の音が後ろへ押される。
+            for i in range(min(missing, _PLC_MAX_FRAMES)):
+                out.append(((next_ts - (missing - i) * _FRAME_SAMPLES) % _TS_MOD, None, next_at))
             self._next_seq = skipped
         return out
 
