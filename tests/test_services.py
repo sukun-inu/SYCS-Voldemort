@@ -5511,8 +5511,17 @@ class EndToEndEncryptionTests(unittest.TestCase):
             session.note_encrypted()
         self.assertTrue(session.is_end_to_end_encrypted)
 
-    def test_encrypted_frames_never_reach_a_track(self):
-        """暗号文が音として書き込まれないこと。"""
+    def test_ciphertext_is_never_decoded_as_audio(self):
+        """暗号文をそのまま Opus に渡さないこと。
+
+        渡しても例外にならず**雑音が返る**。「録れているのに聞けない」が
+        いちばんたちの悪い壊れ方なので、復号できなければ音にしない。
+
+        続けて復号できないときは、そもそも鍵が無いということなので、欠落
+        補間で無い音を作り続けない（_PLC_MAX_FRAMES で打ち切る）。ぽつぽつ
+        失敗するだけなら前後を繋ぐ——そちらは
+        test_an_undecryptable_frame_is_concealed_not_silenced が見ている。
+        """
         session = self.rec.RecordingSession(
             guild_id=999,
             channel_id=1,
@@ -5526,13 +5535,21 @@ class EndToEndEncryptionTests(unittest.TestCase):
         sink = self.rec._make_sink_class()(session)
         user = Mock(id=1, display_name="すずき")
         payload = bytes(87) + bytes.fromhex("c8db040cfafa")
-        data = SimpleNamespace(packet=SimpleNamespace(ssrc=1, sequence=100, timestamp=48000, payload=120), opus=payload)
-        for _ in range(10):
-            sink.write(user, data)
+        for i in range(10):
+            packet = SimpleNamespace(ssrc=1, sequence=100 + i, timestamp=48000 + i * 960, payload=120, padding=False)
+            sink.write(user, SimpleNamespace(packet=packet, opus=payload))
         sink.flush_pending()
-        self.assertEqual(session.tracks, {}, "暗号文からトラックが作られている")
-        self.assertEqual(session.encrypted_frames, 10)
-        self.assertEqual(session.dropped_packets, 0, "デコードを試している")
+
+        self.assertEqual(session.encrypted_frames, 10, "復号を諦めた数が合っていない")
+        self.assertEqual(session.dropped_packets, 0, "暗号文をデコードしている")
+        track = session.tracks.get(1)
+        if track is not None:
+            track.close(track.written_bytes / self.rec.BYTES_PER_SECOND)
+            self.assertEqual(
+                track.voiced_bytes,
+                self.rec._PLC_MAX_FRAMES * self.rec.FRAME_BYTES,
+                "鍵が無いのに欠落補間で音を作り続けている",
+            )
 
 
 class DaveDecryptionTests(unittest.TestCase):
@@ -5642,9 +5659,12 @@ class DaveDecryptionTests(unittest.TestCase):
         「音はあったが取り出せなかった」なので、意味が違う。sporadic に
         起きると発話の途中に穴が開き、途切れ途切れに聞こえる。
 
-        欠落として数えれば Opus の欠落補間が前後を繋ぐ。連続して失敗した
-        場合は _PLC_MAX_FRAMES で頭打ちになるので、無い音を作り続けることも
-        ない。
+        Opus の欠落補間で前後を繋ぐ。連続して失敗した場合は _PLC_MAX_FRAMES で
+        頭打ちになるので、無い音を作り続けることもない。
+
+        **守るのは「無音の穴が開かないこと」で、埋める場所ではない。** 復号を
+        取り出すとき（_emit）まで遅らせた際に、埋める仕組みは drain() の欠落
+        補間から _emit 側へ移ったが、外から見た振る舞いは変わっていない。
         """
         import services.recording_service as recording
 
@@ -5682,13 +5702,162 @@ class DaveDecryptionTests(unittest.TestCase):
 
         stream = sink._streams[1]
         self.assertEqual(stream.encrypted, 1, "復号の失敗を数えていない")
-        self.assertEqual(stream.lost, 1, "復号できなかった 20ms を欠落として扱っていない")
+        self.assertEqual(stream.decrypted, 4, "残りを復号できていない")
         track = session.tracks[1]
         track.close(track.written_bytes / recording.BYTES_PER_SECOND)
         self.assertEqual(
             track.voiced_bytes,
             5 * recording.FRAME_BYTES,
             "復号できなかった 20ms が無音で埋められている（＝途切れている）",
+        )
+
+    def test_frames_that_arrive_before_the_owner_is_known_are_still_decrypted(self):
+        """持ち主が分かる前に届いた暗号化フレームも、あとから復号できること。
+
+        音は UDP で届くが、「その SSRC が誰か」はゲートウェイの SPEAKING
+        イベントという別経路で遅れて届く。DAVE の復号には user_id が要るので、
+        受信の時点で復号しようとすると対応が付く前のぶんは必ず失敗する。
+
+        実測（本番 09:31）では E2EE不可=7 が出たが、7枚とも接続直後の
+        かたまりの中で、鍵の問題ではなく user_id が無かっただけだった。
+        その人が既に喋っていれば、発話の頭 150ms ほどが毎回落ちる。
+
+        並べ直しの列（_pending）はもともと持ち主が分かるまで抱える作りなので、
+        復号を取り出すときまで遅らせれば、抱えていたぶんも復号できる。
+        """
+        import services.recording_service as recording
+
+        session = recording.RecordingSession(
+            guild_id=999,
+            channel_id=1,
+            channel_name="VC",
+            started_by_id=1,
+            started_by_name="t",
+            started_at=time.monotonic(),
+            max_seconds=0,
+            retention_days=1,
+        )
+        sink = recording._make_sink_class()(session)
+        plain = _opus_frame(self)
+        encrypted = bytes(87) + bytes.fromhex("c8db040cfafa")
+
+        def decrypt(client, user_id, payload):
+            # 本物と同じ条件。user_id が無ければ復号できない。
+            return plain if user_id else None
+
+        user = Mock(id=7, display_name="すーくん")
+        with patch.object(recording.dave, "decrypt_opus", decrypt):
+            for i in range(5):  # まだ誰の音か分からない
+                packet = SimpleNamespace(
+                    ssrc=1, sequence=100 + i, timestamp=48000 + i * 960, payload=120, padding=False
+                )
+                sink.write(None, SimpleNamespace(packet=packet, opus=encrypted))
+            for i in range(5, 8):  # 対応が付いた
+                packet = SimpleNamespace(
+                    ssrc=1, sequence=100 + i, timestamp=48000 + i * 960, payload=120, padding=False
+                )
+                sink.write(user, SimpleNamespace(packet=packet, opus=encrypted))
+            sink.flush_pending()
+
+        stream = sink._streams[1]
+        self.assertEqual(stream.encrypted, 0, "対応が付く前のぶんを諦めている")
+        self.assertEqual(stream.decrypted, 8, "抱えていたぶんを復号していない")
+        track = session.tracks[7]
+        track.close(track.written_bytes / recording.BYTES_PER_SECOND)
+        self.assertEqual(
+            track.voiced_bytes,
+            8 * recording.FRAME_BYTES,
+            "冒頭のぶんがトラックに入っていない",
+        )
+
+    def test_sporadic_failures_are_each_concealed(self):
+        """間を空けて失敗するぶんは、何度でも繋ぐこと。
+
+        「続けて失敗したら打ち切る」の数え方を、成功しても戻さないでいると、
+        録音の頭からの通算になる。長い録音では途中で必ず上限を超え、そこから
+        先は**ぽつぽつの失敗が全部 20ms の無音の穴に戻る**。しかも数字の上は
+        「打ち切った」としか見えないので、途切れて聞こえるのに理由が分からない。
+        """
+        import services.recording_service as recording
+
+        session = recording.RecordingSession(
+            guild_id=999,
+            channel_id=1,
+            channel_name="VC",
+            started_by_id=1,
+            started_by_name="t",
+            started_at=time.monotonic(),
+            max_seconds=0,
+            retention_days=1,
+        )
+        sink = recording._make_sink_class()(session)
+        user = Mock(id=7, display_name="すーくん")
+        plain = _opus_frame(self)
+        marker = bytes.fromhex("c8db040cfafa")
+        total = 21
+
+        def decrypt(client, user_id, payload):
+            return None if payload[0] == 1 else plain
+
+        with patch.object(recording.dave, "decrypt_opus", decrypt):
+            for i in range(total):
+                # 3枚に1枚だけ失敗させる（連続はしない）
+                body = bytes([1 if i % 3 == 2 else 2]) * 87 + marker
+                packet = SimpleNamespace(
+                    ssrc=1, sequence=100 + i, timestamp=48000 + i * 960, payload=120, padding=False
+                )
+                sink.write(user, SimpleNamespace(packet=packet, opus=body))
+            sink.flush_pending()
+
+        stream = sink._streams[1]
+        self.assertEqual(stream.encrypted, total // 3, "失敗の数が合っていない（前提の確認）")
+        track = session.tracks[7]
+        track.close(track.written_bytes / recording.BYTES_PER_SECOND)
+        self.assertEqual(
+            track.voiced_bytes,
+            total * recording.FRAME_BYTES,
+            "間を空けた失敗を繋がなくなっている（連続の数え方が通算になっている）",
+        )
+
+    def test_the_capture_says_how_the_decryption_turned_out(self):
+        """控えたパケットに、復号できたかどうかまで残ること。
+
+        復号は取り出すときまで遅れるので、受信の時点では「暗号文だった」
+        までしか分からない。結果まで残さないと、控えたものを見ても E2EE の
+        扱いが追えない（それが控える目的だった）。
+        """
+        import services.recording_service as recording
+
+        session = recording.RecordingSession(
+            guild_id=999,
+            channel_id=1,
+            channel_name="VC",
+            started_by_id=1,
+            started_by_name="t",
+            started_at=time.monotonic(),
+            max_seconds=0,
+            retention_days=1,
+        )
+        sink = recording._make_sink_class()(session)
+        user = Mock(id=7, display_name="すーくん")
+        plain = _opus_frame(self)
+        encrypted = bytes(87) + bytes.fromhex("c8db040cfafa")
+        results = [plain, None, plain]
+
+        def decrypt(client, user_id, payload):
+            return results.pop(0)
+
+        with patch.object(recording.dave, "decrypt_opus", decrypt):
+            for i in range(3):
+                packet = SimpleNamespace(
+                    ssrc=1, sequence=100 + i, timestamp=48000 + i * 960, payload=120, padding=False
+                )
+                sink.write(user, SimpleNamespace(packet=packet, opus=encrypted))
+            sink.flush_pending()
+
+        self.assertEqual(
+            [p["kind"] for p in sink._streams[1].captured],
+            ["E2EE復号", "E2EE不可", "E2EE復号"],
         )
 
     def test_a_dave_frame_arriving_before_the_speaker_is_known_does_not_crash(self):
@@ -6044,15 +6213,23 @@ class PacketCaptureTests(unittest.TestCase):
         sink = self.rec._make_sink_class()(session)
         user = Mock(id=7, display_name="すーくん")
         frame = _opus_frame(self)
-        encrypted = bytes(87) + bytes.fromhex("c8db040cfafa")
+        marker = bytes.fromhex("c8db040cfafa")
+        bad, good = bytes([1]) * 87 + marker, bytes([2]) * 87 + marker
 
-        sink.write(user, SimpleNamespace(packet=self._packet(100, ext=(1, 3)), opus=frame))
-        sink.write(user, SimpleNamespace(packet=self._packet(101, padding=True, ext=(9, 3)), opus=bytes([255]) * 255))
-        with patch.object(self.rec.dave, "decrypt_opus", return_value=None):
-            sink.write(user, SimpleNamespace(packet=self._packet(102), opus=encrypted))
-        with patch.object(self.rec.dave, "decrypt_opus", return_value=frame):
-            sink.write(user, SimpleNamespace(packet=self._packet(103), opus=encrypted))
-        sink.flush_pending()
+        # 復号は取り出すときまで遅れるので、結果が中身で決まるようにする。
+        # 書き込みごとに patch を差し替えると、「いつ復号されるか」に依存した
+        # テストになってしまう。
+        def decrypt(client, user_id, payload):
+            return None if payload[0] == 1 else frame
+
+        with patch.object(self.rec.dave, "decrypt_opus", decrypt):
+            sink.write(user, SimpleNamespace(packet=self._packet(100, ext=(1, 3)), opus=frame))
+            sink.write(
+                user, SimpleNamespace(packet=self._packet(101, padding=True, ext=(9, 3)), opus=bytes([255]) * 255)
+            )
+            sink.write(user, SimpleNamespace(packet=self._packet(102), opus=bad))
+            sink.write(user, SimpleNamespace(packet=self._packet(103), opus=good))
+            sink.flush_pending()
 
         kept = session.packet_capture[0]["packets"]
         self.assertEqual([p["kind"] for p in kept], ["音声", "詰め物", "E2EE不可", "E2EE復号"])

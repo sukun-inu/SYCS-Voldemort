@@ -672,8 +672,12 @@ class _StreamAssembler:
         self.captured: list[dict] = []  # そのまま控えたパケット（→ capture）
         self.capture_skipped = 0  # 上限に当たって控えなかった数
         self._capture_seen = 0  # capture() に来た総数（冒頭かどうかの判定用）
+        # 復号の結果待ちの控え。RTP タイムスタンプ -> 控えた記録（→ stamp_capture）。
+        # 控えた数が上限で頭打ちになるので、こちらも際限なくは増えない。
+        self._capture_awaiting: dict[int, dict] = {}
+        self.undecryptable_run = 0  # 続けて復号できなかった数（→ _emit）
 
-    def capture(self, packet, payload: bytes | None, kind: str, *, user_known: bool) -> None:
+    def capture(self, packet, payload: bytes | None, kind: str, *, user_known: bool, awaiting: bool = False) -> None:
         """届いたパケットを、手を加える前のまま控える。
 
         **詰め物を剥がす前・復号する前を残すこと。** 剥がしたあとを控えると、
@@ -694,19 +698,39 @@ class _StreamAssembler:
             self.capture_skipped += 1
             return
         extension = getattr(packet, "extension_data", None) or {}
-        self.captured.append(
-            {
-                "seq": int(getattr(packet, "sequence", -1)),
-                "ts": int(getattr(packet, "timestamp", 0) or 0),
-                "pt": getattr(packet, "payload", None),
-                "padding": bool(getattr(packet, "padding", False)),
-                "ext": sorted(extension),
-                "size": len(payload or b""),
-                "kind": kind,
-                "user_known": user_known,
-                "opus_b64": base64.b64encode(payload or b"").decode("ascii"),
-            }
-        )
+        # 突き合わせの鍵にも使うので、entry から読み直さず先に整数で持つ
+        # （entry は値の型が混ざるので、そこから取ると鍵として使えない）。
+        timestamp = int(getattr(packet, "timestamp", 0) or 0)
+        entry = {
+            "seq": int(getattr(packet, "sequence", -1)),
+            "ts": timestamp,
+            "pt": getattr(packet, "payload", None),
+            "padding": bool(getattr(packet, "padding", False)),
+            "ext": sorted(extension),
+            "size": len(payload or b""),
+            "kind": kind,
+            "user_known": user_known,
+            "opus_b64": base64.b64encode(payload or b"").decode("ascii"),
+        }
+        self.captured.append(entry)
+        if awaiting:
+            self._capture_awaiting[timestamp] = entry
+
+    def stamp_capture(self, timestamp: int, kind: str) -> None:
+        """控えた記録に、あとから分かった結果を書き入れる。
+
+        復号は取り出すときまで遅らせている（→ _emit）ので、受信の時点では
+        「暗号文だった」までしか分からない。結果まで残さないと、控えたものを
+        見ても E2EE の扱いが追えない（それが控える目的だった）。
+
+        突き合わせに RTP タイムスタンプを使うのは、_emit まで届くのがこれと
+        中身だけで、連番はそこまで来ないため。音声フレームのタイムスタンプは
+        1ストリーム内で重ならない（探査パケットは重なるが、あちらは暗号文
+        ではないのでここには来ない）。
+        """
+        entry = self._capture_awaiting.pop(timestamp, None)
+        if entry is not None:
+            entry["kind"] = kind
 
     def snapshot(self) -> dict[str, Any]:
         """このストリームの内訳。ログと info.json の**唯一の出どころ**。
@@ -1085,39 +1109,29 @@ class _RecordingSinkBase:
             if sequence >= 0:
                 stream.skip(sequence)
             return
-        kind = "音声"
-        if encoded and dave.is_dave_frame(encoded):
-            # 端から端まで暗号化されている。復号してから渡す。
-            # 暗号文のまま Opus に食わせると、例外にならず雑音が返る。
-            plain = dave.decrypt_opus(self._client(), user_id, encoded)
-            if plain is None:
-                stream.received += 1
-                stream.encrypted += 1
-                self.session.note_encrypted()
-                # **skip() しないこと。** 詰め物と同じ扱いにしていたが、
-                # 意味が違う。詰め物は「はじめから音が入っていない」ので
-                # 飛ばすのが正しいが、こちらは「音はあったのに取り出せ
-                # なかった」である。skip() すると drain() が穴と見なさず、
-                # 欠落補間も作らないまま番号だけ進むので、その 20ms が
-                # pad_until でまるごと無音になる。ぽつぽつ失敗すると発話の
-                # 途中に 20ms の穴が開き、途切れ途切れに聞こえていた。
-                #
-                # 何も伝えなければ drain() が穴として扱い、欠落に数えたうえで
-                # Opus に前後を繋がせる。連続して失敗しても _PLC_MAX_FRAMES で
-                # 頭打ちになるので、無い音を作り続けることはない。
-                stream.capture(packet, data.opus, "E2EE不可", user_known=known)
-                return
-            encoded = plain
-            stream.decrypted += 1
-            kind = "E2EE復号"
+        # **ここでは復号しない（→ _emit）。**
+        #
+        # DAVE の復号には user_id が要る。ところが音は UDP で届くのに、
+        # 「その SSRC が誰か」はゲートウェイの SPEAKING イベントという別経路で
+        # 遅れて届く。受信の時点で復号すると、対応が付く前に届いたぶんは
+        # user_id が無いので必ず失敗する。本番実測（09:31）の E2EE不可=7 は
+        # 7枚とも接続直後のかたまりで、鍵の問題ではなくこれだった。その人が
+        # 既に喋っていれば、発話の頭 150ms ほどが毎回落ちることになる。
+        #
+        # 並べ直しの列（_pending）は**もともと持ち主が分かるまで抱える**作りな
+        # ので、復号を取り出すときまで遅らせれば、抱えていたぶんも復号できる。
+        # _emit は持ち主が分かっている場合しか回らないので、あちらでは user_id が
+        # 必ずある。
+        encrypted_frame = bool(encoded) and dave.is_dave_frame(encoded)
         if encoded and sequence >= 0:
             stream.received += 1
-            # 位置の計算は 20ms 固定を前提にしている（_FRAME_SAMPLES）。
-            # 崩れたら黙ってずれるのではなく、数として出す。
-            samples = opus_frame_samples(encoded)
-            if samples is not None and samples != _FRAME_SAMPLES:
-                stream.odd_frames += 1
-            stream.capture(packet, data.opus, kind, user_known=known)
+            stream.capture(
+                packet,
+                data.opus,
+                "E2EE" if encrypted_frame else "音声",
+                user_known=known,
+                awaiting=encrypted_frame,
+            )
             stream.push(sequence, int(packet.timestamp), encoded, now)
         elif encoded:
             # voice_recv の SilencePacket は sequence が常に -1（rtp.py）。
@@ -1160,7 +1174,40 @@ class _RecordingSinkBase:
         # 音は全部そのぶんずれたまま。トラックごとにずれ幅が違うのは、
         # 「次に誰かが話した時刻」がトラックごとに違うため。
         started_at = self.session.started_at
+        user_id = int(getattr(user, "id", 0) or 0)
         for timestamp, encoded, arrived_at in ready:
+            if encoded is not None and dave.is_dave_frame(encoded):
+                # 端から端まで暗号化されている。復号してから渡す。
+                # 暗号文のまま Opus に食わせると、例外にならず雑音が返る。
+                plain = dave.decrypt_opus(self._client(), user_id, encoded)
+                if plain is None:
+                    stream.encrypted += 1
+                    self.session.note_encrypted()
+                    stream.stamp_capture(timestamp, "E2EE不可")
+                    stream.undecryptable_run += 1
+                    # **黙って飛ばさないこと。** 飛ばすとその 20ms が
+                    # pad_until でまるごと無音になり、発話の途中に穴が開いて
+                    # 途切れ途切れに聞こえる。None を渡して前後を繋がせる。
+                    #
+                    # ただし続けて失敗しているなら話は別で、そこは「取り
+                    # 出せなかった」ではなく「そもそも鍵が無い」である。
+                    # 無い音を作り続けても仕方がないので、drain() の欠落補間と
+                    # 同じ上限で打ち切る。
+                    if stream.undecryptable_run > _PLC_MAX_FRAMES:
+                        continue
+                    encoded = None
+                else:
+                    encoded = plain
+                    stream.decrypted += 1
+                    stream.undecryptable_run = 0
+                    stream.stamp_capture(timestamp, "E2EE復号")
+            if encoded is not None:
+                # 位置の計算は 20ms 固定を前提にしている（_FRAME_SAMPLES）。
+                # 崩れたら黙ってずれるのではなく、数として出す。復号したあと
+                # でないと Opus の TOC が読めないので、受信時ではなくここで見る。
+                samples = opus_frame_samples(encoded)
+                if samples is not None and samples != _FRAME_SAMPLES:
+                    stream.odd_frames += 1
             try:
                 pcm = stream.decode(encoded)
             except Exception as e:
