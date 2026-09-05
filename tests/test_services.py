@@ -3378,6 +3378,40 @@ class StreamAssemblerTests(unittest.TestCase):
             "書いたばかりの音より手前へ無い音を置いている",
         )
 
+    def test_hitting_the_skip_limit_only_forgets_the_oldest(self):
+        """**上限に当たったとき、覚えているもの全部を捨てないこと。**
+
+        「音声が入っていない」と覚えた番号は、_next_seq がそこへ来たときに
+        「穴ではない」と判断するために要る。上限で丸ごと消すと、**いま入れた
+        ばかりの、これから使う番号まで一緒に消える。**
+
+        消えたあとは詰め物が穴に見えるので、欠落として数えたうえで Opus に
+        無い音を作らせる。まさにこれを止めるために skip() を入れたので、
+        上限に当たった瞬間だけ元の壊れ方へ戻ることになる。
+
+        古いほうは _next_seq が既に通り過ぎていて、二度と参照されない。
+        捨てるならそちら。
+        """
+        limit = self.rec._SKIP_MAX
+        self._push(1, now=0.0)
+        self.stream.drain(1.0)  # 起点を 1 に決める
+
+        # 上限を1つ超えるまで詰め物が続き、そのあと本物が届く
+        for seq in range(2, 2 + limit + 1):
+            self.stream.skip(seq)
+        last = 2 + limit
+        self._push(last + 1, now=0.0)
+        drained = self.stream.drain(2.0)
+
+        # 上限を1つ超えたので、いちばん古い1つは捨てざるをえない。**その1つだけ**
+        # であること。丸ごと消していると、覚えていた 1000 個ぶんが欠落に化ける。
+        self.assertEqual(self.stream.lost, 1, "上限に当たった瞬間、覚えていた全部を欠落として数え直している")
+        self.assertEqual(
+            [payload for _ts, payload, _at in drained].count(None),
+            1,
+            "覚えていた詰め物のぶんまで無い音を作っている",
+        )
+
     def test_a_gap_is_given_up_on_after_the_hold_window(self):
         self._push(1, now=0.0)
         self._push(3, now=0.0)
