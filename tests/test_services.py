@@ -6278,6 +6278,88 @@ class PacketCaptureTests(unittest.TestCase):
         sink.write(user, SimpleNamespace(packet=self._packet(100 + total, padding=True), opus=bytes([255]) * 255))
         self.assertEqual(sink._streams[1].captured[-1]["kind"], "詰め物")
 
+    def test_encrypted_audio_does_not_crowd_out_the_anomalies(self):
+        """普通に復号できた音声で、控えの枠を食い潰さないこと。
+
+        本番実測（10:51）で、控えた 280 枚に対し **1579 枚が上限に当たって
+        省かれた**。DAVE が必須になった今、音声フレームは全部が暗号文で来る。
+        受信の時点では「暗号文だった」までしか分からず、それを異常扱いして
+        いたので、普通の音声で枠が埋まっていた。55秒の録音のうち控えられたのは
+        冒頭6秒ぶんだけで、**それ以降に何が起きても残らない**状態だった。
+        """
+        session = self._session()
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=7, display_name="すーくん")
+        frame = _opus_frame(self)
+        marker = bytes.fromhex("c8db040cfafa")
+        body = bytes([2]) * 87 + marker
+
+        with patch.object(self.rec.dave, "decrypt_opus", return_value=frame):
+            for i in range(self.rec._CAPTURE_HEAD + 200):
+                sink.write(user, SimpleNamespace(packet=self._packet(100 + i, ext=(1, 3)), opus=body))
+            # 枠が空いていないと、このあとの異常が残らない
+            last = 100 + self.rec._CAPTURE_HEAD + 200
+            sink.write(user, SimpleNamespace(packet=self._packet(last, padding=True), opus=bytes([255]) * 255))
+            sink.flush_pending()
+
+        stream = sink._streams[1]
+        self.assertEqual(stream.capture_skipped, 0, "普通の音声で上限に当たっている")
+        self.assertEqual(len(stream.captured), self.rec._CAPTURE_HEAD + 1)
+        self.assertEqual(stream.captured[-1]["kind"], "詰め物", "冒頭を過ぎた異常が残っていない")
+
+    def test_a_late_decryption_failure_is_kept_with_its_bytes(self):
+        """冒頭を過ぎてから復号に失敗したぶんも、生のまま残ること。
+
+        復号は取り出すときまで遅れるので、受信の時点では普通かどうかが
+        分からない。分からないものを全部控えると枠が埋まり、控えないと
+        **本物の鍵の問題が起きたときに中身が残らない**。結果が出てから拾う。
+        """
+        session = self._session()
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=7, display_name="すーくん")
+        frame = _opus_frame(self)
+        marker = bytes.fromhex("c8db040cfafa")
+        good, bad = bytes([2]) * 87 + marker, bytes([1]) * 87 + marker
+
+        def decrypt(client, user_id, payload):
+            return None if payload[0] == 1 else frame
+
+        with patch.object(self.rec.dave, "decrypt_opus", decrypt):
+            for i in range(self.rec._CAPTURE_HEAD + 100):
+                sink.write(user, SimpleNamespace(packet=self._packet(100 + i, ext=(1, 3)), opus=good))
+            broken = 100 + self.rec._CAPTURE_HEAD + 100
+            sink.write(user, SimpleNamespace(packet=self._packet(broken, ext=(1, 3)), opus=bad))
+            sink.flush_pending()
+
+        kept = sink._streams[1].captured
+        failures = [p for p in kept if p["kind"] == "E2EE不可"]
+        self.assertEqual(len(failures), 1, "冒頭を過ぎた復号の失敗が残っていない")
+        self.assertEqual(base64.b64decode(failures[0]["opus_b64"]), bad, "中身が残っていない")
+
+    def test_pending_results_do_not_pile_up_without_bound(self):
+        """結果待ちの控えを、際限なく抱えないこと。
+
+        暗号文は復号の結果が出るまで保留にする。ところが結果が出るのは
+        _emit で、_emit は持ち主が分かるまで回らない。対応が付かないまま
+        音だけ届き続けると、保留がそのまま積み上がる。1枚ずつ生のバイト列を
+        持っているので、6時間の録音なら数百MBになる。
+        """
+        session = self._session()
+        sink = self.rec._make_sink_class()(session)
+        marker = bytes.fromhex("c8db040cfafa")
+        body = bytes([2]) * 87 + marker
+        over = self.rec._CAPTURE_AWAITING_MAX + 50
+        for i in range(over):
+            sink.write(None, SimpleNamespace(packet=self._packet(100 + i, ext=(1, 3)), opus=body))
+
+        stream = sink._streams[1]
+        self.assertEqual(stream.unknown, over, "持ち主不明のまま受け取っていない（前提の確認）")
+        self.assertLessEqual(
+            len(stream._capture_awaiting),
+            self.rec._CAPTURE_AWAITING_MAX,
+            "結果待ちが際限なく積み上がっている",
+        )
+
     def test_the_capture_is_capped_and_says_how_many_it_dropped(self):
         """上限に当たったら、そこで止めて省いた数を残すこと。
 
