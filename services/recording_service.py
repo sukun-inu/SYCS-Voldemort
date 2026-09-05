@@ -317,7 +317,16 @@ class _TrackWriter:
         """
         self.pad_until(elapsed)
         self._raw(pcm)
-        self.voiced_bytes += len(pcm)
+        # **まるごとゼロのフレームは数えないこと。** Discord は喋っていない
+        # あいだ 3 バイトの無音フレーム（f8 ff fe）を送り、Opus はそれを 20ms
+        # ぶんのゼロへ復号する。届いた枚数としては音声だが、書かれるのは無音で、
+        # これを数えていたので「発話時間」が実際の発話とかけ離れていた
+        # （実録音では Achi が 1901.2 秒と出て、音が入っているのは 411.5 秒）。
+        #
+        # バイト列のまま数えるのは、ここが書き込みのたびに走るため。全サンプルを
+        # 見る必要はなく、ゼロ以外が1バイトでもあれば音は入っている。
+        if pcm.count(0) != len(pcm):
+            self.voiced_bytes += len(pcm)
 
     def close(self, total_elapsed: float, timeout: float = 60.0) -> None:
         """末尾まで無音で埋めてから ffmpeg を終わらせる。
@@ -349,7 +358,12 @@ class _TrackWriter:
 
     @property
     def voiced_seconds(self) -> float:
-        """実際に声が入っていた秒数（無音埋めの分は含まない）。"""
+        """実際に音が入っていた秒数。
+
+        含まないのは2つ。**時間軸を合わせるための無音埋め**（pad_until）と、
+        **復号するとまるごとゼロになるフレーム**（Discord の無音フレーム）。
+        後者は音声パケットとして届くので、枚数を数えると発話に見えてしまう。
+        """
         return self.voiced_bytes / BYTES_PER_SECOND
 
 
