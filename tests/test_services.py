@@ -3189,6 +3189,40 @@ class StreamAssemblerTests(unittest.TestCase):
         self.stream.flush()
         self.assertEqual(self.stream.lost, 3)
 
+    def test_only_the_real_loss_is_concealed_not_the_probes(self):
+        """**無い音を作る枚数は、詰め物を除いた「本当に落ちた数」で決めること。**
+
+        欠落補間の枚数は `gap`（番号の差）から取っていたが、gap には詰め物の
+        ぶんが入っている。落ちたのは1枚なのに3枚ぶんの無い音を作ることになる。
+
+        置き場所まで狂うのが効く。**詰め物は RTP タイムスタンプを進めない** —
+        実録音の packets.jsonl では、探査パケットが直前の音声と同じ時刻で
+        17枚続いていた（dts=0）。位置は次のパケットの時刻から数えて決めるので、
+        詰め物のぶんまで数えると、直前に書いたばかりの音より手前を指す。
+
+        pad_until は前へしか進まないので、手前を指されたぶんはその場に追記
+        される。つまり発話中の音が 20ms ずつ後ろへ押される。ae85a24 で直した
+        「発話の途中に 20ms の無音が刺さる」の、符号違いの同じ壊れ方になる。
+        """
+        # 100 は本物 / 101 は本当に落ちた / 102・103 は詰め物（時刻を進めない）
+        # / 104 は本物。実時間は 2 フレームぶんしか進んでいない。
+        self.stream.push(100, 96000, b"", 0.0)
+        for seq in (102, 103):
+            self.stream.skip(seq)
+        self.stream.push(104, 96000 + 960 * 2, b"", 0.30)
+        drained = self.stream.drain(1.0)
+
+        self.assertEqual(self.stream.lost, 1)
+        concealed = [ts for ts, payload, _at in drained if payload is None]
+        self.assertEqual(len(concealed), 1, "落ちていない詰め物のぶんまで無い音を作っている")
+        # 落ちた 101 が居たはずの場所 = 次の本物の 1 フレーム手前
+        self.assertEqual(concealed, [96000 + 960])
+        self.assertEqual(
+            [ts for ts, payload, _at in drained],
+            [96000, 96960, 97920],
+            "書いたばかりの音より手前へ無い音を置いている",
+        )
+
     def test_a_gap_is_given_up_on_after_the_hold_window(self):
         self._push(1, now=0.0)
         self._push(3, now=0.0)
