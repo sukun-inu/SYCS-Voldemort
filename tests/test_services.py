@@ -5720,6 +5720,200 @@ class DaveDecryptionTests(unittest.TestCase):
         self.assertEqual(sink._streams[1].unknown, 1)
 
 
+class ReceiveBreakdownTests(unittest.TestCase):
+    """受信の内訳が ZIP の中（info.json / info.txt）から読めること。
+
+    途切れの原因を切り分けるのに要るのはストリームごとのカウンタだが、
+    これまではログの `[recording] ssrc=…` 行にしか出ていなかった。本番の
+    ログを遡らないと分からないうえ、録音を受け取った人の手元には無い。
+    ZIP を開けば分かる状態にしておかないと、次に同じことが起きたときに
+    また実ファイルの波形を測るところからやり直しになる。
+    """
+
+    def setUp(self):
+        import services.recording_service as recording
+
+        self.rec = recording
+
+    def _session(self):
+        return self.rec.RecordingSession(
+            guild_id=999,
+            channel_id=1,
+            channel_name="VC",
+            started_by_id=1,
+            started_by_name="t",
+            started_at=time.monotonic(),
+            max_seconds=0,
+            retention_days=1,
+        )
+
+    def _healthy_jitter(self):
+        """ジッタバッファが差し替わっている本番の状態にする。
+
+        テストでは install() を呼んでいないので、素のままだと必ず
+        「差し替えられていません」の行が出て、他の行の有無を確かめられない。
+        """
+        return patch.object(self.rec.voice_jitter, "stats", return_value={"installed": True, "late_rejected": 0})
+
+    def _record(self, session):
+        """1人ぶん、詰め物と欠落を1つずつ混ぜて録る。"""
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=7, display_name="すーくん")
+        frame = _opus_frame(self)
+        for i in range(6):
+            if i == 2:
+                continue  # 届かない → 欠落
+            payload = bytes([255]) * 255 if i == 4 else frame  # 本物の詰め物
+            packet = SimpleNamespace(ssrc=1, sequence=100 + i, timestamp=48000 + i * 960, payload=120, padding=(i == 4))
+            sink.write(user, SimpleNamespace(packet=packet, opus=payload))
+        sink.flush_pending()
+        return sink
+
+    def test_the_counters_survive_into_the_session(self):
+        """内訳が sink ではなくセッションに残ること。
+
+        sink は停止後に voice_recv 側の別スレッドから cleanup() されるので、
+        書き出し（_finalize）の時点で参照できるとは限らない。
+        """
+        session = self._session()
+        self._record(session)
+        self.assertTrue(session.receive_stats, "内訳がセッションに写っていない")
+        entry = session.receive_stats[0]
+        self.assertEqual(entry["name"], "すーくん")
+        self.assertEqual(entry["padding_only"], 1)
+        self.assertEqual(entry["lost"], 1)
+
+    def test_cleanup_does_not_wipe_the_counters(self):
+        """cleanup() が先に走っても内訳が消えないこと。
+
+        stop_listening() は別スレッドで cleanup() を起こすので、
+        flush_pending() と競走する（voice_recv reader.stop()）。負けた側が
+        空で上書きすると、内訳がまるごと消える。
+        """
+        session = self._session()
+        sink = self._record(session)
+        before = list(session.receive_stats)
+        sink.cleanup()
+        self.assertEqual(session.receive_stats, before, "cleanup() が内訳を消している")
+
+    def test_the_counters_survive_cleanup_running_first(self):
+        """cleanup() が flush_pending() より先に来ても内訳が残ること。
+
+        voice_recv の `AudioReader.stop()` は cleanup() を別スレッドで起こす
+        ので、どちらが先になるかは決まっていない。cleanup() が先だと
+        _streams は空になったあとで flush_pending() が走るため、写す側が
+        cleanup() にも無いと内訳がまるごと消える。逆に、空のまま writes
+        すると先に集めたものを上書きして同じことが起きる。
+        """
+        session = self._session()
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=7, display_name="すーくん")
+        frame = _opus_frame(self)
+        for i in range(6):
+            packet = SimpleNamespace(ssrc=1, sequence=100 + i, timestamp=48000 + i * 960, payload=120, padding=False)
+            sink.write(user, SimpleNamespace(packet=packet, opus=frame))
+
+        sink.cleanup()  # 先に解放される
+        sink.flush_pending()  # そのあとで書き出しに来る
+
+        self.assertTrue(session.receive_stats, "cleanup() が先だと内訳が残らない")
+        self.assertEqual(session.receive_stats[0]["name"], "すーくん")
+
+    def test_one_speaker_reconnecting_is_still_one_row(self):
+        """再接続で SSRC が変わっても、1人は1行にまとまること。
+
+        再接続すると同じ人に別の SSRC が振られる。SSRC のまま並べると1人が
+        複数行に散り、読み手が足し算をしないと損失の大きさが分からない。
+        """
+        session = self._session()
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=7, display_name="すーくん")
+        frame = _opus_frame(self)
+        for ssrc, base in ((1, 100), (2, 500)):  # 再接続前と後
+            for i in range(4):
+                packet = SimpleNamespace(
+                    ssrc=ssrc, sequence=base + i, timestamp=48000 + i * 960, payload=120, padding=False
+                )
+                sink.write(user, SimpleNamespace(packet=packet, opus=frame))
+        sink.flush_pending()
+        for track in session.tracks.values():
+            track.close(1.0)
+
+        self.assertEqual(len(session.receive_stats), 2, "SSRC が2本に分かれていない（前提の確認）")
+        with self._healthy_jitter():
+            info = self.rec._finalize_info(session, 1.0, "手動停止", datetime.now(self.rec._JST))
+        speakers = info["受信の内訳"]["話者別"]
+        self.assertEqual(len(speakers), 1, "同じ人が SSRC ごとに分かれている")
+        self.assertEqual(speakers[0]["受信"], 8, "2本ぶんが合算されていない")
+
+    def test_info_json_carries_the_breakdown(self):
+        session = self._session()
+        self._record(session)
+        for track in session.tracks.values():
+            track.close(1.0)
+        info = self.rec._finalize_info(session, 1.0, "手動停止", datetime.now(self.rec._JST))
+
+        breakdown = info["受信の内訳"]
+        self.assertIn("ジッタバッファ", breakdown)
+        speaker = breakdown["話者別"][0]
+        self.assertEqual(speaker["名前"], "すーくん")
+        self.assertEqual(speaker["詰め物"], 1)
+        self.assertEqual(speaker["欠落"], 1)
+        # received は「音声として受け取った数」なので、届かなかった欠落は
+        # そこに入っていない。分母に足さないと割合が実際より大きく出る。
+        self.assertEqual(speaker["受信"], 4)
+        self.assertEqual(speaker["取り出せなかった割合(%)"], 40.0)
+
+    def test_info_txt_names_the_counters_that_are_not_zero(self):
+        """人が開く info.txt に、0 でないものだけが出ること。
+
+        全部並べると健全な録音でも読み飛ばされる。出ていること自体が
+        「見るべきものがある」の合図になるようにする。
+        """
+        session = self._session()
+        self._record(session)
+        for track in session.tracks.values():
+            track.close(1.0)
+        with self._healthy_jitter():
+            info = self.rec._finalize_info(session, 1.0, "手動停止", datetime.now(self.rec._JST))
+            text = self.rec._info_text(session, info)
+
+        self.assertIn("受信の内訳", text)
+        self.assertIn("詰め物", text)
+        self.assertNotIn("溢れ", text, "0 のものまで並べている")
+
+    def test_a_clean_recording_says_nothing(self):
+        """何も起きていない録音では、内訳の行を出さないこと。"""
+        session = self._session()
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=7, display_name="すーくん")
+        frame = _opus_frame(self)
+        for i in range(6):
+            packet = SimpleNamespace(ssrc=1, sequence=100 + i, timestamp=48000 + i * 960, payload=120, padding=False)
+            sink.write(user, SimpleNamespace(packet=packet, opus=frame))
+        sink.flush_pending()
+        for track in session.tracks.values():
+            track.close(1.0)
+        with self._healthy_jitter():
+            info = self.rec._finalize_info(session, 1.0, "手動停止", datetime.now(self.rec._JST))
+            self.assertNotIn("受信の内訳", self.rec._info_text(session, info))
+
+    def test_a_jitter_buffer_that_was_not_replaced_is_called_out(self):
+        """差し替えに失敗していたら、そう書くこと。
+
+        差し替わっていないと voice_recv 側が穴のたびにパケットを捨てるので、
+        「欠落」の数が実際の損失より多く出る。それを知らずに数字だけ見ると、
+        回線が悪いという誤った結論になる。
+        """
+        session = self._session()
+        self._record(session)
+        for track in session.tracks.values():
+            track.close(1.0)
+        with patch.object(self.rec.voice_jitter, "stats", return_value={"installed": False, "late_rejected": 0}):
+            info = self.rec._finalize_info(session, 1.0, "手動停止", datetime.now(self.rec._JST))
+            self.assertIn("差し替えられていません", self.rec._info_text(session, info))
+
+
 def _opus_frame(test, hz: int = 440) -> bytes:
     """20ms ぶんの本物の Opus パケット。作れない環境ではテストを飛ばす。
 
