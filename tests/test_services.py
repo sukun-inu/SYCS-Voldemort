@@ -3226,6 +3226,50 @@ class StreamAssemblerTests(unittest.TestCase):
         self.assertEqual(self._seqs(drained)[-1], 5)
         self.assertEqual(self.stream.lost, 3)
 
+    def test_a_skip_left_behind_the_start_does_not_eat_audio_a_wrap_later(self):
+        """**通り過ぎた「音声なし」の番号を、覚えたままにしないこと。**
+
+        ストリームの冒頭は帯域推定の探査（詰め物）から始まることがある。実録音
+        （2026-09-05 / 221分36秒）の Achi はまさにそれで、seq 32780〜32793 の
+        14枚が詰め物だった。このとき _next_seq はまだ決まっていないので skip() は
+        14個とも覚えるが、最初の音声は 32794 で、覚えた番号はどれも**その手前**に
+        なる。drain() は前へしか進まないので誰も消費せず、_SKIP_MAX にも当たらない
+        まま録音の最後まで残る。
+
+        16bit の連番は 65536枚（発話 22分ぶん）で1周する。**戻ってきた 32780 は
+        今度は本物の音声だが、覚えている番号に当たって _pending を見ずに捨てられる。**
+        その結果、届いている音を自分で捨てたうえで、それを回線の損失として報告する。
+
+        実録音に出ていた `時計の飛び=-14` がこの症状で、詰め物14枚とちょうど一致
+        する（負になるのは gap が負になるため）。カウンタが負なのは表に出た部分で、
+        本体は 220ms ぶんの音が消えていることのほう。
+        """
+        # 32780 は実録音の Achi の番号。65530 は、詰め物と最初の音声のあいだで
+        # 連番が折り返す場合（手前かどうかを素の大小で比べると取り違える）。
+        for first_pad, pads in ((32780, 14), (65530, 14)):
+            with self.subTest(先頭の詰め物=first_pad):
+                stream = self.rec._StreamAssembler(18295)
+                for i in range(pads):
+                    stream.skip((first_pad + i) % self.rec._SEQ_MOD)
+
+                seq = (first_pad + pads) % self.rec._SEQ_MOD
+                sent, got = [], []
+                now = 0.0
+                for _ in range(self.rec._SEQ_MOD + 40):  # 連番を1周させる
+                    now += 0.02
+                    stream.push(seq, seq * 960, seq.to_bytes(2, "big"), now)
+                    sent.append(seq)
+                    got.extend(payload for _ts, payload, _at in stream.drain(now))
+                    seq = (seq + 1) % self.rec._SEQ_MOD
+                got.extend(payload for _ts, payload, _at in stream.flush())
+
+                arrived = [int.from_bytes(p, "big") for p in got if p is not None]
+                self.assertEqual(sorted(set(sent) - set(arrived)), [], "届いた音を自分で捨てている")
+                self.assertEqual(got.count(None), 0, "落ちていないのに無い音を作っている")
+                self.assertEqual(stream.lost, 0, "自分で捨てたぶんを損失として報告している")
+                self.assertEqual(stream.late, 0)
+                self.assertEqual(stream.jumped, 0, "カウンタが負になっている（gap が負）")
+
     def test_sequence_numbers_wrap_around(self):
         """RTP のシーケンス番号は 16bit で折り返す。"""
         for seq in (65534, 0, 65535, 1):
