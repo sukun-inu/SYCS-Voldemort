@@ -15,6 +15,7 @@ import asyncio
 import contextlib
 import io
 import gzip
+import base64
 import json
 from datetime import datetime, timedelta, timezone
 import logging
@@ -5934,7 +5935,11 @@ class ReceiveBreakdownTests(unittest.TestCase):
             track.close(1.0)
         with self._healthy_jitter():
             info = self.rec._finalize_info(session, 1.0, "手動停止", datetime.now(self.rec._JST))
-            self.assertNotIn("受信の内訳", self.rec._info_text(session, info))
+            text = self.rec._info_text(session, info)
+        self.assertNotIn("受信の内訳", text)
+        # 控えたパケットの案内は別枠。健全な録音でも必ずあるので、内訳と同じ
+        # 枠に入れると「行が出ている＝異常」の合図が潰れる。
+        self.assertIn("packets.jsonl", text)
 
     def test_a_jitter_buffer_that_was_not_replaced_is_called_out(self):
         """差し替えに失敗していたら、そう書くこと。
@@ -5950,6 +5955,202 @@ class ReceiveBreakdownTests(unittest.TestCase):
         with patch.object(self.rec.voice_jitter, "stats", return_value={"installed": False, "late_rejected": 0}):
             info = self.rec._finalize_info(session, 1.0, "手動停止", datetime.now(self.rec._JST))
             self.assertIn("差し替えられていません", self.rec._info_text(session, info))
+
+
+class PacketCaptureTests(unittest.TestCase):
+    """届いたパケットそのものを ZIP へ控えること。
+
+    カウンタは「何枚どうなったか」しか言わない。今回、詰め物50枚と E2EE不可7枚
+    の正体（どちらも接続直後の1回のかたまりで、探査は RTP 拡張 {9,3} を持ち
+    直前の音声と同じタイムスタンプだった）が分かったのは、たまたま本番ログに
+    パケットの中身が出ていたからで、ZIP だけからは追えなかった。
+
+    全部は残せない（6時間の録音なら1人100万枚を超える）ので、実際に見たいところ
+    ——接続直後と、普通の音声として扱えなかったもの——に絞って控える。
+    """
+
+    def setUp(self):
+        import services.recording_service as recording
+
+        self.rec = recording
+
+    def _session(self):
+        return self.rec.RecordingSession(
+            guild_id=999,
+            channel_id=1,
+            channel_name="VC",
+            started_by_id=1,
+            started_by_name="t",
+            started_at=time.monotonic(),
+            max_seconds=0,
+            retention_days=1,
+        )
+
+    def _packet(self, sequence, *, padding=False, ext=None):
+        return SimpleNamespace(
+            ssrc=1,
+            sequence=sequence,
+            timestamp=48000 + sequence * 960,
+            payload=120,
+            padding=padding,
+            extension_data={k: b"" for k in (ext or ())},
+        )
+
+    def test_the_bytes_are_kept_exactly_as_they_arrived(self):
+        """控えるのは、詰め物を剥がす前・復号する前の生のバイト列であること。
+
+        剥がしたあとを控えると、剥がす判断そのものが正しかったのかを
+        あとから確かめられない。判断を疑うために残すので、判断前を残す。
+        """
+        session = self._session()
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=7, display_name="すーくん")
+        raw = bytes(96) + bytes.fromhex("010dfafa0202")  # 末尾が詰め物の E2EE フレーム
+        with patch.object(self.rec.dave, "decrypt_opus", return_value=None):
+            sink.write(user, SimpleNamespace(packet=self._packet(100, padding=True), opus=raw))
+        sink.flush_pending()
+
+        kept = session.packet_capture[0]["packets"]
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(base64.b64decode(kept[0]["opus_b64"]), raw, "剥がしたあとを控えている")
+        self.assertEqual(kept[0]["size"], len(raw))
+
+    def test_trimmed_padding_is_kept_too(self):
+        """普通の音声でも、剥がした詰め物ごと控えること。
+
+        剥がすのは末尾だけのこともある（E2EE のフレームでは末尾のマーカーが
+        詰め物に隠れる）。剥がしたあとを控えると、剥がす幅が正しかったのかを
+        後から確かめられない。**復号や剥がしを疑うために残す**ので、
+        手を加える前を残す。
+        """
+        session = self._session()
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=7, display_name="すーくん")
+        frame = _opus_frame(self)
+        raw = frame + bytes([0, 2])  # 末尾2バイトが詰め物（RFC 3550）
+        sink.write(user, SimpleNamespace(packet=self._packet(100, padding=True), opus=raw))
+        sink.flush_pending()
+
+        kept = session.packet_capture[0]["packets"]
+        self.assertEqual(kept[0]["kind"], "音声", "剥がしたうえで音声として扱えていない（前提の確認）")
+        self.assertEqual(base64.b64decode(kept[0]["opus_b64"]), raw, "剥がしたあとを控えている")
+
+    def test_each_packet_says_how_it_was_treated(self):
+        """1枚ごとに、こちらがどう扱ったかが分かること。
+
+        E2EE とそれ以外の分かれ方が読めないと、控えても切り分けに使えない。
+        """
+        session = self._session()
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=7, display_name="すーくん")
+        frame = _opus_frame(self)
+        encrypted = bytes(87) + bytes.fromhex("c8db040cfafa")
+
+        sink.write(user, SimpleNamespace(packet=self._packet(100, ext=(1, 3)), opus=frame))
+        sink.write(user, SimpleNamespace(packet=self._packet(101, padding=True, ext=(9, 3)), opus=bytes([255]) * 255))
+        with patch.object(self.rec.dave, "decrypt_opus", return_value=None):
+            sink.write(user, SimpleNamespace(packet=self._packet(102), opus=encrypted))
+        with patch.object(self.rec.dave, "decrypt_opus", return_value=frame):
+            sink.write(user, SimpleNamespace(packet=self._packet(103), opus=encrypted))
+        sink.flush_pending()
+
+        kept = session.packet_capture[0]["packets"]
+        self.assertEqual([p["kind"] for p in kept], ["音声", "詰め物", "E2EE不可", "E2EE復号"])
+        # 今回の切り分けは RTP 拡張の番号で付いた（探査は {9,3}）。必ず残す。
+        # ログの {9, 3} は集合の表示で順序に意味が無いため、並べ直して残す。
+        self.assertEqual(kept[0]["ext"], [1, 3])
+        self.assertEqual(kept[1]["ext"], [3, 9])
+
+    def test_whether_the_owner_was_known_is_recorded(self):
+        """届いた時点で持ち主が分かっていたかを残すこと。
+
+        E2EE の復号には user_id が要るのに、SSRC と人の対応はゲートウェイ側の
+        別経路で遅れて届く。実測の「E2EE不可7枚」は全部この状態のものだった。
+        分かっていたかどうかが残っていないと、鍵の問題と区別が付かない。
+        """
+        session = self._session()
+        sink = self.rec._make_sink_class()(session)
+        encrypted = bytes(87) + bytes.fromhex("c8db040cfafa")
+        with patch.object(self.rec.dave, "decrypt_opus", return_value=None):
+            sink.write(None, SimpleNamespace(packet=self._packet(100), opus=encrypted))
+        user = Mock(id=7, display_name="すーくん")
+        with patch.object(self.rec.dave, "decrypt_opus", return_value=None):
+            sink.write(user, SimpleNamespace(packet=self._packet(101), opus=encrypted))
+
+        kept = sink._streams[1].captured
+        self.assertEqual([p["user_known"] for p in kept], [False, True])
+
+    def test_ordinary_audio_stops_being_kept_after_the_head(self):
+        """普通の音声は冒頭だけ控え、そのあとは異常なものだけ控えること。
+
+        全部控えると 6時間の録音で 200MB を超える。切り分けに要るのは
+        接続直後と、普通に扱えなかったものだけ。
+        """
+        session = self._session()
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=7, display_name="すーくん")
+        frame = _opus_frame(self)
+        total = self.rec._CAPTURE_HEAD + 50
+        for i in range(total):
+            sink.write(user, SimpleNamespace(packet=self._packet(100 + i, ext=(1, 3)), opus=frame))
+
+        kept = sink._streams[1].captured
+        self.assertEqual(len(kept), self.rec._CAPTURE_HEAD, "普通の音声を際限なく控えている")
+
+        # 冒頭を過ぎても、異常なものは入ること
+        sink.write(user, SimpleNamespace(packet=self._packet(100 + total, padding=True), opus=bytes([255]) * 255))
+        self.assertEqual(sink._streams[1].captured[-1]["kind"], "詰め物")
+
+    def test_the_capture_is_capped_and_says_how_many_it_dropped(self):
+        """上限に当たったら、そこで止めて省いた数を残すこと。
+
+        黙って打ち切ると、読んだ人が「これで全部」と受け取る。
+        """
+        session = self._session()
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=7, display_name="すーくん")
+        over = self.rec._CAPTURE_MAX + 30
+        for i in range(over):
+            sink.write(user, SimpleNamespace(packet=self._packet(100 + i, padding=True), opus=bytes([255]) * 255))
+
+        stream = sink._streams[1]
+        self.assertEqual(len(stream.captured), self.rec._CAPTURE_MAX)
+        self.assertEqual(stream.capture_skipped, over - self.rec._CAPTURE_MAX)
+
+    def test_the_archive_carries_the_capture(self):
+        """ZIP に packets.jsonl として入り、どの SSRC の誰かが分かること。"""
+        session = self._session()
+        sink = self.rec._make_sink_class()(session)
+        user = Mock(id=7, display_name="すーくん")
+        frame = _opus_frame(self)
+        for i in range(3):
+            sink.write(user, SimpleNamespace(packet=self._packet(100 + i, ext=(1, 3)), opus=frame))
+        sink.flush_pending()
+        for track in session.tracks.values():
+            track.close(1.0)
+
+        info = self.rec._finalize_info(session, 1.0, "手動停止", datetime.now(self.rec._JST))
+        zip_path = self.rec._write_archive(session, {"version": 1}, info)
+        with zipfile.ZipFile(zip_path) as archive:
+            self.assertIn("packets.jsonl", archive.namelist())
+            lines = archive.read("packets.jsonl").decode("utf-8").splitlines()
+        self.assertEqual(len(lines), 3)
+        first = json.loads(lines[0])
+        self.assertEqual(first["ssrc"], 1)
+        self.assertEqual(first["name"], "すーくん")
+        self.assertEqual(first["seq"], 100)
+        self.assertEqual(info["受信の内訳"]["控えたパケット"]["件数"], 3)
+
+    def test_nothing_is_written_when_there_is_nothing_to_show(self):
+        """控えるものが無ければ packets.jsonl を作らないこと。
+
+        中身の無いファイルが毎回入っていると、有無が合図にならなくなる。
+        """
+        session = self._session()
+        info = self.rec._finalize_info(session, 1.0, "手動停止", datetime.now(self.rec._JST))
+        zip_path = self.rec._write_archive(session, {"version": 1}, info)
+        with zipfile.ZipFile(zip_path) as archive:
+            self.assertNotIn("packets.jsonl", archive.namelist())
 
 
 def _opus_frame(test, hz: int = 440) -> bytes:

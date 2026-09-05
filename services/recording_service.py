@@ -591,6 +591,23 @@ _FRAME_SAMPLES = 960  # 20ms ぶんのサンプル数（RTP タイムスタン�
 _PLC_MAX_FRAMES = 5
 # デコード失敗の中身をログに残す件数（ストリームごと）。全部出すと洪水になる。
 _FAILURE_SAMPLES = 3
+# 届いたパケットをそのまま控える枚数（ストリームごと）。
+#
+# **全部は残せない。** 6時間の録音は1人あたり 100万枚を超え、そのまま書くと
+# 200MB になる。実際に切り分けに要ったのは2種類だけだった。
+#
+#   1. 接続直後 … SSRC と人の対応が付くまでのやりとりと、帯域推定の探査が
+#                 ここに集中する（実測では詰め物50枚と E2EE不可7枚が、
+#                 すべて接続後 0.1 秒のひとかたまりに入っていた）
+#   2. 普通の音声として扱えなかったもの … 詰め物・E2EE不可・無音
+#
+# なので、冒頭は種類を問わず控え、そのあとは 2. だけ控える。
+_CAPTURE_HEAD = 80  # 冒頭のこの枚数は種類を問わず控える
+_CAPTURE_MAX = 280  # ストリームごとの上限。超えたぶんは数だけ残す
+# 「普通に扱えた」とみなす種別。冒頭を過ぎたらこれは控えない。
+_CAPTURE_ORDINARY = frozenset({"音声", "E2EE復号"})
+CAPTURE_NAME = "packets.jsonl"
+
 _SEQ_MOD = 1 << 16  # RTP シーケンス番号は 16bit
 _TS_MOD = 1 << 32  # RTP タイムスタンプは 32bit（48kHz 刻み）
 
@@ -652,6 +669,44 @@ class _StreamAssembler:
         self.padding_only = 0  # 中身がパディングだけのパケット（音声ではない）
         self.received = 0  # 受け取った音声フレームの総数
         self.payload_types: dict[int, int] = {}  # RTP のペイロードタイプ別の数
+        self.captured: list[dict] = []  # そのまま控えたパケット（→ capture）
+        self.capture_skipped = 0  # 上限に当たって控えなかった数
+        self._capture_seen = 0  # capture() に来た総数（冒頭かどうかの判定用）
+
+    def capture(self, packet, payload: bytes | None, kind: str, *, user_known: bool) -> None:
+        """届いたパケットを、手を加える前のまま控える。
+
+        **詰め物を剥がす前・復号する前を残すこと。** 剥がしたあとを控えると、
+        剥がすと決めた判断そのものが正しかったのかを後から確かめられない。
+        疑うために残すので、疑う対象を残す。
+
+        枚数は絞る（→ _CAPTURE_HEAD / _CAPTURE_MAX）。RTP 拡張の番号まで
+        残すのは、実測でこれが決め手になったため。帯域推定の探査は {9,3} を
+        持ち、直前の音声パケットと同じタイムスタンプで届いていた（音声は
+        {1,3} で 960 ずつ進む）。番号が無いと、探査と音声を後から見分ける
+        手がかりが無い。
+        """
+        self._capture_seen += 1
+        if self._capture_seen > _CAPTURE_HEAD and kind in _CAPTURE_ORDINARY:
+            return
+        if len(self.captured) >= _CAPTURE_MAX:
+            # 黙って打ち切ると、読んだ人が「これで全部」と受け取る。
+            self.capture_skipped += 1
+            return
+        extension = getattr(packet, "extension_data", None) or {}
+        self.captured.append(
+            {
+                "seq": int(getattr(packet, "sequence", -1)),
+                "ts": int(getattr(packet, "timestamp", 0) or 0),
+                "pt": getattr(packet, "payload", None),
+                "padding": bool(getattr(packet, "padding", False)),
+                "ext": sorted(extension),
+                "size": len(payload or b""),
+                "kind": kind,
+                "user_known": user_known,
+                "opus_b64": base64.b64encode(payload or b"").decode("ascii"),
+            }
+        )
 
     def snapshot(self) -> dict[str, Any]:
         """このストリームの内訳。ログと info.json の**唯一の出どころ**。
@@ -1021,13 +1076,16 @@ class _RecordingSinkBase:
         now = time.monotonic()
         sequence = int(getattr(packet, "sequence", -1))
         encoded = strip_rtp_padding(packet, data.opus)
+        known = user is not None
         if encoded is None:
             # 中身がパディングだけ（帯域推定の探査）か、そもそも空。音声ではない。
             # **番号は消費されているので、組み立て側へ必ず伝えること。**
             stream.padding_only += 1
+            stream.capture(packet, data.opus, "詰め物", user_known=known)
             if sequence >= 0:
                 stream.skip(sequence)
             return
+        kind = "音声"
         if encoded and dave.is_dave_frame(encoded):
             # 端から端まで暗号化されている。復号してから渡す。
             # 暗号文のまま Opus に食わせると、例外にならず雑音が返る。
@@ -1047,9 +1105,11 @@ class _RecordingSinkBase:
                 # 何も伝えなければ drain() が穴として扱い、欠落に数えたうえで
                 # Opus に前後を繋がせる。連続して失敗しても _PLC_MAX_FRAMES で
                 # 頭打ちになるので、無い音を作り続けることはない。
+                stream.capture(packet, data.opus, "E2EE不可", user_known=known)
                 return
             encoded = plain
             stream.decrypted += 1
+            kind = "E2EE復号"
         if encoded and sequence >= 0:
             stream.received += 1
             # 位置の計算は 20ms 固定を前提にしている（_FRAME_SAMPLES）。
@@ -1057,6 +1117,7 @@ class _RecordingSinkBase:
             samples = opus_frame_samples(encoded)
             if samples is not None and samples != _FRAME_SAMPLES:
                 stream.odd_frames += 1
+            stream.capture(packet, data.opus, kind, user_known=known)
             stream.push(sequence, int(packet.timestamp), encoded, now)
         elif encoded:
             # voice_recv の SilencePacket は sequence が常に -1（rtp.py）。
@@ -1064,6 +1125,7 @@ class _RecordingSinkBase:
             # 「もう出した番号より後ろ」と見なされて捨てられる。
             # 中身は無音なので、時間軸の穴埋めに任せて数えるだけにする。
             stream.silence += 1
+            stream.capture(packet, data.opus, "無音", user_known=known)
 
         # 抱えている全ストリームを見る。喋り終えた人の最後のぶんが
         # 出されないまま残り続けないように。
@@ -1151,13 +1213,24 @@ class _RecordingSinkBase:
         if not self._streams:
             return
         stats = []
+        capture = []
         for ssrc, stream in self._streams.items():
             entry = stream.snapshot()
             user = self._users.get(ssrc)
             entry["user_id"] = int(getattr(user, "id", 0) or 0)
             entry["name"] = str(getattr(user, "display_name", "") or "")
             stats.append(entry)
+            if stream.captured:
+                capture.append(
+                    {
+                        "ssrc": ssrc,
+                        "name": entry["name"],
+                        "packets": stream.captured,
+                        "skipped": stream.capture_skipped,
+                    }
+                )
         self.session.receive_stats = stats
+        self.session.packet_capture = capture
 
     def log_summary(self) -> None:
         """ストリームごとの内訳。数だけでは何が起きたか分からないため。
@@ -1252,6 +1325,8 @@ class RecordingSession:
     # ストリーム（SSRC）ごとの受信の内訳。停止時に sink から写す（→ _collect_stats）。
     # sink 側に置いたままだと、書き出しの時点では解放済みかもしれない。
     receive_stats: list[dict] = field(default_factory=list)
+    # そのまま控えたパケット（ストリームごと）。同じく停止時に sink から写す。
+    packet_capture: list[dict] = field(default_factory=list)
     announce_message: discord.Message | None = None
     sink: object | None = None  # 停止時に、並べ直し待ちのパケットを書き出す
     _guard_task: asyncio.Task | None = None
@@ -1954,10 +2029,16 @@ def _receive_breakdown(session: RecordingSession) -> dict:
         row["取り出せなかった割合(%)"] = round(missed / total * 100, 2) if total else 0.0
         speakers.append(row)
 
+    kept = sum(len(c["packets"]) for c in session.packet_capture)
     return {
         "ジッタバッファ": {
             "差し替え済み": bool(jitter["installed"]),
             "手遅れで受け取れなかった": int(jitter["late_rejected"]),
+        },
+        "控えたパケット": {
+            "件数": kept,
+            "控えきれず省いた": sum(int(c["skipped"]) for c in session.packet_capture),
+            "ファイル": CAPTURE_NAME if kept else None,
         },
         "話者別": speakers,
     }
@@ -1985,6 +2066,23 @@ def _breakdown_lines(info: dict) -> list[str]:
     if not lines:
         return []
     return ["", "受信の内訳（0 のものは省いています。詳細は info.json）:", *lines]
+
+
+def _capture_lines(info: dict) -> list[str]:
+    """packets.jsonl があることを知らせる1行。
+
+    **「受信の内訳」とは分けること。** あちらは 0 でないものだけを出して、
+    行が出ていること自体を「見るべきものがある」の合図にしている。控えた
+    パケットは健全な録音でも必ずあるので、同じ枠に入れると合図が潰れる。
+    かといって黙っていると、ファイルがあることに誰も気づかない。
+    """
+    kept = cast("dict[str, Any]", (info.get("受信の内訳") or {}).get("控えたパケット") or {})
+    if not kept.get("件数"):
+        return []
+    note = f"届いたパケットを {kept['件数']} 枚、手を加えずに {kept['ファイル']} へ控えてあります。"
+    if kept.get("控えきれず省いた"):
+        note += f"（上限に当たった {kept['控えきれず省いた']} 枚は入っていません）"
+    return ["", note]
 
 
 def _finalize_info(session: RecordingSession, total_elapsed: float, reason: str, started_jst: datetime) -> dict:
@@ -2089,6 +2187,7 @@ def _info_text(session: RecordingSession, info: dict) -> str:
                 for t in cast("list[dict[str, Any]]", info["トラック"])
             ],
             *_breakdown_lines(info),
+            *_capture_lines(info),
         ]
     )
 
@@ -2106,6 +2205,15 @@ def _write_archive(session: RecordingSession, manifest: dict, info: dict) -> Pat
         archive.writestr(MANIFEST_NAME, json.dumps(manifest, ensure_ascii=False))
         archive.writestr("info.json", json.dumps(info, ensure_ascii=False, indent=2))
         archive.writestr("info.txt", _info_text(session, info))
+        # 1行1パケットにするのは、長い録音でも grep と1行ずつの読み込みで
+        # 扱えるようにするため。1つの JSON にすると全部読み込まないと開けない。
+        lines = [
+            json.dumps({"ssrc": group["ssrc"], "name": group["name"], **packet}, ensure_ascii=False)
+            for group in session.packet_capture
+            for packet in group["packets"]
+        ]
+        if lines:
+            archive.writestr(CAPTURE_NAME, "\n".join(lines))
     return zip_path
 
 
