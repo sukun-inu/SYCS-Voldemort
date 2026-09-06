@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from http import HTTPStatus
 from pathlib import Path
 
 from envutil import env_bool, env_float
@@ -9,12 +10,13 @@ from webapp_admin.core.config import resolve_session_secret, settings_dir
 
 install_file_logging(settings_dir() / "logs", "admin.log")
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.responses import JSONResponse, RedirectResponse
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from webapp_admin.extensions import limiter
 from webapp_admin.metrics import (
@@ -173,6 +175,17 @@ def _is_api(request: Request) -> bool:
     return wants_json(request)
 
 
+def _is_delivery_link(request: Request) -> bool:
+    """ブラウザが直接開く配信リンクか。
+
+    このプロセスは管理画面と配信の両方を持つ。配信は別ホスト（mcdn.*）から
+    /dlaudio/ だけが通されているため、管理画面の /static/ を参照するページを
+    返しても資材が全部 404 になる。返すページを分ける判定はここ1箇所。
+    JSON か HTML かの判定（_is_api）とは別軸なので、関数も分けてある。
+    """
+    return request.url.path.startswith("/dlaudio/")
+
+
 def _error_response(
     request: Request,
     status_code: int,
@@ -189,6 +202,17 @@ def _error_response(
     """
     if _is_api(request):
         return JSONResponse({"detail": detail or message}, status_code=status_code, headers=headers)
+    if _is_delivery_link(request):
+        # 配信リンクは mcdn.* のホストで踏まれる。そこへ通っているのは
+        # /dlaudio/ だけなので、error.html が読む /static/ は届かない。
+        # 単体で立つページを services 側から借りる（理由はそちらの docstring）。
+        from services.djaudio_cdn import render_link_error_page
+
+        return HTMLResponse(
+            render_link_error_page(status_code, detail or description or message),
+            status_code=status_code,
+            headers=headers,
+        )
     return render(
         request,
         "error.html",
@@ -199,28 +223,52 @@ def _error_response(
     )
 
 
-def _http_exception_response(request: Request, exc: HTTPException):
+def _default_reason_phrase(status_code: int) -> str:
+    """そのコードの英語の既定フレーズ（"Not Found" 等）。無いコードは空文字。"""
+    try:
+        return HTTPStatus(status_code).phrase
+    except ValueError:
+        return ""
+
+
+def _http_exception_response(request: Request, exc: StarletteHTTPException):
     """HTTPException を、コードごとの日本語メッセージ + detail の補足にする。
 
-    exc.detail をそのまま補足文として画面に出す。detail を渡さずに
+    exc.detail をそのまま補足文として画面に出す。ただし detail を渡さずに
     `HTTPException(status_code=400)` とだけ書くと、starlette が既定で
-    detail へ "Bad Request" 等の英語フレーズを入れるため、それがそのまま
-    補足として日本語ページに出てしまう（detail が既定メッセージと完全一致
-    するときだけ二重表示を避けている。既定フレーズはここには一致しない）。
+    detail へ "Bad Request" 等の英語フレーズを入れる。それを見せると日本語の
+    ページに英語が併記されるので、既定フレーズと一致する detail は落とす
+    （下の _default_reason_phrase）。日本語の msg と重複する detail も同様に
+    落とす（二重表示を避ける）。
 
     ExceptionGroup 経由の経路（_exception_group_response）からも呼ぶので、
     ハンドラのクロージャではなく、ここに関数として置いてある。
     """
+    # ここに無いコードは「エラーが発生しました。」に落ちる。配信リンクが
+    # 実際に投げる 409/410/416 と、レート制限の 429 が漏れていたため、
+    # 理由が detail に入っているのに見出しだけ何も言っていない状態だった
+    # （期限切れのリンクを踏むと「エラーが発生しました。」と出ていた）。
     msgs = {
         400: "不正なリクエストです。",
         403: "アクセス権限がありません。",
         404: "ページが見つかりません。",
+        405: "このURLでは受け付けていない操作です。",
+        409: "この内容では処理できません。",
+        410: "リンクの有効期限が切れています。",
+        416: "要求された範囲を返せません。",
+        429: "リクエストが多すぎます。",
         500: "サーバーエラーが発生しました。",
     }
     msg = msgs.get(exc.status_code, "エラーが発生しました。")
     # 断った理由が書いてあるなら、そのまま見せる。「不正なリクエストです」
     # だけでは、何を直せばいいのか分からない。
     detail = exc.detail if isinstance(exc.detail, str) and exc.detail else ""
+    # ただし detail を渡さずに投げられた HTTPException には、starlette が
+    # 既定でそのコードの英語フレーズ（"Not Found" など）を入れてくる。
+    # それは「断った理由」ではないので、無かったことにして日本語の msg
+    # だけを見せる。放っておくと日本語のページに "Not Found" が併記される。
+    if detail == _default_reason_phrase(exc.status_code):
+        detail = ""
     description = detail if detail and detail != msg else None
     # API は JSON で返す。HTML のエラーページを返すと、fetch する側は本文を
     # 読めず「HTTP 502」としか言えない。detail に入れた理由をそのまま渡す。
@@ -251,7 +299,7 @@ def _exception_group_response(request: Request, exc: ExceptionGroup):
         return RedirectResponse("/admin/login", status_code=303)
     if isinstance(root, _NeedsGuild):
         return RedirectResponse("/admin/guilds", status_code=303)
-    if isinstance(root, HTTPException):
+    if isinstance(root, StarletteHTTPException):
         return _http_exception_response(request, root)
 
     leaves = _flatten_exception_group(exc)
@@ -510,9 +558,18 @@ def _register_exception_handlers(app: FastAPI) -> None:
         """
         return _error_response(request, 429, "リクエストが多すぎます。しばらく待ってから再試行してください。")
 
-    @app.exception_handler(HTTPException)
-    async def http_exception_handler(request: Request, exc: HTTPException):
-        """HTTPException を日本語のメッセージつきで返す（中身は _http_exception_response）。"""
+    @app.exception_handler(StarletteHTTPException)
+    async def admin_http_exception_handler(request: Request, exc: StarletteHTTPException):
+        """HTTPException を日本語のメッセージつきで返す（中身は _http_exception_response）。
+
+        登録先が **starlette 側の基底クラス** なのが要点。fastapi.HTTPException
+        だけに登録していたころは、経路が見つからないときに starlette の
+        ルーターが投げる素の HTTPException がここを素通りし、starlette 既定の
+        {"detail":"Not Found"} が生で返っていた。エンドポイントの中から投げた
+        410 は日本語のページになるのに、URL を打ち間違えただけだと英語の JSON
+        が出る、という食い違いになる。基底クラスに登録すれば MRO をたどって
+        fastapi.HTTPException も同じここへ来る。
+        """
         return _http_exception_response(request, exc)
 
     @app.exception_handler(ExceptionGroup)
