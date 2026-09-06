@@ -1901,6 +1901,65 @@ class ErrorPageCspTests(unittest.TestCase):
         self.assertIn("detail", response.json())
 
 
+class UnhandledExceptionGroupTests(unittest.TestCase):
+    """原因不明の例外で 500 を返すときも、相手に応じた形で返すこと。
+
+    _exception_group_response の最後の 500 だけが _error_response を通らず、
+    error.html を直に描いていた。**分割前からそうなっていた**ので分割時は
+    そのまま移してあり、次の2つが残っていた。
+
+      - fetch する側（ミキサー・管理画面のJS）に HTML が返る。本文を読めず
+        「HTTP 500」としか言えない。他の経路はぜんぶ JSON にしてある。
+      - 配信リンク（/dlaudio/）に管理画面のページが返る。配信のホストへ
+        通っているのは /dlaudio/ だけなので /static/ が全部 404 になり、
+        素の HTML が並ぶだけの画面が出る（DeliveryErrorPageTests と同じ話）。
+
+    どちらも「500 が返る」ことは変わらないため、動かしてみても気づけない。
+    """
+
+    def setUp(self):
+        from webapp_admin.app import create_app
+
+        app = create_app()
+
+        for path in ("/admin/api/boom", "/dlaudio/boom", "/admin/boom"):
+
+            async def boom():
+                raise ExceptionGroup("boom", [RuntimeError("下で落ちた")])
+
+            app.add_api_route(path, boom, methods=["GET"], include_in_schema=False)
+
+        self.client = TestClient(app, raise_server_exceptions=False)
+
+    def _get(self, path, accept):
+        # ハンドラは原因を logger.error へ残す。assertLogs で受け止めるのは、
+        # その記録が消えていないことを確かめるためと、テスト出力へ
+        # トレースバックを撒かないため。
+        with self.assertLogs("webapp_admin.app", level="ERROR") as logs:
+            response = self.client.get(path, headers={"Accept": accept})
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("RuntimeError", "\n".join(logs.output))
+        return response
+
+    def test_a_fetching_client_gets_json(self):
+        response = self._get("/admin/api/boom", "application/json")
+        self.assertIn("application/json", response.headers["content-type"])
+        self.assertIn("detail", response.json())
+
+    def test_a_delivery_link_gets_the_page_that_stands_on_its_own(self):
+        response = self._get("/dlaudio/boom", "text/html,*/*")
+        self.assertIn("text/html", response.headers["content-type"])
+        self.assertNotIn("/static/", response.text)
+        self.assertNotIn("/admin/", response.text)
+
+    def test_a_browser_on_the_admin_screen_still_gets_the_admin_page(self):
+        """管理画面側は今までどおり error.html のままであること。"""
+        response = self._get("/admin/boom", "text/html")
+        self.assertIn("text/html", response.headers["content-type"])
+        self.assertIn("error-page", response.text)
+        self.assertIn("サーバーエラー", response.text)
+
+
 class BotTokenResolutionTests(unittest.TestCase):
     """DISCORD_BOT_TOKEN の解決が config.py と webapp_admin.auth でズレないこと。
 
