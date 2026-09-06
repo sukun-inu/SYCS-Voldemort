@@ -717,16 +717,17 @@ def render_link_error_page(status_code: int, detail: object) -> str:
     max-width: 420px; width: 100%; background: #181c15; border: 1px solid #2c3126;
     border-radius: 16px; padding: 32px 28px; text-align: center;
   }}
-  .code {{ font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px;
-           letter-spacing: .08em; color: #7fbf8f; margin: 0 0 10px; }}
   h1 {{ font-size: 20px; margin: 0 0 12px; }}
+  /* 番号は見出しと同じ行に置く。別の行に「DJAudio-DL ・ 410」と出していた
+     ころは、区切りの中黒だけが浮いて見えた。 */
+  h1 .code {{ font-family: ui-monospace, "SF Mono", Consolas, monospace;
+              letter-spacing: .08em; color: #7fbf8f; margin-right: .5em; }}
   p {{ font-size: 14.5px; line-height: 1.7; color: #b7bfae; margin: 0; }}
 </style>
 </head>
 <body>
   <div class="card">
-    <p class="code">DJAudio-DL &middot; {status_code}</p>
-    <h1>{title_html}</h1>
+    <h1><span class="code">{status_code}</span>{title_html}</h1>
     <p>{message_html}</p>
   </div>
 </body>
