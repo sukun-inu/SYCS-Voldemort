@@ -31,6 +31,7 @@ os.environ["DJAUDIO_CACHE_DIR"] = tempfile.mkdtemp(prefix="admin-api-cache-")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import itsdangerous  # noqa: E402
+from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
 from starlette.testclient import TestClient  # noqa: E402
 
 from webapp_admin.app import app  # noqa: E402
@@ -1958,6 +1959,96 @@ class UnhandledExceptionGroupTests(unittest.TestCase):
         self.assertIn("text/html", response.headers["content-type"])
         self.assertIn("error-page", response.text)
         self.assertIn("サーバーエラー", response.text)
+
+
+class ExceptionGroupIncidentTests(unittest.TestCase):
+    """包まれた例外も、素の例外と同じくインシデントとして記録すること。
+
+    anyio のタスクグループを通ると、ルートが投げた実装バグは ExceptionGroup
+    に包まれて上がる。その経路だけ record_exception を呼んでいなかったため、
+    exceptions_total{type=...} が増えず、インシデントには metrics_middleware
+    が 5xx レスポンスを見て立てる「HTTP 500」しか残らなかった
+    （例外の型名もメッセージも無い）。record_exception の
+    docstring にあるとおり、このカウンタは「初めて出た例外」に気づくための
+    唯一の口なので、包まれたバグはその口を通らないことになる。
+
+    記録するのは包みではなく中身。全部 "ExceptionGroup" で立ててしまうと、
+    呼んではいても型名が潰れて、やはり新しいバグに気づけない。
+    """
+
+    def setUp(self):
+        from webapp_admin.app import create_app
+        from webapp_admin.security import _NeedsLogin
+
+        app = create_app()
+
+        async def grouped_bug():
+            raise ExceptionGroup("boom", [RuntimeError("下で落ちた")])
+
+        async def grouped_login():
+            raise ExceptionGroup("auth", [_NeedsLogin()])
+
+        async def grouped_http():
+            raise ExceptionGroup("http", [StarletteHTTPException(status_code=404, detail="ありません。")])
+
+        async def plain_bug():
+            raise RuntimeError("素で落ちた")
+
+        for path, handler in (
+            ("/admin/grouped-bug", grouped_bug),
+            ("/admin/grouped-login", grouped_login),
+            ("/admin/grouped-http", grouped_http),
+            ("/admin/plain-bug", plain_bug),
+        ):
+            app.add_api_route(path, handler, methods=["GET"], include_in_schema=False)
+
+        self.client = TestClient(app, raise_server_exceptions=False)
+
+    def _call(self, path, headers=None):
+        with patch("webapp_admin.app.record_exception") as recorded:
+            with self.assertLogs("webapp_admin.app", level="ERROR"):
+                response = self.client.get(path, headers=headers or {})
+        return response, recorded
+
+    def test_a_grouped_bug_is_recorded_as_its_own_type(self):
+        response, recorded = self._call("/admin/grouped-bug")
+        self.assertEqual(response.status_code, 500)
+        recorded.assert_called_once()
+        exception, info = recorded.call_args.args
+        # 包み（ExceptionGroup）ではなく中身が渡ること。
+        self.assertIsInstance(exception, RuntimeError)
+        self.assertEqual(str(exception), "下で落ちた")
+        self.assertEqual(info["method"], "GET")
+        self.assertEqual(info["path"], "/admin/grouped-bug")
+
+    def test_a_plain_bug_is_still_recorded(self):
+        response, recorded = self._call("/admin/plain-bug")
+        self.assertEqual(response.status_code, 500)
+        recorded.assert_called_once()
+        self.assertIsInstance(recorded.call_args.args[0], RuntimeError)
+
+    def test_the_snapshot_prefers_the_address_cloudflare_saw(self):
+        """インシデントの remote_addr が、経路によって食い違わないこと。
+
+        素の経路（metrics_middleware）は CF-Connecting-IP を優先していた。
+        包まれた経路が自前で組み立てると、ここが黙ってズレる。
+        """
+        _, recorded = self._call("/admin/grouped-bug", {"CF-Connecting-IP": "203.0.113.9"})
+        self.assertEqual(recorded.call_args.args[1]["remote_addr"], "203.0.113.9")
+
+    def test_normal_control_flow_is_not_an_incident(self):
+        """ログインの誘導や 404 は、包まれていてもバグではないこと。
+
+        ここを一緒に記録すると、インシデント一覧が未ログインのアクセスで
+        埋まり、本当に見るべき障害が流れる（record_error_response が 4xx を
+        インシデントにしないのと同じ理由）。
+        """
+        for path, expected in (("/admin/grouped-login", 303), ("/admin/grouped-http", 404)):
+            with self.subTest(path):
+                with patch("webapp_admin.app.record_exception") as recorded:
+                    response = self.client.get(path, follow_redirects=False)
+                self.assertEqual(response.status_code, expected)
+                recorded.assert_not_called()
 
 
 class BotTokenResolutionTests(unittest.TestCase):

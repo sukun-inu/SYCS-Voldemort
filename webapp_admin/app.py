@@ -282,13 +282,30 @@ def _http_exception_response(request: Request, exc: StarletteHTTPException):
     )
 
 
+def _request_snapshot(request: Request) -> dict:
+    """インシデントへ添える、リクエストの素性。
+
+    metrics_middleware と _exception_group_response の両方が同じものを要る。
+    別々に書くと、片方だけ CF-Connecting-IP を見なくなっても気づけない
+    （インシデント一覧の remote_addr が、経路によって Cloudflare の手前と
+    奥で食い違う、という形でしか出ない）。
+    """
+    # request.client.host は uvicorn の proxy_headers が X-Forwarded-For
+    # から直したあとの値（admin_main.py で有効にしている）。信頼する
+    # プロキシ以外から来たヘッダは uvicorn が捨てるので、ここでは
+    # そのまま使ってよい。CF-Connecting-IP はそれより手前にある
+    # Cloudflare が付けるもので、より確からしいので優先する。
+    client_ip = request.headers.get("CF-Connecting-IP") or (request.client.host if request.client else "unknown")
+    return {"method": request.method, "path": request.url.path, "endpoint": None, "remote_addr": client_ip}
+
+
 def _exception_group_response(request: Request, exc: ExceptionGroup):
     """ExceptionGroup の中身を見て、他の応答へ振り分ける。
 
     _NeedsLogin/_NeedsGuild/HTTPException を包んだ ExceptionGroup は
     FastAPI が直接は拾わない（登録してあるのはそれぞれの生の型に対する
     ハンドラのため）ので、ここで unwrap して手動で同じ処理に回す。
-    どれにも当たらない場合だけ、原因不明のバグとしてログへ残し 500 を返す。
+    どれにも当たらない場合だけ、原因不明のバグとして記録・ログして 500 を返す。
 
     その最後の 500 も、他の経路と同じく _error_response を通す。以前はここ
     だけが error.html を直に描いており、fetch する側には本文を読めない HTML
@@ -303,6 +320,13 @@ def _exception_group_response(request: Request, exc: ExceptionGroup):
         return RedirectResponse("/admin/guilds", status_code=303)
     if isinstance(root, StarletteHTTPException):
         return _http_exception_response(request, root)
+
+    # 包まれていても実装バグであることに変わりはないので、素の例外と同じく
+    # インシデントにする。**記録するのは包みではなく中身（root）**で、
+    # exceptions_total のラベルが "ExceptionGroup" で埋まらないようにする。
+    # このカウンタは「初めて出た例外」に気づくための唯一の口なので、
+    # 全部が同じ型名になると、新しいバグが出ても増え方が変わらない。
+    record_exception(root, _request_snapshot(request))
 
     leaves = _flatten_exception_group(exc)
     logger.error(
@@ -324,8 +348,11 @@ def _unhandled_request_response(request: Request, exc: Exception, snap: dict):
     内側の ExceptionMiddleware で先に Response へ変換されるため、
     ここへは来ない ＝ 監視・ログはこれまでどおり動く。
     """
-    record_exception(exc, snap)
+    # 記録するのは包みではなく中身。ログは前から root を出していたのに、
+    # インシデントとカウンタだけが包みの型名（BaseExceptionGroup）で
+    # 立っていて、一覧とログで別の名前が並んでいた。
     root = _unwrap_exception_group(exc) if isinstance(exc, BaseExceptionGroup) else exc
+    record_exception(root, snap)
     logger.exception(
         "Request failed method=%s path=%s root=%s detail=%s",
         request.method,
@@ -595,13 +622,7 @@ def _register_middleware(app: FastAPI, secret: str) -> None:
         いずれでもない例外（＝上のハンドラが対応していない実装バグ）しか
         受け取らない（詳しくは _unhandled_request_response）。
         """
-        # request.client.host は uvicorn の proxy_headers が X-Forwarded-For
-        # から直したあとの値（admin_main.py で有効にしている）。信頼する
-        # プロキシ以外から来たヘッダは uvicorn が捨てるので、ここでは
-        # そのまま使ってよい。CF-Connecting-IP はそれより手前にある
-        # Cloudflare が付けるもので、より確からしいので優先する。
-        client_ip = request.headers.get("CF-Connecting-IP") or (request.client.host if request.client else "unknown")
-        snap = {"method": request.method, "path": request.url.path, "endpoint": None, "remote_addr": client_ip}
+        snap = _request_snapshot(request)
         try:
             response = await call_next(request)
             if not request.url.path.startswith("/static"):
