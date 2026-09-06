@@ -27,55 +27,6 @@ install_file_logging(env_path("SETTINGS_DIR", Path(__file__).resolve().parent / 
 
 logger = logging.getLogger(__name__)
 
-_ERROR_TITLES = {
-    403: "アクセスできません",
-    404: "リンクが見つかりません",
-    410: "リンクの有効期限切れ",
-}
-
-
-def _render_error_page(status_code: int, detail: object) -> str:
-    """配信リンクをブラウザで直接開いた人に見せる案内ページ。
-
-    リンクは Discord のメッセージから踏まれるので、期限切れや権限違いに
-    JSON を返すと生の文字列が表示される。detail が空でも「この操作を
-    完了できませんでした」に倒し、白紙を返さない。
-    """
-    title = _ERROR_TITLES.get(status_code, "エラーが発生しました")
-    message = detail if isinstance(detail, str) and detail else "この操作を完了できませんでした。"
-    return f"""<!doctype html>
-<html lang="ja">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title} - DJAudio-DL</title>
-<style>
-  :root {{ color-scheme: dark light; }}
-  body {{
-    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    background: #10120f; color: #e9ece4;
-    font-family: "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", "Meiryo", system-ui, sans-serif;
-    padding: 24px;
-  }}
-  .card {{
-    max-width: 420px; width: 100%; background: #181c15; border: 1px solid #2c3126;
-    border-radius: 16px; padding: 32px 28px; text-align: center;
-  }}
-  .code {{ font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px;
-           letter-spacing: .08em; color: #7fbf8f; margin: 0 0 10px; }}
-  h1 {{ font-size: 20px; margin: 0 0 12px; }}
-  p {{ font-size: 14.5px; line-height: 1.7; color: #b7bfae; margin: 0; }}
-</style>
-</head>
-<body>
-  <div class="card">
-    <p class="code">DJAudio-DL &middot; {status_code}</p>
-    <h1>{title}</h1>
-    <p>{message}</p>
-  </div>
-</body>
-</html>"""
-
 
 def create_cdn_app() -> FastAPI:
     """配信専用の FastAPI アプリを組み立てる。
@@ -102,11 +53,11 @@ def create_cdn_app() -> FastAPI:
         # HTML を返していたため、ミキサーは断られた理由を読めなかった
         # （JSON として解釈できず「Unexpected token '<'」になる）。
         # 判定は services/djaudio_cdn.wants_json に1つだけ置く。
-        from services.djaudio_cdn import wants_json
+        from services.djaudio_cdn import render_link_error_page, wants_json
 
         if request.url.path.startswith("/dlaudio/files/") and not wants_json(request):
             return HTMLResponse(
-                _render_error_page(exc.status_code, exc.detail),
+                render_link_error_page(exc.status_code, exc.detail),
                 status_code=exc.status_code,
             )
         return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)

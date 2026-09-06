@@ -9,6 +9,7 @@ webapp_admin にも cdn_main にも依存せず、どちらからでも import �
 
 import asyncio
 import gzip
+import html
 import json
 import logging
 import re
@@ -658,6 +659,78 @@ def wants_json(request) -> bool:
     """
     accept = request.headers.get("accept", "")
     return "application/json" in accept and "text/html" not in accept
+
+
+# 配信リンクのエラーページに出す見出し。status ごとの一言で、detail はこの下に添える。
+_LINK_ERROR_TITLES = {
+    400: "リクエストが正しくありません",
+    403: "アクセスできません",
+    404: "リンクが見つかりません",
+    405: "この URL では受け付けていない操作です",
+    409: "この録音では作れません",
+    410: "リンクの有効期限切れ",
+    416: "要求された範囲を返せません",
+    429: "アクセスが集中しています",
+    500: "処理に失敗しました",
+}
+
+
+def render_link_error_page(status_code: int, detail: object) -> str:
+    """配信リンクをブラウザで直接開いた人に見せる案内ページ。
+
+    ページを**外部の資材へ一切頼らない形**にしてあるのは、返す先が配信の
+    ホストだからだ。そこへ通っているのは /dlaudio/ だけで、管理画面の
+    /static/ は届かない。管理画面のテンプレート（error.html）を返していた
+    ころは、そこが読む CSS 4本・aero.js・アイコンのスプライトが揃って 404
+    になり、素の HTML が縦に並ぶだけの画面が出ていた。しかも「管理画面へ」
+    のリンクつきで——Discord のリンクを踏んだ人に見せる先ではない。
+
+    wants_json と同じく、置き場所はここ1箇所だけにする。管理画面
+    （webapp_admin/app.py）と単体の配信プロセス（cdn_main.py）の両方が
+    これを呼ぶ。別々に持っていたころは、同じ URL でもどちらのプロセスが
+    応答したかで見た目も案内も変わっていた。
+
+    detail が空でも「この操作を完了できませんでした」に倒し、白紙を返さない。
+    """
+    title = _LINK_ERROR_TITLES.get(status_code, "エラーが発生しました")
+    message = detail if isinstance(detail, str) and detail else "この操作を完了できませんでした。"
+    # detail は今のところ全部このモジュール内の定数だが、埋め込む側で
+    # 逃がしておく。ここへ外から来た文字列を渡す変更が入っても、
+    # そのままタグとして解釈されることはない。
+    title_html = html.escape(title)
+    message_html = html.escape(message)
+    return f"""<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title_html} - DJAudio-DL</title>
+<style>
+  :root {{ color-scheme: dark light; }}
+  body {{
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: #10120f; color: #e9ece4;
+    font-family: "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", "Meiryo", system-ui, sans-serif;
+    padding: 24px;
+  }}
+  .card {{
+    max-width: 420px; width: 100%; background: #181c15; border: 1px solid #2c3126;
+    border-radius: 16px; padding: 32px 28px; text-align: center;
+  }}
+  .code {{ font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12.5px;
+           letter-spacing: .08em; color: #7fbf8f; margin: 0 0 10px; }}
+  h1 {{ font-size: 20px; margin: 0 0 12px; }}
+  p {{ font-size: 14.5px; line-height: 1.7; color: #b7bfae; margin: 0; }}
+</style>
+</head>
+<body>
+  <div class="card">
+    <p class="code">DJAudio-DL &middot; {status_code}</p>
+    <h1>{title_html}</h1>
+    <p>{message_html}</p>
+  </div>
+</body>
+</html>"""
 
 
 # ZIP からトラックを取り出すときの読み取り単位。

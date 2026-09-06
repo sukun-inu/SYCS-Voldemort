@@ -1781,6 +1781,126 @@ class CdnErrorShapeTests(unittest.TestCase):
         self.assertIn("text/html", response.headers["content-type"])
 
 
+class DeliveryErrorPageTests(unittest.TestCase):
+    """配信リンクのエラーページが、配信のホストだけで完結していること。
+
+    このページは Discord から踏まれ、配信のホスト（/dlaudio/ しか通っていない）
+    が返す。管理画面のテンプレートを返していたころは、そこから参照される
+    /static/css/*・/static/js/aero.js・アイコンのスプライトが全部 404 になり、
+    素の HTML が並ぶだけの画面になっていた（さらに「管理画面へ」のリンクまで
+    出ていた）。ページは外部の資材に頼らず、単体で読める形で返す。
+    """
+
+    def setUp(self):
+        from cdn_main import create_cdn_app
+
+        self.admin = TestClient(app)
+        self.cdn = TestClient(create_cdn_app())
+        self.path = f"/dlaudio/files/{GUILD_ID}/{'a' * 32}"
+        self.browser = {"Accept": "text/html,application/xhtml+xml,*/*;q=0.8"}
+
+    def _page(self, client):
+        response = client.get(self.path, headers=self.browser)
+        self.assertEqual(response.status_code, 410)
+        self.assertIn("text/html", response.headers["content-type"])
+        return response.text
+
+    def test_the_page_needs_nothing_but_itself(self):
+        for name, client in (("admin", self.admin), ("cdn", self.cdn)):
+            with self.subTest(name):
+                body = self._page(client)
+                self.assertNotIn("/static/", body)
+                self.assertNotIn("<link", body)
+                self.assertNotIn("<script", body)
+
+    def test_the_page_does_not_send_visitors_to_the_admin_screen(self):
+        for name, client in (("admin", self.admin), ("cdn", self.cdn)):
+            with self.subTest(name):
+                self.assertNotIn("/admin/", self._page(client))
+
+    def test_both_processes_return_the_same_page(self):
+        """管理画面と単体の配信プロセスで、同じ URL には同じページが出ること。
+
+        文面もテンプレートも別々に持っていたころは、どちらのプロセスが応答
+        したかで見た目も案内も変わっていた。判定（wants_json）と同じく、
+        ページも services/djaudio_cdn に1つだけ置く。
+        """
+        self.assertEqual(self._page(self.admin), self._page(self.cdn))
+
+    def test_the_headline_says_why_it_was_refused(self):
+        """期限切れは「期限切れ」と出すこと。
+
+        管理画面側は 400/403/404/500 しか文面を持っておらず、配信リンクが
+        使う 410 が表から漏れていたため、見出しが「エラーが発生しました。」
+        になっていた。理由は detail に入っているのに、一番大きな文字が
+        何も言っていない状態だった。
+        """
+        for name, client in (("admin", self.admin), ("cdn", self.cdn)):
+            with self.subTest(name):
+                body = self._page(client)
+                self.assertIn("有効期限", body)
+                self.assertNotIn("エラーが発生しました", body)
+
+    def test_a_fetching_client_still_gets_json(self):
+        """ミキサー向けの JSON は、ページを共通化しても変わらないこと。"""
+        for name, client in (("admin", self.admin), ("cdn", self.cdn)):
+            with self.subTest(name):
+                response = client.get(self.path, headers={"Accept": "application/json"})
+                self.assertEqual(response.status_code, 410)
+                self.assertIn("application/json", response.headers["content-type"])
+                self.assertIn("有効期限", response.json()["detail"])
+
+    def test_the_reason_is_escaped_into_the_page(self):
+        """detail を HTML へ入れるときに、タグとして解釈させないこと。"""
+        from services.djaudio_cdn import render_link_error_page
+
+        page = render_link_error_page(404, "<script>alert(1)</script>")
+        self.assertNotIn("<script>", page)
+        self.assertIn("&lt;script&gt;", page)
+
+
+class ErrorPageCspTests(unittest.TestCase):
+    """管理画面のエラーページが、自分で宣言した CSP の下で動くこと。
+
+    CSP は script-src 'self' で、'unsafe-inline' も 'unsafe-hashes' も無い。
+    onclick="" のようなインラインのイベントハンドラはブロックされ、
+    「前のページへ」は押しても何も起きない死んだボタンになっていた
+    （javascript: の擬似 URL をボタンへ替えたときに、同じ理由で塞がれる
+    ことを見落としていた）。動きは外部のスクリプトから結びつける。
+    """
+
+    def setUp(self):
+        self.client = TestClient(app)
+
+    def test_the_error_page_has_no_inline_handlers(self):
+        response = self.client.get("/admin/no-such-page", headers={"Accept": "text/html"})
+        self.assertIn("text/html", response.headers["content-type"])
+        self.assertNotIn("onclick", response.text)
+        self.assertNotIn("javascript:", response.text)
+
+    def test_unknown_urls_get_the_error_page_not_raw_json(self):
+        """ルーティングが返す 404/405 も、他のエラーと同じ扱いにすること。
+
+        ハンドラを fastapi.HTTPException にだけ登録していたため、
+        経路が見つからないときに starlette が投げる HTTPException は拾われず、
+        Starlette 既定の {"detail":"Not Found"} が生で返っていた。
+        エンドポイントの中から投げた 410 は日本語のページになるのに、
+        URL を打ち間違えただけだと英語の JSON が出る、という食い違いがあった。
+        """
+        for path in ("/admin/no-such-page", "/no-such-page-at-all"):
+            with self.subTest(path):
+                response = self.client.get(path, headers={"Accept": "text/html"})
+                self.assertEqual(response.status_code, 404)
+                self.assertIn("text/html", response.headers["content-type"])
+                self.assertIn("見つかりません", response.text)
+
+    def test_a_fetching_client_still_gets_json_for_unknown_urls(self):
+        response = self.client.get("/admin/no-such-page", headers={"Accept": "application/json"})
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("application/json", response.headers["content-type"])
+        self.assertIn("detail", response.json())
+
+
 class BotTokenResolutionTests(unittest.TestCase):
     """DISCORD_BOT_TOKEN の解決が config.py と webapp_admin.auth でズレないこと。
 
@@ -2272,15 +2392,21 @@ class CreateAppShapeTests(unittest.TestCase):
         "metrics_middleware",
     ]
 
-    # 先頭3つは FastAPI が既定で入れるもの。4つ目以降が create_app の登録。
+    # 先頭3つの枠は FastAPI が既定で入れるもの。4つ目以降が create_app の登録。
+    #
+    # 先頭の HTTPException だけは、FastAPI の既定（http_exception_handler）を
+    # create_app が **上書き** している。starlette.exceptions.HTTPException に
+    # 登録するので鍵が既定と同じになり、位置は先頭のまま値だけが差し替わる。
+    # 名前が admin_ 付きに変わっているのがその証拠で、ここが素の
+    # http_exception_handler に戻ったら、経路が見つからないときの 404 が
+    # 英語の JSON（{"detail":"Not Found"}）で返る状態に逆戻りしている。
     HANDLERS = [
-        ("HTTPException", "http_exception_handler"),
+        ("HTTPException", "admin_http_exception_handler"),
         ("RequestValidationError", "request_validation_exception_handler"),
         ("WebSocketRequestValidationError", "websocket_request_validation_exception_handler"),
         ("_NeedsLogin", "needs_login_handler"),
         ("_NeedsGuild", "needs_guild_handler"),
         ("RateLimitExceeded", "rate_limit_handler"),
-        ("HTTPException", "http_exception_handler"),
         ("ExceptionGroup", "exception_group_handler"),
     ]
 
