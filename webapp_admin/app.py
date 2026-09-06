@@ -290,9 +290,11 @@ def _exception_group_response(request: Request, exc: ExceptionGroup):
     ハンドラのため）ので、ここで unwrap して手動で同じ処理に回す。
     どれにも当たらない場合だけ、原因不明のバグとしてログへ残し 500 を返す。
 
-    最後の 500 だけは _error_response を通していない（＝ API にも HTML を
-    返す）。**分割前からそうなっている**ので、そのまま移してある。直すなら
-    別のコミットで、その振る舞いを見ているテストを足してから。
+    その最後の 500 も、他の経路と同じく _error_response を通す。以前はここ
+    だけが error.html を直に描いており、fetch する側には本文を読めない HTML
+    が、配信リンクには /static/ の届かないホストで管理画面のページが返って
+    いた。**どちらも「500 が返る」ことは変わらない**ため、動かしてみるだけ
+    では気づけない。UnhandledExceptionGroupTests が3種類の相手を固定している。
     """
     root = _unwrap_exception_group(exc)
     if isinstance(root, _NeedsLogin):
@@ -311,13 +313,7 @@ def _exception_group_response(request: Request, exc: ExceptionGroup):
         [f"{type(leaf).__name__}: {leaf}" for leaf in leaves],
         exc_info=exc,
     )
-    return render(
-        request,
-        "error.html",
-        status_code=500,
-        code=500,
-        message="サーバーエラーが発生しました。",
-    )
+    return _error_response(request, 500, "サーバーエラーが発生しました。")
 
 
 def _unhandled_request_response(request: Request, exc: Exception, snap: dict):
