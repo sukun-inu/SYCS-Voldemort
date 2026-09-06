@@ -194,14 +194,7 @@
   </div>
 </section>
 
-<!-- Footer -->
-<footer class="landing-footer">
-  <div class="landing-footer-links">
-    <a href="https://metals.kawasaki-n3t.f5.si/" target="_blank" rel="noopener noreferrer">貴金属価格トラッカー</a>
-    <a href="{{ url_for('terms') }}">利用規約</a>
-    <a href="{{ url_for('privacy') }}">プライバシーポリシー</a>
-  </div>
-</footer>
+{% include "_site_footer.html" %}
 <script src="{{ admin_asset_url('js/public.js') }}"></script>
 </body>
 </html>

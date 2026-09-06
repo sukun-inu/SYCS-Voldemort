@@ -1,0 +1,17 @@
+{# 公開ページ共通のフッター。landing / guide / privacy / terms が include する。
+
+   以前はページごとに別物だった。トップは平文リンク3本、ガイドは「トラッカーへの
+   ボタン行」と「利用規約・プライバシーの legal 行」の両方、プライバシーと利用規約は
+   隣のページへのボタンが1つだけ。CSS も .landing-footer-links / .doc-legal /
+   .doc-links と3系統に分かれていて、リンクの区切りを外すだけでも3か所を直す
+   羽目になっていた。
+
+   ログイン画面はここを使わない。あちらは中央寄せのカードの中に法務リンクを
+   置いており、幅いっぱいの罫線付きフッターを足すとカードの体裁が崩れる。 #}
+<footer class="site-footer">
+  <div class="site-footer-links">
+    <a href="https://metals.kawasaki-n3t.f5.si/" target="_blank" rel="noopener noreferrer">貴金属価格トラッカー</a>
+    <a href="{{ url_for('terms') }}">利用規約</a>
+    <a href="{{ url_for('privacy') }}">プライバシーポリシー</a>
+  </div>
+</footer>
