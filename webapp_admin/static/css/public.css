@@ -548,7 +548,9 @@ body.public h3 .chip { font-size: 12px; }
 .doc-legal {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  /* 中黒の区切りをやめたので、リンク同士は間隔だけで分ける。
+     横は landing-footer-links と同じ 20px に揃える。 */
+  gap: 10px 20px;
   justify-content: center;
   margin-top: 44px;
   padding: 32px 24px 0;
@@ -556,8 +558,6 @@ body.public h3 .chip { font-size: 12px; }
   color: var(--ink-3);
   font-size: 12.5px;
 }
-.doc-legal-sep { color: var(--ink-3); opacity: .6; }
-
 .info-panel {
   padding: 18px 20px;
   border: 1px solid var(--hair);
