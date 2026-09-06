@@ -143,7 +143,8 @@ body.aero-page {
 .login-actions { display: flex; flex-direction: column; gap: 10px; margin: 26px 0 18px; }
 .login-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
 .login-note { color: var(--fg-subtle); font-size: var(--text-md); line-height: 1.9; }
-/* 中黒の区切りをやめたので、リンク同士は間隔だけで分ける（public.css の .doc-legal と同じ 20px）。 */
+/* ログイン画面の法務リンク。中央寄せのカードの中に置くので、公開ページ共通の
+   .site-footer（幅いっぱい・罫線あり）は使わない。間隔だけはそちらと揃える。 */
 .login-legal { display: flex; gap: 10px 20px; justify-content: center; margin-top: 20px; font-size: var(--text-md); color: var(--fg-subtle); }
 
 .btn-discord {

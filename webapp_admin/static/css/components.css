@@ -824,3 +824,31 @@
   .daw-head-col { flex-basis: 132px; }
   .daw-strip { flex-basis: 78px; }
 }
+
+/* ── 公開ページ共通のフッター ─────────────────────────────── */
+/* landing / guide / privacy / terms が同じものを出す（templates/_site_footer.html）。
+   以前はページごとに .landing-footer-links / .doc-legal / .doc-links と3系統に
+   分かれていた。base.css / components.css は公開ページもログイン画面も読むので、
+   定義はここに1つだけ置く（public.css へ書くと共通クラスの上書きになり、
+   StylesheetTests が落ちる）。
+
+   色と罫線を var(--hair, ...) の形で書いてあるのは、公開サイト（public.css）が
+   独自の細い罫線の階調を持っており、それを読まない画面もあるため。public.css を
+   読んでいれば公開サイトの階調に、読んでいなければ tokens.css の既定へ落ちる。 */
+.site-footer { border-top: 1px solid var(--hair, var(--border-muted)); }
+.site-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  /* 中黒の区切りは使わない。リンク同士は間隔だけで分ける。 */
+  gap: 10px 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 34px 24px 40px;
+  /* 公開ページに居たころは 13.5px だった。components.css は字の大きさを
+     整数 px の段階に揃える決まりなので（SpacingScaleTests）、既定の段階へ寄せる。
+     ログイン画面の法務リンクも同じ --text-md。 */
+  font-size: var(--text-md);
+  color: var(--ink-3, var(--fg-subtle));
+}
+.site-footer-links a { color: inherit; }
+.site-footer-links a:hover { color: var(--ink, var(--fg)); }

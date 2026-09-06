@@ -350,20 +350,6 @@ body.public h3 { text-wrap: balance; }
 .landing-steps li::before { left: 0; top: 22px; }
 .landing-steps > li + li { margin-top: 0; }
 
-.landing-footer { border-top: 1px solid var(--hair); }
-.landing-footer-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 20px;
-  align-items: center;
-  justify-content: center;
-  padding: 34px 24px 40px;
-  font-size: 13.5px;
-  color: var(--ink-3);
-}
-.landing-footer-links a { color: var(--ink-3); }
-.landing-footer-links a:hover { color: var(--ink); }
-
 /* ── カード ───────────────────────────────────────────────── */
 /* base.css の .row（汎用の横並び）とは別物なので、名前を分ける。
    内側の罫線は 1px の隙間から下地（--hair）を覗かせて引く。カードの影では引けない。
@@ -541,23 +527,6 @@ body.public h2 .chip,
 body.public h3 .chip { font-size: 12px; }
 
 .doc-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
-.doc-links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 26px; font-size: 14px; }
-/* 罫線を持つのはこの帯なので、上の余白もここで取る。
-   0 のままだと直前のボタンの下端に線が接して、ボタンが線の上に載って見える。
-   セクションの区切り（padding 44px + 罫線）と同じ間合いに揃える。 */
-.doc-legal {
-  display: flex;
-  flex-wrap: wrap;
-  /* 中黒の区切りをやめたので、リンク同士は間隔だけで分ける。
-     横は landing-footer-links と同じ 20px に揃える。 */
-  gap: 10px 20px;
-  justify-content: center;
-  margin-top: 44px;
-  padding: 32px 24px 0;
-  border-top: 1px solid var(--hair);
-  color: var(--ink-3);
-  font-size: 12.5px;
-}
 .info-panel {
   padding: 18px 20px;
   border: 1px solid var(--hair);
