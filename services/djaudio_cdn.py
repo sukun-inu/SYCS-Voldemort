@@ -719,9 +719,10 @@ def render_link_error_page(status_code: int, detail: object) -> str:
   }}
   h1 {{ font-size: 20px; margin: 0 0 12px; }}
   /* 番号は見出しと同じ行に置く。別の行に「DJAudio-DL ・ 410」と出していた
-     ころは、区切りの中黒だけが浮いて見えた。 */
+     ころは、区切りの中黒だけが浮いて見えた。
+     番号と見出しの間隔は h1 の中の空白1つぶんだけで、ここでは足さない。 */
   h1 .code {{ font-family: ui-monospace, "SF Mono", Consolas, monospace;
-              letter-spacing: .08em; color: #7fbf8f; margin-right: .5em; }}
+              letter-spacing: .08em; color: #7fbf8f; }}
   p {{ font-size: 14.5px; line-height: 1.7; color: #b7bfae; margin: 0; }}
 </style>
 </head>
