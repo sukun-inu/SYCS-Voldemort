@@ -727,7 +727,7 @@ def render_link_error_page(status_code: int, detail: object) -> str:
 </head>
 <body>
   <div class="card">
-    <h1><span class="code">{status_code}</span>{title_html}</h1>
+    <h1><span class="code">{status_code}</span> {title_html}</h1>
     <p>{message_html}</p>
   </div>
 </body>
