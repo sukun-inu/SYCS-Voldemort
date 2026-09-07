@@ -159,6 +159,11 @@ RETENTION_DAYS_MIN = 1
 RETENTION_DAYS_MAX = 30
 _GUARD_INTERVAL_SEC = 15.0
 _EMPTY_GRACE_SEC = 20.0  # 開始直後は参加者のキャッシュが揃っていないことがある
+# 音声が入ってこない状態を、これだけ続けて見たら書き出す。**0 にしないこと。**
+# 音声 WS が 1006 で切れると discord.py は自力で張り直すが、その 2〜3 秒は
+# is_connected() が False になる。即断すると、戻ってくるはずの接続を停止処理が
+# 切ってしまい、通話ごと落ちる（→ _guard）。_GUARD_INTERVAL_SEC の数倍を取る。
+_RECEIVE_GRACE_SEC = 45.0
 
 # guild_id -> RecordingSession
 _sessions: dict[int, "RecordingSession"] = {}
@@ -1484,6 +1489,9 @@ class RecordingSession:
     packet_capture: list[dict] = field(default_factory=list)
     announce_message: discord.Message | None = None
     sink: object | None = None  # 停止時に、並べ直し待ちのパケットを書き出す
+    # 音声が入ってこなくなって見えた時刻（monotonic）。戻れば None に戻す。
+    # 「1回の点検で止めない」ための猶予をここで数える（→ _guard）。
+    receive_stalled_at: float | None = None
     _guard_task: asyncio.Task | None = None
 
     @property
@@ -1873,27 +1881,44 @@ async def _announce_start(
     return None
 
 
-def _is_receiving(guild_id: int) -> bool:
-    """まだ音声を受信できている状態か。
+def _receive_stall(guild_id: int) -> str:
+    """いま音声が入ってきていない理由。入ってきていれば空文字。
 
-    voice_recv は受信スレッドで例外が起きると stop_listening() を呼んで
-    黙って受信をやめる（デコードできないパケット1つでも起きうる）。
-    接続そのものは生きているので、listening かどうかで見分ける。
+    **空でない＝もう駄目だ、ではない。** 音声 WS が 1006 で切れたあと
+    discord.py が自力で張り直している 2〜3 秒も、ここでは「入ってきていない」に
+    なる。呼ぶ側は _RECEIVE_GRACE_SEC のあいだ様子を見てから止めること
+    （→ _guard）。1回見ただけで止めた結果が、下の再接続の分岐に書いてある。
+
+    判断できないときは空文字（＝止めない）に倒す。voice_recv 側の作りが
+    変わって is_listening() が無くなっても、勝手に録音を畳まないため。
     """
-    client = voice_session.get(guild_id)
+    client = voice_session.peek(guild_id)
     if client is None:
-        return False
+        return "音声接続がありません"
+
+    # **voice_session.get() を使わないこと。** get() は is_connected() が
+    # False の接続を None に潰して返す。再接続中の数秒がそれに当たるので、
+    # get() で受けると「接続が消えた」に化け、下の is_listening() まで辿り
+    # 着けない。2026-09-07 の本番はこれで、再接続の途中に点検が当たった
+    # ギルドが録音を畳まれ、停止処理の disconnect() が張り直し中の
+    # ハンドシェイクを潰して、30 秒後のタイムアウトで通話ごと落ちていた。
+    if not client.is_connected():
+        return "再接続中です"
+
+    # voice_recv は受信スレッドで例外が起きると stop_listening() を呼んで
+    # 黙って受信をやめる（デコードできないパケット1つでも起きうる）。
+    # 接続は生きたままなので、listening かどうかでしか見分けられない。
     is_listening = getattr(client, "is_listening", None)
     if is_listening is None:
-        return True  # 判断できないなら止めない
+        return ""
     try:
-        return bool(is_listening())
+        return "" if is_listening() else "受信スレッドが止まっています"
     except Exception as e:
         # is_listening() 自体が例外を投げるのは想定外だが、ここでも方針は
         # 上と同じ「判断できないなら止めない」。ただし想定外の失敗である
         # ことは分かるようにしておく（voice_recv 側の変化に気づく手がかり）。
         logger.debug("[recording] guild=%s is_listening() が失敗しました: %s", guild_id, e)
-        return True
+        return ""
 
 
 def _vc_is_empty(bot, session: "RecordingSession") -> bool:
@@ -1979,14 +2004,34 @@ async def _guard(bot, guild_id: int) -> None:
                 await _guard_stop(bot, guild_id, session, dave.unavailable_reason())
                 return
 
-            # 受信スレッドが落ちていないか。voice_recv は内部でエラーが起きると
-            # stop_listening() を呼んで受信をやめるが、こちらのセッションは
-            # 「録音中」のまま残る。放っておくと、途中で切れた録音が最後まで
-            # 録れたように見えてしまうので、気づいた時点で書き出す。
-            if not _is_receiving(guild_id):
-                logger.warning(
-                    "[recording] guild=%s 音声の受信が止まっていたので書き出します",
+            # 音声が入ってこなくなっていないか。voice_recv は内部でエラーが
+            # 起きると stop_listening() を呼んで受信をやめるが、こちらの
+            # セッションは「録音中」のまま残る。放っておくと、途中で切れた
+            # 録音が最後まで録れたように見えてしまう。
+            #
+            # **見つけた瞬間に止めないこと。** 音声 WS の 1006 切断を
+            # discord.py が張り直している 2〜3 秒も、ここでは「入ってこない」に
+            # なる。そこで止めると、停止処理の disconnect() が張り直し中の
+            # ハンドシェイクを潰し、戻ってくるはずだった通話ごと落ちる。
+            # かといって永久に待つと、上限なしで録っているときに誰も止められ
+            # なくなるので、猶予を切って数える。
+            stall = _receive_stall(guild_id)
+            if not stall:
+                session.receive_stalled_at = None
+            elif session.receive_stalled_at is None:
+                session.receive_stalled_at = time.monotonic()
+                logger.info(
+                    "[recording] guild=%s 音声が入ってきていません（%s）。%.0f 秒待って戻らなければ書き出します",
                     guild_id,
+                    stall,
+                    _RECEIVE_GRACE_SEC,
+                )
+            elif time.monotonic() - session.receive_stalled_at >= _RECEIVE_GRACE_SEC:
+                logger.warning(
+                    "[recording] guild=%s 音声が %.0f 秒入ってこないので書き出します（%s）",
+                    guild_id,
+                    time.monotonic() - session.receive_stalled_at,
+                    stall,
                 )
                 await _guard_stop(bot, guild_id, session, "音声の受信が止まりました")
                 return
@@ -2021,7 +2066,10 @@ async def stop_recording(bot, guild_id: int, *, reason: str = "") -> dict:
     # 先に受信を止め、並べ直し待ちのぶんを書き出してから停止扱いにする。
     # 順序を入れ替えると feed() が stopping で弾かれ、末尾の音（最大 0.2 秒）が
     # 毎回失われる。await を挟まないので、この間に二重停止は入り込めない。
-    client = voice_session.get(guild_id)
+    # peek() を使うのは、再接続中（is_connected() が False）に get() が None を
+    # 返し、受信を止めないままセッションだけ畳んでしまうため。読み手のいない
+    # 受信スレッドが残る。
+    client = voice_session.peek(guild_id)
     if client is not None and hasattr(client, "stop_listening"):
         try:
             client.stop_listening()

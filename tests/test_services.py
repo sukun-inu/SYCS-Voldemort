@@ -2162,6 +2162,22 @@ class VoiceSessionTests(unittest.TestCase):
 
         self.assertIs(self.vs._locks.get(1), lock_before)
 
+    def test_channel_id_survives_a_reconnect(self):
+        """張り直しの数秒でも「どの VC に居るか」は変わらないこと。
+
+        ここが None になると、録音終了後の退出判定が「読み上げの見張り先とは
+        別の VC だ」と誤り、読み上げが使っている VC から bot が出ていく
+        （→ recording_service._release_if_unused）。
+        """
+        client = Mock()
+        client.is_connected = Mock(return_value=False)  # 張り直しの最中
+        client.channel = Mock(id=77)
+        self.vs._clients[1] = client
+
+        self.assertEqual(self.vs.channel_id(1), 77)
+        self.assertIs(self.vs.peek(1), client, "接続そのものは居るのに見えていない")
+        self.assertIsNone(self.vs.get(1), "get() は「今すぐ音を流せるか」を返し続けること")
+
 
 class RecordingTests(unittest.TestCase):
     """録音のトラック生成。ffmpeg を実際に動かして中身を確かめる。"""
@@ -3893,6 +3909,113 @@ class OpusResilienceTests(unittest.TestCase):
         self.assertIn("59.8", field.value)
         self.assertIn("シロウP 1.07%", field.value)
 
+    def test_the_timeline_survives_a_reconnect(self):
+        """再接続をまたいでも、後半の音が同じ時間軸の正しい位置に置かれること。
+
+        再接続では SSRC が振り直され、RTP タイムスタンプの基準も相手側で
+        変わる。位置をタイムスタンプの絶対値で決めていると、後半まるごとが
+        別の場所へ飛び、「どこからの録音なのか」が分からなくなる。マルチ
+        トラックは重ねて編集するためのものなので、そうなると使えない。
+
+        置く位置は常に「録音開始からの経過秒」で決まり、SSRC ごとの起点は
+        最初に届いた時刻で取り直される（→ offset_for）。だから再接続の穴は
+        無音として空くだけで、以後のずれは残らない。**再接続のたびに録音を
+        切って別セッションにしなくてよい根拠がこれ。** 切ってしまうと、
+        1つの通話が複数の ZIP に分かれ、繋ぎ直すには穴の長さを別途知る必要が
+        できる（ここではその情報が録音の中に残る）。
+        """
+        fed: list[float] = []
+        self.session.feed = lambda user, pcm, at=None: fed.append(at)  # type: ignore[method-assign]
+
+        clock = [self.session.started_at]
+        payload = self._frame()
+
+        def send(ssrc: int, base_ts: int, count: int, seq0: int) -> None:
+            for i in range(count):
+                clock[0] += 0.02
+                packet = SimpleNamespace(
+                    ssrc=ssrc,
+                    sequence=(seq0 + i) % 65536,
+                    timestamp=(base_ts + i * 960) % (2**32),
+                )
+                self.sink.write(self.user, SimpleNamespace(opus=payload, packet=packet))
+
+        with patch.object(self.rec.time, "monotonic", lambda: clock[0]):
+            send(1111, 100_000, 20, seq0=500)  # 再接続前
+            before = len(fed)
+            clock[0] += 3.0  # 張り直しにかかった時間（音は入ってこない）
+            # 再接続後は SSRC もタイムスタンプの基準も別物になる
+            send(2222, 4_000_000_000, 20, seq0=9000)
+            self.sink.flush_pending()
+
+        self.assertTrue(fed[:before], "再接続前の音が書き込まれていない")
+        after = [at for at in fed[before:] if at is not None]
+        self.assertTrue(after, "再接続後の音が書き込まれていない")
+
+        # 前半は 0.4 秒までに収まっている（20 枚 × 20ms）
+        self.assertLess(max(fed[:before]), 0.5, "再接続前の音が想定より後ろに置かれている")
+        # 後半は「穴のぶんだけ後ろ」に置かれる。前へ飛んでも後ろへ飛んでもいけない。
+        self.assertGreater(min(after), 3.0, f"再接続後の音が手前へ飛んでいる: {min(after):.2f} 秒")
+        self.assertLess(max(after), 4.5, f"再接続後の音が先へ飛んでいる: {max(after):.2f} 秒")
+        self.assertEqual(after, sorted(after), "再接続後の音の順序が入れ替わっている")
+
+    def test_a_timestamp_base_change_on_the_same_ssrc_is_rebased(self):
+        """SSRC が変わらないまま相手の時計だけ変わっても、置き場所が飛ばないこと。
+
+        再開（close code 4015 の resume）では SSRC が振り直されないことがあり、
+        そのとき起点は張り直されないまま相手の RTP タイムスタンプの基準だけが
+        変わる。前へ飛べば録音の終わりのほうへ、後ろへ飛べば手前へ、そのトラック
+        だけがまとめて動く。ずれ幅はトラックごとに違い、録音の途中から始まる。
+
+        _StreamAssembler.offset_for の張り直しがこれを吸収している。上の
+        test_the_timeline_survives_a_reconnect が守るのは「新しい SSRC の起点」で、
+        こちらとは別の道である（片方だけでは両方守れない）。
+        """
+        fed: list[float] = []
+        self.session.feed = lambda user, pcm, at=None: fed.append(at)  # type: ignore[method-assign]
+
+        clock = [self.session.started_at]
+        payload = self._frame()
+        seq = [500]
+
+        def send(base_ts: int, count: int) -> None:
+            for i in range(count):
+                clock[0] += 0.02
+                packet = SimpleNamespace(
+                    ssrc=1111,  # 再開では振り直されない
+                    sequence=seq[0] % 65536,
+                    timestamp=(base_ts + i * 960) % (2**32),
+                )
+                seq[0] += 1
+                self.sink.write(self.user, SimpleNamespace(opus=payload, packet=packet))
+
+        with self.assertLogs(self.rec.logger, level="WARNING") as captured:
+            with patch.object(self.rec.time, "monotonic", lambda: clock[0]):
+                send(100_000, 20)
+                clock[0] += 3.0
+                # 前へ 300 秒ぶん。**折り返しの半周（2^31）より小さく取ること。**
+                # 大きく飛ばすと _wrapped_delta が「後ろへ飛んだ」に読み替えて
+                # しまい、前向きの分岐を通らない（前向きを消しても落ちない
+                # テストになる。実際に一度そうなった）。
+                send(100_000 + 19 * 960 + 48_000 * 300, 20)
+                mid = len(fed)
+                clock[0] += 3.0
+                # 後ろへ。**offset が負にならない程度に戻すこと。**
+                # 負にすると「前へ飛んだ」の側（offset < 0）で拾われ、今度は
+                # 後ろ向きの分岐を通らない。
+                send(100_000 + 19 * 960 + 48_000 * 300 - 117_120, 20)
+                self.sink.flush_pending()
+
+        ahead = [at for at in fed[:mid] if at is not None][-10:]
+        behind = [at for at in fed[mid:] if at is not None]
+        self.assertTrue(ahead and behind, "書き込みが行われていない")
+        self.assertLess(max(ahead), 4.5, f"前へ飛んだ音が引き戻せていない: {max(ahead):.2f} 秒")
+        self.assertGreater(min(behind), 6.0, f"後ろへ飛んだ音が手前に置かれている: {min(behind):.2f} 秒")
+        self.assertTrue(
+            any("タイムスタンプ" in m for m in captured.output),
+            "張り直したことが何も記録に残っていない",
+        )
+
 
 class RecordingSinkShapeTests(unittest.TestCase):
     """_make_sink_class() が返すクラスの、外から見える姿を固定する。
@@ -4011,11 +4134,14 @@ class RecordingSinkShapeTests(unittest.TestCase):
 
 
 class ReceiverHealthTests(unittest.TestCase):
-    """受信が止まったことに気づけること。
+    """音声が入ってこなくなったことに気づけること。
 
     voice_recv は内部エラーで stop_listening() を呼ぶが、こちらのセッションは
     「録音中」のまま残る。放っておくと、途中で切れた録音が最後まで録れたように
     見えてしまう。
+
+    _receive_stall() は「いま入ってきていない理由」までを返す。止めるかどうかは
+    guard 側の判断（→ GuardReconnectTests）で、ここではその材料だけを見る。
     """
 
     def setUp(self):
@@ -4029,36 +4155,189 @@ class ReceiverHealthTests(unittest.TestCase):
     def tearDown(self):
         self.vs._clients.clear()
 
-    def test_listening_client_is_healthy(self):
+    def _client(self, *, connected=True, listening=True):
         client = Mock()
-        client.is_listening = Mock(return_value=True)
-        self.vs._clients[1] = client
-        self.assertTrue(self.rec._is_receiving(1))
+        client.is_connected = Mock(return_value=connected)
+        client.is_listening = Mock(return_value=listening)
+        return client
+
+    def test_listening_client_is_healthy(self):
+        self.vs._clients[1] = self._client()
+        self.assertEqual(self.rec._receive_stall(1), "")
 
     def test_stopped_listening_is_detected(self):
-        client = Mock()
-        client.is_listening = Mock(return_value=False)
-        self.vs._clients[1] = client
-        self.assertFalse(self.rec._is_receiving(1))
+        self.vs._clients[1] = self._client(listening=False)
+        self.assertIn("受信スレッド", self.rec._receive_stall(1))
 
     def test_missing_connection_is_not_receiving(self):
-        self.assertFalse(self.rec._is_receiving(1))
+        self.assertIn("音声接続がありません", self.rec._receive_stall(1))
+
+    def test_a_reconnecting_client_is_told_apart_from_a_dead_one(self):
+        """再接続中と、受信スレッドが死んだのを混ぜないこと。
+
+        混ぜていたのが 2026-09-07 の不具合。voice_session.get() が
+        is_connected() の False を None に潰すため、張り直し中の 2〜3 秒が
+        「接続が消えた」になり、is_listening()（生きている）を見ないまま
+        録音が畳まれて、通話ごと落ちていた。理由を分けて返すことで、
+        ログからもどちらだったのか分かるようにする。
+        """
+        self.vs._clients[1] = self._client(connected=False, listening=True)
+        self.assertEqual(self.rec._receive_stall(1), "再接続中です")
 
     def test_client_without_the_method_is_left_alone(self):
         """判断できないものを「止まっている」と決めつけて録音を切らないこと。"""
         client = Mock(spec=discord.VoiceClient)  # is_listening を持たない
+        client.is_connected = Mock(return_value=True)
         self.vs._clients[1] = client
-        self.assertTrue(self.rec._is_receiving(1))
+        self.assertEqual(self.rec._receive_stall(1), "")
 
     def test_is_listening_raising_is_logged_but_still_treated_as_healthy(self):
         """is_listening() 自体が例外を投げるのは想定外。方針（判断できないなら
         止めない）は変えないが、黙って握りつぶさず理由を残すこと。"""
-        client = Mock()
+        client = self._client()
         client.is_listening = Mock(side_effect=RuntimeError("boom"))
         self.vs._clients[1] = client
         with self.assertLogs(self.rec.logger, level="DEBUG") as captured:
-            self.assertTrue(self.rec._is_receiving(1))
+            self.assertEqual(self.rec._receive_stall(1), "")
         self.assertTrue(any("is_listening" in m for m in captured.output))
+
+
+class GuardReconnectTests(unittest.IsolatedAsyncioTestCase):
+    """再接続の最中に guard が録音を止めないこと。
+
+    音声 WS は 1006（異常終了）で切れることがあり、discord.py はそれを自力で
+    張り直す。張り直しの 2〜3 秒は is_connected() が False になるが、受信
+    スレッドは生きたままで、繋がり直せば音は戻ってくる。
+
+    ここを「受信が止まった」と決めつけて stop_recording() を呼ぶと、停止処理が
+    張り直し中の接続へ disconnect() をぶつける。進行中のハンドシェイクは
+    change_voice_state(channel=None) で無効になり、30 秒後にタイムアウトして
+    通話ごと落ちる。本番の 2026-09-07 22:44 に実際に起きた壊れ方で、
+    利用者からは「回線は悪くないのに勝手に通話が切れる」と見えていた。
+    """
+
+    GUILD = 4700
+
+    def setUp(self):
+        import services.recording_service as recording
+        from services import voice_session
+
+        self.rec = recording
+        self.vs = voice_session
+        self.vs._clients.clear()
+        self.rec._sessions.pop(self.GUILD, None)
+
+        self.session = recording.RecordingSession(
+            guild_id=self.GUILD,
+            channel_id=555,
+            channel_name="雑談VC",
+            started_by_id=1,
+            started_by_name="すずき",
+            started_at=time.monotonic(),
+            max_seconds=0,  # 上限なし（時間では止まらない）
+            retention_days=7,
+        )
+        self.rec._sessions[self.GUILD] = self.session
+
+        # 再接続中の VoiceClient: 繋がってはいないが、受信スレッドは生きている。
+        self.client = Mock()
+        self.client.is_connected = Mock(return_value=False)
+        self.client.is_listening = Mock(return_value=True)
+        self.vs._clients[self.GUILD] = self.client
+
+        self.stopped = AsyncMock(return_value={"token": "t"})
+        self.bot = Mock()
+        self.bot.get_guild.return_value = None  # VC の無人判定は「分からない」に倒す
+
+    def tearDown(self):
+        self.rec._sessions.pop(self.GUILD, None)
+        self.vs._clients.clear()
+
+    async def _run_guard(self, seconds: float):
+        """guard を動かして、指定秒後に止める。"""
+        task = asyncio.create_task(self.rec._guard(self.bot, self.GUILD))
+        await asyncio.sleep(seconds)
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    async def test_a_reconnect_does_not_stop_the_recording(self):
+        """張り直しが終われば、録音はそのまま続くこと。"""
+        with (
+            patch.object(self.rec, "_GUARD_INTERVAL_SEC", 0.01),
+            patch.object(self.rec, "_RECEIVE_GRACE_SEC", 10.0),
+            patch.object(self.rec, "stop_recording", self.stopped),
+        ):
+            task = asyncio.create_task(self.rec._guard(self.bot, self.GUILD))
+            await asyncio.sleep(0.1)  # 何度も点検が回る
+            self.client.is_connected.return_value = True  # 張り直しが完了
+            await asyncio.sleep(0.05)
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+        self.stopped.assert_not_awaited()
+        self.assertIn(self.GUILD, self.rec._sessions, "再接続だけで録音が畳まれている")
+
+    async def test_a_reconnect_that_never_comes_back_is_written_out(self):
+        """戻ってこないなら、猶予を過ぎたところで書き出すこと。
+
+        止めないことだけを優先すると、今度は「永久に止まらない録音」ができる。
+        上限なしで録っているとき、それは無音を録り続けるではなく、誰も
+        止められない状態になる。
+        """
+        with (
+            patch.object(self.rec, "_GUARD_INTERVAL_SEC", 0.01),
+            patch.object(self.rec, "_RECEIVE_GRACE_SEC", 0.05),
+            patch.object(self.rec, "stop_recording", self.stopped),
+            patch.object(self.rec, "_announce_stop", AsyncMock()),
+        ):
+            await self._run_guard(0.3)
+
+        self.stopped.assert_awaited()
+
+    async def test_a_dead_receiver_is_still_written_out(self):
+        """繋がっているのに受信スレッドだけ死んだ場合は、従来どおり書き出すこと。
+
+        7cc4eb9 でこの見張りを入れた理由がこれ。voice_recv は受信スレッドで
+        例外が出ると stop_listening() を呼ぶが、接続は生きたままなので、
+        こちらのセッションは「録音中」の表示を保ったまま音だけが入らなくなる。
+        """
+        self.client.is_connected.return_value = True
+        self.client.is_listening.return_value = False
+        with (
+            patch.object(self.rec, "_GUARD_INTERVAL_SEC", 0.01),
+            patch.object(self.rec, "_RECEIVE_GRACE_SEC", 0.05),
+            patch.object(self.rec, "stop_recording", self.stopped),
+            patch.object(self.rec, "_announce_stop", AsyncMock()),
+        ):
+            await self._run_guard(0.3)
+
+        self.stopped.assert_awaited()
+
+    async def test_a_recovered_stall_starts_the_grace_over(self):
+        """一度戻ったら、猶予は数え直すこと。
+
+        数え直さないと、短い再接続を何度か繰り返しただけで合計が猶予を超え、
+        繋がっている最中に録音が畳まれる。
+        """
+        with (
+            patch.object(self.rec, "_GUARD_INTERVAL_SEC", 0.01),
+            patch.object(self.rec, "_RECEIVE_GRACE_SEC", 0.3),
+            patch.object(self.rec, "stop_recording", self.stopped),
+            patch.object(self.rec, "_announce_stop", AsyncMock()),
+        ):
+            task = asyncio.create_task(self.rec._guard(self.bot, self.GUILD))
+            for _ in range(4):  # 切れる→戻る、を繰り返す
+                self.client.is_connected.return_value = False
+                await asyncio.sleep(0.1)
+                self.client.is_connected.return_value = True
+                await asyncio.sleep(0.1)
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+        self.stopped.assert_not_awaited()
 
 
 class AutoRecordingTests(unittest.TestCase):
@@ -4356,14 +4635,14 @@ class ReleaseAfterRecordingTests(unittest.TestCase):
         self.vs._clients.clear()
         self.vs._holds.clear()
 
-    def _connect(self, holds=()):
+    def _connect(self, holds=(), *, connected=True):
         disconnected = []
 
         async def disconnect(force=False):
             disconnected.append(True)
 
         client = Mock(spec=discord.VoiceClient)
-        client.is_connected.return_value = True
+        client.is_connected.return_value = connected
         client.channel = Mock(id=self.VC)
         client.disconnect = disconnect
         self.vs._clients[self.GUILD] = client
@@ -4371,8 +4650,8 @@ class ReleaseAfterRecordingTests(unittest.TestCase):
             self.vs.hold(self.GUILD, holder)
         return disconnected
 
-    def _release(self, *, tts_enabled, tts_vc, holds=()):
-        disconnected = self._connect(holds)
+    def _release(self, *, tts_enabled, tts_vc, holds=(), connected=True):
+        disconnected = self._connect(holds, connected=connected)
         with (
             patch("services.tts_store.get_tts_settings", lambda g: {"enabled": tts_enabled, "vc_channel_id": tts_vc}),
             patch("services.tts_service.get_effective_vc_watch", lambda g, s: (tts_vc, [])),
@@ -4394,6 +4673,16 @@ class ReleaseAfterRecordingTests(unittest.TestCase):
 
     def test_stays_while_something_else_holds_the_connection(self):
         self.assertFalse(self._release(tts_enabled=False, tts_vc=self.VC, holds=("something",)))
+
+    def test_stays_for_the_tts_even_while_the_connection_is_reconnecting(self):
+        """張り直しの最中でも、読み上げが使っている VC からは出ないこと。
+
+        居場所の判定に voice_session.get() を使うと、is_connected() が False の
+        数秒だけ「どの VC に居るか分からない」になり、見張り先と一致しなくなる。
+        録音を止めたついでに読み上げごと VC から蹴り出されるので、利用者からは
+        「録音が終わったら読み上げも黙った」という形で見える。
+        """
+        self.assertFalse(self._release(tts_enabled=True, tts_vc=self.VC, connected=False))
 
 
 class RecordingLimitConstantsTests(unittest.TestCase):
