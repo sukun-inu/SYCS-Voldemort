@@ -71,6 +71,11 @@ def get(guild_id: int) -> discord.VoiceClient | None:
     """現在の共有接続を返す。切断済みなら None（_clients に残っていても
     実際には繋がっていないハンドシェイク切れの接続を、生きているものと
     偽って返さないようにする）。
+
+    **「今すぐ音を流せるか」を訊く関数であって、「接続が居るか」ではない。**
+    音声 WS が切れて discord.py が自力で張り直している 2〜3 秒も
+    is_connected() は False になるので、ここは None を返す。接続そのものの
+    有無を見たいなら peek() を使うこと（→ peek のコメント）。
     """
     client = _clients.get(guild_id)
     if client is not None and not client.is_connected():
@@ -78,9 +83,27 @@ def get(guild_id: int) -> discord.VoiceClient | None:
     return client
 
 
+def peek(guild_id: int) -> discord.VoiceClient | None:
+    """管理表にある接続を、接続状態で潰さずにそのまま返す。
+
+    get() が None にしてしまう「再接続中」を、接続が消えたと読み違えない
+    ための入口。音声 WS の 1006 切断を discord.py が張り直している数秒は
+    is_connected() が False になるが、VoiceClient も受信スレッドも生きており、
+    繋がり直せば音は戻る。そこを「もう居ない」と判断して切断や停止に進むと、
+    戻ってくるはずの通話を自分で落とすことになる（本番で起きた）。
+    """
+    return _clients.get(guild_id)
+
+
 def channel_id(guild_id: int) -> int | None:
-    """現在接続中のVCチャンネルID。未接続なら None。"""
-    client = get(guild_id)
+    """現在接続中のVCチャンネルID。接続が無ければ None。
+
+    get() ではなく peek() を見るのは、再接続中でも「どの VC に居るか」は
+    変わらないため。ここで数秒だけ None になると、録音終了後の退出判定が
+    「読み上げの見張り先とは違う VC だ」と誤り、読み上げが使っている VC から
+    bot が出ていってしまう（→ recording_service._release_if_unused）。
+    """
+    client = peek(guild_id)
     return client.channel.id if client and client.channel else None
 
 
