@@ -640,15 +640,21 @@ function lookupTab(data) {
 
 /* ── ログ ───────────────────────────────────────────────── */
 
-/* ログの行から重大度を見て色を分ける。
-   形式は "2026-08-24 03:00:00 [ERROR] logger: 本文"。level が読めない行（例外の
-   スタックトレースなど）は、直前の行の色を引き継いで1つのまとまりに見せる。 */
+/* 重大度から色のクラスへ。JSONL では level がそのまま入っているが、JSONL が
+   まだ無いプロセス（旧いコンテナ、初回起動）ではテキストを正規表現で割るので
+   両方に要る。 */
 const LOG_LEVEL = /\b(CRITICAL|ERROR|WARNING|WARN|INFO|DEBUG)\b/;
 const LEVEL_CLASS = {
   CRITICAL: "is-error", ERROR: "is-error", WARNING: "is-warn", WARN: "is-warn",
   INFO: "", DEBUG: "is-debug",
 };
 
+const LOG_SOURCES = [["bot", "Bot"], ["admin", "管理画面"], ["web", "公開サイト"], ["cdn", "CDN"]];
+const LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"];
+
+/* テキストログ（JSONL が無いときの退避経路）の描画。
+   形式は "2026-08-24 03:00:00 [ERROR] [security] logger: 本文"。level が読めない行
+   （例外のスタックトレースなど）は、直前の行の色を引き継いで1つのまとまりに見せる。 */
 function renderLogLines(target, lines) {
   let carried = "";
   const nodes = lines.map((line) => {
@@ -659,7 +665,40 @@ function renderLogLines(target, lines) {
   clear(target).append(...nodes);
 }
 
+/* JSONL の描画。時刻・カテゴリ・本文を列に分けるので、テキストと違って
+   「直前の色を引き継ぐ」小細工が要らない（例外は同じ1件の中に入っている）。 */
+function renderLogRows(target, rows) {
+  const nodes = rows.map((row) => {
+    const body = row.exc ? `${row.message}\n${row.exc}` : row.message || "";
+    return el(
+      "div",
+      { class: `log-line log-row ${LEVEL_CLASS[row.level] ?? ""}`.trim() },
+      // 日付は捨てて時刻だけ出す。末尾を追いかける使い方では、同じ日付が
+      // 全行に並ぶだけで本文を押し出す。
+      el("span", { class: "log-time", text: String(row.time || "").slice(11, 23) }),
+      el("span", { class: "log-cat", text: row.category || "-", title: row.logger || "" }),
+      el("span", { class: "log-msg", text: body })
+    );
+  });
+  clear(target).append(...nodes);
+}
+
+/* カテゴリの選択肢を入れ替える。いま選んでいる値は、サーバーが返した一覧に
+   無くても残す——絞り込んだ結果その窓に1件も無いだけ、という状況で選択が
+   勝手に「すべて」へ戻ると、絞ったつもりのまま全件を見ることになる。 */
+function syncCategoryOptions(select, categories) {
+  const chosen = select.value;
+  const wanted = ["", ...categories, ...(chosen && !categories.includes(chosen) ? [chosen] : [])];
+  const current = Array.from(select.options).map((o) => o.value);
+  if (current.length === wanted.length && current.every((v, i) => v === wanted[i])) return;
+  clear(select).append(
+    ...wanted.map((value) => el("option", { value, text: value || "すべてのカテゴリ" }))
+  );
+  select.value = chosen;
+}
+
 const REFRESH_MS = 5000;
+const SEARCH_DEBOUNCE_MS = 400;
 
 /**
  * ログ表示。開いた時点で自動で読み込み、開いている間だけ一定間隔で追いかける。
@@ -667,8 +706,11 @@ const REFRESH_MS = 5000;
  */
 function logsTab(win) {
   const source = el("select", { class: "select" },
-                    el("option", { value: "bot", text: "bot.log" }),
-                    el("option", { value: "admin", text: "admin.log" }));
+                    ...LOG_SOURCES.map(([value, text]) => el("option", { value, text })));
+  const level = el("select", { class: "select" },
+                   ...LOG_LEVELS.map((value) => el("option", { value, text: value === "DEBUG" ? "すべて" : `${value} 以上` })));
+  const category = el("select", { class: "select" }, el("option", { value: "", text: "すべてのカテゴリ" }));
+  const search = el("input", { class: "input log-search", type: "search", placeholder: "本文を検索" });
   const lines = el("input", { class: "input", type: "number", value: "500", min: "10", max: "1000" });
   const follow = el("input", { type: "checkbox", checked: true });
   const output = el("pre", { class: "log-view", text: "読み込み中…" });
@@ -676,26 +718,51 @@ function logsTab(win) {
 
   let busy = false;
   let timer = null;
+  let searchTimer = null;
   // タブを開いた最初の1回が失敗すると、output は初期値の「読み込み中…」の
   // ままになる。status（小さな隅の文字）だけでは気づきにくく、いつまでも
   // 読み込み中に見えてしまうので、まだ一度も表示できていないときだけ
   // output 側にも失敗を出す（表示済みのログを定期更新の失敗で消しはしない）。
   let loaded = false;
 
+  /* 絞り込みの3つは JSONL があるときだけ意味がある。テキストへ倒れている
+     間は、押しても何も変わらない操作を出しておかない。 */
+  function setFilterEnabled(enabled) {
+    for (const control of [level, category, search]) control.disabled = !enabled;
+  }
+
+  function query() {
+    const params = new URLSearchParams({
+      source: source.value,
+      lines: String(lines.value || 500),
+      level: level.value,
+      category: category.value,
+      q: search.value.trim(),
+    });
+    return `${BASE}/logs?${params}`;
+  }
+
   async function load({ quiet = false } = {}) {
     if (busy) return;
     busy = true;
     try {
-      const result = await api.get(`${BASE}/logs?source=${source.value}&lines=${lines.value || 500}`);
+      const result = await api.get(query());
       // 読んでいる途中で下へ飛ばされると邪魔なので、いちばん下に居るときだけ追尾する
       const atBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 24;
-      if (result.lines.length) {
-        renderLogLines(output, result.lines);
+      setFilterEnabled(result.structured);
+      if (result.structured) {
+        syncCategoryOptions(category, result.categories || []);
+        if (result.rows.length) renderLogRows(output, result.rows);
+        else clear(output).append(el("div", { class: "log-line is-debug", text: "（条件に合う記録がありません）" }));
+        status.textContent =
+          `${result.rows.length} / ${result.matched} 件（${result.scanned} 行を走査${result.truncated ? "・上限まで" : ""}）` +
+          `・${new Date().toLocaleTimeString("ja-JP")} 更新`;
       } else {
-        clear(output).append(el("div", { class: "log-line is-debug", text: "（空です）" }));
+        if (result.lines.length) renderLogLines(output, result.lines);
+        else clear(output).append(el("div", { class: "log-line is-debug", text: "（空です）" }));
+        status.textContent = `${result.lines.length} 行・JSONL なし・${new Date().toLocaleTimeString("ja-JP")} 更新`;
       }
       if (atBottom) output.scrollTop = output.scrollHeight;
-      status.textContent = `${result.lines.length} 行・${new Date().toLocaleTimeString("ja-JP")} 更新`;
       loaded = true;
     } catch (error) {
       status.textContent = `読み込めません（${error.message}）`;
@@ -713,6 +780,9 @@ function logsTab(win) {
       "ログ",
       el("div", { class: "row log-toolbar" },
          source,
+         level,
+         category,
+         search,
          lines,
          el("label", { class: "check log-follow" }, follow, el("span", { class: "check-text", text: "自動更新" })),
          actionButton("再読み込み", "bi-arrow-clockwise", () => load().then(() => null)),
@@ -727,10 +797,19 @@ function logsTab(win) {
     if (!follow.checked || node.hidden || document.hidden || !node.isConnected) return;
     load({ quiet: true });
   }, REFRESH_MS);
-  win.addCleanup(() => window.clearInterval(timer));
+  win.addCleanup(() => {
+    window.clearInterval(timer);
+    window.clearTimeout(searchTimer);
+  });
 
-  source.addEventListener("change", () => load());
-  lines.addEventListener("change", () => load());
+  for (const control of [source, level, category, lines]) {
+    control.addEventListener("change", () => load());
+  }
+  // 1文字ごとに叩くと、20/minute のレート制限に自分で当たる。
+  search.addEventListener("input", () => {
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(() => load(), SEARCH_DEBOUNCE_MS);
+  });
 
   return { node, onShow: () => load({ quiet: true }) };
 }

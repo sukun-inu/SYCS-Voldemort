@@ -8,14 +8,18 @@ from commands.activity_log import install_command_activity_logging
 from commands.interaction_utils import install_global_app_command_error_handler
 from config import DISCORD_BOT_TOKEN
 from envutil import env_path
-from services.log_setup import LOG_FORMAT, install_file_logging
+from services.log_setup import install_console_logging, install_file_logging, install_structured_logging
 
-logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+# basicConfig ではなくこちらを使う。LOG_FORMAT は `%(category)s` を含み、
+# basicConfig が作る素の Formatter では KeyError になる。
+install_console_logging()
 
 # 素の os.getenv("SETTINGS_DIR", 既定値) は SETTINGS_DIR="" のとき Path("") =
 # カレントディレクトリになり、ログだけ data/ の外へ出ていた。envutil に揃える。
 _log_dir = env_path("SETTINGS_DIR", Path(__file__).resolve().parent / "data") / "logs"
 install_file_logging(_log_dir, "bot.log")
+# 端末から読むテキストと、管理画面が絞り込む JSONL の両方を書く。
+install_structured_logging(_log_dir, "bot.jsonl")
 
 
 async def main():

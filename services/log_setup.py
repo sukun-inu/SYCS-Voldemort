@@ -34,18 +34,24 @@ CDN と Web に至ってはファイルへ落としておらず、コンテナ�
 from __future__ import annotations
 
 import gzip
+import json
 import logging
 import os
 import shutil
 import sys
+from datetime import datetime
+from functools import lru_cache
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
+from typing import Any
 
 from envutil import env_int
 
 logger = logging.getLogger(__name__)
 
-LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+# `%(category)s` は CategoryFormatter が埋める。素の logging.Formatter へ
+# この書式を渡すと KeyError になるので、必ず install_* 越しに使うこと。
+LOG_FORMAT = "%(asctime)s [%(levelname)s] [%(category)s] %(name)s: %(message)s"
 
 # 10年。ユーザー状態の履歴（USER_STATE_RETENTION_DAYS）と同じ既定にしてある。
 DEFAULT_RETENTION_DAYS = 3650
@@ -89,12 +95,253 @@ def gzip_rotator(source: str, dest: str) -> None:
         )
 
 
-def install_file_logging(log_dir: Path, filename: str, *, level: int = logging.INFO) -> Path:
-    """root ロガーへ、日付で回すファイルハンドラを1つ足す。
+# ── ログの分類（イベントビューアーで言う「ソース」）────────────────
 
-    同じファイルへのハンドラが既にあれば足さない（uvicorn の reload や
-    テストでの再 import で二重に書き込まれるのを防ぐ）。戻り値は書き込む
-    ファイルのパスで、呼び出し側がログに出せるようにしてある。
+# ロガー名からカテゴリを引く表。**接頭辞は素の文字列一致で、長いものが勝つ。**
+#
+# 分類を各ファイルの手打ち接頭辞（`logger.info("[recording] ...")`）に頼ると、
+# 必ず揺れる。実際この時点で `[SECURITY]` と `[security]`、`[TTS]` と
+# `[tts_service]`、`[BOT]` と `[BOT_SETUP]` が混在していた。全ファイルが
+# `getLogger(__name__)` を使っているので、**モジュール名から引けば、
+# 呼び出し側は1行も書かなくてよい**（＝次に足すモジュールで書き忘れない）。
+#
+# 素の startswith にしてあるのは、このリポジトリのモジュール名が
+# `djaudio_service` / `djaudio_cache` のように接頭辞で系列を作っているため。
+# ドット境界で照合すると `services.djaudio` が1つも当たらず、5モジュールを
+# 個別に並べることになる。代わりに `services.djaudio_cdn` のような
+# 「系列の中の例外」は、長い方が勝つ規則で拾う。
+CATEGORY_RULES: tuple[tuple[str, str], ...] = (
+    # 音声
+    ("services.recording_service", "recording"),
+    ("commands.record", "recording"),
+    ("webapp_admin.api.recording", "recording"),
+    ("services.voice_session", "voice"),
+    ("services.voice_jitter", "voice"),
+    ("services.dave", "voice"),
+    ("events.voice", "voice"),
+    ("services.tts", "tts"),
+    ("commands.tts_commands", "tts"),
+    ("services.djaudio", "djaudio"),
+    ("commands.djaudio_commands", "djaudio"),
+    # 保護・監視。誤検知を追うときはこの1カテゴリだけ見れば済むようにまとめる。
+    ("services.security_service", "security"),
+    ("services.spam_detection", "security"),
+    ("services.raid_detection", "security"),
+    ("services.url_safety", "security"),
+    ("services.virustotal_service", "security"),
+    ("services.content_moderation", "security"),
+    # 通知・定期処理
+    ("services.earthquake_service", "earthquake"),
+    ("services.news_service", "news"),
+    ("services.welcome_service", "welcome"),
+    ("services.sticky_service", "sticky"),
+    ("services.reaction_role_service", "reactionrole"),
+    ("services.metal_service", "metal"),
+    ("commands.metal_commands", "metal"),
+    ("webapp.forecast", "metal"),
+    ("services.chatgpt_service", "ai"),
+    ("services.groq_client", "ai"),
+    # 状態
+    ("services.settings_store", "settings"),
+    ("services.user_state", "userstate"),
+    ("events.user_state_sync", "userstate"),
+    ("services.guild_retention", "userstate"),
+    ("services.logging_service", "auditlog"),
+    ("commands.logging_commands", "auditlog"),
+    # Bot の入口
+    ("main", "bot"),
+    ("bot_setup", "bot"),
+    ("events", "bot"),
+    ("commands", "command"),
+    ("discord", "discord"),
+    # HTTP を話すもの
+    ("webapp_admin.api.dev", "dev"),
+    ("services.dev_signals", "dev"),
+    ("services.dev_test_notify", "dev"),
+    ("webapp_admin.metrics", "metrics"),
+    ("webapp_admin.prometheus_view", "metrics"),
+    ("services.metrics_reporter", "metrics"),
+    ("services.metrics_registry", "metrics"),
+    ("webapp_admin", "admin"),
+    ("cdn_main", "cdn"),
+    ("services.djaudio_cdn", "cdn"),
+    ("webapp", "web"),
+    ("web_main", "web"),
+    ("admin_main", "admin"),
+    ("uvicorn", "http"),
+    ("aiohttp", "http"),
+    ("httpx", "http"),
+    ("httpcore", "http"),
+    ("slowapi", "http"),
+    ("starlette", "http"),
+    ("fastapi", "http"),
+    ("services.http_client", "http"),
+    # 土台
+    ("config", "system"),
+    ("envutil", "system"),
+    ("services.log_setup", "system"),
+    ("services.shared_cache", "system"),
+    ("services.ttl_cache", "system"),
+    ("services.discord_utils", "discord"),
+    ("alembic", "system"),
+    ("sqlalchemy", "system"),
+    ("asyncio", "system"),
+    ("apscheduler", "system"),
+    ("watchfiles", "system"),
+    ("redis", "system"),
+    ("PIL", "system"),
+    # `logging.info(...)` を直に呼んだ行。root ロガーなので name は "root" になる。
+    # 素通しにすると起動直後の数行だけが分類外に落ちて、目立つ場所で表が
+    # 効いていないように見える。
+    ("root", "system"),
+    ("yt_dlp", "djaudio"),
+    ("mutagen", "djaudio"),
+)
+
+# どの規則にも当たらなかったロガーの行き先。
+#
+# 機械的な導出（末尾の `_service` を落とす等）へ倒す手もあるが、そうすると
+# **分類し忘れたモジュールが「それらしいカテゴリ」を名乗って紛れ込む。**
+# 当たらないものは当たらないと分かる形にして、テスト側で拾う
+# （tests の LogCategoryTests がリポジトリ全体を走査している）。
+DEFAULT_CATEGORY = "other"
+
+# 長い接頭辞から順に並べ替えたもの。表の記載順に依存させないため、ここで1回だけ畳む。
+_SORTED_CATEGORY_RULES: tuple[tuple[str, str], ...] = tuple(
+    sorted(CATEGORY_RULES, key=lambda rule: len(rule[0]), reverse=True)
+)
+
+
+@lru_cache(maxsize=1024)
+def category_for(logger_name: str) -> str:
+    """ロガー名からカテゴリを引く。当たらなければ DEFAULT_CATEGORY。
+
+    ログ1行ごとに呼ばれるので lru_cache を掛けている。ロガー名は
+    モジュール名の集合＝有限（このリポジトリでは 66 個）なので、
+    キャッシュが際限なく育つことはない。
+    """
+    for prefix, category in _SORTED_CATEGORY_RULES:
+        if logger_name.startswith(prefix):
+            return category
+    return DEFAULT_CATEGORY
+
+
+class CategoryFormatter(logging.Formatter):
+    """`%(category)s` を埋めてから整形する、テキストログ用の整形器。
+
+    カテゴリを Filter で付けなかったのは、**Filter がハンドラの持ち物で、
+    親ロガーへ伝播した記録には掛からない**ため。root へ付けても、
+    `getLogger("services.foo")` から上がってきた記録は root のフィルタを
+    通らずに root のハンドラへ届く。つまり `%(category)s` を含む書式は
+    KeyError で落ちる。整形器側で埋めれば、この書式を使うハンドラでは
+    必ず値が入っている。
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        """record にカテゴリを載せてから、通常どおり整形する。"""
+        record.category = category_for(record.name)
+        return super().format(record)
+
+
+# JSON へ写さない LogRecord の属性。ここに無いものは「呼び出し側が extra= で
+# 足した項目」とみなして payload へ入れる（guild_id など）。
+_STANDARD_RECORD_KEYS = frozenset(
+    {
+        "args",
+        "asctime",
+        "category",
+        "created",
+        "exc_info",
+        "exc_text",
+        "filename",
+        "funcName",
+        "levelname",
+        "levelno",
+        "lineno",
+        "module",
+        "msecs",
+        "msg",
+        "name",
+        "pathname",
+        "process",
+        "processName",
+        "relativeCreated",
+        "stack_info",
+        "taskName",
+        "thread",
+        "threadName",
+        "message",
+    }
+)
+
+# extra で足した値のうち、1件あたりに許す文字数。長い本文をそのまま入れると
+# 1行が肥大して、管理画面が末尾N行を読むときの費用が跳ね上がる。
+_EXTRA_VALUE_MAX = 512
+
+
+class JsonlFormatter(logging.Formatter):
+    """1行1件の JSON（JSON Lines）へ整形する。管理画面が絞り込むための形。
+
+    テキストログと別に持つ理由は、**テキストを正規表現で割る方式が、本文に
+    改行が入った瞬間に崩れる**から。例外のスタックトレースは必ず改行を含むので、
+    「レベルで色を分ける」程度でも既に破綻していた（管理画面は直前の行の色を
+    引き継ぐ小細工でごまかしている）。カテゴリで絞る・期間で切る・本文を
+    検索する、のどれもが構造を要求するので、最初から構造で書き出す。
+
+    人が `tail -f` する先はテキストログのまま残す。片方だけにすると、
+    **障害のときに端末から素早く読む手段が無くなる。**
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        """1件を JSON 文字列にする。"""
+        payload: dict[str, Any] = {
+            # ローカル時刻＋オフセット付き。UTC 固定にすると、運用者が
+            # ログの時刻とチャットの時刻を頭の中で足し引きすることになる。
+            "time": datetime.fromtimestamp(record.created).astimezone().isoformat(timespec="milliseconds"),
+            "level": record.levelname,
+            "category": category_for(record.name),
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
+        elif record.exc_text:
+            payload["exc"] = record.exc_text
+        payload.update(_extra_fields(record))
+        # ensure_ascii=False は日本語をそのまま出すため。改行はここで \n へ
+        # 逃がされるので、1件が必ず1行に収まる（JSON Lines の前提）。
+        return json.dumps(payload, ensure_ascii=False)
+
+
+def _extra_fields(record: logging.LogRecord) -> dict[str, Any]:
+    """`extra=` で足された、JSON に載せられる値だけを取り出す。
+
+    載せる型を絞っているのは、**任意のオブジェクトを json.dumps へ渡すと
+    TypeError でログ自体が消える**ため。ログの都合で本体を止めないという
+    gzip_rotator と同じ方針で、載せられないものは黙って捨てる。
+    """
+    extras: dict[str, Any] = {}
+    for key, value in record.__dict__.items():
+        if key in _STANDARD_RECORD_KEYS or key.startswith("_"):
+            continue
+        if isinstance(value, str):
+            extras[key] = value[:_EXTRA_VALUE_MAX]
+        elif isinstance(value, (int, float, bool)) or value is None:
+            extras[key] = value
+    return extras
+
+
+def _install_rotating_handler(
+    log_dir: Path,
+    filename: str,
+    formatter: logging.Formatter,
+    level: int,
+) -> Path:
+    """root へ、日付で回すファイルハンドラを1つ足す。既にあれば足さない。
+
+    install_file_logging（テキスト）と install_structured_logging（JSONL）の
+    共通部分。回し方・畳み方・保管日数を1箇所に置いておかないと、**片方だけ
+    掃除が効かない**という、ディスクが埋まるまで気づけない壊れ方をする。
     """
     log_dir.mkdir(parents=True, exist_ok=True)
     path = log_dir / filename
@@ -115,10 +362,54 @@ def install_file_logging(log_dir: Path, filename: str, *, level: int = logging.I
     handler.suffix = "%Y-%m-%d"
     handler.namer = gzip_namer
     handler.rotator = gzip_rotator
-    handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    handler.setFormatter(formatter)
     handler.setLevel(level)
     root.addHandler(handler)
     return path
+
+
+def install_file_logging(log_dir: Path, filename: str, *, level: int = logging.INFO) -> Path:
+    """root ロガーへ、日付で回すテキストのファイルハンドラを1つ足す。
+
+    同じファイルへのハンドラが既にあれば足さない（uvicorn の reload や
+    テストでの再 import で二重に書き込まれるのを防ぐ）。戻り値は書き込む
+    ファイルのパスで、呼び出し側がログに出せるようにしてある。
+    """
+    return _install_rotating_handler(log_dir, filename, CategoryFormatter(LOG_FORMAT), level)
+
+
+def install_structured_logging(log_dir: Path, filename: str, *, level: int = logging.INFO) -> Path:
+    """root ロガーへ、日付で回す JSONL のファイルハンドラを1つ足す。
+
+    テキスト版と**両方**設置する前提。片方に寄せない理由は JsonlFormatter の
+    docstring に書いた（端末から読む手段と、画面から絞る手段の両方が要る）。
+
+    保管日数はテキスト版と同じ LOG_RETENTION_DAYS を見る。日数を別々にすると、
+    「テキストには残っているのに JSON には無い日」ができて、画面と端末で
+    見える範囲が食い違う。
+    """
+    return _install_rotating_handler(log_dir, filename, JsonlFormatter(), level)
+
+
+def install_console_logging(*, level: int = logging.INFO) -> None:
+    """標準エラーへの出力を、カテゴリ付きの書式で設置する。
+
+    `logging.basicConfig(format=LOG_FORMAT)` を置き換えるためのもの。
+    basicConfig は素の logging.Formatter を作るので、`%(category)s` を含む
+    LOG_FORMAT を渡すと **1行目のログで KeyError になり、そのプロセスの
+    コンソール出力が丸ごと死ぬ**（logging は整形の失敗を握りつぶして
+    標準エラーへ書くだけなので、例外にもならず静かに壊れる）。
+
+    既に同じ整形器のハンドラが root にあれば足さない。
+    """
+    root = logging.getLogger()
+    for existing in root.handlers:
+        if isinstance(existing, logging.StreamHandler) and isinstance(existing.formatter, CategoryFormatter):
+            return
+    handler = logging.StreamHandler()
+    handler.setFormatter(CategoryFormatter(LOG_FORMAT))
+    root.addHandler(handler)
+    root.setLevel(level)
 
 
 # 既定で信頼するプロキシの帯域。

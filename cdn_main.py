@@ -20,10 +20,17 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from envutil import env_int, env_path
-from services.log_setup import LOG_FORMAT, install_file_logging, trusted_proxies
+from services.log_setup import (
+    install_console_logging,
+    install_file_logging,
+    install_structured_logging,
+    trusted_proxies,
+)
 
-logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
-install_file_logging(env_path("SETTINGS_DIR", Path(__file__).resolve().parent / "data") / "logs", "cdn.log")
+install_console_logging()
+_log_dir = env_path("SETTINGS_DIR", Path(__file__).resolve().parent / "data") / "logs"
+install_file_logging(_log_dir, "cdn.log")
+install_structured_logging(_log_dir, "cdn.jsonl")
 
 logger = logging.getLogger(__name__)
 

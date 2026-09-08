@@ -5,10 +5,13 @@ from http import HTTPStatus
 from pathlib import Path
 
 from envutil import env_bool, env_float
-from services.log_setup import install_file_logging
+from services.log_setup import install_file_logging, install_structured_logging
 from webapp_admin.core.config import resolve_session_secret, settings_dir
 
 install_file_logging(settings_dir() / "logs", "admin.log")
+# コンソールは uvicorn が自前の書式で持っているので触らない。ファイル側だけ、
+# 端末用のテキストと画面用の JSONL を並べて置く。
+install_structured_logging(settings_dir() / "logs", "admin.jsonl")
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.staticfiles import StaticFiles

@@ -450,6 +450,30 @@
 .log-line.is-warn { color: var(--attention); }
 .log-line.is-debug { color: var(--fg-subtle); }
 
+/* JSONL の1件。時刻・カテゴリ・本文の3列。
+   grid にしてあるのは、本文が複数行（例外のスタックトレース）になっても
+   時刻とカテゴリの列が崩れないため。table だと1件が1行に潰れる。 */
+.log-row {
+  display: grid;
+  grid-template-columns: 6.5em 8.5em minmax(0, 1fr);
+  gap: 0 10px;
+  align-items: baseline;
+}
+.log-time { color: var(--fg-subtle); font-variant-numeric: tabular-nums; }
+/* カテゴリは幅を固定して、目で縦に追えるようにする。はみ出す長い名前は
+   省略する——折り返すと、その1件だけ行の高さが変わって走査しづらくなる。 */
+.log-cat {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent);
+}
+.log-row.is-error .log-cat { color: var(--danger); }
+.log-row.is-warn .log-cat { color: var(--attention); }
+.log-row.is-debug .log-cat { color: var(--fg-subtle); }
+/* 本文だけ折り返す。pre-wrap にしないと、例外の改行が消えて1行になる。 */
+.log-msg { white-space: pre-wrap; overflow-wrap: anywhere; }
+
 /* ── 窓いっぱいに広げる画面（開発者パネル） ───────────────────
    窓 → タブ → タブの中身 → ログ、と順に高さを渡す。どこか1つでも
    高さが決まらないと、ログは max-height の 320px のままになる。 */
@@ -471,6 +495,11 @@
 .log-toolbar { flex: none; flex-wrap: wrap; }
 .log-toolbar .select { width: auto; min-width: 120px; }
 .log-toolbar .input { width: 84px; }
+/* 検索だけは他の入力より広く取る。84px では語の途中までしか見えない。 */
+.log-toolbar .log-search { width: 180px; }
+/* 使えないあいだ（JSONL がまだ無いプロセス）は、押せないことを見て分かるように */
+.log-toolbar .select:disabled,
+.log-toolbar .input:disabled { opacity: 0.5; cursor: not-allowed; }
 .log-follow { align-items: center; flex: none; white-space: nowrap; }
 .log-follow input { margin: 0; }
 .log-status { font-variant-numeric: tabular-nums; white-space: nowrap; }

@@ -694,6 +694,197 @@ class LogRetentionTests(unittest.TestCase):
         self.assertEqual(len(mine), 1)
 
 
+class LogCategoryTests(unittest.TestCase):
+    """ログ1行ごとに「どの機能から出たか」が分かること。
+
+    以前は分類が各ファイルの手打ち接頭辞だけで、**同じ機能が別名で出ていた**
+    （`[SECURITY]` と `[security]`、`[TTS]` と `[tts_service]`、`[BOT]` と
+    `[BOT_SETUP]`）。カテゴリで絞る画面を作っても、片方しか引っかからない。
+
+    ここで固定するのは3つ。
+
+      - ロガー名（＝モジュール名）から機械的に引くこと。呼び出し側は書かない
+      - 長い接頭辞が勝つこと（`services.djaudio_cdn` は djaudio ではなく cdn）
+      - **リポジトリ内の全ロガーが、どれかのカテゴリに入ること**
+
+    3つ目が要。新しいモジュールを足したとき、分類表への追加を忘れると
+    そのモジュールのログだけ静かに `other` へ落ちる。カテゴリで絞って
+    見ている運用者からは、**そのログは存在しないのと同じになる。**
+    """
+
+    def setUp(self):
+        from services import log_setup
+
+        self.log_setup = log_setup
+
+    def test_the_category_comes_from_the_module_name(self):
+        """呼び出し側が何も書かなくても、モジュール名から分類されること。"""
+        self.assertEqual(self.log_setup.category_for("services.recording_service"), "recording")
+        self.assertEqual(self.log_setup.category_for("events.voice"), "voice")
+        self.assertEqual(self.log_setup.category_for("webapp_admin.app"), "admin")
+
+    def test_the_longest_prefix_wins(self):
+        """系列の中の例外を、長い接頭辞で拾えること。
+
+        `services.djaudio_cdn` は名前こそ djaudio 系列だが、動いている
+        プロセスは CDN。`services.djaudio` が先に当たると、**配信の障害を
+        DJAudio のカテゴリで探すことになる。**
+        """
+        self.assertEqual(self.log_setup.category_for("services.djaudio_service"), "djaudio")
+        self.assertEqual(self.log_setup.category_for("services.djaudio_cdn"), "cdn")
+
+    def test_an_unknown_logger_falls_to_other(self):
+        """表に無いロガーは other になること（それらしい名前を名乗らせない）。"""
+        self.assertEqual(self.log_setup.category_for("some.third.party"), self.log_setup.DEFAULT_CATEGORY)
+
+    def test_every_logger_in_the_repository_is_categorised(self):
+        """本体の全モジュールが分類表に載っていること。
+
+        載っていないと、そのモジュールのログはカテゴリで絞る画面から
+        消える。**「足したのに出てこない」は、原因を追うのがいちばん
+        難しい壊れ方**なので、ここで機械的に止める。
+
+        失敗したときは services/log_setup.py の CATEGORY_RULES へ足すこと。
+        """
+        root = Path(__file__).resolve().parent.parent
+        skip = {"tests", "tools", "migrations", "scripts", ".venv", "venv", "__pycache__"}
+        uncategorised = []
+        for path in root.rglob("*.py"):
+            parts = path.relative_to(root).with_suffix("").parts
+            if skip & set(parts):
+                continue
+            if "getLogger(__name__)" not in path.read_text(encoding="utf-8", errors="replace"):
+                continue
+            name = ".".join(part for part in parts if part != "__init__")
+            if self.log_setup.category_for(name) == self.log_setup.DEFAULT_CATEGORY:
+                uncategorised.append(name)
+        self.assertEqual(uncategorised, [], f"CATEGORY_RULES に無いモジュール: {uncategorised}")
+
+    def test_the_text_format_carries_the_category(self):
+        """テキストログの各行にカテゴリが入ること。
+
+        端末から grep でカテゴリを絞れるかどうかがここで決まる。整形器では
+        なく Filter で付けると、**親ロガーへ伝播した記録には掛からず**、
+        `%(category)s` が KeyError になって行ごと消える。
+        """
+        record = logging.LogRecord("services.tts_service", logging.INFO, "f.py", 1, "読み上げ開始", None, None)
+        formatted = self.log_setup.CategoryFormatter(self.log_setup.LOG_FORMAT).format(record)
+        self.assertIn("[tts]", formatted)
+        self.assertIn("読み上げ開始", formatted)
+
+
+class StructuredLogTests(unittest.TestCase):
+    """管理画面が絞り込むための JSONL を、テキストと並べて書くこと。
+
+    テキストを正規表現で割る方式は、**本文に改行が入った瞬間に崩れる。**
+    例外のスタックトレースは必ず改行を含むので、「レベルで色を分ける」
+    程度でも既に破綻していた。カテゴリで絞る・期間で切る・本文を検索する、
+    のどれもが構造を要求するため、最初から構造で書き出す。
+
+    固定するのは、
+
+      - 1件が必ず1行に収まること（例外を含んでいても）
+      - JSON にできない extra を捨てても、**ログ自体は消えないこと**
+      - テキストと JSONL の両方へ、同じ1件が届くこと
+      - 回し方・保管日数がテキストと同じであること
+    """
+
+    def setUp(self):
+        from services import log_setup
+
+        self.log_setup = log_setup
+        self.dir = Path(tempfile.mkdtemp(prefix="jsonl-test-"))
+        self._root_handlers = list(logging.getLogger().handlers)
+        self.writer = logging.getLogger("services.recording_service")
+        self.writer.setLevel(logging.INFO)
+        self.addCleanup(self.writer.setLevel, logging.NOTSET)
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        """テストで足したハンドラを外す。残すと以後のテストの出力が混ざる。"""
+        root = logging.getLogger()
+        for handler in list(root.handlers):
+            if handler not in self._root_handlers:
+                handler.close()
+                root.removeHandler(handler)
+
+    def _rows(self, filename="bot.jsonl"):
+        """書き出した JSONL を読んで、辞書の一覧にする。"""
+        text = (self.dir / filename).read_text(encoding="utf-8")
+        return [json.loads(line) for line in text.splitlines() if line]
+
+    def test_one_event_is_one_line_even_with_a_traceback(self):
+        """例外を含む1件が、改行で割れず1行に収まること。
+
+        ここが崩れると、管理画面は1件を複数件として数え、しかも**割れた
+        断片は JSON として読めないので捨てられる**——例外だけが一覧から
+        消えるという、いちばん困る形で壊れる。
+        """
+        self.log_setup.install_structured_logging(self.dir, "bot.jsonl")
+        try:
+            raise ValueError("書き出しに失敗")
+        except ValueError:
+            self.writer.exception("録音を畳めませんでした")
+
+        rows = self._rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["category"], "recording")
+        self.assertEqual(rows[0]["level"], "ERROR")
+        self.assertIn("ValueError: 書き出しに失敗", rows[0]["exc"])
+        self.assertIn("\n", rows[0]["exc"])
+
+    def test_extra_values_that_cannot_be_json_are_dropped_without_losing_the_line(self):
+        """JSON にできない extra があっても、その1件は書かれること。
+
+        任意のオブジェクトを json.dumps へ渡すと TypeError になり、logging は
+        それを握りつぶして標準エラーへ吐くだけ——**ログの行は消える。**
+        載せられない値だけ捨てて、記録そのものは残す。
+        """
+        self.log_setup.install_structured_logging(self.dir, "bot.jsonl")
+        self.writer.info("開始", extra={"guild_id": 42, "sink": object()})
+
+        rows = self._rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["guild_id"], 42)
+        self.assertNotIn("sink", rows[0])
+
+    def test_the_text_log_and_the_jsonl_get_the_same_event(self):
+        """端末から読むテキストと、画面が絞る JSONL の両方へ届くこと。
+
+        片方に寄せると、障害のときに端末から素早く読む手段か、カテゴリで
+        絞る手段のどちらかが無くなる。
+        """
+        self.log_setup.install_file_logging(self.dir, "bot.log")
+        self.log_setup.install_structured_logging(self.dir, "bot.jsonl")
+        self.writer.info("録音を開始しました")
+
+        self.assertIn("[recording]", (self.dir / "bot.log").read_text(encoding="utf-8"))
+        self.assertEqual(self._rows()[0]["message"], "録音を開始しました")
+
+    def test_the_jsonl_rolls_and_is_gzipped_like_the_text_log(self):
+        """JSONL もテキストと同じ条件で回り、畳まれること。
+
+        保管日数や畳み方を別々に持つと、**テキストには残っているのに JSON
+        には無い日**ができ、端末と画面で見える範囲が食い違う。
+        """
+        from logging.handlers import TimedRotatingFileHandler
+
+        with patch.dict(os.environ, {"LOG_RETENTION_DAYS": "30"}):
+            self.log_setup.install_structured_logging(self.dir, "bot.jsonl")
+        handler = [h for h in logging.getLogger().handlers if isinstance(h, TimedRotatingFileHandler)][-1]
+
+        self.assertEqual(handler.backupCount, 30)
+        self.writer.info("いちにち目")
+        handler.doRollover()
+        self.writer.info("ふつか目")
+        handler.flush()
+
+        packed = sorted(self.dir.glob("bot.jsonl.*.gz"))
+        self.assertEqual(len(packed), 1, sorted(p.name for p in self.dir.iterdir()))
+        self.assertIn("いちにち目", gzip.open(packed[0], "rt", encoding="utf-8").read())
+        self.assertEqual(self._rows()[0]["message"], "ふつか目")
+
+
 class NotifyAllGuildsTests(unittest.TestCase):
     """通知の組み立て順と、失敗の握り方を固定する。
 

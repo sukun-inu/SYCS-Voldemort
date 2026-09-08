@@ -45,7 +45,9 @@ precision = 2
 #     のテストを足して 75.12% になったので 73 へ
 #   → メトリクスと共有レート制限のテストを足して 75.45%、かつ Python を 3.13 へ
 #     揃えて版差が消えたので 74 へ（空ける理由は上記のとおり OS 差のみになった）
-fail_under = 74
+#   → ログの分類（services/log_setup.py）と開発者パネルの /logs へテストを
+#     足して 76.61% になったので 75 へ
+fail_under = 75
 
 [html]
 directory = htmlcov
