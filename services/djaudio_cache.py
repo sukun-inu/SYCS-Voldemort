@@ -185,6 +185,42 @@ async def cache_cleanup_loop(bot=None, interval: int = 60) -> None:
         await _cleanup_expired(bot)
 
 
+def _scan_expired(now: float) -> list[dict]:
+    """期限切れのメタ情報を集めて返す。**別スレッドから呼ぶ前提の同期関数。**
+
+    キャッシュ件数ぶん open + json.load するので、掃除の所要時間は件数に
+    比例する（実測: 1,000 件で 250ms、3,000 件で 795ms）。以前はこれを
+    イベントループ上で直に回していて、**60秒ごとに Bot 全体がその時間だけ
+    止まっていた**——音声が途切れ、コマンドの応答が遅れ、ハートビートまで
+    遅延する。件数に比例するので、使われるほど重くなる形でもあった。
+
+    壊れたメタは警告して飛ばす。1件の破損で掃除全体を止めると、期限切れが
+    延々と残り続ける。
+    """
+    expired: list[dict] = []
+    for meta_path in DJAUDIO_CACHE_DIR.glob("*.json"):
+        try:
+            with meta_path.open("r", encoding="utf-8") as f:
+                meta = json.load(f)
+            if now > meta.get("expires_at", 0):
+                # token が無いものはここで弾く。後段の _delete_entry へ
+                # 渡してから KeyError にすると、その回の掃除が丸ごと止まる。
+                expired.append({**meta, "token": meta["token"]})
+        except (json.JSONDecodeError, KeyError, OSError) as e:
+            logger.warning("掃除中にエラー %s: %s", meta_path, e)
+    return expired
+
+
+def _delete_entries(tokens: list[str]) -> None:
+    """複数トークンのファイルをまとめて消す。**別スレッドから呼ぶ前提。**
+
+    1件ずつ to_thread へ渡すと、100 件で 100 回スレッドを行き来する。
+    まとめて1回にする。
+    """
+    for token in tokens:
+        _delete_entry(token)
+
+
 async def _cleanup_expired(bot=None) -> None:
     """期限切れのキャッシュエントリを全部削除する。
 
@@ -192,33 +228,37 @@ async def _cleanup_expired(bot=None) -> None:
     リンク付き）も一緒に削除する。リンク切れのメッセージだけが残って
     誤クリックを招くのを防ぐための後始末で、メッセージ削除に失敗しても
     キャッシュ自体の削除は続ける。
+
+    ファイルを触る部分（走査・削除）は to_thread の向こうで動かす。
+    **ここを直に呼ぶとイベントループが件数ぶん止まる**（_scan_expired の
+    docstring 参照）。Discord のメッセージ削除だけは通信なので、こちら側で
+    await する。
     """
     now = datetime.now(timezone.utc).timestamp()
-    deleted = 0
-    for meta_path in DJAUDIO_CACHE_DIR.glob("*.json"):
+    expired = await asyncio.to_thread(_scan_expired, now)
+
+    for meta in expired:
+        if bot is None:
+            continue
+        channel_id = meta.get("discord_channel_id")
+        message_id = meta.get("discord_message_id")
+        if not (channel_id and message_id):
+            continue
         try:
-            with meta_path.open("r", encoding="utf-8") as f:
-                meta = json.load(f)
-            if now > meta.get("expires_at", 0):
-                if bot is not None:
-                    channel_id = meta.get("discord_channel_id")
-                    message_id = meta.get("discord_message_id")
-                    if channel_id and message_id:
-                        try:
-                            channel = bot.get_channel(int(channel_id))
-                            if channel:
-                                msg = await channel.fetch_message(int(message_id))
-                                await msg.delete()
-                                logger.info("Discord メッセージ削除: %s", message_id)
-                        except Exception as e:
-                            logger.warning("メッセージ削除失敗 %s: %s", message_id, e)
-                _delete_entry(meta["token"])
-                deleted += 1
-        except (json.JSONDecodeError, KeyError) as e:
-            logger.warning("掃除中にエラー %s: %s", meta_path, e)
-    if deleted:
-        logger.info("DJAudio 期限切れキャッシュ %s 件を削除", deleted)
-    _cleanup_orphaned_tmp_files(now)
+            channel = bot.get_channel(int(channel_id))
+            if channel:
+                msg = await channel.fetch_message(int(message_id))
+                await msg.delete()
+                logger.info("Discord メッセージ削除: %s", message_id)
+        except Exception as e:
+            logger.warning("メッセージ削除失敗 %s: %s", message_id, e)
+
+    if expired:
+        # メッセージ削除の成否に関わらず消す。残すとリンク切れの
+        # エントリがディスクに溜まり続ける（元の実装もそうしていた）。
+        await asyncio.to_thread(_delete_entries, [meta["token"] for meta in expired])
+        logger.info("DJAudio 期限切れキャッシュ %s 件を削除", len(expired))
+    await asyncio.to_thread(_cleanup_orphaned_tmp_files, now)
 
 
 # _write_meta_atomic() が tmp.replace() の前に落ちると *.tmp が残る。
