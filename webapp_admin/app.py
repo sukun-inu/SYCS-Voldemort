@@ -527,6 +527,17 @@ def _register_metrics_reporter(app: FastAPI) -> None:
     from services.metrics_reporter import report_forever
 
     @app.on_event("startup")
+    async def _start_loop_watchdog() -> None:
+        """イベントループの見張りを仕掛ける。
+
+        管理画面は既定 workers=1 なので、ここが詰まると**ヘルスチェックを
+        含む全 HTTP 応答が固まる。** どの処理で固まったかを残す。
+        """
+        from services import loop_watchdog
+
+        loop_watchdog.install()
+
+    @app.on_event("startup")
     async def _start_metrics_reporter() -> None:
         """報告ループを Task として動かし、app.state に控える。"""
         app.state.metrics_reporter_task = asyncio.create_task(

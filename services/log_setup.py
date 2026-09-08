@@ -180,6 +180,9 @@ CATEGORY_RULES: tuple[tuple[str, str], ...] = (
     ("config", "system"),
     ("envutil", "system"),
     ("services.log_setup", "system"),
+    # イベントループの停止だけは独立したカテゴリにする。他と混ぜると、
+    # いちばん探したいときに system の中から拾い出すことになる。
+    ("services.loop_watchdog", "stall"),
     ("services.shared_cache", "system"),
     ("services.ttl_cache", "system"),
     ("services.discord_utils", "discord"),

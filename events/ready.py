@@ -12,6 +12,7 @@ import logging
 
 from discord.ext.commands import Bot
 from envutil import env_bool
+from services import loop_watchdog
 from services.djaudio_cache import cache_cleanup_loop as djaudio_cache_cleanup
 from services.earthquake_service import run_earthquake_ws
 
@@ -50,6 +51,9 @@ def register(bot: Bot, state: EventState, loops: BackgroundLoops) -> None:
         監視・djaudioキャッシュ掃除だけを止める（ステータス更新と
         dev_signal_taskは常時起動）。
         """
+        # ループが動き出した後に仕掛ける（install は実行中のループを要る）。
+        # on_ready は再接続のたびに呼ばれるが、install 側が二重を弾く。
+        loop_watchdog.install()
         logger.info("[BOT] Logged in as %s", bot.user)
         synced = await bot.tree.sync()
         # 何を持って上がったのかを1行に出す。以前は "Logged in as X" だけで、

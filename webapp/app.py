@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 from config import METAL_COMMANDS
 from envutil import env_int
+from services import loop_watchdog
 from services.metrics_reporter import report_forever
 from services.url_safety import URLSafetyError, validate_public_http_url
 from .cache import TTLCache
@@ -894,6 +895,10 @@ async def lifespan(_: FastAPI):
     スケジューラを一切持たない。finally節はyield前の初期化失敗でも安全に
     通れるよう、scheduler/has_scheduler_lockのNoneチェックを先に行う。
     """
+    # ワーカーごとに1つ。advisory lock の内側へ入れないこと——lock を
+    # 取れなかったワーカーで詰まったときこそ、見えないと困る。
+    loop_watchdog.install()
+
     await init_db()
     refresh_vapid_config()
     scheduler: AsyncIOScheduler | None = None

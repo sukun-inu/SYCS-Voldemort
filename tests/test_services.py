@@ -23,6 +23,7 @@ import os
 import re
 import sys
 import tempfile
+import threading
 import time
 import unittest
 import zipfile
@@ -883,6 +884,143 @@ class StructuredLogTests(unittest.TestCase):
         self.assertEqual(len(packed), 1, sorted(p.name for p in self.dir.iterdir()))
         self.assertIn("いちにち目", gzip.open(packed[0], "rt", encoding="utf-8").read())
         self.assertEqual(self._rows()[0]["message"], "ふつか目")
+
+
+class LoopStallWatchdogTests(unittest.TestCase):
+    """イベントループが止まったとき、止めている場所が名指しで残ること。
+
+    「たまにえらく重い」は**再現しないので静的解析では追えない。** 実際、
+    配信キャッシュの掃除が 60 秒ごとにループを 600ms 止めていた件は、async
+    関数の本体を構文木で走査しても引っかからなかった（`for ...: path.open()`
+    という形で、「await の付いていない重い呼び出し」という分類に入らない）。
+    定期実行の中身を1つずつ読んで、ようやく見つかっている。
+
+    同じものが他にもある前提で、次に起きたときは本番が自分で名乗るようにする。
+    ここで固定するのは、
+
+      - 止まったことに気づき、**止めている関数名がスタックに出ること**
+      - 1回の停止で警告が1行だけ出ること（気づくたび書くとログが埋まる）
+      - 解けたときに、実際に何 ms 止まっていたかが出ること
+      - 環境変数で切れること
+      - 二重に仕掛からないこと（on_ready は再接続のたびに呼ばれる）
+    """
+
+    def setUp(self):
+        from services import loop_watchdog
+
+        self.wd = loop_watchdog
+        # 先に畳んでから始める。**見張りはモジュール変数で「もう仕掛かって
+        # いる」を覚えている**ので、別のテストファイルが on_ready を通すと
+        # （tests/test_events_handlers.py がそうする）ここでの install() が
+        # 何もせずに False を返し、単体では通るのに全体では落ちる。
+        self.wd.shutdown()
+        self.addCleanup(self.wd.shutdown)
+
+    def _run_with_stall(self, stall_sec, warn_ms="100", check_ms="20"):
+        """見張りを入れ、わざと stall_sec 秒止めて、出たログを返す。"""
+
+        async def scenario():
+            self.wd.install()
+            await asyncio.sleep(0.08)
+            self._the_blocking_call(stall_sec)
+            await asyncio.sleep(0.25)
+
+        with patch.dict(os.environ, {"LOOP_STALL_WARN_MS": warn_ms, "LOOP_STALL_CHECK_MS": check_ms}):
+            with self.assertLogs(self.wd.logger, level="INFO") as captured:
+                asyncio.run(scenario())
+        return captured.output
+
+    @staticmethod
+    def _the_blocking_call(seconds):
+        """イベントループを止める張本人。この名前がログに出てほしい。"""
+        time.sleep(seconds)
+
+    def test_it_names_the_function_that_is_blocking_the_loop(self):
+        """「遅い」ではなく「どの行で止まっているか」が出ること。
+
+        所要時間だけ出しても、**どこを直せばよいか分からない。** 停止中に
+        ループのスレッドのスタックを取れているかどうかがここで決まる。
+        """
+        output = self._run_with_stall(0.5)
+        stalls = [line for line in output if "止まっています" in line]
+
+        self.assertEqual(len(stalls), 1, output)
+        self.assertIn("_the_blocking_call", stalls[0])
+        self.assertIn("time.sleep(seconds)", stalls[0])
+
+    def test_one_stall_produces_one_warning(self):
+        """1回の停止で、警告が1行だけ出ること。
+
+        見張りは 20ms ごとに起きる。気づくたびに書くと 500ms の停止で
+        20行以上並び、**本当に知りたい最初の1行が埋もれる。**
+        """
+        output = self._run_with_stall(0.5)
+
+        self.assertEqual(len([line for line in output if "止まっています" in line]), 1, output)
+
+    def test_the_total_duration_is_reported_when_it_recovers(self):
+        """解けたときに、実際の停止時間が出ること。
+
+        最初の警告に出せるのは「しきい値を超えた時点までの時間」だけで、
+        **本当に何 ms 止まったかは解けるまで分からない。** 500ms 止めた
+        ものが 100ms と記録されると、影響の大きさを読み違える。
+        """
+        output = self._run_with_stall(0.5)
+        recovered = [line for line in output if "解けました" in line]
+
+        self.assertEqual(len(recovered), 1, output)
+        milliseconds = int(re.search(r"（約 (\d+) ms）", recovered[0]).group(1))
+        self.assertGreater(milliseconds, 300, recovered[0])
+
+    def test_it_can_be_switched_off(self):
+        """LOOP_STALL_WARN_MS=0 で仕掛からないこと。
+
+        停止が常態化している環境では警告がログを埋め尽くしうる。直すべきは
+        停止の方だが、直すまでのあいだログを読めなくすると**直すための情報
+        まで失う。**
+        """
+
+        async def scenario():
+            return self.wd.install()
+
+        with patch.dict(os.environ, {"LOOP_STALL_WARN_MS": "0"}):
+            self.assertFalse(asyncio.run(scenario()))
+
+    def test_installing_twice_does_not_add_a_second_watchdog(self):
+        """二重に仕掛からないこと。
+
+        on_ready は**再接続のたびに**呼ばれる。素通しにすると、切断が
+        起きるたびに見張りスレッドと心拍タスクが増えていく。
+        """
+        before = threading.active_count()
+
+        async def scenario():
+            first = self.wd.install()
+            second = self.wd.install()
+            return first, second
+
+        with patch.dict(os.environ, {"LOOP_STALL_WARN_MS": "100", "LOOP_STALL_CHECK_MS": "20"}):
+            first, second = asyncio.run(scenario())
+
+        self.assertTrue(first)
+        self.assertFalse(second)
+        self.assertLessEqual(threading.active_count() - before, 1)
+
+    def test_a_quiet_loop_produces_no_warning(self):
+        """止まっていないときは何も出さないこと。
+
+        誤検知が出ると、**本物の停止を見ても信じなくなる。**
+        """
+
+        async def scenario():
+            self.wd.install()
+            await asyncio.sleep(0.4)
+
+        with patch.dict(os.environ, {"LOOP_STALL_WARN_MS": "100", "LOOP_STALL_CHECK_MS": "20"}):
+            with self.assertLogs(self.wd.logger, level="INFO") as captured:
+                asyncio.run(scenario())
+
+        self.assertEqual([line for line in captured.output if "止まっています" in line], [], captured.output)
 
 
 class NotifyAllGuildsTests(unittest.TestCase):
