@@ -813,10 +813,20 @@ class DevApiTests(unittest.TestCase):
         self.assertEqual(self.dev.get("/admin/api/dev/user?user_id=abc").status_code, 400)
         self.assertEqual(self.dev.get("/admin/api/dev/channels?guild_id=abc").status_code, 400)
 
-    def test_logs_are_returned_as_lines(self):
+    def test_logs_come_back_in_one_of_the_two_shapes(self):
+        """本物のログディレクトリ相手でも、画面が読める形が返ること。
+
+        JSONL があるかどうかで返す形が変わる（rows / lines）。**どちらでも
+        画面が描けること**を実物で確かめる。個々の絞り込みは
+        DevLogsApiTests が一時ディレクトリで見ている。
+        """
         payload = self.dev.get("/admin/api/dev/logs?source=admin&lines=10").json()
         self.assertEqual(payload["source"], "admin")
-        self.assertIsInstance(payload["lines"], list)
+        if payload["structured"]:
+            self.assertIsInstance(payload["rows"], list)
+            self.assertIsInstance(payload["categories"], list)
+        else:
+            self.assertIsInstance(payload["lines"], list)
 
     def test_unknown_log_source_is_rejected(self):
         self.assertEqual(self.dev.get("/admin/api/dev/logs?source=secret").status_code, 422)
@@ -861,6 +871,156 @@ class DevApiTests(unittest.TestCase):
     def test_cache_delete_rejects_a_bad_token(self):
         response = self.dev.delete("/admin/api/dev/cache/..%2Fetc", headers=CSRF_HEADER)
         self.assertIn(response.status_code, (400, 404))
+
+
+class DevLogsApiTests(unittest.TestCase):
+    """ログをカテゴリ・レベル・本文で絞れること。
+
+    それまでの画面は bot.log / admin.log の末尾200行を生のまま流すだけで、
+    **web と cdn は管理画面から一切見えなかった**（`^(bot|admin)$` に
+    固定されていた）。加えてテキストを読む限り「録音だけ見たい」も
+    「ERROR 以上だけ見たい」もできず、目当ての行はスクロールで探すしかない。
+
+    ここで固定するのは、
+
+      - 4プロセスすべてを読めること。それ以外のパスは受け付けないこと
+      - レベルは「指定した以上」で通ること（ERROR を選んで CRITICAL が消えない）
+      - カテゴリの選択肢は、**絞り込む前の**一覧から作られること
+      - 壊れた行があっても、その1行を捨てて残りを返すこと
+      - JSONL がまだ無いプロセスでは、テキストへ倒れること
+    """
+
+    def setUp(self):
+        self.dev = make_client(user_id="4242")
+        self.dir = Path(tempfile.mkdtemp(prefix="devlogs-test-"))
+        patcher = patch("webapp_admin.api.dev._LOG_DIR", self.dir)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        from webapp_admin.extensions import limiter
+
+        limiter.reset()
+
+    def _write(self, name, rows):
+        """JSONL の中身を作る。rows に str をそのまま混ぜると、壊れた行になる。"""
+        lines = [row if isinstance(row, str) else json.dumps(row, ensure_ascii=False) for row in rows]
+        (self.dir / name).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def _sample(self):
+        """カテゴリとレベルが混ざった、絞り込みを試せる最小の一式。"""
+        return [
+            {
+                "time": "2026-09-08T10:00:00.000+09:00",
+                "level": "INFO",
+                "category": "recording",
+                "logger": "services.recording_service",
+                "message": "録音を開始しました",
+            },
+            {
+                "time": "2026-09-08T10:00:01.000+09:00",
+                "level": "WARNING",
+                "category": "tts",
+                "logger": "services.tts_service",
+                "message": "読み上げが詰まりました",
+            },
+            {
+                "time": "2026-09-08T10:00:02.000+09:00",
+                "level": "ERROR",
+                "category": "recording",
+                "logger": "services.recording_service",
+                "message": "書き出しに失敗",
+            },
+            {
+                "time": "2026-09-08T10:00:03.000+09:00",
+                "level": "CRITICAL",
+                "category": "security",
+                "logger": "services.security_service",
+                "message": "レイドを検知",
+            },
+        ]
+
+    def test_all_four_processes_can_be_read(self):
+        """bot 以外の3プロセスも読めること。
+
+        以前は web と cdn のログファイルは書かれていたのに、画面から
+        指定する口が無かった。**サーバーへ入らないと読めないログ**は、
+        管理画面がある意味が薄い。
+        """
+        for source in ("bot", "admin", "web", "cdn"):
+            self._write(f"{source}.jsonl", self._sample())
+            payload = self.dev.get(f"/admin/api/dev/logs?source={source}").json()
+            self.assertTrue(payload["structured"], source)
+            self.assertEqual(len(payload["rows"]), 4, source)
+
+    def test_an_unknown_source_is_rejected(self):
+        """source は4プロセスに固定。任意のパスを読み出せないこと。"""
+        self.assertEqual(self.dev.get("/admin/api/dev/logs?source=../settings").status_code, 422)
+
+    def test_the_level_filter_keeps_everything_above_it(self):
+        """ERROR を選んだとき、CRITICAL が消えないこと。
+
+        完全一致で絞ると、**いちばん見たいものが絞るほど見えなくなる。**
+        """
+        self._write("bot.jsonl", self._sample())
+        rows = self.dev.get("/admin/api/dev/logs?source=bot&level=ERROR").json()["rows"]
+        self.assertEqual([row["level"] for row in rows], ["ERROR", "CRITICAL"])
+
+    def test_the_category_filter_narrows_to_one_feature(self):
+        """カテゴリで1機能だけに絞れること。"""
+        self._write("bot.jsonl", self._sample())
+        rows = self.dev.get("/admin/api/dev/logs?source=bot&category=recording").json()["rows"]
+        self.assertEqual([row["message"] for row in rows], ["録音を開始しました", "書き出しに失敗"])
+
+    def test_the_search_matches_the_message_and_the_logger(self):
+        """本文でもロガー名でも引けること。"""
+        self._write("bot.jsonl", self._sample())
+        by_message = self.dev.get("/admin/api/dev/logs?source=bot&q=レイド").json()["rows"]
+        self.assertEqual([row["category"] for row in by_message], ["security"])
+        by_logger = self.dev.get("/admin/api/dev/logs?source=bot&q=tts_service").json()["rows"]
+        self.assertEqual([row["category"] for row in by_logger], ["tts"])
+
+    def test_the_category_list_is_taken_before_filtering(self):
+        """カテゴリの選択肢が、絞り込みで痩せないこと。
+
+        絞ったあとの集合を返すと、いちど `recording` を選んだ瞬間に
+        選択肢がそれ1つになり、**他のカテゴリへ移れなくなる。**
+        """
+        self._write("bot.jsonl", self._sample())
+        payload = self.dev.get("/admin/api/dev/logs?source=bot&category=recording").json()
+        self.assertEqual(payload["categories"], ["recording", "security", "tts"])
+
+    def test_a_broken_line_is_skipped_instead_of_failing_the_request(self):
+        """書き込み途中の半端な1行で、画面ごと落ちないこと。
+
+        ローテーション直後や書き込み中に読むと、必ず半端な行を掴む。
+        そこで 400 を返すと、**画面が数分おきに理由もなくエラーになる。**
+        """
+        rows = self._sample()
+        self._write("bot.jsonl", [rows[0], '{"level": "INFO", ', rows[1]])
+        payload = self.dev.get("/admin/api/dev/logs?source=bot").json()
+        self.assertEqual(payload["scanned"], 2)
+        self.assertEqual([row["category"] for row in payload["rows"]], ["recording", "tts"])
+
+    def test_it_falls_back_to_the_text_log_when_there_is_no_jsonl(self):
+        """JSONL がまだ無いプロセスでは、テキストを返すこと。
+
+        旧いコンテナがまだ動いている・初回起動でファイルが無い、という
+        状況で**黙って空を返すと「ログが出ていない」と誤読する。**
+        絞り込みは効かなくなるが、読めないよりは良い。
+        """
+        (self.dir / "bot.log").write_text("2026-09-08 10:00:00 [INFO] [bot] main: 起動\n", encoding="utf-8")
+        payload = self.dev.get("/admin/api/dev/logs?source=bot").json()
+        self.assertFalse(payload["structured"])
+        self.assertEqual(payload["categories"], [])
+        self.assertIn("起動", payload["lines"][0])
+
+    def test_only_the_last_n_rows_come_back(self):
+        """lines で指定した件数までに切って返すこと（末尾優先）。"""
+        self._write("bot.jsonl", self._sample() * 10)
+        payload = self.dev.get("/admin/api/dev/logs?source=bot&lines=10").json()
+        self.assertEqual(payload["matched"], 40)
+        self.assertEqual(len(payload["rows"]), 10)
+        self.assertEqual(payload["rows"][-1]["category"], "security")
 
 
 class ExternalFailureTests(unittest.TestCase):

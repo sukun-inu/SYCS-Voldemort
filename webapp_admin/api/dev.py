@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import re
+from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
@@ -727,17 +728,124 @@ async def user_lookup(request: Request, user_id: str = Query(...), _=Depends(che
     )
 
 
+# 絞り込みのために遡って読む行数の上限。
+#
+# カテゴリやレベルで絞ると、返す 200 行を埋めるのに何千行も遡ることがある
+# （`recording` だけ見たい、というのが典型）。かといって無制限に遡らせると、
+# 10年ぶんのログを持つ本番で1リクエストがファイル全体を読む。**天井を置いて、
+# 届かなかったことを画面へ返す**（truncated）のが、黙って途中で切るより良い。
+_LOG_SCAN_LIMIT = 20000
+
+# 重大度の並び。指定したレベル「以上」を通す（イベントビューアーと同じ考え方）。
+_LOG_LEVEL_ORDER: dict[str, int] = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}
+
+
+def _tail_lines(path: Path, limit: int) -> list[str]:
+    """ファイルの末尾N行を返す。読めなければ空リスト。
+
+    _tail_file と同じく全文を読んでから末尾を切る。deque(maxlen=) にして
+    あるのは、20000 行を切り出すために 10年ぶんのリストを一度メモリへ
+    載せないため（readlines()[-N:] は全行を保持する）。
+    """
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as f:
+            return [line.rstrip("\n") for line in deque(f, maxlen=limit)]
+    except OSError:
+        return []
+
+
+def _parse_log_rows(raw: list[str]) -> list[dict[str, Any]]:
+    """JSONL の各行を辞書へ直す。壊れた行は捨てる。
+
+    捨ててよい理由は、**壊れる行が「今まさに書かれている途中の最終行」に
+    ほぼ限られる**ため。ローテーション直後や、書き込みの途中で読みに行くと
+    半端な1行を掴む。そこで 400 を返すと、画面が数分おきに理由もなく
+    エラーになる。
+    """
+    rows: list[dict[str, Any]] = []
+    for line in raw:
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
+    return rows
+
+
+def _log_row_matches(row: dict[str, Any], min_level: int, category: str, needle: str) -> bool:
+    """1件が絞り込み条件に合うか。
+
+    レベルは「指定した重大度以上」で通す。完全一致にすると、ERROR を選んだ
+    ときに CRITICAL が消える——**いちばん見たいものが、絞り込むほど
+    見えなくなる。**
+    """
+    if _LOG_LEVEL_ORDER.get(str(row.get("level", "")), 0) < min_level:
+        return False
+    if category and row.get("category") != category:
+        return False
+    if needle and needle not in f"{row.get('message', '')}\n{row.get('logger', '')}\n{row.get('exc', '')}".lower():
+        return False
+    return True
+
+
 @router.get("/logs")
 @limiter.limit("20/minute")
 async def logs(
     request: Request,
     _=Depends(check_dev),
-    source: str = Query("bot", pattern="^(bot|admin)$"),
+    source: str = Query("bot", pattern="^(bot|admin|web|cdn)$"),
     lines: int = Query(200, ge=10, le=1000),
+    level: str = Query("DEBUG", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$"),
+    category: str = Query("", max_length=32, pattern="^[a-z_]*$"),
+    q: str = Query("", max_length=200),
 ):
-    """bot.log / admin.log の末尾を返す。source は正規表現パターンで bot/admin のみに固定（任意パス読み出しを防ぐ）。"""
-    path = _LOG_DIR / f"{source}.log"
-    return JSONResponse({"source": source, "path": str(path), "lines": _tail_file(path, lines)})
+    """各プロセスのログ末尾を返す。JSONL があればカテゴリ・レベル・本文で絞る。
+
+    source は正規表現で 4 プロセスに固定してある（任意パス読み出しを防ぐ）。
+    category も `[a-z_]*` に縛る——値はそのまま比較に使うだけでパスには
+    入らないが、ここを開けておく理由が無い。
+
+    JSONL がまだ無いプロセス（旧バージョンのまま動いているコンテナ、
+    ローテーション前の初回起動）では、**黙って空を返さずテキストへ倒す。**
+    絞り込みは効かなくなるが、ログが読めなくなるよりは良い。
+    """
+    jsonl = _LOG_DIR / f"{source}.jsonl"
+    if not jsonl.exists():
+        path = _LOG_DIR / f"{source}.log"
+        return JSONResponse(
+            {
+                "source": source,
+                "path": str(path),
+                "structured": False,
+                "categories": [],
+                "lines": _tail_file(path, lines),
+            }
+        )
+
+    raw = _tail_lines(jsonl, _LOG_SCAN_LIMIT)
+    rows = _parse_log_rows(raw)
+    # 絞り込む前の全カテゴリを返す。絞ったあとの集合を返すと、いちど
+    # `recording` を選んだ瞬間に選択肢がそれ1つになり、他へ移れなくなる。
+    categories = sorted({str(row.get("category", "")) for row in rows if row.get("category")})
+    min_level = _LOG_LEVEL_ORDER[level]
+    needle = q.strip().lower()
+    matched = [row for row in rows if _log_row_matches(row, min_level, category, needle)]
+    return JSONResponse(
+        {
+            "source": source,
+            "path": str(jsonl),
+            "structured": True,
+            "categories": categories,
+            "scanned": len(rows),
+            "matched": len(matched),
+            # 天井まで読んだということは、その先にまだ古い記録がある。
+            "truncated": len(raw) >= _LOG_SCAN_LIMIT,
+            "rows": matched[-lines:],
+        }
+    )
 
 
 # ── ギルド設定の書き出し / 取り込み ─────────────────────────
