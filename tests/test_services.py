@@ -2180,6 +2180,144 @@ class DjaudioCacheAtomicWriteTests(unittest.TestCase):
         fresh_tmp.unlink()
 
 
+class DjaudioCacheSweepOffloadTests(unittest.TestCase):
+    """配信キャッシュの掃除が、イベントループの上で行われていないこと。
+
+    _cleanup_expired は 60 秒ごとに回る。以前はキャッシュ件数ぶんの
+    `open()` + `json.load()` をイベントループ上で直に回していて、**Bot 全体が
+    その時間だけ止まっていた。** 実測（Windows / Python 3.13）:
+
+        件数    掃除の所要   他タスクの最大遅延
+         100     16.6 ms         14.9 ms
+        1000    250.5 ms        164.1 ms
+        3000    795.5 ms        624.1 ms
+
+    音声が途切れ、コマンドの応答が遅れ、ハートビートまで遅延する。しかも
+    **件数に比例する**ので、使われるほど重くなる。1分に1回きっかり起きる
+    ので「たまにえらく重い」という形で出る——起動時ではないため、
+    起動の計測をいくらしても見つからなかった。
+
+    通信（Discord のメッセージ削除）はループ側で await する。そちらを
+    スレッドへ送っても速くならないうえ、discord.py のオブジェクトを
+    別スレッドから触ることになる。
+    """
+
+    ROOT = Path(__file__).resolve().parent.parent
+    OFFLOADED = {"_scan_expired", "_delete_entries", "_cleanup_orphaned_tmp_files"}
+
+    def setUp(self):
+        import services.djaudio_cache as djaudio_cache
+
+        self.dc = djaudio_cache
+
+    def test_the_filesystem_work_is_only_reachable_through_to_thread(self):
+        """走査・削除・一時ファイル掃除が、直呼びされていないこと。
+
+        直呼びは見た目では気付けない（普通の関数呼び出しにしか見えない）
+        ので、構文木から機械的に見る。**元の実装はまさにこの形で、
+        レビューを何度も通っていた。**
+        """
+        tree = ast.parse((self.ROOT / "services/djaudio_cache.py").read_text(encoding="utf-8"))
+        target = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.AsyncFunctionDef) and node.name == "_cleanup_expired"
+        )
+
+        offloaded, direct = set(), []
+        for call in ast.walk(target):
+            if not isinstance(call, ast.Call):
+                continue
+            name = call.func.attr if isinstance(call.func, ast.Attribute) else getattr(call.func, "id", "")
+            if name == "to_thread":
+                offloaded.update(arg.id for arg in call.args if isinstance(arg, ast.Name) and arg.id in self.OFFLOADED)
+            elif name in self.OFFLOADED:
+                direct.append((call.lineno, name))
+
+        self.assertEqual(direct, [], f"イベントループ上で直に呼んでいる: {direct}")
+        self.assertEqual(offloaded, self.OFFLOADED, f"to_thread へ渡されていない: {self.OFFLOADED - offloaded}")
+
+    def test_other_tasks_keep_running_while_the_sweep_is_slow(self):
+        """掃除が遅いときでも、他のコルーチンが動き続けること。
+
+        実ファイルの速さに依存させないため、走査を「同期で 0.3 秒かかる
+        もの」に差し替えて測る。ループ上で走っていれば、その間 ticker は
+        1回も進めない。
+        """
+        ticks = []
+
+        def slow_scan(now):
+            """0.3 秒かかる走査のふり。"""
+            time.sleep(0.3)
+            return []
+
+        async def scenario():
+            """掃除と ticker を同時に走らせる。"""
+
+            async def ticker():
+                while True:
+                    await asyncio.sleep(0.01)
+                    ticks.append(1)
+
+            task = asyncio.create_task(ticker())
+            await self.dc._cleanup_expired(None)
+            task.cancel()
+
+        with patch.object(self.dc, "_scan_expired", slow_scan):
+            asyncio.run(scenario())
+
+        # 0.3 秒あれば 10ms 間隔で 20 回以上は進めるはず。ループが止まって
+        # いれば 0 回になる。速さではなく「進めたかどうか」を見る。
+        self.assertGreater(len(ticks), 5, "掃除の間、他のコルーチンが1つも進めていない")
+
+    def test_an_expired_entry_and_its_discord_message_are_both_removed(self):
+        """期限切れの実体・メタ・返信メッセージが揃って消えること。
+
+        ファイル削除をスレッドへ移した際に、削除そのものを落としていないか
+        を見る（速くなっても消えなくなっては意味がない）。
+        """
+        src_dir = Path(tempfile.mkdtemp(prefix="djaudio-sweep-"))
+        src = src_dir / "x.mp3"
+        src.write_bytes(b"fake-mp3-bytes")
+        token = self.dc.register_file(src, "http://example.com/x", "タイトル", 999, ttl=-1)
+        self.dc.update_discord_message(token, 111, 222)
+
+        message = Mock()
+        message.delete = AsyncMock()
+        channel = Mock()
+        channel.fetch_message = AsyncMock(return_value=message)
+        bot = Mock()
+        bot.get_channel = Mock(return_value=channel)
+
+        asyncio.run(self.dc._cleanup_expired(bot))
+
+        message.delete.assert_awaited_once()
+        # get_meta() では確かめられない。**あれは期限切れを見た時点で自分でも
+        # _delete_entry を呼ぶ**ので、掃除が何もしていなくても None を返し、
+        # ついでにファイルまで消してしまう（最初この形で書いて、削除を
+        # 丸ごと落とす変異を素通しした）。実ファイルだけを見る。
+        self.assertEqual(list(self.dc.DJAUDIO_CACHE_DIR.glob(f"{token}.*")), [])
+
+    def test_one_broken_metadata_file_does_not_stop_the_sweep(self):
+        """壊れたメタが1件あっても、他の期限切れは消えること。
+
+        走査を分離したときに例外の握り方を変えると、**1件の破損で掃除が
+        丸ごと止まり、期限切れが延々と残る。**
+        """
+        (self.dc.DJAUDIO_CACHE_DIR / "broken.json").write_text("{壊れている", encoding="utf-8")
+        src_dir = Path(tempfile.mkdtemp(prefix="djaudio-sweep2-"))
+        src = src_dir / "y.mp3"
+        src.write_bytes(b"fake")
+        token = self.dc.register_file(src, "http://example.com/y", "タイトル", 999, ttl=-1)
+
+        with self.assertLogs(self.dc.logger, level="WARNING"):
+            asyncio.run(self.dc._cleanup_expired(None))
+
+        # ここも get_meta ではなく実ファイルで見る（上のテストの理由と同じ）
+        self.assertEqual(list(self.dc.DJAUDIO_CACHE_DIR.glob(f"{token}.*")), [])
+        (self.dc.DJAUDIO_CACHE_DIR / "broken.json").unlink(missing_ok=True)
+
+
 class DjaudioSiteDetectionTests(unittest.TestCase):
     def setUp(self):
         import services.djaudio_site_detection as sd
