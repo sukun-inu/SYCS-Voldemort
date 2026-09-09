@@ -7,6 +7,8 @@ DB を必要とするユーザー状態監査は services 層を差し替えて�
 標準ライブラリの unittest だけで動く。pytest からも実行できる。
 """
 
+import ast
+import zipfile
 import base64
 import json
 import os
@@ -1686,6 +1688,150 @@ class RecordingClipTests(unittest.TestCase):
         self.assertEqual(client.get(f"{base}?start=0&length=0").status_code, 400)
         self.assertEqual(client.get(f"{base}?start=0&length=999").status_code, 400)
         self.assertEqual(client.get(f"/dlaudio/files/111/{self.token}/segment?start=0&length=1").status_code, 403)
+
+
+class CdnOffloadTests(unittest.TestCase):
+    """CDN の重い処理が、イベントループの上で行われていないこと。
+
+    このプロセスは録音ミキサーの配信を1人で受ける。ここが詰まると、**同じ
+    ワーカーが受けている他のリクエスト（配信・ヘルスチェック含む）まで
+    巻き添えで固まる。** 実測（Windows / Python 3.13）:
+
+        切り出しZIPの圧縮   8トラック×60分   20,100 ms
+        索引の JSON+gzip    2時間×5トラック      107 ms
+        無圧縮判定          32トラック            25 ms
+
+    1つ目が桁違い。しかも**24倍の時間をかけてファイルは大きくなっていた**
+    ——mp3 は既に圧縮済みなので deflate が効かず、ZIP のヘッダぶん増える
+    （STORED 99ms/45.78MB に対し DEFLATED 2,347ms/45.79MB）。本体の録音
+    アーカイブは最初から無圧縮で入れていた（recording_service._write_archive）
+    ので、切り出しだけが揃っていなかった。
+
+    ffmpeg の呼び出し（_clip_stem）だけは元から to_thread へ逃がしてあった。
+    **逃がした先から戻ってきた音声を、この場で圧縮していた**ので、逃がした
+    意味が半分無くなっていた。
+    """
+
+    ROOT = Path(__file__).resolve().parent.parent
+
+    def _async_body(self, name):
+        """djaudio_cdn.py の async 関数を1つ、構文木で取り出す。"""
+        tree = ast.parse((self.ROOT / "services/djaudio_cdn.py").read_text(encoding="utf-8"))
+        return next(node for node in ast.walk(tree) if isinstance(node, ast.AsyncFunctionDef) and node.name == name)
+
+    def _direct_calls(self, node):
+        """その関数が、await も to_thread も通さずに直接呼んでいる名前。"""
+        awaited, offloaded, called = set(), set(), []
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Await) and isinstance(inner.value, ast.Call):
+                awaited.add(id(inner.value))
+            if isinstance(inner, ast.AsyncWith):
+                for item in inner.items:
+                    if isinstance(item.context_expr, ast.Call):
+                        awaited.add(id(item.context_expr))
+        for inner in ast.walk(node):
+            if not isinstance(inner, ast.Call):
+                continue
+            name = inner.func.attr if isinstance(inner.func, ast.Attribute) else getattr(inner.func, "id", "")
+            if name == "to_thread":
+                # 逃がした「関数」は第1引数だけ。残りはその関数へ渡す値なので、
+                # 全部を集めると zip_path や index まで「逃がした」ことになる。
+                if inner.args and isinstance(inner.args[0], ast.Name):
+                    offloaded.add(inner.args[0].id)
+                continue
+            if id(inner) not in awaited:
+                called.append(name)
+        return set(called), offloaded
+
+    def test_the_clip_zip_is_built_off_the_event_loop(self):
+        """切り出し ZIP の組み立てが、丸ごとスレッド側であること。
+
+        以前は ffmpeg だけを逃がし、`archive.writestr` はこの場で呼んでいた。
+        **20 秒ワーカーが固まる。**
+        """
+        called, offloaded = self._direct_calls(self._async_body("recording_clip"))
+
+        self.assertNotIn("writestr", called)
+        self.assertNotIn("ZipFile", called)
+        self.assertNotIn("_clip_stem", called)
+        self.assertIn("_build_clip_zip", offloaded)
+
+    def test_the_mixer_manifest_is_built_off_the_event_loop(self):
+        """索引づくり（ZIP を何度も開く）がスレッド側であること。"""
+        called, offloaded = self._direct_calls(self._async_body("recording_manifest"))
+
+        self.assertNotIn("_read_manifest", called)
+        self.assertNotIn("_stored_member_range", called)
+        self.assertIn("_mixer_manifest", offloaded)
+
+    def test_the_json_encoding_and_gzip_are_off_the_event_loop(self):
+        """索引の JSON 化と gzip がスレッド側であること。
+
+        2時間×5トラックで実測 107ms。ミキサーを開くたびに掛かる。
+        """
+        called, offloaded = self._direct_calls(self._async_body("_json_maybe_gzipped"))
+
+        self.assertNotIn("compress", called)
+        self.assertNotIn("dumps", called)
+        self.assertIn("_encode_json", offloaded)
+
+    def test_the_stem_archive_reads_are_off_the_event_loop(self):
+        """トラック配信の ZIP 読みがスレッド側であること。
+
+        圧縮された古いアーカイブでは**1本まるごと読んで展開する。**
+        """
+        called, offloaded = self._direct_calls(self._async_body("recording_stem"))
+
+        self.assertNotIn("_read_manifest", called)
+        self.assertNotIn("_stored_member_range", called)
+        self.assertNotIn("ZipFile", called)
+        self.assertEqual(offloaded, {"_stem_source", "_read_member"})
+
+    def test_mp3_members_of_a_clip_are_stored_uncompressed(self):
+        """切り出し ZIP の mp3 が、無圧縮で入っていること。
+
+        deflate は mp3 に効かない。**24倍の時間をかけて、ファイルは
+        大きくなる。** 本体のアーカイブと揃えて無圧縮にする。無圧縮なら
+        ついでに、切り出した ZIP も範囲指定で直接読めるようになる。
+        """
+        from services import djaudio_cdn as cdn
+
+        work = Path(tempfile.mkdtemp(prefix="clip-store-"))
+        source = work / "rec.zip"
+        with zipfile.ZipFile(source, "w", compression=zipfile.ZIP_STORED) as z:
+            z.writestr("00_a.mp3", b"\xff\xfb" + os.urandom(4096))
+        stems = [{"index": 0, "file": "00_a.mp3"}]
+        out = work / "clip.zip"
+
+        # ffmpeg を呼ばずに、切り出しの結果だけ差し替える
+        with patch.object(cdn, "_clip_stem", lambda *a, **k: b"\xff\xfb" + os.urandom(2048)):
+            written = cdn._build_clip_zip(source, out, stems, 0.0, 1.0, 1.0, {"channel_name": "会議"})
+
+        self.assertEqual(written, 1)
+        with zipfile.ZipFile(out) as archive:
+            self.assertEqual(archive.getinfo("00_a.mp3").compress_type, zipfile.ZIP_STORED)
+            # 説明文は素のテキストなので、こちらは縮めてよい
+            self.assertEqual(archive.getinfo("info.txt").compress_type, zipfile.ZIP_DEFLATED)
+
+    def test_a_clip_with_no_usable_track_reports_failure(self):
+        """1本も切り出せなかったら 0 を返すこと。
+
+        呼び出し側はこの 0 を見て 500 を返す。**ここで 1 以上を返すと、
+        中身が info.txt しか入っていない ZIP が「成功」として落ちてくる。**
+        """
+        from services import djaudio_cdn as cdn
+
+        work = Path(tempfile.mkdtemp(prefix="clip-empty-"))
+        source = work / "rec.zip"
+        with zipfile.ZipFile(source, "w") as z:
+            z.writestr("00_a.mp3", b"x")
+
+        with patch.object(cdn, "_clip_stem", lambda *a, **k: None):
+            written = cdn._build_clip_zip(
+                source, work / "clip.zip", [{"index": 0, "file": "00_a.mp3"}], 0.0, 1.0, 1.0, {}
+            )
+
+        self.assertEqual(written, 0)
 
 
 class TextContrastTests(unittest.TestCase):

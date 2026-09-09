@@ -1023,6 +1023,114 @@ class LoopStallWatchdogTests(unittest.TestCase):
         self.assertEqual([line for line in captured.output if "止まっています" in line], [], captured.output)
 
 
+class EarthquakeTileDecodeTests(unittest.TestCase):
+    """地図タイルの復号が、イベントループの上で行われていないこと。
+
+    地図の合成（塗り替え・描画・PNG 保存）は最初からスレッドへ逃がしてあった
+    のに、**タイルの復号だけが取得側に残っていた。** `Image.open` 自体は
+    ヘッダを読むだけだが、続く `convert("L")` が全画素を復号する。1枚 0.40ms、
+    1枚の地図は 6x4 = 24 枚で 8.2ms。しかも並行取得した全枚数ぶんが、
+    **緊急地震速報を全ギルドへ配信しようとしているまさにその瞬間**に固まって
+    走る。余震が続けば短時間に何度も起きる。
+
+    復号を _paste_tiles（既にスレッドの向こう側）へ移した。
+
+    ここで固定するのは、
+
+      - 取得側が復号しないこと（バイト列のまま返す）
+      - 貼る側がバイト列を復号して、**実際に地図へ反映すること**
+      - 壊れた1枚で地図ごと落ちないこと
+
+    2つ目が要。取り違えて全枚数を捨てるようにしても、**地図は海色のまま
+    出来上がるので例外は出ない。** 既存の地図テストはタイル無し（[None]）で
+    描いているため、全部通ってしまう。
+    """
+
+    def setUp(self):
+        import services.earthquake_service as eq
+
+        self.eq = eq
+
+    def _tile_png(self, line_value=0):
+        """白地図タイル相当（白い面に黒い線）の PNG バイト列。"""
+        from PIL import Image
+
+        tile = Image.new("L", (self.eq._TILE_SZ, self.eq._TILE_SZ), 255)
+        for i in range(self.eq._TILE_SZ):
+            tile.putpixel((0, i), line_value)
+        buf = io.BytesIO()
+        tile.convert("RGB").save(buf, format="PNG")
+        return buf.getvalue()
+
+    def test_the_fetcher_does_not_decode(self):
+        """取得側が Image を作らないこと。
+
+        構文木で見る。ここに `convert` が戻ると、**戻ったこと自体は何も
+        壊さない**（型が違うだけで _paste_tiles が黙って捨てる）ので、
+        地図が海色になるまで誰も気づかない。
+        """
+        root = Path(__file__).resolve().parent.parent
+        tree = ast.parse((root / "services/earthquake_service.py").read_text(encoding="utf-8"))
+        fetch = next(
+            node for node in ast.walk(tree) if isinstance(node, ast.AsyncFunctionDef) and node.name == "_fetch_tile"
+        )
+        names = {
+            inner.func.attr if isinstance(inner.func, ast.Attribute) else getattr(inner.func, "id", "")
+            for inner in ast.walk(fetch)
+            if isinstance(inner, ast.Call)
+        }
+
+        self.assertNotIn("convert", names)
+        self.assertNotIn("open", names)
+
+    def test_the_paster_decodes_the_bytes_and_paints_them(self):
+        """貼る側がバイト列を復号し、地図に反映すること。
+
+        海色のままでないこと＝タイルが本当に貼られたこと。
+        """
+        raw = self._tile_png()
+        image = self.eq._paste_tiles([(0, 0)], [raw], 0.0, 0.0)
+
+        # 白い面は陸の色へ、線は線の色へ塗り替わる
+        self.assertEqual(image.getpixel((10, 10)), self.eq._MAP_LAND)
+        self.assertEqual(image.getpixel((0, 10)), self.eq._MAP_LINE)
+
+    def test_a_missing_tile_leaves_the_sea_colour(self):
+        """取れなかった枚は、その枡が海色のまま残ること。"""
+        image = self.eq._paste_tiles([(0, 0)], [None], 0.0, 0.0)
+
+        self.assertEqual(image.getpixel((10, 10)), self.eq._MAP_SEA)
+
+    def test_a_broken_tile_does_not_take_the_whole_map_down(self):
+        """壊れた1枚があっても、他の枚は貼られること。
+
+        以前は復号が取得側の try/except の中にあったので、壊れたタイルは
+        そこで None になっていた。復号を移したぶん、**移した先で握らないと
+        地図の生成ごと落ちる。**
+        """
+        good = self._tile_png()
+        image = self.eq._paste_tiles(
+            [(0, 0), (1, 0)],
+            ["PNG ではない壊れたバイト列".encode("utf-8"), good],
+            0.0,
+            0.0,
+        )
+
+        # 壊れた枡は海色、隣の正しい枡は陸色
+        self.assertEqual(image.getpixel((10, 10)), self.eq._MAP_SEA)
+        self.assertEqual(image.getpixel((self.eq._TILE_SZ + 10, 10)), self.eq._MAP_LAND)
+
+    def test_an_exception_from_gather_is_skipped(self):
+        """gather(return_exceptions=True) が混ぜてくる例外を飛ばせること。
+
+        タイル取得は例外をそのまま並びへ入れる作りなので、貼る側は
+        バイト列以外を必ず素通りしなければならない。
+        """
+        image = self.eq._paste_tiles([(0, 0)], [RuntimeError("取得に失敗")], 0.0, 0.0)
+
+        self.assertEqual(image.getpixel((10, 10)), self.eq._MAP_SEA)
+
+
 class NotifyAllGuildsTests(unittest.TestCase):
     """通知の組み立て順と、失敗の握り方を固定する。
 
