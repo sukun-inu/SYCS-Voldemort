@@ -472,7 +472,7 @@ class HandleDjaudioMessageTests(unittest.TestCase):
         message = self._message(content="https://www.youtube.com/watch?v=abc")
         with (
             patch.object(djaudio, "get_djaudio_runtime_settings", return_value=self._settings()),
-            patch.object(djaudio, "validate_public_http_url", side_effect=URLSafetyError("blocked")),
+            patch.object(djaudio, "validate_public_http_url_async", AsyncMock(side_effect=URLSafetyError("blocked"))),
             patch.object(djaudio, "_process_url") as process_mock,
         ):
             asyncio.run(djaudio.handle_djaudio_message(Mock(), message))
@@ -487,7 +487,7 @@ class HandleDjaudioMessageTests(unittest.TestCase):
         djaudio._user_cooldown.set((1, 2), time.monotonic())
         with (
             patch.object(djaudio, "get_djaudio_runtime_settings", return_value=self._settings(cooldown=30)),
-            patch.object(djaudio, "validate_public_http_url", return_value=None),
+            patch.object(djaudio, "validate_public_http_url_async", AsyncMock(return_value=None)),
             patch.object(djaudio, "_process_url") as process_mock,
         ):
             asyncio.run(djaudio.handle_djaudio_message(Mock(), message))
@@ -501,7 +501,7 @@ class HandleDjaudioMessageTests(unittest.TestCase):
         bot = Mock()
         with (
             patch.object(djaudio, "get_djaudio_runtime_settings", return_value=self._settings()),
-            patch.object(djaudio, "validate_public_http_url", return_value=None),
+            patch.object(djaudio, "validate_public_http_url_async", AsyncMock(return_value=None)),
             patch.object(djaudio, "_process_url", AsyncMock()) as process_mock,
         ):
             asyncio.run(djaudio.handle_djaudio_message(bot, message))
@@ -515,7 +515,7 @@ class HandleDjaudioMessageTests(unittest.TestCase):
         message = self._message(content="https://www.youtube.com/watch?v=a https://www.youtube.com/watch?v=b")
         with (
             patch.object(djaudio, "get_djaudio_runtime_settings", return_value=self._settings(max_urls=1)),
-            patch.object(djaudio, "validate_public_http_url", return_value=None),
+            patch.object(djaudio, "validate_public_http_url_async", AsyncMock(return_value=None)),
             patch.object(djaudio, "_process_url", AsyncMock()) as process_mock,
         ):
             asyncio.run(djaudio.handle_djaudio_message(Mock(), message))

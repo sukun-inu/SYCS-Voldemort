@@ -46,7 +46,11 @@ import discord  # noqa: E402
 import services.earthquake_service as eq  # noqa: E402
 from services import settings_store as store  # noqa: E402
 from services.news_service import _favicon_url  # noqa: E402
-from services.url_safety import URLSafetyError, validate_public_http_url  # noqa: E402
+from services.url_safety import (  # noqa: E402
+    URLSafetyError,
+    validate_public_http_url,
+    validate_public_http_url_async,
+)
 from services.welcome_service import DEFAULT_GOODBYE, DEFAULT_WELCOME, render_template  # noqa: E402
 from webapp_admin.schema.validation import InvalidValue, validate_field  # noqa: E402
 
@@ -68,6 +72,38 @@ def _command_body(source: str, name: str) -> str:
             sep = chr(10) * 3  # 空行2つ＝次のトップレベル定義の始まり
             body += tail[: tail.index(sep) if sep in tail else len(tail)]
     return body
+
+
+def _calls_in_async_bodies(tree: ast.AST, names: set[str]) -> list[tuple[int, str]]:
+    """async 関数の本体で直接呼ばれているものだけを返す。
+
+    async の中に def を書いた場合、その中は同期の文脈なので対象外。
+    ast.walk では境界を越えて拾ってしまうので、自分で降りる。
+
+    「同期のまま呼ぶとイベントループが止まる関数」を探す検査が2つ（設定の
+    書き込みと、URL の安全性検査）あり、探し方は同じなのでここに置く。
+    """
+    found: list[tuple[int, str]] = []
+
+    def scan(node, inside_async: bool):
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.AsyncFunctionDef):
+                scan(child, True)
+                continue
+            if isinstance(child, (ast.FunctionDef, ast.Lambda)):
+                scan(child, False)
+                continue
+            if (
+                inside_async
+                and isinstance(child, ast.Call)
+                and isinstance(child.func, ast.Name)
+                and child.func.id in names
+            ):
+                found.append((child.lineno, child.func.id))
+            scan(child, inside_async)
+
+    scan(tree, False)
+    return found
 
 
 def _record_command_source() -> str:
@@ -2306,6 +2342,128 @@ class UrlSafetyTests(unittest.TestCase):
             with self.assertRaises(URLSafetyError):
                 validate_public_http_url("https://mixed.example/")
         self.assertTrue(gai.called, "getaddrinfo が差し替わっていない")
+
+    def test_async_resolution_leaves_the_event_loop_running(self):
+        """非同期版の名前解決が、イベントループを止めないこと。
+
+        socket.getaddrinfo は返るまでスレッドを止める。ループの上で直に呼ぶと
+        DNS が返るまで全部が止まり、本番では 509ms / 720ms の停止として
+        観測された（services/loop_watchdog.py の [stall] ログ）。
+
+        「遅い DNS を模して、そのあいだにループ上の別タスクが動けるか」を
+        見る。同期呼び出しへ戻すと、待つ相手（resumed を立てるタスク）が
+        動けないので、この差し替えが時間切れで落ちる。
+        """
+        import socket as _socket
+
+        seen: dict[str, int] = {}
+        resumed = threading.Event()
+
+        def fake_getaddrinfo(*_args, **_kwargs):
+            seen["thread"] = threading.get_ident()
+            if not resumed.wait(5):
+                raise RuntimeError("名前解決の最中にイベントループが止まっていた")
+            return [(_socket.AF_INET, None, None, "", ("142.251.150.119", 0))]
+
+        async def scenario() -> int:
+            async def keep_going():
+                # 解決の待ちに入ったあとで動く。ループが生きている証拠。
+                await asyncio.sleep(0)
+                resumed.set()
+
+            task = asyncio.create_task(keep_going())
+            with patch("services.url_safety.socket.getaddrinfo", fake_getaddrinfo):
+                await validate_public_http_url_async("https://example.test/")
+            await task
+            return threading.get_ident()
+
+        loop_thread = asyncio.run(scenario())
+        self.assertIn("thread", seen, "getaddrinfo が呼ばれていない")
+        self.assertNotEqual(seen["thread"], loop_thread, "名前解決がループのスレッドで走っている")
+
+    def test_async_version_applies_the_same_judgement(self):
+        """非同期版でも判定が同じであること（片方だけ緩まないこと）。"""
+        import socket as _socket
+
+        infos = [
+            (_socket.AF_INET, None, None, "", ("142.251.150.119", 0)),
+            (_socket.AF_INET, None, None, "", ("10.0.0.5", 0)),
+        ]
+        with patch("services.url_safety.socket.getaddrinfo", return_value=infos):
+            with self.assertRaises(URLSafetyError):
+                asyncio.run(validate_public_http_url_async("https://mixed.example/"))
+
+        for url in ("http://127.0.0.1/", "http://localhost/", "file:///etc/passwd", "example.com"):
+            with self.subTest(url=url), self.assertRaises(URLSafetyError):
+                asyncio.run(validate_public_http_url_async(url))
+
+        # 名前解決の要らない公開アドレスは、非同期版でも通る
+        asyncio.run(validate_public_http_url_async("https://[::ffff:142.251.150.119]/path"))
+
+    def test_sync_version_on_the_event_loop_names_its_caller(self):
+        """ループの上で同期版を呼んだら、停止として現れる前に警告を残すこと。"""
+        import socket as _socket
+
+        infos = [(_socket.AF_INET, None, None, "", ("142.251.150.119", 0))]
+
+        async def scenario():
+            with patch("services.url_safety.socket.getaddrinfo", return_value=infos):
+                validate_public_http_url("https://example.test/")
+
+        with self.assertLogs("services.url_safety", level="WARNING") as logs:
+            asyncio.run(scenario())
+        joined = " ".join(logs.output)
+        self.assertIn("[stall]", joined)
+        self.assertIn("validate_public_http_url_async", joined)
+        self.assertIn("test_services.py", joined, "呼び出し元のファイルが出ていない")
+
+
+class SyncUrlValidationInAsyncTests(unittest.TestCase):
+    """async の中から同期の validate_public_http_url を呼んでいないこと。
+
+    この関数の実体は socket.getaddrinfo で、返るまでスレッドを止める。async の
+    中から直に呼ぶと、DNS が返るまでイベントループ全体が固まる。本番では
+    DJ-Audio の URL 検査が 509ms / 720ms の停止として観測された
+    （services/loop_watchdog.py の [stall] ログ）。
+
+    直呼びは見た目では気付けない（普通の関数呼び出しにしか見えない）ので、
+    設定の書き込みと同じやり方で構文木から機械的に見つける。非同期からは
+    validate_public_http_url_async を await すること。
+    """
+
+    ROOT = Path(__file__).resolve().parent.parent
+    SKIP_DIRS = {".git", "tests", "migrations", "__pycache__", ".venv", "venv"}
+    BLOCKING = {"validate_public_http_url"}
+
+    def _offenders(self) -> list[str]:
+        offenders: list[str] = []
+        for path in sorted(self.ROOT.rglob("*.py")):
+            if any(part in self.SKIP_DIRS for part in path.relative_to(self.ROOT).parts):
+                continue
+            try:
+                tree = ast.parse(path.read_text(encoding="utf-8"))
+            except (SyntaxError, UnicodeDecodeError):
+                continue
+            for line, name in _calls_in_async_bodies(tree, self.BLOCKING):
+                offenders.append(f"{path.relative_to(self.ROOT)}:{line} {name}()")
+        return offenders
+
+    def test_no_async_function_validates_urls_synchronously(self):
+        offenders = self._offenders()
+        self.assertEqual(
+            offenders,
+            [],
+            "async から同期の URL 検査を呼んでいます。"
+            "await validate_public_http_url_async(...) を通してください:" + chr(10) + chr(10).join(offenders),
+        )
+
+    def test_the_search_actually_finds_a_direct_call(self):
+        """探し方が壊れていたら、この検査は何も見なくなる。"""
+        tree = ast.parse("async def f(url):" + chr(10) + "    validate_public_http_url(url)" + chr(10))
+        self.assertEqual(_calls_in_async_bodies(tree, self.BLOCKING), [(2, "validate_public_http_url")])
+        # await 付きの非同期版は対象外
+        ok = ast.parse("async def f(url):" + chr(10) + "    await validate_public_http_url_async(url)" + chr(10))
+        self.assertEqual(_calls_in_async_bodies(ok, self.BLOCKING), [])
 
 
 class NewsFaviconTests(unittest.TestCase):
@@ -7906,30 +8064,9 @@ class SettingsWriteOffloadTests(unittest.TestCase):
     def _direct_calls(self, tree: ast.AST, names: set[str]) -> list[tuple[int, str]]:
         """async 関数の本体で直接呼ばれているものだけを返す。
 
-        async の中に def を書いた場合、その中は同期の文脈なので対象外。
-        ast.walk では境界を越えて拾ってしまうので、自分で降りる。
+        探し方そのものは URL 検査の同じ形の検査と共有している。
         """
-        found: list[tuple[int, str]] = []
-
-        def scan(node, inside_async: bool):
-            for child in ast.iter_child_nodes(node):
-                if isinstance(child, ast.AsyncFunctionDef):
-                    scan(child, True)
-                    continue
-                if isinstance(child, (ast.FunctionDef, ast.Lambda)):
-                    scan(child, False)
-                    continue
-                if (
-                    inside_async
-                    and isinstance(child, ast.Call)
-                    and isinstance(child.func, ast.Name)
-                    and child.func.id in names
-                ):
-                    found.append((child.lineno, child.func.id))
-                scan(child, inside_async)
-
-        scan(tree, False)
-        return found
+        return _calls_in_async_bodies(tree, names)
 
     def test_awrite_lets_the_event_loop_keep_running(self):
         """awrite が実際に待ちをイベントループの外へ出していること。

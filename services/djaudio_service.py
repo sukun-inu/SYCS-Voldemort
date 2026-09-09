@@ -31,7 +31,7 @@ from services.djaudio_cache import register_file, update_discord_message
 from services.djaudio_isrc_meta import enrich_metadata
 from services.djaudio_site_detection import detect_site, is_djaudio_allowed_url, is_unsupported_url
 from services.ttl_cache import TTLCache
-from services.url_safety import URLSafetyError, validate_public_http_url
+from services.url_safety import URLSafetyError, validate_public_http_url_async
 from services.settings_store import (
     DJAudioRuntimeSettings,
     get_djaudio_runtime_settings,
@@ -521,7 +521,7 @@ async def handle_djaudio_message(bot: Bot, message: discord.Message) -> None:
             continue
         # ③ セキュリティ判定：SSRF・プライベートIPなどのチェック
         try:
-            validate_public_http_url(url)
+            await validate_public_http_url_async(url)
         except URLSafetyError:
             security_rejected.append("この URL はセキュリティ上の理由で処理できぬ。")
             continue
