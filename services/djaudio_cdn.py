@@ -205,35 +205,42 @@ def _read_manifest(zip_path: Path) -> dict:
         raise HTTPException(status_code=500, detail="録音の索引を読めませんでした。")
 
 
-def _json_maybe_gzipped(payload: dict, request: Request) -> Response:
+def _encode_json(payload: dict, compress: bool) -> bytes:
+    """索引を bytes にする（必要なら gzip も）。**別スレッド用。**
+
+    2時間×5トラックの索引で実測 json.dumps 5.4ms + gzip 101.1ms = 106.5ms。
+    **ミキサーを開くたびに、この間そのワーカーの全リクエストが止まっていた。**
+    録音が長いほど、トラックが多いほど伸びる。
+    """
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    return gzip.compress(body, 6) if compress else body
+
+
+async def _json_maybe_gzipped(payload: dict, request: Request) -> Response:
     """JSON を返す。相手が gzip を受け付けるなら圧縮して返す。
 
     受け付けない相手（curl の既定など）には素のまま返す。ここで無条件に
     圧縮すると、ヘッダを見ない道具から**読めない中身**が返ることになる。
     """
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    if "gzip" not in request.headers.get("accept-encoding", "").lower():
+    compress = "gzip" in request.headers.get("accept-encoding", "").lower()
+    body = await asyncio.to_thread(_encode_json, payload, compress)
+    if not compress:
         return Response(content=body, media_type="application/json")
     return Response(
-        content=gzip.compress(body, 6),
+        content=body,
         media_type="application/json",
         headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
     )
 
 
-@dlaudio_router.get("/files/{guild_id}/{token}/mixer")
-async def recording_manifest(guild_id: str, token: str, request: Request):
-    """ミキサーが読む索引（トラックの並び・波形・長さ）。
+def _mixer_manifest(zip_path: Path, guild_id: str, token: str) -> dict:
+    """ミキサーへ返す索引を組み立てる。**別スレッド用。**
 
-    波形を 0.05 秒刻みで持つので、2時間×5トラックだと素の JSON で 2MB 近く
-    なる。中身は base64 の1バイト列で、無音がそのまま 'A' の連なりになるため
-    **圧縮がよく効く**（実測で 1.98MB → 1.16MB）。ここだけ手で gzip する。
-
-    アプリ全体に GZipMiddleware を挟まないのは、トラック配信が Range に
-    対応しているため。途中から返すレスポンスを圧縮しなおすと、
-    Content-Range とバイト数が食い違って頭出しが壊れる。
+    ZIP を何度も開く。索引を読むのに1回、さらに**トラックごとに無圧縮かを
+    確かめるのに1回ずつ**（_stored_member_range が中で ZIP とファイルの
+    両方を開く）。実測で 32 トラックのとき 25.0 ms、16 トラックで 9.9 ms。
+    ミキサーを開くたびに掛かるので、ここもループから出す。
     """
-    zip_path = _recording_zip(guild_id, token)
     manifest = _read_manifest(zip_path)
     stems = manifest.get("stems", [])
     for stem in stems:
@@ -253,28 +260,55 @@ async def recording_manifest(guild_id: str, token: str, request: Request):
             "sample_rate": SEGMENT_RATE,
             "channels": len(stems),
         }
-    return _json_maybe_gzipped(manifest, request)
+    return manifest
+
+
+@dlaudio_router.get("/files/{guild_id}/{token}/mixer")
+async def recording_manifest(guild_id: str, token: str, request: Request):
+    """ミキサーが読む索引（トラックの並び・波形・長さ）。
+
+    波形を 0.05 秒刻みで持つので、2時間×5トラックだと素の JSON で 2MB 近く
+    なる。中身は base64 の1バイト列で、無音がそのまま 'A' の連なりになるため
+    **圧縮がよく効く**（実測で 1.98MB → 1.16MB）。ここだけ手で gzip する。
+
+    アプリ全体に GZipMiddleware を挟まないのは、トラック配信が Range に
+    対応しているため。途中から返すレスポンスを圧縮しなおすと、
+    Content-Range とバイト数が食い違って頭出しが壊れる。
+    """
+    zip_path = _recording_zip(guild_id, token)
+    manifest = await asyncio.to_thread(_mixer_manifest, zip_path, guild_id, token)
+    return await _json_maybe_gzipped(manifest, request)
+
+
+def _stem_source(zip_path: Path, index: int) -> tuple[dict, tuple[int, int] | None]:
+    """トラック1本の情報と、無圧縮なら (開始位置, 長さ)。**別スレッド用。**"""
+    stems = _read_manifest(zip_path).get("stems", [])
+    stem = next((s for s in stems if int(s.get("index", -1)) == index), None)
+    if stem is None:
+        raise HTTPException(status_code=404, detail="そのトラックはありません。")
+    return stem, _stored_member_range(zip_path, str(stem.get("file", "")))
+
+
+def _read_member(zip_path: Path, name: str) -> bytes:
+    """圧縮されて入っている古いアーカイブから、1本を丸ごと読む。**別スレッド用。**"""
+    try:
+        with zipfile.ZipFile(zip_path) as archive:
+            return archive.read(name)
+    except (KeyError, OSError, zipfile.BadZipFile):
+        raise HTTPException(status_code=404, detail="そのトラックを読めませんでした。")
 
 
 @dlaudio_router.get("/files/{guild_id}/{token}/stem/{index}")
 async def recording_stem(guild_id: str, token: str, index: int, request: Request):
     """トラック1本を配信する。頭出しのため Range に対応する。"""
     zip_path = _recording_zip(guild_id, token)
-    stems = _read_manifest(zip_path).get("stems", [])
-    stem = next((s for s in stems if int(s.get("index", -1)) == index), None)
-    if stem is None:
-        raise HTTPException(status_code=404, detail="そのトラックはありません。")
-
+    stem, found = await asyncio.to_thread(_stem_source, zip_path, index)
     name = str(stem.get("file", ""))
-    found = _stored_member_range(zip_path, name)
 
     if found is None:
         # 圧縮して入っている古いアーカイブ。範囲指定はできないので通しで返す。
-        try:
-            with zipfile.ZipFile(zip_path) as archive:
-                data = archive.read(name)
-        except (KeyError, OSError, zipfile.BadZipFile):
-            raise HTTPException(status_code=404, detail="そのトラックを読めませんでした。")
+        # **1本まるごと読んで展開する**ので、必ずスレッドの向こうでやる。
+        data = await asyncio.to_thread(_read_member, zip_path, name)
         return Response(content=data, media_type="audio/mpeg")
 
     start, size = found
@@ -427,6 +461,68 @@ SEGMENT_RATE = 48000
 _SEGMENT_PREROLL = 2.0
 
 
+def _build_clip_zip(
+    zip_path: Path,
+    out_path: Path,
+    stems: list[dict],
+    begin: float,
+    length: float,
+    finish: float,
+    manifest: dict,
+) -> int:
+    """切り出した ZIP を組み立てて、入れたトラック数を返す。**別スレッド用。**
+
+    ■ mp3 を無圧縮で入れる理由
+
+    mp3 は既に圧縮済みで、deflate を掛けても縮まない。実測（5トラック×10分）:
+
+        ZIP_STORED     99 ms   出力 45.78 MB
+        ZIP_DEFLATED 2347 ms   出力 45.79 MB
+
+    **24倍の時間をかけて、ファイルは大きくなる**（ZIP のヘッダぶん）。
+    8トラック×60分では 20.1 秒かかっていた。本体の録音アーカイブは既に
+    無圧縮で入れている（services/recording_service.py の _write_archive）
+    ので、切り出しだけが揃っていなかった。
+
+    info.txt は素のテキストなので、こちらは既定の deflate に任せる。
+
+    ■ なぜ丸ごとスレッドで動かすか
+
+    ffmpeg（_clip_stem）は元々逃がしてあったが、**書き込み側の方が重かった。**
+    トラックごとに逃がして戻ってを繰り返すより、組み立て全体を1回で渡す方が
+    行き来も減る。
+    """
+    written = 0
+    try:
+        build = zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED)
+    except OSError as e:
+        logger.warning("切り出しの出力を作れませんでした: %s", e)
+        return 0
+    with build as archive:
+        for stem in stems:
+            member = str(stem.get("file", ""))
+            piece = _clip_stem(zip_path, member, begin, length)
+            if piece is None:
+                continue
+            archive.writestr(member, piece, compress_type=zipfile.ZIP_STORED)
+            written += 1
+        if not written:
+            return 0
+        archive.writestr(
+            "info.txt",
+            "\n".join(
+                [
+                    f"元の録音: {manifest.get('channel_name', '')}",
+                    f"切り出した区間: {begin:.2f} 秒 〜 {finish:.2f} 秒（{length:.2f} 秒）",
+                    f"トラック数: {written}",
+                    "",
+                    "全トラックを同じ位置で切っているので、重ねれば時間軸は揃います。",
+                ]
+            ),
+        )
+    return written
+
+
 def _gzip_file(src: Path, dst: Path) -> None:
     """gzip で固める。水準は1で足りる（→ recording_segment のコメント）。"""
     with open(src, "rb") as fin, gzip.open(dst, "wb", compresslevel=1) as fout:
@@ -533,7 +629,7 @@ async def recording_segment(guild_id: str, token: str, request: Request, start: 
     arrayBuffer() には生の PCM が入る。
     """
     zip_path = _recording_zip(guild_id, token)
-    stems = _read_manifest(zip_path).get("stems", [])
+    stems = (await asyncio.to_thread(_read_manifest, zip_path)).get("stems", [])
     if not stems:
         raise HTTPException(status_code=404, detail="トラックがありません。")
     if len(stems) > SEGMENT_MAX_TRACKS:
@@ -578,7 +674,7 @@ async def recording_clip(guild_id: str, token: str, start: float = 0.0, end: flo
     全トラックを同じ位置で切るので、落としたあとも時間軸は揃っている。
     """
     zip_path = _recording_zip(guild_id, token)
-    manifest = _read_manifest(zip_path)
+    manifest = await asyncio.to_thread(_read_manifest, zip_path)
     stems = manifest.get("stems", [])
     if not stems:
         raise HTTPException(status_code=404, detail="トラックがありません。")
@@ -600,39 +696,15 @@ async def recording_clip(guild_id: str, token: str, start: float = 0.0, end: flo
     # まで丸ごと抱えていた。同時に2人が押せば軽く GB を超える。
     work = Path(tempfile.mkdtemp(prefix="clip-out-"))
     out_path = work / "clip.zip"
-    written = 0
-    try:
-        _build = zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED)
-    except OSError as e:
+    # **組み立て全体をまとめてスレッドへ出す。** 以前は ffmpeg の呼び出しだけを
+    # to_thread へ逃がし、返ってきた音声を archive.writestr でこの場で書いていた。
+    # ffmpeg を逃がした意味が半分無くなっていて、実測では書き込み側の方が重い
+    # （_build_clip_zip の docstring 参照）。ついでに、トラックごとに
+    # スレッドを行き来するのもやめる。
+    written = await asyncio.to_thread(_build_clip_zip, zip_path, out_path, stems, begin, length, finish, manifest)
+    if not written:
         shutil.rmtree(work, ignore_errors=True)
-        logger.warning("切り出しの出力を作れませんでした: %s", e)
         raise HTTPException(status_code=500, detail="切り出しに失敗しました。")
-    with _build as archive:
-        for stem in stems:
-            member = str(stem.get("file", ""))
-            # ffmpeg の subprocess.run はブロッキング（最大180秒）。ここで直接
-            # 呼ぶと FastAPI のイベントループごと止まり、同じワーカーが受けている
-            # 他のリクエスト（配信・ヘルスチェック含む）まで巻き添えで固まる。
-            piece = await asyncio.to_thread(_clip_stem, zip_path, member, begin, length)
-            if piece is None:
-                continue
-            archive.writestr(member, piece)
-            written += 1
-        if not written:
-            shutil.rmtree(work, ignore_errors=True)
-            raise HTTPException(status_code=500, detail="切り出しに失敗しました。")
-        archive.writestr(
-            "info.txt",
-            "\n".join(
-                [
-                    f"元の録音: {manifest.get('channel_name', '')}",
-                    f"切り出した区間: {begin:.2f} 秒 〜 {finish:.2f} 秒（{length:.2f} 秒）",
-                    f"トラック数: {written}",
-                    "",
-                    "全トラックを同じ位置で切っているので、重ねれば時間軸は揃います。",
-                ]
-            ),
-        )
 
     stamp = f"{int(begin)}-{int(finish)}"
     return FileResponse(

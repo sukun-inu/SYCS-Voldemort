@@ -694,11 +694,20 @@ def _resolve_point_coord(addr: str, pref: str) -> tuple[float, float] | None:
     return _PREF_CENTERS.get(pref) or _PREF_CENTERS.get(addr)
 
 
-async def _fetch_tile(session: aiohttp.ClientSession, z: int, x: int, y: int):
-    """地図タイルを1枚取得する。取れなければ None を返し、呼び出し側は
-    タイル無しのまま描画を続ける（地震速報の配信をタイル取得の失敗で
-    遅らせないため）。timeout を3秒と短くしているのは、数十枚を並行取得
-    する用途で1枚の遅延が全体を長引かせないようにするため。
+async def _fetch_tile(session: aiohttp.ClientSession, z: int, x: int, y: int) -> bytes | None:
+    """地図タイルを1枚取得する。**復号はせず、PNG のバイト列のまま返す。**
+
+    取れなければ None を返し、呼び出し側はタイル無しのまま描画を続ける
+    （地震速報の配信をタイル取得の失敗で遅らせないため）。timeout を3秒と
+    短くしているのは、数十枚を並行取得する用途で1枚の遅延が全体を
+    長引かせないようにするため。
+
+    以前はここで `Image.open(...).convert("L")` まで済ませていた。Image.open
+    自体はヘッダを読むだけだが、**convert が全画素を復号する。** 1枚 0.40ms、
+    1枚の地図は 6x4 = 24 枚なので 8.2ms がイベントループ上で走っていた。
+    しかも並行取得した全枚数ぶんが、緊急地震速報を配信しようとしている
+    まさにその瞬間に固まって走る。復号は _paste_tiles（既にスレッドの
+    向こう側）へ移した。
     """
     url = _TILE_URL.format(z=z, x=x, y=y)
     try:
@@ -708,9 +717,7 @@ async def _fetch_tile(session: aiohttp.ClientSession, z: int, x: int, y: int):
             timeout=aiohttp.ClientTimeout(total=3),
         ) as resp:
             if resp.status == 200:
-                data = await resp.read()
-                # 白地図は「白い面に細い黒線」。明るさだけ使うので L で受ける。
-                return Image.open(io.BytesIO(data)).convert("L")
+                return await resp.read()
     except Exception as e:
         logger.debug("[earthquake] tile %d/%d/%d fetch error: %s", z, x, y, e)
     return None
@@ -1039,12 +1046,26 @@ def _overlaps(box: tuple[float, float, float, float], rects: list[tuple[float, f
 
 
 def _paste_tiles(coords: list[tuple[int, int]], tiles: list, origin_x: float, origin_y: float) -> "Image.Image":
-    """取り込んだタイルを1枚の面に貼る。白地図は暗色へ塗り替えてから貼る。"""
+    """取り込んだタイルを1枚の面に貼る。白地図は暗色へ塗り替えてから貼る。
+
+    tiles は PNG のバイト列（取れなかった枚は None、gather の
+    return_exceptions=True で例外が混ざることもある）。**復号もここでやる。**
+    この関数はスレッドの向こう側なので、復号を足してもイベントループは
+    止まらない（_fetch_tile の docstring 参照）。
+
+    白地図は「白い面に細い黒線」。明るさだけ使うので L で受ける。
+    """
     base = Image.new("RGB", (_MAP_W, _MAP_H), _MAP_SEA)
-    for (tx, ty), tile in zip(coords, tiles):
-        if not isinstance(tile, Image.Image):
+    for (tx, ty), raw in zip(coords, tiles):
+        if not isinstance(raw, bytes):
             continue
-        base.paste(_recolour_tile(tile), (int(tx * _TILE_SZ - origin_x), int(ty * _TILE_SZ - origin_y)))
+        try:
+            gray = Image.open(io.BytesIO(raw)).convert("L")
+        except Exception as e:
+            # 壊れた1枚で地図ごと落とさない。その枡が海色のまま残るだけ。
+            logger.debug("[earthquake] tile %d/%d decode error: %s", tx, ty, e)
+            continue
+        base.paste(_recolour_tile(gray), (int(tx * _TILE_SZ - origin_x), int(ty * _TILE_SZ - origin_y)))
     return base
 
 
