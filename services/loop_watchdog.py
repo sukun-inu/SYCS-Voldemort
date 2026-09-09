@@ -27,6 +27,22 @@ asyncio には `loop.slow_callback_duration` があるが、これは
 仕組みではない。** こちらは「眠っているスレッド1本 + 100ms ごとの時刻書き込み」
 だけで、止まっていないときの費用がほぼ無い。
 
+■ スタックにアプリの行が1つも出ない停止がある
+
+本番で 1016ms 止まったとき、いちばん深いところが asyncio の TLS 読み出し
+（sslproto の `_do_read`）で、**アプリのフレームが1行も無かった。** ループを
+埋めていたのがこちらのコードではなく「届いた暗号文の復号」だったため。
+行番号を眺めても直しようがない。
+
+こういう停止で要るのは「どの接続か」なので、内部フレームの局所変数から
+相手を引き出して `相手:` の行を足す（SNI のホスト名・peername・上に載って
+いるプロトコル・受信済みのバイト数）。名前解決は挟まない。
+
+同じ理由で、**1回の停止でスタックを1本しか取らないのをやめた。** 短い
+コールバックが切れ目なく続いてループが空かない形では、1本はくじ引きに
+しかならない。ただし気づくたびに書くとログが埋まるので、場所が変わった
+ときだけ書き足す（同じところで止まり続けているなら1行のまま）。
+
 ■ 止まっていることを、止まっているループからは報せられない
 
 報告を見張りスレッド側から出しているのはそのため。ループ上のタスクから
@@ -57,6 +73,22 @@ DEFAULT_CHECK_MS = 100
 # 残すスタックの行数。深い側（＝実際に動いていた場所）から数える。
 # 全部残すと discord.py と asyncio の内部で 100 行を超え、ログが読めなくなる。
 _MAX_STACK_LINES = 24
+
+# 1回の停止で残すスタックの本数。
+#
+# **1本では足りない停止がある。** 本番で 1016ms 止まったとき、いちばん深い
+# ところが asyncio の TLS 読み出し（sslproto の _do_read）で、アプリの
+# フレームが1行も出なかった。この形は「1つの呼び出しが長い」のではなく
+# 「短いコールバックが切れ目なく続いてループが空かない」ことが多く、
+# そのとき1本のスタックはくじ引きにしかならない。
+#
+# かといって気づくたびに書くとログが埋まるので、**場所が変わったときだけ**
+# 書き足す。同じところで止まり続けている（time.sleep など）なら1行のまま。
+_MAX_SAMPLES = 3
+
+# スタックを取りに行く回数の上限。書くのは上の本数までだが、「場所が
+# 変わったか」を見るには取る必要がある。長い停止で延々と取り続けない蓋。
+_MAX_SAMPLE_TRIES = 60
 
 # ループが最後に息をした時刻（time.monotonic）。見張りスレッドと共有する。
 # float の読み書きは GIL の下で分割されないので、ロックは要らない。
@@ -101,23 +133,110 @@ async def _heartbeat(interval_sec: float) -> None:
         await asyncio.sleep(interval_sec)
 
 
-def _loop_stack() -> str:
-    """イベントループのスレッドが、いまどこを実行しているかを文字列で返す。
+def _peername(obj: object) -> str:
+    """transport から相手のアドレスを取り出す。取れなければ空文字。"""
+    getter = getattr(obj, "get_extra_info", None)
+    if getter is None:
+        return ""
+    try:
+        peer = getter("peername")
+    except Exception:
+        return ""
+    if isinstance(peer, tuple) and len(peer) >= 2:
+        return f"{peer[0]}:{peer[1]}"
+    return str(peer) if peer else ""
+
+
+def _buffered_bytes(protocol: object) -> str:
+    """受け取り中の本文の大きさ。**「大きな取得が犯人か」を分ける手掛かり。**
+
+    aiohttp の ResponseHandler は読みかけの本文を StreamReader に持っていて、
+    そこまでに流し込まれた総量が分かる。他のプロトコルでは取れないので空。
+    """
+    total = getattr(getattr(protocol, "_payload", None), "total_bytes", None)
+    if isinstance(total, int) and total > 0:
+        return f"受信 {total / 1024:.0f} KB"
+    return ""
+
+
+def _describe_endpoint(obj: object) -> str:
+    """asyncio の transport / SSLProtocol なら、通信の相手を1行で名乗らせる。
+
+    見るのは SNI のホスト名（名前解決を挟まずに相手が分かる）、peername、
+    上に載っているプロトコルの型名、受信済みのバイト数。
+    それ以外のオブジェクトなら空文字を返す（呼び出し側が次のフレームへ進む）。
+    """
+    sslobj = getattr(obj, "_sslobj", None)  # asyncio の SSLProtocol
+    if sslobj is None and getattr(obj, "_sock", None) is None:
+        return ""
+
+    bits: list[str] = []
+    host = getattr(sslobj, "server_hostname", None)
+    if host:
+        bits.append(str(host))
+
+    peer = _peername(obj) or _peername(getattr(obj, "_transport", None))
+    if peer:
+        bits.append(peer)
+
+    protocol = getattr(obj, "_app_protocol", None) or getattr(obj, "_protocol", None)
+    if protocol is not None:
+        bits.append(type(protocol).__name__)
+        buffered = _buffered_bytes(protocol)
+        if buffered:
+            bits.append(buffered)
+    return " / ".join(bits)
+
+
+def _peer_of(frame) -> str:
+    """スタックをたどって、いま読み書きしている通信の相手を名指しする。
+
+    **TLS の読み出しでループが埋まる形では、行番号から何も分からない。**
+    本番で実際にそうなった（1016ms、いちばん深いところが sslproto の
+    _do_read で、アプリのフレームが1行も無い）。どこを直すかを決めるには
+    「どの接続か」が要る。その内部フレームは相手を知っているので、
+    局所変数の self から引き出す。
+
+    フレームの局所変数を別スレッドから覗くので、**取れなくて当たり前**として
+    扱う。ここで例外を出せば見張りごと死ぬ。
+    """
+    depth = 0
+    while frame is not None and depth < _MAX_STACK_LINES:
+        try:
+            described = _describe_endpoint(frame.f_locals.get("self"))
+        except Exception:
+            described = ""
+        if described:
+            return described
+        frame = frame.f_back
+        depth += 1
+    return ""
+
+
+def _loop_sample() -> tuple[str, str]:
+    """イベントループのスレッドが、いまどこを実行しているかを写し取る。
+
+    返すのは (ログへ残す文字列, 同じ場所かどうかを見る鍵)。鍵はいちばん深い
+    1行で、これが変わらないうちは同じところで止まり続けていると見なす。
 
     取れなかった場合（スレッドが既に終わっている等）は、その旨を返す。
     **ここで例外を出すと見張りごと死ぬ**ので、握って文字列にする。
     """
     if _loop_thread_id is None:
-        return "（ループのスレッドが分かりません）"
+        return "（ループのスレッドが分かりません）", ""
     frame = sys._current_frames().get(_loop_thread_id)
     if frame is None:
-        return "（ループのスレッドのスタックを取れませんでした）"
+        return "（ループのスレッドのスタックを取れませんでした）", ""
     try:
         lines = traceback.format_stack(frame)
     except Exception as exc:  # pragma: no cover - スタック取得はまず失敗しない
-        return f"（スタックを整形できませんでした: {exc}）"
+        return f"（スタックを整形できませんでした: {exc}）", ""
     # 末尾＝いちばん深いところ。手前は asyncio と discord.py の内部が並ぶだけ。
-    return "".join(lines[-_MAX_STACK_LINES:]).rstrip()
+    text = "".join(lines[-_MAX_STACK_LINES:]).rstrip()
+    peer = _peer_of(frame)
+    if peer:
+        text += f"\n  相手: {peer}"
+    return text, lines[-1].strip() if lines else ""
 
 
 def _watch(stop: threading.Event, warn_sec: float, check_sec: float) -> None:
@@ -132,6 +251,8 @@ def _watch(stop: threading.Event, warn_sec: float, check_sec: float) -> None:
     動き続ける。
     """
     reported_beat: float | None = None
+    seen_leaves: set[str] = set()
+    tries = 0
     while not stop.wait(check_sec):
         loop = _loop
         if loop is None or loop.is_closed():
@@ -150,14 +271,35 @@ def _watch(stop: threading.Event, warn_sec: float, check_sec: float) -> None:
                     extra={"stall_ms": round((beat - reported_beat) * 1000)},
                 )
                 reported_beat = None
+                seen_leaves = set()
+                tries = 0
             continue
-        if reported_beat is not None:
-            continue  # この停止についてはもう書いた
-        reported_beat = beat
+
+        if reported_beat is None:
+            reported_beat = beat
+            tries = 1
+            text, leaf = _loop_sample()
+            seen_leaves.add(leaf)
+            logger.warning(
+                "[stall] イベントループが %.0f ms 止まっています。止めている場所:\n%s",
+                late * 1000,
+                text,
+                extra={"stall_ms": round(late * 1000)},
+            )
+            continue
+
+        # 同じ停止が続いている。**場所が変わったときだけ**書き足す。
+        if len(seen_leaves) >= _MAX_SAMPLES or tries >= _MAX_SAMPLE_TRIES:
+            continue
+        tries += 1
+        text, leaf = _loop_sample()
+        if leaf in seen_leaves:
+            continue
+        seen_leaves.add(leaf)
         logger.warning(
-            "[stall] イベントループが %.0f ms 止まっています。止めている場所:\n%s",
+            "[stall] 同じ停止が続いています（%.0f ms 経過）。今度はここにいます:\n%s",
             late * 1000,
-            _loop_stack(),
+            text,
             extra={"stall_ms": round(late * 1000)},
         )
 
