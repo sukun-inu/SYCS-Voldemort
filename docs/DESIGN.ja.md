@@ -885,6 +885,14 @@ class BypassResult(NamedTuple):
 フィード URL、Web App の Push エンドポイントなど、利用者が指定できる URL は
 すべてここを通る。
 
+検査の実体は名前解決で、`socket.getaddrinfo` は返るまでスレッドを止める。
+**async の中からは `validate_public_http_url_async()` を await すること。**
+同期版を直に呼ぶと DNS が返るまでイベントループ全体が固まる（本番で 509ms /
+720ms の停止として観測された）。判定そのものは両者で同じ実装を共有していて、
+違いは解決をスレッドへ逃がすかどうかだけ。直呼びが混ざっていないことは
+`SyncUrlValidationInAsyncTests` が構文木で見ており、実行時にも
+`[stall]` の警告が呼び出し元を名指しで残す。
+
 ---
 
 ## 10. ユーザー状態監査

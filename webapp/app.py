@@ -31,7 +31,7 @@ from config import METAL_COMMANDS
 from envutil import env_int
 from services import loop_watchdog
 from services.metrics_reporter import report_forever
-from services.url_safety import URLSafetyError, validate_public_http_url
+from services.url_safety import URLSafetyError, validate_public_http_url_async
 from .cache import TTLCache
 from .asset_version import render_index_html, render_service_worker
 from .db import SessionLocal, close_db, engine, init_db
@@ -212,16 +212,16 @@ def _cache_headers(ttl_seconds: int) -> dict[str, str]:
     }
 
 
-def _validate_push_endpoint(endpoint: str) -> str:
+async def _validate_push_endpoint(endpoint: str) -> str:
     """購読エンドポイントURLを検証する。SSRF対策と、任意ホストへの通知投稿を防ぐ許可リストの2段構え。
 
-    validate_public_http_url はプライベート/内部アドレスを弾く（SSRF
+    validate_public_http_url_async はプライベート/内部アドレスを弾く（SSRF
     対策）。PUSH_ALLOWED_ENDPOINT_SUFFIXES を設定した環境ではさらに
     ホスト名を許可リストに限定する。両方を経て初めて受理する。
     """
     endpoint = endpoint.strip()
     try:
-        validate_public_http_url(endpoint, allow_http=False)
+        await validate_public_http_url_async(endpoint, allow_http=False)
     except URLSafetyError as e:
         raise HTTPException(status_code=400, detail=f"無効なPush endpointです: {e}") from e
 
@@ -1262,7 +1262,7 @@ async def push_subscribe(
     if not is_push_enabled():
         raise HTTPException(status_code=503, detail="Push通知が無効です。VAPID設定を確認してください。")
 
-    endpoint = _validate_push_endpoint(payload.endpoint)
+    endpoint = await _validate_push_endpoint(payload.endpoint)
     existing = (await session.scalars(select(PushSubscription).where(PushSubscription.endpoint == endpoint))).first()
     if existing:
         existing.p256dh_key = payload.keys.p256dh

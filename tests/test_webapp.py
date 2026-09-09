@@ -260,7 +260,7 @@ class APIPushPublicKeyTests(unittest.TestCase):
 class APIPushSubscribeTests(unittest.TestCase):
     """Push購読登録エンドポイントの分岐(新規/更新/上限/重複/無効/不正endpoint)を検証する。
 
-    validate_public_http_url は実際にDNS解決を行う(services/url_safety.py)ため、
+    validate_public_http_url_async は実際にDNS解決を行う(services/url_safety.py)ため、
     ネットワークに出ないようモックする。DBセッションは override_db_session で
     差し替え、session.add/commit/rollback が正しい条件でだけ呼ばれることを
     分岐ごとに確認する。
@@ -279,7 +279,7 @@ class APIPushSubscribeTests(unittest.TestCase):
         self.mock_is_push_enabled = self.is_push_enabled_patch.start()
         self.mock_is_push_enabled.return_value = True
 
-        self.validate_public_http_url_patch = patch("webapp.app.validate_public_http_url")
+        self.validate_public_http_url_patch = patch("webapp.app.validate_public_http_url_async", new_callable=AsyncMock)
         self.mock_validate_url = self.validate_public_http_url_patch.start()
         # By default, return normally (no exception) for valid endpoints
         self.mock_validate_url.return_value = None

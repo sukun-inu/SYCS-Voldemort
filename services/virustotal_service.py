@@ -12,7 +12,7 @@ import vt
 from config import VIRUSTOTAL_API_KEY
 from envutil import env_int
 from services.ttl_cache import TTLCache
-from services.url_safety import URLSafetyError, validate_public_http_url
+from services.url_safety import URLSafetyError, validate_public_http_url_async
 
 MALICIOUS_THRESHOLD = 10
 VT_CACHE_TTL = 60 * 60 * 6
@@ -89,13 +89,13 @@ async def fetch_content_type(session: aiohttp.ClientSession, url: str) -> str:
         Content-Type を得る。
 
         VT_MAX_REDIRECTS を超えたら追跡を諦める（無限リダイレクトに
-        引きずられないため）。リダイレクト先ごとに validate_public_http_url
+        引きずられないため）。リダイレクト先ごとに validate_public_http_url_async
         を通すので、外部URLがリダイレクトで内部アドレスへ誘導する経路も
         弾く。
         """
         current = target_url
         for _ in range(VT_MAX_REDIRECTS + 1):
-            validate_public_http_url(current)
+            await validate_public_http_url_async(current)
             async with session.request(method, current, allow_redirects=False) as r:
                 if 300 <= r.status < 400:
                     location = r.headers.get("Location")
@@ -291,7 +291,7 @@ async def vt_scan_target(session: aiohttp.ClientSession, url: str) -> Dict[str, 
     VT_MAX_DOWNLOAD_BYTES を超えたら読み切る前に打ち切る。
     """
     try:
-        validate_public_http_url(url)
+        await validate_public_http_url_async(url)
     except URLSafetyError as e:
         logger.warning("[VT] unsafe URL blocked: %s (%s)", url, e)
         return {"status": "skip", "type": "url", "reason": f"unsafe_url:{e}", "malicious": 0, "suspicious": 0}
@@ -307,7 +307,7 @@ async def vt_scan_target(session: aiohttp.ClientSession, url: str) -> Dict[str, 
             current = url
             data: bytes | None = None
             for _ in range(VT_MAX_REDIRECTS + 1):
-                validate_public_http_url(current)
+                await validate_public_http_url_async(current)
                 async with session.get(current, allow_redirects=False) as r:
                     if 300 <= r.status < 400:
                         location = r.headers.get("Location")
