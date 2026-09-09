@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import html
 import logging
@@ -160,6 +161,12 @@ async def _fetch_articles(session: aiohttp.ClientSession, query: str) -> list[di
     """Google News RSSを取得してパースする。通信失敗・XMLパース失敗の
     どちらも例外を投げず空リストを返す。1フィードの取得失敗で
     run_news_feeds のループ全体（他ギルド・他フィード）を止めないため。
+
+    取るのはバイト列のまま（`resp.text()` ではない）で、復号もパースも
+    スレッドの向こう側でやる。`resp.text()` は Content-Type に charset が
+    無いと**本文全体を舐めて文字コードを推定する**し、続く XML のパースと
+    記事1件ずつの HTML 除去も、記事100件ぶんがイベントループの上で固まって
+    走る。地図タイルの復号を _paste_tiles へ移したのと同じ形。
     """
     url = _RSS_BASE.format(query=quote(query))
     try:
@@ -167,14 +174,24 @@ async def _fetch_articles(session: aiohttp.ClientSession, query: str) -> list[di
             if resp.status != 200:
                 logger.warning("[news_service] RSS fetch status=%s query=%s", resp.status, query)
                 return []
-            text = await resp.text()
+            raw = await resp.read()
     except Exception as e:
         logger.exception("[news_service] RSS fetch error query=%s: %s", query, e)
         return []
 
+    return await asyncio.to_thread(_parse_rss, raw)
+
+
+def _parse_rss(raw: bytes) -> list[dict]:
+    """RSS のバイト列から記事の一覧を作る。**同期・CPU仕事なので、
+    イベントループの上で呼ばないこと**（_fetch_articles が to_thread で包む）。
+
+    文字コードは XML 宣言に従う（ET がバイト列から読む）。パースに失敗しても
+    例外を投げず空リストを返す。
+    """
     articles: list[dict] = []
     try:
-        root = ET.fromstring(text)
+        root = ET.fromstring(raw)
         channel = root.find("channel")
         if channel is None:
             return []

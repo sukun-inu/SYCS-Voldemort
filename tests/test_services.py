@@ -935,7 +935,11 @@ class LoopStallWatchdogTests(unittest.TestCase):
     ここで固定するのは、
 
       - 止まったことに気づき、**止めている関数名がスタックに出ること**
-      - 1回の停止で警告が1行だけ出ること（気づくたび書くとログが埋まる）
+      - 同じ場所で止まり続けているなら、警告が1行だけ出ること
+        （気づくたび書くとログが埋まる）
+      - **場所が移った停止では、移った先も出ること**（1本のスタックでは
+        足りない停止がある。下の docstring を参照）
+      - スタックにアプリの行が無い停止で、通信の相手が名指しされること
       - 解けたときに、実際に何 ms 止まっていたかが出ること
       - 環境変数で切れること
       - 二重に仕掛からないこと（on_ready は再接続のたびに呼ばれる）
@@ -971,6 +975,11 @@ class LoopStallWatchdogTests(unittest.TestCase):
         """イベントループを止める張本人。この名前がログに出てほしい。"""
         time.sleep(seconds)
 
+    @staticmethod
+    def _the_other_blocking_call(seconds):
+        """1回の停止のうち、後半を止める張本人。こちらも出てほしい。"""
+        time.sleep(seconds)
+
     def test_it_names_the_function_that_is_blocking_the_loop(self):
         """「遅い」ではなく「どの行で止まっているか」が出ること。
 
@@ -993,6 +1002,102 @@ class LoopStallWatchdogTests(unittest.TestCase):
         output = self._run_with_stall(0.5)
 
         self.assertEqual(len([line for line in output if "止まっています" in line]), 1, output)
+
+    def test_a_stall_that_stays_put_is_still_one_line(self):
+        """同じところで止まり続けているなら、書き足さないこと。
+
+        場所が変わったら書き足す仕組みを入れた以上、**変わっていないのに
+        書き足さない**ことを押さえないと、20ms ごとの追記でログが埋まる。
+        """
+        output = self._run_with_stall(0.5)
+
+        self.assertEqual([line for line in output if "今度はここにいます" in line], [], output)
+
+    def test_a_stall_that_moves_gets_a_second_stack(self):
+        """1回の停止のうちに場所が移ったら、移った先も残ること。
+
+        本番の 1016ms の停止は、いちばん深いところが asyncio の TLS 読み出し
+        で、アプリのフレームが1行も無かった。**この形は「1つの呼び出しが
+        長い」のではなく「短いコールバックが切れ目なく続く」ことが多く、
+        1本のスタックはくじ引きにしかならない。**
+
+        止める場所を途中で変えて、2本目が出ることを見る。1本しか取らない
+        実装へ戻すと、後半の名前がどこにも出なくなる。
+        """
+
+        async def scenario():
+            self.wd.install()
+            await asyncio.sleep(0.08)
+            self._the_blocking_call(0.4)
+            self._the_other_blocking_call(0.3)
+            await asyncio.sleep(0.25)
+
+        with patch.dict(os.environ, {"LOOP_STALL_WARN_MS": "100", "LOOP_STALL_CHECK_MS": "20"}):
+            with self.assertLogs(self.wd.logger, level="INFO") as captured:
+                asyncio.run(scenario())
+
+        first = [line for line in captured.output if "止まっています" in line]
+        extra = [line for line in captured.output if "今度はここにいます" in line]
+        self.assertEqual(len(first), 1, captured.output)
+        self.assertGreaterEqual(len(extra), 1, captured.output)
+        named = " ".join(first + extra)
+        self.assertIn("_the_blocking_call", named)
+        self.assertIn("_the_other_blocking_call", named)
+
+    def test_it_names_the_connection_when_the_stack_has_no_app_frame(self):
+        """スタックが asyncio の内部で終わる停止で、通信の相手が出ること。
+
+        本番で 1016ms 止まったとき、残ったのは sslproto の `_do_read` までで、
+        **どの接続の話なのかが分からなかった。** 行番号からは何も決まらない
+        ので、内部フレームの self から相手を引き出す。
+        """
+
+        class _FakeSSLProtocol:
+            """asyncio の SSLProtocol が、読み出し中に持っている形。"""
+
+            def __init__(self):
+                self._sslobj = SimpleNamespace(server_hostname="cdn.example.com")
+                self._transport = SimpleNamespace(
+                    get_extra_info=lambda key: ("203.0.113.9", 443) if key == "peername" else None
+                )
+                self._app_protocol = SimpleNamespace(_payload=SimpleNamespace(total_bytes=6 * 1024 * 1024))
+
+        def _do_read(self, probe):
+            """フレームが生きているうちに覗かせる（抜けると局所変数が消える）。"""
+            return probe(sys._getframe())
+
+        described = _do_read(_FakeSSLProtocol(), self.wd._peer_of)
+        self.assertIn("cdn.example.com", described)
+        self.assertIn("203.0.113.9:443", described)
+        self.assertIn("6144 KB", described)
+
+        # 通信と関係のない停止に、ありもしない相手を書かないこと
+        self.assertEqual(self.wd._peer_of(sys._getframe()), "")
+
+        # 見つけた相手が、実際に停止のログへ載ること（繋ぎ忘れの検査）
+        with patch.object(self.wd, "_peer_of", return_value="cdn.example.com / 203.0.113.9:443"):
+            output = self._run_with_stall(0.4)
+        stalls = [line for line in output if "止まっています" in line]
+        self.assertEqual(len(stalls), 1, output)
+        self.assertIn("相手: cdn.example.com / 203.0.113.9:443", stalls[0])
+
+    def test_the_asyncio_attributes_it_reads_still_exist(self):
+        """覗いている属性名が asyncio 側で変わっていないこと。
+
+        偽物で組んだ検査は、**名前が変わった瞬間に嘘をつく**（偽物の方は
+        変わらないので緑のまま）。本物の原文に名前があることを確かめる。
+        """
+        import asyncio.selector_events
+        import asyncio.sslproto
+        import inspect
+
+        ssl_source = inspect.getsource(asyncio.sslproto.SSLProtocol)
+        for name in ("_sslobj", "_transport", "_app_protocol"):
+            self.assertIn(f"self.{name}", ssl_source, name)
+
+        transport_source = inspect.getsource(asyncio.selector_events._SelectorTransport)
+        self.assertIn("self._sock", transport_source)
+        self.assertIn("self._protocol", transport_source)
 
     def test_the_total_duration_is_reported_when_it_recovers(self):
         """解けたときに、実際の停止時間が出ること。
@@ -2464,6 +2569,136 @@ class SyncUrlValidationInAsyncTests(unittest.TestCase):
         # await 付きの非同期版は対象外
         ok = ast.parse("async def f(url):" + chr(10) + "    await validate_public_http_url_async(url)" + chr(10))
         self.assertEqual(_calls_in_async_bodies(ok, self.BLOCKING), [])
+
+
+class _FakeRssResponse:
+    """aiohttp の応答の代わり。**本文をどう取ったか**を覚えておく。"""
+
+    status = 200
+
+    def __init__(self, raw: bytes):
+        """バイト列を持たせるだけ。"""
+        self._raw = raw
+        self.text_called = False
+
+    async def read(self) -> bytes:
+        """バイト列のまま返す（本命の経路）。"""
+        return self._raw
+
+    async def text(self, *_args, **_kwargs) -> str:
+        """呼ばれたら記録する。文字コード推定が起きる経路。"""
+        self.text_called = True
+        return self._raw.decode("utf-8")
+
+    async def __aenter__(self):
+        """async with 用。"""
+        return self
+
+    async def __aexit__(self, *_exc):
+        """async with 用。握りつぶさない。"""
+        return False
+
+
+class _FakeRssSession:
+    """aiohttp.ClientSession の代わり。返す応答は1つだけ。"""
+
+    def __init__(self, response: _FakeRssResponse):
+        """応答を持たせるだけ。"""
+        self._response = response
+
+    def get(self, *_args, **_kwargs):
+        """async with に渡せるものを返す。"""
+        return self._response
+
+
+class NewsFeedParseOffloadTests(unittest.TestCase):
+    """RSS の復号とパースが、イベントループの上で走らないこと。
+
+    ニュースの巡回は5分ごとに、全ギルド・全フィードぶん回る。`resp.text()` は
+    Content-Type に charset が無いと**本文全体を舐めて文字コードを推定する**し、
+    続く XML のパースと記事1件ずつの HTML 除去も、記事100件ぶんがループの上で
+    固まって走っていた。地図タイルの復号を _paste_tiles へ移したのと同じ形。
+
+    ここで固定するのは、
+
+      - パースがループのスレッドで走らないこと
+      - 本文をバイト列で受けること（`resp.text()` を呼ばない＝推定を起こさない）
+      - 移したあとも、記事の中身が同じであること
+    """
+
+    SAMPLE = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<rss version="2.0"><channel>'
+        "<item>"
+        "<title>台風が接近 - 気象新聞</title>"
+        "<link>https://news.example/1</link>"
+        "<pubDate>Tue, 09 Sep 2025 12:00:00 GMT</pubDate>"
+        "<description>&lt;p&gt;本文の抜粋&lt;/p&gt;</description>"
+        '<source url="https://kisho.example/">気象新聞</source>'
+        "</item>"
+        "</channel></rss>"
+    ).encode("utf-8")
+
+    def setUp(self):
+        import services.news_service as news
+
+        self.news = news
+
+    def test_the_articles_survive_the_move(self):
+        """スレッドへ移したあとも、記事の中身が同じであること。"""
+        articles = self.news._parse_rss(self.SAMPLE)
+
+        self.assertEqual(len(articles), 1, articles)
+        self.assertEqual(articles[0]["title"], "台風が接近")
+        self.assertEqual(articles[0]["source"], "気象新聞")
+        self.assertEqual(articles[0]["sourceUrl"], "https://kisho.example/")
+        self.assertEqual(articles[0]["link"], "https://news.example/1")
+        self.assertEqual(articles[0]["desc"], "本文の抜粋")
+
+    def test_a_broken_feed_gives_an_empty_list(self):
+        """壊れた XML で例外を投げないこと（1フィードで巡回を止めない）。"""
+        self.assertEqual(self.news._parse_rss(b"<rss><channel"), [])
+
+    def test_the_body_is_taken_as_bytes(self):
+        """`resp.text()` を呼ばないこと。**呼べば文字コード推定がループの上で走る。**"""
+        response = _FakeRssResponse(self.SAMPLE)
+
+        articles = asyncio.run(self.news._fetch_articles(_FakeRssSession(response), "台風"))
+
+        self.assertEqual(len(articles), 1, articles)
+        self.assertFalse(response.text_called, "resp.text() を呼んでいる（文字コード推定が走る）")
+
+    def test_the_parse_does_not_run_on_the_event_loop_thread(self):
+        """パースの最中も、ループが他の仕事を進められること。
+
+        遅いパースを模して、そのあいだにループ上の別タスクが動けるかを見る。
+        同期呼び出しへ戻すと、待つ相手が動けないので時間切れで落ちる。
+        """
+        seen: dict[str, int] = {}
+        resumed = threading.Event()
+
+        def fake_parse(raw: bytes) -> list[dict]:
+            seen["thread"] = threading.get_ident()
+            if not resumed.wait(5):
+                raise RuntimeError("パースの最中にイベントループが止まっていた")
+            return [{"title": "dummy"}]
+
+        async def scenario():
+            async def keep_going():
+                # パースの待ちに入ったあとで動く。ループが生きている証拠。
+                await asyncio.sleep(0)
+                resumed.set()
+
+            task = asyncio.create_task(keep_going())
+            with patch.object(self.news, "_parse_rss", fake_parse):
+                articles = await self.news._fetch_articles(_FakeRssSession(_FakeRssResponse(self.SAMPLE)), "台風")
+            await task
+            return articles, threading.get_ident()
+
+        articles, loop_thread = asyncio.run(scenario())
+        self.assertEqual(articles, [{"title": "dummy"}])
+        self.assertIn("thread", seen, "_parse_rss が呼ばれていない")
+        self.assertNotEqual(seen["thread"], loop_thread, "パースがループのスレッドで走っている")
 
 
 class NewsFaviconTests(unittest.TestCase):
