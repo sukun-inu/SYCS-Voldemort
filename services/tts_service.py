@@ -275,7 +275,10 @@ async def enqueue_message(
 
     speak_max = int(settings.get("speak_max_length", 200))
     read_name = settings.get("read_name", True)
-    speak_text = f"{member.display_name}。{cleaned}" if read_name else cleaned
+    # 名前にも辞書を当てる。辞書に名前の読みを登録する人が多く、本文でだけ
+    # 効いて頭の名前で効かないと、登録が効いていないように聞こえる。
+    speak_name = _apply_dictionary(member.display_name, dictionary)
+    speak_text = f"{speak_name}。{cleaned}" if read_name else cleaned
     if len(speak_text) > speak_max:
         speak_text = speak_text[:speak_max]
 
@@ -298,7 +301,7 @@ async def enqueue_vc_event(
     event: str,
 ) -> None:
     """VC参加・退出をTTSで読み上げる。event は 'join' または 'leave'。"""
-    from services.tts_store import get_tts_settings
+    from services.tts_store import get_tts_dictionary, get_tts_settings
 
     settings = get_tts_settings(guild.id)
     if not settings.get("enabled") or not settings.get("vc_notify"):
@@ -309,6 +312,9 @@ async def enqueue_vc_event(
 
     name = getattr(member, "display_name", None) or str(member)
     text = f"{name}が参加しました" if event == "join" else f"{name}が退出しました"
+    # メッセージの読み上げと同じ辞書を当てる。ここだけ素通しだと、名前の読みを
+    # 登録しても入退室のときだけ読み違える。
+    text = _apply_dictionary(text, get_tts_dictionary(guild.id))
 
     voice = str(settings.get("default_voice") or _DEFAULT_VOICE)
     rate = int(settings.get("default_rate") or _DEFAULT_RATE)
