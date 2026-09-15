@@ -2170,6 +2170,52 @@ class TtsDictionaryTests(unittest.TestCase):
         self.assertEqual(self.apply("axb を読む", {"a.b": "エービー"}), "axb を読む")
 
 
+class TtsDictionaryCoverageTests(unittest.TestCase):
+    """辞書が本文だけでなく、名前と入退室の読み上げにも効くこと。
+
+    辞書には名前の読みを登録することが多い。本文でだけ効いて、入退室の
+    「〇〇が退出しました」や発言の頭の名前で効かないと、登録が効いていない
+    ように聞こえる。
+    """
+
+    def setUp(self):
+        from services import tts_service as tts
+
+        self.tts = tts
+        self.tts._queues.pop(7, None)
+        self.addCleanup(self.tts._queues.pop, 7, None)
+
+    def _spoken(self, run, settings):
+        synth = AsyncMock(return_value=("http://x/a.wav", 1))
+        with (
+            patch.object(self.tts, "_synthesize", synth),
+            patch("services.tts_store.get_tts_settings", lambda gid: settings),
+            patch("services.tts_store.get_tts_dictionary", lambda gid: {"鈴木": "すずき"}),
+            patch("services.tts_store.get_user_tts_settings", lambda gid, uid: {}),
+            patch.object(self.tts, "get_effective_vc_watch", lambda gid, s: (99, [])),
+            patch.object(self.tts.asyncio, "create_task", lambda coro: coro.close()),
+        ):
+            asyncio.run(run())
+        synth.assert_awaited_once()
+        return synth.await_args.args[0]
+
+    def test_vc_join_and_leave_use_the_dictionary(self):
+        guild = SimpleNamespace(id=7)
+        member = SimpleNamespace(id=1, display_name="鈴木")
+        settings = {"enabled": True, "vc_notify": True, "vc_channel_id": 99}
+        for event, expected in (("join", "すずきが参加しました"), ("leave", "すずきが退出しました")):
+            with self.subTest(event=event):
+                spoken = self._spoken(lambda: self.tts.enqueue_vc_event(Mock(), guild, member, event), settings)
+                self.assertEqual(spoken, expected)
+
+    def test_the_name_before_a_message_uses_the_dictionary(self):
+        guild = SimpleNamespace(id=7)
+        member = SimpleNamespace(id=1, display_name="鈴木")
+        settings = {"enabled": True, "vc_channel_id": 99}
+        spoken = self._spoken(lambda: self.tts.enqueue_message(Mock(), guild, member, "やあ"), settings)
+        self.assertEqual(spoken, "すずき。やあ")
+
+
 class SettingsStoreTests(unittest.TestCase):
     def setUp(self):
         self.guild_id = 4242
