@@ -42,6 +42,15 @@ async def main():
         ", ".join(loaded_modules),
     )
 
+    # 保存済みの null を起動時にまとめて落とす。書き換えのたびにも落としているが
+    # （services/settings_store._mutate_settings）、誰も書き換えないギルドには
+    # 古い null が残り続けるので、ここで揃える。
+    from services.settings_store import drop_stored_nulls
+
+    dropped = drop_stored_nulls()
+    if dropped:
+        logging.getLogger(__name__).info("settings.json から null を %d 件取り除きました", dropped)
+
     async with bot:
         if not DISCORD_BOT_TOKEN:
             raise RuntimeError("DISCORD_BOT_TOKEN が設定されていません。環境変数または .env を確認してください。")

@@ -323,6 +323,14 @@ session-level advisory lock** を取れたプロセスだけがスケジュー�
 指す `services/*` の関数に委ねる。Bot 側も同じ関数を読むので、管理画面と Bot で
 設定の解釈がズレない。
 
+**null は保存しない。** 解除（`None`）は鍵ごと消し、`None` を消して空になった
+入れ子も消す。読み出し側はどれも `settings.get("x", 既定値)` の形なので、null が
+残っていると既定値が効かず、`int(None)` で落ちたりログのレベルが `"NONE"` に
+なったりする。書き込みはすべて `_mutate_settings` を通るのでそこで落とし、書き換えの
+起きないギルドに残った古い null は Bot の起動時に `drop_stored_nulls()` がまとめて
+落とす。どちらも「最後に触られた時刻」は押さない（形を揃えただけで、利用者は
+触っていない）。
+
 TTS だけは専用ストア（`services/tts_store.py`）を経由する。`watch_channel_ids`
 の int 化など、`settings.json` を直接触ると壊れる整合性がそこに入っている。
 
