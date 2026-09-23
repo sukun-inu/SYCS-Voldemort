@@ -86,6 +86,10 @@ class SharedCache:
         self._client: Any = None
         # 遮断器がこの時刻まで開いている（monotonic 秒）。0 は閉じている。
         self._blocked_until = 0.0
+        # 最初に失敗した時刻（monotonic 秒）。繋がっている間は None。
+        # 遮断器（_blocked_until）はクールダウンのたびに閉じるので、「いつから
+        # 落ちているか」はそちらからは分からない。復帰のログに経過を出すために持つ。
+        self._down_since: float | None = None
 
     @property
     def configured(self) -> bool:
@@ -364,12 +368,28 @@ class SharedCache:
         if client is None:
             return None
         try:
-            return await operation(client)
+            result = await operation(client)
         except Exception as exc:  # noqa: BLE001 - モジュール冒頭の 1.
             # 接続そのものを捨てる。壊れた接続を使い回すと、復旧後も失敗し続ける。
             self._client = None
             self._trip(exc, "操作に失敗しました")
             return None
+        self._recovered()
+        return result
+
+    def _recovered(self) -> None:
+        """落ちていた相手に、また1回通った。そのときだけ1行残す。
+
+        外れたときの行（_trip）しか無いと、ログから「30秒で戻った」のか
+        「ずっと落ちている」のかを区別できない。**止まっていた長さが分かる
+        のは、戻った行があるときだけである。** 戻った1回目だけに出し、
+        繋がっている間の成功では出さない（1リクエスト1行になる）。
+        """
+        if self._down_since is None:
+            return
+        elapsed = time.monotonic() - self._down_since
+        self._down_since = None
+        logger.info("共有キャッシュが戻りました（%.0f 秒ぶり）。", elapsed)
 
     def _trip(self, exc: BaseException, what: str) -> None:
         """遮断器を開く。開くときだけログを出す。
@@ -378,15 +398,29 @@ class SharedCache:
         埋もれる。ここを「1リクエスト1行」にした結果ログが読めなくなった例が
         別の箇所であったので、最初からこうしておく。
         """
-        already_open = time.monotonic() < self._blocked_until
-        self._blocked_until = time.monotonic() + self._cooldown
+        now = time.monotonic()
+        already_open = now < self._blocked_until
+        self._blocked_until = now + self._cooldown
         if already_open:
             return
+        if self._down_since is None:
+            self._down_since = now
+            logger.warning(
+                "共有キャッシュを %.0f 秒間使いません（%s: %s）。一次キャッシュだけで動作を続けます。",
+                self._cooldown,
+                what,
+                exc,
+            )
+            return
+        # クールダウンが明けて試し直したが、まだ繋がらない。同じ文言を繰り返すと
+        # 「また落ちた」のか「落ちたまま」なのかが読めないので、経過を添える。
         logger.warning(
-            "共有キャッシュを %.0f 秒間使いません（%s: %s）。一次キャッシュだけで動作を続けます。",
-            self._cooldown,
+            "共有キャッシュにまだ繋がりません（落ちてから %.0f 秒。%s: %s）。"
+            "あと %.0f 秒は一次キャッシュだけで動作します。",
+            now - self._down_since,
             what,
             exc,
+            self._cooldown,
         )
 
 
