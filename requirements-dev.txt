@@ -2,10 +2,10 @@
 # 含めない。coverage はテストの実行行数を測るだけのツールで、
 # bot / web の実行には一切関与しないため、本番イメージを太らせたくない。
 #
-# coverage==7.16.0
+# coverage==7.16.1
 # 2026年8月時点の最新安定版。7.x 系は Python 3.9〜3.14 に対応しており、
 # ローカル・CI・本番はすべて 3.13（Dockerfile と揃えてある）。
-coverage==7.16.0
+coverage==7.16.1
 
 # Linting and formatting
 #
@@ -27,7 +27,7 @@ coverage==7.16.0
 #   ローカルへ注釈を足して直した。**実行時の防御は外していない**（CONTRIBUTING 6.）。
 #   あわせて overrides の3つを unused と報告するようになったが、これは note で
 #   error ではないので CI は落ちない。消してはいけない理由は pyproject.toml に書いた。
-ruff==0.16.6
+ruff==0.16.8
 black==26.5.1
 mypy==2.3.1
 
