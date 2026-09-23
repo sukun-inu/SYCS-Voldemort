@@ -1187,7 +1187,7 @@ def main():
                 check("新コマンド名になっている", "/metal gold" in body and "/info server" in body)
 
                 # 読み物ページは1本の柱で組む。見出し・本文・コマンド一覧・
-                # 箇条書き・ボタンの左端がすべて同じ位置から始まること。
+                # 箇条書きの左端がすべて同じ位置から始まること。
                 # （コマンド一覧だけ 4px 内側に入り、罫線だけ全幅で伸びていた）
                 doc = page.evaluate("""() => {
                   const wrap = document.querySelector('.doc-wrap');
@@ -1197,8 +1197,10 @@ def main():
                     const el = document.querySelector(sel);
                     return el ? Math.round((el.getBoundingClientRect().left - L) * 10) / 10 : null;
                   };
-                  const links = document.querySelector('.doc-links').getBoundingClientRect();
-                  const legal = document.querySelector('.doc-legal').getBoundingClientRect();
+                  // 末尾の帯は公開4ページ共通の .site-footer（templates/_site_footer.html）。
+                  // 以前は .doc-links（ボタン行）と .doc-legal（罫線の帯）の2つだった。
+                  const content = wrap.lastElementChild.getBoundingClientRect();
+                  const footer = document.querySelector('.site-footer').getBoundingClientRect();
                   const icon = document.querySelector('.doc-section h2 .icon').getBoundingClientRect();
                   return {
                     cols: {
@@ -1206,9 +1208,8 @@ def main():
                       '見出し': left('.doc-section h2 .icon'),
                       'コマンド': left('.doc-cmd-name'),
                       '箇条書き': left('.doc-section ul > li'),
-                      'ボタン': left('.doc-links .btn'),
                     },
-                    gap: Math.round((legal.top - links.bottom) * 10) / 10,
+                    gap: Math.round((footer.top - content.bottom) * 10) / 10,
                     iconWidth: Math.round(icon.width * 10) / 10,
                   };
                 }""")
@@ -1217,8 +1218,8 @@ def main():
                     set(doc["cols"].values()) == {0},
                     " / ".join(f"{k} {v}" for k, v in doc["cols"].items()),
                 )
-                # 罫線を持つ帯に上の余白が無いと、直前のボタンの下端に線が接する
-                check("末尾の罫線がボタンに接しない", doc["gap"] >= 24, f'{doc["gap"]:g}px')
+                # 罫線を持つ帯に上の余白が無いと、直前の本文の下端に線が接する
+                check("末尾の罫線が本文に接しない", doc["gap"] >= 24, f'{doc["gap"]:g}px')
                 # .doc-section h2 .icon は body.public h2 .icon に負けやすい
                 check("見出しのアイコンが指定どおりの大きさ", doc["iconWidth"] == 17, f'{doc["iconWidth"]:g}px')
 
