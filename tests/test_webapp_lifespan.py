@@ -385,5 +385,300 @@ class LifespanShapeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(FakeScheduler.instances, [])
 
 
+class _FakeLockConn:
+    """ロックを持つ接続の代わり。execute が失敗するかどうかと、捨て方を記録する。"""
+
+    def __init__(self, *, alive: bool = True, fail_with: BaseException | None = None) -> None:
+        """alive=False なら execute が失敗する（接続が切れている）。"""
+        self.alive = alive
+        self.fail_with = fail_with
+        self.calls: list[str] = []
+
+    async def execute(self, statement: Any, params: Any = None) -> None:
+        """実行した文を記録する。切れていれば例外を投げる。"""
+        self.calls.append(str(statement))
+        if self.fail_with is not None:
+            raise self.fail_with
+        if not self.alive:
+            raise ConnectionError("connection is closed")
+
+    async def invalidate(self) -> None:
+        """プールへ戻さずに捨てたことを記録する。"""
+        self.calls.append("invalidate")
+
+    async def close(self) -> None:
+        """閉じた（プールへ返した）ことを記録する。"""
+        self.calls.append("close")
+
+
+class SchedulerLockWatchTests(unittest.IsolatedAsyncioTestCase):
+    """スケジューラのロックを持つ接続が切れたとき、担当を降りて取り直すこと。
+
+    ロックは起動時に取った接続を開きっぱなしにして保っている。以前はその接続が
+    途中で切れても誰も気づかず、**切れたワーカーはスケジューラを動かし続け、
+    外れたロックは次に起動したワーカーが取った。** 日次の価格取得が2本並んで走り、
+    MetalpriceAPI の無料枠（月100回）を倍の速さで使う。本番では停止のたびに
+    「advisory lock解放に失敗した（connection is closed）」が出ていた。
+    """
+
+    def setUp(self) -> None:
+        """ロック用接続の置き場を空にし、スケジューラは偽物にする。"""
+        FakeScheduler.instances.clear()
+        self._conn_patch = patch.object(app_module, "_scheduler_lock_conn", None)
+        self._conn_patch.start()
+        self.addCleanup(self._conn_patch.stop)
+        self._stack = [
+            patch.object(app_module, "AsyncIOScheduler", FakeScheduler),
+            patch.object(app_module, "CronTrigger", _fake_trigger("CronTrigger")),
+            patch.object(app_module, "IntervalTrigger", _fake_trigger("IntervalTrigger")),
+        ]
+        for item in self._stack:
+            item.start()
+            self.addCleanup(item.stop)
+
+    def _holding(self, conn: _FakeLockConn) -> Any:
+        """conn でロックを持ち、スケジューラが動いている担当を作る。"""
+        app_module._scheduler_lock_conn = conn  # type: ignore[assignment]  # 偽の接続
+        duty = app_module._SchedulerDuty()
+        duty.holds_lock = True
+        duty.start_scheduler()
+        return duty
+
+    async def test_a_live_connection_keeps_the_duty_as_it_is(self):
+        """接続が生きていれば、何も変えず、取り直しにも行かないこと。"""
+        duty = self._holding(_FakeLockConn(alive=True))
+        scheduler = duty.scheduler
+        acquire = AsyncMock(return_value=True)
+
+        with patch.object(app_module, "_try_acquire_scheduler_lock", acquire):
+            await duty.check()
+
+        acquire.assert_not_called()
+        self.assertIs(duty.scheduler, scheduler)
+        self.assertFalse(scheduler.shutdown_called)
+
+    async def test_a_dead_connection_stops_the_scheduler_before_trying_again(self):
+        """切れていたら、取り直しに行く**前に**スケジューラを止めること。
+
+        先に取り直しへ進むと、他のワーカーが引き継いでいた場合に、止め損ねた
+        こちらのスケジューラと向こうのスケジューラが同時に日次ジョブを走らせる。
+        """
+        duty = self._holding(_FakeLockConn(alive=False))
+        old = duty.scheduler
+        seen: list[bool] = []
+
+        async def acquire() -> bool:
+            """呼ばれた時点で古いスケジューラが止まっていたかを控える。"""
+            seen.append(old.shutdown_called)
+            return False
+
+        with (
+            patch.object(app_module, "_try_acquire_scheduler_lock", acquire),
+            self.assertLogs(app_module.logger, level="WARNING"),
+        ):
+            await duty.check()
+
+        self.assertEqual(seen, [True], "スケジューラを止める前に取り直しへ進んでいる")
+        self.assertFalse(duty.holds_lock)
+        self.assertIsNone(duty.scheduler)
+
+    async def test_it_takes_the_lock_again_without_rerunning_the_startup_jobs(self):
+        """取り直せたら新しいスケジューラで担当に戻り、起動時ジョブは走らせないこと。
+
+        起動時ジョブは「起動した日のぶんを作る」処理で、担当が入れ替わるたびに
+        走らせると同じ日の取得が重なる。
+        """
+        duty = self._holding(_FakeLockConn(alive=False))
+        startup = AsyncMock()
+
+        with (
+            patch.object(app_module, "_try_acquire_scheduler_lock", AsyncMock(return_value=True)),
+            patch.object(app_module, "_run_startup_jobs", startup),
+            self.assertLogs(app_module.logger, level="WARNING") as logs,
+        ):
+            await duty.check()
+
+        self.assertTrue(duty.holds_lock)
+        self.assertEqual(len(FakeScheduler.instances), 2, "新しいスケジューラが作られていない")
+        self.assertTrue(duty.scheduler.started)
+        startup.assert_not_called()
+        self.assertTrue(any("取り直した" in r.getMessage() for r in logs.records))
+
+    async def test_the_dead_connection_is_thrown_away_not_returned_to_the_pool(self):
+        """切れた接続は invalidate で捨てること（close だけでプールへ返さない）。
+
+        SELECT 1 が一時的に失敗しただけでセッションが生きていた場合、プールへ
+        返すとロックを抱えたセッションが別のリクエストに使い回され、誰も
+        ロックを取れなくなる。
+        """
+        conn = _FakeLockConn(alive=False)
+        duty = self._holding(conn)
+
+        with (
+            patch.object(app_module, "_try_acquire_scheduler_lock", AsyncMock(return_value=False)),
+            self.assertLogs(app_module.logger, level="WARNING"),
+        ):
+            await duty.check()
+
+        self.assertIn("invalidate", conn.calls)
+        self.assertLess(conn.calls.index("invalidate"), conn.calls.index("close"))
+        self.assertIsNone(app_module._scheduler_lock_conn)
+
+    async def test_a_worker_without_the_lock_takes_over(self):
+        """ロックを持っていなかったワーカーが、空いたロックを引き継ぐこと。
+
+        担当が死んだとき、引き継ぐのは残ったワーカーである。以前は起動時の1回しか
+        取りに行かなかったので、担当が死ぬと再起動まで誰も定期ジョブを走らせなかった。
+        """
+        duty = app_module._SchedulerDuty()
+
+        with (
+            patch.object(app_module, "_try_acquire_scheduler_lock", AsyncMock(return_value=True)),
+            self.assertLogs(app_module.logger, level="WARNING") as logs,
+        ):
+            await duty.check()
+
+        self.assertTrue(duty.holds_lock)
+        self.assertTrue(duty.scheduler.started)
+        self.assertTrue(any("引き継いだ" in r.getMessage() for r in logs.records))
+
+    async def test_a_worker_without_the_lock_stays_quiet_while_someone_else_holds_it(self):
+        """他が持っている間は、何も作らず、何も出さないこと（毎分ログが出るのを避ける）。"""
+        duty = app_module._SchedulerDuty()
+
+        with (
+            patch.object(app_module, "_try_acquire_scheduler_lock", AsyncMock(return_value=False)),
+            self.assertNoLogs(app_module.logger, level="INFO"),
+        ):
+            await duty.check()
+
+        self.assertFalse(duty.holds_lock)
+        self.assertEqual(FakeScheduler.instances, [])
+
+    async def test_a_database_that_is_down_does_not_break_the_watch(self):
+        """取りに行く処理が例外を出しても、check() は例外を外へ出さないこと。"""
+        duty = app_module._SchedulerDuty()
+
+        with (
+            patch.object(app_module, "_try_acquire_scheduler_lock", AsyncMock(side_effect=OSError("db down"))),
+            self.assertLogs(app_module.logger, level="WARNING"),
+        ):
+            await duty.check()
+
+        self.assertFalse(duty.holds_lock)
+
+    async def test_the_watch_keeps_going_after_an_unexpected_failure(self):
+        """check() が想定外に落ちても、見張りのループは止まらないこと。
+
+        ここが止まると、ロックを失ったワーカーが担当を名乗り続ける元の状態へ黙って戻る。
+        """
+        calls: list[int] = []
+
+        async def check() -> None:
+            """1回目だけ落ち、3回目で見張りを終わらせる。"""
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError("boom")
+            if len(calls) == 3:
+                raise asyncio.CancelledError
+
+        duty = app_module._SchedulerDuty()
+        duty.check = check  # type: ignore[method-assign]  # 呼ばれた回数だけ見たい
+        with (
+            patch.object(app_module, "SCHEDULER_LOCK_CHECK_SECONDS", 0),
+            self.assertLogs(app_module.logger, level="ERROR"),
+            self.assertRaises(asyncio.CancelledError),
+        ):
+            await app_module._watch_scheduler_lock(duty)
+
+        self.assertEqual(len(calls), 3)
+
+    async def test_releasing_a_lock_whose_connection_is_gone_is_not_an_error(self):
+        """停止時に接続が既に切れていたら、例外の全文ではなく1行で済ませること。
+
+        切れた時点で Postgres がロックを外しているので、外すものは残っていない。
+        以前は停止のたびに100行近いトレースバックが ERROR で出ていた。
+        """
+        from sqlalchemy.exc import InterfaceError
+
+        conn = _FakeLockConn(fail_with=InterfaceError("SELECT pg_advisory_unlock($1)", {}, Exception("closed")))
+        app_module._scheduler_lock_conn = conn  # type: ignore[assignment]  # 偽の接続
+
+        with self.assertLogs(app_module.logger, level="INFO") as logs:
+            await app_module._release_scheduler_lock()
+
+        self.assertEqual([r.levelname for r in logs.records], ["INFO"])
+        self.assertIn("close", conn.calls)
+        self.assertIsNone(app_module._scheduler_lock_conn)
+
+    async def test_the_lifespan_stops_the_watch_before_the_scheduler(self):
+        """後始末で、見張りを止めてからスケジューラを止めること。
+
+        逆だと、止めたばかりのスケジューラを見張りが「担当が居ない」と読んで
+        取り直しに行く。
+        """
+        order: list[str] = []
+        started = asyncio.Event()
+
+        async def fake_watch(duty: Any) -> None:
+            """止められた時点を記録する。"""
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                order.append("watch_stopped")
+                raise
+
+        class RecordingScheduler(FakeScheduler):
+            """止められた時点を記録するスケジューラ。"""
+
+            def shutdown(self, wait: bool = True) -> None:
+                """止められたことを order へ記録する。"""
+                order.append("scheduler_stopped")
+                super().shutdown(wait)
+
+        async def fake_report_forever(app_name: str, **kwargs: Any) -> None:
+            """報告ループの代わり。"""
+            await asyncio.Event().wait()
+
+        with (
+            patch.object(app_module, "init_db", AsyncMock()),
+            patch.object(app_module, "refresh_vapid_config", lambda: None),
+            patch.object(app_module, "_try_acquire_scheduler_lock", AsyncMock(return_value=True)),
+            patch.object(app_module, "_run_startup_jobs", AsyncMock()),
+            patch.object(app_module, "_release_scheduler_lock", AsyncMock(side_effect=lambda: order.append("release"))),
+            patch.object(app_module, "close_db", AsyncMock()),
+            patch.object(app_module, "AsyncIOScheduler", RecordingScheduler),
+            patch.object(app_module, "report_forever", fake_report_forever),
+            patch.object(app_module, "_watch_scheduler_lock", fake_watch),
+            patch.multiple(app_module, WEB_SCHEDULER_ENABLED=True),
+        ):
+            async with app_module.lifespan(None):  # type: ignore[arg-type]  # 引数は使われない
+                await asyncio.wait_for(started.wait(), 1)
+
+        self.assertEqual(order, ["watch_stopped", "scheduler_stopped", "release"])
+
+    async def test_the_watch_is_not_started_when_the_scheduler_is_off(self):
+        """WEB_SCHEDULER_ENABLED=false なら、見張りも動かさないこと。"""
+        watch = AsyncMock()
+
+        async def fake_report_forever(app_name: str, **kwargs: Any) -> None:
+            """報告ループの代わり。"""
+            await asyncio.Event().wait()
+
+        with (
+            patch.object(app_module, "init_db", AsyncMock()),
+            patch.object(app_module, "refresh_vapid_config", lambda: None),
+            patch.object(app_module, "close_db", AsyncMock()),
+            patch.object(app_module, "report_forever", fake_report_forever),
+            patch.object(app_module, "_watch_scheduler_lock", watch),
+            patch.multiple(app_module, WEB_SCHEDULER_ENABLED=False),
+        ):
+            async with app_module.lifespan(None):  # type: ignore[arg-type]  # 引数は使われない
+                await asyncio.sleep(0)
+
+        watch.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
