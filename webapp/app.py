@@ -24,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
+from sqlalchemy.exc import IntegrityError, InterfaceError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 from config import METAL_COMMANDS
@@ -734,6 +734,13 @@ async def collect_daily_data(*, force_snapshot_refresh: bool = False, force_fore
 SCHEDULER_ADVISORY_LOCK_KEY = 721045501
 _scheduler_lock_conn: AsyncConnection | None = None
 
+# ロックを持つ接続が生きているかを確かめる間隔（秒）。持っていないワーカーは、
+# 同じ間隔で取りに行く（担当が死んだときに引き継ぐため）。
+#
+# 短すぎる意味は無い。見張っているのは「切れたまま担当を名乗り続ける」ことで、
+# 日次ジョブの時刻に間に合えばよい。持っていないワーカーは毎回接続を1本借りる。
+SCHEDULER_LOCK_CHECK_SECONDS = env_int("WEB_SCHEDULER_LOCK_CHECK_SECONDS", 60, minimum=5)
+
 
 async def _try_acquire_scheduler_lock() -> bool:
     """PostgreSQLのsession-level advisory lockを取得できたプロセスだけが定期ジョブを担当する。
@@ -775,10 +782,135 @@ async def _release_scheduler_lock() -> None:
             text("SELECT pg_advisory_unlock(:key)"),
             {"key": SCHEDULER_ADVISORY_LOCK_KEY},
         )
+    except InterfaceError:
+        # 接続がもう切れていた。session-level のロックは、セッションが終わった
+        # 時点で Postgres が外しているので、ここで外すものは残っていない。
+        # 例外の全文を出すと「解放に失敗した」ように読めるが、実害は無い。
+        logger.info("[WEB] スケジューラのロックを持つ接続は既に切れていた（ロックは Postgres 側で外れている）。")
     except Exception:
         logger.exception("[WEB] スケジューラのadvisory lock解放に失敗した。")
     finally:
         await conn.close()
+
+
+async def _scheduler_lock_alive() -> bool:
+    """ロックを持っている接続が、まだ生きているか。
+
+    session-level の advisory lock は、その接続のセッションが続く限り外れない。
+    だから接続が応答すればロックも持っている。逆に接続が切れていれば、ロックは
+    Postgres がもう外していて、**他のワーカーが取れる状態になっている。**
+    """
+    conn = _scheduler_lock_conn
+    if conn is None:
+        return False
+    try:
+        await conn.execute(text("SELECT 1"))
+    except Exception:
+        return False
+    return True
+
+
+async def _discard_scheduler_lock_conn() -> None:
+    """切れたと判断した接続を、プールへ戻さずに捨てる。
+
+    **close() だけで済ませてはいけない。** close() は接続をプールへ返す。
+    SELECT 1 が一時的に失敗しただけでセッションが実は生きていた場合、ロックを
+    抱えたままのセッションがプールに戻り、別のリクエストに使い回される。
+    そうなると誰も（このワーカー自身も）ロックを取れず、日次ジョブが止まる。
+    invalidate() はその下の接続ごと閉じるので、セッションが生きていてもロックが外れる。
+    """
+    global _scheduler_lock_conn
+    conn, _scheduler_lock_conn = _scheduler_lock_conn, None
+    if conn is None:
+        return
+    try:
+        await conn.invalidate()
+        await conn.close()
+    except Exception:
+        # 捨てる側の失敗で見張りを止めたくない。接続はもう使わない。
+        logger.debug("[WEB] 切れたロック用接続を捨てるときに失敗した", exc_info=True)
+
+
+class _SchedulerDuty:
+    """このワーカーが定期ジョブの担当かどうかと、担当ならそのスケジューラ。
+
+    lifespan の局所変数にしておくと、途中で担当が入れ替わったこと（ロック用
+    接続が切れた・担当が死んで引き継いだ）を後始末へ伝えられない。後始末は
+    「今ロックを持っているか」で解放するかを決めるので、ここへ集める。
+    """
+
+    def __init__(self) -> None:
+        """担当ではない状態で始める。"""
+        self.scheduler: AsyncIOScheduler | None = None
+        self.holds_lock = False
+
+    def start_scheduler(self) -> None:
+        """定期ジョブを登録して動かす。"""
+        self.scheduler = _build_scheduler()
+        self.scheduler.start()
+
+    def stop_scheduler(self) -> None:
+        """動いていれば止める。実行中のジョブは待たない（lifespan の後始末と同じ）。"""
+        if self.scheduler is not None:
+            self.scheduler.shutdown(wait=False)
+            self.scheduler = None
+
+    async def check(self) -> None:
+        """ロックを持っているなら生きているかを確かめ、持っていないなら取りに行く。
+
+        **持っていたのに接続が切れていたら、先にスケジューラを止める。** 止めずに
+        取り直しへ進むと、取り直しに失敗した（＝他のワーカーが引き継いだ）ときに
+        2つのワーカーが同時に日次ジョブを走らせ、MetalpriceAPI の無料枠を倍の
+        速さで使う。
+
+        取り直したときに起動時ジョブ（_run_startup_jobs）は走らせない。あれは
+        「起動した日のぶんを作る」処理で、担当の入れ替わりのたびに走らせると
+        同じ日の取得が重なる。
+        """
+        if self.holds_lock:
+            if await _scheduler_lock_alive():
+                return
+            logger.warning(
+                "[WEB] スケジューラのロックを持っていた DB 接続が切れていた。"
+                "スケジューラを止めて取り直す（切れていた間に他のワーカーが引き継いでいる可能性がある）。"
+            )
+            self.stop_scheduler()
+            await _discard_scheduler_lock_conn()
+            self.holds_lock = False
+            was_holding = True
+        else:
+            was_holding = False
+
+        try:
+            acquired = await _try_acquire_scheduler_lock()
+        except Exception as exc:
+            # DB が落ちている間はここへ来る。次の見張りでまた試す。
+            logger.warning("[WEB] スケジューラのロックを取りに行けなかった: %s", exc)
+            return
+        if not acquired:
+            if was_holding:
+                logger.warning("[WEB] スケジューラのロックは他のワーカーが持っている。このワーカーは担当を降りる。")
+            return
+        self.holds_lock = True
+        self.start_scheduler()
+        logger.warning(
+            "[WEB] スケジューラのロックを%s。定期ジョブの担当になった（起動時ジョブは走らせない）。",
+            "取り直した" if was_holding else "引き継いだ",
+        )
+
+
+async def _watch_scheduler_lock(duty: _SchedulerDuty) -> None:
+    """一定間隔で duty.check() を呼び続ける。例外で止まらない。
+
+    ここが止まると、ロックを失ったワーカーが担当を名乗り続ける元の状態へ
+    黙って戻る。check() の中は例外を拾っているが、拾い漏れても見張りは続ける。
+    """
+    while True:
+        await asyncio.sleep(SCHEDULER_LOCK_CHECK_SECONDS)
+        try:
+            await duty.check()
+        except Exception:
+            logger.exception("[WEB] スケジューラのロックの見張りで想定外の失敗")
 
 
 async def _run_startup_jobs() -> None:
@@ -901,17 +1033,16 @@ async def lifespan(_: FastAPI):
 
     await init_db()
     refresh_vapid_config()
-    scheduler: AsyncIOScheduler | None = None
-    has_scheduler_lock = False
+    duty = _SchedulerDuty()
+    lock_watch: asyncio.Task[None] | None = None
 
     if WEB_SCHEDULER_ENABLED:
-        has_scheduler_lock = await _try_acquire_scheduler_lock()
+        duty.holds_lock = await _try_acquire_scheduler_lock()
 
-    if WEB_SCHEDULER_ENABLED and has_scheduler_lock:
+    if WEB_SCHEDULER_ENABLED and duty.holds_lock:
         await _run_startup_jobs()
 
-        scheduler = _build_scheduler()
-        scheduler.start()
+        duty.start_scheduler()
         logger.info("WEB_SCHEDULER_ENABLED=true: background scheduler started (advisory lock acquired)")
     elif WEB_SCHEDULER_ENABLED:
         logger.info(
@@ -920,6 +1051,13 @@ async def lifespan(_: FastAPI):
         )
     else:
         logger.info("WEB_SCHEDULER_ENABLED=false: startup jobs and scheduler are disabled")
+
+    # ロックを持つ接続は起動から終了まで開きっぱなしで、途中で切れても誰も
+    # 気づかなかった（切れた時点でロックは外れ、次に起動したワーカーが取るので、
+    # 定期ジョブが2本並んで走る）。持っていないワーカーも見張る——担当が死んだ
+    # ときに引き継ぐのはそちらである。
+    if WEB_SCHEDULER_ENABLED:
+        lock_watch = asyncio.create_task(_watch_scheduler_lock(duty))
 
     # メトリクスの報告。**advisory lock とは無関係に、全ワーカーで動かす。**
     # スケジューラ担当だけにすると、担当でないワーカーが死んでも Netdata から
@@ -941,9 +1079,16 @@ async def lifespan(_: FastAPI):
             await metrics_task
         except asyncio.CancelledError:
             pass
-        if scheduler is not None:
-            scheduler.shutdown(wait=False)
-        if has_scheduler_lock:
+        # 見張りを先に止める。スケジューラを止めた直後に見張りが走ると、
+        # 止めたばかりの担当を取り直しに行く。
+        if lock_watch is not None:
+            lock_watch.cancel()
+            try:
+                await lock_watch
+            except asyncio.CancelledError:
+                pass
+        duty.stop_scheduler()
+        if duty.holds_lock:
             await _release_scheduler_lock()
         await close_db()
 

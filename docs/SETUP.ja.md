@@ -130,6 +130,7 @@ docker compose up -d --build
 |---|---|---|
 | `WEB_PORT` | 任意 | デフォルト `8000` |
 | `WEB_SCHEDULER_ENABLED` | 任意 | `true/false`。日次更新/Push通知ジョブを実行するか（既定 `true`） |
+| `WEB_SCHEDULER_LOCK_CHECK_SECONDS` | 任意 | 定期ジョブの担当ロックを見張る間隔（秒、既定 `60`、最小 `5`）。担当の接続が切れたら取り直し、担当が居なくなったら他のワーカーが引き継ぐ |
 | `METAL_AUTO_REPAIR_ENABLED` | 任意 | `true/false`。metalprice DBの定期自動修復を実行するか（既定 `true`） |
 | `METAL_AUTO_REPAIR_INTERVAL_MINUTES` | 任意 | 自動修復の実行間隔（分、既定 `30`）。delta_from_previous・metal_codeの整合性チェックは外部APIを消費しない純粋なローカル計算のため、範囲を絞らず常に全履歴が対象 |
 | `METAL_AUTO_REPAIR_FORCE_FORECAST_REFRESH` | 任意 | 各修復時に予測キャッシュ再生成を強制（既定 `false`） |
