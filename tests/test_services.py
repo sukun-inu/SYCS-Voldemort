@@ -2278,6 +2278,147 @@ class SettingsStoreTests(unittest.TestCase):
         self.assertEqual(store.get_welcome_settings(fresh)["channel_id"], 1)
 
 
+class SettingsNullTests(unittest.TestCase):
+    """settings.json に null を保存しないこと。
+
+    読み出し側はどれも ``settings.get("x", 既定値)`` の形で、鍵が無ければ既定値へ
+    倒れる前提で書かれている。null が入っていると既定値ではなく None が返り、
+    ``int(...)`` で落ちたりログのレベルが "NONE" になったりする。
+    """
+
+    def _raw(self, guild_id):
+        """キャッシュを通さず、ディスクにある1ギルドぶんをそのまま読む。"""
+        data = json.loads(store._SETTINGS_FILE.read_text(encoding="utf-8"))
+        return data["guilds"].get(str(guild_id))
+
+    def _write_old_file(self, guilds):
+        """null を含んだまま保存されていた、以前の形のファイルを作る。"""
+        store._save_all({"guilds": {str(gid): settings for gid, settings in guilds.items()}})
+
+    def test_clearing_a_setting_removes_the_key(self):
+        """解除（None）は鍵ごと消え、読み出しは「未設定」の既定値に戻ること。"""
+        store.set_vc_notify_channel_id(5101, 123)
+        store.set_vc_notify_channel_id(5101, None)
+
+        self.assertNotIn("vc_notify_channel_id", self._raw(5101))
+        self.assertEqual(store.get_vc_notify_channel_id(5101), 0)
+
+    def test_a_block_left_with_only_nulls_disappears(self):
+        """null を落として空になった入れ子は、空の {} として残さないこと。"""
+        store.set_welcome_channel(5102, None)
+        self.assertNotIn("welcome", self._raw(5102))
+
+        store.set_welcome_message(5102, "ようこそ")
+        store.set_welcome_channel(5102, None)
+        self.assertEqual(self._raw(5102)["welcome"], {"message": "ようこそ"})
+
+    def test_a_null_no_longer_blocks_the_default(self):
+        """null が入っていても、読み出しで既定値が効くこと。
+
+        以前は ``tts.max_length`` に null が入ると、読み上げのたびに
+        ``int(None)`` で TypeError になっていた。
+        """
+        store.update_guild_settings(5103, {"tts": {"enabled": True, "max_length": None}})
+        self.assertNotIn("max_length", store.get_guild_settings(5103)["tts"])
+
+    def test_empty_blocks_and_list_items_are_kept(self):
+        """もとから空の辞書と、リストの中の None は触らないこと。
+
+        空の辞書は「作ったが中身が無い」で、鍵が無いのとは書いた側の意図が違う。
+        リストの要素は位置に意味があるので、None を抜くと後ろがずれる。
+        """
+        store.update_guild_settings(5104, {"sticky_messages": {}, "slots": [1, None, 3]})
+        raw = self._raw(5104)
+        self.assertEqual(raw["sticky_messages"], {})
+        self.assertEqual(raw["slots"], [1, None, 3])
+
+    def test_false_and_zero_are_values_not_nulls(self):
+        """落とすのは None だけ。False・0・空文字は利用者が選んだ値である。"""
+        store.update_guild_settings(5105, {"flag": False, "count": 0, "text": ""})
+        raw = self._raw(5105)
+        self.assertEqual((raw["flag"], raw["count"], raw["text"]), (False, 0, ""))
+
+    def test_any_write_cleans_every_guild_without_touching_their_time(self):
+        """1ギルドの書き込みで、他のギルドに残っていた null も揃うこと。
+
+        揃えたギルドに「最後に触られた時刻」を押してはいけない。押すと、放棄された
+        設定の掃除（guild_retention）が「最近触られた」と読み、永久に動かなくなる。
+        """
+        old = "2006-01-01T00:00:00+00:00"
+        self._write_old_file(
+            {
+                5106: {"vc_notify_role_id": None, "log_channel_id": 1, store.TOUCHED_AT_KEY: old},
+                5107: {"log_channel_id": 2},
+            }
+        )
+
+        store.update_guild_settings(5107, {"log_channel_id": 3})
+
+        self.assertNotIn("vc_notify_role_id", self._raw(5106))
+        self.assertEqual(store.touched_at(5106), old)
+
+    def test_the_startup_sweep_removes_old_nulls(self):
+        """起動時の掃除が、書き換えの起きていないギルドの null を落とすこと。"""
+        old = "2006-01-01T00:00:00+00:00"
+        self._write_old_file(
+            {
+                5108: {
+                    "welcome": {"channel_id": None, "message": "やあ"},
+                    "earthquake": {"channel_id": None},
+                    "news_feeds": {"f": {"channel_id": 1, "seen_hashes": ["a"], "last_run": None}},
+                    store.TOUCHED_AT_KEY: old,
+                }
+            }
+        )
+
+        self.assertEqual(store.drop_stored_nulls(), 3)
+
+        raw = self._raw(5108)
+        self.assertEqual(raw["welcome"], {"message": "やあ"})
+        self.assertNotIn("earthquake", raw)
+        self.assertEqual(raw["news_feeds"]["f"], {"channel_id": 1, "seen_hashes": ["a"]})
+        self.assertEqual(store.touched_at(5108), old, "形を揃えただけで時刻を押した")
+
+    def test_the_startup_sweep_does_not_rewrite_a_clean_file(self):
+        """落とすものが無ければファイルを書かないこと（起動のたびに書き直さない）。"""
+        self._write_old_file({5109: {"log_channel_id": 1}})
+        before = store._SETTINGS_FILE.stat().st_mtime_ns
+
+        with patch.object(store, "_save_all") as save:
+            self.assertEqual(store.drop_stored_nulls(), 0)
+
+        save.assert_not_called()
+        self.assertEqual(store._SETTINGS_FILE.stat().st_mtime_ns, before)
+
+    def test_the_startup_sweep_leaves_a_broken_file_alone(self):
+        """壊れたファイルを空として書き戻さないこと。
+
+        読めない settings.json は空として読まれる。そのまま保存すると、
+        null を落とすつもりで全ギルドの設定を消すことになる。
+        """
+        store._SETTINGS_FILE.write_text('{"guilds": {"1": {"log_channel_id": ', encoding="utf-8")
+        try:
+            self.assertEqual(store.drop_stored_nulls(), 0)
+            self.assertEqual(store._SETTINGS_FILE.read_text(encoding="utf-8"), '{"guilds": {"1": {"log_channel_id": ')
+        finally:
+            store._save_all({"guilds": {}})
+
+    def test_a_nested_change_moves_the_timestamp(self):
+        """入れ子の設定を書き換えたときも、触られた時刻が動くこと。
+
+        変更前の控えを浅いコピーで取っていたので、welcome や earthquake の中を
+        その場で書き換えると控えの側も一緒に変わり、「変わっていない」と
+        判定されていた。トップレベルの設定しか触らないギルドだけが時刻を持ち、
+        入れ子の設定だけを使うギルドは放棄扱いの判定に使う時刻が古いままになる。
+        """
+        store.set_welcome_channel(5110, 10)
+        store.update_guild_settings(5110, {store.TOUCHED_AT_KEY: "2006-01-01T00:00:00+00:00"})
+
+        store.set_welcome_channel(5110, 20)
+
+        self.assertNotEqual(store.touched_at(5110), "2006-01-01T00:00:00+00:00")
+
+
 class SettingsLockLoggingTests(unittest.TestCase):
     """settings.json のファイルロック。永続化に関わるので、握りつぶさず
     理由を残すこと（他プロセスが最大 _SETTINGS_LOCK_STALE_SEC 待たされる）。"""

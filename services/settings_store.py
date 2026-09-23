@@ -1,3 +1,4 @@
+import copy
 import logging
 from datetime import datetime, timezone
 import os
@@ -280,6 +281,73 @@ def known_guild_ids() -> list[int]:
     return out
 
 
+def _drop_nulls(node: Any) -> int:
+    """値が None の鍵を、入れ子の奥まで取り除く。取り除いた数を返す。
+
+    **None は「未設定」であって、保存する値ではない。** 読み出し側はどれも
+    ``settings.get("x", 既定値)`` の形で書かれていて、鍵が無ければ既定値へ
+    倒れる。ところが null が入っていると ``get`` は既定値ではなく None を返し、
+    ``int(settings.get("max_length", 100))`` のような読み方は TypeError で落ちる
+    （ログのレベルなら ``str(None)`` で "NONE" になる）。鍵ごと消しておけば、
+    どの読み方でも既定値が効く。
+
+    null を取り除いた結果で空になった辞書も消す（``{"welcome": {"channel_id": null}}``
+    を ``{"welcome": {}}`` として残さない）。もとから空だった辞書は残す。
+    リストの要素は位置に意味があるので、None でも消さない（中の辞書だけ掃除する）。
+    """
+    removed = 0
+    if isinstance(node, dict):
+        for key in [key for key, value in node.items() if value is None]:
+            del node[key]
+            removed += 1
+        for key in list(node):
+            value = node[key]
+            if not isinstance(value, (dict, list)):
+                continue
+            inner = _drop_nulls(value)
+            removed += inner
+            if inner and isinstance(value, dict) and not value:
+                del node[key]
+    elif isinstance(node, list):
+        for item in node:
+            removed += _drop_nulls(item)
+    return removed
+
+
+def _drop_nulls_in_guilds(data: dict[str, Any]) -> int:
+    """全ギルドの設定から null を取り除く。ギルドの入れ物そのものは消さない。
+
+    根の ``guilds`` や各ギルドの dict まで「空になったから」と消すと、
+    ``data["guilds"]`` がある前提で書かれた全コードが落ちる。
+    """
+    guilds = data.get("guilds")
+    if not isinstance(guilds, dict):
+        return 0
+    return sum(_drop_nulls(settings) for settings in guilds.values() if isinstance(settings, dict))
+
+
+def drop_stored_nulls() -> int:
+    """settings.json に保存済みの null を取り除く。取り除いた数を返す。
+
+    書き込みはすべて _mutate_settings を通り、そこで null を落としているので、
+    設定を1度でも書き換えればファイル全体が揃う。これは「書き換えが起きない
+    まま古い null が残る」ぶんを、起動時にまとめて揃えるための口。
+
+    - 取り除くものが無ければ書かない（毎回の起動でファイルを書き直さない）
+    - 「最後に触られた時刻」は押さない。形を揃えただけで、利用者が設定を
+      触ったわけではない。押すと、放棄された設定の掃除（guild_retention）が
+      「最近触られた」と読んで永久に動かなくなる
+    - 壊れた settings.json は空として読まれるが、そこからは何も取り除けない
+      ので書き戻さない（空で上書きして全ギルドを消すことが起きない）
+    """
+    with _settings_file_lock():
+        data = _load_all_from_disk()
+        removed = _drop_nulls_in_guilds(data)
+        if removed:
+            _save_all(data)
+        return removed
+
+
 def _mutate_settings(mutator: Callable[[dict[str, Any]], _T]) -> _T:
     """ロックを取り、ディスクから読み直してから mutator を適用して保存する。
 
@@ -290,11 +358,24 @@ def _mutate_settings(mutator: Callable[[dict[str, Any]], _T]) -> _T:
 
     保存の直前に「触られた時刻」を押す。全てのセッターがここを通るので、
     1箇所で足りる（個別のセッターへ足す方式は、次に足すセッターで忘れる）。
+    null を保存しない処理も同じ理由でここに置く（→ _drop_nulls）。
+
+    変更前の控えは**深いコピー**で取る。浅いコピーだと、入れ子の設定
+    （welcome・earthquake・tts など）を mutator がその場で書き換えたとき、
+    控えの側も同じ辞書なので一緒に変わり、「変わっていない」と判定されて
+    時刻が押されなかった。
+
+    null は控えを取る前にも落とす。控えに null が残っていると、書き込み後の
+    null を落としただけで「変わった」と読まれ、触っていないギルドに時刻が押される。
     """
     with _settings_file_lock():
         data = _load_all_from_disk()
-        before = {key: dict(value) for key, value in (data.get("guilds") or {}).items() if isinstance(value, dict)}
+        _drop_nulls_in_guilds(data)
+        before = {
+            key: copy.deepcopy(value) for key, value in (data.get("guilds") or {}).items() if isinstance(value, dict)
+        }
         result = mutator(data)
+        _drop_nulls_in_guilds(data)
         _stamp_touched(data, before)
         _save_all(data)
         return result
