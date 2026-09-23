@@ -146,58 +146,7 @@ class MetalDeferTests(unittest.TestCase):
 
 
 class AdminGuardTests(unittest.TestCase):
-    """ドキュメントで管理者専用としているものに、実際にガードがあること。
-
-    録音の状況は「誰が録音されていて、どれだけ喋ったか」を含む。
-    """
-
-    def _tree(self):
-        """コマンドを登録して、名前から呼び出せるようにする。"""
-        registry = {}
-
-        class FakeGroup:
-            def __init__(self, **kwargs):
-                self.kwargs = kwargs
-
-            def command(self, *, name, description=""):
-                def wrap(fn):
-                    registry[name] = fn
-                    return fn
-
-                return wrap
-
-        return registry, FakeGroup
-
-    def test_record_status_refuses_non_admins(self):
-        # commands/recording_commands.py はトピック別モジュール（commands/record/
-        # 以下）へ分割済みで、/record status の実処理と recording_service 参照は
-        # commands.record.session 側にある。パッチ対象もそちらに合わせる
-        # （分割の経緯は commands/record/__init__.py を参照）。
-        import commands.record.session as rs
-        import commands.recording_commands as rc
-
-        registry, FakeGroup = self._tree()
-        with patch.object(rc.app_commands, "Group", FakeGroup):
-            rc.register_recording_commands(Mock())
-
-        interaction, calls = make_interaction(administrator=False)
-        with patch.object(rs.recording, "get_session", Mock()) as get_session:
-            asyncio.run(registry["status"](interaction))
-        get_session.assert_not_called()
-        self.assertTrue(calls, "何も返していない")
-
-    def test_record_status_answers_admins(self):
-        import commands.record.session as rs
-        import commands.recording_commands as rc
-
-        registry, FakeGroup = self._tree()
-        with patch.object(rc.app_commands, "Group", FakeGroup):
-            rc.register_recording_commands(Mock())
-
-        interaction, calls = make_interaction(administrator=True)
-        with patch.object(rs.recording, "get_session", Mock(return_value=None)):
-            asyncio.run(registry["status"](interaction))
-        self.assertTrue(calls, "何も返していない")
+    """ドキュメントで管理者専用としているものに、実際にガードがあること。"""
 
     def test_tts_status_refuses_non_admins(self):
         import commands.tts_commands as tc
@@ -210,11 +159,6 @@ class AdminGuardTests(unittest.TestCase):
 
 
 class GuardHelperTests(unittest.TestCase):
-    def test_is_admin_is_false_outside_a_guild(self):
-        from commands.guards import is_admin
-
-        interaction, _ = make_interaction(guild=False)
-        self.assertFalse(is_admin(interaction))
 
     def test_ensure_admin_explains_why_it_refused(self):
         from commands.guards import ensure_admin
@@ -488,8 +432,7 @@ class TtsValidationTests(unittest.TestCase):
 class TtsJoinDeferTests(unittest.TestCase):
     """/tts join: VC接続前にdeferすること。
 
-    temp_join はVC接続を伴い、管理者なら録音の自動開始判定も続く。どちらも
-    Discordとの往復があり、defer無しでは3秒の持ち時間を超えて
+    temp_join はVC接続を伴い、Discordとの往復がある。defer無しでは3秒の持ち時間を超えて
     「アプリケーションが応答しませんでした」になりうる。
     """
 
@@ -505,80 +448,12 @@ class TtsJoinDeferTests(unittest.TestCase):
         with (
             patch.object(tc, "get_tts_settings", Mock(return_value={"enabled": True})),
             patch.object(tc.tts_service, "temp_join", slow_join),
-            patch.object(tc, "is_admin", Mock(return_value=False)),
         ):
             asyncio.run(tc.tts_join.callback(interaction, Mock(mention="#vc")))
 
         self.assertTrue(seen_before_join, "temp_join が呼ばれていない")
         self.assertIn("defer", seen_before_join[0], f"接続前の応答: {seen_before_join[0]}")
         self.assertEqual(calls, ["defer", "followup.send"], str(calls))
-
-
-class RecordingListCapTests(unittest.TestCase):
-    """録音の除外リスト・参加者リストは、件数が多くても省略件数を隠さない。"""
-
-    def _register(self):
-        # /record config の実処理は commands/record/ への分割で
-        # commands.record.config へ移った。get_recording_settings を patch する
-        # 先もそちらでなければならない（分割の経緯は
-        # commands/record/__init__.py を参照）。recording_commands 側へ
-        # 再エクスポートして AttributeError だけ消すと、patch が実際の
-        # 呼び出し先へ届かないまま既定の設定を読み、除外0人の経路を通って
-        # 何も確かめずに緑になる。
-        import commands.record.config as rcfg
-        import commands.recording_commands as rc
-
-        registry = {}
-
-        class FakeGroup:
-            def __init__(self, **kwargs):
-                pass
-
-            def command(self, *, name, description=""):
-                def wrap(fn):
-                    registry[name] = fn
-                    return fn
-
-                return wrap
-
-            def add_command(self, *a, **k):
-                pass
-
-        with patch.object(rc.app_commands, "Group", FakeGroup):
-            rc.register_recording_commands(Mock())
-        return rcfg, registry
-
-    def test_excluded_list_shows_the_omitted_count(self):
-        rcfg, registry = self._register()
-        interaction, calls = make_interaction(administrator=True)
-        sent = {}
-
-        async def fake_send(*a, **k):
-            sent["embed"] = k.get("embed")
-
-        interaction.response.send_message = fake_send
-
-        excluded_ids = list(range(30))
-        with (
-            patch.object(
-                rcfg,
-                "get_recording_settings",
-                Mock(
-                    return_value={
-                        "enabled": True,
-                        "auto_start": False,
-                        "max_minutes": 60,
-                        "retention_days": 7,
-                        "excluded_user_ids": excluded_ids,
-                    }
-                ),
-            ),
-            patch.object(rcfg.recording, "preferred_vc_channel_id", Mock(return_value=None)),
-        ):
-            asyncio.run(registry["config"](interaction))
-
-        field = next(f for f in sent["embed"].fields if f.name == "録音しない人")
-        self.assertIn("…他10人", field.value)
 
 
 class ServerNewsListTests(unittest.TestCase):
@@ -934,7 +809,7 @@ class CommandTreeTests(unittest.TestCase):
 
     def test_nothing_is_lost_in_the_rename(self):
         """グループ化で機能が減っていないこと。"""
-        self.assertEqual(len(self.leaves), 64, sorted(self.leaves))
+        self.assertEqual(len(self.leaves), 58, sorted(self.leaves))
 
     def test_the_docs_list_exactly_what_is_registered(self):
         """ドキュメントと実装のずれは、読んだ人の理解と挙動のずれになる。"""
@@ -971,7 +846,7 @@ class CapListBudgetTests(unittest.TestCase):
 
     以前は items[:limit] と件数だけで打ち切っており、docstring が名乗る
     「2000文字に収まる」を実際には保証していなかった（1件の長さが可変な
-    /news list や、embed field(1024) に流用した /record status で破れる）。
+    /news list や、embed field(1024) に並べる一覧で破れる）。
     件数ではなく文字数を最終的な保証にしたので、そこを境界で押さえる。
     """
 
@@ -991,16 +866,6 @@ class CapListBudgetTests(unittest.TestCase):
                 "**スティッキー一覧**\n",
                 25,
                 "件",
-                "\n",
-            ),
-            # /record status: 表示名は最大32文字。embed field なので上限は 1024
-            (
-                "speakers",
-                [f"・{'名' * 32}（発話 1時間23分45秒）" for _ in range(200)],
-                EMBED_FIELD_BUDGET,
-                "",
-                20,
-                "人",
                 "\n",
             ),
             # /log settings: embed field に読点区切りで並べる

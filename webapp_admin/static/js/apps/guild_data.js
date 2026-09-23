@@ -58,7 +58,7 @@ export function mount(win) {
              el("div", { class: "grow list-main" },
                 el("div", { text: "設定" }),
                 el("div", { class: "list-sub", text:
-                  "各画面で保存した内容（通知先・ロール・読み上げ・録音など）" }))),
+                  "各画面で保存した内容（通知先・ロール・読み上げなど）" }))),
           el("div", { class: "list-row" },
              el("div", { class: "grow list-main" },
                 el("div", { text: "ユーザー状態の監査履歴" }),

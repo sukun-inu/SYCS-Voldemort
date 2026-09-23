@@ -99,7 +99,7 @@ def gzip_rotator(source: str, dest: str) -> None:
 
 # ロガー名からカテゴリを引く表。**接頭辞は素の文字列一致で、長いものが勝つ。**
 #
-# 分類を各ファイルの手打ち接頭辞（`logger.info("[recording] ...")`）に頼ると、
+# 分類を各ファイルの手打ち接頭辞（`logger.info("[tts] ...")`）に頼ると、
 # 必ず揺れる。実際この時点で `[SECURITY]` と `[security]`、`[TTS]` と
 # `[tts_service]`、`[BOT]` と `[BOT_SETUP]` が混在していた。全ファイルが
 # `getLogger(__name__)` を使っているので、**モジュール名から引けば、
@@ -112,12 +112,7 @@ def gzip_rotator(source: str, dest: str) -> None:
 # 「系列の中の例外」は、長い方が勝つ規則で拾う。
 CATEGORY_RULES: tuple[tuple[str, str], ...] = (
     # 音声
-    ("services.recording_service", "recording"),
-    ("commands.record", "recording"),
-    ("webapp_admin.api.recording", "recording"),
     ("services.voice_session", "voice"),
-    ("services.voice_jitter", "voice"),
-    ("services.dave", "voice"),
     ("events.voice", "voice"),
     ("services.tts", "tts"),
     ("commands.tts_commands", "tts"),

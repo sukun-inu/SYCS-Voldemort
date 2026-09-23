@@ -40,7 +40,8 @@ def _sanitize_filename(value: str, fallback: str = "file") -> str:
     return safe
 
 
-# 配信できる拡張子。録音は ZIP でまとめて渡すため mp3 以外も置けるようにしている。
+# 配信できる拡張子。mp3 以外も置けるようにしている（.zip はVC録音があった頃の
+# アーカイブが有効期限まで配信され続けるよう残している）。
 _CONTENT_TYPES = {
     ".mp3": "audio/mpeg",
     ".zip": "application/zip",
@@ -76,7 +77,7 @@ def register_file(
 ) -> str:
     """ファイルをキャッシュに登録してトークンを返す。ttl 省略時はグローバル設定値を使用。
 
-    拡張子は元のファイルのものを引き継ぐ（録音の ZIP など mp3 以外も扱う）。
+    拡張子は元のファイルのものを引き継ぐ（mp3 以外も扱う）。
     引数名が mp3_path なのは既存の呼び出しとの互換のため。
     """
     token = uuid.uuid4().hex
@@ -114,7 +115,7 @@ def _write_meta_atomic(meta_path: Path, meta: dict) -> None:
     直接 open("w") で上書きすると、CDN（別プロセス）側の get_meta() や
     定期掃除の glob() が書き込み途中のファイルを読んで JSONDecodeError に
     なりうる（本番の CDN と Bot は別プロセスで、同じディレクトリを見ている）。
-    settings_store / recording_service と同じ tmp→replace の作法に揃える。
+    settings_store と同じ tmp→replace の作法に揃える。
     """
     tmp = meta_path.with_suffix(meta_path.suffix + ".tmp")
     with tmp.open("w", encoding="utf-8") as f:

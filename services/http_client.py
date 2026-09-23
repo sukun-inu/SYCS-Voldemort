@@ -68,8 +68,8 @@ def get_session() -> aiohttp.ClientSession:
 async def close_session() -> None:
     """終了時に閉じる。閉じ忘れると "Unclosed client session" が出る。
 
-    閉じられなくても停止処理そのものは続ける（後始末の失敗で、録音の
-    書き出しなど本筋の後始末を止めない）。
+    閉じられなくても停止処理そのものは続ける（後始末の失敗で、本筋の
+    後始末を止めない）。
     """
     global _session, _loop
     session, _session, _loop = _session, None, None

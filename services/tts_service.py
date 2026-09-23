@@ -151,11 +151,9 @@ async def _synthesize(text: str, voice: str, rate: int) -> tuple[Optional[str], 
 async def _connect_or_move(guild: discord.Guild, vc_channel_id: int) -> discord.VoiceClient | None:
     """VCに接続。既に別チャンネルに接続中なら移動。
 
-    接続そのものの管理は services/voice_session.py に持たせている。読み上げと
-    録音は bot の仕様上ひとつの接続を共有するしかなく、片方が勝手に繋ぎ直したり
-    切ったりすると、もう片方が巻き添えで落ちるため。
+    接続そのものの管理は services/voice_session.py に持たせている。
     """
-    return await voice_session.acquire(guild, vc_channel_id, purpose="tts")
+    return await voice_session.acquire(guild, vc_channel_id)
 
 
 async def _player_loop(bot: Bot, guild_id: int) -> None:
@@ -172,7 +170,6 @@ async def _player_loop(bot: Bot, guild_id: int) -> None:
             item = await asyncio.wait_for(queue.get(), timeout=_IDLE_TIMEOUT_SEC)
         except asyncio.TimeoutError:
             _temp_overrides.pop(guild_id, None)
-            # 録音中などで占有されていれば切断は見送られる
             await voice_session.release(guild_id)
             _tasks.pop(guild_id, None)
             return
@@ -356,7 +353,6 @@ async def disconnect(guild_id: int) -> None:
     if task and not task.done():
         task.cancel()
 
-    # 録音中は接続を切らない（録音側が止めるまで掴んだままにする）。
     await voice_session.release(guild_id)
 
     queue = _queues.pop(guild_id, None)

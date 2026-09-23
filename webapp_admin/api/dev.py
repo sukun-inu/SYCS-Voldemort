@@ -356,7 +356,7 @@ def _tail_file(path: Path, lines: int) -> list[str]:
 def _require_id(value: str, label: str) -> str:
     """Discord ID として妥当な数字文字列だけを受け付ける。sanitize() で長さも制御弁を入れる。
 
-    api/recording.py の _require_id と役割は同じだが、こちらは戻り値が
+    戻り値は
     str（呼び出し側で int() するかどうかを選べる。ID をログへそのまま
     出す用途があるため）。
     """
@@ -698,7 +698,6 @@ async def channels(request: Request, guild_id: str = Query(...), _=Depends(check
             key=lambda c: c["name"].lower(),
         )
 
-    # 録音の対象は VC なので、テキストと一緒に返して画面側で選ばせる。
     return JSONResponse({"channels": pick(text_types), "voice_channels": pick(voice_types)})
 
 
@@ -731,7 +730,7 @@ async def user_lookup(request: Request, user_id: str = Query(...), _=Depends(che
 # 絞り込みのために遡って読む行数の上限。
 #
 # カテゴリやレベルで絞ると、返す 200 行を埋めるのに何千行も遡ることがある
-# （`recording` だけ見たい、というのが典型）。かといって無制限に遡らせると、
+# （`tts` だけ見たい、というのが典型）。かといって無制限に遡らせると、
 # 10年ぶんのログを持つ本番で1リクエストがファイル全体を読む。**天井を置いて、
 # 届かなかったことを画面へ返す**（truncated）のが、黙って途中で切るより良い。
 _LOG_SCAN_LIMIT = 20000
@@ -828,7 +827,7 @@ async def logs(
     raw = _tail_lines(jsonl, _LOG_SCAN_LIMIT)
     rows = _parse_log_rows(raw)
     # 絞り込む前の全カテゴリを返す。絞ったあとの集合を返すと、いちど
-    # `recording` を選んだ瞬間に選択肢がそれ1つになり、他へ移れなくなる。
+    # `tts` を選んだ瞬間に選択肢がそれ1つになり、他へ移れなくなる。
     categories = sorted({str(row.get("category", "")) for row in rows if row.get("category")})
     min_level = _LOG_LEVEL_ORDER[level]
     needle = q.strip().lower()

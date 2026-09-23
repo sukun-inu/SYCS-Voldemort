@@ -51,7 +51,7 @@
 | `static/js/wm/` | ウィンドウマネージャ |
 | `static/js/lib/motion.js` | 位置を測ってから動かすアニメーション（最小化・最大化・開閉） |
 | `static/js/forms/` | スキーマ → DOM のレンダラと明示保存 |
-| `static/js/apps/` | 専用画面（monitor / user_state / dev / sql / recording / mixer / guild_data） |
+| `static/js/apps/` | 専用画面（monitor / user_state / dev / sql / guild_data） |
 
 ## 4. 設定を1つ増やすとき
 
@@ -100,8 +100,7 @@ Field(
 - **同じ列に並ぶ物は高さを1つに揃える**。役割の違いは高さではなく、色（primary /
   danger / is-on）と字の大きさで出す。既定は `.btn` の 32px で、入力欄もこれに
   合わせてある。小さくするのは行の中に埋め込むとき（`.btn-sm` 26px、一覧の行の
-  編集・削除など）だけ。ミキサーの操作列は、30px / 26px / 32px / 40px の4種類が
-  1列に並んでいた（`tools/check_recording_mixer.py` が実測して1種類か見ている）。
+  編集・削除など）だけ。
 
 ## 6. 確認コマンド
 
