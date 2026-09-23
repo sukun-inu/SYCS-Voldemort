@@ -12,8 +12,8 @@ def create_bot() -> Bot:
     intent はどれも Discord の開発者ポータル側でも有効にしておく必要が
     あり、片方だけ入れても該当のイベントが黙って届かなくなる（例外は
     出ない）。message_content・members・voice_states・moderation・
-    reactions が、それぞれ ChatGPT応答/スパム検査・入退室ログ・VC通知と
-    録音・BAN の監査・リアクションロールに対応している。
+    reactions が、それぞれ ChatGPT応答/スパム検査・入退室ログ・VC通知・
+    BAN の監査・リアクションロールに対応している。
     """
     intents = discord.Intents.default()
     intents.message_content = True

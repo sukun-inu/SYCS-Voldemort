@@ -7,8 +7,6 @@ DB を必要とするユーザー状態監査は services 層を差し替えて�
 標準ライブラリの unittest だけで動く。pytest からも実行できる。
 """
 
-import ast
-import zipfile
 import base64
 import json
 import os
@@ -880,7 +878,7 @@ class DevLogsApiTests(unittest.TestCase):
 
     それまでの画面は bot.log / admin.log の末尾200行を生のまま流すだけで、
     **web と cdn は管理画面から一切見えなかった**（`^(bot|admin)$` に
-    固定されていた）。加えてテキストを読む限り「録音だけ見たい」も
+    固定されていた）。加えてテキストを読む限り「読み上げだけ見たい」も
     「ERROR 以上だけ見たい」もできず、目当ての行はスクロールで探すしかない。
 
     ここで固定するのは、
@@ -914,9 +912,9 @@ class DevLogsApiTests(unittest.TestCase):
             {
                 "time": "2026-09-08T10:00:00.000+09:00",
                 "level": "INFO",
-                "category": "recording",
-                "logger": "services.recording_service",
-                "message": "録音を開始しました",
+                "category": "djaudio",
+                "logger": "services.djaudio_service",
+                "message": "ダウンロードを開始しました",
             },
             {
                 "time": "2026-09-08T10:00:01.000+09:00",
@@ -928,8 +926,8 @@ class DevLogsApiTests(unittest.TestCase):
             {
                 "time": "2026-09-08T10:00:02.000+09:00",
                 "level": "ERROR",
-                "category": "recording",
-                "logger": "services.recording_service",
+                "category": "djaudio",
+                "logger": "services.djaudio_service",
                 "message": "書き出しに失敗",
             },
             {
@@ -970,8 +968,8 @@ class DevLogsApiTests(unittest.TestCase):
     def test_the_category_filter_narrows_to_one_feature(self):
         """カテゴリで1機能だけに絞れること。"""
         self._write("bot.jsonl", self._sample())
-        rows = self.dev.get("/admin/api/dev/logs?source=bot&category=recording").json()["rows"]
-        self.assertEqual([row["message"] for row in rows], ["録音を開始しました", "書き出しに失敗"])
+        rows = self.dev.get("/admin/api/dev/logs?source=bot&category=djaudio").json()["rows"]
+        self.assertEqual([row["message"] for row in rows], ["ダウンロードを開始しました", "書き出しに失敗"])
 
     def test_the_search_matches_the_message_and_the_logger(self):
         """本文でもロガー名でも引けること。"""
@@ -984,12 +982,12 @@ class DevLogsApiTests(unittest.TestCase):
     def test_the_category_list_is_taken_before_filtering(self):
         """カテゴリの選択肢が、絞り込みで痩せないこと。
 
-        絞ったあとの集合を返すと、いちど `recording` を選んだ瞬間に
+        絞ったあとの集合を返すと、いちど `djaudio` を選んだ瞬間に
         選択肢がそれ1つになり、**他のカテゴリへ移れなくなる。**
         """
         self._write("bot.jsonl", self._sample())
-        payload = self.dev.get("/admin/api/dev/logs?source=bot&category=recording").json()
-        self.assertEqual(payload["categories"], ["recording", "security", "tts"])
+        payload = self.dev.get("/admin/api/dev/logs?source=bot&category=djaudio").json()
+        self.assertEqual(payload["categories"], ["djaudio", "security", "tts"])
 
     def test_a_broken_line_is_skipped_instead_of_failing_the_request(self):
         """書き込み途中の半端な1行で、画面ごと落ちないこと。
@@ -1001,7 +999,7 @@ class DevLogsApiTests(unittest.TestCase):
         self._write("bot.jsonl", [rows[0], '{"level": "INFO", ', rows[1]])
         payload = self.dev.get("/admin/api/dev/logs?source=bot").json()
         self.assertEqual(payload["scanned"], 2)
-        self.assertEqual([row["category"] for row in payload["rows"]], ["recording", "tts"])
+        self.assertEqual([row["category"] for row in payload["rows"]], ["djaudio", "tts"])
 
     def test_it_falls_back_to_the_text_log_when_there_is_no_jsonl(self):
         """JSONL がまだ無いプロセスでは、テキストを返すこと。
@@ -1254,146 +1252,6 @@ class DocsTests(unittest.TestCase):
         )
 
 
-class RecordingMixerApiTests(unittest.TestCase):
-    """ミキサーが使う配信API。ZIP を展開せずに1トラックずつ読ませる。"""
-
-    @classmethod
-    def setUpClass(cls):
-        import math
-        import struct
-        import time as _time
-        from unittest.mock import Mock
-
-        import services.recording_service as recording
-
-        def tone(seconds, freq=440.0):
-            out = bytearray()
-            for i in range(int(recording.SAMPLE_RATE * seconds)):
-                v = int(12000 * math.sin(2 * math.pi * freq * i / recording.SAMPLE_RATE))
-                out += struct.pack("<hh", v, v)
-            return bytes(out)
-
-        session = recording.RecordingSession(
-            guild_id=GUILD_ID,
-            channel_id=555,
-            channel_name="雑談VC",
-            started_by_id=1,
-            started_by_name="すずき",
-            started_at=_time.monotonic(),
-            max_seconds=0,
-            retention_days=7,
-        )
-        session.feed(Mock(id=1, display_name="すずき"), tone(0.4))
-        session.feed(Mock(id=2, display_name="たなか"), tone(0.4, 660))
-        cls.result = recording._finalize(session, 2.0, "テスト")
-        cls.token = cls.result["token"]
-
-    def setUp(self):
-        self.client = TestClient(app)
-
-    def _mixer_url(self, guild_id=GUILD_ID, token=None):
-        return f"/dlaudio/files/{guild_id}/{token or self.token}/mixer"
-
-    def test_manifest_describes_every_track(self):
-        response = self.client.get(self._mixer_url())
-        self.assertEqual(response.status_code, 200)
-        manifest = response.json()
-        self.assertAlmostEqual(manifest["duration_seconds"], 2.0, delta=0.1)
-        self.assertEqual(len(manifest["stems"]), 2)
-        self.assertEqual({s["name"] for s in manifest["stems"]}, {"すずき", "たなか"})
-        self.assertTrue(all(s["peaks_b64"] and s["rms_b64"] for s in manifest["stems"]))
-        self.assertTrue(all("/stem/" in s["url"] for s in manifest["stems"]))
-
-    def test_the_manifest_is_compressed_when_the_browser_accepts_it(self):
-        """索引を gzip で返すこと。
-
-        波形を 0.05 秒刻みで持つので、2時間×5トラックだと素の JSON で 2MB 近く
-        なる。中身は base64 の1バイト列で無音が同じ文字の連なりになるため、
-        圧縮がよく効く（実測 1.98MB → 1.16MB）。**開くたびに毎回落ちてくる**
-        ものなので、ここを素で流すと待ち時間がそのまま増える。
-        """
-        response = self.client.get(self._mixer_url(), headers={"accept-encoding": "gzip"})
-        self.assertEqual(response.status_code, 200)
-        # httpx は透過的に展開するので、中身が読めることと宣言の両方を見る。
-        self.assertEqual(response.headers.get("content-encoding"), "gzip")
-        # セッション層が Cookie も足すので、含まれていることだけを見る。
-        self.assertIn("Accept-Encoding", response.headers.get("vary", ""))
-        self.assertIn("stems", response.json())
-
-    def test_the_manifest_stays_plain_for_clients_that_do_not_ask_for_gzip(self):
-        """gzip を受け付けない相手には、そのまま返すこと。
-
-        ヘッダを見ない道具（curl の既定など）に圧縮を送りつけると、
-        **読めない中身**が返ることになる。
-        """
-        response = self.client.get(self._mixer_url(), headers={"accept-encoding": "identity"})
-        self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.headers.get("content-encoding"))
-        self.assertIn("stems", response.json())
-
-    def test_stem_is_served_as_seekable_audio(self):
-        url = self.client.get(self._mixer_url()).json()["stems"][0]["url"]
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.headers["content-type"], "audio/mpeg")
-        # Range を宣言しないと、ブラウザは頭出しのたびに全部落とし直す。
-        self.assertEqual(response.headers.get("accept-ranges"), "bytes")
-        self.assertGreater(len(response.content), 0)
-
-    def test_range_requests_return_exactly_the_asked_bytes(self):
-        url = self.client.get(self._mixer_url()).json()["stems"][0]["url"]
-        whole = self.client.get(url).content
-
-        partial = self.client.get(url, headers={"Range": "bytes=100-199"})
-        self.assertEqual(partial.status_code, 206)
-        self.assertEqual(partial.content, whole[100:200])
-        self.assertEqual(partial.headers.get("content-range"), f"bytes 100-199/{len(whole)}")
-
-        suffix = self.client.get(url, headers={"Range": "bytes=-50"})
-        self.assertEqual(suffix.status_code, 206)
-        self.assertEqual(suffix.content, whole[-50:])
-
-        beyond = self.client.get(url, headers={"Range": f"bytes={len(whole) + 10}-"})
-        self.assertEqual(beyond.status_code, 416)
-
-    def test_broken_ranges_do_not_produce_a_broken_response(self):
-        """満たせない Range は 416、範囲として成立しないものは全体を返すこと。
-
-        終わりが始まりより手前（"bytes=500-100"）を弾いていなかったため、
-        Content-Length: -399 という壊れたヘッダを 206 で返していた。厳格な
-        プロキシやクライアントはここで接続を切る。
-        """
-        url = self.client.get(self._mixer_url()).json()["stems"][0]["url"]
-        size = len(self.client.get(url).content)
-
-        for header in ("bytes=500-100", "bytes=900-100", f"bytes={size}-{size + 10}"):
-            response = self.client.get(url, headers={"Range": header})
-            self.assertEqual(response.status_code, 416, header)
-            self.assertEqual(response.headers.get("content-range"), f"bytes */{size}", header)
-
-        # 数字がどちらも無いものは Range として成立しない。無視して全体を返す。
-        whole = self.client.get(url, headers={"Range": "bytes=-"})
-        self.assertEqual(whole.status_code, 200)
-        self.assertEqual(len(whole.content), size)
-
-        # どの応答でも Content-Length が負にならないこと
-        for header in ("bytes=0-99", "bytes=500-100", "bytes=-", "bytes=-50"):
-            response = self.client.get(url, headers={"Range": header})
-            length = response.headers.get("content-length")
-            self.assertTrue(length is None or int(length) >= 0, (header, length))
-
-    def test_other_guilds_cannot_read_the_recording(self):
-        self.assertEqual(self.client.get(self._mixer_url(guild_id=111)).status_code, 403)
-
-    def test_unknown_or_broken_links_do_not_leak(self):
-        self.assertEqual(self.client.get(self._mixer_url(token="a" * 32)).status_code, 410)
-        self.assertEqual(self.client.get(self._mixer_url(token="xx")).status_code, 404)
-        self.assertEqual(
-            self.client.get(f"/dlaudio/files/{GUILD_ID}/{self.token}/stem/99").status_code,
-            404,
-        )
-
-
 if __name__ == "__main__":
     unittest.main()
 
@@ -1441,397 +1299,6 @@ class SnowflakeJsonTests(unittest.TestCase):
 
         got = stringify_big_ints({"a": [{"id": self.VC_ID}], "b": (self.VC_ID, 1), "c": "x"})
         self.assertEqual(got, {"a": [{"id": str(self.VC_ID)}], "b": [str(self.VC_ID), 1], "c": "x"})
-
-    def test_the_recording_api_sends_ids_as_strings(self):
-        from services import settings_store as store
-
-        store.set_recording_settings(
-            GUILD_ID,
-            {
-                "vc_channel_id": self.VC_ID,
-                "announce_channel_id": self.VC_ID,
-            },
-        )
-        client = make_client()
-        body = client.get("/admin/api/recording?include_channels=0").text
-        self.assertIn(f'"{self.VC_ID}"', body, body[:400])
-        # 桁が落ちた値が混ざっていないこと
-        self.assertNotIn("1234567890123456800", body)
-
-
-class RecordingClipTests(unittest.TestCase):
-    """区間の切り出し。ミキサーで決めた範囲だけを落とせること。"""
-
-    @classmethod
-    def setUpClass(cls):
-        import math
-        import struct
-        import time as _time
-        from unittest.mock import Mock
-
-        import services.recording_service as recording
-
-        def tone(seconds, freq=440.0):
-            out = bytearray()
-            for i in range(int(recording.SAMPLE_RATE * seconds)):
-                v = int(12000 * math.sin(2 * math.pi * freq * i / recording.SAMPLE_RATE))
-                out += struct.pack("<hh", v, v)
-            return bytes(out)
-
-        session = recording.RecordingSession(
-            guild_id=GUILD_ID,
-            channel_id=555,
-            channel_name="雑談VC",
-            started_by_id=1,
-            started_by_name="すずき",
-            started_at=_time.monotonic(),
-            max_seconds=0,
-            retention_days=7,
-        )
-        session.feed(Mock(id=1, display_name="すずき"), tone(2.0))
-        session.feed(Mock(id=2, display_name="たなか"), tone(2.0, 660))
-        cls.result = recording._finalize(session, 4.0, "テスト")
-        cls.token = cls.result["token"]
-
-    def _url(self, start, end, guild_id=GUILD_ID, token=None):
-        return f"/dlaudio/files/{guild_id}/{token or self.token}/clip" f"?start={start}&end={end}"
-
-    def test_a_region_comes_back_as_a_zip_of_every_track(self):
-        import io
-        import zipfile
-
-        response = TestClient(app).get(self._url(0.5, 1.5))
-        self.assertEqual(response.status_code, 200, response.text[:200])
-        self.assertEqual(response.headers["content-type"], "application/zip")
-        self.assertIn("attachment", response.headers.get("content-disposition", ""))
-
-        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
-            names = archive.namelist()
-        self.assertEqual(len([n for n in names if n.endswith(".mp3")]), 2, names)
-        self.assertIn("info.txt", names)
-
-    def test_the_clip_is_shorter_than_the_whole_recording(self):
-        client = TestClient(app)
-        clip = client.get(self._url(0.5, 1.0)).content
-        whole = client.get(f"/dlaudio/files/{GUILD_ID}/{self.token}/stem/0").content
-        self.assertLess(len(clip), len(whole) * 2, "全部入っている（切り出せていない）")
-
-    def test_a_backwards_or_tiny_region_is_refused(self):
-        client = TestClient(app)
-        self.assertEqual(client.get(self._url(2.0, 1.0)).status_code, 400)
-        self.assertEqual(client.get(self._url(1.0, 1.0)).status_code, 400)
-
-    def test_an_absurdly_long_region_is_refused(self):
-        """丸ごと落としてもらうべき長さで、その場で切らない。"""
-        client = TestClient(app)
-        response = client.get(self._url(0, 3600 * 3))
-        self.assertEqual(response.status_code, 400)
-        # 断った理由が本文に出ること（「不正なリクエストです」で終わらせない）
-        self.assertIn("時間", response.text)
-        # fetch する側（JSON を求める相手）には JSON で理由を返すこと
-        as_json = client.get(self._url(0, 3600 * 3), headers={"Accept": "application/json"})
-        self.assertIn("時間", as_json.json()["detail"])
-
-    def test_other_guilds_cannot_clip(self):
-        self.assertEqual(TestClient(app).get(self._url(0.5, 1.5, guild_id=111)).status_code, 403)
-
-    def test_nothing_reads_a_whole_track_into_memory(self):
-        """トラックを丸ごとメモリへ読まないこと。
-
-        6時間×8人の録音は 689MB になる。切り出しも、かつてあった解析・打ち消しも、
-        どれも「トラック全体を bytes で読んでから ffmpeg の標準入力へ渡す」形だった
-        ので、1リクエストで数百MB、同時に2つ来れば GB 単位になっていた。
-        取り出しは一時ファイルへ流す。
-        """
-        import tracemalloc
-        from services import djaudio_cdn as cdn
-
-        zip_path = cdn._recording_zip(str(GUILD_ID), self.token)
-        member = cdn._read_manifest(zip_path)["stems"][0]["file"]
-        size = cdn._stored_member_range(zip_path, member)[1]
-
-        with tempfile.TemporaryDirectory() as work:
-            destination = Path(work) / "stem.mp3"
-            tracemalloc.start()
-            self.assertTrue(cdn._extract_member(zip_path, member, destination))
-            _current, peak = tracemalloc.get_traced_memory()
-            tracemalloc.stop()
-
-        self.assertEqual(destination.stat().st_size if destination.exists() else size, size)
-        # 読み取り単位ぶんの上振れは許す。トラックの大きさには比例しないこと。
-        self.assertLess(peak, cdn._MEMBER_CHUNK * 4, f"{peak} バイト確保している（トラックは {size} バイト）")
-
-    def test_the_segment_carries_one_channel_per_track(self):
-        """再生用の区切りは「1トラック＝1チャンネル」の生 PCM で返すこと。
-
-        トラックごとに <audio> を持つと時計が人数ぶん並び、揃え続けるための
-        補正が要る。1つの音源にまとめれば時計も1つで、ずれようがない。
-
-        コンテナに入れないのは実測の結果。Opus(WebM) はブラウザ側で
-        チャンネル順が入れ替わり、WAV は3チャンネルのとき
-        EncodingError で復号を拒まれた（ffmpeg が 2.1 のレイアウトを書くため）。
-        生の PCM なら並びは書いた順そのもの。
-        """
-        client = TestClient(app)
-        manifest = client.get(f"/dlaudio/files/{GUILD_ID}/{self.token}/mixer").json()
-        self.assertIn("/segment", manifest["segment_url"])
-        self.assertEqual(
-            manifest["segment_format"],
-            {
-                "encoding": "s16le",
-                "sample_rate": 48000,
-                "channels": len(manifest["stems"]),
-            },
-        )
-
-        response = client.get(f"{manifest['segment_url']}?start=1&length=1")
-        self.assertEqual(response.status_code, 200, response.text[:200])
-        channels = manifest["segment_format"]["channels"]
-        frames = len(response.content) / 2 / channels
-        self.assertAlmostEqual(frames / 48000, 1.0, delta=0.05)
-
-        # チャンネルごとに中身が違うこと（全部同じなら混ざっている）
-        import array
-
-        samples = array.array("h")
-        samples.frombytes(response.content[: len(response.content) // 2 * 2])
-        per_channel = [samples[c::channels] for c in range(channels)]
-        energies = [sum(abs(v) for v in ch[:4000]) for ch in per_channel]
-        self.assertTrue(all(e > 0 for e in energies), energies)
-        self.assertNotEqual(per_channel[0][:200], per_channel[1][:200], "チャンネルが同じ中身になっている")
-
-    def test_the_segment_starts_exactly_where_it_was_asked_to(self):
-        """区切りの先頭がずれないこと。
-
-        入力側の -ss だけで切ると、区切りの先頭に無音が入る。subfile 越しの
-        mp3 は索引を使った正確なシークができないためで、実測では要求位置に
-        よって 110〜195ms とばらついた。区切りの継ぎ目ごとに音が欠け、
-        しかも欠ける量が位置によって違う、という一番たちの悪い形になる。
-        入力側は手前まで飛ぶだけにして、端数は出力側で捨てる。
-        """
-        import array
-        import math
-        import struct
-        import time as _time
-
-        import services.recording_service as recording
-        from services.djaudio_cache import get_meta, payload_path
-        from services import djaudio_cdn as cdn
-
-        # 5秒ごとに 0.2 秒の合図が入る 30 秒の録音。位置が分かるようにする。
-        rate = recording.SAMPLE_RATE
-        pcm = bytearray()
-        for i in range(int(rate * 30)):
-            loud = ((i / rate) % 5.0) < 0.2
-            value = int(12000 * math.sin(2 * math.pi * 880 * i / rate)) if loud else 0
-            pcm += struct.pack("<hh", value, value)
-
-        session = recording.RecordingSession(
-            guild_id=GUILD_ID,
-            channel_id=555,
-            channel_name="目印",
-            started_by_id=1,
-            started_by_name="すずき",
-            started_at=_time.monotonic(),
-            max_seconds=0,
-            retention_days=7,
-        )
-        track = recording._TrackWriter(1, "すずき", Path(session.workdir) / "01-a.mp3", session.started_at)
-        session.tracks[1] = track
-        track.write(bytes(pcm), 0.0)
-        with patch.object(recording, "measure_voice", return_value=None):
-            result = recording._finalize(session, 30.0, "テスト")
-
-        zip_path = payload_path(result["token"], get_meta(result["token"]))
-        stems = cdn._read_manifest(zip_path)["stems"]
-        with tempfile.TemporaryDirectory() as work:
-            out = Path(work) / "segment.pcm"
-            for start in (5.0, 10.0, 20.0, 25.0):
-                self.assertTrue(cdn._segment_pcm(zip_path, stems, start, 1.0, out))
-                samples = array.array("h")
-                samples.frombytes(out.read_bytes())
-                first = next((i for i, v in enumerate(samples) if abs(v) > 500), None)
-                self.assertIsNotNone(first, f"{start} 秒の区切りに音が無い")
-                self.assertLess(
-                    first / 48000, 0.01, f"{start} 秒を要求したのに先頭が " f"{first / 48000 * 1000:.1f} ms ずれている"
-                )
-
-    def test_the_segment_is_compressed_but_still_raw_pcm(self):
-        """gzip で返しても、解いた中身は生の PCM のままであること。
-
-        生の PCM は中身に関係なく帯域を食う（5トラックで 3.84Mbps、32なら
-        24.6Mbps）。中身はほとんど無音なので gzip が極端に効き、実測では
-        1.2〜21.9% まで縮んだ。**縮めた結果が別物になっていないこと**を
-        ここで固定する。取得が再生に間に合わなくなると、クライアントは
-        間に合わなかったぶんを飛ばして鳴らすので、帯域は音の欠けに直結する。
-        """
-        import gzip as gziplib
-
-        client = TestClient(app)
-        url = f"/dlaudio/files/{GUILD_ID}/{self.token}/segment?start=0&length=1"
-
-        plain = client.get(url, headers={"Accept-Encoding": "identity"})
-        self.assertEqual(plain.status_code, 200)
-        self.assertNotIn("content-encoding", plain.headers)
-
-        packed = client.get(url, headers={"Accept-Encoding": "gzip"})
-        self.assertEqual(packed.status_code, 200)
-        raw = packed.content
-        # TestClient は透過的に解くことがあるので、どちらでも通るようにする。
-        if packed.headers.get("content-encoding") == "gzip" and raw[:2] == b"\x1f\x8b":
-            raw = gziplib.decompress(raw)
-        self.assertEqual(raw, plain.content, "gzip を解いた中身が生の PCM と違う")
-
-    def test_the_segment_rejects_impossible_requests(self):
-        client = TestClient(app)
-        base = f"/dlaudio/files/{GUILD_ID}/{self.token}/segment"
-        self.assertEqual(client.get(f"{base}?start=0&length=0").status_code, 400)
-        self.assertEqual(client.get(f"{base}?start=0&length=999").status_code, 400)
-        self.assertEqual(client.get(f"/dlaudio/files/111/{self.token}/segment?start=0&length=1").status_code, 403)
-
-
-class CdnOffloadTests(unittest.TestCase):
-    """CDN の重い処理が、イベントループの上で行われていないこと。
-
-    このプロセスは録音ミキサーの配信を1人で受ける。ここが詰まると、**同じ
-    ワーカーが受けている他のリクエスト（配信・ヘルスチェック含む）まで
-    巻き添えで固まる。** 実測（Windows / Python 3.13）:
-
-        切り出しZIPの圧縮   8トラック×60分   20,100 ms
-        索引の JSON+gzip    2時間×5トラック      107 ms
-        無圧縮判定          32トラック            25 ms
-
-    1つ目が桁違い。しかも**24倍の時間をかけてファイルは大きくなっていた**
-    ——mp3 は既に圧縮済みなので deflate が効かず、ZIP のヘッダぶん増える
-    （STORED 99ms/45.78MB に対し DEFLATED 2,347ms/45.79MB）。本体の録音
-    アーカイブは最初から無圧縮で入れていた（recording_service._write_archive）
-    ので、切り出しだけが揃っていなかった。
-
-    ffmpeg の呼び出し（_clip_stem）だけは元から to_thread へ逃がしてあった。
-    **逃がした先から戻ってきた音声を、この場で圧縮していた**ので、逃がした
-    意味が半分無くなっていた。
-    """
-
-    ROOT = Path(__file__).resolve().parent.parent
-
-    def _async_body(self, name):
-        """djaudio_cdn.py の async 関数を1つ、構文木で取り出す。"""
-        tree = ast.parse((self.ROOT / "services/djaudio_cdn.py").read_text(encoding="utf-8"))
-        return next(node for node in ast.walk(tree) if isinstance(node, ast.AsyncFunctionDef) and node.name == name)
-
-    def _direct_calls(self, node):
-        """その関数が、await も to_thread も通さずに直接呼んでいる名前。"""
-        awaited, offloaded, called = set(), set(), []
-        for inner in ast.walk(node):
-            if isinstance(inner, ast.Await) and isinstance(inner.value, ast.Call):
-                awaited.add(id(inner.value))
-            if isinstance(inner, ast.AsyncWith):
-                for item in inner.items:
-                    if isinstance(item.context_expr, ast.Call):
-                        awaited.add(id(item.context_expr))
-        for inner in ast.walk(node):
-            if not isinstance(inner, ast.Call):
-                continue
-            name = inner.func.attr if isinstance(inner.func, ast.Attribute) else getattr(inner.func, "id", "")
-            if name == "to_thread":
-                # 逃がした「関数」は第1引数だけ。残りはその関数へ渡す値なので、
-                # 全部を集めると zip_path や index まで「逃がした」ことになる。
-                if inner.args and isinstance(inner.args[0], ast.Name):
-                    offloaded.add(inner.args[0].id)
-                continue
-            if id(inner) not in awaited:
-                called.append(name)
-        return set(called), offloaded
-
-    def test_the_clip_zip_is_built_off_the_event_loop(self):
-        """切り出し ZIP の組み立てが、丸ごとスレッド側であること。
-
-        以前は ffmpeg だけを逃がし、`archive.writestr` はこの場で呼んでいた。
-        **20 秒ワーカーが固まる。**
-        """
-        called, offloaded = self._direct_calls(self._async_body("recording_clip"))
-
-        self.assertNotIn("writestr", called)
-        self.assertNotIn("ZipFile", called)
-        self.assertNotIn("_clip_stem", called)
-        self.assertIn("_build_clip_zip", offloaded)
-
-    def test_the_mixer_manifest_is_built_off_the_event_loop(self):
-        """索引づくり（ZIP を何度も開く）がスレッド側であること。"""
-        called, offloaded = self._direct_calls(self._async_body("recording_manifest"))
-
-        self.assertNotIn("_read_manifest", called)
-        self.assertNotIn("_stored_member_range", called)
-        self.assertIn("_mixer_manifest", offloaded)
-
-    def test_the_json_encoding_and_gzip_are_off_the_event_loop(self):
-        """索引の JSON 化と gzip がスレッド側であること。
-
-        2時間×5トラックで実測 107ms。ミキサーを開くたびに掛かる。
-        """
-        called, offloaded = self._direct_calls(self._async_body("_json_maybe_gzipped"))
-
-        self.assertNotIn("compress", called)
-        self.assertNotIn("dumps", called)
-        self.assertIn("_encode_json", offloaded)
-
-    def test_the_stem_archive_reads_are_off_the_event_loop(self):
-        """トラック配信の ZIP 読みがスレッド側であること。
-
-        圧縮された古いアーカイブでは**1本まるごと読んで展開する。**
-        """
-        called, offloaded = self._direct_calls(self._async_body("recording_stem"))
-
-        self.assertNotIn("_read_manifest", called)
-        self.assertNotIn("_stored_member_range", called)
-        self.assertNotIn("ZipFile", called)
-        self.assertEqual(offloaded, {"_stem_source", "_read_member"})
-
-    def test_mp3_members_of_a_clip_are_stored_uncompressed(self):
-        """切り出し ZIP の mp3 が、無圧縮で入っていること。
-
-        deflate は mp3 に効かない。**24倍の時間をかけて、ファイルは
-        大きくなる。** 本体のアーカイブと揃えて無圧縮にする。無圧縮なら
-        ついでに、切り出した ZIP も範囲指定で直接読めるようになる。
-        """
-        from services import djaudio_cdn as cdn
-
-        work = Path(tempfile.mkdtemp(prefix="clip-store-"))
-        source = work / "rec.zip"
-        with zipfile.ZipFile(source, "w", compression=zipfile.ZIP_STORED) as z:
-            z.writestr("00_a.mp3", b"\xff\xfb" + os.urandom(4096))
-        stems = [{"index": 0, "file": "00_a.mp3"}]
-        out = work / "clip.zip"
-
-        # ffmpeg を呼ばずに、切り出しの結果だけ差し替える
-        with patch.object(cdn, "_clip_stem", lambda *a, **k: b"\xff\xfb" + os.urandom(2048)):
-            written = cdn._build_clip_zip(source, out, stems, 0.0, 1.0, 1.0, {"channel_name": "会議"})
-
-        self.assertEqual(written, 1)
-        with zipfile.ZipFile(out) as archive:
-            self.assertEqual(archive.getinfo("00_a.mp3").compress_type, zipfile.ZIP_STORED)
-            # 説明文は素のテキストなので、こちらは縮めてよい
-            self.assertEqual(archive.getinfo("info.txt").compress_type, zipfile.ZIP_DEFLATED)
-
-    def test_a_clip_with_no_usable_track_reports_failure(self):
-        """1本も切り出せなかったら 0 を返すこと。
-
-        呼び出し側はこの 0 を見て 500 を返す。**ここで 1 以上を返すと、
-        中身が info.txt しか入っていない ZIP が「成功」として落ちてくる。**
-        """
-        from services import djaudio_cdn as cdn
-
-        work = Path(tempfile.mkdtemp(prefix="clip-empty-"))
-        source = work / "rec.zip"
-        with zipfile.ZipFile(source, "w") as z:
-            z.writestr("00_a.mp3", b"x")
-
-        with patch.object(cdn, "_clip_stem", lambda *a, **k: None):
-            written = cdn._build_clip_zip(
-                source, work / "clip.zip", [{"index": 0, "file": "00_a.mp3"}], 0.0, 1.0, 1.0, {}
-            )
-
-        self.assertEqual(written, 0)
 
 
 class TextContrastTests(unittest.TestCase):
@@ -2065,18 +1532,17 @@ class DjaudioLimitTests(unittest.TestCase):
 class CdnErrorShapeTests(unittest.TestCase):
     """単体の配信プロセスでも、fetch する側には JSON で理由を返すこと。
 
-    /dlaudio/files/ の下には2種類が同居している。ブラウザが直接開く配信リンクと、
-    ミキサーが fetch する索引・切り出し。cdn_main.py はパスの接頭辞だけで
-    「配信リンクだから HTML」と決めていたため、ミキサーが受け取るのも HTML に
-    なり、断られた理由を読めなかった（JSON として解釈できず
-    「Unexpected token '<'」としか言えない）。判定は Accept で行う。
+    /dlaudio/files/ の配信リンクはブラウザが直接開くが、fetch されることもある。
+    cdn_main.py はパスの接頭辞だけで「配信リンクだから HTML」と決めていたため、
+    fetch する側が受け取るのも HTML になり、断られた理由を読めなかった（JSON
+    として解釈できず「Unexpected token '<'」としか言えない）。判定は Accept で行う。
     """
 
     def setUp(self):
         from cdn_main import create_cdn_app
 
         self.client = TestClient(create_cdn_app())
-        self.url = f"/dlaudio/files/{GUILD_ID}/nosuchtoken/mixer"
+        self.url = f"/dlaudio/files/{GUILD_ID}/nosuchtoken"
 
     def test_a_fetching_client_gets_json(self):
         response = self.client.get(self.url, headers={"Accept": "application/json"})
@@ -2149,7 +1615,7 @@ class DeliveryErrorPageTests(unittest.TestCase):
                 self.assertNotIn("エラーが発生しました", body)
 
     def test_a_fetching_client_still_gets_json(self):
-        """ミキサー向けの JSON は、ページを共通化しても変わらないこと。"""
+        """fetch する側向けの JSON は、ページを共通化しても変わらないこと。"""
         for name, client in (("admin", self.admin), ("cdn", self.cdn)):
             with self.subTest(name):
                 response = client.get(self.path, headers={"Accept": "application/json"})
@@ -2215,7 +1681,7 @@ class UnhandledExceptionGroupTests(unittest.TestCase):
     error.html を直に描いていた。**分割前からそうなっていた**ので分割時は
     そのまま移してあり、次の2つが残っていた。
 
-      - fetch する側（ミキサー・管理画面のJS）に HTML が返る。本文を読めず
+      - fetch する側（管理画面のJS）に HTML が返る。本文を読めず
         「HTTP 500」としか言えない。他の経路はぜんぶ JSON にしてある。
       - 配信リンク（/dlaudio/）に管理画面のページが返る。配信のホストへ
         通っているのは /dlaudio/ だけなので /static/ が全部 404 になり、
@@ -2796,10 +2262,6 @@ class CreateAppShapeTests(unittest.TestCase):
         ("/admin/api/guild-data", "delete"),
         ("/admin/api/users/state", "get"),
         ("/admin/api/users/state/{user_id}", "get"),
-        ("/admin/api/recording", "get"),
-        ("/admin/api/recording/start", "post"),
-        ("/admin/api/recording/stop", "post"),
-        ("/admin/api/recording/settings", "put"),
         ("/admin/api/dev/overview", "get"),
         ("/admin/api/dev/earthquakes", "get"),
         ("/admin/api/dev/send-message", "post"),
@@ -2823,10 +2285,6 @@ class CreateAppShapeTests(unittest.TestCase):
         ("/dlaudio/health", "get"),
         ("/dlaudio/files/{guild_id}/{token}", "get"),
         ("/dlaudio/info/{guild_id}/{token}", "get"),
-        ("/dlaudio/files/{guild_id}/{token}/mixer", "get"),
-        ("/dlaudio/files/{guild_id}/{token}/stem/{index}", "get"),
-        ("/dlaudio/files/{guild_id}/{token}/segment", "get"),
-        ("/dlaudio/files/{guild_id}/{token}/clip", "get"),
         ("/", "get"),
         ("/guide", "get"),
         ("/privacy", "get"),

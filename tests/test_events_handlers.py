@@ -41,7 +41,6 @@ import events.messages as messages  # noqa: E402
 import events.ready as ready  # noqa: E402
 import events.voice as voice  # noqa: E402
 from events.state import EventState  # noqa: E402
-from services.recording_service import RecordingError  # noqa: E402
 
 
 class _FakeBot:
@@ -1111,9 +1110,8 @@ class RegisterBackgroundTasksShapeTests(unittest.TestCase):
 class DevSignalOrderTests(unittest.TestCase):
     """シグナルを、置かれた順に処理すること。
 
-    同じ用途が複数溜まっていることがあり（録音の開始と停止など）、順序が
-    入れ替わると噛み合わない。**入れ替わっても例外は出ず、ログも全部出る。**
-    「開始→停止」が「停止→開始」になれば、録音が止まらないまま残るだけ。
+    同じ用途が複数溜まっていることがあり、順序が入れ替わると噛み合わない。
+    **入れ替わっても例外は出ず、ログも全部出る。**
     """
 
     def setUp(self):
@@ -1274,120 +1272,6 @@ class DevSignalTaskTests(unittest.TestCase):
             _run(self.loops.dev_signal_task())
         run_test.assert_not_called()
         self.assertTrue(any("未知の通知テスト" in line for line in cm.output))
-
-    def test_recording_start_with_a_missing_guild_warns_and_does_not_start(self):
-        payload = json.dumps({"guild_id": 123, "channel_id": 456})
-        sig = _sig_file("recording_start.signal", content=payload)
-        bot = SimpleNamespace(get_guild=Mock(return_value=None))
-        loops = bg.register(bot, self.state)
-        with (
-            patch("services.dev_signals.collect", return_value=[sig]),
-            patch("services.recording_service.start_recording", AsyncMock()) as start_rec,
-            self.assertLogs(bg.logger, level="WARNING"),
-        ):
-            _run(loops.dev_signal_task())
-        start_rec.assert_not_called()
-
-    def test_recording_start_with_a_channel_that_is_not_a_voice_channel_warns_and_does_not_start(self):
-        guild = SimpleNamespace(get_channel=Mock(return_value=SimpleNamespace()), me="me-member")
-        bot = SimpleNamespace(get_guild=Mock(return_value=guild), user="bot-user")
-        loops = bg.register(bot, self.state)
-        payload = json.dumps({"guild_id": 123, "channel_id": 456})
-        sig = _sig_file("recording_start.signal", content=payload)
-        with (
-            patch("services.dev_signals.collect", return_value=[sig]),
-            patch("services.recording_service.start_recording", AsyncMock()) as start_rec,
-            self.assertLogs(bg.logger, level="WARNING") as cm,
-        ):
-            _run(loops.dev_signal_task())
-        start_rec.assert_not_called()
-        self.assertTrue(any("recording_start" in line for line in cm.output))
-
-    def test_recording_start_failure_is_warned_not_raised(self):
-        channel = Mock(spec=discord.VoiceChannel)
-        channel.id = 456
-        guild = SimpleNamespace(get_channel=Mock(return_value=channel), me="me-member")
-        bot = SimpleNamespace(get_guild=Mock(return_value=guild), user="bot-user")
-        loops = bg.register(bot, self.state)
-        payload = json.dumps({"guild_id": 123, "channel_id": 456})
-        sig = _sig_file("recording_start.signal", content=payload)
-        with (
-            patch("services.dev_signals.collect", return_value=[sig]),
-            patch(
-                "services.recording_service.start_recording",
-                AsyncMock(side_effect=RecordingError("既に録音中")),
-            ),
-            self.assertLogs(bg.logger, level="WARNING") as cm,
-        ):
-            _run(loops.dev_signal_task())  # 例外が外へ出ないことを確認
-        self.assertTrue(any("recording_start" in line for line in cm.output))
-
-    def test_recording_start_success_starts_recording_on_the_resolved_channel(self):
-        channel = Mock(spec=discord.VoiceChannel)
-        channel.id = 456
-        guild = SimpleNamespace(get_channel=Mock(return_value=channel), me="me-member")
-        bot = SimpleNamespace(get_guild=Mock(return_value=guild), user="bot-user")
-        loops = bg.register(bot, self.state)
-        payload = json.dumps({"guild_id": 123, "channel_id": 456})
-        sig = _sig_file("recording_start.signal", content=payload)
-        with (
-            patch("services.dev_signals.collect", return_value=[sig]),
-            patch("services.recording_service.start_recording", AsyncMock()) as start_rec,
-        ):
-            _run(loops.dev_signal_task())
-        start_rec.assert_awaited_once_with(bot, guild, channel, started_by="me-member")
-
-    def test_recording_stop_success_sends_the_result_embed(self):
-        target = Mock(spec=discord.abc.Messageable)
-        guild = SimpleNamespace(get_channel=Mock(return_value=None))
-        bot = SimpleNamespace(get_guild=Mock(return_value=guild))
-        loops = bg.register(bot, self.state)
-        payload = json.dumps({"guild_id": 123})
-        sig = _sig_file("recording_stop.signal", content=payload)
-        result = {"channel_id": 1, "token": "tok"}
-        embed = discord.Embed(title="done")
-        with (
-            patch("services.dev_signals.collect", return_value=[sig]),
-            patch("services.recording_service.stop_recording", AsyncMock(return_value=result)),
-            patch("services.recording_service.build_result_embed", return_value=embed),
-            patch("services.recording_service.resolve_announce_channel", return_value=target),
-        ):
-            _run(loops.dev_signal_task())
-        target.send.assert_awaited_once_with(embed=embed)
-
-    def test_recording_stop_with_no_valid_send_target_warns(self):
-        guild = SimpleNamespace(get_channel=Mock(return_value=None))
-        bot = SimpleNamespace(get_guild=Mock(return_value=guild))
-        loops = bg.register(bot, self.state)
-        payload = json.dumps({"guild_id": 123})
-        sig = _sig_file("recording_stop.signal", content=payload)
-        result = {"channel_id": 1, "token": "tok"}
-        with (
-            patch("services.dev_signals.collect", return_value=[sig]),
-            patch("services.recording_service.stop_recording", AsyncMock(return_value=result)),
-            patch("services.recording_service.build_result_embed", return_value=discord.Embed()),
-            patch("services.recording_service.resolve_announce_channel", return_value=None),  # 送り先が無い
-            self.assertLogs(bg.logger, level="WARNING") as cm,
-        ):
-            _run(loops.dev_signal_task())
-        self.assertTrue(any("送信先がありません" in line and "tok" in line for line in cm.output))
-
-    def test_recording_stop_failure_is_warned_not_raised(self):
-        guild = SimpleNamespace(get_channel=Mock(return_value=None))
-        bot = SimpleNamespace(get_guild=Mock(return_value=guild))
-        loops = bg.register(bot, self.state)
-        payload = json.dumps({"guild_id": 123})
-        sig = _sig_file("recording_stop.signal", content=payload)
-        with (
-            patch("services.dev_signals.collect", return_value=[sig]),
-            patch(
-                "services.recording_service.stop_recording",
-                AsyncMock(side_effect=RecordingError("既に停止済み")),
-            ),
-            self.assertLogs(bg.logger, level="WARNING") as cm,
-        ):
-            _run(loops.dev_signal_task())
-        self.assertTrue(any("recording_stop" in line for line in cm.output))
 
     def test_an_exception_while_processing_one_signal_does_not_stop_the_others(self):
         bad = _sig_file("eq_replay.signal", content="{not json")
@@ -1716,116 +1600,6 @@ class VcNotifyHandlerTests(unittest.TestCase):
         self.assertIsNone(ch.send.call_args.kwargs["content"])
 
 
-class StopRecordingIfVcEmptyTests(unittest.TestCase):
-    def _channel(self, cid, *, members=()):
-        return SimpleNamespace(id=cid, members=list(members))
-
-    def test_no_active_session_does_nothing(self):
-        guild = SimpleNamespace(id=1)
-        channel = self._channel(10)
-        with (
-            patch("services.recording_service.get_session", return_value=None),
-            patch("services.recording_service.stop_recording", AsyncMock()) as stop,
-        ):
-            _run(voice._stop_recording_if_vc_empty(object(), guild, channel))
-        stop.assert_not_called()
-
-    def test_channel_none_does_nothing(self):
-        guild = SimpleNamespace(id=1)
-        session = SimpleNamespace(channel_id=10)
-        with (
-            patch("services.recording_service.get_session", return_value=session),
-            patch("services.recording_service.stop_recording", AsyncMock()) as stop,
-        ):
-            _run(voice._stop_recording_if_vc_empty(object(), guild, None))
-        stop.assert_not_called()
-
-    def test_a_different_channel_than_the_recording_session_does_nothing(self):
-        guild = SimpleNamespace(id=1)
-        session = SimpleNamespace(channel_id=999)
-        channel = self._channel(10)
-        with (
-            patch("services.recording_service.get_session", return_value=session),
-            patch("services.recording_service.stop_recording", AsyncMock()) as stop,
-        ):
-            _run(voice._stop_recording_if_vc_empty(object(), guild, channel))
-        stop.assert_not_called()
-
-    def test_a_human_still_present_does_nothing(self):
-        guild = SimpleNamespace(id=1)
-        session = SimpleNamespace(channel_id=10)
-        channel = self._channel(10, members=[SimpleNamespace(bot=False)])
-        with (
-            patch("services.recording_service.get_session", return_value=session),
-            patch("services.recording_service.stop_recording", AsyncMock()) as stop,
-        ):
-            _run(voice._stop_recording_if_vc_empty(object(), guild, channel))
-        stop.assert_not_called()
-
-    def test_only_bots_remaining_stops_and_announces_on_the_configured_channel(self):
-        guild = SimpleNamespace(id=1)
-        session = SimpleNamespace(channel_id=10, announce_message=None)
-        channel = self._channel(10, members=[SimpleNamespace(bot=True)])
-        configured = Mock(spec=discord.abc.Messageable)
-        embed = discord.Embed(title="結果")
-        with (
-            patch("services.recording_service.get_session", return_value=session),
-            patch("services.recording_service.stop_recording", AsyncMock(return_value={"token": "abc"})) as stop,
-            patch("services.recording_service.build_result_embed", return_value=embed),
-            patch("services.recording_service.resolve_announce_channel", return_value=configured),
-        ):
-            _run(voice._stop_recording_if_vc_empty(object(), guild, channel))
-        stop.assert_awaited_once()
-        self.assertEqual(stop.call_args.kwargs["reason"], "VC が空になりました")
-        configured.send.assert_awaited_once_with(embed=embed)
-
-    def test_falls_back_to_the_original_announce_message_channel_when_nothing_is_configured(self):
-        guild = SimpleNamespace(id=1)
-        announced_channel = Mock(spec=discord.abc.Messageable)
-        session = SimpleNamespace(channel_id=10, announce_message=SimpleNamespace(channel=announced_channel))
-        channel = self._channel(10, members=[])
-        with (
-            patch("services.recording_service.get_session", return_value=session),
-            patch("services.recording_service.stop_recording", AsyncMock(return_value={"token": "x"})),
-            patch("services.recording_service.build_result_embed", return_value=discord.Embed()),
-            patch("services.recording_service.resolve_announce_channel", return_value=None),
-        ):
-            _run(voice._stop_recording_if_vc_empty(object(), guild, channel))
-        announced_channel.send.assert_awaited_once()
-
-    def test_falls_back_to_the_vc_text_chat_when_nothing_else_is_available(self):
-        guild = SimpleNamespace(id=1)
-        session = SimpleNamespace(channel_id=10, announce_message=None)
-        channel = Mock(spec=discord.abc.Messageable)
-        channel.id = 10
-        channel.members = []
-        with (
-            patch("services.recording_service.get_session", return_value=session),
-            patch("services.recording_service.stop_recording", AsyncMock(return_value={"token": "x"})),
-            patch("services.recording_service.build_result_embed", return_value=discord.Embed()),
-            patch("services.recording_service.resolve_announce_channel", return_value=None),
-        ):
-            _run(voice._stop_recording_if_vc_empty(object(), guild, channel))
-        channel.send.assert_awaited_once()
-
-    def test_warns_when_every_send_target_fails(self):
-        guild = SimpleNamespace(id=1)
-        session = SimpleNamespace(channel_id=10, announce_message=None)
-        channel = Mock(spec=discord.abc.Messageable)
-        channel.id = 10
-        channel.members = []
-        channel.send = AsyncMock(side_effect=RuntimeError("送信失敗"))
-        with (
-            patch("services.recording_service.get_session", return_value=session),
-            patch("services.recording_service.stop_recording", AsyncMock(return_value={"token": "x"})),
-            patch("services.recording_service.build_result_embed", return_value=discord.Embed()),
-            patch("services.recording_service.resolve_announce_channel", return_value=None),
-            self.assertLogs(voice.logger, level="WARNING") as cm,
-        ):
-            _run(voice._stop_recording_if_vc_empty(object(), guild, channel))
-        self.assertTrue(any("token" in line for line in cm.output))
-
-
 class OnVoiceStateUpdateContractTests(unittest.TestCase):
     """on_voice_state_update: イベントの種類ごとにどのサービスが呼ばれ、
     どれが呼ばれないかの配線を固定する。個々のヘルパーの中身は上の
@@ -1845,11 +1619,6 @@ class OnVoiceStateUpdateContractTests(unittest.TestCase):
             "log_transition": stack.enter_context(patch.object(voice, "_log_vc_transition", AsyncMock())),
             "persist_transition": stack.enter_context(patch.object(voice, "_persist_vc_transition", AsyncMock())),
             "notify": stack.enter_context(patch.object(voice, "_vc_notify_handler", AsyncMock())),
-            "stop_recording": stack.enter_context(patch.object(voice, "_stop_recording_if_vc_empty", AsyncMock())),
-            "auto_start": stack.enter_context(patch("services.recording_service.maybe_auto_start", AsyncMock())),
-            "maybe_start_for_channel": stack.enter_context(
-                patch("services.recording_service.maybe_start_for_channel", AsyncMock())
-            ),
             "auto_join": stack.enter_context(patch("services.tts_service.auto_join", AsyncMock())),
             "has_temp": stack.enter_context(patch("services.tts_service.has_temp_override", return_value=False)),
             "get_tts_settings": stack.enter_context(
@@ -1882,9 +1651,8 @@ class OnVoiceStateUpdateContractTests(unittest.TestCase):
         mocks["log_transition"].assert_not_called()
         mocks["persist_transition"].assert_not_called()
         mocks["notify"].assert_not_called()
-        mocks["stop_recording"].assert_not_called()
 
-    def test_a_human_join_runs_security_logging_persistence_notify_and_auto_recording(self):
+    def test_a_human_join_runs_security_logging_persistence_and_notify(self):
         guild = SimpleNamespace(id=1)
         member = SimpleNamespace(guild=guild, bot=False, id=2)
         after_ch = SimpleNamespace(id=5, name="c")
@@ -1897,9 +1665,6 @@ class OnVoiceStateUpdateContractTests(unittest.TestCase):
         self.assertTrue(mocks["log_transition"].call_args.args[2])  # is_join
         mocks["persist_transition"].assert_called_once()
         mocks["notify"].assert_called_once()
-        mocks["auto_start"].assert_called_once_with(self.bot, member, after_ch)
-        # before_ch=None なので毎回呼ばれるが、中では即 no-op になる（専用テストで確認済み）
-        mocks["stop_recording"].assert_called_once_with(self.bot, guild, None)
 
     def test_a_human_leave_that_empties_the_watched_channel_disconnects_tts(self):
         guild = SimpleNamespace(id=1)
@@ -1911,7 +1676,6 @@ class OnVoiceStateUpdateContractTests(unittest.TestCase):
         with patch.object(voice, "_tts_vc_became_empty", return_value=True):
             _run(self.handler(member, before, after))
         mocks["disconnect"].assert_called_once_with(1)
-        mocks["auto_start"].assert_not_called()  # 参加ではないので自動録音の開始は無い
 
     def test_a_human_leave_that_does_not_empty_the_channel_does_not_disconnect_tts(self):
         guild = SimpleNamespace(id=1)
@@ -1924,7 +1688,7 @@ class OnVoiceStateUpdateContractTests(unittest.TestCase):
             _run(self.handler(member, before, after))
         mocks["disconnect"].assert_not_called()
 
-    def test_tts_auto_join_and_recording_trigger_on_the_configured_vc(self):
+    def test_tts_auto_join_triggers_on_the_configured_vc(self):
         guild = SimpleNamespace(id=1)
         member = SimpleNamespace(guild=guild, bot=False, id=2)
         after_ch = SimpleNamespace(id=5, name="c")
@@ -1933,7 +1697,6 @@ class OnVoiceStateUpdateContractTests(unittest.TestCase):
         mocks = self._patch_all(tts_settings={"enabled": True, "vc_channel_id": 5})
         _run(self.handler(member, before, after))
         mocks["auto_join"].assert_called_once_with(guild, 5)
-        mocks["maybe_start_for_channel"].assert_called_once_with(self.bot, guild, after_ch, trigger="TTS参加")
 
     def test_tts_auto_join_is_skipped_during_a_temporary_override(self):
         guild = SimpleNamespace(id=1)
@@ -1990,15 +1753,13 @@ class OnVoiceStateUpdateOrderAndStateTests(unittest.TestCase):
     （CONTRIBUTING 5.「長い関数を割る前に、不変条件テストを書く」）。
 
     上の OnVoiceStateUpdateContractTests は「どれが呼ばれ、どれが呼ばれないか」
-    を見ているが、次の3つは崩しても全部通る。原文の docstring が
+    を見ているが、次の2つは崩しても全部通る。原文の docstring が
     「入れ替えると壊れる」と名指ししているのに、誰も見ていなかったところ。
 
-      1. 録音の自動停止が、TTS の切断より**先**に走ること
-      2. before.channel / after.channel を1回だけ読むこと
-      3. 入室時刻とメンション時刻が、呼び出しをまたいで残ること
+      1. before.channel / after.channel を1回だけ読むこと
+      2. 入室時刻とメンション時刻が、呼び出しをまたいで残ること
 
-    1 を入れ替えると、VC が空になったとき **録音が途中で切れて終わる。**
-    3 が崩れると在室時間が常に 0 になり、ロールメンションの10分抑止も
+    2 が崩れると在室時間が常に 0 になり、ロールメンションの10分抑止も
     毎回リセットされて連投になる。どちらも例外は出ない。
     """
 
@@ -2018,48 +1779,12 @@ class OnVoiceStateUpdateOrderAndStateTests(unittest.TestCase):
             "log_transition": stack.enter_context(patch.object(voice, "_log_vc_transition", AsyncMock())),
             "persist_transition": stack.enter_context(patch.object(voice, "_persist_vc_transition", AsyncMock())),
             "notify": stack.enter_context(patch.object(voice, "_vc_notify_handler", AsyncMock())),
-            "auto_start": stack.enter_context(patch("services.recording_service.maybe_auto_start", AsyncMock())),
-            "maybe_start_for_channel": stack.enter_context(
-                patch("services.recording_service.maybe_start_for_channel", AsyncMock())
-            ),
             "auto_join": stack.enter_context(patch("services.tts_service.auto_join", AsyncMock())),
             "has_temp": stack.enter_context(patch("services.tts_service.has_temp_override", return_value=False)),
             "get_tts_settings": stack.enter_context(patch("services.tts_store.get_tts_settings", return_value={})),
         }
         mocks.update(extra)
         return mocks
-
-    def test_the_recording_is_stopped_before_tts_disconnects(self):
-        """録音の自動停止が、TTS の切断より先に走ること。
-
-        逆にすると、VC が空になったときに先に切断が起きる。**録音は
-        途中で終わり、そこまでの音だけが書き出される。** 例外は出ないし、
-        呼ばれた回数はどちらの順でも同じなので、順序を見るしかない。
-        """
-        order: list[str] = []
-
-        async def stop_recording(*a, **k):
-            """録音の自動停止の代わり。"""
-            order.append("stop_recording")
-
-        async def disconnect(*a, **k):
-            """TTS 切断の代わり。"""
-            order.append("disconnect")
-
-        member = self._member()
-        before_ch = SimpleNamespace(id=5, name="c", members=[])
-        before = SimpleNamespace(channel=before_ch)
-        after = SimpleNamespace(channel=None)
-        with ExitStack() as stack:
-            self._patched(
-                stack,
-                stop_recording=stack.enter_context(patch.object(voice, "_stop_recording_if_vc_empty", stop_recording)),
-                disconnect=stack.enter_context(patch("services.tts_service.disconnect", disconnect)),
-            )
-            stack.enter_context(patch.object(voice, "_tts_vc_became_empty", return_value=True))
-            _run(self.handler(member, before, after))
-
-        self.assertEqual(order, ["stop_recording", "disconnect"])
 
     def test_the_channel_properties_are_read_only_once(self):
         """before.channel / after.channel を読み直さないこと。
@@ -2090,7 +1815,6 @@ class OnVoiceStateUpdateOrderAndStateTests(unittest.TestCase):
         with ExitStack() as stack:
             self._patched(
                 stack,
-                stop_recording=stack.enter_context(patch.object(voice, "_stop_recording_if_vc_empty", AsyncMock())),
                 disconnect=stack.enter_context(patch("services.tts_service.disconnect", AsyncMock())),
             )
             _run(self.handler(member, before, after))
@@ -2110,7 +1834,6 @@ class OnVoiceStateUpdateOrderAndStateTests(unittest.TestCase):
         with ExitStack() as stack:
             mocks = self._patched(
                 stack,
-                stop_recording=stack.enter_context(patch.object(voice, "_stop_recording_if_vc_empty", AsyncMock())),
                 disconnect=stack.enter_context(patch("services.tts_service.disconnect", AsyncMock())),
             )
             stack.enter_context(patch.object(voice.time, "time", lambda: next(clock)))
@@ -2132,7 +1855,6 @@ class OnVoiceStateUpdateOrderAndStateTests(unittest.TestCase):
         with ExitStack() as stack:
             mocks = self._patched(
                 stack,
-                stop_recording=stack.enter_context(patch.object(voice, "_stop_recording_if_vc_empty", AsyncMock())),
                 disconnect=stack.enter_context(patch("services.tts_service.disconnect", AsyncMock())),
             )
             _run(self.handler(member, SimpleNamespace(channel=None), SimpleNamespace(channel=after_ch)))

@@ -166,8 +166,8 @@ def _register_legacy_redirects(app: FastAPI) -> None:
 def _is_api(request: Request) -> bool:
     """JSON で返すべき相手か。
 
-    画面から fetch する先は /admin/api/ だけではない（配信の /dlaudio/ も
-    ミキサーが読む）。HTML のエラーページを返すと、fetch する側は本文を
+    画面から fetch する先は /admin/api/ だけとは限らない（配信の /dlaudio/ も
+    同じプロセスに載っている）。HTML のエラーページを返すと、fetch する側は本文を
     読めず「HTTP 400」としか言えない。Accept を見て使い分ける。
     ブラウザの遷移は text/html を要求するので、これまでどおり画面が出る。
     """
@@ -414,7 +414,6 @@ def _include_routers(app: FastAPI) -> None:
     from services.djaudio_cdn import dlaudio_router
     from webapp_admin.api.apps import router as apps_api_router
     from webapp_admin.api.dev import router as dev_api_router
-    from webapp_admin.api.recording import router as recording_api_router
     from webapp_admin.api.sql import router as sql_api_router
     from webapp_admin.api.users import router as users_api_router
     from webapp_admin.views.auth_views import router as auth_router
@@ -424,7 +423,6 @@ def _include_routers(app: FastAPI) -> None:
     app.include_router(dashboard_router, prefix="/admin")
     app.include_router(apps_api_router, prefix="/admin/api")
     app.include_router(users_api_router, prefix="/admin/api")
-    app.include_router(recording_api_router, prefix="/admin/api")
     app.include_router(dev_api_router, prefix="/admin/api/dev")
     app.include_router(sql_api_router, prefix="/admin/api/sql")
     app.include_router(dlaudio_router, prefix="/dlaudio")

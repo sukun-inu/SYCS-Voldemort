@@ -1,7 +1,7 @@
 """on_voice_state_update とその内側のヘルパー。
 
 setup_events(bot) の巨大クロージャの中でも単独最大（約270行）だった
-on_voice_state_update を、判定・ログ・永続化・通知・TTS/録音連携ごとの
+on_voice_state_update を、判定・ログ・永続化・通知・TTS連携ごとの
 ヘルパーへ割った。ハンドラ本体はそれらを順番に呼ぶだけにしてある。
 ロジックは元のまま移しただけで、判定条件やログ文言は変えていない。
 """
@@ -357,52 +357,7 @@ async def _vc_notify_handler(
     await notify_ch.send(content=content, embed=embed)
 
 
-async def _stop_recording_if_vc_empty(bot: Bot, guild: discord.Guild, channel) -> None:
-    """録音中のVCから人間が居なくなったら、そこで区切って書き出す。
-
-    放っておくと上限（既定6時間）まで無音を録り続けることになる。
-    """
-    from services import recording_service as recording
-
-    session = recording.get_session(guild.id)
-    if session is None or channel is None or channel.id != session.channel_id:
-        return
-    if any(m for m in channel.members if not m.bot):
-        return
-
-    result = await recording.stop_recording(bot, guild.id, reason="VC が空になりました")
-    embed = recording.build_result_embed(guild.id, result)
-    # 設定した通知先 → 開始告知を出した場所 → VC のチャット欄 の順に試す
-    configured = recording.resolve_announce_channel(guild)
-    announced = session.announce_message.channel if session.announce_message else None
-    for target in (configured, announced, channel):
-        if target is None:
-            continue
-        try:
-            await target.send(embed=embed)
-            return
-        except Exception as e:
-            logger.debug("[BOT_SETUP] 録音結果を送れませんでした: %s", e)
-    logger.warning("[BOT_SETUP] guild=%s 録音結果の通知先がありませんでした（token=%s）", guild.id, result["token"])
-
-
-async def _auto_start_recording(bot: Bot, member: discord.Member, after_ch, is_join: bool) -> None:
-    """自動録音: 設定済みVCに人が入ったら録り始める。
-
-    読み上げとは独立したスイッチで、両方オンなら同じ接続で両方動く。
-    """
-    if not (is_join and after_ch is not None):
-        return
-
-    from services import recording_service as recording
-
-    await _safe(
-        recording.maybe_auto_start(bot, member, after_ch),
-        "録音の自動開始",
-    )
-
-
-async def _maybe_tts_auto_join(bot: Bot, member: discord.Member, after_ch, is_join: bool) -> None:
+async def _maybe_tts_auto_join(member: discord.Member, after_ch, is_join: bool) -> None:
     """TTS 自動参加: 設定済みVCに誰か入ったらBotも入る（temp override 中はスキップ）。"""
     try:
         if is_join and after_ch is not None:
@@ -414,16 +369,6 @@ async def _maybe_tts_auto_join(bot: Bot, member: discord.Member, after_ch, is_jo
             if _tts_cfg.get("enabled") and _tts_vc_id and int(_tts_vc_id) == after_ch.id:
                 if not _has_temp(member.guild.id):
                     await _tts_auto_join(member.guild, int(_tts_vc_id))
-                    # 読み上げが入った VC でも録音の条件を見る（入室側の
-                    # 判定と入口が違うだけで、狙いは同じ）
-                    from services import recording_service as _recording
-
-                    await _recording.maybe_start_for_channel(
-                        bot,
-                        member.guild,
-                        after_ch,
-                        trigger="TTS参加",
-                    )
     except Exception as e:
         logger.exception("[BOT_SETUP] TTS auto_join error: %s", e)
 
@@ -432,8 +377,6 @@ async def _maybe_tts_auto_leave(member: discord.Member, before_ch, is_leave: boo
     """TTS 自動退出: VCに人間が誰もいなくなったらBotも退出（temp override も解除）。
 
     退出だけでなく移動も対象になるのがここ。判定そのものは _tts_vc_announce と共通。
-    呼び出し側は、これより**先に**録音の自動停止を済ませておくこと
-    （切断されると録音が途中で終わる）。
     """
     try:
         if (is_leave or is_move) and _tts_vc_became_empty(member.guild.id, before_ch):
@@ -456,8 +399,7 @@ async def _dispatch_voice_state(
 
     呼び出し順序に依存関係が複数あり、入れ替えると壊れる（各所のコメント参照）:
     TTSアナウンス(_tts_vc_announce)はbot自身の入退室も対象なので
-    member.bot判定より前に呼ぶ／録音の自動停止はTTS切断より先に呼ぶ
-    （切断されると録音が途中で終わる）。before_ch/after_chはプロパティを
+    member.bot判定より前に呼ぶ。before_ch/after_chはプロパティを
     1回だけ読んで使い回す（何度も読み直すとNoneに化けることがある）。
 
     状態の2つの辞書は呼び出しをまたいで持ち回る。ここで作ると、在室時間が
@@ -512,13 +454,7 @@ async def _dispatch_voice_state(
         "VC notify",
     )
 
-    await _auto_start_recording(bot, member, after_ch, is_join)
-    await _maybe_tts_auto_join(bot, member, after_ch, is_join)
-
-    # 録音中のVCが空になったら、無音を録り続けないよう自動で止めて書き出す。
-    # TTS の切断より先に処理する（切断されると録音が途中で終わるため）。
-    await _safe(_stop_recording_if_vc_empty(bot, member.guild, before_ch), "録音の自動停止")
-
+    await _maybe_tts_auto_join(member, after_ch, is_join)
     await _maybe_tts_auto_leave(member, before_ch, is_leave, is_move)
 
 

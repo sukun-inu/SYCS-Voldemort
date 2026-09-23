@@ -48,7 +48,7 @@ def _panel_or_404(request: Request, app_id: str) -> Panel:
 def _editable_panel(request: Request, app_id: str) -> Panel:
     """書き込み系エンドポイント共通のガード。custom パネルには明示保存の概念が無い。
 
-    custom パネル（DEV/SQL/RECORDING/USER_STATE 等）は自前のAPIで状態を持ち、
+    custom パネル（DEV/SQL/USER_STATE 等）は自前のAPIで状態を持ち、
     このスキーマ駆動の values/collections 経由の保存対象ではない。ここを
     通さずに save_app 等を直接叩かれても 404 で弾く。
     """

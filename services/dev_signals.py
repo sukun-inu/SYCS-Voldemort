@@ -1,7 +1,7 @@
 """Bot と管理画面のあいだで受け渡す「シグナル」。
 
 管理画面は Bot とは別プロセスなので、Bot にしかできない操作（VC への接続、
-録音の開始・停止、Discord への送信）を直接は呼べない。共有ディレクトリへ
+Discord への送信など）を直接は呼べない。共有ディレクトリへ
 ファイルを1つ置き、Bot が定期的に拾って実行する。
 
 置き場所は settings.json と同じ SETTINGS_DIR の下。書く側（管理画面）と
@@ -56,8 +56,8 @@ def signal_dir() -> Path:
 def task_name_of(path: Path) -> str:
     """ファイル名から用途名を取り出す。
 
-    "recording_start.signal"           -> "recording_start"
-    "recording_start.19f3a2c1de.signal" -> "recording_start"
+    "eq_replay.signal"           -> "eq_replay"
+    "eq_replay.19f3a2c1de.signal" -> "eq_replay"
     """
     return path.name.split(".", 1)[0]
 
@@ -86,7 +86,7 @@ def pending() -> list[str]:
 def collect() -> list[Path]:
     """未処理のシグナルを、置かれた順に返す。
 
-    同じ用途が複数溜まっていることがある（録音の開始と停止など）。glob の
+    同じ用途が複数溜まっていることがある。glob の
     順序は環境依存なので、更新時刻とファイル名で並べ直してから渡す。
     """
     try:

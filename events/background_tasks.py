@@ -15,7 +15,6 @@ import asyncio
 import json
 import logging
 import math
-from typing import cast
 
 import discord
 import psutil
@@ -140,80 +139,6 @@ async def _signal_eq_replay(bot: Bot, sig_content: str) -> None:
     logger.info("[DEV] eq_replay: %d 件へ送信", sent)
 
 
-async def _recording_start(bot: Bot, guild, guild_id: int, payload: dict) -> None:
-    """管理画面から指定された VC で録音を始める。
-
-    `guild_id` を別に受けるのは、ログへ出すのが**要求された guild_id**だから。
-    `guild.id` で代用すると、取り違えたときに「要求した ID」ではなく
-    「見つかった ID」が出て、食い違いそのものが見えなくなる。
-    """
-    from services import recording_service as recording
-
-    channel = guild.get_channel(int(payload.get("channel_id", 0)))
-    if not isinstance(channel, discord.VoiceChannel):
-        logger.warning(
-            "[DEV] recording_start: channel_id=%s が見つからないか VC ではありません",
-            payload.get("channel_id"),
-        )
-        return
-    # guild.me は接続直後だと None のことがあり、そのときは bot.user（起動時に
-    # 必ず入る）で代用する。どちらも実体は「録音を始めた人」として扱える
-    # ユーザーだが、型としては Member | ClientUser | None なので cast で通す。
-    # 分割前はこの行が注釈の無いクロージャの中にあり、型検査の対象外だった。
-    starter = cast(discord.abc.User, guild.me or bot.user)
-    try:
-        await recording.start_recording(bot, guild, channel, started_by=starter)
-        logger.info("[DEV] recording_start: guild=%s ch=%s", guild_id, channel.id)
-    except recording.RecordingError as e:
-        logger.warning("[DEV] recording_start 失敗 guild=%s: %s", guild_id, e)
-
-
-async def _recording_stop(bot: Bot, guild, guild_id: int) -> None:
-    """録音を止め、結果を告知先へ送る。
-
-    停止先は `guild.id` ではなく、要求された `guild_id` で指す（理由は
-    _recording_start と同じ）。
-    """
-    from services import recording_service as recording
-
-    try:
-        result = await recording.stop_recording(bot, guild_id, reason="管理画面から停止")
-        embed = recording.build_result_embed(guild_id, result)
-        target = recording.resolve_announce_channel(
-            guild,
-            fallback=guild.get_channel(result["channel_id"]),
-        )
-        if isinstance(target, discord.abc.Messageable):
-            await target.send(embed=embed)
-        else:
-            logger.warning(
-                "[DEV] recording_stop: guild=%s 結果の送信先がありません（token=%s）",
-                guild_id,
-                result["token"],
-            )
-        logger.info("[DEV] recording_stop: guild=%s token=%s", guild_id, result["token"])
-    except recording.RecordingError as e:
-        logger.warning("[DEV] recording_stop 失敗 guild=%s: %s", guild_id, e)
-
-
-async def _signal_recording(bot: Bot, task_name: str, sig_content: str) -> None:
-    """録音の開始・停止。管理画面は別プロセスなので、ここで受ける。"""
-    payload = json.loads(sig_content)
-    guild_id = int(payload.get("guild_id", 0))
-    guild = bot.get_guild(guild_id)
-    if guild is None:
-        logger.warning(
-            "[DEV] %s: guild_id=%s が見つかりません" "（bot が未参加、またはキャッシュ未反映）",
-            task_name,
-            guild_id,
-        )
-        return
-    if task_name == "recording_start":
-        await _recording_start(bot, guild, guild_id, payload)
-    else:
-        await _recording_stop(bot, guild, guild_id)
-
-
 async def _signal_test_notify(bot: Bot, task_name: str, sig_content: str) -> None:
     """通知テスト。中身は services/dev_test_notify.py が持つ。
 
@@ -252,8 +177,6 @@ async def _handle_dev_signal(bot: Bot, state: EventState, task_name: str, sig_co
         await _signal_user_state_repair(bot, state)
     elif task_name == "eq_replay":
         await _signal_eq_replay(bot, sig_content)
-    elif task_name in ("recording_start", "recording_stop"):
-        await _signal_recording(bot, task_name, sig_content)
     elif task_name.startswith("test_"):
         await _signal_test_notify(bot, task_name, sig_content)
     else:
@@ -267,8 +190,8 @@ async def _process_dev_signals(bot: Bot, state: EventState) -> None:
     1ファイルの処理で例外が出ても内側の try/except で捕まえ、他のシグナルの
     処理やこのループ自体を止めない。
     """
-    # 置かれた順に処理する。同じ用途が複数溜まっていることがあり
-    # （録音の開始と停止など）、順序が入れ替わると噛み合わない。
+    # 置かれた順に処理する。同じ用途が複数溜まっていることがあり、
+    # 順序が入れ替わると噛み合わない。
     for sig_file in dev_signals.collect():
         task_name = dev_signals.task_name_of(sig_file)
         try:

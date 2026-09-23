@@ -5,7 +5,7 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Bot
 
-from commands.guards import ensure_admin, is_admin
+from commands.guards import ensure_admin
 from commands.interaction_utils import (
     EMBED_DESCRIPTION_BUDGET,
     cap_list_for_message,
@@ -177,13 +177,10 @@ async def tts_join(
     interaction: discord.Interaction,
     channel: discord.VoiceChannel,
 ) -> None:
-    """VC参加自体は誰でも使える。管理者以外に録音の自動開始を許さない
-    ガードの理由、defer の位置付けは本文コメント参照。
-    """
+    """VC参加自体は誰でも使える。defer の位置付けは本文コメント参照。"""
     assert interaction.guild
-    # VC接続（temp_join）、さらに管理者なら録音の自動開始判定も続けて行う。
-    # どちらもDiscordとの往復を伴い、3秒の持ち時間を超えうるので先にdeferする
-    # （/record start や /tts leave の録音締め処理と同じ考え方）。
+    # VC接続（temp_join）はDiscordとの往復を伴い、3秒の持ち時間を超えうるので
+    # 先にdeferする。
     await interaction.response.defer(ephemeral=True, thinking=True)
     settings = get_tts_settings(interaction.guild.id)
     if not settings.get("enabled"):
@@ -193,72 +190,19 @@ async def tts_join(
     bot = cast(Bot, interaction.client)
     await tts_service.temp_join(bot, interaction.guild, channel.id)
 
-    # 読み上げと録音は独立したスイッチ。両方オンなら、こちらの入口から入っても
-    # 録音が始まるようにする（人の入室イベントだけを入口にしていると、既に人が
-    # いる VC へ手動で参加させたときに録音が始まらない）。
-    #
-    # ただし録音は管理者専用の機能（/record start も管理者限定）なので、
-    # 誰でも打てるこのコマンドから始められるようにはしない。このガードが無いと、
-    # 一般利用者が /tts join で録音を開始できてしまう。
-    extra = ""
-    if is_admin(interaction):
-        from services import recording_service as recording
-
-        await recording.maybe_start_for_channel(
-            interaction.client,
-            interaction.guild,
-            channel,
-            trigger="/tts join",
-        )
-        if recording.is_recording(interaction.guild.id):
-            extra = "録音も始めた。"
-
     await send_ephemeral(
         interaction,
-        f"✅ {channel.mention} に参加した。このVCのコメント欄を優先読み上げ中。{extra}"
+        f"✅ {channel.mention} に参加した。このVCのコメント欄を優先読み上げ中。"
         f"\n`/tts leave` で退出・元の設定に戻る。",
     )
 
 
-@tts_group.command(name="leave", description="ボットをVCから退出させキューをクリアする（録音中なら締めてから退出）")
+@tts_group.command(name="leave", description="ボットをVCから退出させキューをクリアする")
 async def tts_leave(interaction: discord.Interaction) -> None:
-    """録音停止の権限（/record stop は管理者限定）を、このコマンド経由で
-    迂回させない分岐の理由は本文コメント参照。管理者以外は読み上げだけを
-    切り、録音は続けさせる。
-    """
+    """読み上げを止めてVCから退出する。"""
     assert interaction.guild
-    from services import recording_service as recording
-
-    # 録音を止められるのは管理者だけ。誰でも打てるこのコマンドで録音を
-    # 打ち切れると、/record stop の管理者限定を迂回できてしまう。
-    # 管理者以外は読み上げだけ抜ける（接続は録音側が掴んでいるので切れない）。
-    if not recording.is_recording(interaction.guild.id) or not is_admin(interaction):
-        await tts_service.disconnect(interaction.guild.id)
-        note = ""
-        if recording.is_recording(interaction.guild.id):
-            note = "\n※ 録音は続いている。止めるには管理者に `/record stop` を頼め。"
-        await send_ephemeral(interaction, f"✅ 読み上げを止めた。{note}")
-        return
-
-    # 録音中に黙って抜けると、そこまで録った分が宙に浮く。締めてリンクを出す。
-    # 書き出し（ffmpeg と ZIP 化）に時間がかかるので defer しておく。
-    await interaction.response.defer(thinking=True)
-    try:
-        result = await recording.stop_recording(
-            interaction.client,
-            interaction.guild.id,
-            reason="/tts leave で退出",
-        )
-    except recording.RecordingError as e:
-        await tts_service.disconnect(interaction.guild.id)
-        await interaction.followup.send(f"✅ VCから退出した。ただし録音の書き出しに失敗した（{e}）")
-        return
-
     await tts_service.disconnect(interaction.guild.id)
-    await interaction.followup.send(
-        content="✅ VCから退出した。録音も締めた。",
-        embed=recording.build_result_embed(interaction.guild.id, result),
-    )
+    await send_ephemeral(interaction, "✅ 読み上げを止めた。")
 
 
 @tts_group.command(name="default_voice", description="サーバーのデフォルト声を設定する")
@@ -310,9 +254,7 @@ async def tts_read_name_cmd(
     enabled: str,
 ) -> None:
     """bool ではなく on/off の choice にしているのは、Discord UI 上で
-    bool 引数は "True"/"False" としか表示されず分かりにくいため
-    （record/config.py の auto コマンドは同じ用途に bool を直接使っており、
-    ここはUI表示を優先して意図的に choice にしている）。
+    bool 引数は "True"/"False" としか表示されず分かりにくいため。
     """
     if not await ensure_admin(interaction):
         return

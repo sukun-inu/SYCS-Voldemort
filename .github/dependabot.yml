@@ -74,14 +74,11 @@ updates:
       # 出てくる PR を見るまで分からない。**
       - dependency-name: redis
         versions: [">=8.0.0"]
-      # discord.py 本体を上げると音声接続と録音の検証が必須になる（DAVE の鍵交換と
-      # voice_recv の組み合わせが版に依存する）。手動で上げる前提にして、自動 PR は
+      # discord.py 本体を上げると音声接続の検証が必須になる（DAVE の鍵交換が
+      # 版に依存する）。手動で上げる前提にして、自動 PR は
       # メジャー・マイナーだけ抑える。パッチは受け取る。
       - dependency-name: discord.py
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
-      # discord-ext-voice-recv は上流がまだ alpha で、上げるたびに録音の動作確認が
-      # 要る（requirements.txt のコメント参照）。自動では上げない。
-      - dependency-name: discord-ext-voice-recv
 
   - package-ecosystem: github-actions
     directory: /

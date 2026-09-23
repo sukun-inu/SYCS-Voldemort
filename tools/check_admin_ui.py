@@ -276,7 +276,7 @@ def main():
             try:
                 page.wait_for_selector(window + ".savebar-status", timeout=3000)
             except PlaywrightTimeout:
-                # 保存バーを持たない画面（録音・SQL・監視など）はここでは見ない
+                # 保存バーを持たない画面（SQL・監視など）はここでは見ない
                 page.click(window + ".window-control.close")
                 continue
             bar = page.locator(window + ".savebar-status")
@@ -498,32 +498,19 @@ def main():
             page.locator('.window[data-app-id="tts"] .field[data-key="default_voice"] input').count() == 1,
         )
 
-        # ── VC録音のパネル ──
-        _serve_channels(
-            [
-                {"id": "111", "name": "general", "type": 0},
-                {"id": "333", "name": "雑談VC", "type": 2},
-            ]
-        )
-        settings_store.set_recording_settings(
-            GUILD_ID,
-            {
-                "enabled": True,
-                "auto_start": True,
-                "max_minutes": 0,
-                "retention_days": 30,
-                "announce_channel_id": int(_ORPHAN_CHANNEL),
-                "vc_channel_id": None,
-            },
-        )
+        # ── 画面共通の検査（VC 通知パネルで見る） ──
+        # もとは VC録音のパネルで見ていた。録音機能を外したので、同じ部品
+        # （lib/dom.js field()・チャンネル選択・ウィンドウ）を使うスキーマ駆動の
+        # 画面へ移した。
+        vc_window = '.window[data-app-id="vc-notify"] '
+        vc_channel = vc_window + '.field[data-key="vc_notify_channel_id"] select'
+        _serve_channels([{"id": "111", "name": "general", "type": 0}])
+        settings_store.set_vc_notify_channel_id(GUILD_ID, int(_ORPHAN_CHANNEL))
+        page.keyboard.press("Escape")
         page.click("#start-button")
-        page.click('.app-tile[data-app-id="recording"]')
-        page.wait_for_selector('.window[data-app-id="recording"]', timeout=8000)
-        page.wait_for_timeout(1500)
-        rec_window = '.window[data-app-id="recording"] '
-        rec_body = page.locator('.window[data-app-id="recording"]').inner_text()
-
-        check("録音が無いときにミキサーの入口が説明される", "録音を停止すると" in rec_body and "ミキサー" in rec_body)
+        page.click('.app-tile[data-app-id="vc-notify"]')
+        page.wait_for_selector(vc_channel, timeout=8000)
+        page.wait_for_timeout(500)
 
         # ── ラベルが入力欄に結び付いていること ──
         # 開発者パネルと録音パネルは、それぞれ自前で同じ field() を持っていて、
@@ -545,15 +532,15 @@ def main():
           }
           return out;
         }""",
-            '.window[data-app-id="recording"]',
+            '.window[data-app-id="vc-notify"]',
         )
-        check("録音パネルのラベルが入力欄に結び付いている", unlabelled == [], f"結び付いていない: {unlabelled}")
+        check("VC 通知パネルのラベルが入力欄に結び付いている", unlabelled == [], f"結び付いていない: {unlabelled}")
 
         # ── ウィンドウの大きさをキーボードで変えられること ──
         # つまみは pointerdown だけで動いていたので、マウス以外の利用者は
         # 任意の大きさにできなかった（最大化・最小化はボタンで押せる）。
         resized = page.evaluate("""() => {
-          const win = document.querySelector('.window[data-app-id="recording"]');
+          const win = document.querySelector('.window[data-app-id="vc-notify"]');
           const grip = win.querySelector(".window-resize");
           const before = { w: win.offsetWidth, h: win.offsetHeight };
           grip.focus();
@@ -592,60 +579,50 @@ def main():
 
         # select.value に一覧へ無い値を入れても、ブラウザは黙って無視して空欄にする。
         # そのまま保存すると設定が消える（実際に起きた）。
-        picked = page.evaluate("""() => Array.from(
-                 document.querySelectorAll('.window[data-app-id="recording"] select'))
-                 .filter((s) => !s.hidden)
-                 .map((s) => ({ value: s.value,
-                                text: s.selectedOptions[0] ? s.selectedOptions[0].textContent : "" }))""")
-        orphan = next((x for x in picked if x["value"] == _ORPHAN_CHANNEL), None)
-        check("一覧に無いチャンネルでもプルダウンが空にならない", orphan is not None, str([x["value"] for x in picked]))
-        check(
-            "一覧に無いと分かる表示になっている",
-            bool(orphan) and "一覧にありません" in orphan["text"],
-            orphan["text"] if orphan else "",
-        )
-
-        page.locator(rec_window + 'button:has-text("設定を保存")').click()
-        page.wait_for_timeout(1200)
-        saved = settings_store.get_recording_settings(GUILD_ID)["announce_channel_id"]
-        check("そのまま保存しても設定が消えない", str(saved) == _ORPHAN_CHANNEL, f"保存後={saved}")
+        read_select = """(sel) => { const s = document.querySelector(sel);
+                 return { value: s.value,
+                          text: s.selectedOptions[0] ? s.selectedOptions[0].textContent : "" }; }"""
+        picked = page.evaluate(read_select, vc_channel)
+        check("一覧に無いチャンネルでもプルダウンが空にならない", picked["value"] == _ORPHAN_CHANNEL, picked["value"])
+        check("一覧に無いと分かる表示になっている", "一覧にありません" in picked["text"], picked["text"])
+        # 空欄に化けていれば、開いただけで「変更あり」になり、保存で設定が消える。
+        status = page.locator(vc_window + ".savebar-status").inner_text()
+        check("一覧に無いチャンネルを開いただけでは変更扱いにならない", status == "変更はありません", status)
+        page.locator(vc_window + ".window-control").last.click()
+        page.wait_for_timeout(300)
 
         # 実在するチャンネルが名前で出ること。JSON に数値で入れると
         # 1234567890123456789 → 1234567890123456800 と桁が落ちて一致しない。
         _serve_channels(
             [
                 {"id": "111", "name": "general", "type": 0},
-                {"id": _LISTED_CHANNEL, "name": "雑談VC", "type": 2},
+                {"id": _LISTED_CHANNEL, "name": "雑談", "type": 0},
             ]
         )
-        settings_store.set_recording_settings(
-            GUILD_ID,
-            {
-                "vc_channel_id": int(_LISTED_CHANNEL),
-                "announce_channel_id": None,
-            },
-        )
-        page.locator('.window[data-app-id="recording"] .window-control').last.click()
-        page.wait_for_timeout(300)
+        settings_store.set_vc_notify_channel_id(GUILD_ID, int(_LISTED_CHANNEL))
         page.click("#start-button")
-        page.click('.app-tile[data-app-id="recording"]')
-        page.wait_for_selector('.window[data-app-id="recording"]', timeout=8000)
-        page.wait_for_timeout(1500)
-
-        picked = page.evaluate("""() => Array.from(
-                 document.querySelectorAll('.window[data-app-id="recording"] select'))
-                 .filter((s) => !s.hidden)
-                 .map((s) => ({ value: s.value,
-                                text: s.selectedOptions[0] ? s.selectedOptions[0].textContent : "" }))""")
+        page.click('.app-tile[data-app-id="vc-notify"]')
+        page.wait_for_selector(vc_channel, timeout=8000)
+        page.wait_for_timeout(500)
+        picked = page.evaluate(read_select, vc_channel)
         check(
             "19桁のIDが桁落ちせず名前で出る",
-            any(x["value"] == _LISTED_CHANNEL and "雑談VC" in x["text"] for x in picked),
+            picked["value"] == _LISTED_CHANNEL and "雑談" in picked["text"],
             str(picked),
         )
+        page.locator(vc_window + ".window-control").last.click()
+        page.wait_for_timeout(300)
+        settings_store.set_vc_notify_channel_id(GUILD_ID, 0)
 
-        # チェックボックスは、スキーマ駆動の画面と同じ並びにする
+        # チェックボックスは、チェックと文字を横並びにし、左端をそろえる
+        # （TTS の窓は開いたままなので、タイルを押すと前面へ出るだけ）
+        page.click("#start-button")
+        page.click('.app-tile[data-app-id="tts"]')
+        page.wait_for_selector('.window[data-app-id="tts"] input[type=checkbox]', state="attached", timeout=8000)
+        page.wait_for_timeout(300)
         boxes = page.evaluate("""() => Array.from(
-                 document.querySelectorAll('.window[data-app-id="recording"] input[type=checkbox]'))
+                 document.querySelectorAll('.window[data-app-id="tts"] input[type=checkbox]'))
+                 .filter((b) => b.offsetParent !== null)
                  .map((b) => {
                    const label = b.closest('label.check');
                    const text = label && label.querySelector('.check-text');
@@ -660,10 +637,8 @@ def main():
             str(boxes),
         )
         check("チェックの左端がそろっている", len({b.get("left") for b in boxes if b.get("paired")}) == 1, str(boxes))
-
-        # このあとのウィンドウ操作は開いている枚数を数えるので、閉じておく。
-        page.locator('.window[data-app-id="recording"] .window-control').last.click()
-        page.wait_for_timeout(400)
+        # TTS の窓は上の保存バーの検査から開いたまま。このあとのウィンドウ操作は
+        # 開いている枚数を数えるので、ここでは閉じない。
 
         # ── サーバーのデータ（取り消しの効かない操作の入口） ──
         # 消す口（DELETE /admin/api/guild-data）だけ先に入っていて、叩く画面が
@@ -1199,19 +1174,13 @@ def main():
 
             if path_ == "/":
                 body = page.locator("body").inner_text()
-                check("トップに VC録音 が載っている", "VC録音" in body)
-                check("録音対象から外れる手段がトップに書いてある", "/record exclude" in body)
+                # VC録音は外した。無い機能をトップで案内しないこと。
+                check("トップに VC録音 が残っていない", "録音" not in body and "/record" not in body)
 
             if path_ == "/guide":
                 body = page.locator("body").inner_text()
-                # 録音は個人に紐づく情報を扱う。参加者が「自分は対象から
-                # 外れられる」と知る手段が公開ページに無いと具合が悪い。
-                check("使い方に VC録音 の節がある", "VC録音" in body)
-                check("録音が必ず通知されると書いてある", "必ず投稿されます" in body)
-                check("/record exclude が誰でも使えると分かる", "/record exclude" in body and "誰でも使えます" in body)
-                check("録音データの保存期限が書いてある", "7 日" in body and "30 日" in body)
-                check("政府機関以外に使わない旨がある", "政府機関への提供が必要な場合を除き" in body)
-                check("ミキサーの説明がある", "ミキサー" in body and "波形" in body)
+                # VC録音は外した。無い機能の使い方を案内しないこと。
+                check("使い方に VC録音 が残っていない", "録音" not in body and "ミキサー" not in body)
                 # コマンド名をグループ化したので、旧名が残っていないこと
                 stale = [n for n in ("/metal_", "/server_info", "/user_info", "/bot_help") if n in body]
                 check("旧コマンド名が残っていない", not stale, str(stale))

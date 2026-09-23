@@ -97,11 +97,12 @@ python -m unittest tests.test_services -v        # 1ファイル
 ### docstring に「なぜこのテストがあるか」を書く
 
 ```python
-def test_tracks_are_padded_onto_one_timeline(self):
-    """喋った時刻が違っても、全トラックが同じ長さ・同じ時間軸に揃うこと。
+def test_the_join_time_survives_between_calls(self):
+    """入室時刻が次の呼び出しまで残り、在室時間になること。
 
-    受信できるのは発話中のパケットだけなので、素直に繋ぐと無音が詰まって
-    トラック同士がずれる。ずれると重ねて編集できず、マルチトラックの意味が無い。
+    入室時刻を持つ辞書を呼び出しごとに作り直すと、退出時に引ける
+    入室時刻が無くなり、**在室時間は常に 0 になる。** ログには
+    「0分」と出るだけで、誰も落ちない。
     """
 ```
 

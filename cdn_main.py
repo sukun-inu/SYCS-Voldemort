@@ -51,14 +51,14 @@ def create_cdn_app() -> FastAPI:
     async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         """エラーを、相手が読める形（HTML か JSON）で返し分ける。
 
-        返し分けを誤るとミキサー側が理由を読めなくなる。判定を置く場所に
+        返し分けを誤ると fetch する側が理由を読めなくなる。判定を置く場所に
         ついては下のコメント。
         """
         # ブラウザで直接開かれる配信リンクには簡易HTMLの案内ページを返す。
-        # ただし /dlaudio/files/ の下には、ミキサーが fetch する索引・解析・
-        # 切り出しも同居している。パスの接頭辞で決めていたころは、そちらにも
-        # HTML を返していたため、ミキサーは断られた理由を読めなかった
-        # （JSON として解釈できず「Unexpected token '<'」になる）。
+        # ただし同じ URL をスクリプトが fetch することもある。パスの接頭辞で
+        # 決めていたころは、そちらにも HTML を返していたため、fetch する側は
+        # 断られた理由を読めなかった（JSON として解釈できず
+        # 「Unexpected token '<'」になる）。
         # 判定は services/djaudio_cdn.wants_json に1つだけ置く。
         from services.djaudio_cdn import render_link_error_page, wants_json
 
