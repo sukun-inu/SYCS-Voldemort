@@ -26,7 +26,9 @@ import logging
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # noqa: E402
 
@@ -432,6 +434,137 @@ class SharedCacheFailureTests(QuietSharedCacheLog, unittest.IsolatedAsyncioTestC
             for _ in range(5):
                 await cache.get_json("ns", "k")
         self.assertEqual(len(logs.records), 1, f"1行だけであること: {[r.message for r in logs.records]}")
+
+
+class SharedCacheRecoveryLogTests(unittest.IsolatedAsyncioTestCase):
+    """落ちた共有キャッシュが戻ったとき、戻ったことと止まっていた長さが残ること。
+
+    外れたときの1行しか無いと、ログから「30秒で戻った」のか「ずっと落ちている」
+    のかを区別できない。本番で ``Error -3 connecting to valkey:6379`` が1行だけ
+    出たとき、それがどれだけ続いたのかを誰も答えられなかった。
+    """
+
+    def _messages(self, logs):
+        """assertLogs が集めた行の本文だけを並べる。"""
+        return [record.getMessage() for record in logs.records]
+
+    def _at(self, now):
+        """services.shared_cache から見た時計だけを now に止める。
+
+        time.monotonic そのものを差し替えると、asyncio のループの時計まで
+        止まってテストが進まなくなる。モジュールが参照する time だけを替える。
+        """
+        return patch.object(shared_cache_module, "time", SimpleNamespace(monotonic=lambda: now))
+
+    async def test_the_first_success_after_a_failure_says_it_is_back(self):
+        """落ちたあとの最初の成功で、戻ったことを経過秒つきで1行出すこと。"""
+        fake = FakeValkey(fail_on={"get"})
+        cache = make_cache(fake, breaker_cooldown_seconds=1.0)
+
+        with self._at(1000.0):
+            await cache.get_json("ns", "k")
+
+        cache._blocked_until = 0.0
+        fake.fail_on = set()
+        with (
+            self._at(1042.0),
+            self.assertLogs(shared_cache_module.logger, level="INFO") as logs,
+        ):
+            await cache.get_json("ns", "k")
+
+        self.assertEqual(self._messages(logs), ["共有キャッシュが戻りました（42 秒ぶり）。"])
+
+    async def test_it_says_so_only_once(self):
+        """戻った1回目だけに出し、繋がっている間の成功では出さないこと。
+
+        毎回出すと1リクエスト1行になり、ログがそれで埋まる。
+        """
+        fake = FakeValkey(fail_on={"get"})
+        cache = make_cache(fake, breaker_cooldown_seconds=1.0)
+        with self.assertLogs(shared_cache_module.logger, level="WARNING"):
+            await cache.get_json("ns", "k")
+        cache._blocked_until = 0.0
+        fake.fail_on = set()
+
+        with self.assertLogs(shared_cache_module.logger, level="INFO") as logs:
+            for _ in range(5):
+                await cache.get_json("ns", "k")
+
+        self.assertEqual(len(logs.records), 1, self._messages(logs))
+
+    async def test_a_healthy_cache_never_logs(self):
+        """一度も落ちていなければ、成功しても何も出さないこと。"""
+        cache = make_cache()
+        with self.assertNoLogs(shared_cache_module.logger, level="DEBUG"):
+            await cache.set_json("ns", "k", {"a": 1}, 60)
+            await cache.get_json("ns", "k")
+
+    async def test_a_retry_that_still_fails_says_how_long_it_has_been_down(self):
+        """クールダウン明けにまだ繋がらないときは、落ちてからの秒数を添えること。
+
+        以前は最初と同じ文言がもう1行出るだけで、「また落ちた」のか
+        「落ちたまま」なのかが読めなかった。
+        """
+        fake = FakeValkey(fail_on={"get"})
+        cache = make_cache(fake, breaker_cooldown_seconds=30.0)
+
+        with (
+            self._at(1000.0),
+            self.assertLogs(shared_cache_module.logger, level="WARNING") as first,
+        ):
+            await cache.get_json("ns", "k")
+        with (
+            self._at(1031.0),
+            self.assertLogs(shared_cache_module.logger, level="WARNING") as second,
+        ):
+            await cache.get_json("ns", "k")
+
+        self.assertIn("30 秒間使いません", self._messages(first)[0])
+        self.assertIn("まだ繋がりません（落ちてから 31 秒", self._messages(second)[0])
+
+    async def test_the_duration_counts_from_the_first_failure(self):
+        """戻ったときの秒数は、最後の失敗からではなく最初の失敗から数えること。
+
+        最後の失敗から数えると、30秒ごとに試し直している限り
+        「30 秒ぶり」としか出ず、何分止まっていても分からない。
+        """
+        fake = FakeValkey(fail_on={"get"})
+        cache = make_cache(fake, breaker_cooldown_seconds=30.0)
+        with self.assertLogs(shared_cache_module.logger, level="WARNING"):
+            for now in (1000.0, 1031.0, 1062.0):
+                with self._at(now):
+                    await cache.get_json("ns", "k")
+
+        fake.fail_on = set()
+        with (
+            self._at(1093.0),
+            self.assertLogs(shared_cache_module.logger, level="INFO") as logs,
+        ):
+            await cache.get_json("ns", "k")
+
+        self.assertEqual(self._messages(logs), ["共有キャッシュが戻りました（93 秒ぶり）。"])
+
+    async def test_a_new_outage_after_recovery_starts_its_own_count(self):
+        """戻ったあとにまた落ちたら、新しい停止として最初の文言から出し直すこと。"""
+        fake = FakeValkey(fail_on={"get"})
+        cache = make_cache(fake, breaker_cooldown_seconds=1.0)
+        with self.assertLogs(shared_cache_module.logger, level="INFO"):
+            with self._at(1000.0):
+                await cache.get_json("ns", "k")
+            cache._blocked_until = 0.0
+            fake.fail_on = set()
+            with self._at(1010.0):
+                await cache.get_json("ns", "k")
+
+        fake.fail_on = {"get"}
+        with (
+            self._at(5000.0),
+            self.assertLogs(shared_cache_module.logger, level="WARNING") as logs,
+        ):
+            await cache.get_json("ns", "k")
+
+        self.assertIn("1 秒間使いません", self._messages(logs)[0])
+        self.assertNotIn("まだ繋がりません", self._messages(logs)[0])
 
 
 class SharedCacheClearTests(unittest.IsolatedAsyncioTestCase):
