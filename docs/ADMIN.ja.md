@@ -400,10 +400,9 @@ pgAdmin を別に立てずに Postgres を見て触るための画面です。`D
 > 残っているのに JSON には無い日」ができ、端末と画面で見える範囲が食い違います。
 > 以前は 1MB × 3世代のサイズ回転で、**混んだ日は半日ぶんも残りませんでした。**
 - `data/admin_monitor/`: 監視のハートビートとインシデント記録
-- `data/_dev_signals/`: 開発者パネルから Bot へ渡す実行シグナル
 - `data/djaudio_cache`: DJAudio の一時 MP3 キャッシュ
 - `migrations/` + DB（`POSTGRES_DB`）: Web トラッカーの永続データ
-- DB（`USER_STATE_POSTGRES_DB`）: ユーザー状態監査データ
+- DB（`USER_STATE_POSTGRES_DB`）: ユーザー状態監査データと、開発者パネルから Bot へ渡す実行シグナル（`dev_signal` 表）
 
 ### 3-1. サーバーのデータを消す
 

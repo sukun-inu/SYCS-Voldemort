@@ -21,6 +21,7 @@ import psutil
 from discord.ext import tasks
 from discord.ext.commands import Bot
 from envutil import env_int
+from sqlalchemy.exc import SQLAlchemyError
 from services import dev_signals
 from services.metrics_reporter import report_once
 from services.earthquake_service import run_earthquake_ws
@@ -159,7 +160,7 @@ async def _handle_dev_signal(bot: Bot, state: EventState, task_name: str, sig_co
     """用途名から処理を選んで走らせる。知らない名前なら False。
 
     False を返した側（_process_dev_signals）が警告を出す。どの分岐にも
-    当たらないと、ファイルだけ消えて「受信」「完了」のログが残り、何も
+    当たらないと、依頼だけ消えて「受信」「完了」のログが残り、何も
     実行されないまま成功に見える。名前の打ち間違いや実装漏れが静かに
     埋もれるので、必ず声を上げる。
     """
@@ -185,23 +186,26 @@ async def _handle_dev_signal(bot: Bot, state: EventState, task_name: str, sig_co
 
 
 async def _process_dev_signals(bot: Bot, state: EventState) -> None:
-    """開発用シグナルファイル（管理画面など別プロセスからの合図）を1件ずつ処理する。
+    """開発用シグナル（管理画面など別プロセスからの依頼）を1件ずつ処理する。
 
-    1ファイルの処理で例外が出ても内側の try/except で捕まえ、他のシグナルの
+    1件の処理で例外が出ても内側の try/except で捕まえ、他のシグナルの
     処理やこのループ自体を止めない。
     """
-    # 置かれた順に処理する。同じ用途が複数溜まっていることがあり、
-    # 順序が入れ替わると噛み合わない。
-    for sig_file in dev_signals.collect():
-        task_name = dev_signals.task_name_of(sig_file)
+    try:
+        # 置かれた順で返ってくる。同じ用途が複数溜まっていることがあり、
+        # 順序が入れ替わると噛み合わない。
+        signals = await dev_signals.claim()
+    except (SQLAlchemyError, OSError) as e:
+        # データベースに届かなかった。取り出しと削除は同じトランザクションなので、
+        # 依頼は表に残っている。次の巡回（30秒後）でまた取りに行く。
+        logger.warning("[DEV] シグナルを取り出せませんでした（次の巡回で取り直します）: %s", e)
+        return
+
+    for signal in signals:
+        task_name = signal.task
         try:
-            try:
-                sig_content = sig_file.read_text(encoding="utf-8")
-            except OSError:
-                continue
-            sig_file.unlink(missing_ok=True)
             logger.info("[DEV] シグナル受信: %s", task_name)
-            if not await _handle_dev_signal(bot, state, task_name, sig_content):
+            if not await _handle_dev_signal(bot, state, task_name, signal.payload):
                 logger.warning("[DEV] 未知のシグナルなので何もしませんでした: %s", task_name)
                 continue
             logger.info("[DEV] シグナル完了: %s", task_name)
@@ -273,7 +277,7 @@ def register(bot: Bot, state: EventState) -> BackgroundLoops:
 
     @tasks.loop(seconds=30)
     async def dev_signal_task():
-        """開発者シグナルファイルの監視（中身は _process_dev_signals）。"""
+        """開発者シグナルの監視（中身は _process_dev_signals）。"""
         await _process_dev_signals(bot, state)
 
     # Bot は HTTP サーバーを持たないので、Netdata から直接は測れない。ここで

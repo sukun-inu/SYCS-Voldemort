@@ -42,9 +42,9 @@
             ┌───────────────┴──┐        ┌──┴──────────────────┐
             │  /app/data       │        │  Postgres           │
             │  settings.json   │        │  metal_prices       │
-            │  _dev_signals/   │        │  user_state_audit   │
-            │  djaudio_cache/  │        └──┬───────────┬──────┘
-            │  logs/           │           │           │
+            │  djaudio_cache/  │        │  user_state_audit   │
+            │  logs/           │        └──┬───────────┬──────┘
+            │                  │           │           │
             └───────────────┬──┘           │           │
                             │              │           │
    ブラウザ ───────▶┌───────┴──────────────┴───┐       │
@@ -126,7 +126,6 @@ import 時に ffmpeg の解決をするので、共通の置き場にはでき�
 |---|---|---|
 | `data/settings.json` | ギルドごとの全設定 | Bot / Admin（`services/settings_store.py` 経由） |
 | `data/settings.json.lock` | 書き込みの排他 | 同上 |
-| `data/_dev_signals/` | Bot への依頼（→ 3節） | Admin が書き、Bot が読む |
 | `data/djaudio_cache/` | 配信するファイルと `<token>.json` のメタ | Bot が書き、`/dlaudio` が読む |
 | `data/admin_monitor/heartbeat.json` | 管理画面の死活 | Admin |
 | `data/.admin_session_secret` | セッション署名キー | Admin（無ければ生成する） |
@@ -154,6 +153,7 @@ import 時に ffmpeg の解決をするので、共通の置き場にはでき�
 |---|---|
 | `user_state_current` | ユーザーごとの現在の状態（在籍 / 退出 / BAN 済み、ロール、権限） |
 | `user_state_event` | 状態が変わった出来事の履歴（参加・退出・BAN・KICK・ロール変化） |
+| `dev_signal` | Admin から Bot への依頼（→ 3節）。Bot が取り出すと消える |
 
 スキーマの変更は Alembic（`migrations/versions/`）。現在 0001〜0005。
 
@@ -186,29 +186,44 @@ JSON の読み書きは `orjson` があればそれを使い、無ければ標�
 ### 3.1 シグナル（Admin → Bot）
 
 管理画面から「通知をテスト送信」「地震をリプレイ」を押したとき、その処理は Bot に
-しかできない。共有ディレクトリにファイルを1つ置き、Bot が30秒ごとに拾って
-実行する。実装は `services/dev_signals.py`。
+しかできない。Admin が `user_state_audit` の `dev_signal` 表に1行置き、Bot が30秒
+ごとに取り出して実行する。実装は `services/dev_signals.py`。
 
 ```
-Admin  ──▶  data/_dev_signals/eq_replay.<一意>.signal  ──▶  Bot
-                        （payload に guild_id / channel_id）
+Admin  ──▶  dev_signal（task, dedupe_key, payload）  ──▶  Bot
+                    （payload に guild_id / channel_id）
 ```
 
-ファイル名の付け方に意味がある。
+以前は `data/_dev_signals/` にファイルを置いていた。これは Bot と Admin が同じ
+ボリュームを見ているあいだしか成り立たず、コンテナを別のホストへ分けた瞬間に
+「キューに追加しました」と出るのに何も届かない形で壊れる。Bot と Admin の両方が
+接続できるデータベースは `user_state_audit` だけなので、そこに置いた。Valkey に
+しなかったのは、Valkey には消えても作り直せるものしか置かない約束だから。
 
-| 形 | 用途 | 例 |
+依頼は2種類ある。
+
+| 種類 | 用途 | 例 |
 |---|---|---|
-| `<用途>.signal` | 何度実行しても結果が同じもの。溜める意味が無いので上書き | `news_feeds`, `sticky`, `djaudio_cache`, `earthquake_reconnect`, `user_state_repair` |
-| `<用途>.<一意>.signal` | 対象が payload の中にしかないもの。上書きすると別の対象宛が消える | `eq_replay`, `test_*` |
+| `per_guild=False` | 何度実行しても結果が同じもの。溜める意味が無いので、`dedupe_key` に用途名を入れて1行に畳む | `news_feeds`, `sticky`, `djaudio_cache`, `earthquake_reconnect`, `user_state_repair` |
+| `per_guild=True` | 対象が payload の中にしかないもの。畳むと別の対象宛が消えるので、`dedupe_key` を NULL にして1回ずつ別の行にする | `eq_replay`, `test_*` |
 
-後者を用途名だけで書いていたときは、2つのサーバーの管理者が30秒以内に操作
-すると先の1件が黙って消えていた。押した側には「キューに追加しました」と出た
-ままで、ログにも残らない。Bot 側は「最初の `.` まで」を用途名として読むので、
-どちらの形も同じ分岐に落ちる。処理は**置かれた順**（mtime）で行う。同じ用途が
-複数溜まっていても、置いた順に効かせるため。
+後者を用途名だけで1件にまとめていたときは、2つのサーバーの管理者が30秒以内に
+操作すると先の1件が黙って消えていた。押した側には「キューに追加しました」と出た
+ままで、ログにも残らない。
+
+取り出しは `DELETE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING`
+の1文で行い、**取り出すと同時に消す。** 処理の途中で Bot が落ちればその依頼は
+失われるが、二重に実行されるよりはよい（テスト通知や地震リプレイが2回飛ぶ）。
+行ロックを取るので、Bot を複数動かしても同じ依頼を2つが拾うことはない。処理は
+**置かれた順**（id）で行う。
 
 どの分岐にも当たらなかったシグナルは、必ず warning を出す。黙って消えると
 「受信」「完了」のログだけが残り、何も実行されないまま成功に見える。
+
+依頼を置けなかったとき（データベースに届かないとき）は、Admin が 503 を返す。
+「キューに追加しました」とは言わない。Bot 側で取り出せなかったときは warning を
+出してその巡回を終え、次の巡回で取り直す（取り出しと削除が同じトランザクション
+なので、依頼は表に残っている）。
 
 **制約**: 反映まで最大30秒。押した瞬間に結果は返らないので、UI は
 「キューに追加しました」と伝えて状況を数秒おきに取り直す。即時性が要る操作を
