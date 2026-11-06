@@ -7,6 +7,7 @@ DB を必要とするユーザー状態監査は services 層を差し替えて�
 標準ライブラリの unittest だけで動く。pytest からも実行できる。
 """
 
+import asyncio
 import base64
 import json
 import os
@@ -37,6 +38,7 @@ from starlette.testclient import TestClient  # noqa: E402
 from webapp_admin.app import app  # noqa: E402
 from webapp_admin.schema.registry import PANEL_BY_ID  # noqa: E402
 from webapp_admin.schema.types_def import Field, Widget  # noqa: E402
+from tests.sqlite_session import use_sqlite_for_dev_signals  # noqa: E402
 
 
 def tearDownModule():
@@ -526,6 +528,15 @@ class UserStateApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 303)
 
 
+def _latest_signal(name: str):
+    """その用途で最後に置かれた依頼の中身（JSON を辞書にしたもの）。"""
+    from services import dev_signals
+
+    payload = asyncio.run(dev_signals.latest(name))
+    assert payload is not None, f"{name} の依頼が置かれていない"
+    return json.loads(payload)
+
+
 class DevApiTests(unittest.TestCase):
     """開発者パネルの API。DEV_USER_ID と一致するユーザーだけが使える。"""
 
@@ -539,6 +550,9 @@ class DevApiTests(unittest.TestCase):
         from webapp_admin.extensions import limiter
 
         limiter.reset()
+        # Bot への依頼の置き場（user_state_audit の dev_signal 表）を SQLite にする。
+        # テストごとに空のデータベースから始まるので、前のテストの依頼は残らない。
+        use_sqlite_for_dev_signals(self)
 
     def test_non_developer_is_forbidden(self):
         self.assertEqual(self.normal.get("/admin/api/dev/overview").status_code, 403)
@@ -653,8 +667,6 @@ class DevApiTests(unittest.TestCase):
         直接指定してテスト送信できること（地震リプレイと同じ抜け道）。
 
         シグナル名は test_<kind>。kind の一覧は services/dev_test_notify.py が持つ。"""
-        from services.dev_signals import latest as latest_signal
-
         bad_channel = self.dev.post(
             "/admin/api/dev/test-notify/welcome",
             json={"guild_id": str(GUILD_ID), "channel_id": "xyz"},
@@ -669,7 +681,7 @@ class DevApiTests(unittest.TestCase):
         )
         self.assertEqual(ok.status_code, 200)
         self.assertIn("555", ok.json()["message"])
-        signal = json.loads(latest_signal("test_vc").read_text(encoding="utf-8"))
+        signal = _latest_signal("test_vc")
         self.assertEqual(signal["guild_id"], GUILD_ID)
         self.assertEqual(signal["channel_id"], 555)
 
@@ -680,7 +692,7 @@ class DevApiTests(unittest.TestCase):
             headers=CSRF_HEADER,
         )
         self.assertEqual(no_channel.status_code, 200)
-        signal2 = json.loads(latest_signal("test_welcome").read_text(encoding="utf-8"))
+        signal2 = _latest_signal("test_welcome")
         self.assertIsNone(signal2["channel_id"])
 
     def test_earthquake_replay_validates_the_payload(self):
@@ -698,8 +710,6 @@ class DevApiTests(unittest.TestCase):
         シグナルは {"event": ..., "guild_id": ...} という封筒形式で書かれ、
         bot 側 (bot_setup.py) がここから対象ギルドを読み取る契約になっている。
         """
-        from services.dev_signals import latest as latest_signal
-
         event = json.dumps({"earthquake": {"hypocenter": {"name": "テスト沖"}}})
 
         bad = self.dev.post(
@@ -714,20 +724,18 @@ class DevApiTests(unittest.TestCase):
         )
         self.assertEqual(ok.status_code, 200)
         self.assertIn(str(GUILD_ID), ok.json()["message"])
-        signal = json.loads(latest_signal("eq_replay").read_text(encoding="utf-8"))
+        signal = _latest_signal("eq_replay")
         self.assertEqual(signal["guild_id"], GUILD_ID)
         self.assertIn("earthquake", signal["event"])
 
         # guild_id 省略時は全サーバー扱い（null）のまま、明示的に選べる状態を保つ
         all_guilds = self.dev.post("/admin/api/dev/earthquake-replay", json={"event_json": event}, headers=CSRF_HEADER)
         self.assertEqual(all_guilds.status_code, 200)
-        signal2 = json.loads(latest_signal("eq_replay").read_text(encoding="utf-8"))
+        signal2 = _latest_signal("eq_replay")
         self.assertIsNone(signal2["guild_id"])
 
     def test_earthquake_replay_can_override_the_channel(self):
         """地震アラート設定を持たないギルドでも、DEV専用にチャンネルを直接指定できること。"""
-        from services.dev_signals import latest as latest_signal
-
         event = json.dumps({"earthquake": {"hypocenter": {"name": "テスト沖"}}})
 
         # チャンネルIDだけ指定してギルドが無いのは拒否する
@@ -753,7 +761,7 @@ class DevApiTests(unittest.TestCase):
         )
         self.assertEqual(ok.status_code, 200)
         self.assertIn("555", ok.json()["message"])
-        signal = json.loads(latest_signal("eq_replay").read_text(encoding="utf-8"))
+        signal = _latest_signal("eq_replay")
         self.assertEqual(signal["guild_id"], GUILD_ID)
         self.assertEqual(signal["channel_id"], 555)
 
@@ -764,20 +772,17 @@ class DevApiTests(unittest.TestCase):
             headers=CSRF_HEADER,
         )
         self.assertEqual(no_channel.status_code, 200)
-        signal2 = json.loads(latest_signal("eq_replay").read_text(encoding="utf-8"))
+        signal2 = _latest_signal("eq_replay")
         self.assertIsNone(signal2["channel_id"])
 
     def test_signals_for_different_guilds_do_not_overwrite_each_other(self):
-        """対象がギルドごとに違うシグナルは、1件ずつ別のファイルにすること。
+        """対象がギルドごとに違うシグナルは、1件ずつ別に残すこと。
 
-        Bot は30秒ごとにしか拾わない。用途名だけのファイル名で書いていたため、
+        Bot は30秒ごとにしか拾わない。用途名だけで1件にまとめていたころは、
         2つのサーバーの管理者がその間に操作すると先の1件が上書きで消え、
         押した側には「キューに追加しました」と出たまま何も起きなかった。
         """
         from services import dev_signals
-
-        for path in dev_signals.collect():
-            path.unlink(missing_ok=True)
 
         event = json.dumps({"earthquake": {"hypocenter": {"name": "テスト沖"}}})
         for guild_id in ("111", "222"):
@@ -788,26 +793,37 @@ class DevApiTests(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 200)
 
-        signals = [p for p in dev_signals.collect() if dev_signals.task_name_of(p) == "eq_replay"]
+        signals = asyncio.run(dev_signals.claim())
         self.assertEqual(len(signals), 2, "2回押したぶんが残っていない")
-        sent = [json.loads(p.read_text(encoding="utf-8"))["guild_id"] for p in signals]
-        self.assertEqual(sorted(sent), [111, 222])
-        # Bot 側は用途名で分岐する。名前を一意にしても同じ分岐に落ちること。
-        self.assertTrue(all(dev_signals.task_name_of(p) == "eq_replay" for p in signals))
+        # Bot 側は用途名で分岐する。別々に残しても同じ分岐に落ちること。
+        self.assertEqual([signal.task for signal in signals], ["eq_replay", "eq_replay"])
+        self.assertEqual(sorted(json.loads(signal.payload)["guild_id"] for signal in signals), [111, 222])
 
     def test_repeatable_tasks_keep_collapsing_into_one_signal(self):
-        """何度実行しても結果が同じものは、溜めずに上書きでよい。"""
+        """何度実行しても結果が同じものは、溜めずに1件へ畳む。"""
         from services import dev_signals
-
-        for path in dev_signals.collect():
-            path.unlink(missing_ok=True)
 
         for _ in range(3):
             response = self.dev.post("/admin/api/dev/signal/news_feeds", headers=CSRF_HEADER)
             self.assertEqual(response.status_code, 200)
 
-        signals = [p for p in dev_signals.collect() if dev_signals.task_name_of(p) == "news_feeds"]
-        self.assertEqual(len(signals), 1)
+        self.assertEqual([signal.task for signal in asyncio.run(dev_signals.claim())], ["news_feeds"])
+
+    def test_a_signal_that_could_not_be_saved_is_reported_as_a_failure(self):
+        """依頼を保存できなかったら 503 を返し、「追加しました」と言わないこと。
+
+        ファイルに置いていたころは、Bot に届かない状態でも画面には
+        「キューに追加しました」と出て、何も起きないまま成功に見えていた。
+        置き場がデータベースになって「置けない」が起きうるようになったので、
+        それを押した人に必ず返す。
+        """
+        from sqlalchemy.exc import OperationalError
+
+        failure = OperationalError("INSERT INTO dev_signal", {}, Exception("connection refused"))
+        with patch("services.dev_signals.write", AsyncMock(side_effect=failure)):
+            response = self.dev.post("/admin/api/dev/signal/news_feeds", headers=CSRF_HEADER)
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn("追加しました", response.text)
 
     def test_lookup_endpoints_reject_non_numeric_ids(self):
         self.assertEqual(self.dev.get("/admin/api/dev/user?user_id=abc").status_code, 400)

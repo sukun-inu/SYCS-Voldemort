@@ -41,6 +41,7 @@ import events.messages as messages  # noqa: E402
 import events.ready as ready  # noqa: E402
 import events.voice as voice  # noqa: E402
 from events.state import EventState  # noqa: E402
+from services.dev_signals import Signal  # noqa: E402
 
 
 class _FakeBot:
@@ -1043,20 +1044,16 @@ class NewsAndStickyLoopTests(unittest.TestCase):
         run_sticky.assert_awaited_once_with(self.bot)
 
 
-def _sig_file(name, content="", *, read_error=None):
-    """dev_signal_task が読む1件のシグナルファイルの代わり。
+_signal_ids = iter(range(1, 1_000_000))
 
-    task_name_of() は path.name をそのまま使う実装なので、Mock に
-    文字列の .name だけ持たせれば実物の Path と同じに扱える。
+
+def _signal(task, content=""):
+    """dev_signal_task が受け取る1件の依頼（services.dev_signals.claim の戻り値の要素）。
+
+    id は作った順に増やす。claim() は置かれた順（id 順）で返す約束なので、
+    テストでも並べた順と id の順を揃えておく。
     """
-    sig = Mock()
-    sig.name = name
-    if read_error is not None:
-        sig.read_text = Mock(side_effect=read_error)
-    else:
-        sig.read_text = Mock(return_value=content)
-    sig.unlink = Mock()
-    return sig
+    return Signal(id=next(_signal_ids), task=task, payload=content)
 
 
 class RegisterBackgroundTasksShapeTests(unittest.TestCase):
@@ -1126,11 +1123,11 @@ class DevSignalOrderTests(unittest.TestCase):
         ため。最初は news/sticky/news の3件で書いていたが、これは逆順にしても
         同じ並びになる（回文）ので、順序を壊しても落ちなかった。
         """
-        files = [_sig_file("news_feeds.signal"), _sig_file("sticky.signal"), _sig_file("djaudio_cache.signal")]
+        signals = [_signal("news_feeds"), _signal("sticky"), _signal("djaudio_cache")]
         calls: list[str] = []
         cleanup = AsyncMock(side_effect=lambda **_: calls.append("djaudio"))
         with (
-            patch("services.dev_signals.collect", return_value=files),
+            patch("services.dev_signals.claim", AsyncMock(return_value=signals)),
             patch.object(bg, "run_news_feeds", AsyncMock(side_effect=lambda *_: calls.append("news"))),
             patch.object(bg, "process_pending_stickies", AsyncMock(side_effect=lambda *_: calls.append("sticky"))),
             patch("services.djaudio_cache._cleanup_expired", cleanup),
@@ -1148,49 +1145,57 @@ class DevSignalTaskTests(unittest.TestCase):
         self.loops = bg.register(self.bot, self.state)
 
     def test_unknown_signal_warns_and_does_not_log_completion(self):
-        sig = _sig_file("mystery.signal")
+        sig = _signal("mystery")
         with (
-            patch("services.dev_signals.collect", return_value=[sig]),
+            patch("services.dev_signals.claim", AsyncMock(return_value=[sig])),
             self.assertLogs(bg.logger, level="INFO") as cm,
         ):
             _run(self.loops.dev_signal_task())
-        sig.unlink.assert_called_once_with(missing_ok=True)
         self.assertTrue(any("未知のシグナル" in line for line in cm.output))
         self.assertFalse(any("シグナル完了" in line for line in cm.output))
 
-    def test_an_unreadable_signal_is_skipped_without_deleting_it(self):
-        sig = _sig_file("news_feeds.signal", read_error=OSError("locked"))
+    def test_an_unreachable_database_warns_and_runs_nothing(self):
+        """データベースに届かないときは、警告を出してその巡回を終えること。
+
+        取り出しに失敗した時点で何も実行していないこと、ループ自体を例外で
+        止めないことを見る。discord.ext.tasks のループは中で例外が飛ぶと
+        二度と回らないので、ここで上へ投げると管理画面からの依頼が以後すべて
+        届かなくなる（Bot を再起動するまで）。
+        """
+        from sqlalchemy.exc import OperationalError
+
+        failure = OperationalError("DELETE FROM dev_signal", {}, Exception("connection refused"))
         with (
-            patch("services.dev_signals.collect", return_value=[sig]),
+            patch("services.dev_signals.claim", AsyncMock(side_effect=failure)),
             patch.object(bg, "run_news_feeds", AsyncMock()) as run_news,
+            self.assertLogs(bg.logger, level="WARNING") as cm,
         ):
             _run(self.loops.dev_signal_task())
         run_news.assert_not_called()
-        sig.unlink.assert_not_called()
+        self.assertTrue(any("取り出せませんでした" in line for line in cm.output))
 
-    def test_news_feeds_signal_runs_and_deletes_the_file(self):
-        sig = _sig_file("news_feeds.signal")
+    def test_news_feeds_signal_runs_news_feeds(self):
+        sig = _signal("news_feeds")
         with (
-            patch("services.dev_signals.collect", return_value=[sig]),
+            patch("services.dev_signals.claim", AsyncMock(return_value=[sig])),
             patch.object(bg, "run_news_feeds", AsyncMock()) as run_news,
         ):
             _run(self.loops.dev_signal_task())
         run_news.assert_awaited_once_with(self.bot)
-        sig.unlink.assert_called_once_with(missing_ok=True)
 
     def test_sticky_signal_runs_process_pending_stickies(self):
-        sig = _sig_file("sticky.signal")
+        sig = _signal("sticky")
         with (
-            patch("services.dev_signals.collect", return_value=[sig]),
+            patch("services.dev_signals.claim", AsyncMock(return_value=[sig])),
             patch.object(bg, "process_pending_stickies", AsyncMock()) as run_sticky,
         ):
             _run(self.loops.dev_signal_task())
         run_sticky.assert_awaited_once_with(self.bot)
 
     def test_djaudio_cache_signal_runs_cleanup(self):
-        sig = _sig_file("djaudio_cache.signal")
+        sig = _signal("djaudio_cache")
         with (
-            patch("services.dev_signals.collect", return_value=[sig]),
+            patch("services.dev_signals.claim", AsyncMock(return_value=[sig])),
             patch("services.djaudio_cache._cleanup_expired", AsyncMock()) as cleanup,
         ):
             _run(self.loops.dev_signal_task())
@@ -1200,11 +1205,11 @@ class DevSignalTaskTests(unittest.TestCase):
         old_task = Mock()
         old_task.done.return_value = False
         self.state.ws_task = old_task
-        sig = _sig_file("earthquake_reconnect.signal")
+        sig = _signal("earthquake_reconnect")
 
         async def _scenario():
             with (
-                patch("services.dev_signals.collect", return_value=[sig]),
+                patch("services.dev_signals.claim", AsyncMock(return_value=[sig])),
                 patch.object(bg, "run_earthquake_ws", AsyncMock()),
             ):
                 await self.loops.dev_signal_task()
@@ -1218,9 +1223,9 @@ class DevSignalTaskTests(unittest.TestCase):
         self.assertIsInstance(new_task, asyncio.Task)
 
     def test_user_state_repair_signal_runs_a_full_sync_with_integrity_repair(self):
-        sig = _sig_file("user_state_repair.signal")
+        sig = _signal("user_state_repair")
         with (
-            patch("services.dev_signals.collect", return_value=[sig]),
+            patch("services.dev_signals.claim", AsyncMock(return_value=[sig])),
             patch.object(bg, "_sync_user_state_all_guilds", AsyncMock()) as sync_all,
         ):
             _run(self.loops.dev_signal_task())
@@ -1232,9 +1237,9 @@ class DevSignalTaskTests(unittest.TestCase):
 
     def test_eq_replay_new_format_passes_the_guild_and_channel_overrides(self):
         payload = json.dumps({"event": {"foo": "bar"}, "guild_id": 42, "channel_id": 99})
-        sig = _sig_file("eq_replay.signal", content=payload)
+        sig = _signal("eq_replay", content=payload)
         with (
-            patch("services.dev_signals.collect", return_value=[sig]),
+            patch("services.dev_signals.claim", AsyncMock(return_value=[sig])),
             patch("services.earthquake_service._notify_all_guilds", AsyncMock(return_value=3)) as notify,
         ):
             _run(self.loops.dev_signal_task())
@@ -1242,9 +1247,9 @@ class DevSignalTaskTests(unittest.TestCase):
 
     def test_eq_replay_old_format_treats_the_whole_payload_as_the_event(self):
         payload = json.dumps({"foo": "legacy"})
-        sig = _sig_file("eq_replay.signal", content=payload)
+        sig = _signal("eq_replay", content=payload)
         with (
-            patch("services.dev_signals.collect", return_value=[sig]),
+            patch("services.dev_signals.claim", AsyncMock(return_value=[sig])),
             patch("services.earthquake_service._notify_all_guilds", AsyncMock(return_value=0)) as notify,
         ):
             _run(self.loops.dev_signal_task())
@@ -1252,9 +1257,9 @@ class DevSignalTaskTests(unittest.TestCase):
 
     def test_test_prefixed_signal_runs_the_named_notification_test(self):
         payload = json.dumps({"guild_id": 7, "channel_id": 8})
-        sig = _sig_file("test_welcome.signal", content=payload)
+        sig = _signal("test_welcome", content=payload)
         with (
-            patch("services.dev_signals.collect", return_value=[sig]),
+            patch("services.dev_signals.claim", AsyncMock(return_value=[sig])),
             patch("services.dev_test_notify.KINDS", ("welcome",)),
             patch("services.dev_test_notify.run_test", AsyncMock()) as run_test,
         ):
@@ -1262,9 +1267,9 @@ class DevSignalTaskTests(unittest.TestCase):
         run_test.assert_awaited_once_with(self.bot, "welcome", 7, 8)
 
     def test_test_prefixed_signal_with_an_unknown_kind_warns_without_calling_run_test(self):
-        sig = _sig_file("test_bogus.signal", content="{}")
+        sig = _signal("test_bogus", content="{}")
         with (
-            patch("services.dev_signals.collect", return_value=[sig]),
+            patch("services.dev_signals.claim", AsyncMock(return_value=[sig])),
             patch("services.dev_test_notify.KINDS", ("welcome",)),
             patch("services.dev_test_notify.run_test", AsyncMock()) as run_test,
             self.assertLogs(bg.logger, level="WARNING") as cm,
@@ -1274,10 +1279,10 @@ class DevSignalTaskTests(unittest.TestCase):
         self.assertTrue(any("未知の通知テスト" in line for line in cm.output))
 
     def test_an_exception_while_processing_one_signal_does_not_stop_the_others(self):
-        bad = _sig_file("eq_replay.signal", content="{not json")
-        good = _sig_file("news_feeds.signal")
+        bad = _signal("eq_replay", content="{not json")
+        good = _signal("news_feeds")
         with (
-            patch("services.dev_signals.collect", return_value=[bad, good]),
+            patch("services.dev_signals.claim", AsyncMock(return_value=[bad, good])),
             patch.object(bg, "run_news_feeds", AsyncMock()) as run_news,
             self.assertLogs(bg.logger, level="ERROR"),
         ):

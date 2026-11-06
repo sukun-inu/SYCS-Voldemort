@@ -4,7 +4,8 @@ DEV_USER_ID と一致するユーザーだけが使える。本番データに�
 含むため、各エンドポイントに個別のレート制限を掛けている。
 
 Bot 本体へ渡す操作（タスク実行・通知テスト・地震リプレイ）は、
-SETTINGS_DIR/_dev_signals にシグナルファイルを置いて Bot 側に拾わせる。
+user_state_audit の dev_signal 表に依頼を置いて Bot 側に拾わせる
+（services/dev_signals.py）。
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from typing import Any, cast
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy.exc import SQLAlchemyError
 from webapp_admin.api.jsonsafe import SafeJSONResponse as JSONResponse
 
 from config import DISCORD_BOT_TOKEN, DJAUDIO_CACHE_DIR
@@ -241,8 +243,36 @@ def _cache_entries() -> list[dict]:
 
 # シグナルの読み書きは services/dev_signals.py に一本化している。Bot 側も
 # 同じモジュールを見るので、置き場と名前の付け方が食い違わない。
-_pending_signals = dev_signals.pending
-_write_signal = dev_signals.write
+
+
+async def _write_signal(name: str, payload: Any, *, per_guild: bool = False) -> None:
+    """Bot への依頼を置く。置けなかったら 503 で押した人へ返す。
+
+    ここで握りつぶすと、画面には「キューに追加しました」と出たまま何も起きない。
+    ファイルに置いていたころに実際にあった壊れ方なので、必ず失敗として返す。
+    """
+    try:
+        await dev_signals.write(name, payload, per_guild=per_guild)
+    except (SQLAlchemyError, OSError) as e:
+        logger.warning("[DEV] Bot への依頼を保存できませんでした（%s）: %s", name, e)
+        raise HTTPException(
+            status_code=503,
+            detail="Bot への依頼を保存できませんでした。データベースに接続できるか確認してください。",
+        ) from e
+
+
+async def _pending_signals() -> list[str]:
+    """待っている依頼の用途名。読めなかったら空にする。
+
+    表示（タスク一覧のバッジ）にしか使わないので、ここで画面全体を落とさない。
+    読めなかった理由はログに残す。依頼を置く側（_write_signal）は 503 で
+    止まるので、「置けたのに見えない」と「置けていない」を取り違えることはない。
+    """
+    try:
+        return await dev_signals.pending()
+    except (SQLAlchemyError, OSError) as e:
+        logger.warning("[DEV] 待っている依頼を読めませんでした: %s", e)
+        return []
 
 
 def _normalize_env_value(value: object) -> str | None:
@@ -423,7 +453,7 @@ async def overview(request: Request, _=Depends(check_dev)):
             "entries": entries,
             "expired": sum(1 for entry in entries if entry["expired"]),
         },
-        "pending_signals": _pending_signals(),
+        "pending_signals": await _pending_signals(),
         "tasks": VALID_TASKS,
         "env_rows": _env_rows(),
         "stickies": _all_stickies(),
@@ -574,10 +604,10 @@ async def trigger_signal(task_name: str, request: Request, _=Depends(check_dev),
     """定期実行タスクを今すぐ1回動かす。VALID_TASKS に無い名前は404（任意のタスク名を実行させない）。"""
     if task_name not in VALID_TASKS:
         raise HTTPException(status_code=404, detail="不明なタスクです。")
-    _write_signal(task_name, {"task": task_name, "created_at": datetime.now(timezone.utc).isoformat()})
+    await _write_signal(task_name, {"task": task_name, "created_at": datetime.now(timezone.utc).isoformat()})
     return _ok(
         f"「{VALID_TASKS[task_name]}」をキューに追加しました。数十秒以内に実行されます。",
-        pending_signals=_pending_signals(),
+        pending_signals=await _pending_signals(),
     )
 
 
@@ -601,7 +631,7 @@ async def test_notify(kind: str, request: Request, _=Depends(check_dev), _csrf=D
 
     # 対象のギルドは payload の中にしかない。用途名だけのファイル名にすると、
     # Bot が拾う前に別のギルド宛で上書きされて消える（per_guild=True）。
-    _write_signal(
+    await _write_signal(
         f"test_{kind}",
         {
             "guild_id": guild_id,
@@ -613,7 +643,7 @@ async def test_notify(kind: str, request: Request, _=Depends(check_dev), _csrf=D
     target = f"ギルド {guild_id} のチャンネル {channel_id}（設定は無視）" if channel_id else f"ギルド {guild_id}"
     return _ok(
         f"「{kind_label(kind)}」のテストをキューに追加しました。（送信先: {target}）",
-        pending_signals=_pending_signals(),
+        pending_signals=await _pending_signals(),
     )
 
 
@@ -654,7 +684,7 @@ async def earthquake_replay(request: Request, _=Depends(check_dev), _csrf=Depend
     channel_id = int(_require_id(raw_channel_id, "チャンネルID")) if raw_channel_id else None
 
     # 送信先が payload の中にしかないので、1件ずつ別のファイルにする。
-    _write_signal("eq_replay", {"event": data, "guild_id": guild_id, "channel_id": channel_id}, per_guild=True)
+    await _write_signal("eq_replay", {"event": data, "guild_id": guild_id, "channel_id": channel_id}, per_guild=True)
     if channel_id:
         target = f"ギルド {guild_id} のチャンネル {channel_id}（地震アラート設定は無視）"
     elif guild_id:
@@ -663,7 +693,7 @@ async def earthquake_replay(request: Request, _=Depends(check_dev), _csrf=Depend
         target = "全サーバー"
     return _ok(
         f"地震速報をリプレイキューに追加しました（送信先: {target}）。数十秒以内に通知が送信されます。",
-        pending_signals=_pending_signals(),
+        pending_signals=await _pending_signals(),
     )
 
 
