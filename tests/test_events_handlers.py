@@ -1174,6 +1174,43 @@ class DevSignalTaskTests(unittest.TestCase):
         run_news.assert_not_called()
         self.assertTrue(any("取り出せませんでした" in line for line in cm.output))
 
+    def test_files_from_the_old_place_are_moved_before_claiming(self):
+        """以前の置き場（ファイル）から移してから、表の依頼を取り出すこと。
+
+        逆の順だと、入れ替えの途中で古い管理画面が置いた依頼は、移した巡回では
+        実行されず、次の巡回まで30秒待たされる。
+        """
+        calls: list[str] = []
+        with (
+            patch(
+                "services.dev_signals.import_legacy_files",
+                AsyncMock(side_effect=lambda: calls.append("import") or 1),
+            ),
+            patch(
+                "services.dev_signals.claim",
+                AsyncMock(side_effect=lambda: calls.append("claim") or []),
+            ),
+        ):
+            _run(self.loops.dev_signal_task())
+        self.assertEqual(calls, ["import", "claim"])
+
+    def test_a_failure_to_move_old_files_does_not_stop_claiming(self):
+        """以前の置き場から移せなくても、表の依頼は取り出して実行すること。
+
+        移すところで巡回を終えると、古い置き場が読めない（権限など）だけで、
+        表に入っている依頼まで永久に実行されなくなる。
+        """
+        sig = _signal("news_feeds")
+        with (
+            patch("services.dev_signals.import_legacy_files", AsyncMock(side_effect=PermissionError("denied"))),
+            patch("services.dev_signals.claim", AsyncMock(return_value=[sig])),
+            patch.object(bg, "run_news_feeds", AsyncMock()) as run_news,
+            self.assertLogs(bg.logger, level="WARNING") as cm,
+        ):
+            _run(self.loops.dev_signal_task())
+        run_news.assert_awaited_once_with(self.bot)
+        self.assertTrue(any("移せませんでした" in line for line in cm.output))
+
     def test_news_feeds_signal_runs_news_feeds(self):
         sig = _signal("news_feeds")
         with (

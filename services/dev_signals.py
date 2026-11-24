@@ -48,6 +48,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import (
@@ -67,6 +68,8 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.dml import ReturningDelete
+
+from envutil import env_path
 
 logger = logging.getLogger(__name__)
 
@@ -238,3 +241,100 @@ async def latest(name: str) -> str | None:
         stmt = select(dev_signal.c.payload).where(dev_signal.c.task == name).order_by(dev_signal.c.id.desc()).limit(1)
         value = await session.scalar(stmt)
     return None if value is None else str(value)
+
+
+# ── 以前の置き場（ファイル）からの移行 ─────────────────────────────
+#
+# 6c61884 までは SETTINGS_DIR/_dev_signals/ にファイルを置いていた。本番は
+# 2026-11-25 時点でまだその版で動いている。入れ替えた時点で残っている依頼と、
+# 入れ替えの途中で古い管理画面が書いた依頼を、取りこぼさずに表へ移す。
+#
+# **外せる条件:** 本番から 6c61884 以前の版が無くなり、data/_dev_signals/ が空に
+# なったことを確かめたら、この節と events/background_tasks.py の呼び出しを消してよい。
+
+LEGACY_SUFFIX = ".signal"
+_IMPORTING_SUFFIX = ".importing"
+_DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+
+def legacy_dir() -> Path:
+    """以前の置き場。書いていた側と同じく SETTINGS_DIR から解決する。"""
+    return env_path("SETTINGS_DIR", _DEFAULT_DATA_DIR) / "_dev_signals"
+
+
+def _legacy_files(directory: Path) -> list[Path]:
+    """残っている依頼ファイルを、置かれた順（更新時刻、同じならファイル名）に並べる。
+
+    取り込む順が表の id の順になり、それが Bot の実行順になる。ファイルの頃も
+    置かれた順に実行していたので、並びを崩さない。
+    """
+
+    def order(path: Path) -> tuple[float, str]:
+        """並べ替えの鍵。読んでいる間に消えたものは最後へ回す。"""
+        try:
+            return (path.stat().st_mtime, path.name)
+        except OSError:
+            return (float("inf"), path.name)
+
+    return sorted(directory.glob(f"*{LEGACY_SUFFIX}"), key=order)
+
+
+def _parse_legacy_name(path: Path) -> tuple[str, bool]:
+    """ファイル名から (用途名, per_guild か) を取り出す。
+
+    "news_feeds.signal"          -> ("news_feeds", False)
+    "eq_replay.19f3a2c1de.signal" -> ("eq_replay", True)
+
+    以前の書き方では、per_guild の依頼だけ用途名の後ろに一意な部分を足していた。
+    """
+    stem = path.name[: -len(LEGACY_SUFFIX)]
+    task, _, unique = stem.partition(".")
+    return task, bool(unique)
+
+
+async def import_legacy_files() -> int:
+    """以前の置き場に残っている依頼を表へ移し、移した件数を返す。
+
+    1件ずつ、名前を .importing に変えてから表へ書き、書けたら消す。
+
+      - 書けなかったら名前を戻す。次の巡回で取り直す（取りこぼさない）
+      - 書けたあとで消せなくても、名前がもう .signal ではないので、次の巡回で
+        二重に取り込まない（二重に実行しない）
+
+    表へ書く途中の失敗（データベースに届かない）は、そのまま上げる。呼ぶ側
+    （Bot の巡回）が warning を出し、次の巡回で続きから移す。
+    """
+    directory = legacy_dir()
+    if not directory.is_dir():
+        return 0
+    moved = 0
+    for path in _legacy_files(directory):
+        importing = path.with_name(path.name + _IMPORTING_SUFFIX)
+        try:
+            path.rename(importing)
+            text = importing.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            # 別の巡回か別のプロセスが先に取った。
+            continue
+        except OSError as e:
+            logger.warning("[signal] 以前の置き場のファイルを読めませんでした（%s）: %s", path.name, e)
+            continue
+        task, per_guild = _parse_legacy_name(path)
+        try:
+            await write(task, text, per_guild=per_guild)
+        except BaseException:
+            # 名前を戻してから上げる。戻さないと .importing のまま残り、二度と
+            # 拾われない（依頼が黙って消える）。
+            try:
+                importing.rename(path)
+            except OSError as e:
+                logger.error("[signal] 取り込みに失敗したファイルの名前を戻せませんでした（%s）: %s", importing.name, e)
+            raise
+        try:
+            importing.unlink()
+        except OSError as e:
+            logger.warning("[signal] 取り込んだファイルを消せませんでした（%s）: %s", importing.name, e)
+        moved += 1
+    if moved:
+        logger.info("[signal] 以前の置き場（%s）から %d 件を表へ移しました", directory, moved)
+    return moved

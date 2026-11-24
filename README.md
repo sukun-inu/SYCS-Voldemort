@@ -94,6 +94,7 @@ modules nothing ever imports still count as 0%, keeping the number honest.
 | [docs/SETUP.ja.md](docs/SETUP.ja.md) | Docker Compose, environment variables, multi-instance setups |
 | [docs/ADMIN.ja.md](docs/ADMIN.ja.md) | Using the admin panel, where data is stored |
 | [docs/BACKUP.ja.md](docs/BACKUP.ja.md) | What is and is not protected, how to restore, restore rehearsal |
+| [docs/UPGRADE.ja.md](docs/UPGRADE.ja.md) | Upgrading production: which version is running, what changes, what to check afterwards, how to roll back |
 | [docs/MONITORING.ja.md](docs/MONITORING.ja.md) | What Netdata can see, which alarms to set, what to check when it cannot read |
 | [docs/TROUBLESHOOTING.ja.md](docs/TROUBLESHOOTING.ja.md) | Common problems, directory overview |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to work on this repository (summary; full guide in Japanese) |

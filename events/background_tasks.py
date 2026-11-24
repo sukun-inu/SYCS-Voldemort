@@ -192,6 +192,17 @@ async def _process_dev_signals(bot: Bot, state: EventState) -> None:
     処理やこのループ自体を止めない。
     """
     try:
+        # 6c61884 までの管理画面はファイルに置いていた。入れ替えの途中で古い
+        # 管理画面が書いた分も拾うため、起動時の1回ではなく巡回のたびに移す
+        # （ディレクトリが空なら見るだけで終わる）。外せる条件は dev_signals の
+        # import_legacy_files の上のコメント。
+        await dev_signals.import_legacy_files()
+    except (SQLAlchemyError, OSError) as e:
+        # **ここで巡回を終えないこと。** 古い置き場が読めない（権限など）だけで
+        # 毎回ここで止まると、表に入っている依頼まで永久に実行されなくなる。
+        # 移せなかったファイルは残っているので、次の巡回で続きから移す。
+        logger.warning("[DEV] 以前の置き場から依頼を移せませんでした（次の巡回で続きから移します）: %s", e)
+    try:
         # 置かれた順で返ってくる。同じ用途が複数溜まっていることがあり、
         # 順序が入れ替わると噛み合わない。
         signals = await dev_signals.claim()

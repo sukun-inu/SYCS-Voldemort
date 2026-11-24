@@ -200,6 +200,12 @@ Admin  ──▶  dev_signal（task, dedupe_key, payload）  ──▶  Bot
 接続できるデータベースは `user_state_audit` だけなので、そこに置いた。Valkey に
 しなかったのは、Valkey には消えても作り直せるものしか置かない約束だから。
 
+本番が 6c61884（ファイルの版）から上がるときに残っている依頼と、入れ替えの途中で
+古い管理画面が書いた依頼は、Bot が巡回のたびに表へ移す（`import_legacy_files`）。
+1 件ずつ名前を `.importing` に変えてから表へ書き、書けたら消し、書けなかったら
+名前を戻す。取りこぼさず、二重にも実行しないための順番。手順は
+[UPGRADE.ja.md](UPGRADE.ja.md)。
+
 依頼は2種類ある。
 
 | 種類 | 用途 | 例 |
