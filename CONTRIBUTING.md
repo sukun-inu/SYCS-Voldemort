@@ -125,7 +125,10 @@ runs in CI: it first proves that QEMU really rejects AVX2 when pretending to be 
 Bridge (and fails if it does not), then imports and exercises every native extension and
 draws the earthquake images under that emulation. Rust builds use
 `target-cpu=sandybridge` (`rust/.cargo/config.toml`) and run their tests under the same
-emulation. Never use `target-cpu=native`.
+emulation. Never use `target-cpu=native`. Both checks run inside the production images,
+not on the runner: the runner (Ubuntu 26.04) ships a glibc that itself requires
+x86-64-v3 and cannot even start under Sandy Bridge emulation. For the same reason, never
+base a production image on Ubuntu 26.04.
 
 ## CI must never pass vacuously
 

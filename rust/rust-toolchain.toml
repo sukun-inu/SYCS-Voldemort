@@ -4,6 +4,7 @@
 #
 # 上げるときは、ここと次の 2 箇所を同時に揃えること。
 #   rust/tools/voice-check/run.sh       ビルドに使う rust:<版>-slim-bookworm
+#   .github/workflows/rust.yml          CI のジョブを動かす container の同じイメージ
 #   rust/Cargo.toml                     workspace.package.rust-version
 #
 # rustup 1.28 から、このファイルを見ても版を自動では入れなくなった。

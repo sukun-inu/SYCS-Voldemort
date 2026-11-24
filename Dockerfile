@@ -10,6 +10,12 @@
 #
 # 3.11 → 3.13 にした（2026-09-04）。固定している31個すべてに 3.13 で使える配布物が
 # あることを PyPI のメタデータで1つずつ確認してから上げた。
+#
+# **ベースを Ubuntu 26.04 系（とその派生）にしないこと。** 本番の CPU は Sandy Bridge
+# （AVX2 無し）で、Ubuntu 26.04 の glibc は x86-64-v3 を要求するため、起動すらしない
+# （"Fatal glibc error: CPU does not support x86-64-v3"。GitHub の runner で実際に見た）。
+# Debian 系の今のイメージは x86-64 の基本の命令で動く。変えたら CI の
+# tools/check_cpu_baseline.py が、そのイメージの中で Sandy Bridge のふりをして確かめる。
 FROM python:3.13-slim
 
 # 作業ディレクトリ
