@@ -13,7 +13,7 @@
 
 [workspace]
 resolver = "3"
-members = ["tools/voice-check"]
+members = ["crates/sycs-core", "tools/voice-check"]
 
 [workspace.package]
 edition = "2024"
