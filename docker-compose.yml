@@ -221,6 +221,11 @@ services:
       - VT_MAX_DOWNLOAD_BYTES=${VT_MAX_DOWNLOAD_BYTES:-20971520}
       # Bot 設定ファイルの保存先（ボリュームマウント先に合わせる）
       - SETTINGS_DIR=/app/data
+      # ギルドごとの設定の保存先。postgres は user_state_audit の表（Bot と管理画面で
+      # 同じ値にすること。食い違うと、片方の変更がもう片方に届かない）。初回の起動で
+      # settings.json を取り込む。file に戻すときは docs/UPGRADE.ja.md の手順で
+      # 先に書き出すこと（Postgres にだけある変更が消える）。
+      - SETTINGS_BACKEND=${SETTINGS_BACKEND:-postgres}
       - SETTINGS_LOCK_TIMEOUT_SECONDS=${SETTINGS_LOCK_TIMEOUT_SECONDS:-10}
       - SETTINGS_LOCK_STALE_SECONDS=${SETTINGS_LOCK_STALE_SECONDS:-30}
       # ログは日付で1日1ファイル。既定 3650 日（10年）保管し、回した分は gzip で畳む。
@@ -339,6 +344,8 @@ services:
       - ADMIN_MEMORY_ALERT_PERCENT=${ADMIN_MEMORY_ALERT_PERCENT:-90}
       - ADMIN_TPS_ALERT_PERCENT=${ADMIN_TPS_ALERT_PERCENT:-100}
       - SETTINGS_DIR=/app/data
+      # Bot と同じ値にすること（理由は Bot 側のコメント）。
+      - SETTINGS_BACKEND=${SETTINGS_BACKEND:-postgres}
       - SETTINGS_LOCK_TIMEOUT_SECONDS=${SETTINGS_LOCK_TIMEOUT_SECONDS:-10}
       - SETTINGS_LOCK_STALE_SECONDS=${SETTINGS_LOCK_STALE_SECONDS:-30}
       - LOG_RETENTION_DAYS=${LOG_RETENTION_DAYS:-3650}

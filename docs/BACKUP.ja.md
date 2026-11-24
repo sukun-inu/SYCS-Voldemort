@@ -22,9 +22,14 @@
 | `globals-<日時>.sql` | ロール（利用者と権限） | 空のクラスタへ戻すときに所有者を復元できない |
 | `files-<日時>.tar.gz` | `settings.json` と VAPID の鍵 | **サーバーごとの設定が全部消える。Push は購読者全員に取り直してもらう以外に戻す道が無い** |
 
-4 番目が要る理由は、`settings.json` が Postgres ではなく `app_data` ボリューム、
-VAPID の鍵が `shared_secrets` ボリュームに置かれているからです。DB だけ戻しても
-運用は再開できません。
+4 番目が要る理由は、VAPID の鍵が `shared_secrets` ボリュームに置かれているから
+です。DB だけ戻しても運用は再開できません。
+
+ギルドごとの設定は、`SETTINGS_BACKEND=postgres`（本番の既定、2026-11-25〜）なら
+`user_state_audit-<日時>.dump` の `bot_settings_guild` 表に入っています。そのとき
+`files-<日時>.tar.gz` の `settings.json` は取り込み元として残っているだけで、
+**切り替えたあとの変更は入っていません。** 設定を戻すときは DB のダンプから
+戻してください。`SETTINGS_BACKEND=file` のときは、これまでどおり `settings.json` が正です。
 
 **入っていないもの**（意図的に外しています）
 

@@ -124,8 +124,8 @@ import 時に ffmpeg の解決をするので、共通の置き場にはでき�
 
 | 置き場 | 中身 | 読み書きする側 |
 |---|---|---|
-| `data/settings.json` | ギルドごとの全設定 | Bot / Admin（`services/settings_store.py` 経由） |
-| `data/settings.json.lock` | 書き込みの排他 | 同上 |
+| `data/settings.json` | ギルドごとの全設定（`SETTINGS_BACKEND=file` のとき。`postgres` のときは取り込み元として残るだけ → 2.3） | Bot / Admin（`services/settings_store.py` 経由） |
+| `data/settings.json.lock` | 書き込みの排他（ファイルのときだけ） | 同上 |
 | `data/djaudio_cache/` | 配信するファイルと `<token>.json` のメタ | Bot が書き、`/dlaudio` が読む |
 | `data/admin_monitor/heartbeat.json` | 管理画面の死活 | Admin |
 | `data/.admin_session_secret` | セッション署名キー | Admin（無ければ生成する） |
@@ -162,22 +162,53 @@ import 時に ffmpeg の解決をするので、共通の置き場にはでき�
 別ホストで動かす構成のためで、`metal_prices` 側は Web App が `init_db()` で
 同じことをする。
 
-### 2.3 settings.json をデータベースに置かない理由
+### 2.3 ギルドごとの設定の置き場（settings.json と Postgres）
 
 設定は「ギルドごとの入れ子の辞書」で、更新は人の操作の速さでしか起きない。
-それに対して読み出しはメッセージのたびに走る。ファイル＋メモリキャッシュに
-しておくと、DB を1つ増やさずに済む。
+それに対して読み出しはメッセージのたびに走る。どちらの置き場でも、全体を
+メモリに持ち、他のプロセスが書いたら捨てて読み直す。置き場は
+`SETTINGS_BACKEND` で選ぶ（本番の compose は `postgres`、コードの既定は `file`）。
 
-キャッシュの無効化は**ファイル署名（`mtime_ns` + `size`）**で行う。署名が
-変わったら捨てて読み直すので、Bot と管理画面が別プロセスでも相手の更新に
-気づける。
+**Postgres（`SETTINGS_BACKEND=postgres`、`services/settings_pg.py`）**
 
-書き込みはロックファイル（`O_CREAT | O_EXCL`）で直列化する。ロックを持った
-まま死んだ場合に備えて、`SETTINGS_LOCK_STALE_SECONDS`（既定30秒）を過ぎた
-ロックは奪える。解放時は**自分が書いた所有者IDと一致するときだけ**消す
-（他人のロックを消さないため）。
+以前は「DB を1つ増やさずに済む」ので settings.json に置いていた。それは Bot と
+管理画面が同じボリュームを見ている間しか成り立たず、コンテナを別のホストへ
+分けると設定が黙って食い違う。Rust へ移す間は Python と Rust が同じ設定を読むので、
+どちらの言語からも触れる置き場として `user_state_audit` へ移した（2026-11-25）。
 
-JSON の読み書きは `orjson` があればそれを使い、無ければ標準の `json` に落ちる。
+| 表 | 中身 |
+|---|---|
+| `bot_settings_guild` | ギルドごとに1行（`guild_key`, `data` JSONB）。書いたときは変わったギルドの行だけを更新する |
+| `bot_settings_state` | 1行だけ。版番号（書くたびに 1 増える）、guilds 以外のトップレベルのキー、取り込み元の記録 |
+
+- 書き込みは `pg_advisory_xact_lock` で1人に絞り、読み直してから書き換える
+  （ファイル版のロックと同じ役割）。何も変わらなければ書かず、版番号も上げない。
+- 書いたトランザクションが `NOTIFY bot_settings_changed, '<版番号>'` を出し、
+  各プロセスは LISTEN で受けて読み直す（数十ミリ秒で届く）。LISTEN の接続が
+  切れていた間の書き込みは、`SETTINGS_PG_POLL_SECONDS`（既定30秒）ごとの
+  版番号の確認で拾う。
+- 公開関数は同期なので、設定専用のスレッドとイベントループを1本持ち、そこへ
+  頼んで待つ。Bot や管理画面のループのエンジンは使い回さない（asyncpg の接続は
+  作ったループに縛られる）。
+- 最初の読み込みが済むまで読む側は待ち、読めなければ例外を上げる。**空の設定で
+  動き出すことはしない。** 一度読めたあとは、Postgres が落ちてもキャッシュで読み続ける。
+- 表が空なら、最初の起動で settings.json を取り込む。**壊れた settings.json は
+  取り込まない**（ファイル版の読み込みは壊れたファイルを空として扱うが、それを
+  取り込むと空の設定が正になる）。settings.json 自体には触らないので、すぐなら
+  ファイルの版へ戻せる。戻すときは `scripts/export_settings_to_file.py` で書き
+  出してから戻す（[UPGRADE.ja.md](UPGRADE.ja.md)）。
+
+**ファイル（`SETTINGS_BACKEND=file`）**
+
+テスト・検査の道具・手元の起動で使う。キャッシュの無効化は**ファイル署名
+（`mtime_ns` + `size`）**で行い、書き込みはロックファイル（`O_CREAT | O_EXCL`）で
+直列化する。ロックを持ったまま死んだ場合に備えて、`SETTINGS_LOCK_STALE_SECONDS`
+（既定30秒）を過ぎたロックは奪える。解放時は**自分が書いた所有者IDと一致する
+ときだけ**消す（他人のロックを消さないため）。
+
+null を落とすことと「最後に触られた時刻」を押すことは、どちらの置き場でも同じ
+`_mutate_settings` の中で行う。JSON の読み書きは `orjson` があればそれを使い、
+無ければ標準の `json` に落ちる。
 
 ---
 
@@ -374,10 +405,10 @@ TTS だけは専用ストア（`services/tts_store.py`）を経由する。`watc
 
 ### 5.1 非同期から設定を書くときは必ずスレッドへ逃がす
 
-`settings.json` の書き込みはファイルロックを取る。空くのを待つ間は
-`time.sleep(0.05)` のポーリングで、既定のタイムアウトは10秒
-（`SETTINGS_LOCK_TIMEOUT_SECONDS`）。Bot と管理画面は別プロセスで同じファイルを
-共有しているので、競合は実際に起きる。
+設定の書き込みは排他を取る（ファイルならロックファイル、Postgres なら advisory
+lock）。空くのを待つ間、既定で最大10秒（`SETTINGS_LOCK_TIMEOUT_SECONDS`）待つ。
+Bot と管理画面は別プロセスで同じ設定を書くので、競合は実際に起きる。Postgres
+のときは往復のぶんも待つ。
 
 `async` の中から同期のセッターを直に呼ぶと、待つ側のイベントループ全体がその間
 止まる。**Bot なら Discord のハートビートと全ギルドのイベント処理が、管理画面

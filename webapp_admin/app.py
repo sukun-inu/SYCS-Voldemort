@@ -536,6 +536,18 @@ def _register_metrics_reporter(app: FastAPI) -> None:
         loop_watchdog.install()
 
     @app.on_event("startup")
+    async def _start_settings_backend() -> None:
+        """設定の保存先が Postgres なら、読み込みを裏で始めておく（待たない）。
+
+        待たないのは、Postgres が落ちているだけで管理画面が起動できなくなるのを
+        避けるため。設定を読む画面は、読み込みが済むまで待つか、読めなければ
+        エラーを返す（空の設定を出すことはしない。services/settings_pg.py の冒頭）。
+        """
+        from services import settings_store
+
+        settings_store.start_backend()
+
+    @app.on_event("startup")
     async def _start_metrics_reporter() -> None:
         """報告ループを Task として動かし、app.state に控える。"""
         app.state.metrics_reporter_task = asyncio.create_task(
