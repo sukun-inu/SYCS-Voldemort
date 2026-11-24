@@ -203,5 +203,103 @@ class ClaimStatementTests(unittest.TestCase):
         self.assertIn("RETURNING", sql)
 
 
+class LegacyFileImportTests(unittest.TestCase):
+    """6c61884 までの置き場（SETTINGS_DIR/_dev_signals/）に残った依頼を表へ移す。
+
+    本番は 6c61884 で動いている。入れ替えた時点で残っている依頼と、入れ替えの
+    途中で古い管理画面が書いた依頼を、取りこぼさず、二重にも実行しないこと。
+    """
+
+    def setUp(self):
+        use_sqlite_for_dev_signals(self)
+        self.settings_dir = Path(tempfile.mkdtemp(prefix="dev-signals-legacy-"))
+        patcher = patch.dict(os.environ, {"SETTINGS_DIR": str(self.settings_dir)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.legacy = self.settings_dir / "_dev_signals"
+        self.legacy.mkdir()
+
+    def _place(self, name: str, payload: object, mtime: float) -> Path:
+        """以前の管理画面と同じ形でファイルを置く（中身は JSON、時刻は指定どおり）。"""
+        path = self.legacy / name
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        os.utime(path, (mtime, mtime))
+        return path
+
+    def test_files_are_moved_in_the_order_they_were_placed(self):
+        """置かれた順（更新時刻）に表へ入り、その順で Bot に渡ること。
+
+        ファイル名の順（e < n < s）と置かれた順を逆にしてある。名前で並べる
+        変異でも落ちるようにするため。
+        """
+        self._place("sticky.signal", {"n": 1}, mtime=1_000)
+        self._place("news_feeds.signal", {"n": 2}, mtime=2_000)
+        self._place("eq_replay.19f3a2c1de.signal", {"guild_id": 3}, mtime=3_000)
+
+        self.assertEqual(_run(dev_signals.import_legacy_files()), 3)
+
+        claimed = _run(dev_signals.claim())
+        self.assertEqual([s.task for s in claimed], ["sticky", "news_feeds", "eq_replay"])
+        self.assertEqual([json.loads(s.payload) for s in claimed], [{"n": 1}, {"n": 2}, {"guild_id": 3}])
+
+    def test_per_guild_files_stay_apart_and_repeatable_ones_collapse(self):
+        """ファイル名に一意な部分があるものは別の行、無いものは表の既存の行に畳まれること。
+
+        畳み方を間違えると、2つのサーバー宛の地震リプレイが1件に潰れる。
+        """
+        _run(dev_signals.write("news_feeds", {"from": "table"}))
+        self._place("news_feeds.signal", {"from": "file"}, mtime=1_000)
+        self._place("eq_replay.aaa.signal", {"guild_id": 1}, mtime=2_000)
+        self._place("eq_replay.bbb.signal", {"guild_id": 2}, mtime=3_000)
+
+        _run(dev_signals.import_legacy_files())
+
+        self.assertEqual(_run(dev_signals.pending()), ["eq_replay", "eq_replay", "news_feeds"])
+
+    def test_moved_files_are_gone_and_are_not_moved_twice(self):
+        """移したファイルは消え、次の巡回で二重に移さないこと。
+
+        二重に移すと、テスト通知や地震リプレイが二度飛ぶ。
+        """
+        self._place("eq_replay.aaa.signal", {"guild_id": 1}, mtime=1_000)
+
+        self.assertEqual(_run(dev_signals.import_legacy_files()), 1)
+        self.assertEqual(list(self.legacy.iterdir()), [])
+        self.assertEqual(_run(dev_signals.import_legacy_files()), 0)
+        self.assertEqual(len(_run(dev_signals.claim())), 1)
+
+    def test_a_file_that_could_not_be_saved_is_left_for_the_next_round(self):
+        """表へ書けなかったら、ファイルを元の名前に戻して例外を上げること。
+
+        戻さないと .importing のまま残り、二度と拾われない（依頼が黙って消える）。
+        """
+        from sqlalchemy.exc import OperationalError
+
+        path = self._place("eq_replay.aaa.signal", {"guild_id": 1}, mtime=1_000)
+        failure = OperationalError("INSERT INTO dev_signal", {}, Exception("connection refused"))
+        with patch.object(dev_signals, "write", AsyncMock(side_effect=failure)):
+            with self.assertRaises(OperationalError):
+                _run(dev_signals.import_legacy_files())
+
+        self.assertTrue(path.exists(), "書けなかったファイルが元の名前で残っていない")
+        self.assertEqual(_run(dev_signals.import_legacy_files()), 1)
+
+    def test_a_file_already_being_imported_is_not_picked_up_again(self):
+        """.importing のファイルは拾わないこと。
+
+        表へ書けたあとで消せなかったファイルがこの名前で残る。拾い直すと二重に
+        実行される。
+        """
+        (self.legacy / "eq_replay.aaa.signal.importing").write_text("{}", encoding="utf-8")
+
+        self.assertEqual(_run(dev_signals.import_legacy_files()), 0)
+        self.assertEqual(_run(dev_signals.pending()), [])
+
+    def test_nothing_happens_when_the_old_directory_does_not_exist(self):
+        """以前の置き場が無い（新しく立てた環境）なら、何もせず 0 を返すこと。"""
+        self.legacy.rmdir()
+        self.assertEqual(_run(dev_signals.import_legacy_files()), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
