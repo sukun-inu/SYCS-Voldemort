@@ -33,12 +33,13 @@ jobs:
           rustc --version
           cargo --version
 
-      - name: songbird のビルドに要るものを入れる
+      - name: songbird のビルドに要るものと QEMU を入れる
         # songbird が使う opus2 は libopus を pkg-config で探し、無ければ cmake で
         # 自前ビルドする。どちらの経路でも通るように両方入れておく。
+        # qemu-user はテストを本番の CPU（Sandy Bridge）のふりで動かすため。
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends libopus-dev cmake pkg-config
+          sudo apt-get install -y -qq --no-install-recommends libopus-dev cmake pkg-config qemu-user
 
       - name: 整形の確認（cargo fmt）
         run: cargo fmt --all --check
@@ -48,7 +49,14 @@ jobs:
         # 間接の依存は Cargo.lock でしか固定されていない。
         run: cargo clippy --locked --all-targets -- -D warnings
 
-      - name: テスト
+      - name: テスト（本番の CPU のふりで動かす）
+        # ビルドは rust/.cargo/config.toml で target-cpu=sandybridge に絞ってある。
+        # それでも依存の build.rs が C のコードを「ビルドした機械の CPU」向けに
+        # 組むことがあるので、テストの実行そのものを QEMU の Sandy Bridge のふりで行う。
+        # この QEMU が AVX2 を本当に弾くことは、同じ runner で「テスト」の
+        # tools/check_cpu_baseline.py が対照実験で確かめている。
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: qemu-x86_64 -cpu SandyBridge
         run: cargo test --locked
 
       - name: シェルスクリプトの構文検査

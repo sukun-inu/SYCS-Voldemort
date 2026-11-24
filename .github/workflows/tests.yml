@@ -96,6 +96,17 @@ jobs:
       - name: 依存の固定が Docker と同じ条件で解けるか確認
         run: python tools/check_requirements.py
 
+      - name: 本番の CPU（Sandy Bridge）で依存が動くか確認
+        # 本番の VM は Sandy Bridge（AVX2 無し）。この runner は新しい CPU なので、
+        # 上のテストが全部通っても、依存が AVX2 前提で出てきたら本番だけで落ちる。
+        # QEMU で Sandy Bridge のふりをして import・計算・描画まで動かす。
+        # QEMU が AVX2 を本当に弾くかの対照実験も中でやり、弾かなければ落とす
+        # （弾かない QEMU で通すと、何も確かめずに緑になる）。
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends qemu-user gcc
+          python tools/check_cpu_baseline.py
+
       - name: 依存に既知の脆弱性が無いか確認（pip-audit）
         # requirements.txt を全部 == で固定しているのと対で要る。固定は「勝手に
         # 動かない」ことしか保証せず、固定したまま古くなったものが放置される側の

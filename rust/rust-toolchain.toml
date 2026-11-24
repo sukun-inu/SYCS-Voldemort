@@ -1,5 +1,7 @@
 # Rust 本体の版。手元・CI・Docker のビルドで同じものを使う。
 #
+# 本番の CPU に合わせた命令セットは rust/.cargo/config.toml（target-cpu=sandybridge）。
+#
 # 上げるときは、ここと次の 2 箇所を同時に揃えること。
 #   rust/tools/voice-check/run.sh       ビルドに使う rust:<版>-slim-bookworm
 #   rust/Cargo.toml                     workspace.package.rust-version

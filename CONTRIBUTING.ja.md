@@ -279,7 +279,7 @@ return discord.Color.dark_grey()
 
 ---
 
-## 8. CI が落とす11個の条件
+## 8. CI が落とす12個の条件
 
 `.github/workflows/tests.yml`。`main` への push と、すべての pull request で
 走ります。手で回すこともできます。
@@ -306,6 +306,7 @@ commit には使えません。理由の詳細はワークフローの `workflow
 9. `python -m compileall -q .`（全ファイルが CI の Python 3.13 で構文が通るか）
 10. `sh -n docker/*.sh`（シェルスクリプトの構文）
 11. `pip-audit -r requirements.txt --strict`（依存に既知の脆弱性が無いか）
+12. `tools/check_cpu_baseline.py`（本番の CPU（Sandy Bridge）で依存が動くか）
 
 9. は `tools/backtest_forecast.py` が **当時の対象だった Python 3.11 では
 SyntaxError になる状態で main に入っていた**ために足しました（f-string の中で外側と同じ引用符を使う
@@ -331,6 +332,14 @@ Dependabot が ruff を上げる PR を出したときです。
 11. は固定（全部 `==`）と対です。固定は「勝手に動かない」ことしか保証せず、
 固定したまま古くなったものが放置される側の危険は増えます。入れた初回で
 Pillow 12.2.0 の勧告11件が出ました。
+
+12. は本番の VM の CPU が Sandy Bridge（AVX2 無し）だからです。この runner も手元の
+WSL も新しい CPU なので、依存が AVX2 前提で出てくると、テストを全部通しても本番
+だけが起動した瞬間に Illegal instruction で落ちます。QEMU で Sandy Bridge のふりを
+して、ネイティブの拡張の import・計算と地震画像の描画まで動かします。**QEMU が
+AVX2 を本当に弾くかの対照実験を先にやり、弾かなければ落とします**（弾かない QEMU
+で通すと、何も確かめずに緑になる）。Rust 側は `rust/.cargo/config.toml` で
+`target-cpu=sandybridge` に絞り、テストも Sandy Bridge のふりで動かします。
 
 8. は**数しか見ていません。** 空でない文字列が書いてあれば通るので、「読めば
 分かることを書き写しただけの docstring」は素通りします。緑であることは、4. を
