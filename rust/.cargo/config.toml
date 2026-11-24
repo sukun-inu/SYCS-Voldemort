@@ -1,0 +1,13 @@
+# 本番の CPU に合わせて、使う命令を Sandy Bridge までに絞る。
+#
+# 本番の VM は CPU の種類が Sandy Bridge に固定されている（AVX は使えるが、AVX2・FMA・
+# BMI は無い）。手元や CI の新しい CPU でビルドしても、ここで絞っておけば本番で
+# Illegal instruction を起こさない。絞った結果は新しい CPU でもそのまま動く
+# （Sandy Bridge の命令は新しい CPU にも全部ある）。
+#
+# 「native」にはしないこと。ビルドした機械の CPU に合わせてしまい、新しい CPU の
+# CI でビルドしたものが本番で落ちる。
+#
+# CI（.github/workflows/rust.yml）は、テストも QEMU の Sandy Bridge のふりで動かす。
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "target-cpu=sandybridge"]

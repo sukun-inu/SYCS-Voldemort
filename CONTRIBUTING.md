@@ -116,6 +116,17 @@ When upgrading serenity, songbird or davey, run `rust/tools/voice-check` and lis
 in a real voice channel before shipping. Tests cannot tell whether audio reached the
 other side (see its README.ja.md).
 
+## Production CPU (Sandy Bridge)
+
+The production VM's CPU is fixed to Sandy Bridge: AVX, but no AVX2, FMA or BMI. CI
+runners and local machines are newer, so a dependency built for a newer CPU passes every
+test and still dies with "Illegal instruction" in production. `tools/check_cpu_baseline.py`
+runs in CI: it first proves that QEMU really rejects AVX2 when pretending to be Sandy
+Bridge (and fails if it does not), then imports and exercises every native extension and
+draws the earthquake images under that emulation. Rust builds use
+`target-cpu=sandybridge` (`rust/.cargo/config.toml`) and run their tests under the same
+emulation. Never use `target-cpu=native`.
+
 ## CI must never pass vacuously
 
 A check that is present but silently skips is worse than no check at all. That is why
