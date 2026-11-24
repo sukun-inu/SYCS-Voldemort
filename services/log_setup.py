@@ -138,6 +138,7 @@ CATEGORY_RULES: tuple[tuple[str, str], ...] = (
     ("services.groq_client", "ai"),
     # 状態
     ("services.settings_store", "settings"),
+    ("services.settings_pg", "settings"),
     ("services.user_state", "userstate"),
     ("events.user_state_sync", "userstate"),
     ("services.guild_retention", "userstate"),

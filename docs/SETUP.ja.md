@@ -81,7 +81,10 @@ docker compose up -d --build
 | `VIRUSTOTAL_API_KEY` | 任意 | URL/ファイルスキャン |
 | `VT_MAX_DOWNLOAD_BYTES` | 任意 | VTスキャン時の最大ダウンロードサイズ（既定 `20971520` = 20MB） |
 | `SETTINGS_DIR` | 任意 | `settings.json` 保存先 |
-| `SETTINGS_LOCK_TIMEOUT_SECONDS` | 任意 | `settings.json` 更新ロック待機秒数（既定 `10`） |
+| `SETTINGS_BACKEND` | 任意 | ギルドごとの設定の置き場。`postgres`（`USER_STATE_POSTGRES_DB` の表）か `file`（`settings.json`）。コードの既定は `file`、compose の既定は `postgres`。**Bot と管理画面で同じ値にすること** |
+| `SETTINGS_LOAD_TIMEOUT_SECONDS` | 任意 | `postgres` のとき、最初の読み込みを待つ秒数（既定 `30`）。過ぎても読めなければ設定を読む処理がエラーになる（空の設定では動かない） |
+| `SETTINGS_PG_POLL_SECONDS` | 任意 | `postgres` のとき、版番号を確かめる間隔（既定 `30`）。通常は変更の通知が数十ミリ秒で届き、これは通知を取りこぼしたときの保険 |
+| `SETTINGS_LOCK_TIMEOUT_SECONDS` | 任意 | 設定の書き込みの排他を待つ秒数（既定 `10`） |
 | `SETTINGS_LOCK_STALE_SECONDS` | 任意 | 古いロックファイルを破棄する閾値秒数（既定 `30`） |
 | `BOT_BACKGROUND_WORKER` | 任意 | `true/false`。定期ジョブ実行ノードかどうか（既定 `true`） |
 | `USER_STATE_POSTGRES_DSN` | 任意 | ユーザー状態監査DB接続先をDSNで直指定 |

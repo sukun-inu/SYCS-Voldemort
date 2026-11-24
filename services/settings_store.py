@@ -1,5 +1,6 @@
 import copy
 import logging
+import threading
 from datetime import datetime, timezone
 import os
 import time
@@ -9,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar, cast
 
-from envutil import env_float, env_path
+from envutil import env_float, env_path, env_str
 
 try:
     import orjson as _json
@@ -39,6 +40,19 @@ _SETTINGS_LOCK_STALE_SEC = env_float(
     minimum=_SETTINGS_LOCK_TIMEOUT_SEC,
 )
 _SETTINGS_LOCK_POLL_SEC = 0.05
+
+# 保存先。"file"（既定）は settings.json、"postgres" は user_state_audit の表
+# （services/settings_pg.py）。本番の compose は postgres にしてある。
+#
+# 既定をファイルのままにしているのは、テスト・検査の道具（tools/）・手元の起動が
+# データベース無しで動くようにするため。設定を変える関数（get_xxx / set_xxx）は
+# どちらでも同じで、違うのは下の _load_all と _mutate_settings の中だけ。
+_BACKEND = (env_str("SETTINGS_BACKEND", "file") or "file").strip().lower()
+if _BACKEND not in {"file", "postgres"}:
+    logger.warning("SETTINGS_BACKEND=%s は読めません。file として扱います", _BACKEND)
+    _BACKEND = "file"
+_SETTINGS_LOAD_TIMEOUT_SEC = env_float("SETTINGS_LOAD_TIMEOUT_SECONDS", 30.0, minimum=1.0)
+_SETTINGS_PG_POLL_SEC = env_float("SETTINGS_PG_POLL_SECONDS", 30.0, minimum=1.0)
 
 # メモリ内キャッシュ。ファイル署名（mtime_ns + size）が変わったら自動無効化するため、
 # Bot と WebUI が別プロセスでもファイル更新を検知できる。
@@ -96,6 +110,96 @@ def _load_all_from_disk() -> dict[str, Any]:
     except Exception:
         return {"guilds": {}}
     return _normalize_root(data)
+
+
+def _load_legacy_strict() -> tuple[dict[str, Any], str]:
+    """Postgres へ取り込むために settings.json を読む。(中身, 取り込み元の説明) を返す。
+
+    **壊れていたら例外を上げる。** _load_all_from_disk は壊れたファイルを空として
+    扱うが、取り込みでそれをすると、空の設定が正になって元のファイルは二度と
+    読まれない（全ギルドの設定が黙って消える）。読めるまで起動を待たせるほうがよい。
+    ファイルが無いのは新しく立てた環境なので、空から始めてよい。
+    """
+    if not _SETTINGS_FILE.exists():
+        return {"guilds": {}}, f"{_SETTINGS_FILE}（無かったので空から始めた）"
+    data = _json.loads(_SETTINGS_FILE.read_bytes())
+    if not isinstance(data, dict) or not isinstance(data.get("guilds", {}), dict):
+        raise ValueError(f"{_SETTINGS_FILE} の形が読めません（トップレベルか guilds が辞書でない）")
+    return _normalize_root(data), str(_SETTINGS_FILE)
+
+
+_pg: Any = None
+_pg_lock = threading.Lock()
+
+
+def _use_postgres() -> bool:
+    """保存先が Postgres か。"""
+    return _BACKEND == "postgres"
+
+
+def _postgres() -> Any:
+    """Postgres の置き場（1プロセスに1つ）。最初に呼ばれたときに組み立てる。
+
+    エンジンは user_state_db のものを使い回さず、自分で作る。asyncpg の接続は作った
+    イベントループに縛られ、設定は専用のループで動くため（settings_pg の冒頭）。
+    """
+    global _pg
+    if _pg is not None:
+        return _pg
+    with _pg_lock:
+        if _pg is None:
+            from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+            from services import settings_pg, user_state_db
+
+            url = user_state_db.DATABASE_URL
+            engine = create_async_engine(url, pool_pre_ping=True, pool_size=2, max_overflow=2)
+
+            async def create_tables() -> None:
+                """表を（無ければ）作る。"""
+                async with engine.begin() as conn:
+                    await conn.run_sync(settings_pg.metadata.create_all, checkfirst=True)
+
+            _pg = settings_pg.PostgresSettings(
+                session_factory=async_sessionmaker(bind=engine, expire_on_commit=False),
+                create_tables=create_tables,
+                load_legacy=_load_legacy_strict,
+                dialect=engine.dialect.name,
+                listen_dsn=settings_pg.asyncpg_dsn(url),
+                poll_seconds=_SETTINGS_PG_POLL_SEC,
+                write_timeout=_SETTINGS_LOCK_TIMEOUT_SEC,
+                load_timeout=_SETTINGS_LOAD_TIMEOUT_SEC,
+            )
+    return _pg
+
+
+def start_backend() -> None:
+    """保存先が Postgres なら、読み込みを裏で始めておく（待たない）。
+
+    最初に設定を読む人が、取り込みと読み込みを待たされないようにするため。
+    管理画面は起動時にこれを呼ぶ。ファイルなら何もしない。
+    """
+    if _use_postgres():
+        _postgres().start()
+
+
+def export_to_file() -> Path:
+    """Postgres の設定を settings.json へ書き出す。6c61884（ファイルの版）へ戻すときに使う。
+
+    今ある settings.json は settings.json.before-export-<時刻> に退避してから書く。
+    戻したあとに「書き出す前のほうが正しかった」と分かっても、取り返せるように。
+    保存先がファイルのときは意味が無いので例外を上げる。
+    """
+    if not _use_postgres():
+        raise RuntimeError("SETTINGS_BACKEND=postgres のときだけ書き出せます")
+    data = copy.deepcopy(_postgres().snapshot())
+    _SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
+    if _SETTINGS_FILE.exists():
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        _SETTINGS_FILE.replace(_SETTINGS_FILE.with_name(f"settings.json.before-export-{stamp}"))
+    with _settings_file_lock():
+        _save_all(data)
+    return _SETTINGS_FILE
 
 
 @contextmanager
@@ -167,6 +271,9 @@ def _load_all() -> dict[str, Any]:
     すり抜ける。
     """
     global _cache, _cache_sig
+    if _use_postgres():
+        # 他のプロセスの変更は通知と版番号で取り込まれている（settings_pg の冒頭）。
+        return cast(dict[str, Any], _postgres().snapshot())
     sig = _file_signature()
     if _cache is not None and sig == _cache_sig:
         return _cache
@@ -340,6 +447,9 @@ def drop_stored_nulls() -> int:
     - 壊れた settings.json は空として読まれるが、そこからは何も取り除けない
       ので書き戻さない（空で上書きして全ギルドを消すことが起きない）
     """
+    if _use_postgres():
+        # 何も取り除かなければ、Postgres 版は書かない（変わったギルドだけを書くため）。
+        return cast(int, _postgres().transact(_drop_nulls_in_guilds))
     with _settings_file_lock():
         data = _load_all_from_disk()
         removed = _drop_nulls_in_guilds(data)
@@ -350,6 +460,10 @@ def drop_stored_nulls() -> int:
 
 def _mutate_settings(mutator: Callable[[dict[str, Any]], _T]) -> _T:
     """ロックを取り、ディスクから読み直してから mutator を適用して保存する。
+
+    SETTINGS_BACKEND=postgres のときは、ロック・読み直し・保存を Postgres 版
+    （services/settings_pg.py）が受け持つ。下に書いた null と時刻の扱いは、
+    どちらの保存先でも同じ apply の中で行う。
 
     _load_all() のキャッシュではなく _load_all_from_disk() を使うのは、
     ロックを取るまでの間に他プロセスが書き込んでいる可能性があるため。
@@ -368,8 +482,9 @@ def _mutate_settings(mutator: Callable[[dict[str, Any]], _T]) -> _T:
     null は控えを取る前にも落とす。控えに null が残っていると、書き込み後の
     null を落としただけで「変わった」と読まれ、触っていないギルドに時刻が押される。
     """
-    with _settings_file_lock():
-        data = _load_all_from_disk()
+
+    def apply(data: dict[str, Any]) -> _T:
+        """null を落とし、控えを取り、書き換え、また null を落として時刻を押す。"""
         _drop_nulls_in_guilds(data)
         before = {
             key: copy.deepcopy(value) for key, value in (data.get("guilds") or {}).items() if isinstance(value, dict)
@@ -377,6 +492,14 @@ def _mutate_settings(mutator: Callable[[dict[str, Any]], _T]) -> _T:
         result = mutator(data)
         _drop_nulls_in_guilds(data)
         _stamp_touched(data, before)
+        return result
+
+    if _use_postgres():
+        # 排他・読み直し・保存は Postgres 版が受け持つ（変わったギルドの行だけを書く）。
+        return cast(_T, _postgres().transact(apply))
+    with _settings_file_lock():
+        data = _load_all_from_disk()
+        result = apply(data)
         _save_all(data)
         return result
 

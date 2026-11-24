@@ -307,7 +307,7 @@ pgAdmin を別に立てずに Postgres を見て触るための画面です。`D
 
 ## 3. データ保存先
 
-- `settings.json`: ギルドごとの Bot 設定
+- ギルドごとの Bot 設定: `SETTINGS_BACKEND=postgres`（本番の既定）なら `USER_STATE_POSTGRES_DB` の `bot_settings_guild` 表、`file` なら `settings.json`
 - `data/.admin_session_secret`: 管理UI セッション署名キー（`ADMIN_FLASK_SECRET_KEY` 未設定時に初回起動で自動生成）
 - `data/logs/bot.log` / `bot.jsonl`: Discord Bot のログ
 - `data/logs/admin.log` / `admin.jsonl`: 管理 UI のログ

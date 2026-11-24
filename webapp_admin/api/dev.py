@@ -204,11 +204,14 @@ def _all_settings() -> dict:
     """全ギルドの設定を丸ごと読む（開発者パネル専用。通常の設定APIはギルド単位でしか読まない）。
 
     読み込みに失敗しても空の構造を返し、概要画面が丸ごと落ちるのを避ける。
+
+    以前はファイルを直に読んでいた（_load_all_from_disk）。保存先が Postgres の
+    ときはファイルが古いままなので、選んである保存先から読む _load_all を通す。
     """
     try:
-        from services.settings_store import _load_all_from_disk
+        from services.settings_store import _load_all
 
-        return _load_all_from_disk()
+        return _load_all()
     except Exception:
         return {"guilds": {}}
 
