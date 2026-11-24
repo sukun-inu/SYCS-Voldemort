@@ -18,6 +18,11 @@ jobs:
   rust:
     name: fmt・clippy・テスト
     runs-on: ubuntu-latest
+    # **本番と同じイメージの中で回す。** runner（ubuntu-latest = Ubuntu 26.04）の glibc
+    # 自体が x86-64-v3 を要求するので、runner の上ではテストを Sandy Bridge のふりで
+    # 動かせない（"Fatal glibc error: CPU does not support x86-64-v3"）。このイメージの
+    # 版は rust/rust-toolchain.toml と揃えること。
+    container: rust:1.100.0-slim-bookworm
     defaults:
       run:
         working-directory: rust
@@ -26,6 +31,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Rust を入れる（rust/rust-toolchain.toml の版）
+        # イメージに同じ版が入っているので、ここでは rustfmt と clippy が足される。
         # rustup 1.28 から、toolchain ファイルを見ても自動では入れなくなった。
         # 引数なしの install がファイルの版（と components）を入れる。
         run: |
@@ -38,8 +44,8 @@ jobs:
         # 自前ビルドする。どちらの経路でも通るように両方入れておく。
         # qemu-user はテストを本番の CPU（Sandy Bridge）のふりで動かすため。
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends libopus-dev cmake pkg-config qemu-user
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends libopus-dev cmake pkg-config qemu-user
 
       - name: 整形の確認（cargo fmt）
         run: cargo fmt --all --check

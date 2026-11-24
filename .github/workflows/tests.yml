@@ -102,10 +102,20 @@ jobs:
         # QEMU で Sandy Bridge のふりをして import・計算・描画まで動かす。
         # QEMU が AVX2 を本当に弾くかの対照実験も中でやり、弾かなければ落とす
         # （弾かない QEMU で通すと、何も確かめずに緑になる）。
+        #
+        # **runner の上では回さない。** runner（ubuntu-latest = Ubuntu 26.04）の glibc
+        # 自体が x86-64-v3 を要求するので、Sandy Bridge のふりをすると Python が起動
+        # すらしない（"Fatal glibc error: CPU does not support x86-64-v3"）。本番と同じ
+        # イメージ（Dockerfile の FROM）の中で回す。本番の条件にもそのほうが近い。
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends qemu-user gcc
-          python tools/check_cpu_baseline.py
+          docker run --rm -v "$PWD":/src:ro python:3.13-slim sh -c '
+            set -e
+            export PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_ROOT_USER_ACTION=ignore
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends qemu-user gcc libc6-dev >/dev/null
+            cp -r /src /app && cd /app
+            pip install -q -r requirements.txt
+            python tools/check_cpu_baseline.py'
 
       - name: 依存に既知の脆弱性が無いか確認（pip-audit）
         # requirements.txt を全部 == で固定しているのと対で要る。固定は「勝手に
