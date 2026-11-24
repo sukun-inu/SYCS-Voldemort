@@ -1,0 +1,36 @@
+# rust/
+
+discord.py をやめて serenity へ移すための置き場です（2026-11-25〜）。移行が終わるまでは
+Python と Rust のプロセスが本番で共存します。進め方と順番は、リポジトリの外の
+移行トラッカーと `docs/UPGRADE.ja.md` にあります。
+
+| 場所 | 中身 |
+|---|---|
+| `crates/sycs-core` | Rust のプロセスが共通で使う土台。環境変数の読み方・接続先・ログ |
+| `tools/voice-check` | serenity + songbird の Bot が、DAVE 必須の VC で音を届けられるかを人の耳で確かめる道具 |
+
+## Python と揃えているもの
+
+共存している間は、同じ環境変数を読み、同じデータベースにつなぎ、同じディレクトリへ
+ログを書きます。規則が違うと、片方だけが別の値で動いたり、管理画面で片方のログだけ
+絞り込めなかったりします。揃っていることはテストで確かめています。
+
+| もの | Python | Rust | 揃っていることの確かめ方 |
+|---|---|---|---|
+| 環境変数の読み方 | `envutil.py` | `sycs_core::env` | 同じ規則のテスト（空文字は未設定、読めない値は既定値、範囲外は丸める、NaN は弾く） |
+| `user_state_audit` への接続先 | `services/user_state_db.py` | `sycs_core::db` | 同じ環境変数から同じ接続先になるかを、両方で組み立てて突き合わせた（変更のコミットに記録） |
+| ログの形 | `services/log_setup.py` | `sycs_core::log` | Rust が書いた JSONL を管理画面の絞り込みの関数に読ませた。カテゴリの名前は Python の表にあるものだけを使う（テストが Python のファイルを読んで確かめる） |
+| ログのレベルの名前 | `WARNING` | `WARN` を `WARNING` と書く | 管理画面は `WARNING` で比べる。`WARN` のままだと「警告以上」で警告が全部消える |
+| ログのファイル名 | `bot.log` / `bot.log.2026-11-24.gz` | 同じ | 移行中に同じディレクトリで 2 通りの名前が混ざると、片方の掃除が相手を見つけられない |
+
+## 守ること
+
+- **版は `=` で固定し、`Cargo.lock` をコミットする。** Rust 本体は `rust-toolchain.toml`。
+- **本番の CPU は Sandy Bridge（AVX2 無し）。** ビルドは `.cargo/config.toml` で
+  `target-cpu=sandybridge` に絞っている。`native` にしないこと。CI はテストも
+  Sandy Bridge のふりで動かす。
+- **本番のイメージは Debian 系にする。** Ubuntu 26.04 系は glibc が x86-64-v3 を要求し、
+  本番では起動しない。
+- **イメージに tzdata を入れること。** 無いと `TZ=Asia/Tokyo` が効かず、ログの時刻が
+  UTC になる（Python と並べて読むとずれる）。
+- `unsafe` は書かない（ワークスペースで禁止してある）。公開するものには説明を書く。

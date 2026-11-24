@@ -1,0 +1,23 @@
+[package]
+name = "sycs-core"
+version = "0.1.0"
+description = "Rust のプロセスが共通で使う土台（環境変数・接続先・ログ）。Python 側と規則を揃えてある"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+# 版は = で固定する（rust/Cargo.toml の冒頭）。
+[dependencies]
+chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
+flate2 = { version = "=1.1.11" }
+percent-encoding = { version = "=2.3.2" }
+serde_json = { version = "=1.0.154", features = ["preserve_order"] }
+tracing = { version = "=0.1.44" }
+tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["env-filter", "registry", "std"] }
+
+[dev-dependencies]
+tempfile = { version = "=3.27.0" }

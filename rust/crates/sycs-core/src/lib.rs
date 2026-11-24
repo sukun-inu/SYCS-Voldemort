@@ -1,0 +1,14 @@
+//! Rust のプロセスが共通で使う土台。
+//!
+//! discord.py をやめて Rust へ移す間、Python と Rust のプロセスは同じ環境変数を読み、
+//! 同じデータベースにつなぎ、同じディレクトリへログを書く。ここにあるのは、その
+//! 「同じ」を Rust 側で守るためのもの。どれも Python 側の実装と規則を揃えてあり、
+//! 揃っていることをテストで確かめている。
+//!
+//! - [`env`]  環境変数の読み方（Python の `envutil.py`）
+//! - [`db`]   `user_state_audit` への接続先（Python の `services/user_state_db.py`）
+//! - [`log`]  テキストと JSONL のログ（Python の `services/log_setup.py`）
+
+pub mod db;
+pub mod env;
+pub mod log;
