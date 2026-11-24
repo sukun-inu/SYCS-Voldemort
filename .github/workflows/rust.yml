@@ -1,0 +1,59 @@
+name: Rust
+
+# rust/ の検査。Python の「テスト」（tests.yml）とは別の workflow にしてある。
+# 片方が落ちたときに、どちらが落ちたのかを一覧で見分けられるようにするため。
+#
+# paths で絞っていない。絞ると、rust/ を触らない commit には check run が付かず、
+# 「CI で通っていない commit が main の先頭に残る」状態を作りうる（tests.yml の
+# workflow_dispatch のコメントと同じ理由）。数分で終わるので毎回回す。
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  # 手で回せるようにしてある（gh workflow run Rust --ref main）。理由は tests.yml と同じ。
+  workflow_dispatch:
+
+jobs:
+  rust:
+    name: fmt・clippy・テスト
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v7
+
+      - name: Rust を入れる（rust/rust-toolchain.toml の版）
+        # rustup 1.28 から、toolchain ファイルを見ても自動では入れなくなった。
+        # 引数なしの install がファイルの版（と components）を入れる。
+        run: |
+          rustup toolchain install
+          rustc --version
+          cargo --version
+
+      - name: songbird のビルドに要るものを入れる
+        # songbird が使う opus2 は libopus を pkg-config で探し、無ければ cmake で
+        # 自前ビルドする。どちらの経路でも通るように両方入れておく。
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libopus-dev cmake pkg-config
+
+      - name: 整形の確認（cargo fmt）
+        run: cargo fmt --all --check
+
+      - name: lint（clippy。警告も落とす）
+        # --locked は Cargo.lock を書き換えさせない。Cargo.toml を = で固定していても、
+        # 間接の依存は Cargo.lock でしか固定されていない。
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: テスト
+        run: cargo test --locked
+
+      - name: シェルスクリプトの構文検査
+        run: |
+          for f in tools/*/*.sh; do
+            echo "--- $f"
+            sh -n "$f"
+          done
