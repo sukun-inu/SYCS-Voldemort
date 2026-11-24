@@ -1,0 +1,33 @@
+# Rust へ移すもの一式の置き場（cargo のワークスペース）。
+#
+# discord.py をやめて serenity へ移すと決めた（2026-11-25）。移行が終わるまでは
+# Python と Rust が本番で共存するので、Python 側の配置（リポジトリ直下）は崩さず、
+# Rust はこの下にまとめる。プロセス同士は Python の import やファイルではなく、
+# Postgres と Valkey でつなぐ（services/dev_signals.py の冒頭と同じ考え方）。
+#
+# 版の固定は Python と同じ方針にする。
+#   Rust 本体  rust-toolchain.toml で 1.100.0 に固定
+#   依存       Cargo.toml では = で書き、Cargo.lock をコミットする
+# 「手元・CI・本番で同じものが動く」ことしか保証しないので、上げるときは
+# 版を書き換えるコミットとして明示的に行う。
+
+[workspace]
+resolver = "3"
+members = ["tools/voice-check"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.100"
+license = "MIT"
+publish = false
+
+# 全員に効く lint。個々の crate は `[lints] workspace = true` で受け取る。
+[workspace.lints.rust]
+# unsafe は書かない。必要になったら、その crate だけで理由を書いて許す。
+unsafe_code = "forbid"
+# Python 側で docstring を 100% にしているのと同じ。公開するものには説明を書く。
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+# CI では -D warnings で回すので、warn がそのまま落ちる条件になる。
+all = { level = "warn", priority = -1 }

@@ -28,6 +28,8 @@ shared_secrets/
 dist/
 build/
 *.egg-info/
+# Rust のビルド結果（rust/ の下で cargo を打つとここにできる）
+rust/target/
 
 # テスト
 .pytest_cache/

@@ -341,6 +341,25 @@ Pillow 12.2.0 の勧告11件が出ました。
 入れないまま置くと、import に失敗してスキップし、何も検証しないまま exit 0 に
 なります。検証したふりだけが残る状態は、無いより悪いです。
 
+### Rust（`rust/`）
+
+discord.py をやめて serenity へ移すため、`rust/` に cargo のワークスペースを
+置いています（2026-11-25〜）。検査は `.github/workflows/rust.yml` で、Python の
+「テスト」とは別の workflow です。
+
+1. `cargo fmt --all --check`
+2. `cargo clippy --locked --all-targets -- -D warnings`（警告も落とす）
+3. `cargo test --locked`
+4. `sh -n rust/tools/*/*.sh`
+
+版の固定は Python と同じ方針です。Rust 本体は `rust/rust-toolchain.toml`、
+直接の依存は `Cargo.toml` の `=`、間接の依存は `Cargo.lock` で固定します。
+`--locked` は Cargo.lock を書き換えさせないために付けています。
+
+`rust/tools/voice-check` は、serenity・songbird・davey を上げるときに、VC で
+音が届くかを人の耳で確かめる道具です。**テストでは確かめられないので、上げる
+ときは本番へ出す前に必ず回してください**（手順と過去の結果はその README）。
+
 ---
 
 ## 9. AI エージェントに任せるとき

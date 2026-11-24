@@ -103,6 +103,19 @@ test first, make it pass before the split, break it once to prove it bites, then
 split and keep it passing.* Handing over only "split this" makes the agent re-derive
 the procedure every time.
 
+## Rust (`rust/`)
+
+The bot is moving from discord.py to serenity, so `rust/` holds a cargo workspace
+(since 2026-11-25). It has its own workflow, `.github/workflows/rust.yml`:
+`cargo fmt --check`, `cargo clippy --locked --all-targets -- -D warnings`,
+`cargo test --locked`, and `sh -n` on `rust/tools/*/*.sh`. Versions are pinned the
+same way as Python: the toolchain in `rust/rust-toolchain.toml`, direct dependencies
+with `=` in `Cargo.toml`, the rest in `Cargo.lock`.
+
+When upgrading serenity, songbird or davey, run `rust/tools/voice-check` and listen
+in a real voice channel before shipping. Tests cannot tell whether audio reached the
+other side (see its README.ja.md).
+
 ## CI must never pass vacuously
 
 A check that is present but silently skips is worse than no check at all. That is why
