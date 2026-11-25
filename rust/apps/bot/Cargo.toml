@@ -14,6 +14,7 @@ workspace = true
 [dependencies]
 chrono = { workspace = true, features = ["clock", "std"] }
 image = { workspace = true, features = ["png", "gif"] }
+regex = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls"] }
 serde_json = { workspace = true }
 serenity = { workspace = true, features = [
