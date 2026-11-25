@@ -45,6 +45,10 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     ("sycs_core::env", "system"),
     ("sycs_core::db", "system"),
     ("sycs_core::log", "system"),
+    // Python の services.settings_pg・dev_signals・metrics_reporter と同じ棚。
+    ("sycs_core::settings", "settings"),
+    ("sycs_core::signals", "dev"),
+    ("sycs_core::metrics", "metrics"),
     ("sycs_bot", "bot"),
     ("voice_check", "voice"),
     ("songbird", "voice"),
@@ -527,6 +531,21 @@ mod tests {
         assert_eq!(category_in(&rules, "bot::voice::join"), "voice");
         assert_eq!(category_in(&rules, "bot::events"), "bot");
         assert_eq!(category_for("sycs_core::env"), "system");
+        // sycs_core のモジュールは、どれも「その他」に落ちないこと（lib.rs の pub mod から拾う
+        // ので、モジュールを足して表に書き忘れるとここで落ちる）。設定の読み込みのログが
+        // [other] に出ていたのを、本物の Discord につないだ確認で見つけた。
+        let lib = include_str!("lib.rs");
+        let modules: Vec<&str> = lib
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix("pub mod "))
+            .map(|l| l.trim_end_matches(';'))
+            .collect();
+        assert!(modules.len() >= 6, "{modules:?}");
+        for m in modules {
+            let target = format!("sycs_core::{m}");
+            assert_ne!(category_for(&target), "other", "{target}");
+        }
+        assert_eq!(category_for("sycs_core::settings"), "settings");
         // Bot のログは Python の Bot と同じ棚（bot）に並ぶこと。
         assert_eq!(category_for("sycs_bot::handler"), "bot");
         assert_eq!(category_for("something_new"), DEFAULT_CATEGORY);
