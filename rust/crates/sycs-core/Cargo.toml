@@ -10,18 +10,18 @@ publish.workspace = true
 [lints]
 workspace = true
 
-# 版は = で固定する（rust/Cargo.toml の冒頭）。
+# 版は rust/Cargo.toml の [workspace.dependencies] で決める。
 [dependencies]
-chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
-flate2 = { version = "=1.1.11" }
-percent-encoding = { version = "=2.3.2" }
-redis = { version = "=1.8.3", default-features = false, features = ["tokio-comp", "connection-manager"] }
-serde_json = { version = "=1.0.154", features = ["preserve_order"] }
-sqlx = { version = "=0.9.1", default-features = false, features = ["runtime-tokio", "postgres", "json", "derive"] }
-tokio = { version = "=1.54.1", features = ["sync", "time", "rt"] }
-tracing = { version = "=0.1.44" }
-tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["env-filter", "registry", "std"] }
+chrono = { workspace = true, features = ["clock", "std"] }
+flate2 = { workspace = true }
+percent-encoding = { workspace = true }
+redis = { workspace = true, features = ["tokio-comp", "connection-manager"] }
+serde_json = { workspace = true, features = ["preserve_order"] }
+sqlx = { workspace = true, features = ["runtime-tokio", "postgres", "json", "derive"] }
+tokio = { workspace = true, features = ["sync", "time", "rt"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "registry", "std"] }
 
 [dev-dependencies]
-tempfile = { version = "=3.27.0" }
-tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread"] }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

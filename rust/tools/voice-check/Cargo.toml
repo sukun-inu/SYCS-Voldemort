@@ -10,12 +10,11 @@ publish.workspace = true
 [lints]
 workspace = true
 
-# 版は全部 = で固定する。この道具の値打ちは「この版の組み合わせで音が届いた」と
-# 言えることにあるので、範囲で書くと何を確かめたのかが分からなくなる。
-# serenity・songbird を上げるときは、まずここを上げてこの道具で確かめる
-# （手順は README.ja.md）。
+# 版は rust/Cargo.toml の [workspace.dependencies] で決める（= で固定）。この道具の
+# 値打ちは「この版の組み合わせで音が届いた」と言えることにあるので、範囲で書かないこと。
+# serenity・songbird を上げるときは、まずこの道具で確かめる（手順は README.ja.md）。
 [dependencies]
-serenity = { version = "=0.12.5", default-features = false, features = [
+serenity = { workspace = true, features = [
     "builder",
     "cache",
     "client",
@@ -24,9 +23,9 @@ serenity = { version = "=0.12.5", default-features = false, features = [
     "rustls_backend",
     "voice",
 ] }
-songbird = { version = "=0.6.1" }
+songbird = { workspace = true }
 # 合成した WAV を songbird に読ませるため（symphonia の wav / pcm の復号器）。
-symphonia = { version = "=0.5.5", features = ["wav", "pcm"] }
-tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread", "signal", "time"] }
-tracing = { version = "=0.1.44" }
-tracing-subscriber = { version = "=0.3.23", features = ["env-filter", "fmt"] }
+symphonia = { workspace = true, features = ["wav", "pcm"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
