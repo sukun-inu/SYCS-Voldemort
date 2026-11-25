@@ -22,8 +22,12 @@ members = ["apps/bot", "crates/sycs-core", "tools/voice-check"]
 [workspace.dependencies]
 chrono = { version = "=0.4.45", default-features = false }
 flate2 = { version = "=1.1.11" }
+# アバターの代表色（ログの Embed の色）のために png と gif を読む。
+image = { version = "=0.25.10", default-features = false }
 percent-encoding = { version = "=2.3.2" }
 redis = { version = "=1.8.3", default-features = false }
+# serenity が使っているのと同じ版・同じ TLS（rustls）にして、二重に入らないようにする。
+reqwest = { version = "=0.12.28", default-features = false }
 serde_json = { version = "=1.0.154" }
 serenity = { version = "=0.12.5", default-features = false }
 songbird = { version = "=0.6.1" }

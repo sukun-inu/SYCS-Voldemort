@@ -10,10 +10,6 @@
 //! 起動の順番には意味がある。**設定を読めるまで Discord にはつながない。** つないでから
 //! 設定が空だと、セキュリティの機能が全部切れたように振る舞い、誰も気づかない。
 
-mod config;
-mod handler;
-mod signals;
-
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -25,8 +21,8 @@ use sycs_core::metrics::Reporter;
 use sycs_core::settings::{CacheOptions, SettingsCache};
 use tracing::{error, info, warn};
 
-use crate::config::BotConfig;
-use crate::handler::{AppState, Handler};
+use sycs_bot::config::{self, BotConfig};
+use sycs_bot::handler::{AppState, Handler};
 
 #[tokio::main]
 async fn main() -> ExitCode {

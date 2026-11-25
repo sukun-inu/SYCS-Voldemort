@@ -1,0 +1,16 @@
+01_solid.png cc2c0c
+02_two.png 0404cc
+03_gradient.png 88b884
+04_noise.png 3fa1a5
+05_noise_alpha.png bda7ab
+06_palette_trns.png 75dc82
+07_gray.png 373737
+08_gray_alpha.png 1f1f1f
+09_palette.gif 7f3f80
+10_mostly_white.png 1ca45c
+11_all_white.png none
+12_all_transparent.png none
+13_avatar_like.png 343b44
+14_animated.gif fc0404
+15_few_colours.png f4f404
+16_alpha_edge.png fc6404
