@@ -12,6 +12,10 @@ workspace = true
 
 # 版は rust/Cargo.toml の [workspace.dependencies] で決める。
 [dependencies]
+chrono = { workspace = true, features = ["clock", "std"] }
+image = { workspace = true, features = ["png", "gif"] }
+reqwest = { workspace = true, features = ["rustls-tls"] }
+serde_json = { workspace = true }
 serenity = { workspace = true, features = [
     "builder",
     "cache",
