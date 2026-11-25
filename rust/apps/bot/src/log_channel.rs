@@ -126,7 +126,7 @@ fn python_str(value: &Value) -> String {
 ///
 /// Python は読めない文字列で例外を投げ、呼び出し側がそれをログに残して送らない。こちらは
 /// 送らないことだけ揃える（どちらも届かない）。
-fn as_channel_id(value: &Value) -> Option<u64> {
+pub(crate) fn as_channel_id(value: &Value) -> Option<u64> {
     let id = match value {
         Value::Number(n) => n.as_u64(),
         Value::String(s) => s.trim().parse().ok(),
@@ -195,7 +195,7 @@ impl Author {
 }
 
 /// 日本時間（Python の `config.JST`）。
-fn jst() -> FixedOffset {
+pub fn jst() -> FixedOffset {
     FixedOffset::east_opt(9 * 3600).expect("+09:00 は正しいオフセット")
 }
 
@@ -365,7 +365,11 @@ pub async fn log_action(
 ///
 /// **探すのはログのギルドの中だけ。** Python はキャッシュ全体から引くので、設定に別のサーバーの
 /// チャンネルが入っていると、そのサーバーへこのサーバーのログを書いてしまう。こちらは書かない。
-fn text_channel(cache: &Cache, guild_id: GuildId, channel_id: Option<u64>) -> Option<ChannelId> {
+pub(crate) fn text_channel(
+    cache: &Cache,
+    guild_id: GuildId,
+    channel_id: Option<u64>,
+) -> Option<ChannelId> {
     let channel_id = ChannelId::new(channel_id?);
     let guild = cache.guild(guild_id)?;
     let channel = guild.channels.get(&channel_id)?;

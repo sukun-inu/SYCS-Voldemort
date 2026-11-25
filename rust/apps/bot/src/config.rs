@@ -35,6 +35,12 @@ pub struct BotConfig {
     /// **本番の Python の Bot と並べて動かすときは偽にすること。** 取り出すと表から消える
     /// ので、Rust 側が取った依頼は Python 側に届かない。
     pub dev_signals_enabled: bool,
+    /// このサーバーのイベントだけを扱う（`BOT_ONLY_GUILD_ID`）。未設定なら全部。
+    ///
+    /// **本番の Bot のトークンで手元から確かめるときの柵。** 本番の Bot は複数のサーバーに
+    /// 入っているので、絞らないと、確かめている間に他のサーバーの出入りへ反応して、本番の
+    /// 利用者がいるチャンネルへ書いてしまう。本番では設定しない。
+    pub only_guild_id: Option<u64>,
 }
 
 impl BotConfig {
@@ -74,7 +80,15 @@ impl BotConfig {
                 None,
             )),
             dev_signals_enabled: env.boolean("BOT_DEV_SIGNALS_ENABLED", true),
+            only_guild_id: u64::try_from(env.int("BOT_ONLY_GUILD_ID", 0, Some(0), None))
+                .ok()
+                .filter(|id| *id > 0),
         })
+    }
+
+    /// このサーバーのイベントを扱うか。
+    pub fn handles(&self, guild_id: u64) -> bool {
+        self.only_guild_id.is_none_or(|only| only == guild_id)
     }
 }
 
@@ -135,12 +149,35 @@ mod tests {
         assert_eq!(c.metrics_interval, Duration::from_secs(30));
         assert_eq!(c.settings_write_timeout, Duration::from_secs(10));
         assert!(c.dev_signals_enabled);
+        assert_eq!(c.only_guild_id, None);
+        assert!(c.handles(1) && c.handles(2));
         let short = BotConfig::from_env(&env(&[
             ("DISCORD_BOT_TOKEN", "t"),
             ("SETTINGS_LOCK_TIMEOUT_SECONDS", "0.01"),
         ]))
         .unwrap();
         assert_eq!(short.settings_write_timeout, Duration::from_millis(200));
+    }
+
+    /// BOT_ONLY_GUILD_ID を設定したら、そのサーバーのイベントだけを扱うこと。
+    #[test]
+    fn only_guild_limits_the_handled_guilds() {
+        let c = BotConfig::from_env(&env(&[
+            ("DISCORD_BOT_TOKEN", "t"),
+            ("BOT_ONLY_GUILD_ID", "1399617700363370556"),
+        ]))
+        .unwrap();
+        assert!(c.handles(1_399_617_700_363_370_556));
+        assert!(!c.handles(701_798_768_294_756_383));
+        // 0 と読めない値は「絞らない」。
+        for v in ["0", "abc"] {
+            let c = BotConfig::from_env(&env(&[
+                ("DISCORD_BOT_TOKEN", "t"),
+                ("BOT_ONLY_GUILD_ID", v),
+            ]))
+            .unwrap();
+            assert_eq!(c.only_guild_id, None, "{v}");
+        }
     }
 
     /// 特権の intent は members と message_content だけで、presences は申し出ないこと。

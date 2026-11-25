@@ -8,4 +8,6 @@ pub mod compat;
 pub mod config;
 pub mod handler;
 pub mod log_channel;
+pub mod members;
 pub mod signals;
+pub mod welcome;
