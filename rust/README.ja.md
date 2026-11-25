@@ -6,7 +6,7 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 
 | 場所 | 中身 |
 |---|---|
-| `crates/sycs-core` | Rust のプロセスが共通で使う土台。環境変数の読み方・接続先・ログ・メトリクス |
+| `crates/sycs-core` | Rust のプロセスが共通で使う土台。環境変数の読み方・接続先・ログ・メトリクス・設定の読み込み・Bot への依頼の取り出し |
 | `tools/voice-check` | serenity + songbird の Bot が、DAVE 必須の VC で音を届けられるかを人の耳で確かめる道具 |
 
 ## Python と揃えているもの
@@ -21,6 +21,8 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 | `user_state_audit` への接続先 | `services/user_state_db.py` | `sycs_core::db` | 同じ環境変数から同じ接続先になるかを、両方で組み立てて突き合わせた（変更のコミットに記録） |
 | ログの形 | `services/log_setup.py` | `sycs_core::log` | Rust が書いた JSONL を管理画面の絞り込みの関数に読ませた。カテゴリの名前は Python の表にあるものだけを使う（テストが Python のファイルを読んで確かめる） |
 | メトリクス（Valkey への心拍・ゲージ・カウンタ） | `services/metrics_registry.py` / `metrics_reporter.py` | `sycs_core::metrics` | Rust が本物の Valkey へ報告したものを、管理画面の `/metrics` の組み立て（Python）で出した。`sycs_up` が 1、ゲージが出る、カウンタは Python の分と同じ鍵で足し合わさる、心拍とカウンタに期限が無くゲージには有る。カウンタの名前に `sycs_` を付けない（`/metrics` が付ける） |
+| ギルドごとの設定の読み込み | `services/settings_pg.py` | `sycs_core::settings` | 本物の Python（settings_store）が作って書いた表を Rust が読み、Python の変更が通知で同じ瞬間に届いた。CI でも Postgres 16 を立てて、通知・つなぎ直し・版番号の確認を毎回確かめる。書き込みは Bot を移す塊で足す |
+| 管理画面から Bot への依頼の取り出し | `services/dev_signals.py` | `sycs_core::signals` | Python が置いた依頼を、Rust が置いた順・畳まれた形で取り出した。ロック中の行は待たずに飛ばす（Python と Rust の Bot が並んでも二重に実行しない） |
 | ログのレベルの名前 | `WARNING` | `WARN` を `WARNING` と書く | 管理画面は `WARNING` で比べる。`WARN` のままだと「警告以上」で警告が全部消える |
 | ログのファイル名 | `bot.log` / `bot.log.2026-11-24.gz` | 同じ | 移行中に同じディレクトリで 2 通りの名前が混ざると、片方の掃除が相手を見つけられない |
 
@@ -35,3 +37,7 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 - **イメージに tzdata を入れること。** 無いと `TZ=Asia/Tokyo` が効かず、ログの時刻が
   UTC になる（Python と並べて読むとずれる）。
 - `unsafe` は書かない（ワークスペースで禁止してある）。公開するものには説明を書く。
+- **Postgres を使うテストは `#[ignore]` を付け、CI が `--include-ignored` で必ず回す。**
+  手元では `SYCS_TEST_DATABASE_URL` に Postgres を渡して回す。SQLite での代用はしない
+  （LISTEN/NOTIFY と FOR UPDATE SKIP LOCKED が無く、効いているかを確かめられない）。
+- 表を作るのは今は Python 側。Python を外すときに、表の作り方（マイグレーション）を Rust へ移す。

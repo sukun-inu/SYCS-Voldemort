@@ -17,7 +17,8 @@ flate2 = { version = "=1.1.11" }
 percent-encoding = { version = "=2.3.2" }
 redis = { version = "=1.8.3", default-features = false, features = ["tokio-comp", "connection-manager"] }
 serde_json = { version = "=1.0.154", features = ["preserve_order"] }
-tokio = { version = "=1.54.1", features = ["sync", "time"] }
+sqlx = { version = "=0.9.1", default-features = false, features = ["runtime-tokio", "postgres", "json", "derive"] }
+tokio = { version = "=1.54.1", features = ["sync", "time", "rt"] }
 tracing = { version = "=0.1.44" }
 tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["env-filter", "registry", "std"] }
 
