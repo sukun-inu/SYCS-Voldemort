@@ -394,7 +394,7 @@ class BuildLogEmbedTests(unittest.TestCase):
     def test_field_value_over_the_limit_is_truncated_with_a_marker(self):
         """上限を超える値は、印も含めてちょうど 1024 文字に収めること。
 
-        印を上限の外に足すと 1031 文字になり、Discord が送信ごと拒否する（ログが届かない）。
+        印を上限の外に足すと 1032 文字になり、Discord が送信ごと拒否する（ログが届かない）。
         """
         embed = asyncio.run(logging_service.build_log_embed("INFO", "本文", fields={"詳細": "x" * 1100}))
         field = embed.fields[0]

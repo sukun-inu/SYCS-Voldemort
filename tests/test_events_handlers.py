@@ -418,7 +418,7 @@ class OnMessageDeleteTests(unittest.TestCase):
     def test_long_attachment_urls_fit_in_the_embed_field(self):
         """添付の URL が長くても、実際に送る Embed の項目は 1024 文字に収まること。
 
-        以前は 1024 文字で切ってから印を足し（1031 文字）、build_log_embed もさらに
+        以前は 1024 文字で切ってから印を足し（1032 文字）、build_log_embed もさらに
         印を足していた。Discord は 1024 文字を超える項目を送信ごと拒否するので、
         添付の多いメッセージの削除ログが届かなかった。
         """
