@@ -45,6 +45,7 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     ("sycs_core::env", "system"),
     ("sycs_core::db", "system"),
     ("sycs_core::log", "system"),
+    ("sycs_bot", "bot"),
     ("voice_check", "voice"),
     ("songbird", "voice"),
     ("davey", "voice"),
@@ -526,6 +527,8 @@ mod tests {
         assert_eq!(category_in(&rules, "bot::voice::join"), "voice");
         assert_eq!(category_in(&rules, "bot::events"), "bot");
         assert_eq!(category_for("sycs_core::env"), "system");
+        // Bot のログは Python の Bot と同じ棚（bot）に並ぶこと。
+        assert_eq!(category_for("sycs_bot::handler"), "bot");
         assert_eq!(category_for("something_new"), DEFAULT_CATEGORY);
     }
 
