@@ -75,6 +75,33 @@ async fn python_style_write(pool: &PgPool, guild: &str, data: &str, version: i64
     tx.commit().await.unwrap();
 }
 
+/// この接続の束の LISTEN が張られるまで待つ。張られる前に書いたり切ったりすると、試験が
+/// 確かめたいこと（通知が届くか、切れたあと追いつくか）ではなく、張られる早さを見てしまう。
+///
+/// 決め打ちで 300 ms 待っていたころは、CI（テストを QEMU で Sandy Bridge のふりをして動かす
+/// ので遅い）で張られる前に切りに行き、「LISTEN の接続が見つからない」で落ちることがあった。
+async fn wait_for_listener(pool: &PgPool) {
+    let app: (String,) = sqlx::query_as("SELECT current_setting('application_name')")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_secs(15) {
+        let found: Option<(i32,)> = sqlx::query_as(
+            "SELECT pid FROM pg_stat_activity WHERE application_name = $1 AND query LIKE 'LISTEN%'",
+        )
+        .bind(&app.0)
+        .fetch_optional(pool)
+        .await
+        .unwrap();
+        if found.is_some() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    panic!("15 秒待っても LISTEN が張られない");
+}
+
 async fn wait_until(timeout: Duration, mut done: impl FnMut() -> bool) -> Option<Duration> {
     let started = Instant::now();
     while started.elapsed() < timeout {
@@ -121,8 +148,7 @@ async fn a_write_from_another_process_arrives_through_the_notification() {
         .await
         .unwrap();
     assert_eq!(cache.snapshot().guild(111).unwrap()["n"], 1);
-    // LISTEN が張られるまで少し待つ
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    wait_for_listener(&pool).await;
 
     python_style_write(&pool, "111", "{\"n\": 2}", 2).await;
     let took = wait_until(Duration::from_secs(3), || cache.version() == 2).await;
@@ -142,7 +168,7 @@ async fn a_dropped_listener_reconnects_and_catches_up() {
     let cache = settings::SettingsCache::start(pool.clone(), Duration::from_secs(3600))
         .await
         .unwrap();
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    wait_for_listener(&pool).await;
 
     let app: (String,) = sqlx::query_as("SELECT current_setting('application_name')")
         .fetch_one(&pool)
