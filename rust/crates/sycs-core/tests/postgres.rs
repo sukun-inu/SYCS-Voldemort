@@ -14,8 +14,10 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use serde_json::{Value, json};
+use sqlx::postgres::{PgConnectOptions, PgListener, PgPoolOptions};
 use sqlx::{AssertSqlSafe, PgPool};
+use sycs_core::settings::{CacheOptions, LOCK_KEY, SettingsCache, TOUCHED_AT_KEY, WriteError};
 use sycs_core::{settings, signals};
 
 static COUNTER: AtomicU32 = AtomicU32::new(0);
@@ -113,6 +115,64 @@ async fn wait_until(timeout: Duration, mut done: impl FnMut() -> bool) -> Option
     None
 }
 
+/// LISTEN を張らない動かし方。書き込みのテストは、他のテストの通知（データベース全体に届く）で
+/// 手元が読み直されると、書いた直後に手元へ入れたかどうかを見分けられないので、これを使う。
+fn quiet(poll: Duration) -> CacheOptions {
+    CacheOptions {
+        listen: false,
+        ..CacheOptions::new(poll)
+    }
+}
+
+/// 版番号と guilds 以外のキーを入れ、ギルドの行を入れる。行の updated_at は 2000 年にしておく
+/// （書き直されたかどうかを、あとで updated_at で見分けるため）。
+async fn seed(pool: &PgPool, version: i64, guilds: &[(&str, Value)]) {
+    sqlx::query(
+        "INSERT INTO bot_settings_state (id, version, root) VALUES (1, $1, '{\"schema\": \"v1\"}')",
+    )
+    .bind(version)
+    .execute(pool)
+    .await
+    .unwrap();
+    for (key, data) in guilds {
+        sqlx::query("INSERT INTO bot_settings_guild (guild_key, data, updated_at) VALUES ($1, $2, '2000-01-01T00:00:00Z')")
+            .bind(key)
+            .bind(data)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+}
+
+/// 表にあるギルドの行。鍵 → (中身, 2000 年のまま＝書き直されていないか)。
+async fn stored(pool: &PgPool) -> std::collections::BTreeMap<String, (Value, bool)> {
+    let rows: Vec<(String, Value, bool)> =
+        sqlx::query_as("SELECT guild_key, data, updated_at < '2001-01-01' FROM bot_settings_guild")
+            .fetch_all(pool)
+            .await
+            .unwrap();
+    rows.into_iter().map(|(k, d, old)| (k, (d, old))).collect()
+}
+
+async fn stored_version(pool: &PgPool) -> i64 {
+    let row: (i64,) = sqlx::query_as("SELECT version FROM bot_settings_state WHERE id = 1")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    row.0
+}
+
+/// 押された時刻が、Python の読み方（ISO 8601 の UTC）で読めて、いまに近いこと。
+fn assert_fresh_stamp(data: &Value) {
+    let stamp = data[TOUCHED_AT_KEY]
+        .as_str()
+        .unwrap_or_else(|| panic!("時刻が押されていない: {data}"));
+    let at = chrono::DateTime::parse_from_rfc3339(stamp).unwrap();
+    assert_eq!(at.offset().local_minus_utc(), 0, "UTC でない: {stamp}");
+    let age = chrono::Utc::now().signed_duration_since(at);
+    assert!(age.num_seconds().abs() < 60, "いまの時刻でない: {stamp}");
+}
+
 /// 表の中身を、ギルドと guilds 以外のキーと版番号まで、そのまま読むこと。
 #[tokio::test]
 #[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
@@ -200,7 +260,7 @@ async fn a_missed_notification_is_caught_by_the_version_poll() {
     python_style_write(&pool, "111", "{\"n\": 1}", 1).await;
     // LISTEN を張らない。他のテストが流す通知（データベース全体に届く）で読み直してしまうと、
     // 版番号の確認が効いているかを見分けられない。
-    let cache = settings::SettingsCache::start_with(pool.clone(), Duration::from_secs(1), false)
+    let cache = settings::SettingsCache::start_with(pool.clone(), quiet(Duration::from_secs(1)))
         .await
         .unwrap();
 
@@ -218,6 +278,306 @@ async fn a_missed_notification_is_caught_by_the_version_poll() {
         "5 秒で追いつかない（版番号の確認が効いていない）"
     );
     assert_eq!(cache.snapshot().guild(111).unwrap()["n"], 2);
+}
+
+/// 変わったギルドの行だけを書き、版番号を上げ、その版番号を通知し、手元もすぐ差し替えること。
+///
+/// 触っていないギルドまで書き直すと、行の更新時刻が意味を失い、書き込みのたびに全ギルドぶんの
+/// 書き込みが走る。通知が出ないと、Python の管理画面に Bot の変更が届かない。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn a_write_saves_only_what_changed_and_announces_the_new_version() {
+    let pool = isolated_pool("write").await;
+    // 版番号はこのテストにしか無い大きな値にする。通知はデータベース全体に届くので、他の
+    // テストの通知と取り違えないため。
+    let base = 7_000_000_000_i64;
+    seed(
+        &pool,
+        base,
+        &[("111", json!({"n": 1})), ("222", json!({"n": 1}))],
+    )
+    .await;
+    let cache = SettingsCache::start_with(pool.clone(), quiet(Duration::from_secs(3600)))
+        .await
+        .unwrap();
+    let mut listener = PgListener::connect_with(&pool).await.unwrap();
+    listener.listen(settings::CHANNEL).await.unwrap();
+
+    let got = cache
+        .transact(|s| {
+            s.guilds.get_mut("111").unwrap()["n"] = json!(2);
+            "戻り値"
+        })
+        .await
+        .unwrap();
+    assert_eq!(got, "戻り値");
+    // 通知を待たずに手元へ入っている。
+    assert_eq!(cache.version(), base + 1);
+    assert_eq!(cache.snapshot().guild(111).unwrap()["n"], 2);
+
+    assert_eq!(stored_version(&pool).await, base + 1);
+    let rows = stored(&pool).await;
+    assert_eq!(rows["111"].0["n"], 2);
+    assert!(!rows["111"].1, "変えた行が書き直されていない");
+    assert_eq!(
+        rows["222"],
+        (json!({"n": 1}), true),
+        "触っていない行を書き直した"
+    );
+    let root: (Value,) = sqlx::query_as("SELECT root FROM bot_settings_state WHERE id = 1")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(root.0, json!({"schema": "v1"}));
+
+    let expected = (base + 1).to_string();
+    let heard = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let n = listener.recv().await.unwrap();
+            if n.payload() == expected {
+                return;
+            }
+        }
+    })
+    .await;
+    assert!(heard.is_ok(), "新しい版番号の通知が届かない");
+}
+
+/// 何も変わらない書き込みは保存しないこと（版番号も上げない・時刻も押さない）。
+///
+/// 保存すると、読む側全員が無駄に読み直し、触っていないギルドが「最近触られた」になる。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn a_write_that_changes_nothing_is_not_saved() {
+    let pool = isolated_pool("nochange").await;
+    seed(&pool, 1, &[("111", json!({"n": 1}))]).await;
+    let cache = SettingsCache::start_with(pool.clone(), quiet(Duration::from_secs(3600)))
+        .await
+        .unwrap();
+
+    cache
+        .transact(|s| s.guilds.get_mut("111").unwrap()["n"] = json!(1))
+        .await
+        .unwrap();
+    assert_eq!(stored_version(&pool).await, 1);
+    assert_eq!(stored(&pool).await["111"], (json!({"n": 1}), true));
+    assert_eq!(cache.version(), 1);
+}
+
+/// 書き込みで null を落とし、中身が変わったギルドにだけ時刻を押すこと（Python と同じ規則）。
+///
+/// 別のギルドに残っていた null も落として保存するが、そちらには時刻を押さない（利用者が
+/// 触ったのではない）。押すと、放棄された設定の掃除が永久に動かなくなる。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn nulls_are_dropped_and_only_the_touched_guild_is_stamped() {
+    let pool = isolated_pool("nulls").await;
+    seed(
+        &pool,
+        1,
+        &[
+            ("111", json!({"a": 1, "x": null})),
+            ("222", json!({"b": {"c": null}, "keep": 1})),
+        ],
+    )
+    .await;
+    let cache = SettingsCache::start_with(pool.clone(), quiet(Duration::from_secs(3600)))
+        .await
+        .unwrap();
+
+    cache
+        .transact(|s| {
+            let g = s.guilds.get_mut("111").unwrap();
+            g["a"] = json!(2);
+            // 書き換えで入れた null も保存しない。
+            g["y"] = Value::Null;
+        })
+        .await
+        .unwrap();
+
+    let rows = stored(&pool).await;
+    let touched = &rows["111"].0;
+    assert_fresh_stamp(touched);
+    let mut without = touched.clone();
+    without.as_object_mut().unwrap().remove(TOUCHED_AT_KEY);
+    assert_eq!(without, json!({"a": 2}));
+    assert_eq!(
+        rows["222"].0,
+        json!({"keep": 1}),
+        "他のギルドの null が残った・時刻が押された"
+    );
+}
+
+/// ギルドを消したこと、新しいギルド、guilds 以外のキーの変更も保存すること。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn removed_and_added_guilds_and_root_changes_are_saved() {
+    let pool = isolated_pool("shape").await;
+    seed(
+        &pool,
+        1,
+        &[("111", json!({"n": 1})), ("222", json!({"n": 2}))],
+    )
+    .await;
+    let cache = SettingsCache::start_with(pool.clone(), quiet(Duration::from_secs(3600)))
+        .await
+        .unwrap();
+
+    cache
+        .transact(|s| {
+            s.guilds.remove("222");
+            s.guilds.insert("333".into(), json!({"n": 3}));
+            s.root.insert("schema".into(), json!("v2"));
+        })
+        .await
+        .unwrap();
+
+    let rows = stored(&pool).await;
+    assert_eq!(rows.keys().collect::<Vec<_>>(), ["111", "333"]);
+    assert_fresh_stamp(&rows["333"].0);
+    let root: (Value,) = sqlx::query_as("SELECT root FROM bot_settings_state WHERE id = 1")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(root.0, json!({"schema": "v2"}));
+    assert!(cache.snapshot().guild(222).is_none());
+
+    // guilds 以外のキーだけを変えても保存する（ギルドが変わらないから書かない、にしない）。
+    cache
+        .transact(|s| {
+            s.root.insert("note".into(), json!(1));
+        })
+        .await
+        .unwrap();
+    assert_eq!(stored_version(&pool).await, 3);
+}
+
+/// 同時に書いても、1 つも取りこぼさないこと。
+///
+/// 移行中は Python（管理画面・Python の Bot）と Rust（Bot）が同じ表へ書く。排他が無いと、
+/// 2 つが同じ版を読んでそれぞれ書き、後から書いた方が先の変更を消す。ここでは 2 つの手元
+/// （別のプロセスに見立てる）から 4 本並べて同じ数を 1 ずつ増やす。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn concurrent_writers_never_lose_an_increment() {
+    let pool = isolated_pool("race").await;
+    seed(&pool, 1, &[("111", json!({"n": 0}))]).await;
+    let a = SettingsCache::start_with(pool.clone(), quiet(Duration::from_secs(3600)))
+        .await
+        .unwrap();
+    let b = SettingsCache::start_with(pool.clone(), quiet(Duration::from_secs(3600)))
+        .await
+        .unwrap();
+
+    let mut tasks = Vec::new();
+    for cache in [&a, &b, &a, &b] {
+        let cache = std::sync::Arc::clone(cache);
+        tasks.push(tokio::spawn(async move {
+            for _ in 0..25 {
+                cache
+                    .transact(|s| {
+                        let g = s.guilds.get_mut("111").unwrap();
+                        g["n"] = json!(g["n"].as_i64().unwrap() + 1);
+                    })
+                    .await
+                    .unwrap();
+            }
+        }));
+    }
+    for t in tasks {
+        t.await.unwrap();
+    }
+    assert_eq!(stored(&pool).await["111"].0["n"], 100, "増やした数が欠けた");
+    assert_eq!(stored_version(&pool).await, 101);
+}
+
+/// 排他を持ったまま止まった書き手がいても、待ち続けずに諦め、何も書かないこと。
+///
+/// 待ち続けると、止まったプロセスが 1 つあるだけで Bot の書き込みが全部返らなくなる
+/// （Python も SETTINGS_LOCK_TIMEOUT_SECONDS で諦める）。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn a_stuck_writer_makes_others_give_up_instead_of_waiting_forever() {
+    let pool = isolated_pool("stuck").await;
+    seed(&pool, 1, &[("111", json!({"n": 1}))]).await;
+    let cache = SettingsCache::start_with(
+        pool.clone(),
+        CacheOptions {
+            write_timeout: Duration::from_millis(300),
+            ..quiet(Duration::from_secs(3600))
+        },
+    )
+    .await
+    .unwrap();
+
+    // 別の接続が排他を持ったまま止まっている（Python の書き込みが止まったのに見立てる）。
+    let mut holder = pool.acquire().await.unwrap();
+    sqlx::query("SELECT pg_advisory_lock($1)")
+        .bind(LOCK_KEY)
+        .execute(&mut *holder)
+        .await
+        .unwrap();
+
+    let outcome = tokio::time::timeout(
+        Duration::from_secs(5),
+        cache.transact(|s| s.guilds.get_mut("111").unwrap()["n"] = json!(2)),
+    )
+    .await;
+    sqlx::query("SELECT pg_advisory_unlock($1)")
+        .bind(LOCK_KEY)
+        .execute(&mut *holder)
+        .await
+        .unwrap();
+    let outcome = outcome.expect("排他を待ち続けた");
+    assert!(
+        matches!(outcome, Err(WriteError::Timeout(_))),
+        "待ちきれなかったことが分からない: {outcome:?}"
+    );
+    assert_eq!(
+        stored(&pool).await["111"].0,
+        json!({"n": 1}),
+        "書いてしまった"
+    );
+    assert_eq!(stored_version(&pool).await, 1);
+
+    // 排他が空けば書ける。
+    cache
+        .transact(|s| s.guilds.get_mut("111").unwrap()["n"] = json!(2))
+        .await
+        .unwrap();
+    assert_eq!(stored(&pool).await["111"].0["n"], 2);
+}
+
+/// 起動時の掃除は、null を落として保存するが時刻は押さず、落とすものが無ければ書かないこと。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn dropping_stored_nulls_does_not_stamp_and_skips_clean_data() {
+    let pool = isolated_pool("dropnulls").await;
+    seed(
+        &pool,
+        1,
+        &[
+            ("111", json!({"a": null, "b": 1})),
+            ("222", json!({"c": 1})),
+        ],
+    )
+    .await;
+    let cache = SettingsCache::start_with(pool.clone(), quiet(Duration::from_secs(3600)))
+        .await
+        .unwrap();
+
+    assert_eq!(cache.drop_stored_nulls().await.unwrap(), 1);
+    let rows = stored(&pool).await;
+    assert_eq!(
+        rows["111"].0,
+        json!({"b": 1}),
+        "時刻を押した・null が残った"
+    );
+    assert!(rows["222"].1, "null の無い行を書き直した");
+    assert_eq!(stored_version(&pool).await, 2);
+
+    assert_eq!(cache.drop_stored_nulls().await.unwrap(), 0);
+    assert_eq!(stored_version(&pool).await, 2, "落とすものが無いのに書いた");
 }
 
 /// 置かれた順に、上限つきで取り出し、取り出したものは消えること。

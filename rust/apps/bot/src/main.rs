@@ -4,7 +4,7 @@
 //!
 //! - ログ: `<SETTINGS_DIR>/logs/<BOT_PROCESS_NAME>.log` と `.jsonl`（Python と同じ形）
 //! - 死活と数値: Valkey へ（管理画面の `/metrics` に `sycs_up{app="<BOT_PROCESS_NAME>"}` が出る）
-//! - ギルドごとの設定: Postgres から読み、変更は通知で受け取る
+//! - ギルドごとの設定: Postgres から読み、変更は通知で受け取る。起動時に保存済みの null を落とす
 //! - 管理画面からの依頼: 30 秒ごとに取り出す（まだ移していない用途は警告して捨てる）
 //!
 //! 起動の順番には意味がある。**設定を読めるまで Discord にはつながない。** つないでから
@@ -22,7 +22,7 @@ use serenity::Client;
 use sqlx::postgres::PgPoolOptions;
 use sycs_core::env::Env;
 use sycs_core::metrics::Reporter;
-use sycs_core::settings::SettingsCache;
+use sycs_core::settings::{CacheOptions, SettingsCache};
 use tracing::{error, info, warn};
 
 use crate::config::BotConfig;
@@ -65,6 +65,14 @@ async fn main() -> ExitCode {
         );
         return ExitCode::FAILURE;
     };
+    // 保存済みの null を起動時にまとめて落とす（Python の main.py と同じ）。書き換えのたびにも
+    // 落としているが、誰も書き換えないギルドには古い null が残り続ける。失敗しても止まらない
+    // （次に誰かが書けばそのギルドは揃う。読む側は null を未設定として扱う）。
+    match settings.drop_stored_nulls().await {
+        Ok(0) => {}
+        Ok(n) => info!("設定から null を {n} 件取り除きました"),
+        Err(e) => warn!("保存済みの null を取り除けませんでした（このまま続けます）: {e}"),
+    }
 
     let state = Arc::new(AppState::new(
         config.clone(),
@@ -105,7 +113,11 @@ async fn wait_for_settings(pool: &sqlx::PgPool, config: &BotConfig) -> Option<Ar
     let started = Instant::now();
     let mut delay = Duration::from_secs(1);
     loop {
-        match SettingsCache::start(pool.clone(), config.settings_poll_interval).await {
+        let options = CacheOptions {
+            write_timeout: config.settings_write_timeout,
+            ..CacheOptions::new(config.settings_poll_interval)
+        };
+        match SettingsCache::start_with(pool.clone(), options).await {
             Ok(cache) => return Some(cache),
             Err(e) if started.elapsed() + delay < config.settings_load_timeout => {
                 warn!(

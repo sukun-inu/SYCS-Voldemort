@@ -183,6 +183,11 @@ import 時に ffmpeg の解決をするので、共通の置き場にはでき�
 
 - 書き込みは `pg_advisory_xact_lock` で1人に絞り、読み直してから書き換える
   （ファイル版のロックと同じ役割）。何も変わらなければ書かず、版番号も上げない。
+- Rust（`rust/crates/sycs-core/src/settings.rs`）も同じ鍵・同じ規則で書く
+  （null を落とす、中身が変わったギルドにだけ `_updated_at` を押す、変わった行だけを書く）。
+  Python と Rust が同時に書いても1人ずつになり、取りこぼさない。鍵・時刻の鍵・通知の名前は、
+  Rust のテストが Python のソースを読んで突き合わせる。排他を待つのはどちらも
+  `SETTINGS_LOCK_TIMEOUT_SECONDS`（既定10秒）までで、待ちきれなければ何も書かずに諦める。
 - 書いたトランザクションが `NOTIFY bot_settings_changed, '<版番号>'` を出し、
   各プロセスは LISTEN で受けて読み直す（数十ミリ秒で届く）。LISTEN の接続が
   切れていた間の書き込みは、`SETTINGS_PG_POLL_SECONDS`（既定30秒）ごとの
