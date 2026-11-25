@@ -209,14 +209,24 @@ class PostgresSettings:
         返す辞書はキャッシュそのもの（ファイル版の _load_all と同じ）。書き換えは
         必ず transact を通すこと。
         """
+        self._wait_until_loaded()
+        assert self._cache is not None
+        return self._cache[0]
+
+    def _wait_until_loaded(self) -> None:
+        """動き出させ、起動の準備（表を作る → 取り込む → 読む）が済むまで待つ。
+
+        読む・書く・読み直すの**どれもが**ここを通ること。書き込みだけ待たずに走れる
+        作りにしていたころは、起動直後の書き込みが準備を追い越した。表が無くて落ちる
+        だけでなく、書き込みが先に版の行を作ると、取り込みが「もう取り込み済み」と読んで
+        飛ばされ、settings.json の全ギルドの設定が消える（本物の Postgres で見つけた）。
+        """
         self.start()
         if not self._loaded.wait(self._load_timeout):
             raise SettingsNotLoaded(
                 f"設定を Postgres から {self._load_timeout:.0f} 秒以内に読み込めませんでした。"
                 "接続先と、ログの [settings] の警告を確かめてください。"
             )
-        assert self._cache is not None
-        return self._cache[0]
 
     def version(self) -> int:
         """手元のキャッシュの版番号。まだ読めていなければ 0。"""
@@ -228,10 +238,10 @@ class PostgresSettings:
         **専用のループのスレッドからは呼ばないこと**（自分の終わりを待って止まる）。
         settings_store の中からしか呼ばれないので、起きるとしたら作りの誤り。
         """
-        self.start()
-        assert self._loop is not None
         if threading.current_thread() is self._thread:
             raise RuntimeError("settings の専用ループの中から transact を呼んだ（待ち合わせで止まる）")
+        self._wait_until_loaded()
+        assert self._loop is not None
         future = asyncio.run_coroutine_threadsafe(self._transact(fn), self._loop)
         try:
             return future.result(self._write_timeout)
@@ -241,7 +251,7 @@ class PostgresSettings:
 
     def refresh(self) -> None:
         """いますぐ版番号を確かめ、新しければ読み直す（検証と、テスト用）。"""
-        self.start()
+        self._wait_until_loaded()
         assert self._loop is not None
         asyncio.run_coroutine_threadsafe(self._refresh_if_newer(None), self._loop).result(self._write_timeout)
 
