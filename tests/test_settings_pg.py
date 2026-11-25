@@ -10,6 +10,7 @@ WSL で本物の Postgres 16 に当てて確かめる（変更のコミットに
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
@@ -30,12 +31,20 @@ from services import settings_pg  # noqa: E402
 from tests.sqlite_session import FakeAsyncSession, sqlite_engine  # noqa: E402
 
 
-def _make(engine, legacy: Any, *, load_timeout: float = 10.0) -> settings_pg.PostgresSettings:
+def _make(
+    engine, legacy: Any, *, load_timeout: float = 10.0, create_delay: float = 0.0
+) -> settings_pg.PostgresSettings:
     """SQLite に向けた置き場を作る。legacy は取り込み元の中身か、投げる例外。"""
     maker = sessionmaker(bind=engine, expire_on_commit=False)
 
     async def create_tables() -> None:
-        """本番と同じく checkfirst で表を作る。"""
+        """本番と同じく checkfirst で表を作る。create_delay ぶん、作る前に待つ。
+
+        本物の Postgres では表を作るあいだに処理が譲られる。SQLite の代用では譲られない
+        ので、待たせることで同じ割り込みを起こす。
+        """
+        if create_delay:
+            await asyncio.sleep(create_delay)
         settings_pg.metadata.create_all(engine, checkfirst=True)
 
     def load_legacy() -> tuple[dict[str, Any], str]:
@@ -120,6 +129,32 @@ class ImportTests(unittest.TestCase):
         self.assertTrue(any("壊れている" in line for line in logs.output))
         with self.engine.connect() as conn:
             self.assertIsNone(conn.execute(select(settings_pg.state_table.c.id)).first())
+
+
+class StartupOrderTests(unittest.TestCase):
+    """起動の準備（表を作る → 取り込む → 読む）が済む前に書き込みが来たとき。"""
+
+    def test_a_write_right_after_start_waits_for_the_import(self):
+        """起動直後の書き込みが、取り込みを追い越さないこと。
+
+        Bot は起動直後に null の掃除（drop_stored_nulls）で書きに来る。準備を待たずに
+        書くと、表が無くて落ちる。もっと悪いと、書き込みが先に版の行を作り、取り込みが
+        「もう取り込み済み」と読んで飛ばされ、**settings.json の全ギルドの設定が消える。**
+        本物の Postgres で Rust との突き合わせをしたときに、表が無いエラーとして見つかった。
+        """
+        engine = sqlite_engine()
+        self.addCleanup(engine.dispose)
+        store = _make(engine, LEGACY, create_delay=0.3)
+        self.addCleanup(store.close)
+
+        store.transact(lambda data: data["guilds"].setdefault("999", {}).update({"x": 1}))
+
+        snapshot = store.snapshot()
+        self.assertEqual(snapshot["guilds"]["111"], {"welcome": {"channel_id": 1}}, "取り込みが飛ばされた")
+        self.assertEqual(snapshot["guilds"]["999"], {"x": 1})
+        with engine.connect() as conn:
+            state = conn.execute(select(settings_pg.state_table)).one()
+        self.assertEqual(state.imported_from, "test:settings.json")
 
 
 class TransactTests(unittest.TestCase):
