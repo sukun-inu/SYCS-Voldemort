@@ -122,6 +122,21 @@ pub(crate) fn python_str(value: &Value) -> String {
     }
 }
 
+/// Python の `int(value)` のうち、設定に入りうるもの。読めなければ `None`（Python の
+/// `_get_int_setting` はそのとき 0 を使う）。小数は 0 へ向けて切り捨て、真偽値は 1・0。
+pub(crate) fn python_int(value: &Value) -> Option<i64> {
+    match value {
+        Value::Number(n) => n.as_i64().or_else(|| {
+            n.as_f64()
+                .filter(|f| f.is_finite())
+                .map(|f| f.trunc() as i64)
+        }),
+        Value::Bool(b) => Some(i64::from(*b)),
+        Value::String(s) => s.trim().parse().ok(),
+        _ => None,
+    }
+}
+
 /// チャンネル ID として読む。数か数の文字列で、0 より大きいものだけ。
 ///
 /// Python は読めない文字列で例外を投げ、呼び出し側がそれをログに残して送らない。こちらは

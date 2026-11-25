@@ -1,14 +1,14 @@
 //! Discord のイベントを受ける。Python の `events/` にあたる（今は ready・メンバーの出入りと変更・BAN・
-//! メッセージの削除と編集のログ・スティッキー・リアクションロール）。
+//! メッセージの削除と編集のログ・スティッキー・リアクションロール・VC の出入り）。
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 
 use serenity::all::{
-    Cache, ChannelId, ChunkGuildFilter, Context, EventHandler, Guild, GuildId,
+    Cache, ChannelId, ChunkGuildFilter, Context, CreateMessage, EventHandler, Guild, GuildId,
     GuildMemberUpdateEvent, Member, Message, MessageId, MessageUpdateEvent, Reaction, Ready, Role,
-    RoleId, ShardManager, User,
+    RoleId, ShardManager, Timestamp, User, VoiceState,
 };
 use serenity::async_trait;
 use sqlx::PgPool;
@@ -22,6 +22,7 @@ use crate::members::{self, LogEntry};
 use crate::message_cache::{CachedMessage, MessageCache};
 use crate::reaction_roles::{self, Change, ReactionEvent};
 use crate::sticky::{self, StickyCtx, StickyLocks};
+use crate::vc_notify::{self, Filter, Plan, VcTracker};
 use crate::welcome::{self, Kind};
 use crate::{compat, message_logs, signals};
 
@@ -41,6 +42,8 @@ pub struct AppState {
     pub messages: MessageCache,
     /// スティッキーのチャンネルごとの排他。
     pub sticky_locks: StickyLocks,
+    /// VC の参加の時刻・メンションの間隔。
+    pub vc: VcTracker,
     shard_manager: OnceLock<Arc<ShardManager>>,
 }
 
@@ -60,6 +63,7 @@ impl AppState {
             colours: AvatarColours::new(),
             messages: MessageCache::default(),
             sticky_locks: StickyLocks::default(),
+            vc: VcTracker::default(),
             shard_manager: OnceLock::new(),
         }
     }
@@ -207,6 +211,13 @@ impl Handler {
             warn!(guild_id = %guild.id, ?kind, "歓迎・お別れを送れませんでした: {e}");
         }
     }
+}
+
+/// いまの時刻（UNIX 秒、小数つき）。Python の `time.time()`。
+fn unix_now() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0.0, |d| d.as_secs_f64())
 }
 
 /// イベントの時点のサーバーの様子（キャッシュから写す。写したら await をまたいで持ってよい）。
@@ -439,6 +450,95 @@ impl EventHandler for Handler {
             change: Change::Remove,
         };
         reaction_roles::apply(&ctx.cache, &ctx.http, &self.state.settings, event).await;
+    }
+
+    async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
+        let Some(guild_id) = new.guild_id else {
+            return;
+        };
+        let Some(member) = new.member.clone() else {
+            return;
+        };
+        if member.user.bot || !self.handles(guild_id) {
+            return;
+        }
+        // discord.py は前後のチャンネルをキャッシュから引く（無いチャンネルは「VC に居ない」になる）。
+        let (before, after, roles) = {
+            let Some(guild) = ctx.cache.guild(guild_id) else {
+                return;
+            };
+            let pick = |id: Option<ChannelId>| id.and_then(|i| guild.channels.get(&i).cloned());
+            (
+                pick(old.as_ref().and_then(|o| o.channel_id)),
+                pick(new.channel_id),
+                guild.roles.clone(),
+            )
+        };
+        let before_id = before.as_ref().map(|c| c.id.get());
+        let after_id = after.as_ref().map(|c| c.id.get());
+        let Some(change) = vc_notify::change_of(before_id, after_id) else {
+            return;
+        };
+        let now = unix_now();
+        let stay = self
+            .state
+            .vc
+            .track((guild_id.get(), member.user.id.get()), now, change);
+        let entry = vc_notify::log_entry(
+            change,
+            &compat::mention(member.user.id),
+            before_id,
+            after_id,
+        );
+        self.log(
+            &ctx,
+            guild_id,
+            entry,
+            Author::from_member(&member),
+            "VC の出入り",
+        )
+        .await;
+        let input = vc_notify::NoticeInput {
+            guild_id,
+            member: &member,
+            change,
+            before: before.as_ref(),
+            after: after.as_ref(),
+            roles: &roles,
+            now,
+            stay: stay.as_ref().map(|(_, text)| text.as_str()),
+            at: Timestamp::now(),
+        };
+        let snapshot = self.state.settings.snapshot();
+        let plan = vc_notify::plan(
+            &self.state.vc,
+            snapshot.guild(guild_id.get()),
+            |id| log_channel::text_channel(&ctx.cache, guild_id, Some(id)).is_some(),
+            &input,
+        );
+        match plan {
+            Plan::Nothing
+            | Plan::Filtered(Filter::Pass | Filter::Hidden | Filter::MissingRole(false)) => {}
+            Plan::Filtered(Filter::MissingRole(true)) => warn!(
+                "[BOT_SETUP] VC通知のフィルターロールが guild={guild_id} に見つかりません。                 非公開VCの通知が漏れないよう、見つかるまで通知を止めます。                 ロールを作り直すか、管理画面でフィルターの設定を外してください。"
+            ),
+            Plan::Send {
+                channel_id,
+                content,
+                embed,
+            } => {
+                let mut message = CreateMessage::new().embed(*embed);
+                if let Some(content) = content {
+                    message = message.content(content);
+                }
+                if let Err(e) = ChannelId::new(channel_id)
+                    .send_message(&ctx.http, message)
+                    .await
+                {
+                    warn!(%guild_id, "VC 通知を送れませんでした: {e}");
+                }
+            }
+        }
     }
 
     async fn guild_member_addition(&self, ctx: Context, new_member: Member) {
