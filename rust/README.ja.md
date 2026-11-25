@@ -6,8 +6,8 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 
 | 場所 | 中身 |
 |---|---|
-| `apps/bot` | Discord の Bot（serenity）。discord.py の Bot を置き換える。今は骨組み（ログ・心拍・設定のキャッシュ・依頼の巡回・止め方）。イメージは `docker/bot-rs.Dockerfile` |
-| `crates/sycs-core` | Rust のプロセスが共通で使う土台。環境変数の読み方・接続先・ログ・メトリクス・設定の読み込み・Bot への依頼の取り出し |
+| `apps/bot` | Discord の Bot（serenity）。discord.py の Bot を置き換える。今は骨組み（ログ・心拍・設定のキャッシュと起動時の null の掃除・依頼の巡回・止め方）。イメージは `docker/bot-rs.Dockerfile` |
+| `crates/sycs-core` | Rust のプロセスが共通で使う土台。環境変数の読み方・接続先・ログ・メトリクス・設定の読み書き・Bot への依頼の取り出し |
 | `tools/voice-check` | serenity + songbird の Bot が、DAVE 必須の VC で音を届けられるかを人の耳で確かめる道具 |
 
 ## Python と揃えているもの
@@ -22,7 +22,7 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 | `user_state_audit` への接続先 | `services/user_state_db.py` | `sycs_core::db` | 同じ環境変数から同じ接続先になるかを、両方で組み立てて突き合わせた（変更のコミットに記録） |
 | ログの形 | `services/log_setup.py` | `sycs_core::log` | Rust が書いた JSONL を管理画面の絞り込みの関数に読ませた。カテゴリの名前は Python の表にあるものだけを使う（テストが Python のファイルを読んで確かめる） |
 | メトリクス（Valkey への心拍・ゲージ・カウンタ） | `services/metrics_registry.py` / `metrics_reporter.py` | `sycs_core::metrics` | Rust が本物の Valkey へ報告したものを、管理画面の `/metrics` の組み立て（Python）で出した。`sycs_up` が 1、ゲージが出る、カウンタは Python の分と同じ鍵で足し合わさる、心拍とカウンタに期限が無くゲージには有る。カウンタの名前に `sycs_` を付けない（`/metrics` が付ける） |
-| ギルドごとの設定の読み込み | `services/settings_pg.py` | `sycs_core::settings` | 本物の Python（settings_store）が作って書いた表を Rust が読み、Python の変更が通知で同じ瞬間に届いた。CI でも Postgres 16 を立てて、通知・つなぎ直し・版番号の確認を毎回確かめる。書き込みは Bot を移す塊で足す |
+| ギルドごとの設定の読み書き | `services/settings_pg.py` / `settings_store.py` | `sycs_core::settings` | 本物の Python（settings_store）が作って書いた表を Rust が読み、Python の変更が通知で同じ瞬間に届いた。本物の Python と Rust が同じ時刻から同じギルドの数を 200 回ずつ増やして 400 になった（排他の鍵が同じ）。互いが押した「最後に触られた時刻」を読めた（Python の掃除の読み方で）。null の落とし方は 11 例で中身・鍵の並び・落とした数まで一致した。鍵・時刻の鍵・通知の名前はテストが Python のソースと突き合わせる。CI でも Postgres 16 を立てて、通知・つなぎ直し・版番号の確認・同時の書き込み・待ちの上限を毎回確かめる |
 | 管理画面から Bot への依頼の取り出し | `services/dev_signals.py` | `sycs_core::signals` | Python が置いた依頼を、Rust が置いた順・畳まれた形で取り出した。ロック中の行は待たずに飛ばす（Python と Rust の Bot が並んでも二重に実行しない） |
 | ログのレベルの名前 | `WARNING` | `WARN` を `WARNING` と書く | 管理画面は `WARNING` で比べる。`WARN` のままだと「警告以上」で警告が全部消える |
 | ログのファイル名 | `bot.log` / `bot.log.2026-11-24.gz` | 同じ | 移行中に同じディレクトリで 2 通りの名前が混ざると、片方の掃除が相手を見つけられない |

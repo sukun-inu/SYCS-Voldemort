@@ -28,6 +28,8 @@ pub struct BotConfig {
     pub settings_poll_interval: Duration,
     /// 起動時に設定を読めるまで待つ時間。過ぎたら止まる（空の設定では動かない）。
     pub settings_load_timeout: Duration,
+    /// 設定を書くときに、他のプロセスの書き込みが終わるのを待つ上限。過ぎたら書かずに諦める。
+    pub settings_write_timeout: Duration,
     /// 管理画面から Bot への依頼を取り出すか。
     ///
     /// **本番の Python の Bot と並べて動かすときは偽にすること。** 取り出すと表から消える
@@ -62,6 +64,13 @@ impl BotConfig {
                 "SETTINGS_LOAD_TIMEOUT_SECONDS",
                 30.0,
                 Some(1.0),
+                None,
+            )),
+            // 名前と既定（10 秒）・下限（0.2 秒）は Python（settings_store）と同じ。
+            settings_write_timeout: seconds(env.float(
+                "SETTINGS_LOCK_TIMEOUT_SECONDS",
+                10.0,
+                Some(0.2),
                 None,
             )),
             dev_signals_enabled: env.boolean("BOT_DEV_SIGNALS_ENABLED", true),
@@ -124,7 +133,14 @@ mod tests {
         assert_eq!(c.process_name, "bot");
         assert_eq!(log_target(&env(&[])).0, PathBuf::from("/app/data/logs"));
         assert_eq!(c.metrics_interval, Duration::from_secs(30));
+        assert_eq!(c.settings_write_timeout, Duration::from_secs(10));
         assert!(c.dev_signals_enabled);
+        let short = BotConfig::from_env(&env(&[
+            ("DISCORD_BOT_TOKEN", "t"),
+            ("SETTINGS_LOCK_TIMEOUT_SECONDS", "0.01"),
+        ]))
+        .unwrap();
+        assert_eq!(short.settings_write_timeout, Duration::from_millis(200));
     }
 
     /// 特権の intent は members と message_content だけで、presences は申し出ないこと。
