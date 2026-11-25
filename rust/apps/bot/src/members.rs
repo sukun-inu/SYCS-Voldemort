@@ -61,9 +61,10 @@ pub fn jst_minutes(ts: Timestamp) -> String {
         .to_string()
 }
 
-/// アカウントを作った時刻（ID に入っている）。discord.py の `created_at`。
-fn created_at(user_id: UserId) -> String {
-    let ms = (user_id.get() >> 22) as i64 + DISCORD_EPOCH_MS;
+/// ID に入っている作られた時刻を、日本時間の「年/月/日 時:分」で。discord.py の `created_at`
+/// （ユーザーならアカウントの作成日、メッセージなら送った時刻）。
+pub fn snowflake_jst(id: u64) -> String {
+    let ms = (id >> 22) as i64 + DISCORD_EPOCH_MS;
     let utc = DateTime::from_timestamp_millis(ms).unwrap_or_default();
     utc.with_timezone(&log_channel::jst())
         .format("%Y/%m/%d %H:%M")
@@ -105,7 +106,7 @@ pub fn join_entry(member: &Member, member_count: u64) -> LogEntry {
         ),
     )
     .field("ユーザーID", member.user.id.to_string())
-    .field("アカウント作成日", created_at(member.user.id))
+    .field("アカウント作成日", snowflake_jst(member.user.id.get()))
     .field("参加日時", joined)
     .field("メンバー数", member_count.to_string())
 }

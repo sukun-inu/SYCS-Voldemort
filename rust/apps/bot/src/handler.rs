@@ -1,12 +1,14 @@
-//! Discord のイベントを受ける。Python の `events/` にあたる（今は ready・メンバーの出入りと変更・BAN）。
+//! Discord のイベントを受ける。Python の `events/` にあたる（今は ready・メンバーの出入りと変更・BAN・
+//! メッセージの削除と編集のログ・スティッキー）。
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 
 use serenity::all::{
-    Cache, ChunkGuildFilter, Context, EventHandler, Guild, GuildId, GuildMemberUpdateEvent, Member,
-    Ready, Role, RoleId, ShardManager, User,
+    Cache, ChannelId, ChunkGuildFilter, Context, EventHandler, Guild, GuildId,
+    GuildMemberUpdateEvent, Member, Message, MessageId, MessageUpdateEvent, Ready, Role, RoleId,
+    ShardManager, User,
 };
 use serenity::async_trait;
 use sqlx::PgPool;
@@ -17,8 +19,10 @@ use tracing::{debug, info, warn};
 use crate::config::BotConfig;
 use crate::log_channel::{self, Author, AvatarColours, LogSink};
 use crate::members::{self, LogEntry};
+use crate::message_cache::{CachedMessage, MessageCache};
+use crate::sticky::{self, StickyCtx, StickyLocks};
 use crate::welcome::{self, Kind};
-use crate::{compat, signals};
+use crate::{compat, message_logs, signals};
 
 /// Bot が動いている間ずっと持っているもの。
 pub struct AppState {
@@ -32,6 +36,10 @@ pub struct AppState {
     pub reporter: Arc<Reporter>,
     /// アバターの代表色（ログの Embed の色）。
     pub colours: AvatarColours,
+    /// 最近のメッセージの控え（削除・編集のログに使う）。
+    pub messages: MessageCache,
+    /// スティッキーのチャンネルごとの排他。
+    pub sticky_locks: StickyLocks,
     shard_manager: OnceLock<Arc<ShardManager>>,
 }
 
@@ -49,6 +57,8 @@ impl AppState {
             settings,
             reporter,
             colours: AvatarColours::new(),
+            messages: MessageCache::default(),
+            sticky_locks: StickyLocks::default(),
             shard_manager: OnceLock::new(),
         }
     }
@@ -57,6 +67,61 @@ impl AppState {
     pub fn set_shard_manager(&self, manager: Arc<ShardManager>) {
         let _ = self.shard_manager.set(manager);
     }
+
+    fn sticky<'a>(&'a self, ctx: &'a Context) -> StickyCtx<'a> {
+        StickyCtx {
+            http: &ctx.http,
+            cache: &ctx.cache,
+            settings: &self.settings,
+            locks: &self.sticky_locks,
+        }
+    }
+
+    /// 管理画面からの依頼のうち、移した用途を実行する。
+    async fn run_task(&self, ctx: &Context, task: signals::Task) {
+        match task {
+            signals::Task::Sticky => {
+                sticky::process_pending(&self.sticky(ctx), |g| self.config.handles(g)).await;
+            }
+        }
+    }
+}
+
+/// 全サーバーを読み終えたら（来なければ [`CACHE_READY_TIMEOUT`] で見切って）、スティッキーと
+/// 管理画面からの依頼の巡回を始める。
+async fn start_after_cache_ready(
+    ctx: Context,
+    state: Arc<AppState>,
+    ready: Arc<tokio::sync::Notify>,
+) {
+    if tokio::time::timeout(CACHE_READY_TIMEOUT, ready.notified())
+        .await
+        .is_err()
+    {
+        warn!(
+            "{} 秒待っても全サーバーを読み終えませんでした。待たずに始めます",
+            CACHE_READY_TIMEOUT.as_secs()
+        );
+    }
+    tokio::spawn(sticky_forever(ctx.clone(), Arc::clone(&state)));
+    if state.config.dev_signals_enabled {
+        let pool = state.pool.clone();
+        tokio::spawn(signals::run_forever(pool, move |task| {
+            let state = Arc::clone(&state);
+            let ctx = ctx.clone();
+            async move { state.run_task(&ctx, task).await }
+        }));
+    } else {
+        info!("BOT_DEV_SIGNALS_ENABLED=false: 管理画面からの依頼は取り出しません");
+    }
+}
+
+/// スティッキーの指示（貼る・消す）を 30 秒ごとに片付ける。Python の pending_sticky_task。
+async fn sticky_forever(ctx: Context, state: Arc<AppState>) {
+    loop {
+        sticky::process_pending(&state.sticky(&ctx), |g| state.config.handles(g)).await;
+        tokio::time::sleep(sticky::PENDING_INTERVAL).await;
+    }
 }
 
 /// イベントの受け手。
@@ -64,7 +129,13 @@ pub struct Handler {
     state: Arc<AppState>,
     /// 常駐の処理を動かし始めたか。ready は再接続のたびに来るので、2 回目以降は何もしない。
     started: AtomicBool,
+    /// 全サーバーを読み終えた合図（serenity の cache_ready）。
+    cache_ready: Arc<tokio::sync::Notify>,
 }
+
+/// 全サーバーを読み終えるのを待つ上限。過ぎたら待たずに常駐の処理を始める（読めないサーバーが
+/// あると合図が来ない。discord.py も一定の時間で見切って on_ready を出す）。
+const CACHE_READY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 impl Handler {
     /// 作る。
@@ -72,6 +143,7 @@ impl Handler {
         Self {
             state,
             started: AtomicBool::new(false),
+            cache_ready: Arc::new(tokio::sync::Notify::new()),
         }
     }
 
@@ -182,21 +254,30 @@ impl EventHandler for Handler {
         if self.started.swap(true, Ordering::SeqCst) {
             return;
         }
+        // 死活はすぐ送り始める（止まって見えないように）。
         tokio::spawn(report_metrics_forever(
             Arc::clone(&self.state),
             Arc::clone(&ctx.cache),
         ));
-        if self.state.config.dev_signals_enabled {
-            tokio::spawn(signals::run_forever(self.state.pool.clone()));
-        } else {
-            info!("BOT_DEV_SIGNALS_ENABLED=false: 管理画面からの依頼は取り出しません");
-        }
+        // チャンネルを確かめる処理（スティッキー・依頼）は、全サーバーを読み終えてから始める。
+        // serenity の ready はサーバーの情報が届く前に来る（discord.py の on_ready は届いてから）。
+        // 届く前に回すと、スティッキーの最初の指示がチャンネルを確かめられずに 30 秒遅れた。
+        tokio::spawn(start_after_cache_ready(
+            ctx.clone(),
+            Arc::clone(&self.state),
+            Arc::clone(&self.cache_ready),
+        ));
         if let Some(only) = self.state.config.only_guild_id {
             warn!(
                 only,
                 "BOT_ONLY_GUILD_ID が設定されています。このサーバー以外のイベントは扱いません"
             );
         }
+    }
+
+    async fn cache_ready(&self, _ctx: Context, guilds: Vec<GuildId>) {
+        debug!(guilds = guilds.len(), "全サーバーを読み終えました");
+        self.cache_ready.notify_one();
     }
 
     async fn guild_create(&self, ctx: Context, guild: Guild, _is_new: Option<bool>) {
@@ -208,6 +289,102 @@ impl EventHandler for Handler {
         // ログとお別れが出ない（変更前のメンバーが無いと、どちらも出せない）。
         ctx.shard
             .chunk_guild(guild.id, None, false, ChunkGuildFilter::None, None);
+    }
+
+    async fn message(&self, ctx: Context, new_message: Message) {
+        // 控えは、どのサーバーのものでも・DM でも・Bot の発言でも入れる（discord.py と同じ数え方）。
+        self.state
+            .messages
+            .insert(CachedMessage::from_message(&new_message));
+        let Some(guild_id) = new_message.guild_id else {
+            return;
+        };
+        if new_message.author.bot || !self.handles(guild_id) {
+            return;
+        }
+        sticky::handle_message(
+            &self.state.sticky(&ctx),
+            guild_id.get(),
+            new_message.channel_id.get(),
+        )
+        .await;
+    }
+
+    async fn message_delete(
+        &self,
+        ctx: Context,
+        _channel_id: ChannelId,
+        deleted_message_id: MessageId,
+        _guild_id: Option<GuildId>,
+    ) {
+        // 控えに無いメッセージの削除は、discord.py もイベントを出さない（中身が分からない）。
+        let Some(message) = self.state.messages.remove(deleted_message_id) else {
+            return;
+        };
+        let Some(guild_id) = message.guild_id else {
+            return;
+        };
+        if !self.handles(guild_id) {
+            return;
+        }
+        let entry = message_logs::deleted_entry(&message);
+        self.log(
+            &ctx,
+            guild_id,
+            entry,
+            message_logs::author_of(&message),
+            "メッセージの削除",
+        )
+        .await;
+    }
+
+    async fn message_delete_bulk(
+        &self,
+        _ctx: Context,
+        _channel_id: ChannelId,
+        multiple_deleted_messages_ids: Vec<MessageId>,
+        _guild_id: Option<GuildId>,
+    ) {
+        // まとめての削除は、Python もログにしない（控えから外すだけ）。
+        for id in multiple_deleted_messages_ids {
+            self.state.messages.remove(id);
+        }
+    }
+
+    async fn message_update(
+        &self,
+        ctx: Context,
+        _old_if_available: Option<Message>,
+        _new: Option<Message>,
+        event: MessageUpdateEvent,
+    ) {
+        let attachments = event
+            .attachments
+            .as_ref()
+            .map(|list| list.iter().map(|a| a.url.clone()).collect());
+        let Some((before, after)) =
+            self.state
+                .messages
+                .update(event.id, event.content.clone(), attachments)
+        else {
+            return;
+        };
+        let Some(guild_id) = before.guild_id else {
+            return;
+        };
+        if !self.handles(guild_id) {
+            return;
+        }
+        if let Some(entry) = message_logs::edited_entry(&before, &after) {
+            self.log(
+                &ctx,
+                guild_id,
+                entry,
+                message_logs::author_of(&before),
+                "メッセージの編集",
+            )
+            .await;
+        }
     }
 
     async fn guild_member_addition(&self, ctx: Context, new_member: Member) {

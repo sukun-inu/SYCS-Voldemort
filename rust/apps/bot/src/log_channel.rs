@@ -112,7 +112,7 @@ pub fn log_settings(guild: Option<&Value>) -> LogSettings {
 }
 
 /// Python の `str(value)` のうち、設定に入りうるもの。
-fn python_str(value: &Value) -> String {
+pub(crate) fn python_str(value: &Value) -> String {
     match value {
         Value::String(s) => s.clone(),
         Value::Bool(true) => "True".into(),
