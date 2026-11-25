@@ -14,4 +14,5 @@ pub mod message_logs;
 pub mod reaction_roles;
 pub mod signals;
 pub mod sticky;
+pub mod vc_notify;
 pub mod welcome;
