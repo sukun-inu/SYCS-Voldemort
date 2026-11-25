@@ -392,11 +392,21 @@ class BuildLogEmbedTests(unittest.TestCase):
         self.assertIsNone(embed.author.name)
 
     def test_field_value_over_the_limit_is_truncated_with_a_marker(self):
+        """上限を超える値は、印も含めてちょうど 1024 文字に収めること。
+
+        印を上限の外に足すと 1031 文字になり、Discord が送信ごと拒否する（ログが届かない）。
+        """
         embed = asyncio.run(logging_service.build_log_embed("INFO", "本文", fields={"詳細": "x" * 1100}))
         field = embed.fields[0]
         self.assertEqual(field.name, "詳細")
-        self.assertTrue(field.value.startswith("x" * 1024))
+        self.assertEqual(len(field.value), 1024)
+        self.assertTrue(field.value.startswith("x" * (1024 - len("... (省略)"))))
         self.assertTrue(field.value.endswith("... (省略)"))
+
+    def test_field_value_at_the_limit_is_untouched(self):
+        """ちょうど 1024 文字なら切らないこと（境界で 1 文字多く削らない）。"""
+        embed = asyncio.run(logging_service.build_log_embed("INFO", "本文", fields={"詳細": "y" * 1024}))
+        self.assertEqual(embed.fields[0].value, "y" * 1024)
 
     def test_field_value_under_the_limit_is_untouched(self):
         embed = asyncio.run(logging_service.build_log_embed("INFO", "本文", fields={"詳細": "短い"}))

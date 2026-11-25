@@ -24,6 +24,11 @@ _LEVEL_PRIORITY = {
     "DEBUG": 3,
 }
 
+# Embed の項目の値の上限（Discord API）。超えると送信そのものが 400 で拒否され、ログが届かない。
+FIELD_VALUE_LIMIT = 1024
+# 切り詰めたことを示す印。上限の内側に入れる（外に足すと上限を超える）。
+TRUNCATED_MARK = "... (省略)"
+
 # ユーザーごとの代表色キャッシュ {user_id: 0xRRGGBB}（最大1024件でLRU）
 _USER_COLOR_CACHE: Dict[int, int] = {}
 _USER_COLOR_CACHE_MAX = 1024
@@ -148,6 +153,18 @@ async def _user_avatar_color(user: Optional[discord.abc.User]) -> Optional[disco
     return discord.Color.from_rgb(r, g, b)
 
 
+def fit_field_value(value: str) -> str:
+    """Embed の項目の値を、印も含めて Discord の上限（1024 文字）に収める。
+
+    以前は 1024 文字で切ってから印を足していたので、切り詰めた値は 1031 文字に
+    なり、Discord が送信ごと拒否していた（添付ファイルの多いメッセージの削除ログが
+    届かなかった）。印は上限の内側に入れる。
+    """
+    if len(value) <= FIELD_VALUE_LIMIT:
+        return value
+    return value[: FIELD_VALUE_LIMIT - len(TRUNCATED_MARK)] + TRUNCATED_MARK
+
+
 def _get_log_channel(bot: discord.Client, guild_id: int) -> Optional[discord.TextChannel]:
     """設定からログチャンネルを取得。未設定や型不一致の場合はNone。"""
     settings = get_log_settings(guild_id)
@@ -253,11 +270,7 @@ async def build_log_embed(
 
     if fields:
         for name, value in fields.items():
-            # Discord API の制限: embed フィールドは 1024 文字以下
-            truncated_value = str(value)[:1024]
-            if len(str(value)) > 1024:
-                truncated_value += "... (省略)"
-            embed.add_field(name=name, value=truncated_value, inline=False)
+            embed.add_field(name=name, value=fit_field_value(str(value)), inline=False)
 
     # フッターも 2048 文字制限を適用
     footer_text = f"時刻 (JST): {jst_now.strftime('%Y-%m-%d %H:%M:%S')}"
