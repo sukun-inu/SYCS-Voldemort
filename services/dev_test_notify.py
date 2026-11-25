@@ -62,7 +62,9 @@ def _configured_channel_id(kind: str, guild_id: int) -> int | None:
     if kind == "logging":
         from services.logging_service import get_log_settings
 
-        return _as_id(get_log_settings(guild_id).get("log_channel_id"))
+        # get_log_settings は保存の鍵（log_channel_id）を channel_id に詰め替えて返す。
+        # 保存の鍵で引くと常に None になり、設定済みでも「未設定」と答えていた。
+        return _as_id(get_log_settings(guild_id).get("channel_id"))
     if kind == "sticky":
         # スティッキーはチャンネルごとの設定。最初の1つを既定の送信先にする。
         for channel_id in get_sticky_messages(guild_id):
@@ -170,7 +172,8 @@ async def _send_logging(channel, guild) -> str:
     """本番の log_action と同じ Embed を組んで送る。"""
     from services.logging_service import build_log_embed, get_log_settings
 
-    level = str(get_log_settings(guild.id).get("log_level") or "INFO").upper()
+    # 鍵は詰め替え後の level（保存の鍵の log_level で引くと、設定に関係なく INFO になっていた）。
+    level = str(get_log_settings(guild.id).get("level") or "INFO").upper()
     embed = await build_log_embed(
         level,
         "開発者パネルからのテスト送信です。",

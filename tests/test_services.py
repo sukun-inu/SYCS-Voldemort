@@ -2057,11 +2057,30 @@ class DevTestNotifyTests(unittest.TestCase):
         self.assertIn("去っていった", self.sent[0]["content"])
 
     def test_logging_reuses_the_production_embed(self):
-        with patch("services.logging_service.get_log_settings", return_value={"log_level": "WARNING"}):
+        """保存されたログレベルで、本番と同じ Embed を送ること。
+
+        本物の get_log_settings を通す（保存の鍵 log_level → 詰め替え後の level）。
+        以前は get_log_settings を保存の鍵の形で差し替えていたので、鍵を取り違えて
+        いても（常に INFO になっていても）テストが通っていた。
+        """
+        stored = {"log_channel_id": 555, "log_level": "debug"}
+        with patch("services.logging_service.get_guild_settings", return_value=stored):
             asyncio.run(self.dt.run_test(self.bot, "logging", 1, 555))
         embed = self.sent[0]["embed"]
-        self.assertIn("ボットログ", embed.title)
-        self.assertIn("WARNING", embed.title)
+        self.assertEqual(embed.title, "[DEBUG] ボットログ")
+        self.assertEqual({f.name: f.value for f in embed.fields}["ログレベル設定"], "DEBUG")
+
+    def test_logging_without_a_channel_goes_to_the_configured_log_channel(self):
+        """送信先を指定しなければ、設定済みのログチャンネルへ送ること。
+
+        以前は保存の鍵（log_channel_id）で引いていて常に None になり、設定済みでも
+        「未設定」と答えて何も送らなかった。
+        """
+        stored = {"log_channel_id": 555, "log_level": "INFO"}
+        with patch("services.logging_service.get_guild_settings", return_value=stored):
+            asyncio.run(self.dt.run_test(self.bot, "logging", 1, None))
+        self.assertTrue(self.sent, "設定済みのログチャンネルへ送っていない")
+        self.assertIn("ボットログ", self.sent[0]["embed"].title)
 
     def test_reaction_roles_actually_adds_the_emoji(self):
         """絵文字がもう使えない、が主な故障なので一覧表示では確かめられない。"""
