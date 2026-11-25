@@ -156,7 +156,7 @@ async def _user_avatar_color(user: Optional[discord.abc.User]) -> Optional[disco
 def fit_field_value(value: str) -> str:
     """Embed の項目の値を、印も含めて Discord の上限（1024 文字）に収める。
 
-    以前は 1024 文字で切ってから印を足していたので、切り詰めた値は 1031 文字に
+    以前は 1024 文字で切ってから印を足していたので、切り詰めた値は 1032 文字に
     なり、Discord が送信ごと拒否していた（添付ファイルの多いメッセージの削除ログが
     届かなかった）。印は上限の内側に入れる。
     """
