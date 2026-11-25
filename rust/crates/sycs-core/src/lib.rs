@@ -8,7 +8,9 @@
 //! - [`env`]  環境変数の読み方（Python の `envutil.py`）
 //! - [`db`]   `user_state_audit` への接続先（Python の `services/user_state_db.py`）
 //! - [`log`]  テキストと JSONL のログ（Python の `services/log_setup.py`）
+//! - [`metrics`] Valkey への心拍と数値（Python の `services/metrics_registry.py`）
 
 pub mod db;
 pub mod env;
 pub mod log;
+pub mod metrics;
