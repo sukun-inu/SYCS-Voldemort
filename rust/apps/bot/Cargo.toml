@@ -1,0 +1,26 @@
+[package]
+name = "sycs-bot"
+version = "0.1.0"
+description = "SYCS-Voldemort の Discord Bot（serenity）。discord.py の Bot を置き換える"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+# 版は rust/Cargo.toml の [workspace.dependencies] で決める。
+[dependencies]
+serenity = { workspace = true, features = [
+    "builder",
+    "cache",
+    "client",
+    "gateway",
+    "model",
+    "rustls_backend",
+] }
+sqlx = { workspace = true, features = ["runtime-tokio", "postgres"] }
+sycs-core = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
+tracing = { workspace = true }

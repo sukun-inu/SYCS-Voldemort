@@ -6,6 +6,7 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 
 | 場所 | 中身 |
 |---|---|
+| `apps/bot` | Discord の Bot（serenity）。discord.py の Bot を置き換える。今は骨組み（ログ・心拍・設定のキャッシュ・依頼の巡回・止め方）。イメージは `docker/bot-rs.Dockerfile` |
 | `crates/sycs-core` | Rust のプロセスが共通で使う土台。環境変数の読み方・接続先・ログ・メトリクス・設定の読み込み・Bot への依頼の取り出し |
 | `tools/voice-check` | serenity + songbird の Bot が、DAVE 必須の VC で音を届けられるかを人の耳で確かめる道具 |
 
@@ -28,12 +29,17 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 
 ## 守ること
 
-- **版は `=` で固定し、`Cargo.lock` をコミットする。** Rust 本体は `rust-toolchain.toml`。
+- **版は `=` で固定し、`Cargo.lock` をコミットする。** 依存の版は `Cargo.toml` の
+  `[workspace.dependencies]` で 1 回だけ決め、各 crate は `{ workspace = true }` で受け取る。
+  Rust 本体は `rust-toolchain.toml`。
 - **本番の CPU は Sandy Bridge（AVX2 無し）。** ビルドは `.cargo/config.toml` で
   `target-cpu=sandybridge` に絞っている。`native` にしないこと。CI はテストも
   Sandy Bridge のふりで動かす。
 - **本番のイメージは Debian 系にする。** Ubuntu 26.04 系は glibc が x86-64-v3 を要求し、
   本番では起動しない。
+- **移している間、Rust の Bot は本番の compose に入れない。** 入れるのは切り替えの塊。
+  手元で動かすときは `BOT_PROCESS_NAME=bot-rs` にし、本番の Python の Bot と並べるなら
+  `BOT_DEV_SIGNALS_ENABLED=false`（依頼を取り合うと、Python 側に届かなくなる）。
 - **イメージに tzdata を入れること。** 無いと `TZ=Asia/Tokyo` が効かず、ログの時刻が
   UTC になる（Python と並べて読むとずれる）。
 - `unsafe` は書かない（ワークスペースで禁止してある）。公開するものには説明を書く。

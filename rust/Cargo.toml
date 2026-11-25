@@ -13,7 +13,27 @@
 
 [workspace]
 resolver = "3"
-members = ["crates/sycs-core", "tools/voice-check"]
+members = ["apps/bot", "crates/sycs-core", "tools/voice-check"]
+
+# 依存の版はここで 1 回だけ決める（各 crate は `{ workspace = true }` で受け取る）。
+#
+# crate ごとに版を書いていると、Bot と道具と土台で serenity や sqlx の版が食い違い、
+# 1 つだけ上げ忘れる。版は = で固定する（冒頭の方針）。features は各 crate が足す。
+[workspace.dependencies]
+chrono = { version = "=0.4.45", default-features = false }
+flate2 = { version = "=1.1.11" }
+percent-encoding = { version = "=2.3.2" }
+redis = { version = "=1.8.3", default-features = false }
+serde_json = { version = "=1.0.154" }
+serenity = { version = "=0.12.5", default-features = false }
+songbird = { version = "=0.6.1" }
+sqlx = { version = "=0.9.1", default-features = false }
+symphonia = { version = "=0.5.5" }
+sycs-core = { path = "crates/sycs-core" }
+tempfile = { version = "=3.27.0" }
+tokio = { version = "=1.54.1" }
+tracing = { version = "=0.1.44" }
+tracing-subscriber = { version = "=0.3.23", default-features = false }
 
 [workspace.package]
 edition = "2024"

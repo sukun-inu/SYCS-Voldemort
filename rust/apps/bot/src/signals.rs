@@ -1,0 +1,139 @@
+//! 管理画面からの依頼（`dev_signal` 表）を巡回して実行する。Python の `events/background_tasks.py` の
+//! `_process_dev_signals` と `_handle_dev_signal` にあたる。
+//!
+//! 取り出しは `sycs_core::signals::claim`（取り出すと同時に消える）。どの処理にも当たらない
+//! 依頼は**必ず警告を出す。** 黙って消えると「受信」「完了」のログだけが残り、何も実行されない
+//! まま成功に見える（Python で実際にあった）。
+//!
+//! まだ Rust に移していない用途の依頼も、取り出した時点で消える。名指しで警告して、
+//! 何が届かなかったかを分かるようにする。
+
+use std::time::Duration;
+
+use sqlx::PgPool;
+use sycs_core::signals::{self, Signal};
+use tracing::{info, warn};
+
+/// 巡回の間隔。Python の dev_signal_task と同じ 30 秒。
+pub const INTERVAL: Duration = Duration::from_secs(30);
+
+/// 管理画面が置く依頼の用途名（Python の webapp_admin/api/dev.py の VALID_TASKS と、
+/// 通知テストの `test_*`・地震リプレイ）。
+pub const KNOWN_TASKS: &[&str] = &[
+    "news_feeds",
+    "sticky",
+    "djaudio_cache",
+    "earthquake_reconnect",
+    "user_state_repair",
+    "eq_replay",
+];
+
+/// 1 件をどう扱ったか。
+///
+/// 「実行した」は、最初の用途を移すときに足す（今は実行できる用途が 1 つも無い）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Outcome {
+    /// 管理画面が置く用途だが、まだ Rust に移していない。
+    NotPortedYet,
+    /// 知らない用途（打ち間違いか、実装漏れ）。
+    Unknown,
+}
+
+/// 用途名から扱いを決める。今はどの用途もまだ移していない（移すたびにここへ足す）。
+pub fn route(task: &str) -> Outcome {
+    if KNOWN_TASKS.contains(&task) || task.starts_with("test_") {
+        Outcome::NotPortedYet
+    } else {
+        Outcome::Unknown
+    }
+}
+
+/// 取り出した依頼を順に扱い、ログを残す。扱いの結果を返す（テストで確かめるため）。
+pub fn handle_all(batch: &[Signal]) -> Vec<Outcome> {
+    batch
+        .iter()
+        .map(|signal| {
+            info!(task = %signal.task, id = signal.id, "シグナル受信");
+            let outcome = route(&signal.task);
+            match outcome {
+                Outcome::NotPortedYet => warn!(
+                    task = %signal.task,
+                    "まだ Rust に移していない用途なので何もしませんでした（依頼は消えています）"
+                ),
+                Outcome::Unknown => {
+                    warn!(task = %signal.task, "未知のシグナルなので何もしませんでした")
+                }
+            }
+            outcome
+        })
+        .collect()
+}
+
+/// 止められるまで巡回する。データベースに届かなければ警告を出して次の巡回で取り直す
+/// （取り出しと削除は同じ文なので、取り出せなかった依頼は表に残っている）。
+pub async fn run_forever(pool: PgPool) {
+    loop {
+        match signals::claim(&pool, signals::CLAIM_BATCH).await {
+            Ok(batch) => {
+                handle_all(&batch);
+            }
+            Err(e) => warn!("シグナルを取り出せませんでした（次の巡回で取り直します）: {e}"),
+        }
+        tokio::time::sleep(INTERVAL).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn signal(task: &str) -> Signal {
+        Signal {
+            id: 1,
+            task: task.into(),
+            payload: "{}".into(),
+        }
+    }
+
+    /// 管理画面が置く用途は「まだ移していない」、それ以外は「未知」として扱うこと。
+    ///
+    /// 区別しないと、移し忘れ（いつか移す）と打ち間違い（直す）の見分けが付かない。
+    #[test]
+    fn known_tasks_are_not_ported_yet_and_others_are_unknown() {
+        assert_eq!(route("news_feeds"), Outcome::NotPortedYet);
+        assert_eq!(route("eq_replay"), Outcome::NotPortedYet);
+        assert_eq!(route("test_welcome"), Outcome::NotPortedYet);
+        assert_eq!(route("mystery"), Outcome::Unknown);
+    }
+
+    /// 管理画面の用途名の一覧が、Python 側と揃っていること。
+    ///
+    /// 管理画面に用途を足して Rust に足し忘れると、その依頼は「未知」として捨てられる。
+    #[test]
+    fn the_task_list_matches_the_admin_panel() {
+        let admin = include_str!("../../../../webapp_admin/api/dev.py");
+        let start = admin
+            .find("VALID_TASKS: dict[str, str] = {")
+            .expect("VALID_TASKS が見つからない");
+        let block = &admin[start..start + admin[start..].find('}').unwrap()];
+        for line in block.lines().skip(1) {
+            if let Some(name) = line
+                .trim()
+                .strip_prefix('"')
+                .and_then(|l| l.split('"').next())
+            {
+                assert!(
+                    KNOWN_TASKS.contains(&name),
+                    "Rust の KNOWN_TASKS に無い: {name}"
+                );
+            }
+        }
+    }
+
+    /// 1 件ずつ扱い、件数ぶんの結果が返ること。
+    #[test]
+    fn every_claimed_signal_is_handled_in_order() {
+        let outcomes = handle_all(&[signal("sticky"), signal("nope")]);
+        assert_eq!(outcomes, [Outcome::NotPortedYet, Outcome::Unknown]);
+    }
+}
