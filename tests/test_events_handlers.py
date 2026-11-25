@@ -41,6 +41,7 @@ import events.messages as messages  # noqa: E402
 import events.ready as ready  # noqa: E402
 import events.voice as voice  # noqa: E402
 from events.state import EventState  # noqa: E402
+from services import logging_service  # noqa: E402
 from services.dev_signals import Signal  # noqa: E402
 
 
@@ -414,16 +415,25 @@ class OnMessageDeleteTests(unittest.TestCase):
         self.assertIn("(不明なユーザー)", log.call_args.args[3])
         self.assertEqual(log.call_args.kwargs["fields"]["ユーザーID"], "不明")
 
-    def test_long_attachment_urls_are_truncated(self):
+    def test_long_attachment_urls_fit_in_the_embed_field(self):
+        """添付の URL が長くても、実際に送る Embed の項目は 1024 文字に収まること。
+
+        以前は 1024 文字で切ってから印を足し（1031 文字）、build_log_embed もさらに
+        印を足していた。Discord は 1024 文字を超える項目を送信ごと拒否するので、
+        添付の多いメッセージの削除ログが届かなかった。
+        """
         guild = SimpleNamespace(id=1)
         author = SimpleNamespace(id=2, mention="<@2>")
-        long_url = "https://example.com/" + "a" * 1100
-        msg = _message(guild=guild, author=author, attachments=[SimpleNamespace(url=long_url)])
+        urls = [SimpleNamespace(url="https://cdn.example.com/" + "a" * 120) for _ in range(10)]
+        msg = _message(guild=guild, author=author, attachments=urls)
         with patch.object(messages, "log_action", AsyncMock()) as log:
             _run(self.handler(msg))
-        field = log.call_args.kwargs["fields"]["添付ファイル"]
-        self.assertTrue(field.endswith("... (省略)"))
-        self.assertEqual(len(field), 1024 + len("... (省略)"))
+        fields = log.call_args.kwargs["fields"]
+        embed = _run(logging_service.build_log_embed("INFO", "本文", fields=fields))
+        sent = next(f for f in embed.fields if f.name == "添付ファイル")
+        self.assertLessEqual(len(sent.value), 1024)
+        self.assertTrue(sent.value.endswith("... (省略)"))
+        self.assertTrue(sent.value.startswith(urls[0].url))
 
 
 class OnMessageEditTests(unittest.TestCase):

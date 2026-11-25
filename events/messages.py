@@ -94,7 +94,9 @@ def _deleted_fields(message: discord.Message) -> dict[str, str]:
 
     if message.attachments:
         attachment_urls = "\n".join(a.url for a in message.attachments)
-        fields["添付ファイル"] = attachment_urls[:1024] + ("... (省略)" if len(attachment_urls) > 1024 else "")
+        # 切り詰めは log_action（build_log_embed）が上限の内側で行う。ここで切って印を
+        # 足すと 1024 文字を超え、Discord が削除ログを送信ごと拒否していた。
+        fields["添付ファイル"] = attachment_urls
 
     return fields
 
