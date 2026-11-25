@@ -8,6 +8,7 @@
 //! まだ Rust に移していない用途の依頼も、取り出した時点で消える。名指しで警告して、
 //! 何が届かなかったかを分かるようにする。
 
+use std::future::Future;
 use std::time::Duration;
 
 use sqlx::PgPool;
@@ -28,23 +29,30 @@ pub const KNOWN_TASKS: &[&str] = &[
     "eq_replay",
 ];
 
+/// Rust に移した用途。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Task {
+    /// スティッキーの指示（貼る・消す）をいま片付ける。
+    Sticky,
+}
+
 /// 1 件をどう扱ったか。
-///
-/// 「実行した」は、最初の用途を移すときに足す（今は実行できる用途が 1 つも無い）。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
+    /// 移した用途なので実行する。
+    Run(Task),
     /// 管理画面が置く用途だが、まだ Rust に移していない。
     NotPortedYet,
     /// 知らない用途（打ち間違いか、実装漏れ）。
     Unknown,
 }
 
-/// 用途名から扱いを決める。今はどの用途もまだ移していない（移すたびにここへ足す）。
+/// 用途名から扱いを決める（用途を移すたびにここへ足す）。
 pub fn route(task: &str) -> Outcome {
-    if KNOWN_TASKS.contains(&task) || task.starts_with("test_") {
-        Outcome::NotPortedYet
-    } else {
-        Outcome::Unknown
+    match task {
+        "sticky" => Outcome::Run(Task::Sticky),
+        t if KNOWN_TASKS.contains(&t) || t.starts_with("test_") => Outcome::NotPortedYet,
+        _ => Outcome::Unknown,
     }
 }
 
@@ -56,6 +64,7 @@ pub fn handle_all(batch: &[Signal]) -> Vec<Outcome> {
             info!(task = %signal.task, id = signal.id, "シグナル受信");
             let outcome = route(&signal.task);
             match outcome {
+                Outcome::Run(_) => {}
                 Outcome::NotPortedYet => warn!(
                     task = %signal.task,
                     "まだ Rust に移していない用途なので何もしませんでした（依頼は消えています）"
@@ -69,13 +78,22 @@ pub fn handle_all(batch: &[Signal]) -> Vec<Outcome> {
         .collect()
 }
 
-/// 止められるまで巡回する。データベースに届かなければ警告を出して次の巡回で取り直す
-/// （取り出しと削除は同じ文なので、取り出せなかった依頼は表に残っている）。
-pub async fn run_forever(pool: PgPool) {
+/// 止められるまで巡回する。移した用途は `run` で実行する。データベースに届かなければ警告を
+/// 出して次の巡回で取り直す（取り出しと削除は同じ文なので、取り出せなかった依頼は表に残っている）。
+pub async fn run_forever<F, Fut>(pool: PgPool, run: F)
+where
+    F: Fn(Task) -> Fut,
+    Fut: Future<Output = ()>,
+{
     loop {
         match signals::claim(&pool, signals::CLAIM_BATCH).await {
             Ok(batch) => {
-                handle_all(&batch);
+                for (signal, outcome) in batch.iter().zip(handle_all(&batch)) {
+                    if let Outcome::Run(task) = outcome {
+                        run(task).await;
+                        info!(task = %signal.task, id = signal.id, "シグナル完了");
+                    }
+                }
             }
             Err(e) => warn!("シグナルを取り出せませんでした（次の巡回で取り直します）: {e}"),
         }
@@ -95,11 +113,12 @@ mod tests {
         }
     }
 
-    /// 管理画面が置く用途は「まだ移していない」、それ以外は「未知」として扱うこと。
+    /// 移した用途は実行し、管理画面が置くほかの用途は「まだ移していない」、それ以外は「未知」。
     ///
     /// 区別しないと、移し忘れ（いつか移す）と打ち間違い（直す）の見分けが付かない。
     #[test]
     fn known_tasks_are_not_ported_yet_and_others_are_unknown() {
+        assert_eq!(route("sticky"), Outcome::Run(Task::Sticky));
         assert_eq!(route("news_feeds"), Outcome::NotPortedYet);
         assert_eq!(route("eq_replay"), Outcome::NotPortedYet);
         assert_eq!(route("test_welcome"), Outcome::NotPortedYet);
@@ -133,7 +152,14 @@ mod tests {
     /// 1 件ずつ扱い、件数ぶんの結果が返ること。
     #[test]
     fn every_claimed_signal_is_handled_in_order() {
-        let outcomes = handle_all(&[signal("sticky"), signal("nope")]);
-        assert_eq!(outcomes, [Outcome::NotPortedYet, Outcome::Unknown]);
+        let outcomes = handle_all(&[signal("sticky"), signal("eq_replay"), signal("nope")]);
+        assert_eq!(
+            outcomes,
+            [
+                Outcome::Run(Task::Sticky),
+                Outcome::NotPortedYet,
+                Outcome::Unknown
+            ]
+        );
     }
 }

@@ -9,5 +9,8 @@ pub mod config;
 pub mod handler;
 pub mod log_channel;
 pub mod members;
+pub mod message_cache;
+pub mod message_logs;
 pub mod signals;
+pub mod sticky;
 pub mod welcome;
