@@ -6,7 +6,7 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 
 | 場所 | 中身 |
 |---|---|
-| `apps/bot` | Discord の Bot（serenity）。discord.py の Bot を置き換える。今は骨組み（ログ・心拍・設定のキャッシュと起動時の null の掃除・依頼の巡回・止め方）と、ログチャンネルへの書き方。部品はライブラリ（`src/lib.rs`）に置き、イベントにつなぐ前から突き合わせとテストで呼べるようにしてある。イメージは `docker/bot-rs.Dockerfile` |
+| `apps/bot` | Discord の Bot（serenity）。discord.py の Bot を置き換える。今は骨組み（ログ・心拍・設定のキャッシュと起動時の null の掃除・依頼の巡回・止め方）と、ログチャンネルへの書き方、メンバーの参加・退出・変更・BAN のログと歓迎・お別れ（利用者の状態の記録は別の塊で足す）。部品はライブラリ（`src/lib.rs`）に置き、イベントにつなぐ前から突き合わせとテストで呼べるようにしてある。イメージは `docker/bot-rs.Dockerfile` |
 | `crates/sycs-core` | Rust のプロセスが共通で使う土台。環境変数の読み方・接続先・ログ・メトリクス・設定の読み書き・Bot への依頼の取り出し |
 | `tools/voice-check` | serenity + songbird の Bot が、DAVE 必須の VC で音を届けられるかを人の耳で確かめる道具 |
 
@@ -27,6 +27,7 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 | ログチャンネルの Embed（題・本文・色・作者・項目・時刻、上限の切り詰め、送るレベル） | `services/logging_service.py` | `sycs_bot::log_channel` | 同じ入力から Python の `build_log_embed(...).to_dict()` と Rust の Embed の JSON を作って 5 例とも一致（長い本文・作者名・項目、絵文字・結合文字）。違いは discord.py 2.7 が付ける `flags: 0` だけ（付けないのと同じ）。チャンネルは**ログのギルドの中だけ**から探す（Python はキャッシュ全体から引くので、設定に別のサーバーのチャンネルが入っていると、そこへ書いてしまう） |
 | アバターの代表色（Embed の色） | colorthief 0.2.1 | `sycs_bot::colorthief` | Pillow で作った画像 16 種（透過・パレット・グレー・GIF・動く GIF・ほぼ白・全部透明など）で本物の colorthief と一致。基準の画像と答えを `apps/bot/tests/fixtures/colorthief/` に置き、CI で毎回確かめる。安定ソート・0 を偽とみなす判定・浮動小数の計算順・パレットの並びまで写してある |
 | 名前・アバターの URL・mention | discord.py 2.7.1 の `str(user)`・`display_avatar.url`・`mention` | `sycs_bot::compat` | 同じ Discord の JSON を discord.py と serenity に読ませて 10 例とも一致（Bot の `#番号`・動くアバター・サーバーごとのアバター・既定のアバター）。serenity の `face()` は webp を返すが、色が変わるので使わない |
+| メンバーの参加・退出・ニックネーム・ロール・タイムアウト・BAN のログ、歓迎・お別れの文面 | `events/members.py` / `services/welcome_service.py` | `sycs_bot::members` / `sycs_bot::welcome` | 同じ Discord の JSON から discord.py の Member を作って Python の処理に渡し、log_action に渡った中身（レベル・本文・項目の名前と値と順・色）と差し込みの結果が 19 例とも一致。ロールの並び（位置の低い順、同じ位置なら ID の大きい順）・作成日（ID から）・日本時間の書き方・「(なし)」「なし」「(不明)」まで。起動時に全メンバーを読み込む（discord.py の既定。読み込まないと、起動後に一度も見ていない人の退出でログもお別れも出ない） |
 | ログのレベルの名前 | `WARNING` | `WARN` を `WARNING` と書く | 管理画面は `WARNING` で比べる。`WARN` のままだと「警告以上」で警告が全部消える |
 | ログのファイル名 | `bot.log` / `bot.log.2026-11-24.gz` | 同じ | 移行中に同じディレクトリで 2 通りの名前が混ざると、片方の掃除が相手を見つけられない |
 
@@ -43,6 +44,9 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 - **移している間、Rust の Bot は本番の compose に入れない。** 入れるのは切り替えの塊。
   手元で動かすときは `BOT_PROCESS_NAME=bot-rs` にし、本番の Python の Bot と並べるなら
   `BOT_DEV_SIGNALS_ENABLED=false`（依頼を取り合うと、Python 側に届かなくなる）。
+- **本番の Bot のトークンで手元から確かめるときは `BOT_ONLY_GUILD_ID` を付ける。** 本番の Bot は
+  複数のサーバーに入っているので、絞らないと他のサーバーの出入りに反応して、本番の利用者がいる
+  チャンネルへ書いてしまう。本番では付けない。
 - **イメージに tzdata を入れること。** 無いと `TZ=Asia/Tokyo` が効かず、ログの時刻が
   UTC になる（Python と並べて読むとずれる）。
 - `unsafe` は書かない（ワークスペースで禁止してある）。公開するものには説明を書く。
