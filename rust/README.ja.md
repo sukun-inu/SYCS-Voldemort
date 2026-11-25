@@ -6,7 +6,7 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 
 | 場所 | 中身 |
 |---|---|
-| `apps/bot` | Discord の Bot（serenity）。discord.py の Bot を置き換える。今は骨組み（ログ・心拍・設定のキャッシュと起動時の null の掃除・依頼の巡回・止め方）と、ログチャンネルへの書き方、メンバーの参加・退出・変更・BAN のログと歓迎・お別れ、メッセージの削除・編集のログ、スティッキー（利用者の状態の記録は別の塊で足す）。部品はライブラリ（`src/lib.rs`）に置き、イベントにつなぐ前から突き合わせとテストで呼べるようにしてある。イメージは `docker/bot-rs.Dockerfile` |
+| `apps/bot` | Discord の Bot（serenity）。discord.py の Bot を置き換える。今は骨組み（ログ・心拍・設定のキャッシュと起動時の null の掃除・依頼の巡回・止め方）と、ログチャンネルへの書き方、メンバーの参加・退出・変更・BAN のログと歓迎・お別れ、メッセージの削除・編集のログ、スティッキー、リアクションロール（利用者の状態の記録は別の塊で足す）。部品はライブラリ（`src/lib.rs`）に置き、イベントにつなぐ前から突き合わせとテストで呼べるようにしてある。イメージは `docker/bot-rs.Dockerfile` |
 | `crates/sycs-core` | Rust のプロセスが共通で使う土台。環境変数の読み方・接続先・ログ・メトリクス・設定の読み書き・Bot への依頼の取り出し |
 | `tools/voice-check` | serenity + songbird の Bot が、DAVE 必須の VC で音を届けられるかを人の耳で確かめる道具 |
 
@@ -29,6 +29,7 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 | 名前・アバターの URL・mention | discord.py 2.7.1 の `str(user)`・`display_avatar.url`・`mention` | `sycs_bot::compat` | 同じ Discord の JSON を discord.py と serenity に読ませて 10 例とも一致（Bot の `#番号`・動くアバター・サーバーごとのアバター・既定のアバター）。serenity の `face()` は webp を返すが、色が変わるので使わない |
 | メンバーの参加・退出・ニックネーム・ロール・タイムアウト・BAN のログ、歓迎・お別れの文面 | `events/members.py` / `services/welcome_service.py` | `sycs_bot::members` / `sycs_bot::welcome` | 同じ Discord の JSON から discord.py の Member を作って Python の処理に渡し、log_action に渡った中身（レベル・本文・項目の名前と値と順・色）と差し込みの結果が 19 例とも一致。ロールの並び（位置の低い順、同じ位置なら ID の大きい順）・作成日（ID から）・日本時間の書き方・「(なし)」「なし」「(不明)」まで。起動時に全メンバーを読み込む（discord.py の既定。読み込まないと、起動後に一度も見ていない人の退出でログもお別れも出ない） |
 | メッセージの削除・編集のログ、スティッキー | `events/messages.py` / `services/sticky_service.py` | `sycs_bot::message_logs` / `message_cache` / `sticky` | 同じ Discord のメッセージの JSON から discord.py と serenity のメッセージを作り、Python の処理が log_action に渡した中身（作者の名前とアイコンまで）と 9 例とも一致。スティッキーの書き戻し・削除は本物の settings_store と 5 例とも一致。メッセージの控えは discord.py と同じく全体で直近 1000 件（DM・Bot の発言も数える。serenity のキャッシュはチャンネルごとの件数なので使わない）。Bot 自身のメッセージの削除もログに出す（Python と同じ。スティッキーを貼り直すたびに出る） |
+| リアクションロール（絵文字の照合とロールの引き当て） | `services/reaction_role_service.py` | `sycs_bot::reaction_roles` | 絵文字の鍵（文字列 30 種・discord.py の PartialEmoji 5 種）とロールの引き当て（対応表 8 種・13 例）が本物の Python と 48 例とも一致。カスタム絵文字の書き方（`<:name:123>`・`<a:name:123>`・`name:123`・`123`）は Python と同じ正規表現をそのまま使う（テストが Python のソースと突き合わせる。手で書いた比べ方では全角の数字だけ答えが違った） |
 | ログのレベルの名前 | `WARNING` | `WARN` を `WARNING` と書く | 管理画面は `WARNING` で比べる。`WARN` のままだと「警告以上」で警告が全部消える |
 | ログのファイル名 | `bot.log` / `bot.log.2026-11-24.gz` | 同じ | 移行中に同じディレクトリで 2 通りの名前が混ざると、片方の掃除が相手を見つけられない |
 

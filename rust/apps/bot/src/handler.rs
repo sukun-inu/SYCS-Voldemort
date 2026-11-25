@@ -1,5 +1,5 @@
 //! Discord のイベントを受ける。Python の `events/` にあたる（今は ready・メンバーの出入りと変更・BAN・
-//! メッセージの削除と編集のログ・スティッキー）。
+//! メッセージの削除と編集のログ・スティッキー・リアクションロール）。
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -7,8 +7,8 @@ use std::sync::{Arc, OnceLock};
 
 use serenity::all::{
     Cache, ChannelId, ChunkGuildFilter, Context, EventHandler, Guild, GuildId,
-    GuildMemberUpdateEvent, Member, Message, MessageId, MessageUpdateEvent, Ready, Role, RoleId,
-    ShardManager, User,
+    GuildMemberUpdateEvent, Member, Message, MessageId, MessageUpdateEvent, Reaction, Ready, Role,
+    RoleId, ShardManager, User,
 };
 use serenity::async_trait;
 use sqlx::PgPool;
@@ -20,6 +20,7 @@ use crate::config::BotConfig;
 use crate::log_channel::{self, Author, AvatarColours, LogSink};
 use crate::members::{self, LogEntry};
 use crate::message_cache::{CachedMessage, MessageCache};
+use crate::reaction_roles::{self, Change, ReactionEvent};
 use crate::sticky::{self, StickyCtx, StickyLocks};
 use crate::welcome::{self, Kind};
 use crate::{compat, message_logs, signals};
@@ -385,6 +386,59 @@ impl EventHandler for Handler {
             )
             .await;
         }
+    }
+
+    async fn reaction_add(&self, ctx: Context, add_reaction: Reaction) {
+        let Some(guild_id) = add_reaction.guild_id else {
+            return;
+        };
+        // 付いたときは Discord がメンバーを付けてくる。Bot 自身のリアクションには反応しない。
+        let Some(member) = add_reaction.member.as_ref() else {
+            return;
+        };
+        if member.user.bot || !self.handles(guild_id) {
+            return;
+        }
+        let event = ReactionEvent {
+            guild_id,
+            user_id: member.user.id,
+            user_tag: compat::user_tag(&member.user),
+            message_id: add_reaction.message_id.get(),
+            emoji: &add_reaction.emoji,
+            change: Change::Add,
+        };
+        reaction_roles::apply(&ctx.cache, &ctx.http, &self.state.settings, event).await;
+    }
+
+    async fn reaction_remove(&self, ctx: Context, removed_reaction: Reaction) {
+        let (Some(guild_id), Some(user_id)) = (removed_reaction.guild_id, removed_reaction.user_id)
+        else {
+            return;
+        };
+        if !self.handles(guild_id) {
+            return;
+        }
+        // 外れたときは Discord がメンバーを付けてこない。読み込んであるメンバーから引き、
+        // いなければ何もしない（Python と同じ。取りに行かない）。
+        let user = ctx
+            .cache
+            .guild(guild_id)
+            .and_then(|g| g.members.get(&user_id).map(|m| m.user.clone()));
+        let Some(user) = user else {
+            return;
+        };
+        if user.bot {
+            return;
+        }
+        let event = ReactionEvent {
+            guild_id,
+            user_id,
+            user_tag: compat::user_tag(&user),
+            message_id: removed_reaction.message_id.get(),
+            emoji: &removed_reaction.emoji,
+            change: Change::Remove,
+        };
+        reaction_roles::apply(&ctx.cache, &ctx.http, &self.state.settings, event).await;
     }
 
     async fn guild_member_addition(&self, ctx: Context, new_member: Member) {
