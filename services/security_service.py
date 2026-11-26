@@ -341,7 +341,21 @@ async def _run_vt_scans(
         """1件スキャンして、終わるたびに進捗を1つ進める。"""
         nonlocal done, progress_msg
         async with gate:
-            res = await vt_scan_target(session, url)
+            try:
+                res = await vt_scan_target(session, url)
+            except Exception as e:
+                # 1件の予期しない失敗で、検査全体（GPT の判定・削除・剥奪・報告）を止めない。
+                # 止めると、危険な投稿に「走査で落ちる URL」を混ぜるだけで素通りできてしまう
+                # （壊れた URL で url_safety が ValueError を投げていたときに実際にそうなった）。
+                # 走査できなかった件として扱い、印は「注意」になる（安全とは数えない）。
+                logger.exception("[SECURITY] VirusTotal の走査で予期しない失敗 url=%s", url)
+                res = {
+                    "status": "error",
+                    "type": "url",
+                    "reason": f"scan_failed:{type(e).__name__}",
+                    "malicious": 0,
+                    "suspicious": 0,
+                }
         done += 1
         if progress_msg:
             # 「何本終わったか」だけを出す。並列に走るので、どの行まで

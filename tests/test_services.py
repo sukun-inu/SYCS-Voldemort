@@ -2544,6 +2544,20 @@ class UrlSafetyTests(unittest.TestCase):
         with self.assertRaises(URLSafetyError):
             validate_public_http_url("https://user:pass@example.com/")
 
+    def test_malformed_urls_are_blocked_as_unsafe(self):
+        """分解できない URL も URLSafetyError として弾くこと（ValueError のまま漏らさない）。
+
+        urlparse は括弧の閉じない IPv6 などで ValueError を投げる。それが漏れると、
+        VirusTotal の走査を通してメッセージの検査全体が止まり、危険な投稿が素通りした。
+        """
+        for url in ("https://[abc", "https://abc]", "https://[1.2.3.4]/"):
+            with self.subTest(url=url):
+                with self.assertRaises(URLSafetyError) as ctx:
+                    validate_public_http_url(url)
+                self.assertIn("invalid_url", str(ctx.exception))
+                with self.assertRaises(URLSafetyError):
+                    asyncio.run(validate_public_http_url_async(url))
+
     def test_missing_scheme_is_blocked(self):
         with self.assertRaises(URLSafetyError):
             validate_public_http_url("example.com")
@@ -4398,6 +4412,44 @@ class MessageSecurityOutcomeTests(unittest.TestCase):
         self.assertEqual(self.deleted, [True])
         self.assertEqual(self.stripped, [5])
         self.assertFalse(any("要確認" in m for m in self.logged), self.logged)
+
+    def test_a_malformed_link_does_not_let_a_dangerous_message_through(self):
+        """危険な投稿に壊れた URL を混ぜても、削除と剥奪まで進むこと。
+
+        以前は https://[abc のような URL で url_safety が ValueError を投げ、それが
+        VirusTotal の走査ごと検査全体を止めていた。GPT の判定も削除も剥奪も行われず、
+        壊れた URL を1つ添えるだけで検査をすり抜けられた。
+        """
+        with patch.object(self.sec, "get_session", Mock()):
+            self._run(trusted=lambda g: [], gpt="DANGEROUS", content="危ない投稿 https://[abc")
+
+        self.assertEqual(self.deleted, [True], "壊れた URL で検査が止まり、削除されなかった")
+        self.assertEqual(self.stripped, [5])
+
+    def test_one_failing_scan_does_not_stop_the_others(self):
+        """1件の走査が予期しない例外を出しても、走査全体は結果を返すこと。
+
+        その件は「走査できなかった（error）」になり、ほかの件はそのまま走査される。
+        """
+
+        async def scan(session, url):
+            if "boom" in url:
+                raise RuntimeError("想定していない失敗")
+            return {"status": "ok", "type": "url", "malicious": 0, "suspicious": 0}
+
+        with (
+            patch.object(self.sec, "vt_scan_target", scan),
+            patch.object(self.sec, "get_session", Mock()),
+            patch.object(self.sec, "send_log_embed", AsyncMock(return_value=None)),
+            patch.object(self.sec.logger, "exception"),
+        ):
+            logs = []
+            results, _, flags, danger = asyncio.run(
+                self.sec._run_vt_scans(Mock(), 1, ["https://boom.example/", "https://ok.example/"], [], logs)
+            )
+        self.assertEqual([r["status"] for r in results], ["error", "ok"])
+        self.assertFalse(danger)
+        self.assertTrue(logs[0].startswith("[WARN] https://boom.example/"), logs)
 
     def test_a_bypassed_member_is_not_scanned_at_all(self):
         """バイパス対象なら、GPT にも問い合わせずに戻ること。

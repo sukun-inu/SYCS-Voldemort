@@ -174,7 +174,14 @@ def _parse_target(url: str, allow_http: bool) -> tuple[set[IPAddress] | None, st
     埋まっていて名前解決は要らない。ホスト名なら None を返すので、呼び出し側が
     同期・非同期のどちらで解決するかを選ぶ。
     """
-    parsed = urlparse((url or "").strip())
+    try:
+        parsed = urlparse((url or "").strip())
+    except ValueError as e:
+        # urlparse は括弧の閉じない IPv6（https://[abc）や、括弧の中の IPv4 などで
+        # ValueError を投げる。URLSafetyError にしないと呼び出し側が受け止められない。
+        # VirusTotal の走査ではこれが検査全体を止め、危険な投稿に壊れた URL を1つ
+        # 混ぜるだけで、GPT の判定も削除も剥奪も行われずに素通りしていた。
+        raise URLSafetyError(f"invalid_url:{e}") from e
     if not parsed.scheme:
         raise URLSafetyError("missing_scheme")
 
