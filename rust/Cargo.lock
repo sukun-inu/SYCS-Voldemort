@@ -3984,6 +3984,8 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "flate2",
+ "idna",
+ "indexmap",
  "percent-encoding",
  "redis",
  "serde_json",
@@ -3992,6 +3994,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "unicode-normalization",
 ]
 
 [[package]]

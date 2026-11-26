@@ -49,6 +49,9 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     ("sycs_core::settings", "settings"),
     ("sycs_core::signals", "dev"),
     ("sycs_core::metrics", "metrics"),
+    // Python の services.url_safety（security）・ttl_cache（system）と同じ棚。
+    ("sycs_core::url_safety", "security"),
+    ("sycs_core::ttl_cache", "system"),
     ("sycs_bot", "bot"),
     ("voice_check", "voice"),
     ("songbird", "voice"),
