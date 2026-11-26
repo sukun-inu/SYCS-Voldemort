@@ -14,13 +14,16 @@ workspace = true
 [dependencies]
 chrono = { workspace = true, features = ["clock", "std"] }
 flate2 = { workspace = true }
+idna = { workspace = true }
+indexmap = { workspace = true }
 percent-encoding = { workspace = true }
 redis = { workspace = true, features = ["tokio-comp", "connection-manager"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
 sqlx = { workspace = true, features = ["runtime-tokio", "postgres", "json", "derive"] }
-tokio = { workspace = true, features = ["sync", "time", "rt"] }
+tokio = { workspace = true, features = ["sync", "time", "rt", "net"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "registry", "std"] }
+unicode-normalization = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

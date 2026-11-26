@@ -7,7 +7,7 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 | 場所 | 中身 |
 |---|---|
 | `apps/bot` | Discord の Bot（serenity）。discord.py の Bot を置き換える。今は骨組み（ログ・心拍・設定のキャッシュと起動時の null の掃除・依頼の巡回・止め方）と、ログチャンネルへの書き方、メンバーの参加・退出・変更・BAN のログと歓迎・お別れ、メッセージの削除・編集のログ、スティッキー、リアクションロール、VC の出入りのログと通知、セキュリティの部品と VC の荒らし対策（メッセージの検査・読み上げ・利用者の状態の記録は別の塊で足す）。部品はライブラリ（`src/lib.rs`）に置き、イベントにつなぐ前から突き合わせとテストで呼べるようにしてある。イメージは `docker/bot-rs.Dockerfile` |
-| `crates/sycs-core` | Rust のプロセスが共通で使う土台。環境変数の読み方・接続先・ログ・メトリクス・設定の読み書き・Bot への依頼の取り出し |
+| `crates/sycs-core` | Rust のプロセスが共通で使う土台。環境変数の読み方・接続先・ログ・メトリクス・設定の読み書き・Bot への依頼の取り出し・URL の安全確認（SSRF 対策）・期限つきキャッシュ |
 | `tools/voice-check` | serenity + songbird の Bot が、DAVE 必須の VC で音を届けられるかを人の耳で確かめる道具 |
 
 ## Python と揃えているもの
@@ -32,6 +32,7 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 | リアクションロール（絵文字の照合とロールの引き当て） | `services/reaction_role_service.py` | `sycs_bot::reaction_roles` | 絵文字の鍵（文字列 30 種・discord.py の PartialEmoji 5 種）とロールの引き当て（対応表 8 種・13 例）が本物の Python と 48 例とも一致。カスタム絵文字の書き方（`<:name:123>`・`<a:name:123>`・`name:123`・`123`）は Python と同じ正規表現をそのまま使う（テストが Python のソースと突き合わせる。手で書いた比べ方では全角の数字だけ答えが違った） |
 | VC の出入りのログと通知（在室時間・非公開の VC の絞り込み・ロールのメンション） | `events/voice.py` | `sycs_bot::vc_notify` | 本物の Python（discord.py の権限の計算を含む）と 36 例とも一致。在室時間（移動をはさむ・2 回目の退出・ミュートだけ）・絞り込み（@everyone とロールの上書き・管理者・メンバーの上書きは数えない・ロールが無ければ止める）・壊れた設定の値（小数は切り捨て・真偽値は 1・負の数と読めない値）・Embed・10 分に 1 回のメンション |
 | セキュリティの部品（スパム・VC の荒らしの判定、URL の抜き出し、文字の向きの細工、新規メンバー、バイパス、結果の Embed）と VC の荒らし対策 | `services/spam_detection.py` / `raid_detection.py` / `security_service.py` | `sycs_bot::security` | 時刻を固定した列と同じ入力で、本物の Python と 77 例とも一致（スパムは 15 秒で 4 回・荒らしは 20 秒で先頭 4 文字が同じ名前が 5 回・窓の境・URL の記号と重複・大文字の http・新規の 7 日の境と未来の参加日時・バイパスの読めない要素・判定できないものを緑にしない Embed）。バイパスの判定の失敗で措置を見送る分岐は持ち込まない（設定はメモリから引くので失敗しない） |
+| URL の安全確認（SSRF 対策）と期限つきキャッシュ | `services/url_safety.py` / `ttl_cache.py` | `sycs_core::url_safety` / `ttl_cache` | 本物の Python 3.13 と 1416 例とも一致（URL の分解 67・公開アドレスの表の範囲の端と乱数 1325・名前を引く全体 6・キャッシュの操作 18）。URL の分解は Python の urlsplit と同じ決まり、公開アドレスは Python 3.13 の ipaddress の表。表の端と URL の答えは `crates/sycs-core/tests/fixtures/url_safety/` の基準で CI が毎回確かめる。ASCII 以外のホスト名は UTS46（reqwest と同じ）で、Python の IDNA2003 とまれな文字で違う |
 | ログのレベルの名前 | `WARNING` | `WARN` を `WARNING` と書く | 管理画面は `WARNING` で比べる。`WARN` のままだと「警告以上」で警告が全部消える |
 | ログのファイル名 | `bot.log` / `bot.log.2026-11-24.gz` | 同じ | 移行中に同じディレクトリで 2 通りの名前が混ざると、片方の掃除が相手を見つけられない |
 

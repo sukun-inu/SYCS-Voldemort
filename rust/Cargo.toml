@@ -22,8 +22,12 @@ members = ["apps/bot", "crates/sycs-core", "tools/voice-check"]
 [workspace.dependencies]
 chrono = { version = "=0.4.45", default-features = false }
 flate2 = { version = "=1.1.11" }
+# URL の安全確認で、ASCII 以外のホスト名を reqwest と同じ変換（UTS46）にする。
+idna = { version = "=1.1.0" }
 # アバターの代表色（ログの Embed の色）のために png と gif を読む。
 image = { version = "=0.25.10", default-features = false }
+# 期限つきキャッシュの「最後に使われた順」。serde_json（preserve_order）が既に使っている版。
+indexmap = { version = "=2.14.2" }
 percent-encoding = { version = "=2.3.2" }
 redis = { version = "=1.8.3", default-features = false }
 # リアクションロールの絵文字の照合で、Python と同じ正規表現をそのまま使う（ログのフィルタが既に使っている版）。
@@ -40,6 +44,8 @@ tempfile = { version = "=3.27.0" }
 tokio = { version = "=1.54.1" }
 tracing = { version = "=0.1.44" }
 tracing-subscriber = { version = "=0.3.23", default-features = false }
+# URL の安全確認の NFKC（Python の urlsplit の検査と同じ）。url crate が既に使っている版。
+unicode-normalization = { version = "=0.1.26" }
 
 [workspace.package]
 edition = "2024"
