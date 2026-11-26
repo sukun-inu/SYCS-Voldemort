@@ -248,27 +248,35 @@ async def vt_check_file(content: bytes) -> Dict[str, Any]:
 
         return await asyncio.to_thread(sync_scan)
 
-    except vt.error.ConflictError:
+    except vt.error.APIError as e:
+        # vt-py 0.22.0 に ConflictError という型は無い（vt.error には APIError しか無く、種類は
+        # code で表す）。以前は `except vt.error.ConflictError:` と書いていて、何かが失敗する
+        # たびに、この行を評価したところで AttributeError が起きて元の失敗を上書きし、
+        # vt_check_file の外へ漏れていた（タイムアウト・回数制限・アップロードの失敗のどれでも）。
+        # 同時にスキャン中のときに既存の結果を取り直す分岐も、一度も動いていなかった。
+        if getattr(e, "code", None) != "ConflictError":
+            logger.error("[VT] File scan API error: %s", e)
+            return {"status": "error", "type": "file", "reason": str(e), "malicious": 0, "suspicious": 0}
+
+        def sync_fallback():
+            """新規スキャンが ConflictError（他所で同時にスキャン中）になったとき、
+            既存の解析結果をハッシュから取得し直す。
+            """
+            with vt.Client(VIRUSTOTAL_API_KEY, timeout=VT_SCAN_TIMEOUT_SEC) as client:
+                obj = client.get_object(f"/files/{sha256}")
+                stats = obj.last_analysis_stats
+                return {
+                    "status": "conflict_fallback",
+                    "type": "file",
+                    "malicious": stats.get("malicious", 0),
+                    "suspicious": stats.get("suspicious", 0),
+                }
+
         try:
-
-            def sync_fallback():
-                """新規スキャンが ConflictError（他所で同時にスキャン中）になったとき、
-                既存の解析結果をハッシュから取得し直す。
-                """
-                with vt.Client(VIRUSTOTAL_API_KEY, timeout=VT_SCAN_TIMEOUT_SEC) as client:
-                    obj = client.get_object(f"/files/{sha256}")
-                    stats = obj.last_analysis_stats
-                    return {
-                        "status": "conflict_fallback",
-                        "type": "file",
-                        "malicious": stats.get("malicious", 0),
-                        "suspicious": stats.get("suspicious", 0),
-                    }
-
             return await asyncio.to_thread(sync_fallback)
-        except Exception:
-            raise
-
+        except Exception as e2:
+            logger.error("[VT] File scan conflict fallback failed: %s", e2)
+            return {"status": "error", "type": "file", "reason": str(e2), "malicious": 0, "suspicious": 0}
     except Exception as e:
         logger.error("[VT] File scan exception: %s", e)
         return {"status": "error", "type": "file", "reason": str(e), "malicious": 0, "suspicious": 0}
