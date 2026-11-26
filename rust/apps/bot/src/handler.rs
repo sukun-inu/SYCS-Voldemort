@@ -21,6 +21,7 @@ use crate::log_channel::{self, Author, AvatarColours, LogSink};
 use crate::members::{self, LogEntry};
 use crate::message_cache::{CachedMessage, MessageCache};
 use crate::reaction_roles::{self, Change, ReactionEvent};
+use crate::security::{self, RaidDetector, SpamDetector, Stripped};
 use crate::sticky::{self, StickyCtx, StickyLocks};
 use crate::vc_notify::{self, Filter, Plan, VcTracker};
 use crate::welcome::{self, Kind};
@@ -44,6 +45,10 @@ pub struct AppState {
     pub sticky_locks: StickyLocks,
     /// VC の参加の時刻・メンションの間隔。
     pub vc: VcTracker,
+    /// 連投の記録（メッセージの検査で使う）。
+    pub spam: SpamDetector,
+    /// VC に似た名前の人が続けて入った記録。
+    pub raid: RaidDetector,
     shard_manager: OnceLock<Arc<ShardManager>>,
 }
 
@@ -64,6 +69,8 @@ impl AppState {
             messages: MessageCache::default(),
             sticky_locks: StickyLocks::default(),
             vc: VcTracker::default(),
+            spam: SpamDetector::default(),
+            raid: RaidDetector::default(),
             shard_manager: OnceLock::new(),
         }
     }
@@ -210,6 +217,63 @@ impl Handler {
         if let Err(e) = sent {
             warn!(guild_id = %guild.id, ?kind, "歓迎・お別れを送れませんでした: {e}");
         }
+    }
+}
+
+impl Handler {
+    /// VC に入った・移ったときの荒らし対策。Python の `handle_security_for_voice_join`。
+    ///
+    /// 似た名前の人が続けて入ったら、その人のロールを全部剥がしてログに残す。信頼ユーザー・
+    /// バイパスロールの人は数えない（Python と同じく、記録にも入れない）。
+    async fn vc_raid_check(
+        &self,
+        ctx: &Context,
+        guild_id: GuildId,
+        member: &Member,
+        roles: &HashMap<RoleId, Role>,
+        channel: u64,
+        now: f64,
+    ) {
+        // discord.py の member.roles と同じく、サーバーにあるロールと @everyone。
+        let mut held: Vec<RoleId> = member
+            .roles
+            .iter()
+            .copied()
+            .filter(|r| roles.contains_key(r))
+            .collect();
+        held.push(RoleId::new(guild_id.get()));
+        let snapshot = self.state.settings.snapshot();
+        if security::bypass_reason(snapshot.guild(guild_id.get()), member.user.id, &held).is_some()
+        {
+            return;
+        }
+        let name = vc_notify::display_name(
+            member.nick.as_deref(),
+            member.user.global_name.as_deref(),
+            &member.user.name,
+        );
+        if !self.state.raid.check(channel, name, now) {
+            return;
+        }
+        let stripped = security::strip_roles(&ctx.http, guild_id, member.user.id, &held).await;
+        warn!(%guild_id, user_id = %member.user.id, ?stripped, "[SECURITY] VCレイド検出");
+        if stripped == Stripped::Forbidden {
+            warn!(%guild_id, "VCレイドのロール剥奪に失敗しました（権限が足りません）");
+        }
+        let entry = LogEntry {
+            level: log_channel::Level::Error,
+            message: "VCレイド検出".into(),
+            fields: vec![("チャンネル".into(), format!("<#{channel}>"))],
+            colour: Some(members::RED),
+        };
+        self.log(
+            ctx,
+            guild_id,
+            entry,
+            Author::from_member(member),
+            "VCレイド",
+        )
+        .await;
     }
 }
 
@@ -476,10 +540,15 @@ impl EventHandler for Handler {
         };
         let before_id = before.as_ref().map(|c| c.id.get());
         let after_id = after.as_ref().map(|c| c.id.get());
+        let now = unix_now();
+        // 荒らし対策は出入りのログより前（Python の _dispatch_voice_state と同じ順）。
+        if let Some(channel) = after_id.filter(|a| Some(*a) != before_id) {
+            self.vc_raid_check(&ctx, guild_id, &member, &roles, channel, now)
+                .await;
+        }
         let Some(change) = vc_notify::change_of(before_id, after_id) else {
             return;
         };
-        let now = unix_now();
         let stay = self
             .state
             .vc
