@@ -4045,6 +4045,91 @@ class TtsLatencyLoggingTests(unittest.TestCase):
         self.assertEqual(item.vc_channel_id, 99)
 
 
+class VirusTotalFileScanFailureTests(unittest.TestCase):
+    """ファイルの検査（vt_check_file）が失敗したとき、例外を漏らさず結果として返すこと。
+
+    以前は `except vt.error.ConflictError:` と書いていたが、vt-py 0.22.0 にその型は無い。
+    何かが失敗するたびに、その行を評価したところで AttributeError が起きて元の失敗を
+    上書きし、vt_check_file の外へ漏れていた。同時にスキャン中（ConflictError）のときに
+    既存の結果を取り直す分岐も、一度も動いていなかった。
+    """
+
+    def setUp(self):
+        import services.virustotal_service as virustotal
+
+        self.vt_service = virustotal
+        key_patch = patch.object(virustotal, "VIRUSTOTAL_API_KEY", "dummy-key")
+        key_patch.start()
+        self.addCleanup(key_patch.stop)
+
+    def _client(self, *, scan_error, fallback_stats=None):
+        """ハッシュの照会は「無い」、アップロードは scan_error、取り直しは fallback_stats を返す偽物。"""
+        api_error = self.vt_service.vt.error.APIError
+        calls: list[str] = []
+
+        class FakeClient:
+            def __init__(self, apikey, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def get_object(self, path):
+                calls.append("get_object")
+                if fallback_stats is None or calls.count("get_object") == 1:
+                    raise api_error("NotFoundError", "not found")
+                return SimpleNamespace(last_analysis_stats=fallback_stats)
+
+            def scan_file(self, f, wait_for_completion=False):
+                calls.append("scan_file")
+                raise scan_error
+
+        return FakeClient, calls
+
+    def test_a_conflict_falls_back_to_the_existing_analysis(self):
+        """同時にスキャン中（ConflictError）なら、既存の解析結果を取り直して返すこと。"""
+        api_error = self.vt_service.vt.error.APIError
+        FakeClient, calls = self._client(
+            scan_error=api_error("ConflictError", "already being scanned"),
+            fallback_stats={"malicious": 12, "suspicious": 1},
+        )
+        with patch.object(self.vt_service.vt, "Client", FakeClient):
+            result = asyncio.run(self.vt_service.vt_check_file(b"data"))
+        self.assertEqual(result["status"], "conflict_fallback")
+        self.assertEqual((result["malicious"], result["suspicious"]), (12, 1))
+        self.assertEqual(calls, ["get_object", "scan_file", "get_object"])
+
+    def test_a_failed_fallback_is_returned_as_an_error(self):
+        """取り直しにも失敗したら、例外を漏らさず走査できなかった結果として返すこと。"""
+        api_error = self.vt_service.vt.error.APIError
+        FakeClient, calls = self._client(scan_error=api_error("ConflictError", "already being scanned"))
+        with patch.object(self.vt_service.vt, "Client", FakeClient), patch.object(self.vt_service.logger, "error"):
+            result = asyncio.run(self.vt_service.vt_check_file(b"data"))
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(calls, ["get_object", "scan_file", "get_object"])
+
+    def test_other_api_errors_are_returned_as_an_error(self):
+        """ConflictError 以外の API の失敗（回数制限など）は、走査できなかった結果として返すこと。"""
+        api_error = self.vt_service.vt.error.APIError
+        FakeClient, _ = self._client(scan_error=api_error("QuotaExceededError", "quota"))
+        with patch.object(self.vt_service.vt, "Client", FakeClient), patch.object(self.vt_service.logger, "error"):
+            result = asyncio.run(self.vt_service.vt_check_file(b"data"))
+        self.assertEqual(result["status"], "error")
+        self.assertIn("QuotaExceededError", result["reason"])
+        self.assertEqual((result["malicious"], result["suspicious"]), (0, 0))
+
+    def test_other_failures_are_returned_as_an_error(self):
+        """API 以外の失敗（つながらない・時間切れ）も、例外を漏らさず結果として返すこと。"""
+        FakeClient, _ = self._client(scan_error=OSError("Cannot connect"))
+        with patch.object(self.vt_service.vt, "Client", FakeClient), patch.object(self.vt_service.logger, "error"):
+            result = asyncio.run(self.vt_service.vt_check_file(b"data"))
+        self.assertEqual(result["status"], "error")
+        self.assertIn("Cannot connect", result["reason"])
+
+
 class VirusTotalTimeoutAndFailureCacheTests(unittest.TestCase):
     """VirusTotal へ到達できないとき、待ち続けず・叩き直さないこと。
 
