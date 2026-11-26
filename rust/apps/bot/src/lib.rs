@@ -12,6 +12,7 @@ pub mod members;
 pub mod message_cache;
 pub mod message_logs;
 pub mod reaction_roles;
+pub mod security;
 pub mod signals;
 pub mod sticky;
 pub mod vc_notify;
