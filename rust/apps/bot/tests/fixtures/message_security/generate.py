@@ -4,9 +4,19 @@
 偽物に差し替えて回し、Discord への書き込み（送る・書き換える・消す・剥がす・ログ）と Groq に渡したものを
 順に書き出す。時刻は固定する。
 
-    python generate.py cases.json > expected.jsonl   # 本番と同じ依存（requirements.txt）で、リポジトリの直下を /app に置いて
+本番と同じ依存（requirements.txt）で、リポジトリの直下を /app に置いて動かす:
+
+    python generate.py cases.json > expected.jsonl
 """
-import asyncio, datetime, json, math, os, re, sys, tempfile
+
+import asyncio
+import datetime
+import json
+import math
+import os
+import re
+import sys
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -72,7 +82,15 @@ async def run(case):
         return progress if case.get("log_channel", True) else None
 
     async def log_action(bot, guild_id, level, message, user=None, fields=None, embed_color=None):
-        calls.append(["log", level, message, [[k, v] for k, v in (fields or {}).items()], embed_color.value if embed_color else None])
+        calls.append(
+            [
+                "log",
+                level,
+                message,
+                [[k, v] for k, v in (fields or {}).items()],
+                embed_color.value if embed_color else None,
+            ]
+        )
 
     async def scan(session, url):
         scanned.append(url)
@@ -84,8 +102,16 @@ async def run(case):
         return dict(r)
 
     async def assess(text, vt_results, spam_count=0, min_interval=float("inf"), is_new_member=False):
-        calls.append(["assess", text, [[r.get("malicious"), r.get("suspicious")] for r in vt_results], spam_count,
-                      "inf" if math.isinf(min_interval) else min_interval, is_new_member])
+        calls.append(
+            [
+                "assess",
+                text,
+                [[r.get("malicious"), r.get("suspicious")] for r in vt_results],
+                spam_count,
+                "inf" if math.isinf(min_interval) else min_interval,
+                is_new_member,
+            ]
+        )
         return case.get("gpt", "SAFE")
 
     async def remove_roles(*roles, reason=None):
@@ -103,9 +129,12 @@ async def run(case):
     member.remove_roles = remove_roles
     delete = AsyncMock(side_effect=http_error() if case.get("delete_fails") else None)
     message = SimpleNamespace(
-        author=member, guild=SimpleNamespace(id=GUILD), content=case.get("content", ""),
+        author=member,
+        guild=SimpleNamespace(id=GUILD),
+        content=case.get("content", ""),
         attachments=[SimpleNamespace(url=u) for u in case.get("attachments", [])],
-        channel=SimpleNamespace(id=case.get("channel", CHANNEL)), delete=delete,
+        channel=SimpleNamespace(id=case.get("channel", CHANNEL)),
+        delete=delete,
     )
 
     async def delete_and_record():
@@ -113,10 +142,14 @@ async def run(case):
         await delete()
 
     message.delete = delete_and_record
-    with patch.object(ss, "send_log_embed", send_log_embed), patch.object(ss, "log_action", log_action), \
-            patch.object(ss, "vt_scan_target", scan), patch.object(ss, "gpt_assess", assess), \
-            patch.object(ss, "get_session", lambda: None), \
-            patch.object(settings_store, "get_guild_settings", lambda gid: case.get("settings", {})):
+    with (
+        patch.object(ss, "send_log_embed", send_log_embed),
+        patch.object(ss, "log_action", log_action),
+        patch.object(ss, "vt_scan_target", scan),
+        patch.object(ss, "gpt_assess", assess),
+        patch.object(ss, "get_session", lambda: None),
+        patch.object(settings_store, "get_guild_settings", lambda gid: case.get("settings", {})),
+    ):
         await ss.handle_security_for_message(MagicMock(), message)
     return calls, sorted(scanned)
 
@@ -131,9 +164,13 @@ async def main():
     print("\n".join(out))
 
 
-with patch.object(spam_detection, "time", SimpleNamespace(time=lambda: clock["t"])), \
-        patch.object(raid_detection, "time", SimpleNamespace(time=lambda: clock["t"])), \
-        patch.object(discord.utils, "utcnow", lambda: datetime.datetime.fromtimestamp(clock["t"], UTC)), \
-        patch.object(ss, "now_jst", lambda: datetime.datetime.fromtimestamp(clock["t"], JST).strftime("%Y-%m-%d %H:%M:%S")), \
-        patch.object(ss.logger, "warning"), patch.object(ss.logger, "exception"), patch.object(ss.logger, "info"):
+with (
+    patch.object(spam_detection, "time", SimpleNamespace(time=lambda: clock["t"])),
+    patch.object(raid_detection, "time", SimpleNamespace(time=lambda: clock["t"])),
+    patch.object(discord.utils, "utcnow", lambda: datetime.datetime.fromtimestamp(clock["t"], UTC)),
+    patch.object(ss, "now_jst", lambda: datetime.datetime.fromtimestamp(clock["t"], JST).strftime("%Y-%m-%d %H:%M:%S")),
+    patch.object(ss.logger, "warning"),
+    patch.object(ss.logger, "exception"),
+    patch.object(ss.logger, "info"),
+):
     asyncio.run(main())
