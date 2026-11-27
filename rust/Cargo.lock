@@ -3967,11 +3967,13 @@ name = "sycs-bot"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "hex",
  "image",
  "regex",
  "reqwest",
  "serde_json",
  "serenity",
+ "sha2 0.10.9",
  "sqlx",
  "sycs-core",
  "tokio",

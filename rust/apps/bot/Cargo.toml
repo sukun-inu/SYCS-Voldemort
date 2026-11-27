@@ -13,10 +13,12 @@ workspace = true
 # 版は rust/Cargo.toml の [workspace.dependencies] で決める。
 [dependencies]
 chrono = { workspace = true, features = ["clock", "std"] }
+hex = { workspace = true }
 image = { workspace = true, features = ["png", "gif"] }
 regex = { workspace = true }
-reqwest = { workspace = true, features = ["rustls-tls"] }
+reqwest = { workspace = true, features = ["rustls-tls", "multipart"] }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 serenity = { workspace = true, features = [
     "builder",
     "cache",
@@ -29,3 +31,7 @@ sqlx = { workspace = true, features = ["runtime-tokio", "postgres"] }
 sycs-core = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
 tracing = { workspace = true }
+
+[dev-dependencies]
+# VirusTotal の結合テストで、偽物の HTTP サーバーをテストの中に立てる。
+tokio = { workspace = true, features = ["net", "io-util", "macros", "rt-multi-thread"] }
