@@ -3,7 +3,7 @@
 //!
 //! ここは「何を書くか」だけを決める（Discord にもキャッシュにも触らない）。送るのは
 //! `handler`、送り方は `log_channel`。利用者の状態の記録（Python の `record_user_state_event`）は
-//! 別の塊（利用者の状態）で同じイベントに足す。
+//! [`crate::user_state`] が同じイベントで書く。
 //!
 //! 文面・項目の名前と順・時刻の書き方・色は Python と同じ。一致は、同じ Discord の JSON を
 //! discord.py と serenity に読ませ、Python の処理が log_action に渡した中身と突き合わせて

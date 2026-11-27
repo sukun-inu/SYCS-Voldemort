@@ -1,0 +1,1235 @@
+{
+ "steps": [
+  {
+   "events": [
+    [
+     "member_join",
+     "active",
+     null,
+     null,
+     null,
+     "{\"joined_at\": \"2026-11-25T00:05:00.123000+00:00\", \"account_created_at\": \"2015-08-10T17:26:37.529000+00:00\", \"member_count\": 42, \"roles\": [{\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}, {\"id\": 1500000000000000010, \"name\": \"low\", \"position\": 1}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}}",
+     "2026-11-25T00:05:00.250000"
+    ]
+   ],
+   "current": [
+    "nelly",
+    "ネリー",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "active",
+    true,
+    false,
+    false,
+    null,
+    "[{\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}, {\"id\": 1500000000000000010, \"name\": \"low\", \"position\": 1}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "member_join",
+    "2026-11-25T00:05:00.250000",
+    "2026-11-25T00:05:00.250000",
+    null,
+    "2026-11-25T00:05:00.250000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_nickname_changed",
+     "active",
+     null,
+     null,
+     null,
+     "{\"before_nickname\": null, \"after_nickname\": \"にっく ✨\", \"roles\": [{\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}, {\"id\": 1500000000000000010, \"name\": \"low\", \"position\": 1}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}}",
+     "2026-11-25T00:06:00.000000"
+    ]
+   ],
+   "current": [
+    "nelly",
+    "にっく ✨",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "active",
+    true,
+    false,
+    false,
+    null,
+    "[{\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}, {\"id\": 1500000000000000010, \"name\": \"low\", \"position\": 1}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "member_nickname_changed",
+    "2026-11-25T00:06:00.000000",
+    "2026-11-25T00:05:00.250000",
+    null,
+    "2026-11-25T00:06:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_role_changed",
+     "active",
+     null,
+     null,
+     null,
+     "{\"added_roles\": [{\"id\": 1500000000000000050, \"name\": \"\\\"引用\\\" \\\\ 改行\\nあり\", \"position\": 5}, {\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}], \"removed_roles\": [{\"id\": 1500000000000000010, \"name\": \"low\", \"position\": 1}], \"roles\": [{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}, {\"id\": 1500000000000000050, \"name\": \"\\\"引用\\\" \\\\ 改行\\nあり\", \"position\": 5}, {\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}}",
+     "2026-11-25T00:07:00.000001"
+    ]
+   ],
+   "current": [
+    "nelly",
+    "にっく ✨",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "active",
+    true,
+    false,
+    false,
+    null,
+    "[{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}, {\"id\": 1500000000000000050, \"name\": \"\\\"引用\\\" \\\\ 改行\\nあり\", \"position\": 5}, {\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "member_role_changed",
+    "2026-11-25T00:07:00.000001",
+    "2026-11-25T00:05:00.250000",
+    null,
+    "2026-11-25T00:07:00.000001",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_timeout_set",
+     "active",
+     null,
+     null,
+     null,
+     "{\"timed_out_until\": \"2026-11-25T01:00:00+00:00\", \"roles\": [{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}, {\"id\": 1500000000000000050, \"name\": \"\\\"引用\\\" \\\\ 改行\\nあり\", \"position\": 5}, {\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": false, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}}",
+     "2026-11-25T00:08:00.000000"
+    ]
+   ],
+   "current": [
+    "nelly",
+    "にっく ✨",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "active",
+    true,
+    false,
+    true,
+    "2026-11-25T01:00:00.000000",
+    "[{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}, {\"id\": 1500000000000000050, \"name\": \"\\\"引用\\\" \\\\ 改行\\nあり\", \"position\": 5}, {\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": false, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "member_timeout_set",
+    "2026-11-25T00:08:00.000000",
+    "2026-11-25T00:05:00.250000",
+    null,
+    "2026-11-25T00:08:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "voice_join",
+     "active",
+     null,
+     null,
+     null,
+     "{\"channel_before_id\": null, \"channel_before_name\": null, \"channel_after_id\": 1600000000000000001, \"channel_after_name\": \"雑談 🔊\", \"duration_seconds\": null, \"roles\": [{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}, {\"id\": 1500000000000000050, \"name\": \"\\\"引用\\\" \\\\ 改行\\nあり\", \"position\": 5}, {\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": false, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}, \"timed_out_until\": \"2026-11-25T01:00:00+00:00\"}",
+     "2026-11-25T00:09:00.000000"
+    ]
+   ],
+   "current": [
+    "nelly",
+    "にっく ✨",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "active",
+    true,
+    false,
+    true,
+    "2026-11-25T01:00:00.000000",
+    "[{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}, {\"id\": 1500000000000000050, \"name\": \"\\\"引用\\\" \\\\ 改行\\nあり\", \"position\": 5}, {\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": false, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "voice_join",
+    "2026-11-25T00:09:00.000000",
+    "2026-11-25T00:05:00.250000",
+    null,
+    "2026-11-25T00:09:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_timeout_cleared",
+     "active",
+     null,
+     null,
+     null,
+     "{\"roles\": [{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}, {\"id\": 1500000000000000050, \"name\": \"\\\"引用\\\" \\\\ 改行\\nあり\", \"position\": 5}, {\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}}",
+     "2026-11-25T00:10:00.000000"
+    ]
+   ],
+   "current": [
+    "nelly",
+    "にっく ✨",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "active",
+    true,
+    false,
+    false,
+    null,
+    "[{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}, {\"id\": 1500000000000000050, \"name\": \"\\\"引用\\\" \\\\ 改行\\nあり\", \"position\": 5}, {\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "member_timeout_cleared",
+    "2026-11-25T00:10:00.000000",
+    "2026-11-25T00:05:00.250000",
+    null,
+    "2026-11-25T00:10:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "voice_move",
+     "active",
+     null,
+     null,
+     null,
+     "{\"channel_before_id\": 1600000000000000001, \"channel_before_name\": \"雑談 🔊\", \"channel_after_id\": 1600000000000000002, \"channel_after_name\": \"作業 \\\"VC\\\"\", \"roles\": [{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}, {\"id\": 1500000000000000050, \"name\": \"\\\"引用\\\" \\\\ 改行\\nあり\", \"position\": 5}, {\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}}",
+     "2026-11-25T00:11:00.000000"
+    ]
+   ],
+   "current": [
+    "nelly",
+    "にっく ✨",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "active",
+    true,
+    false,
+    false,
+    null,
+    "[{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}, {\"id\": 1500000000000000050, \"name\": \"\\\"引用\\\" \\\\ 改行\\nあり\", \"position\": 5}, {\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "voice_move",
+    "2026-11-25T00:11:00.000000",
+    "2026-11-25T00:05:00.250000",
+    null,
+    "2026-11-25T00:11:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "voice_leave",
+     "active",
+     null,
+     null,
+     null,
+     "{\"channel_before_id\": 1600000000000000002, \"channel_before_name\": \"作業 \\\"VC\\\"\", \"channel_after_id\": null, \"channel_after_name\": null, \"duration_seconds\": 3725, \"duration_hms\": \"01:02:05\", \"roles\": [{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}, {\"id\": 1500000000000000050, \"name\": \"\\\"引用\\\" \\\\ 改行\\nあり\", \"position\": 5}, {\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}}",
+     "2026-11-25T01:11:05.000000"
+    ]
+   ],
+   "current": [
+    "nelly",
+    "にっく ✨",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "active",
+    true,
+    false,
+    false,
+    null,
+    "[{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}, {\"id\": 1500000000000000050, \"name\": \"\\\"引用\\\" \\\\ 改行\\nあり\", \"position\": 5}, {\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "voice_leave",
+    "2026-11-25T01:11:05.000000",
+    "2026-11-25T00:05:00.250000",
+    null,
+    "2026-11-25T01:11:05.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_leave",
+     "left",
+     null,
+     null,
+     null,
+     "{\"member_count\": 41, \"roles\": [{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}, {\"id\": 1500000000000000050, \"name\": \"\\\"引用\\\" \\\\ 改行\\nあり\", \"position\": 5}, {\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}}",
+     "2026-11-25T02:00:00.000000"
+    ]
+   ],
+   "current": [
+    "nelly",
+    "にっく ✨",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "left",
+    false,
+    false,
+    false,
+    null,
+    "[{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}, {\"id\": 1500000000000000050, \"name\": \"\\\"引用\\\" \\\\ 改行\\nあり\", \"position\": 5}, {\"id\": 1500000000000000040, \"name\": \"tie-b\", \"position\": 3}, {\"id\": 1500000000000000030, \"name\": \"tie-a\", \"position\": 3}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "member_leave",
+    "2026-11-25T02:00:00.000000",
+    "2026-11-25T00:05:00.250000",
+    "2026-11-25T02:00:00.000000",
+    "2026-11-25T02:00:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_join",
+     "active",
+     null,
+     null,
+     null,
+     "{\"joined_at\": null, \"account_created_at\": \"2015-08-10T17:26:37.529000+00:00\", \"member_count\": 42, \"roles\": [], \"abilities\": {\"administrator\": true, \"manage_guild\": true, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}}",
+     "2026-11-25T02:01:00.000000"
+    ]
+   ],
+   "current": [
+    "owner",
+    "owner",
+    "https://cdn.discordapp.com/avatars/80351110224678901/0123456789abcdef0123456789abcdef.png?size=1024",
+    "active",
+    true,
+    false,
+    false,
+    null,
+    "[]",
+    "{\"administrator\": true, \"manage_guild\": true, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "member_join",
+    "2026-11-25T02:01:00.000000",
+    "2026-11-25T02:01:00.000000",
+    null,
+    "2026-11-25T02:01:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "voice_leave",
+     "active",
+     null,
+     null,
+     null,
+     "{\"channel_before_id\": 1600000000000000001, \"channel_before_name\": \"雑談 🔊\", \"channel_after_id\": null, \"channel_after_name\": null, \"duration_seconds\": null, \"duration_hms\": null, \"roles\": [], \"abilities\": {\"administrator\": true, \"manage_guild\": true, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}}",
+     "2026-11-25T02:02:00.000000"
+    ]
+   ],
+   "current": [
+    "owner",
+    "owner",
+    "https://cdn.discordapp.com/avatars/80351110224678901/0123456789abcdef0123456789abcdef.png?size=1024",
+    "active",
+    true,
+    false,
+    false,
+    null,
+    "[]",
+    "{\"administrator\": true, \"manage_guild\": true, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "voice_leave",
+    "2026-11-25T02:02:00.000000",
+    "2026-11-25T02:01:00.000000",
+    null,
+    "2026-11-25T02:02:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_join",
+     "active",
+     null,
+     null,
+     null,
+     "{\"joined_at\": \"2026-11-25T00:05:00.123000+00:00\", \"account_created_at\": \"2015-08-10T17:26:37.529000+00:00\", \"member_count\": 43, \"roles\": [{\"id\": 1500000000000000090, \"name\": \"管理者\", \"position\": 9}, {\"id\": 1500000000000000060, \"name\": \"manager\", \"position\": 6}], \"abilities\": {\"administrator\": true, \"manage_guild\": true, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}}",
+     "2026-11-25T02:03:00.000000"
+    ]
+   ],
+   "current": [
+    "adm",
+    "Admin 表示",
+    "https://cdn.discordapp.com/guilds/1399617700363370556/users/80351110224678913/avatars/11111111111111111111111111111111.png?size=1024",
+    "active",
+    true,
+    false,
+    false,
+    null,
+    "[{\"id\": 1500000000000000090, \"name\": \"管理者\", \"position\": 9}, {\"id\": 1500000000000000060, \"name\": \"manager\", \"position\": 6}]",
+    "{\"administrator\": true, \"manage_guild\": true, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "member_join",
+    "2026-11-25T02:03:00.000000",
+    "2026-11-25T02:03:00.000000",
+    null,
+    "2026-11-25T02:03:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_kick",
+     "kicked",
+     80351110224678920,
+     "実行した人",
+     "荒らし行為のため",
+     "{\"member_count\": 42, \"roles\": [{\"id\": 1500000000000000090, \"name\": \"管理者\", \"position\": 9}, {\"id\": 1500000000000000060, \"name\": \"manager\", \"position\": 6}], \"abilities\": {\"administrator\": true, \"manage_guild\": true, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}}",
+     "2026-11-25T02:04:00.000000"
+    ]
+   ],
+   "current": [
+    "adm",
+    "Admin 表示",
+    "https://cdn.discordapp.com/guilds/1399617700363370556/users/80351110224678913/avatars/11111111111111111111111111111111.png?size=1024",
+    "kicked",
+    false,
+    false,
+    false,
+    null,
+    "[{\"id\": 1500000000000000090, \"name\": \"管理者\", \"position\": 9}, {\"id\": 1500000000000000060, \"name\": \"manager\", \"position\": 6}]",
+    "{\"administrator\": true, \"manage_guild\": true, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "member_kick",
+    "2026-11-25T02:04:00.000000",
+    "2026-11-25T02:03:00.000000",
+    "2026-11-25T02:04:00.000000",
+    "2026-11-25T02:04:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_join",
+     "active",
+     null,
+     null,
+     null,
+     "{\"joined_at\": \"2026-11-25T00:05:00.123000+00:00\", \"account_created_at\": \"2015-08-10T17:26:37.529000+00:00\", \"member_count\": 43, \"roles\": [{\"id\": 1500000000000000020, \"name\": \"bypass\", \"position\": 2}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": true, \"bypass_role\": true, \"is_bot\": false}}",
+     "2026-11-25T02:05:00.000000"
+    ]
+   ],
+   "current": [
+    "trusted",
+    "trusted",
+    "https://cdn.discordapp.com/avatars/80351110224678914/a_fedcba9876543210fedcba9876543210.gif?size=1024",
+    "active",
+    true,
+    false,
+    false,
+    null,
+    "[{\"id\": 1500000000000000020, \"name\": \"bypass\", \"position\": 2}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": true, \"bypass_role\": true, \"is_bot\": false}",
+    "member_join",
+    "2026-11-25T02:05:00.000000",
+    "2026-11-25T02:05:00.000000",
+    null,
+    "2026-11-25T02:05:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_ban",
+     "banned",
+     80351110224678920,
+     "Mod さん",
+     "spam",
+     "{\"roles\": [{\"id\": 1500000000000000020, \"name\": \"bypass\", \"position\": 2}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": true, \"bypass_role\": true, \"is_bot\": false}}",
+     "2026-11-25T02:06:00.000000"
+    ]
+   ],
+   "current": [
+    "trusted",
+    "trusted",
+    "https://cdn.discordapp.com/avatars/80351110224678914/a_fedcba9876543210fedcba9876543210.gif?size=1024",
+    "banned",
+    false,
+    true,
+    false,
+    null,
+    "[{\"id\": 1500000000000000020, \"name\": \"bypass\", \"position\": 2}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": true, \"bypass_role\": true, \"is_bot\": false}",
+    "member_ban",
+    "2026-11-25T02:06:00.000000",
+    "2026-11-25T02:05:00.000000",
+    "2026-11-25T02:06:00.000000",
+    "2026-11-25T02:06:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_leave",
+     "left",
+     null,
+     null,
+     null,
+     "{\"member_count\": 42, \"roles\": [{\"id\": 1500000000000000020, \"name\": \"bypass\", \"position\": 2}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": true, \"bypass_role\": true, \"is_bot\": false}}",
+     "2026-11-25T02:06:01.300000"
+    ]
+   ],
+   "current": [
+    "trusted",
+    "trusted",
+    "https://cdn.discordapp.com/avatars/80351110224678914/a_fedcba9876543210fedcba9876543210.gif?size=1024",
+    "left",
+    false,
+    false,
+    false,
+    null,
+    "[{\"id\": 1500000000000000020, \"name\": \"bypass\", \"position\": 2}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": true, \"bypass_role\": true, \"is_bot\": false}",
+    "member_leave",
+    "2026-11-25T02:06:01.300000",
+    "2026-11-25T02:05:00.000000",
+    "2026-11-25T02:06:01.300000",
+    "2026-11-25T02:06:01.300000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_unban",
+     "unbanned",
+     null,
+     null,
+     null,
+     "{}",
+     "2026-11-25T02:07:00.000000"
+    ]
+   ],
+   "current": [
+    "trusted",
+    "trusted",
+    "https://cdn.discordapp.com/avatars/80351110224678914/a_fedcba9876543210fedcba9876543210.gif?size=1024",
+    "unbanned",
+    false,
+    false,
+    false,
+    null,
+    "[{\"id\": 1500000000000000020, \"name\": \"bypass\", \"position\": 2}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": true, \"bypass_role\": true, \"is_bot\": false}",
+    "member_unban",
+    "2026-11-25T02:07:00.000000",
+    "2026-11-25T02:05:00.000000",
+    "2026-11-25T02:06:01.300000",
+    "2026-11-25T02:07:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_ban",
+     "banned",
+     null,
+     null,
+     null,
+     "{}",
+     "2026-11-25T02:08:00.000000"
+    ]
+   ],
+   "current": [
+    "stranger",
+    "Stranger ☃",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "banned",
+    false,
+    true,
+    false,
+    null,
+    "[]",
+    "{}",
+    "member_ban",
+    "2026-11-25T02:08:00.000000",
+    null,
+    "2026-11-25T02:08:00.000000",
+    "2026-11-25T02:08:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_unban",
+     "unbanned",
+     80351110224678920,
+     "Mod さん",
+     null,
+     "{}",
+     "2026-11-25T02:09:00.000000"
+    ]
+   ],
+   "current": [
+    "stranger",
+    "Stranger ☃",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "unbanned",
+    false,
+    false,
+    false,
+    null,
+    "[]",
+    "{}",
+    "member_unban",
+    "2026-11-25T02:09:00.000000",
+    null,
+    "2026-11-25T02:08:00.000000",
+    "2026-11-25T02:09:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_join",
+     "active",
+     null,
+     null,
+     null,
+     "{\"joined_at\": \"2026-11-25T00:05:00.123000+00:00\", \"account_created_at\": \"2015-08-10T17:26:37.529000+00:00\", \"member_count\": 43, \"roles\": [{\"id\": 1500000000000000010, \"name\": \"low\", \"position\": 1}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": true}}",
+     "2026-11-25T02:10:00.000000"
+    ]
+   ],
+   "current": [
+    "helperbot",
+    "helperbot",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "active",
+    true,
+    false,
+    false,
+    null,
+    "[{\"id\": 1500000000000000010, \"name\": \"low\", \"position\": 1}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": true}",
+    "member_join",
+    "2026-11-25T02:10:00.000000",
+    "2026-11-25T02:10:00.000000",
+    null,
+    "2026-11-25T02:10:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_nickname_changed",
+     "active",
+     null,
+     null,
+     null,
+     "{\"before_nickname\": \"old\", \"after_nickname\": null, \"roles\": [{\"id\": 1500000000000000060, \"name\": \"manager\", \"position\": 6}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": false, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}, \"timed_out_until\": \"2026-11-26T00:00:00.500000+00:00\"}",
+     "2026-11-25T02:11:00.000000"
+    ],
+    [
+     "member_role_changed",
+     "active",
+     null,
+     null,
+     null,
+     "{\"added_roles\": [{\"id\": 1500000000000000060, \"name\": \"manager\", \"position\": 6}], \"removed_roles\": [{\"id\": 1500000000000000010, \"name\": \"low\", \"position\": 1}], \"roles\": [{\"id\": 1500000000000000060, \"name\": \"manager\", \"position\": 6}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": false, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}, \"timed_out_until\": \"2026-11-26T00:00:00.500000+00:00\"}",
+     "2026-11-25T02:11:00.000000"
+    ],
+    [
+     "member_timeout_set",
+     "active",
+     null,
+     null,
+     null,
+     "{\"timed_out_until\": \"2026-11-26T00:00:00.500000+00:00\", \"roles\": [{\"id\": 1500000000000000060, \"name\": \"manager\", \"position\": 6}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": false, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}}",
+     "2026-11-25T02:11:00.000000"
+    ]
+   ],
+   "current": [
+    "changer",
+    "changer",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "active",
+    true,
+    false,
+    true,
+    "2026-11-26T00:00:00.500000",
+    "[{\"id\": 1500000000000000060, \"name\": \"manager\", \"position\": 6}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": false, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "member_timeout_set",
+    "2026-11-25T02:11:00.000000",
+    null,
+    null,
+    "2026-11-25T02:11:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [],
+   "current": [
+    "changer",
+    "changer",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "active",
+    true,
+    false,
+    true,
+    "2026-11-26T00:00:00.500000",
+    "[{\"id\": 1500000000000000060, \"name\": \"manager\", \"position\": 6}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": false, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "member_timeout_set",
+    "2026-11-25T02:11:00.000000",
+    null,
+    null,
+    "2026-11-25T02:11:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "voice_join",
+     "active",
+     null,
+     null,
+     null,
+     "{\"channel_before_id\": null, \"channel_before_name\": null, \"channel_after_id\": 1600000000000000001, \"channel_after_name\": \"雑談 🔊\", \"duration_seconds\": null, \"roles\": [{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}, \"timed_out_until\": \"2026-11-24T00:00:00+00:00\"}",
+     "2026-11-25T02:13:00.000000"
+    ]
+   ],
+   "current": [
+    "stale",
+    "stale",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "active",
+    true,
+    false,
+    false,
+    "2026-11-24T00:00:00.000000",
+    "[{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": true, \"ban_members\": true, \"moderate_members\": true, \"manage_roles\": true, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "voice_join",
+    "2026-11-25T02:13:00.000000",
+    null,
+    null,
+    "2026-11-25T02:13:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_timeout_set",
+     "active",
+     null,
+     null,
+     null,
+     "{\"timed_out_until\": \"2026-11-25T03:00:00+00:00\", \"roles\": [{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": false, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}}",
+     "2026-11-25T02:14:00.000000"
+    ]
+   ],
+   "current": [
+    "timed",
+    "timed",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "active",
+    true,
+    false,
+    true,
+    "2026-11-25T03:00:00.000000",
+    "[{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": false, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "member_timeout_set",
+    "2026-11-25T02:14:00.000000",
+    null,
+    null,
+    "2026-11-25T02:14:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_ban",
+     "banned",
+     null,
+     null,
+     null,
+     "{}",
+     "2026-11-25T02:20:00.000000"
+    ]
+   ],
+   "current": [
+    "timed",
+    "timed",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "banned",
+    false,
+    true,
+    true,
+    "2026-11-25T03:00:00.000000",
+    "[{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": false, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "member_ban",
+    "2026-11-25T02:20:00.000000",
+    null,
+    "2026-11-25T02:20:00.000000",
+    "2026-11-25T02:20:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_unban",
+     "unbanned",
+     null,
+     null,
+     null,
+     "{}",
+     "2026-11-25T04:00:00.000000"
+    ]
+   ],
+   "current": [
+    "timed",
+    "timed",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "unbanned",
+    false,
+    false,
+    false,
+    "2026-11-25T03:00:00.000000",
+    "[{\"id\": 1500000000000000070, \"name\": \"モデレーター\", \"position\": 7}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": false, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "member_unban",
+    "2026-11-25T04:00:00.000000",
+    null,
+    "2026-11-25T02:20:00.000000",
+    "2026-11-25T04:00:00.000000",
+    true,
+    true
+   ]
+  }
+ ],
+ "audit": [
+  [
+   "newest-match-wins",
+   "1574939001880576001",
+   1,
+   []
+  ],
+  [
+   "other-target-is-skipped",
+   "1574938997686272000",
+   1,
+   []
+  ],
+  [
+   "exactly-twenty-seconds",
+   "1574938922188800000",
+   1,
+   []
+  ],
+  [
+   "twenty-seconds-and-a-millisecond-is-old",
+   null,
+   3,
+   [
+    0.6,
+    0.6
+   ]
+  ],
+  [
+   "future-entry-is-skipped",
+   null,
+   3,
+   [
+    0.6,
+    0.6
+   ]
+  ],
+  [
+   "no-target",
+   null,
+   3,
+   [
+    0.6,
+    0.6
+   ]
+  ],
+  [
+   "found-on-the-third-read",
+   "1574938993491968000",
+   3,
+   [
+    0.6,
+    0.6
+   ]
+  ],
+  [
+   "a-failed-read-is-retried",
+   "1574938993491968000",
+   2,
+   [
+    0.6
+   ]
+  ],
+  [
+   "never-found",
+   null,
+   3,
+   [
+    0.6,
+    0.6
+   ]
+  ]
+ ],
+ "totals": {
+  "events": 27,
+  "current": 9
+ },
+ "schema": {
+  "columns": [
+   [
+    "user_state_current",
+    "id",
+    "integer",
+    null,
+    "NO",
+    "nextval('user_state_current_id_seq'::regclass)"
+   ],
+   [
+    "user_state_current",
+    "guild_id",
+    "bigint",
+    null,
+    "NO",
+    null
+   ],
+   [
+    "user_state_current",
+    "user_id",
+    "bigint",
+    null,
+    "NO",
+    null
+   ],
+   [
+    "user_state_current",
+    "username",
+    "character varying",
+    128,
+    "YES",
+    null
+   ],
+   [
+    "user_state_current",
+    "display_name",
+    "character varying",
+    128,
+    "YES",
+    null
+   ],
+   [
+    "user_state_current",
+    "avatar_url",
+    "character varying",
+    512,
+    "YES",
+    null
+   ],
+   [
+    "user_state_current",
+    "status",
+    "character varying",
+    32,
+    "NO",
+    null
+   ],
+   [
+    "user_state_current",
+    "is_in_guild",
+    "boolean",
+    null,
+    "NO",
+    null
+   ],
+   [
+    "user_state_current",
+    "is_banned",
+    "boolean",
+    null,
+    "NO",
+    null
+   ],
+   [
+    "user_state_current",
+    "is_timed_out",
+    "boolean",
+    null,
+    "NO",
+    null
+   ],
+   [
+    "user_state_current",
+    "timed_out_until",
+    "timestamp with time zone",
+    null,
+    "YES",
+    null
+   ],
+   [
+    "user_state_current",
+    "roles_json",
+    "text",
+    null,
+    "NO",
+    null
+   ],
+   [
+    "user_state_current",
+    "abilities_json",
+    "text",
+    null,
+    "NO",
+    null
+   ],
+   [
+    "user_state_current",
+    "last_event_type",
+    "character varying",
+    48,
+    "YES",
+    null
+   ],
+   [
+    "user_state_current",
+    "last_event_at",
+    "timestamp with time zone",
+    null,
+    "YES",
+    null
+   ],
+   [
+    "user_state_current",
+    "first_seen_at",
+    "timestamp with time zone",
+    null,
+    "NO",
+    "now()"
+   ],
+   [
+    "user_state_current",
+    "last_joined_at",
+    "timestamp with time zone",
+    null,
+    "YES",
+    null
+   ],
+   [
+    "user_state_current",
+    "last_left_at",
+    "timestamp with time zone",
+    null,
+    "YES",
+    null
+   ],
+   [
+    "user_state_current",
+    "created_at",
+    "timestamp with time zone",
+    null,
+    "NO",
+    "now()"
+   ],
+   [
+    "user_state_current",
+    "updated_at",
+    "timestamp with time zone",
+    null,
+    "NO",
+    "now()"
+   ],
+   [
+    "user_state_event",
+    "id",
+    "integer",
+    null,
+    "NO",
+    "nextval('user_state_event_id_seq'::regclass)"
+   ],
+   [
+    "user_state_event",
+    "guild_id",
+    "bigint",
+    null,
+    "NO",
+    null
+   ],
+   [
+    "user_state_event",
+    "user_id",
+    "bigint",
+    null,
+    "NO",
+    null
+   ],
+   [
+    "user_state_event",
+    "event_type",
+    "character varying",
+    48,
+    "NO",
+    null
+   ],
+   [
+    "user_state_event",
+    "status_after",
+    "character varying",
+    32,
+    "NO",
+    null
+   ],
+   [
+    "user_state_event",
+    "actor_user_id",
+    "bigint",
+    null,
+    "YES",
+    null
+   ],
+   [
+    "user_state_event",
+    "actor_name",
+    "character varying",
+    128,
+    "YES",
+    null
+   ],
+   [
+    "user_state_event",
+    "reason",
+    "text",
+    null,
+    "YES",
+    null
+   ],
+   [
+    "user_state_event",
+    "payload_json",
+    "text",
+    null,
+    "NO",
+    null
+   ],
+   [
+    "user_state_event",
+    "event_at",
+    "timestamp with time zone",
+    null,
+    "NO",
+    "now()"
+   ],
+   [
+    "user_state_event",
+    "created_at",
+    "timestamp with time zone",
+    null,
+    "NO",
+    "now()"
+   ]
+  ],
+  "indexes": [
+   [
+    "user_state_current",
+    "ix_user_state_current_guild_last_event_at",
+    "CREATE INDEX ix_user_state_current_guild_last_event_at ON user_state_current USING btree (guild_id, last_event_at)"
+   ],
+   [
+    "user_state_current",
+    "ix_user_state_current_guild_status",
+    "CREATE INDEX ix_user_state_current_guild_status ON user_state_current USING btree (guild_id, status)"
+   ],
+   [
+    "user_state_current",
+    "uq_user_state_current_guild_user",
+    "CREATE UNIQUE INDEX uq_user_state_current_guild_user ON user_state_current USING btree (guild_id, user_id)"
+   ],
+   [
+    "user_state_current",
+    "user_state_current_pkey",
+    "CREATE UNIQUE INDEX user_state_current_pkey ON user_state_current USING btree (id)"
+   ],
+   [
+    "user_state_event",
+    "ix_user_state_event_event_at",
+    "CREATE INDEX ix_user_state_event_event_at ON user_state_event USING btree (event_at)"
+   ],
+   [
+    "user_state_event",
+    "ix_user_state_event_guild_event_type_event_at",
+    "CREATE INDEX ix_user_state_event_guild_event_type_event_at ON user_state_event USING btree (guild_id, event_type, event_at)"
+   ],
+   [
+    "user_state_event",
+    "ix_user_state_event_guild_user_event_at",
+    "CREATE INDEX ix_user_state_event_guild_user_event_at ON user_state_event USING btree (guild_id, user_id, event_at)"
+   ],
+   [
+    "user_state_event",
+    "user_state_event_pkey",
+    "CREATE UNIQUE INDEX user_state_event_pkey ON user_state_event USING btree (id)"
+   ]
+  ],
+  "constraints": [
+   [
+    "user_state_current",
+    "uq_user_state_current_guild_user",
+    "u",
+    "UNIQUE (guild_id, user_id)"
+   ],
+   [
+    "user_state_current",
+    "user_state_current_pkey",
+    "p",
+    "PRIMARY KEY (id)"
+   ],
+   [
+    "user_state_event",
+    "user_state_event_pkey",
+    "p",
+    "PRIMARY KEY (id)"
+   ]
+  ]
+ }
+}

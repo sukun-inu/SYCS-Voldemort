@@ -11,6 +11,7 @@ use sycs_core::env::Env;
 
 use crate::groq::GroqConfig;
 use crate::message_security::DEFAULT_SCAN_CONCURRENCY;
+use crate::user_state::UserStateConfig;
 use crate::virustotal::VtConfig;
 
 /// Bot を動かすのに要る設定。
@@ -45,6 +46,8 @@ pub struct BotConfig {
     /// 入っているので、絞らないと、確かめている間に他のサーバーの出入りへ反応して、本番の
     /// 利用者がいるチャンネルへ書いてしまう。本番では設定しない。
     pub only_guild_id: Option<u64>,
+    /// 利用者の状態の記録（履歴を残す日数・掃除の間隔）。
+    pub user_state: UserStateConfig,
     /// スラッシュコマンドに応えるか（`BOT_COMMANDS_ENABLED`、既定は応える）。
     ///
     /// **本番の Python の Bot と並べて動かすときは偽にすること。** 同じトークンで 2 つつなぐと、打たれた
@@ -105,6 +108,7 @@ impl BotConfig {
             only_guild_id: u64::try_from(env.int("BOT_ONLY_GUILD_ID", 0, Some(0), None))
                 .ok()
                 .filter(|id| *id > 0),
+            user_state: UserStateConfig::from_env(env),
             commands_enabled: env.boolean("BOT_COMMANDS_ENABLED", true),
             sync_commands: env.boolean("BOT_SYNC_COMMANDS", false),
             vt: VtConfig::from_env(env),
@@ -185,6 +189,7 @@ mod tests {
         assert_eq!(c.settings_write_timeout, Duration::from_secs(10));
         assert!(c.dev_signals_enabled);
         assert_eq!(c.only_guild_id, None);
+        assert_eq!(c.user_state, UserStateConfig::default());
         assert!(c.handles(1) && c.handles(2));
         assert!(c.commands_enabled, "切り替えたら既定でコマンドに応える");
         assert!(
