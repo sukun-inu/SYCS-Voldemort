@@ -18,6 +18,7 @@
 pub mod activity;
 pub mod guards;
 pub mod info;
+pub mod metal;
 pub mod overview;
 pub mod picker;
 pub mod quake;
@@ -126,6 +127,14 @@ pub enum Route {
     InfoServer,
     /// `/info user`
     InfoUser,
+    /// `/metal gold`
+    MetalGold,
+    /// `/metal silver`
+    MetalSilver,
+    /// `/metal platinum`
+    MetalPlatinum,
+    /// `/metal all`
+    MetalAll,
 }
 
 /// 移したコマンドの道すじ。
@@ -188,15 +197,15 @@ pub const PORTED: &[(&str, Route)] = &[
     ("quake type", Route::QuakeType),
     ("info server", Route::InfoServer),
     ("info user", Route::InfoUser),
+    ("metal gold", Route::MetalGold),
+    ("metal silver", Route::MetalSilver),
+    ("metal platinum", Route::MetalPlatinum),
+    ("metal all", Route::MetalAll),
 ];
 
 /// 定義にはあるが、中身をまだ移していないコマンド。移したら [`PORTED`] へ動かす
 /// （テストが、定義・[`PORTED`]・ここの 3 つが食い違っていないことを確かめる）。
 pub const NOT_PORTED_YET: &[&str] = &[
-    "metal gold",
-    "metal silver",
-    "metal platinum",
-    "metal all",
     "djaudio channel",
     "djaudio output",
     "djaudio status",
@@ -272,7 +281,7 @@ pub enum CommandError {
     MissingOption(&'static str),
     /// 設定が読めない形をしている（辞書のはずのところが文字列、など。Python では例外になるところ）。
     BrokenSetting(&'static str),
-    /// [`plan`] を通さないコマンド（[`run`] が先に分ける）を [`plan`] に渡した。
+    /// [`plan`] を通さないコマンド（[`run`]・[`dispatch`] が先に分ける）を [`plan`] に渡した。
     NotPlanned,
 }
 
@@ -429,13 +438,17 @@ pub fn plan(route: Route, input: &PlanInput<'_>) -> Result<Planned, CommandError
         // 上で返している。
         Route::BotHelp => reply(Reply::default()),
         Route::Server(route) => server::plan(route, input),
-        // 地震・情報は [`run`] が先に分ける（権限の見方・要るものが違う）。
+        // 地震・情報は [`run`] が、貴金属は [`dispatch`] が先に分ける（権限の見方・要るもの・応答のしかたが違う）。
         Route::QuakeChannel
         | Route::QuakeMinScale
         | Route::QuakeStatus
         | Route::QuakeType
         | Route::InfoServer
-        | Route::InfoUser => Err(CommandError::NotPlanned),
+        | Route::InfoUser
+        | Route::MetalGold
+        | Route::MetalSilver
+        | Route::MetalPlatinum
+        | Route::MetalAll => Err(CommandError::NotPlanned),
     }
 }
 
@@ -455,6 +468,12 @@ pub struct Deps<'a> {
     pub sticky_locks: &'a StickyLocks,
     /// 開いている地震の通知の種類の画面（/quake type）の覚え。
     pub quake_screens: &'a quake::Screens,
+    /// 貴金属の値段の取り口（/metal）。
+    pub metal: &'a crate::metal::MetalPrices,
+    /// アバターの代表色（/metal がログチャンネルへ書くときの Embed の色）。
+    pub colours: &'a crate::log_channel::AvatarColours,
+    /// 貴金属トラッカーの場所（/metal のリンクのボタン）。
+    pub metals_site_url: &'a str,
 }
 
 /// 移した中身を実行して、返事を作る。
@@ -536,6 +555,16 @@ pub async fn dispatch(deps: &Deps<'_>, command: &CommandInteraction) {
         command.user.id,
         command.channel_id,
     );
+    // 貴金属のコマンドは応答のしかたが違う（先に「考え中」を返し、あとから本文を送る）ので、応答まで任せる。
+    if let Some(kind) = route(&path).and_then(metal::kind_of) {
+        let outcome = metal::run(deps, command, options, kind).await;
+        let ms = started.elapsed().as_millis();
+        match outcome {
+            Ok(()) => info!("{}", activity::completed_line(&path, &who, ms)),
+            Err(e) => error!("{}", activity::failed_line(&path, &who, ms, &e)),
+        }
+        return;
+    }
     let outcome = match route(&path) {
         Some(route) => run(deps, route, command, options).await,
         None => {

@@ -12,6 +12,7 @@ use sycs_core::env::Env;
 use crate::commands::overview::DEFAULT_ADMIN_SITE_URL;
 use crate::groq::GroqConfig;
 use crate::message_security::DEFAULT_SCAN_CONCURRENCY;
+use crate::metal::MetalConfig;
 use crate::news::NewsConfig;
 use crate::user_state::UserStateConfig;
 use crate::virustotal::VtConfig;
@@ -78,6 +79,10 @@ pub struct BotConfig {
     pub news: NewsConfig,
     /// 投稿の判定を覚えておく秒数（`MODERATION_CACHE_TTL_SECONDS`、既定 300・下限 10）。
     pub moderation_cache_ttl: f64,
+    /// 貴金属の値段の API（鍵・覚えておく秒数・場所）。
+    pub metal: MetalConfig,
+    /// 貴金属トラッカーの場所（`METALS_SITE_URL`。/metal のリンクのボタン。末尾の `/` は 1 つにそろえる）。
+    pub metals_site_url: String,
 }
 
 impl BotConfig {
@@ -137,6 +142,10 @@ impl BotConfig {
             news: NewsConfig::from_env(env),
             moderation_cache_ttl: env.int("MODERATION_CACHE_TTL_SECONDS", 300, Some(10), None)
                 as f64,
+            metal: MetalConfig::from_env(env),
+            metals_site_url: crate::commands::metal::normalize_site_url(
+                env.raw("METALS_SITE_URL").as_deref(),
+            ),
         })
     }
 
@@ -226,6 +235,9 @@ mod tests {
         assert_eq!(c.moderation_cache_ttl, 300.0);
         assert_eq!(c.vt.api_key, None);
         assert_eq!(c.groq.api_key, None);
+        assert_eq!(c.metal.api_key, None);
+        assert_eq!(c.metal.cache_ttl_seconds, 1800.0);
+        assert_eq!(c.metals_site_url, "https://metals.kawasaki-n3t.f5.si/");
         let short = BotConfig::from_env(&env(&[
             ("DISCORD_BOT_TOKEN", "t"),
             ("SETTINGS_LOCK_TIMEOUT_SECONDS", "0.01"),

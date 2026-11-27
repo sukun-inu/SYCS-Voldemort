@@ -23,7 +23,10 @@ use sqlx::PgPool;
 use sycs_bot::commands;
 use sycs_bot::commands::picker::Pickers;
 use sycs_bot::commands::quake::Screens;
+use sycs_bot::log_channel::AvatarColours;
+use sycs_bot::metal::{MetalConfig, MetalPrices};
 use sycs_bot::sticky::StickyLocks;
+use sycs_core::env::Env;
 use sycs_core::settings::SettingsCache;
 
 use support::{Seen, user};
@@ -92,6 +95,8 @@ struct Stage {
     pickers: Pickers,
     sticky_locks: StickyLocks,
     quake_screens: Screens,
+    metal: MetalPrices,
+    colours: AvatarColours,
     seen: Arc<Mutex<Vec<Seen>>>,
 }
 
@@ -113,6 +118,8 @@ impl Stage {
             pickers: Pickers::default(),
             sticky_locks: StickyLocks::default(),
             quake_screens: Screens::default(),
+            metal: MetalPrices::new(MetalConfig::from_env(&Env::from_fn(|_| None))),
+            colours: AvatarColours::new(),
             seen,
         }
     }
@@ -126,6 +133,9 @@ impl Stage {
             admin_site_url: "https://admin.example/login",
             sticky_locks: &self.sticky_locks,
             quake_screens: &self.quake_screens,
+            metal: &self.metal,
+            colours: &self.colours,
+            metals_site_url: "https://metals.example/",
         }
     }
 
