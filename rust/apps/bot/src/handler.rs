@@ -1,16 +1,19 @@
 //! Discord のイベントを受ける。Python の `events/` にあたる（今は ready・メンバーの出入りと変更・BAN・
-//! メッセージの検査・メッセージの削除と編集のログ・スティッキー・リアクションロール・VC の出入り）。
+//! メッセージの検査・メッセージの削除と編集のログ・スティッキー・リアクションロール・VC の出入り・
+//! 利用者の状態の記録・スラッシュコマンド）。
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 
+use chrono::Utc;
 use serenity::all::{
     Cache, ChannelId, ChunkGuildFilter, Context, CreateMessage, EventHandler, Guild, GuildId,
     GuildMemberUpdateEvent, Interaction, Member, Message, MessageId, MessageUpdateEvent, Reaction,
-    Ready, Role, RoleId, ShardManager, Timestamp, User, VoiceState,
+    Ready, Role, RoleId, ShardManager, Timestamp, User, UserId, VoiceState,
 };
 use serenity::async_trait;
+use serenity::model::guild::audit_log::MemberAction;
 use sqlx::PgPool;
 use sycs_core::metrics::Reporter;
 use sycs_core::settings::SettingsCache;
@@ -26,6 +29,7 @@ use crate::moderation::Moderation;
 use crate::reaction_roles::{self, Change, ReactionEvent};
 use crate::security::{self, RaidDetector, SpamDetector, Stripped};
 use crate::sticky::{self, StickyCtx, StickyLocks};
+use crate::user_state::{self, GuildView};
 use crate::vc_notify::{self, Filter, Plan, VcTracker};
 use crate::virustotal::VirusTotal;
 use crate::welcome::{self, Kind};
@@ -45,6 +49,8 @@ pub struct AppState {
     pub colours: AvatarColours,
     /// 最近のメッセージの控え（削除・編集のログに使う）。
     pub messages: MessageCache,
+    /// 利用者の状態（入退室・BAN・ロールの変更・VC の出入り）を書く口。
+    pub user_state: user_state::Recorder,
     /// スティッキーのチャンネルごとの排他。
     pub sticky_locks: StickyLocks,
     /// VC の参加の時刻・メンションの間隔。
@@ -70,6 +76,7 @@ impl AppState {
         let groq = Arc::new(Groq::new(config.groq.clone()));
         let moderation = Arc::new(Moderation::new(groq, config.moderation_cache_ttl));
         let judges = Judges::new(vt, moderation, config.vt_scan_concurrency);
+        let user_state = user_state::Recorder::new(pool.clone(), config.user_state.clone());
         Self {
             config,
             pool,
@@ -77,6 +84,7 @@ impl AppState {
             reporter,
             colours: AvatarColours::new(),
             messages: MessageCache::default(),
+            user_state,
             sticky_locks: StickyLocks::default(),
             vc: VcTracker::default(),
             spam: SpamDetector::default(),
@@ -205,6 +213,16 @@ impl Handler {
         }
     }
 
+    /// 利用者の状態を 1 件記録する。失敗は中でログに残し、同じイベントの他の処理（歓迎など）を巻き込まない
+    /// （Python が log_action と record_user_state_event を別々の `_safe` でくるんでいるのと同じ）。
+    async fn record_state(&self, event: user_state::Event) {
+        let snapshot = self.state.settings.snapshot();
+        self.state
+            .user_state
+            .record(&event, snapshot.guild(event.guild_id))
+            .await;
+    }
+
     /// メッセージ 1 件を検査する（危険なら消してロールを剥がす）。Python の `handle_security_for_message`。
     async fn check_security(&self, ctx: &Context, post: &Post) {
         let snapshot = self.state.settings.snapshot();
@@ -326,6 +344,8 @@ struct GuildFacts {
     /// メンバー数。discord.py と同じく、参加・退出はイベントの前に増減している。
     member_count: Option<u64>,
     roles: HashMap<RoleId, Role>,
+    /// 所有者（権限の控えに使う。所有者は全部の権限を持つ）。
+    owner_id: Option<UserId>,
 }
 
 impl GuildFacts {
@@ -336,18 +356,29 @@ impl GuildFacts {
                 name: g.name.clone(),
                 member_count: Some(g.member_count),
                 roles: g.roles.clone(),
+                owner_id: Some(g.owner_id),
             },
             None => Self {
                 id,
                 name: String::new(),
                 member_count: None,
                 roles: HashMap::new(),
+                owner_id: None,
             },
         }
     }
 
     fn sorted_roles(&self, roles: &[RoleId]) -> Vec<RoleId> {
         members::sorted_roles(roles, &self.roles, self.id)
+    }
+
+    /// 利用者の状態の記録に渡す形。
+    fn view(&self) -> GuildView<'_> {
+        GuildView {
+            id: self.id,
+            owner_id: self.owner_id,
+            roles: &self.roles,
+        }
     }
 }
 
@@ -597,7 +628,7 @@ impl EventHandler for Handler {
             return;
         }
         // discord.py は前後のチャンネルをキャッシュから引く（無いチャンネルは「VC に居ない」になる）。
-        let (before, after, roles) = {
+        let (before, after, roles, owner_id) = {
             let Some(guild) = ctx.cache.guild(guild_id) else {
                 return;
             };
@@ -606,6 +637,7 @@ impl EventHandler for Handler {
                 pick(old.as_ref().and_then(|o| o.channel_id)),
                 pick(new.channel_id),
                 guild.roles.clone(),
+                guild.owner_id,
             )
         };
         let before_id = before.as_ref().map(|c| c.id.get());
@@ -636,6 +668,27 @@ impl EventHandler for Handler {
             Author::from_member(&member),
             "VC の出入り",
         )
+        .await;
+        // ログ → 記録 → 通知の順（Python の _dispatch_voice_state と同じ）。
+        let channel = |c: &Option<serenity::all::GuildChannel>| {
+            c.as_ref().map(|c| (c.id.get(), c.name.clone()))
+        };
+        let (was, is) = (channel(&before), channel(&after));
+        let view = GuildView {
+            id: guild_id,
+            owner_id: Some(owner_id),
+            roles: &roles,
+        };
+        self.record_state(user_state::Event::voice(
+            change,
+            &member,
+            &view,
+            was.as_ref().map(|(id, name)| (*id, name.as_str())),
+            is.as_ref().map(|(id, name)| (*id, name.as_str())),
+            stay.as_ref()
+                .map(|(seconds, text)| (*seconds, text.as_str())),
+            Utc::now(),
+        ))
         .await;
         let input = vc_notify::NoticeInput {
             guild_id,
@@ -695,6 +748,13 @@ impl EventHandler for Handler {
             "参加",
         )
         .await;
+        self.record_state(user_state::Event::member_join(
+            &new_member,
+            &guild.view(),
+            guild.member_count.unwrap_or(0),
+            Utc::now(),
+        ))
+        .await;
         self.greet(&ctx, &guild, Kind::Welcome, &new_member.user)
             .await;
     }
@@ -715,11 +775,25 @@ impl EventHandler for Handler {
             debug!(%guild_id, user_id = %user.id, "キャッシュにいないメンバーの退出なので、ログもお別れも出しません");
             return;
         };
+        // キックだったかを監査ログで見分ける。Python と同じく、ログより先に調べる（監査ログへの反映が
+        // 遅れることがあるので、見つからなければ 0.6 秒おきに 2 回まで読み直す。ふつうの退出では、その
+        // ぶんログも遅れる）。Bot に監査ログを見る権限が無ければ、読みに行かない。
+        let kick =
+            user_state::audit_lookup(&ctx.cache, &ctx.http, guild_id, MemberAction::Kick, user.id)
+                .await;
         let guild = GuildFacts::of(&ctx.cache, guild_id);
         let roles = guild.sorted_roles(&member.roles);
         let entry = members::removal_entry(&user, &roles, guild.member_count.unwrap_or(0));
         self.log(&ctx, guild_id, entry, Author::from_member(&member), "退出")
             .await;
+        self.record_state(user_state::Event::member_removal(
+            &member,
+            &guild.view(),
+            guild.member_count.unwrap_or(0),
+            kick,
+            Utc::now(),
+        ))
+        .await;
         self.greet(&ctx, &guild, Kind::Goodbye, &member.user).await;
     }
 
@@ -739,11 +813,16 @@ impl EventHandler for Handler {
             return;
         }
         let author = Author::from_member(&after);
+        let guild = GuildFacts::of(&ctx.cache, guild_id);
         if let Some(entry) = members::nickname_entry(&before, &after) {
             self.log(&ctx, guild_id, entry, author.clone(), "ニックネームの変更")
                 .await;
         }
-        let guild = GuildFacts::of(&ctx.cache, guild_id);
+        let nickname =
+            user_state::Event::nickname_changed(&before, &after, &guild.view(), Utc::now());
+        if let Some(event) = nickname {
+            self.record_state(event).await;
+        }
         let roles = members::role_entry(
             after.user.id,
             &guild.sorted_roles(&before.roles),
@@ -752,6 +831,10 @@ impl EventHandler for Handler {
         if let Some(entry) = roles {
             self.log(&ctx, guild_id, entry, author.clone(), "ロールの変更")
                 .await;
+        }
+        let role = user_state::Event::role_changed(&before, &after, &guild.view(), Utc::now());
+        if let Some(event) = role {
+            self.record_state(event).await;
         }
         let timeout = members::timeout_entry(
             after.user.id,
@@ -762,13 +845,35 @@ impl EventHandler for Handler {
             self.log(&ctx, guild_id, entry, author, "タイムアウト")
                 .await;
         }
+        let timeout =
+            user_state::Event::timeout_changed(&before, &after, &guild.view(), Utc::now());
+        if let Some(event) = timeout {
+            self.record_state(event).await;
+        }
     }
 
     async fn guild_ban_addition(&self, ctx: Context, guild_id: GuildId, banned_user: User) {
         if !self.handles(guild_id) {
             return;
         }
-        let author = banned_author(&ctx.cache, guild_id, &banned_user);
+        // discord.py は、まだキャッシュに残っていればメンバーを渡す（ロールと権限も控えに入る）。
+        // 監査ログを調べる前に取っておく（調べている間に退出のイベントでキャッシュから消える）。
+        let cached = ctx
+            .cache
+            .guild(guild_id)
+            .and_then(|g| g.members.get(&banned_user.id).cloned());
+        let audit = user_state::audit_lookup(
+            &ctx.cache,
+            &ctx.http,
+            guild_id,
+            MemberAction::BanAdd,
+            banned_user.id,
+        )
+        .await;
+        let author = match &cached {
+            Some(member) => Author::from_member(member),
+            None => Author::from_user(&banned_user),
+        };
         self.log(
             &ctx,
             guild_id,
@@ -777,12 +882,29 @@ impl EventHandler for Handler {
             "BAN",
         )
         .await;
+        let guild = GuildFacts::of(&ctx.cache, guild_id);
+        self.record_state(user_state::Event::member_ban(
+            &banned_user,
+            cached.as_ref(),
+            &guild.view(),
+            audit,
+            Utc::now(),
+        ))
+        .await;
     }
 
     async fn guild_ban_removal(&self, ctx: Context, guild_id: GuildId, unbanned_user: User) {
         if !self.handles(guild_id) {
             return;
         }
+        let audit = user_state::audit_lookup(
+            &ctx.cache,
+            &ctx.http,
+            guild_id,
+            MemberAction::BanRemove,
+            unbanned_user.id,
+        )
+        .await;
         let author = banned_author(&ctx.cache, guild_id, &unbanned_user);
         self.log(
             &ctx,
@@ -791,6 +913,12 @@ impl EventHandler for Handler {
             author,
             "BAN の解除",
         )
+        .await;
+        self.record_state(user_state::Event::member_unban(
+            &unbanned_user,
+            guild_id,
+            audit,
+        ))
         .await;
     }
 }

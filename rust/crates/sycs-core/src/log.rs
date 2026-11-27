@@ -61,6 +61,8 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     ("sycs_bot::vc_notify", "voice"),
     ("sycs_bot::security", "security"),
     ("sycs_bot::virustotal", "security"),
+    // Python の services.user_state（userstate）と同じ棚。
+    ("sycs_bot::user_state", "userstate"),
     // Python の commands（スラッシュコマンドの入口と、打たれた記録）と同じ棚。
     ("sycs_bot::commands", "command"),
     ("sycs_bot::moderation", "security"),
@@ -574,6 +576,7 @@ mod tests {
             ("sycs_bot::vc_notify", "voice"),
             ("sycs_bot::security", "security"),
             ("sycs_bot::virustotal", "security"),
+            ("sycs_bot::user_state", "userstate"),
             ("sycs_bot::commands", "command"),
             ("sycs_bot::commands::settings", "command"),
             ("sycs_bot::moderation", "security"),

@@ -19,6 +19,7 @@ pub mod reaction_roles;
 pub mod security;
 pub mod signals;
 pub mod sticky;
+pub mod user_state;
 pub mod vc_notify;
 pub mod virustotal;
 pub mod welcome;

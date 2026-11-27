@@ -1,0 +1,1151 @@
+{
+ "guild": {
+  "id": "1399617700363370556",
+  "owner_id": "80351110224678901",
+  "roles": [
+   {
+    "id": "1399617700363370556",
+    "name": "@everyone",
+    "color": 0,
+    "colors": {
+     "primary_color": 0,
+     "secondary_color": null,
+     "tertiary_color": null
+    },
+    "hoist": false,
+    "position": 0,
+    "permissions": "1099511696384",
+    "managed": false,
+    "mentionable": false,
+    "flags": 0,
+    "guild_id": "1399617700363370556"
+   },
+   {
+    "id": "1500000000000000090",
+    "name": "管理者",
+    "color": 0,
+    "colors": {
+     "primary_color": 0,
+     "secondary_color": null,
+     "tertiary_color": null
+    },
+    "hoist": false,
+    "position": 9,
+    "permissions": "8",
+    "managed": false,
+    "mentionable": false,
+    "flags": 0,
+    "guild_id": "1399617700363370556"
+   },
+   {
+    "id": "1500000000000000070",
+    "name": "モデレーター",
+    "color": 0,
+    "colors": {
+     "primary_color": 0,
+     "secondary_color": null,
+     "tertiary_color": null
+    },
+    "hoist": false,
+    "position": 7,
+    "permissions": "268435462",
+    "managed": false,
+    "mentionable": false,
+    "flags": 0,
+    "guild_id": "1399617700363370556"
+   },
+   {
+    "id": "1500000000000000060",
+    "name": "manager",
+    "color": 0,
+    "colors": {
+     "primary_color": 0,
+     "secondary_color": null,
+     "tertiary_color": null
+    },
+    "hoist": false,
+    "position": 6,
+    "permissions": "32",
+    "managed": false,
+    "mentionable": false,
+    "flags": 0,
+    "guild_id": "1399617700363370556"
+   },
+   {
+    "id": "1500000000000000050",
+    "name": "\"引用\" \\ 改行\nあり",
+    "color": 0,
+    "colors": {
+     "primary_color": 0,
+     "secondary_color": null,
+     "tertiary_color": null
+    },
+    "hoist": false,
+    "position": 5,
+    "permissions": "0",
+    "managed": false,
+    "mentionable": false,
+    "flags": 0,
+    "guild_id": "1399617700363370556"
+   },
+   {
+    "id": "1500000000000000030",
+    "name": "tie-a",
+    "color": 0,
+    "colors": {
+     "primary_color": 0,
+     "secondary_color": null,
+     "tertiary_color": null
+    },
+    "hoist": false,
+    "position": 3,
+    "permissions": "0",
+    "managed": false,
+    "mentionable": false,
+    "flags": 0,
+    "guild_id": "1399617700363370556"
+   },
+   {
+    "id": "1500000000000000040",
+    "name": "tie-b",
+    "color": 0,
+    "colors": {
+     "primary_color": 0,
+     "secondary_color": null,
+     "tertiary_color": null
+    },
+    "hoist": false,
+    "position": 3,
+    "permissions": "0",
+    "managed": false,
+    "mentionable": false,
+    "flags": 0,
+    "guild_id": "1399617700363370556"
+   },
+   {
+    "id": "1500000000000000020",
+    "name": "bypass",
+    "color": 0,
+    "colors": {
+     "primary_color": 0,
+     "secondary_color": null,
+     "tertiary_color": null
+    },
+    "hoist": false,
+    "position": 2,
+    "permissions": "0",
+    "managed": false,
+    "mentionable": false,
+    "flags": 0,
+    "guild_id": "1399617700363370556"
+   },
+   {
+    "id": "1500000000000000010",
+    "name": "low",
+    "color": 0,
+    "colors": {
+     "primary_color": 0,
+     "secondary_color": null,
+     "tertiary_color": null
+    },
+    "hoist": false,
+    "position": 1,
+    "permissions": "128",
+    "managed": false,
+    "mentionable": false,
+    "flags": 0,
+    "guild_id": "1399617700363370556"
+   }
+  ]
+ },
+ "settings": {
+  "trusted_user_ids": [
+   "80351110224678914",
+   "junk",
+   null
+  ],
+  "bypass_role_ids": [
+   1500000000000000020,
+   "x"
+  ]
+ },
+ "steps": [
+  {
+   "at": "2026-11-25T00:05:00.250000+00:00",
+   "kind": "join",
+   "member": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678912",
+     "username": "nelly",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "ネリー"
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [
+     "1500000000000000010",
+     "1500000000000000030",
+     "1500000000000000040",
+     "1500000000000000999"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "count": 42
+  },
+  {
+   "at": "2026-11-25T00:06:00+00:00",
+   "kind": "update",
+   "before": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678912",
+     "username": "nelly",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "ネリー"
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [
+     "1500000000000000010",
+     "1500000000000000030",
+     "1500000000000000040",
+     "1500000000000000999"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "after": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678912",
+     "username": "nelly",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "ネリー"
+    },
+    "nick": "にっく ✨",
+    "avatar": null,
+    "roles": [
+     "1500000000000000010",
+     "1500000000000000030",
+     "1500000000000000040",
+     "1500000000000000999"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   }
+  },
+  {
+   "at": "2026-11-25T00:07:00.000001+00:00",
+   "kind": "update",
+   "before": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678912",
+     "username": "nelly",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "ネリー"
+    },
+    "nick": "にっく ✨",
+    "avatar": null,
+    "roles": [
+     "1500000000000000010",
+     "1500000000000000030",
+     "1500000000000000040",
+     "1500000000000000999"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "after": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678912",
+     "username": "nelly",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "ネリー"
+    },
+    "nick": "にっく ✨",
+    "avatar": null,
+    "roles": [
+     "1500000000000000030",
+     "1500000000000000040",
+     "1500000000000000070",
+     "1500000000000000050"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   }
+  },
+  {
+   "at": "2026-11-25T00:08:00+00:00",
+   "kind": "update",
+   "before": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678912",
+     "username": "nelly",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "ネリー"
+    },
+    "nick": "にっく ✨",
+    "avatar": null,
+    "roles": [
+     "1500000000000000030",
+     "1500000000000000040",
+     "1500000000000000070",
+     "1500000000000000050"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "after": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678912",
+     "username": "nelly",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "ネリー"
+    },
+    "nick": "にっく ✨",
+    "avatar": null,
+    "roles": [
+     "1500000000000000030",
+     "1500000000000000040",
+     "1500000000000000070",
+     "1500000000000000050"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": "2026-11-25T01:00:00+00:00"
+   }
+  },
+  {
+   "at": "2026-11-25T00:09:00+00:00",
+   "kind": "voice",
+   "member": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678912",
+     "username": "nelly",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "ネリー"
+    },
+    "nick": "にっく ✨",
+    "avatar": null,
+    "roles": [
+     "1500000000000000030",
+     "1500000000000000040",
+     "1500000000000000070",
+     "1500000000000000050"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": "2026-11-25T01:00:00+00:00"
+   },
+   "change": "join",
+   "before": null,
+   "after": {
+    "id": "1600000000000000001",
+    "name": "雑談 🔊"
+   },
+   "stay": null
+  },
+  {
+   "at": "2026-11-25T00:10:00+00:00",
+   "kind": "update",
+   "before": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678912",
+     "username": "nelly",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "ネリー"
+    },
+    "nick": "にっく ✨",
+    "avatar": null,
+    "roles": [
+     "1500000000000000030",
+     "1500000000000000040",
+     "1500000000000000070",
+     "1500000000000000050"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": "2026-11-25T01:00:00+00:00"
+   },
+   "after": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678912",
+     "username": "nelly",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "ネリー"
+    },
+    "nick": "にっく ✨",
+    "avatar": null,
+    "roles": [
+     "1500000000000000030",
+     "1500000000000000040",
+     "1500000000000000070",
+     "1500000000000000050"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   }
+  },
+  {
+   "at": "2026-11-25T00:11:00+00:00",
+   "kind": "voice",
+   "member": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678912",
+     "username": "nelly",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "ネリー"
+    },
+    "nick": "にっく ✨",
+    "avatar": null,
+    "roles": [
+     "1500000000000000030",
+     "1500000000000000040",
+     "1500000000000000070",
+     "1500000000000000050"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "change": "move",
+   "before": {
+    "id": "1600000000000000001",
+    "name": "雑談 🔊"
+   },
+   "after": {
+    "id": "1600000000000000002",
+    "name": "作業 \"VC\""
+   },
+   "stay": null
+  },
+  {
+   "at": "2026-11-25T01:11:05+00:00",
+   "kind": "voice",
+   "member": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678912",
+     "username": "nelly",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "ネリー"
+    },
+    "nick": "にっく ✨",
+    "avatar": null,
+    "roles": [
+     "1500000000000000030",
+     "1500000000000000040",
+     "1500000000000000070",
+     "1500000000000000050"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "change": "leave",
+   "before": {
+    "id": "1600000000000000002",
+    "name": "作業 \"VC\""
+   },
+   "after": null,
+   "stay": [
+    3725,
+    "01:02:05"
+   ]
+  },
+  {
+   "at": "2026-11-25T02:00:00+00:00",
+   "kind": "remove",
+   "member": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678912",
+     "username": "nelly",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "ネリー"
+    },
+    "nick": "にっく ✨",
+    "avatar": null,
+    "roles": [
+     "1500000000000000030",
+     "1500000000000000040",
+     "1500000000000000070",
+     "1500000000000000050"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "count": 41,
+   "audit": null
+  },
+  {
+   "at": "2026-11-25T02:01:00+00:00",
+   "kind": "join",
+   "member": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678901",
+     "username": "owner",
+     "discriminator": "0",
+     "avatar": "0123456789abcdef0123456789abcdef",
+     "global_name": null
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [],
+    "joined_at": null,
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "count": 42
+  },
+  {
+   "at": "2026-11-25T02:02:00+00:00",
+   "kind": "voice",
+   "member": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678901",
+     "username": "owner",
+     "discriminator": "0",
+     "avatar": "0123456789abcdef0123456789abcdef",
+     "global_name": null
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [],
+    "joined_at": null,
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "change": "leave",
+   "before": {
+    "id": "1600000000000000001",
+    "name": "雑談 🔊"
+   },
+   "after": null,
+   "stay": null
+  },
+  {
+   "at": "2026-11-25T02:03:00+00:00",
+   "kind": "join",
+   "member": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678913",
+     "username": "adm",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "Admin 表示"
+    },
+    "nick": null,
+    "avatar": "11111111111111111111111111111111",
+    "roles": [
+     "1500000000000000090",
+     "1500000000000000060"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "count": 43
+  },
+  {
+   "at": "2026-11-25T02:04:00+00:00",
+   "kind": "remove",
+   "member": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678913",
+     "username": "adm",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "Admin 表示"
+    },
+    "nick": null,
+    "avatar": "11111111111111111111111111111111",
+    "roles": [
+     "1500000000000000090",
+     "1500000000000000060"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "count": 42,
+   "audit": {
+    "member": {
+     "guild_id": "1399617700363370556",
+     "user": {
+      "id": "80351110224678920",
+      "username": "themod",
+      "discriminator": "0",
+      "avatar": null,
+      "global_name": "Mod さん"
+     },
+     "nick": "実行した人",
+     "avatar": null,
+     "roles": [
+      "1500000000000000070"
+     ],
+     "joined_at": "2026-11-25T00:05:00.123000+00:00",
+     "deaf": false,
+     "mute": false,
+     "flags": 0,
+     "communication_disabled_until": null
+    },
+    "reason": "荒らし行為のため"
+   }
+  },
+  {
+   "at": "2026-11-25T02:05:00+00:00",
+   "kind": "join",
+   "member": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678914",
+     "username": "trusted",
+     "discriminator": "0",
+     "avatar": "a_fedcba9876543210fedcba9876543210",
+     "global_name": null
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [
+     "1500000000000000020"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "count": 43
+  },
+  {
+   "at": "2026-11-25T02:06:00+00:00",
+   "kind": "ban",
+   "user": {
+    "id": "80351110224678914",
+    "username": "trusted",
+    "discriminator": "0",
+    "avatar": "a_fedcba9876543210fedcba9876543210",
+    "global_name": null
+   },
+   "cached": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678914",
+     "username": "trusted",
+     "discriminator": "0",
+     "avatar": "a_fedcba9876543210fedcba9876543210",
+     "global_name": null
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [
+     "1500000000000000020"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "audit": {
+    "user": {
+     "id": "80351110224678920",
+     "username": "themod",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "Mod さん"
+    },
+    "reason": "spam"
+   }
+  },
+  {
+   "at": "2026-11-25T02:06:01.300000+00:00",
+   "kind": "remove",
+   "member": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678914",
+     "username": "trusted",
+     "discriminator": "0",
+     "avatar": "a_fedcba9876543210fedcba9876543210",
+     "global_name": null
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [
+     "1500000000000000020"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "count": 42,
+   "audit": null
+  },
+  {
+   "at": "2026-11-25T02:07:00+00:00",
+   "kind": "unban",
+   "user": {
+    "id": "80351110224678914",
+    "username": "trusted",
+    "discriminator": "0",
+    "avatar": "a_fedcba9876543210fedcba9876543210",
+    "global_name": null
+   },
+   "audit": null
+  },
+  {
+   "at": "2026-11-25T02:08:00+00:00",
+   "kind": "ban",
+   "user": {
+    "id": "80351110224678915",
+    "username": "stranger",
+    "discriminator": "0",
+    "avatar": null,
+    "global_name": "Stranger ☃"
+   },
+   "cached": null,
+   "audit": null
+  },
+  {
+   "at": "2026-11-25T02:09:00+00:00",
+   "kind": "unban",
+   "user": {
+    "id": "80351110224678915",
+    "username": "stranger",
+    "discriminator": "0",
+    "avatar": null,
+    "global_name": "Stranger ☃"
+   },
+   "audit": {
+    "user": {
+     "id": "80351110224678920",
+     "username": "themod",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "Mod さん"
+    },
+    "reason": ""
+   }
+  },
+  {
+   "at": "2026-11-25T02:10:00+00:00",
+   "kind": "join",
+   "member": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678916",
+     "username": "helperbot",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": null,
+     "bot": true
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [
+     "1500000000000000010"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "count": 43
+  },
+  {
+   "at": "2026-11-25T02:11:00+00:00",
+   "kind": "update",
+   "before": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678917",
+     "username": "changer",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": null
+    },
+    "nick": "old",
+    "avatar": null,
+    "roles": [
+     "1500000000000000010"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "after": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678917",
+     "username": "changer",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": null
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [
+     "1500000000000000060"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": "2026-11-26T00:00:00.500000+00:00"
+   }
+  },
+  {
+   "at": "2026-11-25T02:12:00+00:00",
+   "kind": "update",
+   "before": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678917",
+     "username": "changer",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": null
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [
+     "1500000000000000060"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": "2026-11-26T00:00:00.500000+00:00"
+   },
+   "after": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678917",
+     "username": "changer",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": null
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [
+     "1500000000000000060"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": "2026-11-26T00:00:00.500000+00:00"
+   }
+  },
+  {
+   "at": "2026-11-25T02:13:00+00:00",
+   "kind": "voice",
+   "member": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678918",
+     "username": "stale",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": null
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [
+     "1500000000000000070"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": "2026-11-24T00:00:00+00:00"
+   },
+   "change": "join",
+   "before": null,
+   "after": {
+    "id": "1600000000000000001",
+    "name": "雑談 🔊"
+   },
+   "stay": null
+  },
+  {
+   "at": "2026-11-25T02:14:00+00:00",
+   "kind": "update",
+   "before": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678919",
+     "username": "timed",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": null
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [
+     "1500000000000000070"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "after": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678919",
+     "username": "timed",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": null
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [
+     "1500000000000000070"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": "2026-11-25T03:00:00+00:00"
+   }
+  },
+  {
+   "at": "2026-11-25T02:20:00+00:00",
+   "kind": "ban",
+   "user": {
+    "id": "80351110224678919",
+    "username": "timed",
+    "discriminator": "0",
+    "avatar": null,
+    "global_name": null
+   },
+   "cached": null,
+   "audit": null
+  },
+  {
+   "at": "2026-11-25T04:00:00+00:00",
+   "kind": "unban",
+   "user": {
+    "id": "80351110224678919",
+    "username": "timed",
+    "discriminator": "0",
+    "avatar": null,
+    "global_name": null
+   },
+   "audit": null
+  }
+ ],
+ "audit": [
+  {
+   "id": "newest-match-wins",
+   "now_ms": 1795565120000,
+   "target": "80351110224678912",
+   "pages": [
+    [
+     [
+      "1574939001880576001",
+      "80351110224678912"
+     ],
+     [
+      "1574938985103360002",
+      "80351110224678912"
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "other-target-is-skipped",
+   "now_ms": 1795565120000,
+   "target": "80351110224678912",
+   "pages": [
+    [
+     [
+      "1574939001880576000",
+      "5"
+     ],
+     [
+      "1574938997686272000",
+      "80351110224678912"
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "exactly-twenty-seconds",
+   "now_ms": 1795565120000,
+   "target": "80351110224678912",
+   "pages": [
+    [
+     [
+      "1574938922188800000",
+      "80351110224678912"
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "twenty-seconds-and-a-millisecond-is-old",
+   "now_ms": 1795565120000,
+   "target": "80351110224678912",
+   "pages": [
+    [
+     [
+      "1574938922184605696",
+      "80351110224678912"
+     ]
+    ],
+    [],
+    []
+   ]
+  },
+  {
+   "id": "future-entry-is-skipped",
+   "now_ms": 1795565120000,
+   "target": "80351110224678912",
+   "pages": [
+    [
+     [
+      "1574939006079074304",
+      "80351110224678912"
+     ]
+    ],
+    [],
+    []
+   ]
+  },
+  {
+   "id": "no-target",
+   "now_ms": 1795565120000,
+   "target": "80351110224678912",
+   "pages": [
+    [
+     [
+      "1574939001880576000",
+      null
+     ]
+    ],
+    [],
+    []
+   ]
+  },
+  {
+   "id": "found-on-the-third-read",
+   "now_ms": 1795565120000,
+   "target": "80351110224678912",
+   "pages": [
+    [],
+    [],
+    [
+     [
+      "1574938993491968000",
+      "80351110224678912"
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "a-failed-read-is-retried",
+   "now_ms": 1795565120000,
+   "target": "80351110224678912",
+   "pages": [
+    "raise",
+    [
+     [
+      "1574938993491968000",
+      "80351110224678912"
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "never-found",
+   "now_ms": 1795565120000,
+   "target": "80351110224678912",
+   "pages": [
+    [],
+    "raise",
+    []
+   ]
+  }
+ ]
+}
