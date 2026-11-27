@@ -1,5 +1,5 @@
 //! Discord のイベントを受ける。Python の `events/` にあたる（今は ready・メンバーの出入りと変更・BAN・
-//! メッセージの削除と編集のログ・スティッキー・リアクションロール・VC の出入り）。
+//! メッセージの検査・メッセージの削除と編集のログ・スティッキー・リアクションロール・VC の出入り）。
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,13 +17,17 @@ use sycs_core::settings::SettingsCache;
 use tracing::{debug, info, warn};
 
 use crate::config::BotConfig;
+use crate::groq::Groq;
 use crate::log_channel::{self, Author, AvatarColours, LogSink};
 use crate::members::{self, LogEntry};
 use crate::message_cache::{CachedMessage, MessageCache};
+use crate::message_security::{self, DiscordEffects, Judges, Post};
+use crate::moderation::Moderation;
 use crate::reaction_roles::{self, Change, ReactionEvent};
 use crate::security::{self, RaidDetector, SpamDetector, Stripped};
 use crate::sticky::{self, StickyCtx, StickyLocks};
 use crate::vc_notify::{self, Filter, Plan, VcTracker};
+use crate::virustotal::VirusTotal;
 use crate::welcome::{self, Kind};
 use crate::{compat, message_logs, signals};
 
@@ -49,6 +53,8 @@ pub struct AppState {
     pub spam: SpamDetector,
     /// VC に似た名前の人が続けて入った記録。
     pub raid: RaidDetector,
+    /// メッセージの検査に使う VirusTotal と Groq。
+    pub judges: Judges,
     shard_manager: OnceLock<Arc<ShardManager>>,
 }
 
@@ -60,6 +66,10 @@ impl AppState {
         settings: Arc<SettingsCache>,
         reporter: Arc<Reporter>,
     ) -> Self {
+        let vt = Arc::new(VirusTotal::new(config.vt.clone()));
+        let groq = Arc::new(Groq::new(config.groq.clone()));
+        let moderation = Arc::new(Moderation::new(groq, config.moderation_cache_ttl));
+        let judges = Judges::new(vt, moderation, config.vt_scan_concurrency);
         Self {
             config,
             pool,
@@ -71,6 +81,7 @@ impl AppState {
             vc: VcTracker::default(),
             spam: SpamDetector::default(),
             raid: RaidDetector::default(),
+            judges,
             shard_manager: OnceLock::new(),
         }
     }
@@ -194,6 +205,28 @@ impl Handler {
         }
     }
 
+    /// メッセージ 1 件を検査する（危険なら消してロールを剥がす）。Python の `handle_security_for_message`。
+    async fn check_security(&self, ctx: &Context, post: &Post) {
+        let snapshot = self.state.settings.snapshot();
+        let cx = message_security::Context {
+            settings: snapshot.guild(post.guild_id.get()),
+            spam: &self.state.spam,
+            raid: &self.state.raid,
+            judges: &self.state.judges,
+            clock: message_security::system_clock,
+        };
+        let fx = DiscordEffects {
+            sink: LogSink {
+                cache: &ctx.cache,
+                http: &ctx.http,
+                settings: &self.state.settings,
+                colours: &self.state.colours,
+            },
+            post,
+        };
+        message_security::check_message(&fx, &cx, post).await;
+    }
+
     /// 歓迎・お別れを送る。失敗は警告にする。
     async fn greet(&self, ctx: &Context, guild: &GuildFacts, kind: Kind, user: &User) {
         let snapshot = self.state.settings.snapshot();
@@ -234,16 +267,18 @@ impl Handler {
         channel: u64,
         now: f64,
     ) {
-        // discord.py の member.roles と同じく、サーバーにあるロールと @everyone。
-        let mut held: Vec<RoleId> = member
-            .roles
-            .iter()
-            .copied()
-            .filter(|r| roles.contains_key(r))
-            .collect();
-        held.push(RoleId::new(guild_id.get()));
+        // discord.py の member.roles と同じく、サーバーにあるロールを低い順に（剥がす順もこれ。上の
+        // ロールで権限が足りずに止まっても、それより下は剥がし終えている）。バイパスは @everyone も見る。
+        let held = members::sorted_roles(&member.roles, roles, guild_id);
+        let mut with_everyone = vec![RoleId::new(guild_id.get())];
+        with_everyone.extend(held.iter().copied());
         let snapshot = self.state.settings.snapshot();
-        if security::bypass_reason(snapshot.guild(guild_id.get()), member.user.id, &held).is_some()
+        if security::bypass_reason(
+            snapshot.guild(guild_id.get()),
+            member.user.id,
+            &with_everyone,
+        )
+        .is_some()
         {
             return;
         }
@@ -378,12 +413,18 @@ impl EventHandler for Handler {
         if new_message.author.bot || !self.handles(guild_id) {
             return;
         }
-        sticky::handle_message(
-            &self.state.sticky(&ctx),
-            guild_id.get(),
-            new_message.channel_id.get(),
-        )
-        .await;
+        // 検査とスティッキーは並べて走らせる（Python の _dispatch_message の gather と同じ。VirusTotal の
+        // 待ちでスティッキーを遅らせない）。
+        let post = message_security::post_from_message(&ctx.cache, &new_message);
+        let security = async {
+            if let Some(post) = &post {
+                self.check_security(&ctx, post).await;
+            }
+        };
+        let sticky_ctx = self.state.sticky(&ctx);
+        let sticky =
+            sticky::handle_message(&sticky_ctx, guild_id.get(), new_message.channel_id.get());
+        tokio::join!(security, sticky);
     }
 
     async fn message_delete(

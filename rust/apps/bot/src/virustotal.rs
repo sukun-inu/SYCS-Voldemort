@@ -39,7 +39,7 @@ const WEB_TIMEOUT: Duration = Duration::from_secs(300);
 pub const POLL_INTERVAL: Duration = Duration::from_secs(20);
 
 /// 設定。環境変数の名前・既定・下限は Python と同じ。
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct VtConfig {
     /// API の鍵（`VIRUSTOTAL_API_KEY`）。無ければ調べずに `skip`。
     pub api_key: Option<String>,
@@ -55,6 +55,17 @@ pub struct VtConfig {
     pub api_base: String,
     /// 解析の終わりを問い合わせる間隔（本番は 20 秒。テストで短くする）。
     pub poll_interval: Duration,
+}
+
+/// 鍵は表示しない（設定をログに出しても漏れないように）。
+impl std::fmt::Debug for VtConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VtConfig")
+            .field("api_key", &self.api_key.as_ref().map(|_| "***"))
+            .field("scan_timeout", &self.scan_timeout)
+            .field("api_base", &self.api_base)
+            .finish_non_exhaustive()
+    }
 }
 
 impl VtConfig {
