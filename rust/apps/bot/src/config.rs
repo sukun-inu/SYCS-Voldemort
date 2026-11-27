@@ -46,6 +46,11 @@ pub struct BotConfig {
     /// 入っているので、絞らないと、確かめている間に他のサーバーの出入りへ反応して、本番の
     /// 利用者がいるチャンネルへ書いてしまう。本番では設定しない。
     pub only_guild_id: Option<u64>,
+    /// 常駐の仕事（地震の電文の受け取り）をこのプロセスが持つか（`BOT_BACKGROUND_WORKER`、既定は真）。
+    ///
+    /// Python の Bot と同じ変数。Bot を複数並べるときは 1 つだけ真にする（全部が受け取ると、同じ地震を
+    /// 台数ぶん通知する）。**本番の Python の Bot と並べて動かすときも偽にすること**（二重に通知する）。
+    pub background_worker: bool,
     /// 利用者の状態の記録（履歴を残す日数・掃除の間隔）。
     pub user_state: UserStateConfig,
     /// スラッシュコマンドに応えるか（`BOT_COMMANDS_ENABLED`、既定は応える）。
@@ -108,6 +113,7 @@ impl BotConfig {
             only_guild_id: u64::try_from(env.int("BOT_ONLY_GUILD_ID", 0, Some(0), None))
                 .ok()
                 .filter(|id| *id > 0),
+            background_worker: env.boolean("BOT_BACKGROUND_WORKER", true),
             user_state: UserStateConfig::from_env(env),
             commands_enabled: env.boolean("BOT_COMMANDS_ENABLED", true),
             sync_commands: env.boolean("BOT_SYNC_COMMANDS", false),
@@ -188,6 +194,7 @@ mod tests {
         assert_eq!(c.metrics_interval, Duration::from_secs(30));
         assert_eq!(c.settings_write_timeout, Duration::from_secs(10));
         assert!(c.dev_signals_enabled);
+        assert!(c.background_worker);
         assert_eq!(c.only_guild_id, None);
         assert_eq!(c.user_state, UserStateConfig::default());
         assert!(c.handles(1) && c.handles(2));

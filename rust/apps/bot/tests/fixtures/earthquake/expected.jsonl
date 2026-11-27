@@ -1,0 +1,899 @@
+40
+-1
+45
+-1
+-1
+55
+-1
+45
+50
+-1
+99
+55
+-1
+0
+45
+50
+55
+-1
+20
+10
+null
+35.8
+null
+null
+180.0
+null
+null
+null
+35.8
+137.7
+-12.5
+-77.0
+12.5
+1.0
+35.8
+null
+null
+null
+35.8
+-35.8
+null
+null
+1.0
+null
+35.8
+100.0
+null
+null
+null
+null
+null
+"不明"
+"ごく浅い"
+"10 km"
+"不明"
+"40 km"
+"ごく浅い"
+"ごく浅い"
+"10 km"
+"不明"
+"ごく浅い"
+"ごく浅い"
+"10km"
+"不明"
+"abc"
+"40 km"
+"30 km"
+"ごく浅い"
+"1 km"
+"ごく浅い"
+"不明"
+"不明"
+"100 km"
+"nan"
+"700 km"
+["不明",-1.0]
+["M5.2",5.2]
+["M5.0",5.0]
+["M0.0",0.0]
+["不明",-1.0]
+["M5.2",5.2]
+["不明",-1.0]
+["不明",-1.0]
+["不明",-1.0]
+["M7.0",7.0]
+["M4.6",4.6]
+["M6.25",6.25]
+["M0.1",0.1]
+["M1e-05",1e-05]
+["M1e+16",1e+16]
+["M1.2345678901234568e+17",1.2345678901234568e+17]
+["M1e+22",1e+22]
+["M9.95",9.95]
+["M0.0003",0.0003]
+["M1.0",1.0]
+["M0.0",0.0]
+["M6.1",6.1]
+["不明",-1.0]
+["不明",-1.0]
+["Minf",null]
+["不明",-1.0]
+["M5.199999999999999",5.199999999999999]
+["M0.30000000000000004",0.30000000000000004]
+["M100.0",100.0]
+["M12345.678",12345.678]
+["M10.0",10.0]
+["24日 12時54分ごろ",1787543681]
+["4日 2時04分ごろ",1785776641]
+["24日 12時54分ごろ",1787543681]
+["24日 12時54分ごろ",1787543681]
+["不明",null]
+["2026/08/24ごろ",null]
+["2026/08/24 12:54ごろ",null]
+["2026/08/24 12:54:41.123ごろ",null]
+["2026-08-24 12:54:41ごろ",null]
+["2026/13/01 00:00:00ごろ",null]
+["2026/02/30 00:00:00ごろ",null]
+["29日 23時59分ごろ",1709218799]
+["2026/02/29 00:00:00ごろ",null]
+["2026/08/24 24:00:00ごろ",null]
+["2026/08/24 12:60:00ごろ",null]
+["2026/08/24 12:54:60ごろ",null]
+["2026/08/24 12:54:61ごろ",null]
+["2026/08/24 12:54:65ごろ",null]
+["0000/01/01 00:00:00ごろ",null]
+["1日 0時00分ごろ",-62135629200]
+["31日 23時59分ごろ",253402268399]
+[" 2026/08/24 12:54:41ごろ",null]
+["2026/08/24 12:54:41 ごろ",null]
+["4日 12時54分ごろ",1785815681]
+["2026/08/00 12:54:41ごろ",null]
+["26/08/24 12:54:41ごろ",null]
+["24日 9時05分ごろ",1787529907]
+["まもなくごろ",null]
+["24日 0時00分ごろ",1787497200]
+["31日 23時59分ごろ",1798729199]
+["1日 0時00分ごろ",1767193200]
+["2026/08/24 12:54:411ごろ",null]
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚪ 地震情報","description":"24日 13時00分ごろ、\n地震がありました。\nこの地震による津波の心配はありません。","color":15158332,"timestamp":1787544120,"fields":[["震源","南太平洋",true],["規模","M7.1",true],["深さ","10 km",true]],"footer":["気象庁 遠地地震に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚪ 地震情報","description":"地震がありました。\nこの地震による津波の心配はありません。","color":15158332,"timestamp":null,"fields":[],"footer":["気象庁","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚪ 地震情報","description":"地震がありました。\nこの地震による津波の心配はありません。","color":15158332,"timestamp":null,"fields":[],"footer":["気象庁","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\n🚨 津波警報が発令されています！","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\n⚠️ 津波注意報が発令されています。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\n津波の有無を調査中です。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\n津波の有無を調査中です。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\n津波情報は不明です。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\n津波情報は不明です。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 震度速報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 震源に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 震度・震源に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":null,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":null,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":null,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"きょうごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M6.0",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M7.0",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","ごく浅い",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","ごく浅い",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","10km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🔵 地震情報","description":"24日 12時54分ごろ、\n最大震度 1 の地震がありました。\nこの地震による津波の心配はありません。","color":16639,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🔵 地震情報","description":"24日 12時54分ごろ、\n最大震度 2 の地震がありました。\nこの地震による津波の心配はありません。","color":38143,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🔵 地震情報","description":"24日 12時54分ごろ、\n最大震度 3 の地震がありました。\nこの地震による津波の心配はありません。","color":51400,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟠 地震情報","description":"24日 12時54分ごろ、\n最大震度 5弱 の地震がありました。\nこの地震による津波の心配はありません。","color":16756480,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟠 地震情報","description":"24日 12時54分ごろ、\n最大震度 5強 の地震がありました。\nこの地震による津波の心配はありません。","color":16742400,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🔴 地震情報","description":"24日 12時54分ごろ、\n最大震度 6弱 の地震がありました。\nこの地震による津波の心配はありません。","color":16727040,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🔴 地震情報","description":"24日 12時54分ごろ、\n最大震度 6強 の地震がありました。\nこの地震による津波の心配はありません。","color":14417920,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🔴 地震情報","description":"24日 12時54分ごろ、\n最大震度 7 の地震がありました。\nこの地震による津波の心配はありません。","color":7209090,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚪ 地震情報","description":"24日 12時54分ごろ、\n地震がありました。\nこの地震による津波の心配はありません。","color":15158332,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚪ 地震情報","description":"24日 12時54分ごろ、\n地震がありました。\nこの地震による津波の心配はありません。","color":15158332,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚪ 地震情報","description":"24日 12時54分ごろ、\n地震がありました。\nこの地震による津波の心配はありません。","color":15158332,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚪ 地震情報","description":"24日 12時54分ごろ、\n地震がありました。\nこの地震による津波の心配はありません。","color":15158332,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null}
+{"title":"⚪ 地震情報","description":"24日 13時00分ごろ、\n地震がありました。\nこの地震による津波の心配はありません。","color":15158332,"timestamp":1787544120,"fields":[["震源","南太平洋",true],["規模","M7.1",true],["深さ","10 km",true]],"footer":["気象庁 遠地地震に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🚨 緊急地震速報を検出しました","description":"緊急地震速報の受信を検出しました。震源・規模の詳細は、後続の情報でご確認ください。","color":15105570,"timestamp":null,"fields":[],"footer":["気象庁 緊急地震速報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🚨 緊急地震速報を検出しました","description":"緊急地震速報の受信を検出しました。震源・規模の詳細は、後続の情報でご確認ください。","color":15105570,"timestamp":null,"fields":[],"footer":["気象庁 緊急地震速報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🚨 緊急地震速報を検出しました","description":"緊急地震速報の受信を検出しました。震源・規模の詳細は、後続の情報でご確認ください。","color":15105570,"timestamp":null,"fields":[],"footer":["気象庁 緊急地震速報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"✅ 緊急地震速報は取り消されました","description":"**茨城県沖** 付近を震源とする緊急地震速報は取り消されました。","color":3066993,"timestamp":null,"fields":[],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"✅ 緊急地震速報は取り消されました","description":"直前の緊急地震速報は取り消されました。","color":3066993,"timestamp":null,"fields":[],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"✅ 緊急地震速報は取り消されました","description":"直前の緊急地震速報は取り消されました。","color":3066993,"timestamp":null,"fields":[],"footer":["気象庁 緊急地震速報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"✅ 緊急地震速報は取り消されました","description":"**福島県沖** 付近を震源とする緊急地震速報は取り消されました。","color":3066993,"timestamp":null,"fields":[],"footer":["気象庁 緊急地震速報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🚨 緊急地震速報を検出しました","description":"緊急地震速報の受信を検出しました。震源・規模の詳細は、後続の情報でご確認ください。","color":15105570,"timestamp":null,"fields":[],"footer":["気象庁 緊急地震速報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"✅ 緊急地震速報は取り消されました","description":"**x** 付近を震源とする緊急地震速報は取り消されました。","color":3066993,"timestamp":null,"fields":[],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第1報）","description":"**x** 付近を震源とする地震が発生しました。","color":15105570,"timestamp":null,"fields":[["予想震源","x",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"🚨 緊急地震速報（警報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（警報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第7報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第0報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第0報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第1報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第1報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第1報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第1報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第3.0報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":null,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 11時59分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540398,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":null,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"そのうちごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":null,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M6.5",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。","color":15105570,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。","color":15105570,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。","color":15105570,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **1**","color":16639,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **7**","color":7209090,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5強**","color":16742400,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **6強**","color":14417920,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波情報","description":"🔴 大津波警報が発令されています。","color":15158332,"timestamp":1787543880,"fields":[["🔴 大津波警報","岩手県",false],["🟠 津波警報","福島県、宮城県",false],["🟡 津波注意報","茨城県",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波情報","description":"❓ 不明が発令されています。","color":10070709,"timestamp":null,"fields":[],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波予報（解除）","description":"すべての津波予報が解除されました。","color":3066993,"timestamp":1787551200,"fields":[],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波予報（解除）","description":"すべての津波予報が解除されました。","color":3066993,"timestamp":null,"fields":[],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波予報（解除）","description":"すべての津波予報が解除されました。","color":3066993,"timestamp":null,"fields":[],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波情報","description":"❓ 不明が発令されています。","color":10070709,"timestamp":null,"fields":[],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波情報","description":"🟡 津波注意報が発令されています。","color":16705372,"timestamp":null,"fields":[["🟡 津波注意報","a",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波情報","description":"🟠 津波警報が発令されています。","color":15105570,"timestamp":null,"fields":[["🟠 津波警報","a",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波情報","description":"❓ 不明が発令されています。","color":10070709,"timestamp":null,"fields":[["❓ 不明","a",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波情報","description":"❓ 不明が発令されています。","color":10070709,"timestamp":null,"fields":[["❓ 不明","a",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波情報","description":"🟡 津波注意報が発令されています。","color":16705372,"timestamp":null,"fields":[["🟡 津波注意報","不明",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波情報","description":"津波情報が発令されています。","color":10070709,"timestamp":null,"fields":[],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波情報","description":"🟡 津波注意報が発令されています。","color":16705372,"timestamp":null,"fields":[["🟡 津波注意報","b",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波情報","description":"🟡 津波注意報が発令されています。","color":16705372,"timestamp":null,"fields":[["🟡 津波注意報","b",false],["❓ 不明","c",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波情報","description":"🟠 津波警報が発令されています。","color":15105570,"timestamp":null,"fields":[["🟠 津波警報","地域1、地域2、地域3、地域4、地域5、地域6、地域7、地域8、地域9、地域10 他2地域",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波情報","description":"🟠 津波警報が発令されています。","color":15105570,"timestamp":null,"fields":[["🟠 津波警報","地域1、地域2、地域3、地域4、地域5、地域6、地域7、地域8、地域9、地域10",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波情報","description":"🟠 津波警報が発令されています。","color":15105570,"timestamp":null,"fields":[["🟠 津波警報","地域1、地域2、地域3、地域4、地域5、地域6、地域7、地域8、地域9、地域10 他1地域",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波情報","description":"🟡 津波注意報が発令されています。","color":16705372,"timestamp":null,"fields":[["🟡 津波注意報","a、b",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+{"title":"津波情報","description":"❓ 不明が発令されています。","color":10070709,"timestamp":null,"fields":[["❓ 不明","u",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null}
+55
+50
+60
+65
+70
+40
+40
+45
+40
+50
+60
+10
+20
+30
+30
+-1
+-1
+-1
+60
+50
+-1
+55
+55
+-1
+50
+70
+null
+5.2
+5.0
+5.2
+5.2
+5.2
+5.2
+null
+null
+null
+null
+0.0
+0.0
+null
+null
+null
+null
+5.2
+null
+null
+null
+1787543681000000
+1787543681000000
+1787543681000000
+1787543681000000
+1787543681000000
+1787543681000000
+1787543681000000
+1787543681500000
+1787543681123456
+1787543681123456
+1787497200000000
+1787543640000000
+1787540400000000
+1787543681000000
+1787543681000000
+1787594081000000
+1787541881000000
+1787543681250000
+null
+null
+null
+null
+null
+null
+null
+1787543681000000
+1787543651000000
+null
+151.16666666666669
+154.83333333333331
+48.0
+-1000000000.0
+48.0
+-1000000000.0
+157.91666666666669
+18.0
+158.0
+158.0
+18.0
+136.16666666666669
+136.16666666666669
+121.16666666666667
+151.16666666666669
+151.16666666666669
+121.16666666666667
+151.16666666666669
+143.16666666666669
+143.16666666666669
+143.16666666666669
+133.16666666666669
+133.16666666666669
+151.16666666666669
+151.16666666666669
+133.16666666666669
+133.16666666666669
+169.16666666666669
+169.16666666666669
+159.16666666666669
+159.16666666666669
+151.16666666666669
+151.16666666666669
+151.16666666666669
+151.16666666666669
+-30.0
+50.0
+60.0
+13.166666666666671
+13.0
+-1000000000.0
+-1000000000.0
+56.916666666666664
+-30.0
+56.833333333333336
+56.833333333333336
+-30.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+50.0
+-30.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+10.0
+-1000000000.0
+-1000000000.0
+10.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-1000000000.0
+-30.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+48.0
+48.0
+48.0
+48.0
+48.0
+48.0
+48.0
+48.0
+48.0
+48.0
+48.0
+33.0
+33.0
+18.0
+48.0
+48.0
+18.0
+48.0
+40.0
+40.0
+40.0
+30.0
+30.0
+48.0
+48.0
+30.0
+30.0
+66.0
+66.0
+56.0
+56.0
+48.0
+48.0
+48.0
+48.0
+0.0
+121.16666666666667
+124.83333333333333
+18.0
+-1000000000.0
+18.0
+-1000000000.0
+127.91666666666667
+-12.0
+128.0
+128.0
+-12.0
+121.16666666666667
+121.16666666666667
+121.16666666666667
+121.16666666666667
+121.16666666666667
+121.16666666666667
+121.16666666666667
+113.16666666666667
+113.16666666666667
+113.16666666666667
+103.16666666666667
+103.16666666666667
+121.16666666666667
+121.16666666666667
+103.16666666666667
+103.16666666666667
+139.16666666666669
+139.16666666666669
+129.16666666666669
+129.16666666666669
+121.16666666666667
+121.16666666666667
+121.16666666666667
+121.16666666666667
+-30.0
+151.16666666666669
+154.83333333333331
+48.0
+-1000000000.0
+48.0
+-1000000000.0
+157.91666666666669
+18.0
+158.0
+158.0
+18.0
+136.16666666666669
+136.16666666666669
+121.16666666666667
+151.16666666666669
+151.16666666666669
+121.16666666666667
+151.16666666666669
+143.16666666666669
+143.16666666666669
+143.16666666666669
+133.16666666666669
+133.16666666666669
+151.16666666666669
+151.16666666666669
+133.16666666666669
+133.16666666666669
+159.16666666666669
+159.16666666666669
+151.16666666666669
+159.16666666666669
+159.16666666666669
+151.16666666666669
+151.16666666666669
+151.16666666666669
+-30.0
+151.16666666666669
+154.83333333333331
+48.0
+-1000000000.0
+48.0
+-1000000000.0
+157.91666666666669
+18.0
+158.0
+158.0
+18.0
+136.16666666666669
+136.16666666666669
+121.16666666666667
+151.16666666666669
+151.16666666666669
+121.16666666666667
+151.16666666666669
+143.16666666666669
+143.16666666666669
+143.16666666666669
+133.16666666666669
+133.16666666666669
+151.16666666666669
+151.16666666666669
+133.16666666666669
+133.16666666666669
+159.16666666666669
+159.16666666666669
+151.16666666666669
+169.16666666666669
+159.16666666666669
+151.16666666666669
+151.16666666666669
+151.16666666666669
+-30.0
+151.16666666666669
+151.16666666666669
+143.16666666666669
+143.16666666666669
+137.16666666666669
+137.16666666666669
+133.16666666666669
+151.16666666666669
+143.16666666666669
+137.16666666666669
+0.0
+-1000000000.0
+10.0
+{"url":"https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=TEN","key":"551|2026/08/24 12:54:41|40|茨城県沖"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"551|2026/08/24 12:54:41|40|茨城県沖"}
+{"url":"https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=T1","key":"551|2026/08/24 12:54:41|40|茨城県沖"}
+{"url":"https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=M0","key":"551|2026/08/24 12:54:41|40|茨城県沖"}
+{"url":"https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=C","key":"551|2026/08/24 12:54:41|40|茨城県沖"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"551|2026/08/24 12:54:41|40|茨城県沖"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"551|2026/08/24 12:54:41|40|茨城県沖"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"551|2026/08/24 12:54:41|40|茨城県沖"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"551|2026/08/24 12:54:41|40|茨城県沖"}
+{"url":"https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=E1","key":"551|2026/08/24 12:54:41|40|茨城県沖"}
+{"url":"https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=C","key":"551|2026/08/24 13:00:00|-1|南太平洋"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"551|2026/08/24 13:00:00|-1|南太平洋"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"551|2026/08/24 13:00:00|-1|南太平洋"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"551|2026/08/24 13:00:00|-1|南太平洋"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"551|2026/08/24 13:00:00|-1|南太平洋"}
+{"url":"https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=E1","key":"551|2026/08/24 13:00:00|-1|南太平洋"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"556|2026/08/24 12:00:00|45|茨城県沖"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"556|2026/08/24 12:00:00|45|茨城県沖"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"556|2026/08/24 12:00:00|45|茨城県沖"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"556|2026/08/24 12:00:00|45|茨城県沖"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"556|2026/08/24 12:00:00|45|茨城県沖"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"556|2026/08/24 12:00:00|45|茨城県沖"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"||-1|"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"||-1|"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"||-1|"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"||-1|"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"||-1|"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"||-1|"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"None|None|-1|None"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"None|None|-1|None"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"None|None|-1|None"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"None|None|-1|None"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"None|None|-1|None"}
+{"url":"https://www.jma.go.jp/bosai/map.html#contents=earthquake_map","key":"None|None|-1|None"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「アラートを送るチャンネル」が未設定です"],"diagnose":"「アラートを送るチャンネル」が未設定です"}
+{"eval":["skip","「アラートを送るチャンネル」が未設定です"],"diagnose":"「アラートを送るチャンネル」が未設定です"}
+{"eval":["skip","「アラートを送るチャンネル」が未設定です"],"diagnose":"「アラートを送るチャンネル」が未設定です"}
+{"eval":["skip","「アラートを送るチャンネル」が未設定です"],"diagnose":"「アラートを送るチャンネル」が未設定です"}
+{"eval":["skip","「アラートを送るチャンネル」が未設定です"],"diagnose":"「アラートを送るチャンネル」が未設定です"}
+{"eval":["skip","「アラートを送るチャンネル」が未設定です"],"diagnose":"「アラートを送るチャンネル」が未設定です"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["skip","bot がこのギルドをまだキャッシュしていません（未参加、または再起動直後）"],"diagnose":"bot がこのギルドをまだキャッシュしていません（未参加、または再起動直後）"}
+{"eval":["target",4242],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["skip","設定されているチャンネル（-5）が見つからないか、テキストチャンネルではありません"],"diagnose":"設定されているチャンネル（-5）が見つからないか、テキストチャンネルではありません"}
+{"eval":["skip","bot がこのギルドをまだキャッシュしていません（未参加、または再起動直後）"],"diagnose":"bot がこのギルドをまだキャッシュしていません（未参加、または再起動直後）"}
+{"eval":["skip","設定されているチャンネル（1505310388051251261）が見つからないか、テキストチャンネルではありません"],"diagnose":"設定されているチャンネル（1505310388051251261）が見つからないか、テキストチャンネルではありません"}
+{"eval":["skip","設定されているチャンネル（1505310388051251261）が見つからないか、テキストチャンネルではありません"],"diagnose":"設定されているチャンネル（1505310388051251261）が見つからないか、テキストチャンネルではありません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 30 で、今回の震度 -1 は届いていません"],"diagnose":"「通知する最小震度」が 30 で、今回の震度 -1 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 30 で、今回の震度 0 は届いていません"],"diagnose":"「通知する最小震度」が 30 で、今回の震度 0 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 30 で、今回の震度 10 は届いていません"],"diagnose":"「通知する最小震度」が 30 で、今回の震度 10 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 30 で、今回の震度 20 は届いていません"],"diagnose":"「通知する最小震度」が 30 で、今回の震度 20 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 30 で、今回の震度 29 は届いていません"],"diagnose":"「通知する最小震度」が 30 で、今回の震度 29 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 30 で、今回の震度 -1 は届いていません"],"diagnose":"「通知する最小震度」が 30 で、今回の震度 -1 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 30 で、今回の震度 -1 は届いていません"],"diagnose":"「通知する最小震度」が 30 で、今回の震度 -1 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 10 で、今回の震度 -1 は届いていません"],"diagnose":"「通知する最小震度」が 10 で、今回の震度 -1 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 40 で、今回の震度 -1 は届いていません"],"diagnose":"「通知する最小震度」が 40 で、今回の震度 -1 は届いていません"}
+{"eval":["skip","「通知する最小震度」が 40 で、今回の震度 30 は届いていません"],"diagnose":"「通知する最小震度」が 40 で、今回の震度 30 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 45 で、今回の震度 -1 は届いていません"],"diagnose":"「通知する最小震度」が 45 で、今回の震度 -1 は届いていません"}
+{"eval":["skip","「通知する最小震度」が 45 で、今回の震度 30 は届いていません"],"diagnose":"「通知する最小震度」が 45 で、今回の震度 30 は届いていません"}
+{"eval":["skip","「通知する最小震度」が 45 で、今回の震度 40 は届いていません"],"diagnose":"「通知する最小震度」が 45 で、今回の震度 40 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 40 で、今回の震度 -1 は届いていません"],"diagnose":"「通知する最小震度」が 40 で、今回の震度 -1 は届いていません"}
+{"eval":["skip","「通知する最小震度」が 40 で、今回の震度 30 は届いていません"],"diagnose":"「通知する最小震度」が 40 で、今回の震度 30 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 45 で、今回の震度 -1 は届いていません"],"diagnose":"「通知する最小震度」が 45 で、今回の震度 -1 は届いていません"}
+{"eval":["skip","「通知する最小震度」が 45 で、今回の震度 30 は届いていません"],"diagnose":"「通知する最小震度」が 45 で、今回の震度 30 は届いていません"}
+{"eval":["skip","「通知する最小震度」が 45 で、今回の震度 40 は届いていません"],"diagnose":"「通知する最小震度」が 45 で、今回の震度 40 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 30 で、今回の震度 -1 は届いていません"],"diagnose":"「通知する最小震度」が 30 で、今回の震度 -1 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 30 で、今回の震度 -1 は届いていません"],"diagnose":"「通知する最小震度」が 30 で、今回の震度 -1 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 40 で、今回の震度 -1 は届いていません"],"diagnose":"「通知する最小震度」が 40 で、今回の震度 -1 は届いていません"}
+{"eval":["skip","「通知する最小震度」が 40 で、今回の震度 30 は届いていません"],"diagnose":"「通知する最小震度」が 40 で、今回の震度 30 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 1 で、今回の震度 -1 は届いていません"],"diagnose":"「通知する最小震度」が 1 で、今回の震度 -1 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 0 で、今回の震度 -1 は届いていません"],"diagnose":"「通知する最小震度」が 0 で、今回の震度 -1 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 30 で、今回の震度 -1 は届いていません"],"diagnose":"「通知する最小震度」が 30 で、今回の震度 -1 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 0 で、今回の震度 -1 は届いていません"],"diagnose":"「通知する最小震度」が 0 で、今回の震度 -1 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","「通知する最小震度」が 99 で、今回の震度 -1 は届いていません"],"diagnose":"「通知する最小震度」が 99 で、今回の震度 -1 は届いていません"}
+{"eval":["skip","「通知する最小震度」が 99 で、今回の震度 30 は届いていません"],"diagnose":"「通知する最小震度」が 99 で、今回の震度 30 は届いていません"}
+{"eval":["skip","「通知する最小震度」が 99 で、今回の震度 40 は届いていません"],"diagnose":"「通知する最小震度」が 99 で、今回の震度 40 は届いていません"}
+{"eval":["skip","「通知する最小震度」が 99 で、今回の震度 45 は届いていません"],"diagnose":"「通知する最小震度」が 99 で、今回の震度 45 は届いていません"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","通知タイプ「地震情報」がオフになっています"],"diagnose":"通知タイプ「地震情報」がオフになっています"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","通知タイプ「地震情報」がオフになっています"],"diagnose":"通知タイプ「地震情報」がオフになっています"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","通知タイプ「地震情報」がオフになっています"],"diagnose":"通知タイプ「地震情報」がオフになっています"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","通知タイプ「地震情報」がオフになっています"],"diagnose":"通知タイプ「地震情報」がオフになっています"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","通知タイプ「津波情報」がオフになっています"],"diagnose":"通知タイプ「津波情報」がオフになっています"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","通知タイプ「緊急地震速報（警報）」がオフになっています"],"diagnose":"通知タイプ「緊急地震速報（警報）」がオフになっています"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","通知タイプ「緊急地震速報（予報）」がオフになっています"],"diagnose":"通知タイプ「緊急地震速報（予報）」がオフになっています"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["target",1505310388051251261],"diagnose":"条件はすべて満たしていますが、送信の直前で対象から外れました（一時的な状態変化の可能性）"}
+{"eval":["skip","通知タイプ「地震情報」がオフになっています"],"diagnose":"通知タイプ「地震情報」がオフになっています"}
+{"eval":["skip","通知タイプ「津波情報」がオフになっています"],"diagnose":"通知タイプ「津波情報」がオフになっています"}
+{"eval":["skip","通知タイプ「緊急地震速報（警報）」がオフになっています"],"diagnose":"通知タイプ「緊急地震速報（警報）」がオフになっています"}
+{"eval":["skip","通知タイプ「緊急地震速報（予報）」がオフになっています"],"diagnose":"通知タイプ「緊急地震速報（予報）」がオフになっています"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["skip","「アラートを送るチャンネル」が未設定です"],"diagnose":"「アラートを送るチャンネル」が未設定です"}
+{"eval":["skip","「アラートを送るチャンネル」が未設定です"],"diagnose":"「アラートを送るチャンネル」が未設定です"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["skip","「アラートを送るチャンネル」が未設定です"],"diagnose":"「アラートを送るチャンネル」が未設定です"}
+{"eval":["skip","「通知する最小震度」が 70 で、今回の震度 40 は届いていません"],"diagnose":"「通知する最小震度」が 70 で、今回の震度 40 は届いていません"}
+{"eval":["skip","通知タイプ「地震情報」がオフになっています"],"diagnose":"通知タイプ「地震情報」がオフになっています"}
+{"eval":["broken"],"diagnose":"設定の読み取りに失敗しました（"}
+{"eval":["skip","「通知する最小震度」が 70 で、今回の震度 40 は届いていません"],"diagnose":"「通知する最小震度」が 70 で、今回の震度 40 は届いていません"}
+{"eval":["skip","bot がこのギルドをまだキャッシュしていません（未参加、または再起動直後）"],"diagnose":"bot がこのギルドをまだキャッシュしていません（未参加、または再起動直後）"}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"],["earthquake_map.png","MAP"]]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":2,"sent":[[111,1505310388051251261,false,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"],["earthquake_map.png","MAP"]]],[701798768294756383,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"],["earthquake_map.png","MAP"]]],[1399617700363370556,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"],["earthquake_map.png","MAP"]]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":0,"sent":[],"badge":null,"map":null}
+{"count":0,"sent":[],"badge":null,"map":null}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["earthquake_map.png","MAP"]]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["earthquake_map.png","MAP"]]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"]]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"]]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html#contents=earthquake_map"],[["intensity_badge.png","BADGE40"],["earthquake_map.png","MAP"]]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=C"],[["intensity_badge.png","BADGE40"],["earthquake_map.png","MAP"]]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":2,"sent":[[701798768294756383,1505310388051251261,true,{"title":"🔴 地震情報","description":"24日 12時54分ごろ、\n最大震度 6弱 の地震がありました。\nこの地震による津波の心配はありません。","color":16727040,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE55"],["earthquake_map.png","MAP"]]],[1399617700363370556,1505310388051251261,true,{"title":"🔴 地震情報","description":"24日 12時54分ごろ、\n最大震度 6弱 の地震がありました。\nこの地震による津波の心配はありません。","color":16727040,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE55"],["earthquake_map.png","MAP"]]]],"badge":55,"map":[36.5,141.0,2,"最大震度 6弱","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🔵 地震情報","description":"24日 12時54分ごろ、\n最大震度 2 の地震がありました。\nこの地震による津波の心配はありません。","color":38143,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE20"]]]],"badge":20,"map":null}
+{"count":1,"sent":[[701798768294756383,1505310388051251261,true,{"title":"⚪ 地震情報","description":"24日 13時00分ごろ、\n地震がありました。\nこの地震による津波の心配はありません。","color":15158332,"timestamp":1787544120,"fields":[["震源","南太平洋",true],["規模","M7.1",true],["深さ","10 km",true]],"footer":["気象庁 遠地地震に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[]]],"badge":null,"map":null}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"]]]],"badge":40,"map":null}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"]]]],"badge":40,"map":null}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"],["earthquake_map.png","MAP"]]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"]]]],"badge":40,"map":null}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🔵 地震情報","description":"24日 12時54分ごろ、\n最大震度 3 の地震がありました。\nこの地震による津波の心配はありません。","color":51400,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE30"]]]],"badge":30,"map":null}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🔵 地震情報","description":"24日 12時54分ごろ、\n最大震度 3 の地震がありました。\nこの地震による津波の心配はありません。","color":51400,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE30"],["earthquake_map.png","MAP"]]]],"badge":30,"map":[36.5,141.0,1,"最大震度 3","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🔵 地震情報","description":"24日 12時54分ごろ、\n最大震度 2 の地震がありました。\nこの地震による津波の心配はありません。","color":38143,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE20"]]]],"badge":20,"map":null}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"⚪ 地震情報","description":"24日 12時54分ごろ、\n地震がありました。\nこの地震による津波の心配はありません。","color":15158332,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE0"]]]],"badge":0,"map":null}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"⚪ 地震情報","description":"24日 12時54分ごろ、\n地震がありました。\nこの地震による津波の心配はありません。","color":15158332,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE99"],["earthquake_map.png","MAP"]]]],"badge":99,"map":[36.5,141.0,1,"震度分布","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":1,"sent":[[701798768294756383,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"],["earthquake_map.png","MAP"]]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":1,"sent":[[701798768294756383,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"],["earthquake_map.png","MAP"]]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":1,"sent":[[701798768294756383,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"],["earthquake_map.png","MAP"]]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":0,"sent":[],"badge":null,"map":null}
+{"count":0,"sent":[],"badge":null,"map":null}
+{"count":1,"sent":[[701798768294756383,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"],["earthquake_map.png","MAP"]]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":1,"sent":[[701798768294756383,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"],["earthquake_map.png","MAP"]]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":0,"sent":[],"badge":null,"map":null}
+{"count":0,"sent":[],"badge":null,"map":null}
+{"count":1,"sent":[[701798768294756383,777,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"],["earthquake_map.png","MAP"]]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"🟡 地震情報","description":"24日 12時54分ごろ、\n最大震度 4 の地震がありました。\nこの地震による津波の心配はありません。","color":16442900,"timestamp":1787543843,"fields":[["震源","茨城県沖",true],["規模","M5.2",true],["深さ","40 km",true]],"footer":["気象庁 各地の震度に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":"attachment://earthquake_map.png"},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[["intensity_badge.png","BADGE40"],["earthquake_map.png","MAP"]]]],"badge":40,"map":[36.5,141.0,2,"最大震度 4","茨城県沖  M5.2  40 km  24日 12時54分ごろ"]}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"⚪ 地震情報","description":"24日 13時00分ごろ、\n地震がありました。\nこの地震による津波の心配はありません。","color":15158332,"timestamp":1787544120,"fields":[["震源","南太平洋",true],["規模","M7.1",true],["深さ","10 km",true]],"footer":["気象庁 遠地地震に関する情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html?contents=earthquake_map&id=20260824125441"],[]]],"badge":null,"map":null}
+{"count":2,"sent":[[701798768294756383,1505310388051251261,true,{"title":"津波情報","description":"🔴 大津波警報が発令されています。","color":15158332,"timestamp":1787543880,"fields":[["🔴 大津波警報","岩手県",false],["🟠 津波警報","福島県、宮城県",false],["🟡 津波注意報","茨城県",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null},null,[]],[1399617700363370556,1505310388051251261,true,{"title":"津波情報","description":"🔴 大津波警報が発令されています。","color":15158332,"timestamp":1787543880,"fields":[["🔴 大津波警報","岩手県",false],["🟠 津波警報","福島県、宮城県",false],["🟡 津波注意報","茨城県",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null},null,[]]],"badge":null,"map":null}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"津波予報（解除）","description":"すべての津波予報が解除されました。","color":3066993,"timestamp":null,"fields":[],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null},null,[]]],"badge":null,"map":null}
+{"count":0,"sent":[],"badge":null,"map":null}
+{"count":1,"sent":[[701798768294756383,1505310388051251261,true,{"title":"津波情報","description":"🔴 大津波警報が発令されています。","color":15158332,"timestamp":1787543880,"fields":[["🔴 大津波警報","岩手県",false],["🟠 津波警報","福島県、宮城県",false],["🟡 津波注意報","茨城県",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null},null,[]],[1399617700363370556,1505310388051251261,false,{"title":"津波情報","description":"🔴 大津波警報が発令されています。","color":15158332,"timestamp":1787543880,"fields":[["🔴 大津波警報","岩手県",false],["🟠 津波警報","福島県、宮城県",false],["🟡 津波注意報","茨城県",false]],"footer":["気象庁 津波情報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null},null,[]]],"badge":null,"map":null}
+{"count":2,"sent":[[111,1505310388051251261,true,{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html#contents=earthquake_map"],[["intensity_badge.png","BADGE45"]]],[1399617700363370556,1505310388051251261,true,{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html#contents=earthquake_map"],[["intensity_badge.png","BADGE45"]]]],"badge":45,"map":null}
+{"count":2,"sent":[[111,1505310388051251261,true,{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html#contents=earthquake_map"],[["intensity_badge.png","BADGE45"]]],[1399617700363370556,1505310388051251261,true,{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html#contents=earthquake_map"],[["intensity_badge.png","BADGE45"]]]],"badge":45,"map":null}
+{"count":2,"sent":[[701798768294756383,1505310388051251261,true,{"title":"🚨 緊急地震速報を検出しました","description":"緊急地震速報の受信を検出しました。震源・規模の詳細は、後続の情報でご確認ください。","color":15105570,"timestamp":null,"fields":[],"footer":["気象庁 緊急地震速報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html#contents=earthquake_map"],[]],[1399617700363370556,1505310388051251261,true,{"title":"🚨 緊急地震速報を検出しました","description":"緊急地震速報の受信を検出しました。震源・規模の詳細は、後続の情報でご確認ください。","color":15105570,"timestamp":null,"fields":[],"footer":["気象庁 緊急地震速報","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html#contents=earthquake_map"],[]]],"badge":null,"map":null}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"✅ 緊急地震速報は取り消されました","description":"**茨城県沖** 付近を震源とする緊急地震速報は取り消されました。","color":3066993,"timestamp":null,"fields":[],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html#contents=earthquake_map"],[]]],"badge":null,"map":null}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"✅ 緊急地震速報は取り消されました","description":"直前の緊急地震速報は取り消されました。","color":3066993,"timestamp":null,"fields":[],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html#contents=earthquake_map"],[]]],"badge":null,"map":null}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html#contents=earthquake_map"],[]]],"badge":45,"map":null}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **5弱**","color":16756480,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":null,"image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html#contents=earthquake_map"],[]]],"badge":45,"map":null}
+{"count":1,"sent":[[1399617700363370556,1505310388051251261,true,{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。","color":15105570,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html#contents=earthquake_map"],[["intensity_badge.png","BADGE99"]]]],"badge":99,"map":null}
+{"count":1,"sent":[[701798768294756383,1505310388051251261,true,{"title":"⚠️ 緊急地震速報（予報）（第3報）","description":"24日 12時00分ごろ、\n**茨城県沖** 付近を震源とする地震が発生しました。\n予想最大震度 **2**","color":38143,"timestamp":1787540400,"fields":[["予想震源","茨城県沖",true],["予想規模","M5.0",true]],"footer":["気象庁 緊急地震速報（予報）","https://cdn.discordapp.com/avatars/1350672236612288633/9d80744c9723eba8795a7eb3659552b3.webp?size=1024"],"thumbnail":"attachment://intensity_badge.png","image":null},["詳細（気象庁）","https://www.jma.go.jp/bosai/map.html#contents=earthquake_map"],[["intensity_badge.png","BADGE20"]]]],"badge":20,"map":null}
+{"count":0,"sent":[],"badge":null,"map":null}
+"茨城県沖  M5.2  40 km  24日 12時54分ごろ"
+"南太平洋  M7.1  10 km  24日 13時00分ごろ"
+"不明  不明"
+"M5.2  40 km  24日 12時54分ごろ"
+"茨城県沖  M5.2  40 km"
+"茨城県沖  M5.2  ごく浅い  24日 12時54分ごろ"
+"茨城県沖  不明  40 km  24日 12時54分ごろ"
+"茨城県沖  不明  不明  24日 12時54分ごろ"
+[{"code":551,"id":"q1","earthquake":{"time":"2026/08/24 12:54:41","maxScale":40,"domesticTsunami":"None","hypocenter":{"name":"茨城県沖","latitude":36.5,"longitude":141.0,"depth":40,"magnitude":5.2}},"issue":{"type":"DetailScale","time":"2026/08/24 12:57:23"},"points":[{"addr":"水戸市","pref":"茨城県","scale":40},{"addr":"日立市","pref":"茨城県","scale":30}]},1399617700363370556,null]
+[{"code":551,"id":"q1","earthquake":{"time":"2026/08/24 12:54:41","maxScale":40,"domesticTsunami":"None","hypocenter":{"name":"茨城県沖","latitude":36.5,"longitude":141.0,"depth":40,"magnitude":5.2}},"issue":{"type":"DetailScale","time":"2026/08/24 12:57:23"},"points":[{"addr":"水戸市","pref":"茨城県","scale":40},{"addr":"日立市","pref":"茨城県","scale":30}]},1399617700363370556,1505310388051251261]
+[{"code":551,"id":"q1","earthquake":{"time":"2026/08/24 12:54:41","maxScale":40,"domesticTsunami":"None","hypocenter":{"name":"茨城県沖","latitude":36.5,"longitude":141.0,"depth":40,"magnitude":5.2}},"issue":{"type":"DetailScale","time":"2026/08/24 12:57:23"},"points":[{"addr":"水戸市","pref":"茨城県","scale":40},{"addr":"日立市","pref":"茨城県","scale":30}]},null,null]
+[{"code":551,"id":"q1","earthquake":{"time":"2026/08/24 12:54:41","maxScale":40,"domesticTsunami":"None","hypocenter":{"name":"茨城県沖","latitude":36.5,"longitude":141.0,"depth":40,"magnitude":5.2}},"issue":{"type":"DetailScale","time":"2026/08/24 12:57:23"},"points":[{"addr":"水戸市","pref":"茨城県","scale":40},{"addr":"日立市","pref":"茨城県","scale":30}]},null,null]
+[{"code":551,"id":"q1","earthquake":{"time":"2026/08/24 12:54:41","maxScale":40,"domesticTsunami":"None","hypocenter":{"name":"茨城県沖","latitude":36.5,"longitude":141.0,"depth":40,"magnitude":5.2}},"issue":{"type":"DetailScale","time":"2026/08/24 12:57:23"},"points":[{"addr":"水戸市","pref":"茨城県","scale":40},{"addr":"日立市","pref":"茨城県","scale":30}]},null,null]
+[{},1399617700363370556,null]
+[{},1399617700363370556,1505310388051251261]
+[{"code":551,"id":"q1","earthquake":{"time":"2026/08/24 12:54:41","maxScale":40,"domesticTsunami":"None","hypocenter":{"name":"茨城県沖","latitude":36.5,"longitude":141.0,"depth":40,"magnitude":5.2}},"issue":{"type":"DetailScale","time":"2026/08/24 12:57:23"},"points":[{"addr":"水戸市","pref":"茨城県","scale":40},{"addr":"日立市","pref":"茨城県","scale":30}]},1399617700363370556,1505310388051251261]
+[{"code":551},null,null]
+"error"
+"error"
