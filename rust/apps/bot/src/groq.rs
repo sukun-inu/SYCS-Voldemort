@@ -204,9 +204,11 @@ impl Groq {
     ///
     /// 「経った時間を見る」と「待って時刻を書く」を 1 つの錠の中でする。分けると、同時に来た
     /// 呼び出しが全員「もう十分経った」を見て素通りする。
-    async fn respect_min_interval(&self, slot: &Bucket) {
+    ///
+    /// 返すのは「送ってよくなった時刻」（次の呼び出しはここから間隔を数える）。
+    async fn respect_min_interval(&self, slot: &Bucket) -> Instant {
         if self.config.min_interval <= 0.0 {
-            return;
+            return Instant::now();
         }
         let mut last = slot.last_call.lock().await;
         if let Some(at) = *last {
@@ -215,7 +217,9 @@ impl Groq {
                 tokio::time::sleep(seconds(wait)).await;
             }
         }
-        *last = Some(Instant::now());
+        let now = Instant::now();
+        *last = Some(now);
+        now
     }
 
     /// 1 回の呼び出し（SDK の再試行つき）。groq SDK の `AsyncAPIClient.request`。
@@ -575,6 +579,69 @@ mod tests {
         assert_eq!((c.retry_base_delay, c.retry_max_delay), (30.0, 30.0));
         assert_eq!(c.max_concurrent, 1);
         assert_eq!(c.api_key.as_deref(), Some("k"));
+    }
+
+    fn groq(min_interval: f64) -> Arc<Groq> {
+        Arc::new(Groq::new(GroqConfig {
+            api_key: None,
+            base_url: String::new(),
+            max_concurrent: 3,
+            min_interval,
+            max_retries: 0,
+            retry_base_delay: 0.5,
+            retry_max_delay: 0.5,
+        }))
+    }
+
+    /// 同時に来た呼び出しも、送る間隔の下限だけ空けて通すこと。
+    ///
+    /// 送ってよくなった時刻そのもので確かめる。偽物のサーバーに届いた時刻で測ると、遅い環境（CI は
+    /// 本番の CPU のふりで動かす）では、送り出しが空いていても届く間隔が詰まって見える。
+    #[tokio::test]
+    async fn calls_are_spaced_by_the_minimum_interval() {
+        let groq = groq(0.05);
+        let slot = groq.bucket("t");
+        let mut set = tokio::task::JoinSet::new();
+        for _ in 0..5 {
+            let (groq, slot) = (Arc::clone(&groq), Arc::clone(&slot));
+            set.spawn(async move { groq.respect_min_interval(&slot).await });
+        }
+        let mut passed = Vec::new();
+        while let Some(at) = set.join_next().await {
+            passed.push(at.unwrap());
+        }
+        passed.sort();
+        for pair in passed.windows(2) {
+            let gap = pair[1] - pair[0];
+            // タイマーの刻み（1 ミリ秒）のぶんだけ余裕を見る。
+            assert!(gap >= Duration::from_millis(48), "間隔が詰まった: {gap:?}");
+        }
+    }
+
+    /// 間隔の下限が 0 なら待たないこと。
+    #[tokio::test]
+    async fn no_minimum_interval_means_no_waiting() {
+        let groq = groq(0.0);
+        let slot = groq.bucket("t");
+        groq.respect_min_interval(&slot).await;
+        groq.respect_min_interval(&slot).await;
+        // 待たない経路は、最後に送った時刻にも触らない。
+        assert!(slot.last_call.lock().await.is_none());
+    }
+
+    /// 枠と間隔は用途ごとに別で、同じ用途では使い回すこと。
+    #[test]
+    fn buckets_are_per_purpose() {
+        let groq = groq(0.25);
+        assert!(Arc::ptr_eq(
+            &groq.bucket("moderation"),
+            &groq.bucket("moderation")
+        ));
+        assert!(!Arc::ptr_eq(
+            &groq.bucket("moderation"),
+            &groq.bucket("chat")
+        ));
+        assert_eq!(groq.bucket("chat").gate.available_permits(), 3);
     }
 
     /// 乱数は 0 以上 1 未満で、毎回同じではないこと。
