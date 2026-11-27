@@ -1,0 +1,1325 @@
+[
+ {
+  "id": "basic-three-articles-oldest-first",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "not-due-yet",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 1795563300.5,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "due-exactly-at-the-interval",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 1795563300.25,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "default-interval-is-an-hour",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "a": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "last_run": 1795561500.75,
+      "seen_hashes": []
+     },
+     "b": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:empty",
+      "last_run": 1795561500.25,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "numbers-as-text-are-read",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": "1505310388051251261",
+      "query": "feed:basic",
+      "interval": "30",
+      "last_run": "0",
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "zero-and-negative-intervals-always-run",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "a": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:empty",
+      "interval": 0.5,
+      "last_run": 1795565100.25,
+      "seen_hashes": []
+     },
+     "b": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:empty",
+      "interval": -5,
+      "last_run": 1795565200.25,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "many-sends-five-newest-oldest-first",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:many",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "many-second-run-sends-the-rest",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:many",
+      "interval": 30,
+      "last_run": 1795563300.25,
+      "seen_hashes": [
+       "77368e0dc335d0ecc57c23c3abfdff93",
+       "8228811f5d1cb52a7f24a7dbe7b51803",
+       "570676d0f39d357340f2082e68f2d3f0",
+       "41f6972b40eb22beb304c6d0509f98ee",
+       "efce38cb4f1f0dde03622e112bd8c30c"
+      ]
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "everything-seen-sends-nothing",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": [
+       "6568df139d67cb02c9aa0b4cf4d5eaba",
+       "d9d4c5f6c76c0cafb03194b08e90eeab",
+       "759cd67b47efeefeda86b28154a2d86a",
+       5,
+       null,
+       "x"
+      ]
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "seen-keeps-the-last-hundred",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:many",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": [
+       "old000",
+       "old001",
+       "old002",
+       "old003",
+       "old004",
+       "old005",
+       "old006",
+       "old007",
+       "old008",
+       "old009",
+       "old010",
+       "old011",
+       "old012",
+       "old013",
+       "old014",
+       "old015",
+       "old016",
+       "old017",
+       "old018",
+       "old019",
+       "old020",
+       "old021",
+       "old022",
+       "old023",
+       "old024",
+       "old025",
+       "old026",
+       "old027",
+       "old028",
+       "old029",
+       "old030",
+       "old031",
+       "old032",
+       "old033",
+       "old034",
+       "old035",
+       "old036",
+       "old037",
+       "old038",
+       "old039",
+       "old040",
+       "old041",
+       "old042",
+       "old043",
+       "old044",
+       "old045",
+       "old046",
+       "old047",
+       "old048",
+       "old049",
+       "old050",
+       "old051",
+       "old052",
+       "old053",
+       "old054",
+       "old055",
+       "old056",
+       "old057",
+       "old058",
+       "old059",
+       "old060",
+       "old061",
+       "old062",
+       "old063",
+       "old064",
+       "old065",
+       "old066",
+       "old067",
+       "old068",
+       "old069",
+       "old070",
+       "old071",
+       "old072",
+       "old073",
+       "old074",
+       "old075",
+       "old076",
+       "old077",
+       "old078",
+       "old079",
+       "old080",
+       "old081",
+       "old082",
+       "old083",
+       "old084",
+       "old085",
+       "old086",
+       "old087",
+       "old088",
+       "old089",
+       "old090",
+       "old091",
+       "old092",
+       "old093",
+       "old094",
+       "old095",
+       "old096",
+       "old097"
+      ]
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "seen-as-text-is-read-char-by-char",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:empty",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": "abc"
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "extra-keys-in-the-row-are-kept",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:empty",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": [],
+      "note": "keep me",
+      "nested": {
+       "a": [
+        1,
+        2
+       ]
+      }
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "no-query-or-no-channel-is-skipped",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "a": {
+      "channel_id": 1505310388051251261,
+      "query": "",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "b": {
+      "channel_id": 0,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "c": {
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "d": {
+      "channel_id": 1505310388051251261,
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "voice-channel-is-skipped",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": []
+  },
+  "other_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "unknown-channel-is-skipped",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 42,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "guild-not-in-cache-is-skipped",
+  "guilds": {
+   "999": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "fetch-500-still-writes-the-time",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "status:500",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": [
+       "keep"
+      ]
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "fetch-404",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "status:404",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "fetch-non-200-with-a-feed-body-is-not-read",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "a": {
+      "channel_id": 1505310388051251261,
+      "query": "errfeed:503",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "b": {
+      "channel_id": 1505310388051251261,
+      "query": "errfeed:203",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "c": {
+      "channel_id": 1505310388051251261,
+      "query": "errfeed:404",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "fetch-connection-dropped",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "close",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "fetch-broken-xml",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:broken",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "fetch-not-xml",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:notxml",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "fetch-empty-feed",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:empty",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "fetch-follows-redirects",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "redirect:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "query-is-encoded-like-aiohttp",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "AI ニュース +C++ & 'q'=\"w\" 50% a/b?c:d@e!$()*,;#~",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "f2": {
+      "channel_id": 1505310388051251261,
+      "query": "日本 経済",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "no-key-sends-without-summaries",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  },
+  "no_key": true
+ },
+ {
+  "id": "summaries-long-prefixed-null-empty-number",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:groq",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "summaries-no-choice-500-400",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:groq",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": [
+       "5a8eeb2064bb190f5164ff2f0abba33e",
+       "fe4ee35567095447fda971a4d547fc2e",
+       "c9084ae5943fe9d8c8cd4b664ef63235",
+       "0e045329983b215697e86fbd1bca933a",
+       "ffa7d41a48dbf9698b60c1c5b72a1ad6"
+      ]
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "summaries-are-remembered-across-feeds",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "a": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "b": {
+      "channel_id": 1505310388051251262,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261,
+    1505310388051251262
+   ]
+  }
+ },
+ {
+  "id": "send-failure-is-not-marked-seen",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": [
+       "keep"
+      ]
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  },
+  "send_fails": [
+   1505310388051251261
+  ]
+ },
+ {
+  "id": "duplicate-links-are-sent-twice",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:dup",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "edge-first-five",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:edge",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "edge-the-rest-broken-source-url-is-not-sent",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:edge",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": [
+       "8ec8428503fc306a11476534e3108173",
+       "2982ca1c227a7ae4c1694eeb9430d724",
+       "cf727a29fd76422d646aa27c4c6d5341",
+       "0530b1db2ca0f5f23d9cbda288f2d295",
+       "7269d094ed323bacae89cfc94cd47756"
+      ]
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "whitespace-and-encodings",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "a": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:whitespace",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "b": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:latin1",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "c": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:utf16",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "d": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:bom",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "e": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:prefixed",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "f": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:namespaced",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "g": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:badutf8",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "two-guilds-in-key-order",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "f1": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:empty",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   },
+   "701798768294756383": {
+    "news_feeds": {
+     "f2": {
+      "channel_id": 77,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   },
+   "not-a-guild": {
+    "news_feeds": {
+     "f3": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ],
+   "701798768294756383": [
+    77
+   ]
+  }
+ },
+ {
+  "id": "guilds-without-feeds",
+  "guilds": {
+   "1399617700363370556": {},
+   "701798768294756383": {
+    "news_feeds": {}
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ],
+   "701798768294756383": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "good-feed-alone",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "good": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "broken-interval-stops-python",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "bad": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:many",
+      "interval": "soon",
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "good": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  },
+  "rust_like": "good-feed-alone"
+ },
+ {
+  "id": "broken-last-run-stops-python",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "bad": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:many",
+      "interval": 30,
+      "last_run": [
+       1
+      ],
+      "seen_hashes": []
+     },
+     "good": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  },
+  "rust_like": "good-feed-alone"
+ },
+ {
+  "id": "broken-channel-stops-python",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "bad": {
+      "channel_id": "x",
+      "query": "feed:many",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "good": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  },
+  "rust_like": "good-feed-alone"
+ },
+ {
+  "id": "broken-seen-stops-python",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "bad": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:many",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": 3
+     },
+     "good": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  },
+  "rust_like": "good-feed-alone"
+ },
+ {
+  "id": "broken-query-stops-python",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "bad": {
+      "channel_id": 1505310388051251261,
+      "query": 7,
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "good": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  },
+  "rust_like": "good-feed-alone"
+ },
+ {
+  "id": "feed-that-is-not-a-dict-stops-python",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "bad": "oops",
+     "good": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  },
+  "rust_like": "good-feed-alone"
+ },
+ {
+  "id": "shift-jis-feed-stops-python",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "bad": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:sjis",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "good": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  },
+  "rust_like": "good-feed-alone-after-an-empty-fetch",
+  "rust_like_tail": true
+ },
+ {
+  "id": "good-feed-alone-after-an-empty-fetch",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": {
+     "bad": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:empty",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     },
+     "good": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ]
+  }
+ },
+ {
+  "id": "feeds-that-are-not-a-dict-stop-python",
+  "guilds": {
+   "1399617700363370556": {
+    "news_feeds": "oops"
+   },
+   "701798768294756383": {
+    "news_feeds": {
+     "good": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ],
+   "701798768294756383": [
+    1505310388051251261
+   ]
+  },
+  "rust_like": "second-guild-alone"
+ },
+ {
+  "id": "second-guild-alone",
+  "guilds": {
+   "1399617700363370556": {},
+   "701798768294756383": {
+    "news_feeds": {
+     "good": {
+      "channel_id": 1505310388051251261,
+      "query": "feed:basic",
+      "interval": 30,
+      "last_run": 0.0,
+      "seen_hashes": []
+     }
+    }
+   }
+  },
+  "text_channels": {
+   "1399617700363370556": [
+    1505310388051251261
+   ],
+   "701798768294756383": [
+    1505310388051251261
+   ]
+  }
+ }
+]

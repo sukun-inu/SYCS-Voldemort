@@ -34,6 +34,8 @@ pub const KNOWN_TASKS: &[&str] = &[
 pub enum Task {
     /// スティッキーの指示（貼る・消す）をいま片付ける。
     Sticky,
+    /// ニュースをいま巡回する（`interval` が経ったフィードだけ。Python と同じ）。
+    NewsFeeds,
     /// 地震の電文の受け取りをつなぎ直す。
     EarthquakeReconnect,
     /// 地震の電文を、本番と同じ経路で流し直す（中身は依頼の `payload`）。
@@ -55,6 +57,7 @@ pub enum Outcome {
 pub fn route(task: &str) -> Outcome {
     match task {
         "sticky" => Outcome::Run(Task::Sticky),
+        "news_feeds" => Outcome::Run(Task::NewsFeeds),
         "earthquake_reconnect" => Outcome::Run(Task::EarthquakeReconnect),
         "eq_replay" => Outcome::Run(Task::EqReplay),
         t if KNOWN_TASKS.contains(&t) || t.starts_with("test_") => Outcome::NotPortedYet,
@@ -125,7 +128,8 @@ mod tests {
     #[test]
     fn known_tasks_are_not_ported_yet_and_others_are_unknown() {
         assert_eq!(route("sticky"), Outcome::Run(Task::Sticky));
-        assert_eq!(route("news_feeds"), Outcome::NotPortedYet);
+        assert_eq!(route("news_feeds"), Outcome::Run(Task::NewsFeeds));
+        assert_eq!(route("djaudio_cache"), Outcome::NotPortedYet);
         assert_eq!(route("eq_replay"), Outcome::Run(Task::EqReplay));
         assert_eq!(
             route("earthquake_reconnect"),
@@ -163,7 +167,7 @@ mod tests {
     /// 1 件ずつ扱い、件数ぶんの結果が返ること。
     #[test]
     fn every_claimed_signal_is_handled_in_order() {
-        let outcomes = handle_all(&[signal("sticky"), signal("news_feeds"), signal("nope")]);
+        let outcomes = handle_all(&[signal("sticky"), signal("djaudio_cache"), signal("nope")]);
         assert_eq!(
             outcomes,
             [

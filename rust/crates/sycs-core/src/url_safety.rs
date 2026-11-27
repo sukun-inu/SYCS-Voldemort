@@ -252,6 +252,15 @@ fn python_ip_address(text: &str) -> Option<IpAddr> {
     text.parse::<IpAddr>().ok()
 }
 
+/// Python の `urlsplit(url).netloc`（`//` の後ろから `/`・`?`・`#` の手前まで。ユーザー名やポートも含む）。
+/// `//` で始まるホストの部分が無ければ空。分解できない URL（括弧の合わない `https://[abc` など）は `Err`
+/// （Python は ValueError）。
+pub fn netloc(url: &str) -> Result<String, UrlSafetyError> {
+    urlsplit(url)
+        .map(|parts| parts.netloc)
+        .map_err(|e| err(format!("invalid_url:{e}")))
+}
+
 /// 分解した URL のうち、安全確認に要るところ。
 struct Parts {
     scheme: String,
@@ -400,6 +409,38 @@ fn hostname(netloc: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// netloc は Python の urlsplit と同じところを切り出し、分解できない URL は失敗にすること。
+    #[test]
+    fn netloc_is_cut_like_urlsplit() {
+        let ok = |url: &str| netloc(url).unwrap();
+        assert_eq!(ok("https://space.example.jp"), "space.example.jp");
+        assert_eq!(ok("  https://a.example/path?x=1  "), "a.example");
+        assert_eq!(
+            ok("http://user:pw@a.example:8080/x#f"),
+            "user:pw@a.example:8080"
+        );
+        assert_eq!(
+            ok("//schemeless.example.com/path"),
+            "schemeless.example.com"
+        );
+        assert_eq!(ok("HTTPS://UPPER.Example.COM:443"), "UPPER.Example.COM:443");
+        assert_eq!(ok("https://exa\tmple.com/"), "example.com");
+        for none in [
+            "",
+            "no-scheme.example.com/path",
+            "mailto:a@b.example",
+            "https:///x",
+        ] {
+            assert_eq!(ok(none), "", "{none}");
+        }
+        for bad in ["https://[broken", "https://bro]ken/"] {
+            assert!(
+                netloc(bad).unwrap_err().0.starts_with("invalid_url:"),
+                "{bad}"
+            );
+        }
+    }
 
     fn code(url: &str) -> String {
         match parse_target(url, true) {

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <item>
+      <title>同じリンクの記事（1 つ目） - 重複通信</title>
+      <link>https://news.google.com/rss/articles/DUP001?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 03:00:00 GMT</pubDate>
+      <source url="https://dup.example.jp">重複通信</source>
+    </item>
+    <item>
+      <title>同じリンクの記事（2 つ目） - 重複通信</title>
+      <link>https://news.google.com/rss/articles/DUP001?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 02:00:00 GMT</pubDate>
+      <source url="https://dup.example.jp">重複通信</source>
+    </item>
+  </channel>
+</rss>
