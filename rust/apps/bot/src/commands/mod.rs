@@ -8,10 +8,14 @@
 //!   （[`NOT_PORTED_YET`]）には、その旨を返す（切り替えの前に利用者が打つことはない）。
 //! - 打たれたことは、成功も失敗もプロセスのログに 1 行残す（[`activity`]）。
 //!
-//! 移した中身（今は /log・/chat）は、設定を書き換えて返事の文を作るだけの関数にしてある（[`settings`]）。
+//! 移した中身（今は /log・/chat・/trusted・/bypass・/bot）は、設定を読み書きして返事を作るだけの関数に
+//! してある（[`settings`]・[`overview`]）。人数の決まっていない選択（/trusted・/bypass の追加と削除）は、
+//! 選ぶ部品と「確定」のボタンの画面で受ける（[`picker`]）。
 
 pub mod activity;
 pub mod guards;
+pub mod overview;
+pub mod picker;
 pub mod reply;
 pub mod settings;
 
@@ -20,12 +24,14 @@ use std::time::Instant;
 use serde_json::Value;
 use serenity::all::{
     Cache, ChannelId, CommandDataOption, CommandDataOptionValue, CommandInteraction,
-    CreateInteractionResponse, CreateInteractionResponseMessage, GuildId, Http,
+    ComponentInteraction, ComponentInteractionDataKind, CreateInteractionResponse,
+    CreateInteractionResponseMessage, GuildId, Http,
 };
 use sycs_core::settings::{Settings, SettingsCache, WriteError};
 use tracing::{error, info, warn};
 
 use self::guards::Standing;
+use self::picker::{Part, PickerKind, Pickers, Step};
 use self::reply::Reply;
 use crate::vc_notify;
 
@@ -81,6 +87,22 @@ pub enum Route {
     ChatSet,
     /// `/chat clear`
     ChatClear,
+    /// `/trusted add`
+    TrustedAdd,
+    /// `/trusted remove`
+    TrustedRemove,
+    /// `/trusted list`
+    TrustedList,
+    /// `/bypass add`
+    BypassAdd,
+    /// `/bypass remove`
+    BypassRemove,
+    /// `/bypass list`
+    BypassList,
+    /// `/bot settings`
+    BotSettings,
+    /// `/bot help`
+    BotHelp,
 }
 
 /// 移したコマンドの道すじ。
@@ -89,6 +111,14 @@ pub const PORTED: &[(&str, Route)] = &[
     ("log level", Route::LogLevel),
     ("chat set", Route::ChatSet),
     ("chat clear", Route::ChatClear),
+    ("trusted add", Route::TrustedAdd),
+    ("trusted remove", Route::TrustedRemove),
+    ("trusted list", Route::TrustedList),
+    ("bypass add", Route::BypassAdd),
+    ("bypass remove", Route::BypassRemove),
+    ("bypass list", Route::BypassList),
+    ("bot settings", Route::BotSettings),
+    ("bot help", Route::BotHelp),
 ];
 
 /// 定義にはあるが、中身をまだ移していないコマンド。移したら [`PORTED`] へ動かす
@@ -98,14 +128,6 @@ pub const NOT_PORTED_YET: &[&str] = &[
     "metal silver",
     "metal platinum",
     "metal all",
-    "trusted add",
-    "trusted remove",
-    "trusted list",
-    "bypass add",
-    "bypass remove",
-    "bypass list",
-    "bot settings",
-    "bot help",
     "greeting welcome channel",
     "greeting welcome message",
     "greeting goodbye channel",
@@ -246,65 +268,155 @@ pub fn standing_of(cache: &Cache, command: &CommandInteraction) -> Standing {
 
 /// 実行の段取り。すぐ返事するか、設定を書き換えてから返事するか。
 pub enum Planned {
-    /// 設定に触らずに返す（断るときなど）。
+    /// 設定に触らずに返す（断るとき・一覧・選択の画面を開くときなど）。
     Reply(Box<Reply>),
     /// 設定を書き換えて、その結果から返事を作る（[`SettingsCache::transact`] の中で呼ぶ）。
     Write(Box<dyn FnOnce(&mut Settings) -> Reply + Send>),
 }
 
+/// コマンドの片付け方を決めるのに要るもの。
+pub struct PlanInput<'a> {
+    /// 打った人の立場。
+    pub standing: Standing,
+    /// 打たれたサーバー。
+    pub guild_id: Option<GuildId>,
+    /// 打った人。
+    pub user_id: u64,
+    /// 末端の引数。
+    pub options: &'a [CommandDataOption],
+    /// そのサーバーのいまの設定（一覧を出すコマンドが読む）。
+    pub guild_settings: Option<&'a Value>,
+    /// 開いている選択の画面の覚え。
+    pub pickers: &'a Pickers,
+    /// 管理画面の場所（リンクのボタン）。
+    pub admin_site_url: &'a str,
+}
+
 /// 打たれたコマンドをどう片付けるかを決める（権限・引数を見る。Discord にも DB にも触らない）。
-pub fn plan(
-    route: Route,
-    standing: Standing,
-    guild_id: Option<GuildId>,
-    options: &[CommandDataOption],
-) -> Result<Planned, CommandError> {
-    // 今ある 4 つはどれも管理者だけ（Python の ensure_admin）。
-    if let Some(text) = guards::refusal_for_admin_only(standing) {
-        return Ok(Planned::Reply(Box::new(Reply::ephemeral(text))));
+pub fn plan(route: Route, input: &PlanInput<'_>) -> Result<Planned, CommandError> {
+    let reply = |reply: Reply| Ok(Planned::Reply(Box::new(reply)));
+    // /bot help は誰でも打てる。ほかは管理者だけ（Python の ensure_admin）。
+    if route == Route::BotHelp {
+        return reply(Reply {
+            content: None,
+            embeds: overview::help_embeds(&overview::command_lines(&definitions())),
+            components: overview::admin_site_row(input.admin_site_url),
+            ephemeral: true,
+        });
     }
-    let Some(guild_id) = guild_id else {
-        return Ok(Planned::Reply(Box::new(Reply::ephemeral(
-            reply::NOT_IN_GUILD,
-        ))));
+    if let Some(text) = guards::refusal_for_admin_only(input.standing) {
+        return reply(Reply::ephemeral(text));
+    }
+    let Some(guild_id) = input.guild_id else {
+        return reply(Reply::ephemeral(reply::NOT_IN_GUILD));
     };
     let guild = guild_id.get();
+    let options = input.options;
     let channel = || {
         channel_option(options, "channel")
             .map(ChannelId::get)
             .ok_or(CommandError::MissingOption("channel"))
     };
-    Ok(match route {
+    // 選択の画面を開く（選ぶ部品と「確定」のボタンを出す。書くのは確定を押したとき）。
+    let open_picker = |kind: PickerKind| {
+        let token = input.pickers.open(input.user_id, kind);
+        reply(Reply {
+            content: Some(kind.prompt().to_string()),
+            embeds: Vec::new(),
+            components: picker::components(&token, kind, 0),
+            ephemeral: true,
+        })
+    };
+    match route {
         Route::LogChannel => {
             let id = channel()?;
-            Planned::Write(Box::new(move |s| settings::log_channel(s, guild, id)))
+            Ok(Planned::Write(Box::new(move |s| {
+                settings::log_channel(s, guild, id)
+            })))
         }
         Route::LogLevel => {
             let level = string_option(options, "level")
                 .ok_or(CommandError::MissingOption("level"))?
                 .to_string();
-            Planned::Write(Box::new(move |s| settings::log_level(s, guild, &level)))
+            Ok(Planned::Write(Box::new(move |s| {
+                settings::log_level(s, guild, &level)
+            })))
         }
         Route::ChatSet => {
             let id = channel()?;
-            Planned::Write(Box::new(move |s| settings::chat_set(s, guild, id)))
+            Ok(Planned::Write(Box::new(move |s| {
+                settings::chat_set(s, guild, id)
+            })))
         }
-        Route::ChatClear => Planned::Write(Box::new(move |s| settings::chat_clear(s, guild))),
-    })
+        Route::ChatClear => Ok(Planned::Write(Box::new(move |s| {
+            settings::chat_clear(s, guild)
+        }))),
+        Route::TrustedAdd => open_picker(PickerKind::TrustedAdd),
+        Route::TrustedRemove => open_picker(PickerKind::TrustedRemove),
+        Route::BypassAdd => open_picker(PickerKind::BypassAdd),
+        Route::BypassRemove => open_picker(PickerKind::BypassRemove),
+        Route::TrustedList => reply(settings::trusted_list(input.guild_settings)),
+        Route::BypassList => reply(settings::bypass_list(input.guild_settings)),
+        Route::BotSettings => reply(Reply {
+            content: None,
+            embeds: vec![settings::settings_embed(input.guild_settings, guild)],
+            components: overview::admin_site_row(input.admin_site_url),
+            ephemeral: true,
+        }),
+        // 上で返している。
+        Route::BotHelp => reply(Reply::default()),
+    }
+}
+
+/// コマンドと部品の応答に要るもの。
+pub struct Deps<'a> {
+    /// ギルドごとの設定。
+    pub settings: &'a SettingsCache,
+    /// serenity のキャッシュ（権限を決める）。
+    pub cache: &'a Cache,
+    /// Discord へ送る口。
+    pub http: &'a Http,
+    /// 開いている選択の画面の覚え。
+    pub pickers: &'a Pickers,
+    /// 管理画面の場所。
+    pub admin_site_url: &'a str,
 }
 
 /// 移した中身を実行して、返事を作る。
 pub async fn run(
-    settings: &SettingsCache,
+    deps: &Deps<'_>,
     route: Route,
-    standing: Standing,
     command: &CommandInteraction,
     options: &[CommandDataOption],
 ) -> Result<Reply, CommandError> {
-    match plan(route, standing, command.guild_id, options)? {
+    let snapshot = deps.settings.snapshot();
+    let input = PlanInput {
+        standing: standing_of(deps.cache, command),
+        guild_id: command.guild_id,
+        user_id: command.user.id.get(),
+        options,
+        guild_settings: command.guild_id.and_then(|g| snapshot.guild(g.get())),
+        pickers: deps.pickers,
+        admin_site_url: deps.admin_site_url,
+    };
+    match plan(route, &input)? {
         Planned::Reply(reply) => Ok(*reply),
-        Planned::Write(write) => Ok(settings.transact(write).await?),
+        Planned::Write(write) => Ok(deps.settings.transact(write).await?),
     }
+}
+
+fn response_message(reply: Reply) -> CreateInteractionResponseMessage {
+    let mut message = CreateInteractionResponseMessage::new().ephemeral(reply.ephemeral);
+    if let Some(content) = reply.content {
+        message = message.content(content);
+    }
+    if !reply.embeds.is_empty() {
+        message = message.embeds(reply.embeds);
+    }
+    if !reply.components.is_empty() {
+        message = message.components(reply.components);
+    }
+    message
 }
 
 /// 返事を Discord へ送る（最初の応答）。Python の `interaction.response.send_message`。
@@ -314,26 +426,17 @@ pub async fn respond(
     command: &CommandInteraction,
     reply: Reply,
 ) -> Result<(), Box<serenity::Error>> {
-    let mut message = CreateInteractionResponseMessage::new().ephemeral(reply.ephemeral);
-    if let Some(content) = reply.content {
-        message = message.content(content);
-    }
-    if let Some(embed) = reply.embed {
-        message = message.embed(embed);
-    }
     command
-        .create_response(http, CreateInteractionResponse::Message(message))
+        .create_response(
+            http,
+            CreateInteractionResponse::Message(response_message(reply)),
+        )
         .await
         .map_err(Box::new)
 }
 
 /// 打たれたコマンドを 1 つ片付ける（実行 → 返事 → ログに 1 行）。
-pub async fn dispatch(
-    settings: &SettingsCache,
-    cache: &Cache,
-    http: &Http,
-    command: &CommandInteraction,
-) {
+pub async fn dispatch(deps: &Deps<'_>, command: &CommandInteraction) {
     let started = Instant::now();
     let (path, options) = command_path(&command.data.name, &command.data.options);
     let display_name = vc_notify::display_name(
@@ -348,10 +451,7 @@ pub async fn dispatch(
         command.channel_id,
     );
     let outcome = match route(&path) {
-        Some(route) => {
-            let standing = standing_of(cache, command);
-            run(settings, route, standing, command, options).await
-        }
+        Some(route) => run(deps, route, command, options).await,
         None => {
             warn!("[CMD] /{path} {who} まだ移していないコマンドです");
             Ok(Reply::ephemeral(reply::NOT_PORTED))
@@ -365,12 +465,79 @@ pub async fn dispatch(
         let ms = started.elapsed().as_millis();
         error!("{}", activity::failed_line(&path, &who, ms, e));
     }
-    if let Err(e) = respond(http, command, reply).await {
+    if let Err(e) = respond(deps.http, command, reply).await {
         warn!("[CMD] /{path} {who} 返事を送れませんでした: {e}");
     }
     if failure.is_none() {
         let ms = started.elapsed().as_millis();
         info!("{}", activity::completed_line(&path, &who, ms));
+    }
+}
+
+/// 触られた部品（選択・ボタン）を 1 つ片付ける。いまは、信頼済みユーザー・バイパスロールの選択の画面だけ。
+///
+/// この Bot が開いた画面でない・時間切れのものには応えない（Python の View も、時間切れのあとは応えない）。
+pub async fn component(deps: &Deps<'_>, interaction: &ComponentInteraction) {
+    let Some((token, part)) = picker::parse_custom_id(&interaction.data.custom_id) else {
+        return;
+    };
+    let user = interaction.user.id.get();
+    let step = match (part, &interaction.data.kind) {
+        (Part::Select, ComponentInteractionDataKind::UserSelect { values }) => {
+            deps.pickers
+                .select(token, user, values.iter().map(|id| id.get()).collect())
+        }
+        (Part::Select, ComponentInteractionDataKind::RoleSelect { values }) => {
+            deps.pickers
+                .select(token, user, values.iter().map(|id| id.get()).collect())
+        }
+        (Part::Confirm, ComponentInteractionDataKind::Button) => deps.pickers.confirm(token, user),
+        _ => Step::Ignore,
+    };
+    let say =
+        |text: &str| CreateInteractionResponse::Message(response_message(Reply::ephemeral(text)));
+    let response = match step {
+        Step::Ignore => return,
+        Step::NotYours => say(picker::NOT_YOURS),
+        Step::NothingPicked => say(picker::NOTHING_PICKED),
+        // 選んだだけではまだ書かない。確定のボタンに件数を出す（Python の `edit_message(view=self)`）。
+        Step::Redraw { kind, picked } => CreateInteractionResponse::UpdateMessage(
+            CreateInteractionResponseMessage::new()
+                .components(picker::components(token, kind, picked)),
+        ),
+        Step::Confirm { kind, picked } => {
+            let Some(guild_id) = interaction.guild_id else {
+                return;
+            };
+            let guild = guild_id.get();
+            let ids = picked.clone();
+            let written = deps
+                .settings
+                .transact(move |s| {
+                    settings::change_ids(s, guild, kind.settings_key(), &ids, kind.adds())
+                })
+                .await;
+            match written {
+                Ok(updated) => {
+                    // 書けたら画面は終わり（Python の `self.stop()`）。本文を結果に置き換え、部品を外す。
+                    deps.pickers.close(token);
+                    let text = picker::confirmed_text(kind, &picked, updated.len());
+                    CreateInteractionResponse::UpdateMessage(
+                        CreateInteractionResponseMessage::new()
+                            .content(text)
+                            .components(Vec::new()),
+                    )
+                }
+                Err(e) => {
+                    // 画面は残す（もう一度「確定」を押せる。Python も、書けなかったときは View を止めない）。
+                    error!("[CMD] 選択の確定で設定を書けませんでした guild={guild}: {e}");
+                    say(reply::FAILED)
+                }
+            }
+        }
+    };
+    if let Err(e) = interaction.create_response(deps.http, response).await {
+        warn!("[CMD] 選択の画面への応答を送れませんでした: {e}");
     }
 }
 

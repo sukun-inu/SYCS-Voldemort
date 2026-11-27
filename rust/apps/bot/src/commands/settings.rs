@@ -1,14 +1,19 @@
-//! 設定のコマンド（/log・/chat）。Python の `commands/settings/log.py`・`chat.py`。
+//! 設定のコマンド（/log・/chat・/trusted・/bypass・/bot settings）。Python の `commands/settings/` の
+//! `log.py`・`chat.py`・`trusted.py`・`bypass.py`・`overview.py`。
 //!
 //! どれも「設定を書き換えて、返事の文を作る」だけなので、設定の全体を受け取る関数にしてある
 //! （[`sycs_core::settings::SettingsCache::transact`] の中で呼ぶ。表から読み直した設定に当たるので、
 //! 他のプロセスの直前の変更を踏みつぶさない）。Discord には触らない。
 
+use std::collections::BTreeSet;
+
 use serde_json::{Map, Value, json};
+use serenity::all::CreateEmbed;
 use sycs_core::settings::Settings;
 
-use super::reply::Reply;
-use crate::log_channel::{Level, python_str};
+use super::reply::{EMBED_FIELD_BUDGET, MESSAGE_BUDGET, Reply, cap_list_for_message};
+use crate::log_channel::{Level, python_int, python_str};
+use crate::security::id_list;
 
 /// 1 つのギルドの設定に重ねて書く（置き換えではない）。Python の `update_guild_settings`。
 ///
@@ -97,6 +102,140 @@ pub fn chat_set(settings: &mut Settings, guild_id: u64, channel_id: u64) -> Repl
 pub fn chat_clear(settings: &mut Settings, guild_id: u64) -> Reply {
     update_guild(settings, guild_id, [("response_channel_id", Value::Null)]);
     Reply::ephemeral("余への語りかけチャンネルを解除した。再設定されるまで余は応答しない。")
+}
+
+/// 信頼済みユーザー・バイパスロールの ID の並びを足す／外す。Python の `add_trusted_users`・
+/// `remove_trusted_users`・`add_bypass_roles`・`remove_bypass_roles`。
+///
+/// いまの並びを読み（読めない要素は捨てる）、足す／外すをして、重複なしの昇順で書く。外すときに登録されて
+/// いない ID があっても失敗にしない。書いたあとの並びを返す。
+pub fn change_ids(
+    settings: &mut Settings,
+    guild_id: u64,
+    key: &'static str,
+    ids: &[u64],
+    add: bool,
+) -> Vec<i64> {
+    let current = settings
+        .guilds
+        .get(&guild_id.to_string())
+        .and_then(|g| g.get(key));
+    let mut set: BTreeSet<i64> = id_list(current).into_iter().collect();
+    for id in ids {
+        let Ok(id) = i64::try_from(*id) else {
+            continue;
+        };
+        if add {
+            set.insert(id);
+        } else {
+            set.remove(&id);
+        }
+    }
+    let sorted: Vec<i64> = set.into_iter().collect();
+    update_guild(settings, guild_id, [(key, json!(sorted))]);
+    sorted
+}
+
+/// 設定の鍵: 信頼済みユーザー。
+pub const TRUSTED_KEY: &str = "trusted_user_ids";
+/// 設定の鍵: バイパスロール。
+pub const BYPASS_KEY: &str = "bypass_role_ids";
+/// 一覧のコマンドで並べる件数の上限（文字数の上限とは別に）。
+const LIST_LIMIT: usize = 60;
+/// `/bot settings` の一覧に並べる件数。Embed の 1 項目は 1024 文字までで、多いサーバーだと収まらない。
+const OVERVIEW_LIST_LIMIT: usize = 15;
+/// `/bot settings` の Embed の色（discord.py の `Color.blurple()`）。
+pub const BLURPLE: u32 = 0x58_65_F2;
+
+/// ロールのメンション。discord.py の `Role.mention`（@everyone のロールも `<@&ID>` と書く）。
+pub fn role_mention(role_id: i64) -> String {
+    format!("<@&{role_id}>")
+}
+
+/// `/trusted list`: 信頼済みユーザーの一覧。
+pub fn trusted_list(guild: Option<&Value>) -> Reply {
+    let ids = id_list(guild.and_then(|g| g.get(TRUSTED_KEY)));
+    if ids.is_empty() {
+        return Reply::ephemeral("まだ誰も余の信頼を勝ち取っていない。");
+    }
+    let members: Vec<String> = ids.iter().map(|id| format!("<@{id}>")).collect();
+    // 件数が多いと本文の上限（2000 文字）を超えて、送信そのものが失敗する。
+    let header = "余が認めた者の一覧だ:\n";
+    let body = cap_list_for_message(
+        &members,
+        MESSAGE_BUDGET,
+        "名",
+        "\n",
+        Some(LIST_LIMIT),
+        header,
+    );
+    Reply::ephemeral(format!("{header}{body}"))
+}
+
+/// `/bypass list`: バイパスロールの一覧。
+pub fn bypass_list(guild: Option<&Value>) -> Reply {
+    let ids = id_list(guild.and_then(|g| g.get(BYPASS_KEY)));
+    if ids.is_empty() {
+        return Reply::ephemeral("バイパスロールはまだ設定されていない。");
+    }
+    let roles: Vec<String> = ids.iter().map(|id| role_mention(*id)).collect();
+    let header = "バイパスロール一覧:\n";
+    let body = cap_list_for_message(&roles, MESSAGE_BUDGET, "個", "\n", Some(LIST_LIMIT), header);
+    Reply::ephemeral(format!("{header}{body}"))
+}
+
+/// ID の並びを、Embed の 1 項目に収まる長さの列挙にする。Python の `_mention_list`。
+fn mention_list(ids: &[i64], prefix: &str, unit: &str) -> String {
+    if ids.is_empty() {
+        return "なし".to_string();
+    }
+    let items: Vec<String> = ids.iter().map(|id| format!("<{prefix}{id}>")).collect();
+    cap_list_for_message(
+        &items,
+        EMBED_FIELD_BUDGET,
+        unit,
+        ", ",
+        Some(OVERVIEW_LIST_LIMIT),
+        "",
+    )
+}
+
+/// `/bot settings` の Embed（いまの設定の一覧）。Python の `_settings_embed`。
+pub fn settings_embed(guild: Option<&Value>, guild_id: u64) -> CreateEmbed {
+    let get = |key: &str| guild.and_then(|g| g.get(key));
+    let log_channel = get("log_channel_id");
+    let log_channel_text = match log_channel {
+        Some(v) if python_truthy(log_channel) => format!("<#{}>", python_str(v)),
+        _ => "未設定".to_string(),
+    };
+    let level =
+        get("log_level").map_or_else(|| "INFO".to_string(), |v| python_str(v).to_uppercase());
+    // Python の get_response_channel_id（数として読めなければ 0）。
+    let response = get("response_channel_id").and_then(python_int).unwrap_or(0);
+    let response_text = if response != 0 {
+        format!("<#{response}>")
+    } else {
+        "未設定（無効）".to_string()
+    };
+    let trusted = id_list(get(TRUSTED_KEY));
+    let bypass = id_list(get(BYPASS_KEY));
+    CreateEmbed::new()
+        .title("余の現在の設定だ")
+        .description(format!("サーバーID: `{guild_id}`"))
+        .colour(BLURPLE)
+        .field("ログチャンネル", log_channel_text, true)
+        .field("ログレベル", level, true)
+        .field("AI応答チャンネル", response_text, true)
+        .field(
+            format!("信頼済みユーザー（{}名）", trusted.len()),
+            mention_list(&trusted, "@", "名"),
+            false,
+        )
+        .field(
+            format!("バイパスロール（{}個）", bypass.len()),
+            mention_list(&bypass, "@&", "個"),
+            false,
+        )
 }
 
 #[cfg(test)]

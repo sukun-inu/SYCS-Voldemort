@@ -71,6 +71,8 @@ pub struct AppState {
     earthquake_feed: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// ニュースの取得と要約。
     pub news: News,
+    /// 開いている選択の画面（/trusted・/bypass）の覚え。
+    pub pickers: commands::picker::Pickers,
     shard_manager: OnceLock<Arc<ShardManager>>,
 }
 
@@ -108,6 +110,7 @@ impl AppState {
             earthquake_urls: JmaDetailUrls::default(),
             earthquake_feed: Mutex::new(None),
             news,
+            pickers: commands::picker::Pickers::default(),
             shard_manager: OnceLock::new(),
         }
     }
@@ -571,22 +574,35 @@ impl EventHandler for Handler {
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        // 今はスラッシュコマンドだけ（ボタン・選択・補完は、それを使うコマンドを移すときに足す）。
-        let Interaction::Command(command) = interaction else {
-            return;
+        // スラッシュコマンドと、選択の画面の部品（補完は、それを使うコマンドを移すときに足す）。
+        let guild_id = match &interaction {
+            Interaction::Command(command) => command.guild_id,
+            Interaction::Component(component) => component.guild_id,
+            _ => return,
         };
         if !self.state.config.commands_enabled {
             return;
         }
-        // BOT_ONLY_GUILD_ID で絞っているときは、そのサーバーの中のコマンドだけ（DM も扱わない）。
-        let handled = match command.guild_id {
+        // BOT_ONLY_GUILD_ID で絞っているときは、そのサーバーの中のものだけ（DM も扱わない）。
+        let handled = match guild_id {
             Some(guild_id) => self.handles(guild_id),
             None => self.state.config.only_guild_id.is_none(),
         };
         if !handled {
             return;
         }
-        commands::dispatch(&self.state.settings, &ctx.cache, &ctx.http, &command).await;
+        let deps = commands::Deps {
+            settings: &self.state.settings,
+            cache: &ctx.cache,
+            http: &ctx.http,
+            pickers: &self.state.pickers,
+            admin_site_url: &self.state.config.admin_site_url,
+        };
+        match &interaction {
+            Interaction::Command(command) => commands::dispatch(&deps, command).await,
+            Interaction::Component(component) => commands::component(&deps, component).await,
+            _ => {}
+        }
     }
 
     async fn cache_ready(&self, _ctx: Context, guilds: Vec<GuildId>) {

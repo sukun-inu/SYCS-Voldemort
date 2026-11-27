@@ -175,7 +175,7 @@ pub fn is_new_member(joined_at: Option<DateTime<Utc>>, now: DateTime<Utc>) -> bo
 }
 
 /// Python の `_parse_id_list`: リストでなければ空、`int()` で読めない要素は捨てる。
-fn id_list(value: Option<&Value>) -> Vec<i64> {
+pub(crate) fn id_list(value: Option<&Value>) -> Vec<i64> {
     value
         .and_then(Value::as_array)
         .map(|items| items.iter().filter_map(log_channel::python_int).collect())

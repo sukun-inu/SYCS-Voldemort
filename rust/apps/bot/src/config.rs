@@ -9,6 +9,7 @@ use std::time::Duration;
 use serenity::all::GatewayIntents;
 use sycs_core::env::Env;
 
+use crate::commands::overview::DEFAULT_ADMIN_SITE_URL;
 use crate::groq::GroqConfig;
 use crate::message_security::DEFAULT_SCAN_CONCURRENCY;
 use crate::news::NewsConfig;
@@ -65,6 +66,8 @@ pub struct BotConfig {
     /// 登録は全体の置き換え。Python の Bot は起動のたびに行っている。Rust の Bot は、切り替え（B11）で
     /// 既定を「する」に変える。それまでは、確かめたいときだけ明示して使う。
     pub sync_commands: bool,
+    /// 管理画面の場所（`ADMIN_SITE_URL`。`/bot settings`・`/bot help` のリンクのボタン）。
+    pub admin_site_url: String,
     /// VirusTotal（鍵・待ち時間・上限）。
     pub vt: VtConfig,
     /// VirusTotal を同時に走らせる数（`VT_SCAN_CONCURRENCY`、既定 4・下限 1）。
@@ -121,6 +124,7 @@ impl BotConfig {
             user_state: UserStateConfig::from_env(env),
             commands_enabled: env.boolean("BOT_COMMANDS_ENABLED", true),
             sync_commands: env.boolean("BOT_SYNC_COMMANDS", false),
+            admin_site_url: env.string("ADMIN_SITE_URL", DEFAULT_ADMIN_SITE_URL),
             vt: VtConfig::from_env(env),
             vt_scan_concurrency: usize::try_from(env.int(
                 "VT_SCAN_CONCURRENCY",
@@ -208,6 +212,16 @@ mod tests {
             !c.sync_commands,
             "切り替え（B11）までは、明示しない限り登録し直さない"
         );
+        assert_eq!(
+            c.admin_site_url,
+            "https://vol.kawasaki-n3t.f5.si/admin/login"
+        );
+        let moved = BotConfig::from_env(&env(&[
+            ("DISCORD_BOT_TOKEN", "t"),
+            ("ADMIN_SITE_URL", "https://admin.example/login"),
+        ]))
+        .unwrap();
+        assert_eq!(moved.admin_site_url, "https://admin.example/login");
         assert_eq!(c.vt_scan_concurrency, 4);
         assert_eq!(c.moderation_cache_ttl, 300.0);
         assert_eq!(c.vt.api_key, None);

@@ -1,18 +1,626 @@
 [
-  {"id": "log-channel-first-time", "path": "log channel", "who": "admin", "options": {"channel": 123}, "before": {}},
-  {"id": "log-channel-keeps-other-keys-and-shows-level", "path": "log channel", "who": "admin", "options": {"channel": 456}, "before": {"log_level": "debug", "log_channel_id": 123, "welcome": {"enabled": true}}},
-  {"id": "log-channel-refuses-non-admin", "path": "log channel", "who": "member", "options": {"channel": 123}, "before": {"log_level": "ERROR"}},
-  {"id": "log-channel-refuses-outside-guild", "path": "log channel", "who": "dm", "options": {"channel": 123}, "before": {}},
-  {"id": "log-level-with-channel", "path": "log level", "who": "admin", "options": {"level": "INFO"}, "before": {"log_channel_id": 123, "log_level": "ERROR"}},
-  {"id": "log-level-without-channel", "path": "log level", "who": "admin", "options": {"level": "NONE"}, "before": {}},
-  {"id": "log-level-lowercase-is-stored-uppercase", "path": "log level", "who": "admin", "options": {"level": "debug"}, "before": {"log_channel_id": "456"}},
-  {"id": "log-level-zero-channel-is-unset", "path": "log level", "who": "admin", "options": {"level": "ERROR"}, "before": {"log_channel_id": 0}},
-  {"id": "log-level-unknown-is-refused-without-writing", "path": "log level", "who": "admin", "options": {"level": "verbose"}, "before": {"log_level": "INFO", "log_channel_id": 123}},
-  {"id": "log-level-refuses-non-admin", "path": "log level", "who": "member", "options": {"level": "DEBUG"}, "before": {"log_level": "INFO"}},
-  {"id": "chat-set", "path": "chat set", "who": "admin", "options": {"channel": 789}, "before": {"log_level": "INFO"}},
-  {"id": "chat-set-overwrites", "path": "chat set", "who": "admin", "options": {"channel": 790}, "before": {"response_channel_id": 789, "sticky": {}}},
-  {"id": "chat-set-refuses-non-admin", "path": "chat set", "who": "member", "options": {"channel": 789}, "before": {}},
-  {"id": "chat-clear-removes-the-key", "path": "chat clear", "who": "admin", "options": {}, "before": {"response_channel_id": 789, "log_level": "INFO"}},
-  {"id": "chat-clear-when-unset", "path": "chat clear", "who": "admin", "options": {}, "before": {"log_level": "INFO"}},
-  {"id": "chat-clear-refuses-outside-guild", "path": "chat clear", "who": "dm", "options": {}, "before": {"response_channel_id": 789}}
+ {
+  "id": "log-channel-first-time",
+  "path": "log channel",
+  "who": "admin",
+  "options": {
+   "channel": 123
+  },
+  "before": {}
+ },
+ {
+  "id": "log-channel-keeps-other-keys-and-shows-level",
+  "path": "log channel",
+  "who": "admin",
+  "options": {
+   "channel": 456
+  },
+  "before": {
+   "log_level": "debug",
+   "log_channel_id": 123,
+   "welcome": {
+    "enabled": true
+   }
+  }
+ },
+ {
+  "id": "log-channel-refuses-non-admin",
+  "path": "log channel",
+  "who": "member",
+  "options": {
+   "channel": 123
+  },
+  "before": {
+   "log_level": "ERROR"
+  }
+ },
+ {
+  "id": "log-channel-refuses-outside-guild",
+  "path": "log channel",
+  "who": "dm",
+  "options": {
+   "channel": 123
+  },
+  "before": {}
+ },
+ {
+  "id": "log-level-with-channel",
+  "path": "log level",
+  "who": "admin",
+  "options": {
+   "level": "INFO"
+  },
+  "before": {
+   "log_channel_id": 123,
+   "log_level": "ERROR"
+  }
+ },
+ {
+  "id": "log-level-without-channel",
+  "path": "log level",
+  "who": "admin",
+  "options": {
+   "level": "NONE"
+  },
+  "before": {}
+ },
+ {
+  "id": "log-level-lowercase-is-stored-uppercase",
+  "path": "log level",
+  "who": "admin",
+  "options": {
+   "level": "debug"
+  },
+  "before": {
+   "log_channel_id": "456"
+  }
+ },
+ {
+  "id": "log-level-zero-channel-is-unset",
+  "path": "log level",
+  "who": "admin",
+  "options": {
+   "level": "ERROR"
+  },
+  "before": {
+   "log_channel_id": 0
+  }
+ },
+ {
+  "id": "log-level-unknown-is-refused-without-writing",
+  "path": "log level",
+  "who": "admin",
+  "options": {
+   "level": "verbose"
+  },
+  "before": {
+   "log_level": "INFO",
+   "log_channel_id": 123
+  }
+ },
+ {
+  "id": "log-level-refuses-non-admin",
+  "path": "log level",
+  "who": "member",
+  "options": {
+   "level": "DEBUG"
+  },
+  "before": {
+   "log_level": "INFO"
+  }
+ },
+ {
+  "id": "chat-set",
+  "path": "chat set",
+  "who": "admin",
+  "options": {
+   "channel": 789
+  },
+  "before": {
+   "log_level": "INFO"
+  }
+ },
+ {
+  "id": "chat-set-overwrites",
+  "path": "chat set",
+  "who": "admin",
+  "options": {
+   "channel": 790
+  },
+  "before": {
+   "response_channel_id": 789,
+   "sticky": {}
+  }
+ },
+ {
+  "id": "chat-set-refuses-non-admin",
+  "path": "chat set",
+  "who": "member",
+  "options": {
+   "channel": 789
+  },
+  "before": {}
+ },
+ {
+  "id": "chat-clear-removes-the-key",
+  "path": "chat clear",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "response_channel_id": 789,
+   "log_level": "INFO"
+  }
+ },
+ {
+  "id": "chat-clear-when-unset",
+  "path": "chat clear",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "log_level": "INFO"
+  }
+ },
+ {
+  "id": "chat-clear-refuses-outside-guild",
+  "path": "chat clear",
+  "who": "dm",
+  "options": {},
+  "before": {
+   "response_channel_id": 789
+  }
+ },
+ {
+  "id": "trusted-list-empty",
+  "path": "trusted list",
+  "who": "admin",
+  "before": {}
+ },
+ {
+  "id": "trusted-list-keeps-stored-order",
+  "path": "trusted list",
+  "who": "admin",
+  "before": {
+   "trusted_user_ids": [
+    30,
+    "20",
+    "x",
+    10
+   ]
+  }
+ },
+ {
+  "id": "trusted-list-is-cut-at-sixty",
+  "path": "trusted list",
+  "who": "admin",
+  "before": {
+   "trusted_user_ids": [
+    1000000000000000000,
+    1000000000000000001,
+    1000000000000000002,
+    1000000000000000003,
+    1000000000000000004,
+    1000000000000000005,
+    1000000000000000006,
+    1000000000000000007,
+    1000000000000000008,
+    1000000000000000009,
+    1000000000000000010,
+    1000000000000000011,
+    1000000000000000012,
+    1000000000000000013,
+    1000000000000000014,
+    1000000000000000015,
+    1000000000000000016,
+    1000000000000000017,
+    1000000000000000018,
+    1000000000000000019,
+    1000000000000000020,
+    1000000000000000021,
+    1000000000000000022,
+    1000000000000000023,
+    1000000000000000024,
+    1000000000000000025,
+    1000000000000000026,
+    1000000000000000027,
+    1000000000000000028,
+    1000000000000000029,
+    1000000000000000030,
+    1000000000000000031,
+    1000000000000000032,
+    1000000000000000033,
+    1000000000000000034,
+    1000000000000000035,
+    1000000000000000036,
+    1000000000000000037,
+    1000000000000000038,
+    1000000000000000039,
+    1000000000000000040,
+    1000000000000000041,
+    1000000000000000042,
+    1000000000000000043,
+    1000000000000000044,
+    1000000000000000045,
+    1000000000000000046,
+    1000000000000000047,
+    1000000000000000048,
+    1000000000000000049,
+    1000000000000000050,
+    1000000000000000051,
+    1000000000000000052,
+    1000000000000000053,
+    1000000000000000054,
+    1000000000000000055,
+    1000000000000000056,
+    1000000000000000057,
+    1000000000000000058,
+    1000000000000000059,
+    1000000000000000060,
+    1000000000000000061,
+    1000000000000000062,
+    1000000000000000063,
+    1000000000000000064,
+    1000000000000000065,
+    1000000000000000066,
+    1000000000000000067,
+    1000000000000000068,
+    1000000000000000069,
+    1000000000000000070,
+    1000000000000000071,
+    1000000000000000072,
+    1000000000000000073,
+    1000000000000000074,
+    1000000000000000075,
+    1000000000000000076,
+    1000000000000000077,
+    1000000000000000078,
+    1000000000000000079,
+    1000000000000000080,
+    1000000000000000081,
+    1000000000000000082,
+    1000000000000000083,
+    1000000000000000084,
+    1000000000000000085,
+    1000000000000000086,
+    1000000000000000087,
+    1000000000000000088,
+    1000000000000000089,
+    1000000000000000090,
+    1000000000000000091,
+    1000000000000000092,
+    1000000000000000093,
+    1000000000000000094,
+    1000000000000000095,
+    1000000000000000096,
+    1000000000000000097,
+    1000000000000000098,
+    1000000000000000099,
+    1000000000000000100,
+    1000000000000000101,
+    1000000000000000102,
+    1000000000000000103,
+    1000000000000000104,
+    1000000000000000105,
+    1000000000000000106,
+    1000000000000000107,
+    1000000000000000108,
+    1000000000000000109,
+    1000000000000000110,
+    1000000000000000111,
+    1000000000000000112,
+    1000000000000000113,
+    1000000000000000114,
+    1000000000000000115,
+    1000000000000000116,
+    1000000000000000117,
+    1000000000000000118,
+    1000000000000000119,
+    1000000000000000120,
+    1000000000000000121,
+    1000000000000000122,
+    1000000000000000123,
+    1000000000000000124,
+    1000000000000000125,
+    1000000000000000126,
+    1000000000000000127,
+    1000000000000000128,
+    1000000000000000129,
+    1000000000000000130,
+    1000000000000000131,
+    1000000000000000132,
+    1000000000000000133,
+    1000000000000000134,
+    1000000000000000135,
+    1000000000000000136,
+    1000000000000000137,
+    1000000000000000138,
+    1000000000000000139,
+    1000000000000000140,
+    1000000000000000141,
+    1000000000000000142,
+    1000000000000000143,
+    1000000000000000144,
+    1000000000000000145,
+    1000000000000000146,
+    1000000000000000147,
+    1000000000000000148,
+    1000000000000000149
+   ]
+  }
+ },
+ {
+  "id": "trusted-list-refuses-non-admin",
+  "path": "trusted list",
+  "who": "member",
+  "before": {
+   "trusted_user_ids": [
+    1
+   ]
+  }
+ },
+ {
+  "id": "bypass-list-empty",
+  "path": "bypass list",
+  "who": "admin",
+  "before": {
+   "bypass_role_ids": "x"
+  }
+ },
+ {
+  "id": "bypass-list-writes-everyone-by-name",
+  "path": "bypass list",
+  "who": "admin",
+  "before": {
+   "bypass_role_ids": [
+    1399617700363370556,
+    20,
+    30
+   ]
+  }
+ },
+ {
+  "id": "bypass-list-refuses-outside-guild",
+  "path": "bypass list",
+  "who": "dm",
+  "before": {
+   "bypass_role_ids": [
+    20
+   ]
+  }
+ },
+ {
+  "id": "bot-settings-empty",
+  "path": "bot settings",
+  "who": "admin",
+  "before": {}
+ },
+ {
+  "id": "bot-settings-full",
+  "path": "bot settings",
+  "who": "admin",
+  "before": {
+   "log_channel_id": 123,
+   "log_level": "debug",
+   "response_channel_id": "456",
+   "trusted_user_ids": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20
+   ],
+   "bypass_role_ids": [
+    5,
+    1399617700363370556
+   ]
+  }
+ },
+ {
+  "id": "bot-settings-unreadable-values",
+  "path": "bot settings",
+  "who": "admin",
+  "before": {
+   "log_channel_id": 0,
+   "response_channel_id": "abc",
+   "trusted_user_ids": "x",
+   "bypass_role_ids": [
+    null,
+    "7"
+   ]
+  }
+ },
+ {
+  "id": "bot-settings-refuses-non-admin",
+  "path": "bot settings",
+  "who": "member",
+  "before": {
+   "log_level": "INFO"
+  }
+ },
+ {
+  "id": "bot-help-is-open-to-everyone",
+  "path": "bot help",
+  "who": "member",
+  "before": {}
+ },
+ {
+  "id": "trusted-add-then-confirm",
+  "path": "trusted add",
+  "who": "admin",
+  "before": {
+   "trusted_user_ids": [
+    20,
+    10
+   ],
+   "log_level": "INFO"
+  },
+  "steps": [
+   {
+    "select": [
+     30,
+     10
+    ]
+   },
+   {
+    "confirm": true
+   }
+  ]
+ },
+ {
+  "id": "trusted-add-guards",
+  "path": "trusted add",
+  "who": "admin",
+  "before": {},
+  "steps": [
+   {
+    "confirm": true
+   },
+   {
+    "select": [
+     7
+    ],
+    "by": "other"
+   },
+   {
+    "select": [
+     5,
+     6
+    ]
+   },
+   {
+    "confirm": true,
+    "by": "other"
+   },
+   {
+    "confirm": true
+   }
+  ]
+ },
+ {
+  "id": "trusted-add-reselect",
+  "path": "trusted add",
+  "who": "admin",
+  "before": {
+   "trusted_user_ids": [
+    "5",
+    "x",
+    7.9,
+    true
+   ]
+  },
+  "steps": [
+   {
+    "select": [
+     1,
+     2,
+     3
+    ]
+   },
+   {
+    "select": [
+     6
+    ]
+   },
+   {
+    "confirm": true
+   }
+  ]
+ },
+ {
+  "id": "trusted-remove-then-confirm",
+  "path": "trusted remove",
+  "who": "admin",
+  "before": {
+   "trusted_user_ids": [
+    10,
+    20,
+    30
+   ]
+  },
+  "steps": [
+   {
+    "select": [
+     20,
+     99
+    ]
+   },
+   {
+    "confirm": true
+   }
+  ]
+ },
+ {
+  "id": "trusted-add-refuses-non-admin",
+  "path": "trusted add",
+  "who": "member",
+  "before": {
+   "trusted_user_ids": [
+    1
+   ]
+  }
+ },
+ {
+  "id": "bypass-add-then-confirm",
+  "path": "bypass add",
+  "who": "admin",
+  "before": {
+   "bypass_role_ids": [
+    30
+   ]
+  },
+  "steps": [
+   {
+    "select": [
+     1399617700363370556,
+     20
+    ]
+   },
+   {
+    "confirm": true
+   }
+  ]
+ },
+ {
+  "id": "bypass-remove-then-confirm",
+  "path": "bypass remove",
+  "who": "admin",
+  "before": {
+   "bypass_role_ids": [
+    1399617700363370556,
+    20,
+    30
+   ]
+  },
+  "steps": [
+   {
+    "select": [
+     1399617700363370556,
+     30
+    ]
+   },
+   {
+    "confirm": true
+   }
+  ]
+ },
+ {
+  "id": "bypass-add-refuses-outside-guild",
+  "path": "bypass add",
+  "who": "dm",
+  "before": {}
+ }
 ]
