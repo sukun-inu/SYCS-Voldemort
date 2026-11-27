@@ -69,6 +69,8 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     ("sycs_bot::message_security", "security"),
     // Python の services.groq_client と同じ棚（会話・要約と共有の呼び出し口）。
     ("sycs_bot::groq", "ai"),
+    // Python の services.chatgpt_service と同じ棚（応答チャンネルでの受け答え）。
+    ("sycs_bot::chat", "ai"),
     // Python の services.earthquake_service と同じ棚（earthquake_feed も前方一致で入る）。
     ("sycs_bot::earthquake", "earthquake"),
     // Python の services.news_service と同じ棚（RSS の読み手の部品も同じ棚に置く）。
@@ -588,6 +590,7 @@ mod tests {
             ("sycs_bot::moderation", "security"),
             ("sycs_bot::message_security", "security"),
             ("sycs_bot::groq", "ai"),
+            ("sycs_bot::chat", "ai"),
             ("sycs_bot::earthquake", "earthquake"),
             ("sycs_bot::earthquake_feed", "earthquake"),
             ("sycs_bot::news", "news"),

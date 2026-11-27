@@ -1,0 +1,354 @@
+{
+  "talk": [
+    {
+      "id": "one-reply",
+      "turns": [{"text": "名を名乗れ", "replies": [{"content": "余はヴォルデモート卿である。"}]}]
+    },
+    {
+      "id": "history-is-carried-to-the-next-turn",
+      "turns": [
+        {"text": "1 つめ", "replies": [{"content": "答え 1"}]},
+        {"text": "2 つめ", "replies": [{"content": "答え 2"}]},
+        {"text": "", "replies": [{"content": "空の発言への答え"}]}
+      ]
+    },
+    {
+      "id": "null-content-becomes-the-fallback",
+      "turns": [
+        {"text": "黙るのか", "replies": [{"content": null}]},
+        {"text": "もう一度", "replies": [{"content": ""}]},
+        {"text": "三度め", "replies": [{"content": "  "}]}
+      ]
+    },
+    {
+      "id": "rate-limited-once-then-answered",
+      "turns": [
+        {
+          "text": "急げ",
+          "replies": [
+            {"status": 429, "json": {"error": {"message": "slow down", "code": "rate_limit_exceeded"}}},
+            {"content": "待たせたな。"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rate-limited-until-giving-up",
+      "turns": [
+        {
+          "text": "急げ",
+          "replies": [
+            {
+              "status": 429,
+              "json": {
+                "error": {
+                  "message": "Rate limit reached for model `openai/gpt-oss-120b`. Please try again in 7.5s.",
+                  "type": "tokens",
+                  "code": "rate_limit_exceeded"
+                }
+              }
+            }
+          ]
+        },
+        {"text": "まだか", "replies": [{"content": "誤りの文も履歴に残る。"}]}
+      ]
+    },
+    {
+      "id": "unauthorized-is-not-retried",
+      "turns": [
+        {
+          "text": "鍵が違う",
+          "replies": [{"status": 401, "json": {"error": {"message": "Invalid API Key", "type": "invalid_request_error", "code": "invalid_api_key"}}}]
+        }
+      ]
+    },
+    {
+      "id": "server-error-with-a-text-body",
+      "turns": [{"text": "倒れたか", "replies": [{"status": 500, "text": "  upstream connect error\n"}]}]
+    },
+    {
+      "id": "server-error-with-an-empty-body",
+      "turns": [{"text": "倒れたか", "replies": [{"status": 500, "text": "   "}]}]
+    },
+    {
+      "id": "server-error-then-answered",
+      "turns": [
+        {"text": "立て", "replies": [{"status": 503, "text": "busy"}, {"status": 502, "text": "bad gateway"}, {"content": "三度めで応じた。"}]}
+      ]
+    },
+    {
+      "id": "error-body-is-a-json-string",
+      "turns": [{"text": "x", "replies": [{"status": 400, "json": "it's \"broken\""}]}]
+    },
+    {
+      "id": "error-body-is-a-json-list",
+      "turns": [{"text": "x", "replies": [{"status": 400, "json": ["a", 1, null, true, {"k": "v"}]}]}]
+    },
+    {
+      "id": "error-body-is-json-null",
+      "turns": [{"text": "x", "replies": [{"status": 404, "json": null}]}]
+    },
+    {
+      "id": "error-body-is-a-json-number",
+      "turns": [
+        {"text": "x", "replies": [{"status": 400, "json": 12}]},
+        {"text": "y", "replies": [{"status": 400, "json": false}]},
+        {"text": "z", "replies": [{"status": 400, "json": 0.5}]}
+      ]
+    },
+    {
+      "id": "error-body-shows-python-reprs",
+      "turns": [
+        {
+          "text": "x",
+          "replies": [
+            {
+              "status": 422,
+              "json": {
+                "error": {
+                  "both": "it's \"quoted\"",
+                  "single": "it's",
+                  "double": "say \"hi\"",
+                  "plain": "plain",
+                  "escapes": "a\\b\nc\td\re",
+                  "ctrl": "\u0001\u001f\u007f\u0080\u009f",
+                  "spaces": "a b　c d e​f­g﻿h",
+                  "jp": "日本語と絵文字😀",
+                  "private": "",
+                  "unassigned": "͸",
+                  "key's": 1,
+                  "neg": -5,
+                  "f": 1.5,
+                  "big": 1e+22,
+                  "small": 1.5e-07,
+                  "whole": 3.0,
+                  "edges": [1e16, 1e15, 0.0001, 0.00001, 123456789012345680000.0, -0.0, 18446744073709551615, 0.1, 100.0, 1.7976931348623157e308, 5e-324],
+                  "t": true,
+                  "fa": false,
+                  "nu": null,
+                  "list": [1, "a", [], {}],
+                  "empty": ""
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "no-choices-in-the-answer",
+      "turns": [{"text": "x", "replies": [{"status": 200, "json": {"choices": []}}]}]
+    },
+    {
+      "id": "answer-without-choices",
+      "turns": [{"text": "x", "replies": [{"status": 200, "json": {}}]}]
+    },
+    {
+      "id": "answer-with-null-choices",
+      "turns": [{"text": "x", "replies": [{"status": 200, "json": {"choices": null}}]}]
+    },
+    {
+      "id": "choice-without-message",
+      "turns": [{"text": "x", "replies": [{"status": 200, "json": {"choices": [{}]}}]}]
+    },
+    {
+      "id": "choice-with-null-message",
+      "turns": [{"text": "x", "replies": [{"status": 200, "json": {"choices": [{"message": null}]}}]}]
+    },
+    {
+      "id": "message-without-content",
+      "turns": [{"text": "x", "replies": [{"status": 200, "json": {"choices": [{"message": {"role": "assistant"}}]}}]}]
+    },
+    {
+      "id": "answer-is-a-json-list",
+      "turns": [{"text": "x", "replies": [{"status": 200, "json": [1, 2]}]}]
+    },
+    {
+      "id": "answer-is-plain-text",
+      "turns": [{"text": "x", "replies": [{"status": 200, "text": "hello"}]}]
+    },
+    {
+      "id": "answer-is-another-json-value",
+      "turns": [
+        {"text": "a", "replies": [{"status": 200, "json": 5}]},
+        {"text": "b", "replies": [{"status": 200, "json": 1.5}]},
+        {"text": "c", "replies": [{"status": 200, "json": "text"}]},
+        {"text": "d", "replies": [{"status": 200, "json": true}]},
+        {"text": "e", "replies": [{"status": 200, "json": null}]}
+      ]
+    },
+    {
+      "id": "choices-of-another-shape",
+      "turns": [
+        {"text": "a", "replies": [{"status": 200, "json": {"choices": {}}}]},
+        {"text": "b", "replies": [{"status": 200, "json": {"choices": "abc"}}]},
+        {"text": "c", "replies": [{"status": 200, "json": {"choices": 5}}]},
+        {"text": "d", "replies": [{"status": 200, "json": {"choices": [5]}}]},
+        {"text": "e", "replies": [{"status": 200, "json": {"choices": [{"message": "text"}]}}]}
+      ]
+    },
+    {
+      "id": "no-api-key",
+      "no_key": true,
+      "turns": [{"text": "鍵が無い", "replies": [{"content": "呼ばれないはず"}]}]
+    },
+    {
+      "id": "history-keeps-the-last-twenty",
+      "turns": [
+        {"text": "q1", "replies": [{"content": "a1"}]},
+        {"text": "q2", "replies": [{"content": "a2"}]},
+        {"text": "q3", "replies": [{"content": "a3"}]},
+        {"text": "q4", "replies": [{"content": "a4"}]},
+        {"text": "q5", "replies": [{"content": "a5"}]},
+        {"text": "q6", "replies": [{"content": "a6"}]},
+        {"text": "q7", "replies": [{"content": "a7"}]},
+        {"text": "q8", "replies": [{"content": "a8"}]},
+        {"text": "q9", "replies": [{"content": "a9"}]},
+        {"text": "q10", "replies": [{"content": "a10"}]},
+        {"text": "q11", "replies": [{"content": "a11"}]},
+        {"text": "q12", "replies": [{"content": "a12"}]}
+      ]
+    }
+  ],
+  "split": [
+    {"id": "short", "parts": [["やあ", 1]]},
+    {"id": "exactly-2000", "parts": [["a", 2000]]},
+    {"id": "exactly-2000-with-newlines", "parts": [["a", 1500], ["\n", 1], ["b", 499]]},
+    {"id": "2001-without-newline", "parts": [["a", 2001]]},
+    {"id": "newline-at-1000-is-too-early", "parts": [["a", 1000], ["\n", 1], ["b", 1500]]},
+    {"id": "newline-at-1001-splits-there", "parts": [["a", 1001], ["\n", 1], ["b", 1500]]},
+    {"id": "newline-at-1999", "parts": [["a", 1999], ["\n", 1], ["b", 10]]},
+    {"id": "newline-right-after-2000", "parts": [["a", 2000], ["\n", 1], ["b", 10]]},
+    {"id": "several-newlines-at-the-cut", "parts": [["a", 1500], ["\n", 3], ["b", 600], ["\n", 2], ["c", 5]]},
+    {"id": "last-newline-wins", "parts": [["a", 1200], ["\n", 1], ["b", 500], ["\n", 1], ["c", 800]]},
+    {"id": "three-chunks", "parts": [["あ", 1900], ["\n", 1], ["い", 1900], ["\n", 1], ["う", 1900]]},
+    {"id": "astral-characters-count-as-one", "parts": [["😀", 2100]]},
+    {"id": "only-newlines", "parts": [["\n", 2500]]},
+    {"id": "trailing-newlines-after-the-cut", "parts": [["a", 2000], ["\n", 30]]},
+    {"id": "crlf", "parts": [["a", 1500], ["\r\n", 1], ["b", 700]]},
+    {"id": "leading-newlines-are-kept-in-the-first-chunk", "parts": [["\n", 2], ["a", 10]]},
+    {"id": "empty", "parts": []}
+  ],
+  "flow": [
+    {
+      "id": "answers-in-the-response-channel",
+      "settings": {"response_channel_id": 500},
+      "messages": [{"channel": 500, "user": 7, "content": "名を名乗れ", "replies": [{"content": "余はヴォルデモート卿である。"}]}]
+    },
+    {
+      "id": "ignores-other-channels",
+      "settings": {"response_channel_id": 500},
+      "messages": [{"channel": 501, "user": 7, "content": "やあ", "replies": [{"content": "呼ばれないはず"}]}]
+    },
+    {
+      "id": "unset-means-off",
+      "settings": {},
+      "messages": [{"channel": 0, "user": 7, "content": "やあ", "replies": [{"content": "呼ばれないはず"}]}]
+    },
+    {
+      "id": "zero-means-off",
+      "settings": {"response_channel_id": 0},
+      "messages": [{"channel": 0, "user": 7, "content": "やあ", "replies": [{"content": "呼ばれないはず"}]}]
+    },
+    {
+      "id": "negative-means-off",
+      "settings": {"response_channel_id": -500},
+      "messages": [{"channel": -500, "user": 7, "content": "やあ", "replies": [{"content": "呼ばれないはず"}]}]
+    },
+    {
+      "id": "channel-id-stored-as-text",
+      "settings": {"response_channel_id": "500"},
+      "messages": [{"channel": 500, "user": 7, "content": "やあ", "replies": [{"content": "文字列の設定でも応じる。"}]}]
+    },
+    {
+      "id": "unreadable-channel-id-means-off",
+      "settings": {"response_channel_id": "general"},
+      "messages": [{"channel": 500, "user": 7, "content": "やあ", "replies": [{"content": "呼ばれないはず"}]}]
+    },
+    {
+      "id": "ignores-direct-messages",
+      "settings": {"response_channel_id": 500},
+      "messages": [{"channel": 500, "user": 7, "dm": true, "content": "やあ", "replies": [{"content": "呼ばれないはず"}]}]
+    },
+    {
+      "id": "ignores-its-own-messages",
+      "settings": {"response_channel_id": 500},
+      "messages": [{"channel": 500, "user": 1, "self": true, "content": "やあ", "replies": [{"content": "呼ばれないはず"}]}]
+    },
+    {
+      "id": "typing-failure-does-not-stop-the-answer",
+      "settings": {"response_channel_id": 500},
+      "messages": [{"channel": 500, "user": 7, "typing_fails": true, "content": "やあ", "replies": [{"content": "それでも応じる。"}]}]
+    },
+    {
+      "id": "empty-content-is-logged-as-no-content",
+      "settings": {"response_channel_id": 500},
+      "messages": [{"channel": 500, "user": 7, "content": "", "replies": [{"content": "無言か。"}]}]
+    },
+    {
+      "id": "long-answer-is-split-and-the-log-is-cut",
+      "settings": {"response_channel_id": 500},
+      "messages": [
+        {
+          "channel": 500,
+          "user": 7,
+          "content_parts": [["問", 1100]],
+          "replies": [{"content_parts": [["あ", 1500], ["\n", 1], ["い", 1500], ["\n", 1], ["う", 300]]}]
+        }
+      ]
+    },
+    {
+      "id": "api-error-is-sent-as-the-answer",
+      "settings": {"response_channel_id": 500},
+      "messages": [
+        {"channel": 500, "user": 7, "content": "やあ", "replies": [{"status": 401, "json": {"error": {"message": "Invalid API Key"}}}]}
+      ]
+    },
+    {
+      "id": "each-user-has-their-own-history",
+      "settings": {"response_channel_id": 500},
+      "messages": [
+        {"channel": 500, "user": 7, "content": "7 の 1 つめ", "replies": [{"content": "7 への答え 1"}]},
+        {"channel": 500, "user": 8, "content": "8 の 1 つめ", "replies": [{"content": "8 への答え 1"}]},
+        {"channel": 500, "user": 7, "content": "7 の 2 つめ", "replies": [{"content": "7 への答え 2"}]},
+        {"channel": 500, "user": 7, "guild": 2, "content": "別のサーバーの 7", "replies": [{"content": "別のサーバーでは初対面だ。"}]}
+      ]
+    },
+    {
+      "id": "idle-conversations-are-dropped-at-the-twentieth-message",
+      "settings": {"response_channel_id": 500},
+      "messages": [
+        {"channel": 500, "user": 7, "at": 0, "content": "覚えておけ", "replies": [{"content": "覚えた。"}]},
+        {"channel": 500, "user": 8, "at": 3600.5, "repeat": 19, "content": "別の者", "replies": [{"content": "ふむ。"}]},
+        {"channel": 500, "user": 7, "at": 3601, "content": "覚えているか", "replies": [{"content": "誰だ。"}]}
+      ]
+    },
+    {
+      "id": "exactly-an-hour-idle-is-kept",
+      "settings": {"response_channel_id": 500},
+      "messages": [
+        {"channel": 500, "user": 7, "at": 0, "content": "覚えておけ", "replies": [{"content": "覚えた。"}]},
+        {"channel": 500, "user": 8, "at": 3600, "repeat": 19, "content": "別の者", "replies": [{"content": "ふむ。"}]},
+        {"channel": 500, "user": 7, "at": 3601, "content": "覚えているか", "replies": [{"content": "覚えている。"}]}
+      ]
+    },
+    {
+      "id": "the-speaker-is-refreshed-before-the-sweep",
+      "settings": {"response_channel_id": 500},
+      "messages": [
+        {"channel": 500, "user": 7, "at": 0, "content": "覚えておけ", "replies": [{"content": "覚えた。"}]},
+        {"channel": 500, "user": 8, "at": 9000, "repeat": 18, "content": "別の者", "replies": [{"content": "ふむ。"}]},
+        {"channel": 500, "user": 7, "at": 9001, "content": "覚えているか", "replies": [{"content": "覚えている。"}]}
+      ]
+    },
+    {
+      "id": "messages-in-other-channels-do-not-count",
+      "settings": {"response_channel_id": 500},
+      "messages": [
+        {"channel": 500, "user": 7, "at": 0, "content": "覚えておけ", "replies": [{"content": "覚えた。"}]},
+        {"channel": 501, "user": 8, "at": 9000, "repeat": 30, "content": "よそのチャンネル", "replies": [{"content": "呼ばれないはず"}]},
+        {"channel": 500, "user": 7, "at": 9001, "content": "覚えているか", "replies": [{"content": "覚えている。"}]}
+      ]
+    }
+  ]
+}

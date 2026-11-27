@@ -3,6 +3,7 @@
 //! 移行中は機能を 1 つずつ移すので、作ってからイベントにつなぐまでの間がある。部品を
 //! ライブラリに置くのは、その間も Python との突き合わせやテストから呼べるようにするため。
 
+pub mod chat;
 pub mod colorthief;
 pub mod commands;
 pub mod compat;
@@ -21,6 +22,7 @@ pub mod message_logs;
 pub mod message_security;
 pub mod moderation;
 pub mod news;
+pub mod python_repr;
 pub mod reaction_roles;
 pub mod security;
 pub mod signals;
