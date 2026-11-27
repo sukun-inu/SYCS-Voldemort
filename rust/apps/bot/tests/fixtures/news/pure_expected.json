@@ -1,0 +1,555 @@
+{
+ "strip_html": [
+  "",
+  "plain text",
+  "段落 二つ目",
+  "題 配信元",
+  "a c",
+  "&lt;b&gt; 二重の実体は一段だけ戻す",
+  "1 2",
+  "<unclosed tag は残る",
+  "閉じだけ> は残る",
+  "<>空のタグは残る",
+  "改行をまたぐタグ",
+  "前後と 全角 の空白 も一つに",
+  "© © ©right; ∉ ¬it; ¬ & &foo; & &Amp;",
+  "A A A A A &#; &#x; &# &#a;",
+  "� €  ‚ Ÿ � � � � 😀",
+  "‌‍­",
+  "≂̸ <⃒ =⃥ fj",
+  "&thisnameiswaytoolongtobeanentityname12345; &a; &; && &&",
+  "alert('x') 本文",
+  "コメント b --> の後",
+  "あ い う え お か き く け こ さ し す せ そ た ち つ て と な に ぬ ね の は ひ ふ へ ほ ま み む め も や ゆ よ ら り る れ ろ わ を ん あ い う え お か き く け こ さ し す せ そ た ち つ て と な に ぬ ね の は ひ ふ へ ほ ま み む め も や ゆ よ ら り る れ ろ わ を ん あ い う え お か き く け こ さ し す せ そ た ち つ て と な に ぬ ね の は ひ ふ へ ほ ま み む め も や ゆ よ ら り る れ ろ わ を ん あ い う え お か き く け こ さ し…",
+  "区切りの無い長い文字列あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんあいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんあいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんあいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんあいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんあいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんあいうえおかきくけこさしす…",
+  "ちょうど三百文字までは切らないaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…",
+  "😀 絵文字は 1 文字と数える 😀",
+  "abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg abcdefg…",
+  "語の途中で切れる あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ あいうえおかきくけこ…"
+ ],
+ "pub_date": [
+  "2026年11月27日 10:23",
+  "2026年11月27日 10:23",
+  "2026年11月27日 10:23",
+  "2026年11月27日 10:23",
+  "2026年11月27日 1:23",
+  "2026年11月28日 13:59",
+  "2026年11月28日 0:00",
+  "2026年11月28日 0:00",
+  "2026年11月28日 0:00",
+  "2026年11月28日 5:00",
+  "2026年11月28日 7:00",
+  "2026年11月28日 0:00",
+  "2026年11月28日 0:00",
+  "2026年11月27日 14:30",
+  "2026年11月28日 12:00",
+  "2026年11月27日 0:01",
+  "Fri, 27 Nov 2026 15:00:00 +2400",
+  "Fri, 27 Nov 2026 15:00:00 +9999",
+  "2026年11月27日 15:00",
+  "Fri, 27 Nov 2026 15:00:00 +99999999999999999999",
+  "2026年11月27日 10:23",
+  "2026年11月27日 10:23",
+  "2026年11月27日 10:23",
+  "2026年11月27日 10:23",
+  "2026年11月27日 10:23",
+  "2026年11月27日 10:02",
+  "2026年11月27日 10:23",
+  "2026年11月27日 10:23",
+  "2026年11月27日 10:23",
+  "1969年11月27日 10:23",
+  "2068年11月27日 10:23",
+  "1999年11月27日 10:23",
+  "100年11月27日 10:23",
+  "2000年11月27日 10:23",
+  "Fri, 27 Nov -5 01:23:45 GMT",
+  "2026年11月27日 10:23",
+  "2026年11月27日 10:23",
+  "Fri, 27 Nov 2026 01 GMT",
+  "Fri, 27 Nov 2026 01:23:45:67 GMT",
+  "2026年11月27日 1:23",
+  "2026年11月27日 15:23",
+  "Fri, 27 Nov, 2026 01:23:45 GMT",
+  "2026年11月27日 10:23",
+  "2026年11月27日 10:23",
+  "2026年11月27日 10:23",
+  "Fri, 31 Nov 2026 01:23:45 GMT",
+  "2028年2月29日 10:23",
+  "Fri, 29 Feb 2026 01:23:45 GMT",
+  "Fri, 0 Nov 2026 01:23:45 GMT",
+  "Fri, 27 Nov 2026 24:00:00 GMT",
+  "Fri, 27 Nov 2026 23:60:00 GMT",
+  "Fri, 27 Nov 2026 23:59:60 GMT",
+  "Fri, 27 Nov 2026 -1:00:00 GMT",
+  "2026年11月27日 10:02",
+  "2026年11月27日 19:05",
+  "Fri, 27 Nov 10000 01:23:45 GMT",
+  "2001年1月1日 10:00",
+  "Fri, 31 Dec 9999 23:59:59 -0100",
+  "9999年12月31日 23:59",
+  "2001年1月1日 0:00",
+  "1970年1月1日 8:59",
+  "1970年1月1日 9:00",
+  "2027年1月1日 0:00",
+  "2026年3月1日 0:00",
+  "2026-11-27T01:23:45Z",
+  "2026/11/27 01:23:45",
+  "Nov 27 2026",
+  "27 Nov 2026",
+  "Fri, 27 Nov 2026",
+  "not a date",
+  "",
+  " ",
+  "　",
+  ",",
+  "Fri,",
+  "a,b 27 Nov 2026 01:23:45 GMT",
+  "2026年11月27日 10:23",
+  "2026年11月27日 10:23",
+  "Fri, 27 Xyz 2026 01:23:45 GMT",
+  "Fri, Nov Nov 2026 01:23:45 GMT",
+  "Fri, 27 Nov 2026 a:b:c GMT",
+  "2026年11月27日 10:23",
+  "2026年11月27日 10:23",
+  "2026年11月27日 15:23",
+  "2026年11月27日 10:23",
+  "Fri, 31 Dec 9999 23:59:59"
+ ],
+ "normalize": [
+  "",
+  "そのまま",
+  "先頭の接頭辞を落とす",
+  "全角のコロンでも落とす",
+  "改行の先まで落とす",
+  "要約 : 空白をはさむと落とさない",
+  "前後を落としてから接頭辞を見る",
+  "本文の途中の 要約: は落とさない\n要約: 行頭でも二行目は落とさない",
+  "要約: 一回だけ落とす",
+  "空白 と タブ は 一つに",
+  "行\n\n空行は二つまで\n\nに畳む\n\n残す",
+  "行末の空白 \n 行頭の空白",
+  "全角　　の空白と  は畳まない",
+  "CRLF は畳まない",
+  "長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。長い要約です。…",
+  "ちょうど四百文字は切らないxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…",
+  "四百一文字は切るyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…",
+  "切った先が空白なら空白も落とすxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…"
+ ],
+ "favicon": [
+  null,
+  "https://www.google.com/s2/favicons?sz=128&domain=space.example.jp",
+  "https://www.google.com/s2/favicons?sz=128&domain=www.local-times.example.com",
+  "https://www.google.com/s2/favicons?sz=128&domain=empty.example.org",
+  "https://www.google.com/s2/favicons?sz=128&domain=user%3Apw%40cdata.example.net%3A8080",
+  null,
+  "https://www.google.com/s2/favicons?sz=128&domain=schemeless.example.com",
+  "https://www.google.com/s2/favicons?sz=128&domain=UPPER.Example.COM%3A443",
+  "https://www.google.com/s2/favicons?sz=128&domain=%E6%97%A5%E6%9C%AC%E8%AA%9E.example",
+  "https://www.google.com/s2/favicons?sz=128&domain=%5B%3A%3A1%5D%3A8080",
+  {
+   "error": "ValueError"
+  },
+  {
+   "error": "ValueError"
+  },
+  "https://www.google.com/s2/favicons?sz=128&domain=a.example",
+  "https://www.google.com/s2/favicons?sz=128&domain=a.example",
+  null,
+  null,
+  "https://www.google.com/s2/favicons?sz=128&domain=ftp.example.com",
+  "https://www.google.com/s2/favicons?sz=128&domain=a%20b.example",
+  "https://www.google.com/s2/favicons?sz=128&domain=a.example%5Cpath",
+  "https://www.google.com/s2/favicons?sz=128&domain=MiXeD",
+  null,
+  null,
+  "https://www.google.com/s2/favicons?sz=128&domain=example.com",
+  "https://www.google.com/s2/favicons?sz=128&domain=ctl.example",
+  "https://www.google.com/s2/favicons?sz=128&domain=%EF%BD%81%EF%BD%82.example",
+  "https://www.google.com/s2/favicons?sz=128&domain=a.example%3Aport"
+ ],
+ "hash": [
+  "d41d8cd98f00b204e9800998ecf8427e",
+  "6568df139d67cb02c9aa0b4cf4d5eaba",
+  "8cb9d0495a403c20a28ddb28ab670846",
+  "2a02eac39d716a70ecf37579185927b6"
+ ],
+ "quote": [
+  "",
+  "AI%20%E3%83%8B%E3%83%A5%E3%83%BC%E3%82%B9",
+  "a%2Bb",
+  "C%2B%2B",
+  "a%26b%3Dc",
+  "a/b",
+  "50%25",
+  "a%2520b",
+  "a~b_c-d.e",
+  "x%23y",
+  "a%3Fb",
+  "%27q%27%20%22w%22",
+  "%21%2A%28%29%2C%3B%3A%40%24",
+  "%3C%3E%5B%5D%7B%7D%7C%5C%5E%60",
+  "emoji%20%F0%9F%98%80",
+  "tab%09here",
+  "%25E3%2581%2582",
+  "%25zz",
+  "%25",
+  "%E6%97%A5%E6%9C%AC%20%E7%B5%8C%E6%B8%88"
+ ],
+ "parse": [
+  [
+   {
+    "title": "新しい観測衛星の打ち上げに成功",
+    "link": "https://news.google.com/rss/articles/CBMiAAA111?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 01:23:45 GMT",
+    "desc": "",
+    "source": "宇宙新聞",
+    "sourceUrl": "https://space.example.jp"
+   },
+   {
+    "title": "地方の祭りが 3 年ぶりに開催 - 地方タイムズ",
+    "link": "https://news.google.com/rss/articles/CBMiBBB222?oc=5",
+    "pubDate": "Thu, 26 Nov 2026 21:05:09 GMT",
+    "desc": "商店街に屋台が並び、多くの人でにぎわった。 来年も開催する予定という。",
+    "source": "地方タイムズ",
+    "sourceUrl": "https://www.local-times.example.com/news"
+   },
+   {
+    "title": "為替は小動き",
+    "link": "https://news.google.com/rss/articles/CBMiCCC333?oc=5",
+    "pubDate": "Thu, 26 Nov 2026 15:00:00 GMT",
+    "desc": "市場は様子見の姿勢が続いている。",
+    "source": "",
+    "sourceUrl": ""
+   }
+  ],
+  [
+   {
+    "title": "前後に空白のある題 ",
+    "link": "https://x.example/spaces",
+    "pubDate": "  Fri, 27 Nov 2026 01:23:45 +0900  ",
+    "desc": "題と違う説明は残す。",
+    "source": " 空白新聞",
+    "sourceUrl": ""
+   },
+   {
+    "title": "source が無ければ題の後ろを配信元にする - 題の中の",
+    "link": "https://x.example/source-from-title",
+    "pubDate": "27 Nov 2026 01:23 GMT",
+    "desc": "source が無ければ題の後ろを配信元にする は題と同じ始まりなので消える",
+    "source": "最後の区切り",
+    "sourceUrl": ""
+   },
+   {
+    "title": "空の source は空のまま",
+    "link": "https://x.example/empty-source",
+    "pubDate": "",
+    "desc": "",
+    "source": "",
+    "sourceUrl": "https://empty.example.org/path?x=1"
+   },
+   {
+    "title": "区切りの無い題",
+    "link": "https://x.example/no-separator",
+    "pubDate": "Friday, 27-Nov-26 01:23:45 JST",
+    "desc": "",
+    "source": "属性の無い配信元",
+    "sourceUrl": ""
+   },
+   {
+    "title": "子要素",
+    "link": "https://x.example/child/after-comment",
+    "pubDate": "Sat, 28 Nov 2026 00:00:00 -0000",
+    "desc": "CDATA の 中の タグも & 実体も落とす あい©",
+    "source": "CDATA 通信",
+    "sourceUrl": "http://user:pw@cdata.example.net:8080/a"
+   },
+   {
+    "title": "長い説明",
+    "link": "https://x.example/long",
+    "pubDate": "not a date",
+    "desc": "これは とても 長い 説明 です。 あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん…",
+    "source": "scheme の無い配信元",
+    "sourceUrl": "no-scheme.example.com/path"
+   },
+   {
+    "title": "MiXeD Case Title が説明の頭と大文字小文字だけ違う",
+    "link": "https://x.example/case",
+    "pubDate": "Fri, 27 Nov 2026 23:59:59 +0530",
+    "desc": "",
+    "source": "壊れた配信元の URL",
+    "sourceUrl": "https://[broken"
+   },
+   {
+    "title": "",
+    "link": "",
+    "pubDate": " ",
+    "desc": "",
+    "source": "",
+    "sourceUrl": ""
+   },
+   {
+    "title": "末尾がコロンの題:",
+    "link": "https://x.example/colon",
+    "pubDate": "fri, 27 nov 2026 1:2:3 est",
+    "desc": "alert(1) 1 2 ¬anentity; � € � � &foo <",
+    "source": "大文字の配信元",
+    "sourceUrl": "HTTPS://UPPER.Example.COM:443"
+   },
+   {
+    "title": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ 三十文字より長い題",
+    "link": "https://x.example/long-title",
+    "pubDate": "",
+    "desc": "",
+    "source": "長題通信",
+    "sourceUrl": ""
+   }
+  ],
+  [
+   {
+    "title": "連番の記事 1",
+    "link": "https://news.google.com/rss/articles/SEQ001?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 09:00:00 GMT",
+    "desc": "連番の記事の本文 1。",
+    "source": "連番通信",
+    "sourceUrl": "https://seq.example.jp"
+   },
+   {
+    "title": "連番の記事 2",
+    "link": "https://news.google.com/rss/articles/SEQ002?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 08:00:00 GMT",
+    "desc": "連番の記事の本文 2。",
+    "source": "連番通信",
+    "sourceUrl": "https://seq.example.jp"
+   },
+   {
+    "title": "連番の記事 3",
+    "link": "https://news.google.com/rss/articles/SEQ003?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 07:00:00 GMT",
+    "desc": "連番の記事の本文 3。",
+    "source": "連番通信",
+    "sourceUrl": "https://seq.example.jp"
+   },
+   {
+    "title": "連番の記事 4",
+    "link": "https://news.google.com/rss/articles/SEQ004?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 06:00:00 GMT",
+    "desc": "連番の記事の本文 4。",
+    "source": "連番通信",
+    "sourceUrl": "https://seq.example.jp"
+   },
+   {
+    "title": "連番の記事 5",
+    "link": "https://news.google.com/rss/articles/SEQ005?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 05:00:00 GMT",
+    "desc": "連番の記事の本文 5。",
+    "source": "連番通信",
+    "sourceUrl": "https://seq.example.jp"
+   },
+   {
+    "title": "連番の記事 6",
+    "link": "https://news.google.com/rss/articles/SEQ006?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 04:00:00 GMT",
+    "desc": "連番の記事の本文 6。",
+    "source": "連番通信",
+    "sourceUrl": "https://seq.example.jp"
+   },
+   {
+    "title": "連番の記事 7",
+    "link": "https://news.google.com/rss/articles/SEQ007?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 03:00:00 GMT",
+    "desc": "連番の記事の本文 7。",
+    "source": "連番通信",
+    "sourceUrl": "https://seq.example.jp"
+   },
+   {
+    "title": "連番の記事 8",
+    "link": "https://news.google.com/rss/articles/SEQ008?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 02:00:00 GMT",
+    "desc": "連番の記事の本文 8。",
+    "source": "連番通信",
+    "sourceUrl": "https://seq.example.jp"
+   }
+  ],
+  [
+   {
+    "title": "要約の例 G-LONG",
+    "link": "https://news.google.com/rss/articles/G-LONG?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 00:00:00 GMT",
+    "desc": "G-LONG の本文抜粋。",
+    "source": "要約通信",
+    "sourceUrl": "https://sum.example.jp"
+   },
+   {
+    "title": "要約の例 G-PREFIX",
+    "link": "https://news.google.com/rss/articles/G-PREFIX?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 01:00:00 GMT",
+    "desc": "G-PREFIX の本文抜粋。",
+    "source": "要約通信",
+    "sourceUrl": "https://sum.example.jp"
+   },
+   {
+    "title": "要約の例 G-NULL",
+    "link": "https://news.google.com/rss/articles/G-NULL?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 02:00:00 GMT",
+    "desc": "G-NULL の本文抜粋。",
+    "source": "要約通信",
+    "sourceUrl": "https://sum.example.jp"
+   },
+   {
+    "title": "要約の例 G-EMPTY",
+    "link": "https://news.google.com/rss/articles/G-EMPTY?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 03:00:00 GMT",
+    "desc": "G-EMPTY の本文抜粋。",
+    "source": "要約通信",
+    "sourceUrl": "https://sum.example.jp"
+   },
+   {
+    "title": "要約の例 G-NUM",
+    "link": "https://news.google.com/rss/articles/G-NUM?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 04:00:00 GMT",
+    "desc": "G-NUM の本文抜粋。",
+    "source": "要約通信",
+    "sourceUrl": "https://sum.example.jp"
+   },
+   {
+    "title": "要約の例 G-NOCHOICE",
+    "link": "https://news.google.com/rss/articles/G-NOCHOICE?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 05:00:00 GMT",
+    "desc": "G-NOCHOICE の本文抜粋。",
+    "source": "要約通信",
+    "sourceUrl": "https://sum.example.jp"
+   },
+   {
+    "title": "要約の例 G-500",
+    "link": "https://news.google.com/rss/articles/G-500?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 06:00:00 GMT",
+    "desc": "G-500 の本文抜粋。",
+    "source": "要約通信",
+    "sourceUrl": "https://sum.example.jp"
+   },
+   {
+    "title": "要約の例 G-400",
+    "link": "https://news.google.com/rss/articles/G-400?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 07:00:00 GMT",
+    "desc": "G-400 の本文抜粋。",
+    "source": "要約通信",
+    "sourceUrl": "https://sum.example.jp"
+   }
+  ],
+  [],
+  [],
+  [],
+  [
+   {
+    "title": "ふつうの題",
+    "link": "https://x.example/p2",
+    "pubDate": "",
+    "desc": "",
+    "source": "",
+    "sourceUrl": ""
+   }
+  ],
+  [],
+  [],
+  [
+   {
+    "title": "BOM つき",
+    "link": "https://x.example/bom",
+    "pubDate": "",
+    "desc": "",
+    "source": "BOM 通信",
+    "sourceUrl": ""
+   }
+  ],
+  [
+   {
+    "title": "宣言なし",
+    "link": "https://x.example/nodecl",
+    "pubDate": "",
+    "desc": "",
+    "source": "無印通信",
+    "sourceUrl": ""
+   }
+  ],
+  [
+   {
+    "title": "Café résumé",
+    "link": "https://x.example/latin1",
+    "pubDate": "",
+    "desc": "Déjà vu üñ",
+    "source": "Le Monde",
+    "sourceUrl": ""
+   }
+  ],
+  [
+   {
+    "title": "UTF-16 の題",
+    "link": "https://x.example/utf16",
+    "pubDate": "",
+    "desc": "",
+    "source": "十六通信",
+    "sourceUrl": ""
+   }
+  ],
+  [],
+  {
+   "error": "ValueError"
+  },
+  [
+   {
+    "title": "plain ascii",
+    "link": "https://x.example/ascii",
+    "pubDate": "",
+    "desc": "",
+    "source": "wire",
+    "sourceUrl": ""
+   }
+  ],
+  [
+   {
+    "title": "実体の中身",
+    "link": "https://x.example/dtd",
+    "pubDate": "",
+    "desc": "",
+    "source": "DTD 通信",
+    "sourceUrl": ""
+   }
+  ],
+  [
+   {
+    "title": "改行と\tタブ 　全角の空白 ",
+    "link": "https://x.example/ws",
+    "pubDate": "Fri,27 Nov 2026 01:23:45 GMT",
+    "desc": "空白 だらけ の 説明",
+    "source": "　配信元",
+    "sourceUrl": ""
+   }
+  ],
+  [
+   {
+    "title": "同じリンクの記事（1 つ目）",
+    "link": "https://news.google.com/rss/articles/DUP001?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 03:00:00 GMT",
+    "desc": "",
+    "source": "重複通信",
+    "sourceUrl": "https://dup.example.jp"
+   },
+   {
+    "title": "同じリンクの記事（2 つ目）",
+    "link": "https://news.google.com/rss/articles/DUP001?oc=5",
+    "pubDate": "Fri, 27 Nov 2026 02:00:00 GMT",
+    "desc": "",
+    "source": "重複通信",
+    "sourceUrl": "https://dup.example.jp"
+   }
+  ]
+ ],
+ "source_text": [
+  "タイトル: 題\n配信元: 配信元\n本文抜粋: 説明\nURL: https://x.example/1",
+  "タイトル: 題\nURL: https://x.example/1",
+  null,
+  null,
+  "タイトル:   空白",
+  "タイトル: 題\n改行\n配信元: A\n本文抜粋: B\nURL: C"
+ ]
+}

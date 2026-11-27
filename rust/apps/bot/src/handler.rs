@@ -1,6 +1,6 @@
 //! Discord のイベントを受ける。Python の `events/` にあたる（今は ready・メンバーの出入りと変更・BAN・
 //! メッセージの検査・メッセージの削除と編集のログ・スティッキー・リアクションロール・VC の出入り・
-//! 利用者の状態の記録・スラッシュコマンド・地震の通知）。
+//! 利用者の状態の記録・スラッシュコマンド・地震の通知・ニュースの配信）。
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -29,6 +29,7 @@ use crate::members::{self, LogEntry};
 use crate::message_cache::{CachedMessage, MessageCache};
 use crate::message_security::{self, DiscordEffects, Judges, Post};
 use crate::moderation::Moderation;
+use crate::news::{self, DiscordOutlet, News};
 use crate::reaction_roles::{self, Change, ReactionEvent};
 use crate::security::{self, RaidDetector, SpamDetector, Stripped};
 use crate::sticky::{self, StickyCtx, StickyLocks};
@@ -68,6 +69,8 @@ pub struct AppState {
     pub earthquake_urls: JmaDetailUrls,
     /// 地震の電文の受け取り（動いているもの）。つなぎ直すときに止める。
     earthquake_feed: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    /// ニュースの取得と要約。
+    pub news: News,
     shard_manager: OnceLock<Arc<ShardManager>>,
 }
 
@@ -80,8 +83,13 @@ impl AppState {
         reporter: Arc<Reporter>,
     ) -> Self {
         let vt = Arc::new(VirusTotal::new(config.vt.clone()));
+        // Groq は用途ごとの枠を共有するので、プロセスに 1 つだけ作って配る（投稿の判定とニュースの要約）。
         let groq = Arc::new(Groq::new(config.groq.clone()));
-        let moderation = Arc::new(Moderation::new(groq, config.moderation_cache_ttl));
+        let moderation = Arc::new(Moderation::new(
+            Arc::clone(&groq),
+            config.moderation_cache_ttl,
+        ));
+        let news = News::new(config.news.clone(), groq);
         let judges = Judges::new(vt, moderation, config.vt_scan_concurrency);
         let user_state = user_state::Recorder::new(pool.clone(), config.user_state.clone());
         Self {
@@ -99,6 +107,7 @@ impl AppState {
             judges,
             earthquake_urls: JmaDetailUrls::default(),
             earthquake_feed: Mutex::new(None),
+            news,
             shard_manager: OnceLock::new(),
         }
     }
@@ -123,9 +132,27 @@ impl AppState {
             signals::Task::Sticky => {
                 sticky::process_pending(&self.sticky(ctx), |g| self.config.handles(g)).await;
             }
+            signals::Task::NewsFeeds => self.run_news(ctx).await,
             signals::Task::EarthquakeReconnect => self.restart_earthquake_feed(ctx),
             signals::Task::EqReplay => self.replay_earthquake(ctx, &payload).await,
         }
+    }
+
+    /// ニュースを 1 回巡回する。Python の `run_news_feeds`。
+    async fn run_news(&self, ctx: &Context) {
+        let outlet = DiscordOutlet {
+            cache: &ctx.cache,
+            http: &ctx.http,
+            settings: &self.settings,
+        };
+        news::run_news_feeds(
+            &self.news,
+            &outlet,
+            || self.settings.snapshot(),
+            |g| self.config.handles(g),
+            news::unix_now(),
+        )
+        .await;
     }
 
     /// 地震の電文の受け取りを始める（動いていれば止めてから）。Python の `_signal_earthquake_reconnect`。
@@ -209,8 +236,8 @@ impl AppState {
     }
 }
 
-/// 全サーバーを読み終えたら（来なければ [`CACHE_READY_TIMEOUT`] で見切って）、スティッキー・地震の電文の
-/// 受け取り・管理画面からの依頼の巡回を始める。
+/// 全サーバーを読み終えたら（来なければ [`CACHE_READY_TIMEOUT`] で見切って）、スティッキー・ニュース・
+/// 地震の電文の受け取り・管理画面からの依頼の巡回を始める。
 async fn start_after_cache_ready(
     ctx: Context,
     state: Arc<AppState>,
@@ -225,11 +252,16 @@ async fn start_after_cache_ready(
             CACHE_READY_TIMEOUT.as_secs()
         );
     }
-    tokio::spawn(sticky_forever(ctx.clone(), Arc::clone(&state)));
+    // 常駐の仕事（スティッキーの巡回・ニュース・地震の受け取り）は、このプロセスが受け持つときだけ動かす
+    // （Python の on_ready と同じ分け方。メッセージに応じたスティッキーの貼り直しは、ここに依らず動く）。
     if state.config.background_worker {
+        tokio::spawn(sticky_forever(ctx.clone(), Arc::clone(&state)));
+        tokio::spawn(news_forever(ctx.clone(), Arc::clone(&state)));
         state.restart_earthquake_feed(&ctx);
     } else {
-        info!("BOT_BACKGROUND_WORKER=false: 地震の電文は受け取りません");
+        info!(
+            "BOT_BACKGROUND_WORKER=false: スティッキーの巡回・ニュース・地震の受け取りは動かしません"
+        );
     }
     if state.config.dev_signals_enabled {
         let pool = state.pool.clone();
@@ -248,6 +280,21 @@ async fn sticky_forever(ctx: Context, state: Arc<AppState>) {
     loop {
         sticky::process_pending(&state.sticky(&ctx), |g| state.config.handles(g)).await;
         tokio::time::sleep(sticky::PENDING_INTERVAL).await;
+    }
+}
+
+/// ニュースを 5 分ごとに巡回する。Python の news_feed_task。
+///
+/// 1 回ぶんを別のタスクで走らせる。途中で落ちても（パニック）、次の回は走る（Python の `_safe` と同じ。
+/// 取得先が一時的におかしいだけで、配信が止まったままにならないようにする）。
+async fn news_forever(ctx: Context, state: Arc<AppState>) {
+    loop {
+        let (ctx, state) = (ctx.clone(), Arc::clone(&state));
+        let run = tokio::spawn(async move { state.run_news(&ctx).await });
+        if let Err(e) = run.await {
+            warn!("ニュースの巡回が途中で落ちました（次の回は走ります）: {e}");
+        }
+        tokio::time::sleep(news::INTERVAL).await;
     }
 }
 

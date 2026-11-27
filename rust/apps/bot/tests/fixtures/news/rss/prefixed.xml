@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:x="http://example.com/x" version="2.0"><channel><x:item><title>接頭辞つきの item は読まない</title><link>https://x.example/p1</link></x:item><item><x:title>接頭辞つきの題は題ではない</x:title><title>ふつうの題</title><link>https://x.example/p2</link><x:link>https://x.example/ignored</x:link></item></channel></rss>

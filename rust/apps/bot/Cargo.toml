@@ -16,8 +16,11 @@ chrono = { workspace = true, features = ["clock", "std"] }
 futures-util = { workspace = true, features = ["std", "sink"] }
 hex = { workspace = true }
 image = { workspace = true, features = ["png", "gif"] }
+md-5 = { workspace = true }
+percent-encoding = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls", "multipart"] }
+roxmltree = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 serenity = { workspace = true, features = [

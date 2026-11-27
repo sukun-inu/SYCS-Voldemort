@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <item>
+      <title>要約の例 G-LONG - 要約通信</title>
+      <link>https://news.google.com/rss/articles/G-LONG?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 00:00:00 GMT</pubDate>
+      <description>G-LONG の本文抜粋。</description>
+      <source url="https://sum.example.jp">要約通信</source>
+    </item>
+    <item>
+      <title>要約の例 G-PREFIX - 要約通信</title>
+      <link>https://news.google.com/rss/articles/G-PREFIX?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 01:00:00 GMT</pubDate>
+      <description>G-PREFIX の本文抜粋。</description>
+      <source url="https://sum.example.jp">要約通信</source>
+    </item>
+    <item>
+      <title>要約の例 G-NULL - 要約通信</title>
+      <link>https://news.google.com/rss/articles/G-NULL?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 02:00:00 GMT</pubDate>
+      <description>G-NULL の本文抜粋。</description>
+      <source url="https://sum.example.jp">要約通信</source>
+    </item>
+    <item>
+      <title>要約の例 G-EMPTY - 要約通信</title>
+      <link>https://news.google.com/rss/articles/G-EMPTY?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 03:00:00 GMT</pubDate>
+      <description>G-EMPTY の本文抜粋。</description>
+      <source url="https://sum.example.jp">要約通信</source>
+    </item>
+    <item>
+      <title>要約の例 G-NUM - 要約通信</title>
+      <link>https://news.google.com/rss/articles/G-NUM?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 04:00:00 GMT</pubDate>
+      <description>G-NUM の本文抜粋。</description>
+      <source url="https://sum.example.jp">要約通信</source>
+    </item>
+    <item>
+      <title>要約の例 G-NOCHOICE - 要約通信</title>
+      <link>https://news.google.com/rss/articles/G-NOCHOICE?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 05:00:00 GMT</pubDate>
+      <description>G-NOCHOICE の本文抜粋。</description>
+      <source url="https://sum.example.jp">要約通信</source>
+    </item>
+    <item>
+      <title>要約の例 G-500 - 要約通信</title>
+      <link>https://news.google.com/rss/articles/G-500?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 06:00:00 GMT</pubDate>
+      <description>G-500 の本文抜粋。</description>
+      <source url="https://sum.example.jp">要約通信</source>
+    </item>
+    <item>
+      <title>要約の例 G-400 - 要約通信</title>
+      <link>https://news.google.com/rss/articles/G-400?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 07:00:00 GMT</pubDate>
+      <description>G-400 の本文抜粋。</description>
+      <source url="https://sum.example.jp">要約通信</source>
+    </item>
+  </channel>
+</rss>

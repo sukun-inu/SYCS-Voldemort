@@ -11,6 +11,7 @@ use sycs_core::env::Env;
 
 use crate::groq::GroqConfig;
 use crate::message_security::DEFAULT_SCAN_CONCURRENCY;
+use crate::news::NewsConfig;
 use crate::user_state::UserStateConfig;
 use crate::virustotal::VtConfig;
 
@@ -46,7 +47,8 @@ pub struct BotConfig {
     /// 入っているので、絞らないと、確かめている間に他のサーバーの出入りへ反応して、本番の
     /// 利用者がいるチャンネルへ書いてしまう。本番では設定しない。
     pub only_guild_id: Option<u64>,
-    /// 常駐の仕事（地震の電文の受け取り）をこのプロセスが持つか（`BOT_BACKGROUND_WORKER`、既定は真）。
+    /// 常駐の仕事（スティッキーの巡回・ニュース・地震の電文の受け取り）をこのプロセスが持つか
+    /// （`BOT_BACKGROUND_WORKER`、既定は真）。
     ///
     /// Python の Bot と同じ変数。Bot を複数並べるときは 1 つだけ真にする（全部が受け取ると、同じ地震を
     /// 台数ぶん通知する）。**本番の Python の Bot と並べて動かすときも偽にすること**（二重に通知する）。
@@ -69,6 +71,8 @@ pub struct BotConfig {
     pub vt_scan_concurrency: usize,
     /// Groq（鍵・同時に送る数・間隔・再試行）。
     pub groq: GroqConfig,
+    /// ニュース（要約のモデル）。
+    pub news: NewsConfig,
     /// 投稿の判定を覚えておく秒数（`MODERATION_CACHE_TTL_SECONDS`、既定 300・下限 10）。
     pub moderation_cache_ttl: f64,
 }
@@ -126,6 +130,7 @@ impl BotConfig {
             ))
             .unwrap_or(1),
             groq: GroqConfig::from_env(env),
+            news: NewsConfig::from_env(env),
             moderation_cache_ttl: env.int("MODERATION_CACHE_TTL_SECONDS", 300, Some(10), None)
                 as f64,
         })

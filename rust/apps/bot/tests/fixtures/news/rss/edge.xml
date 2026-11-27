@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <notchannel><item><title>外側の item は読まない</title><link>https://x.example/outside</link></item></notchannel>
+  <channel>
+    <title>端の例</title>
+    <item>
+      <link>https://x.example/no-title</link>
+      <description>題の無い item は飛ばす</description>
+    </item>
+    <item>
+      <title>リンクの無い item は飛ばす - 配信元</title>
+    </item>
+    <item>
+      <title>  前後に空白のある題  -  空白新聞  </title>
+      <link>
+        https://x.example/spaces
+      </link>
+      <pubDate>  Fri, 27 Nov 2026 01:23:45 +0900  </pubDate>
+      <description>題と違う説明は残す。</description>
+    </item>
+    <item>
+      <title>source が無ければ題の後ろを配信元にする - 題の中の - 最後の区切り</title>
+      <link>https://x.example/source-from-title</link>
+      <pubDate>27 Nov 2026 01:23 GMT</pubDate>
+      <description>source が無ければ題の後ろを配信元にする は題と同じ始まりなので消える</description>
+    </item>
+    <item>
+      <title>空の source は空のまま - 題の配信元</title>
+      <link>https://x.example/empty-source</link>
+      <source url="  https://empty.example.org/path?x=1  "></source>
+      <description></description>
+    </item>
+    <item>
+      <title>区切りの無い題</title>
+      <link>https://x.example/no-separator</link>
+      <source>属性の無い配信元</source>
+      <pubDate>Friday, 27-Nov-26 01:23:45 JST</pubDate>
+    </item>
+    <item>
+      <title>子要素<b>より前</b>だけが題になる - 後ろは読まない</title>
+      <link>https://x.example/child<!-- コメントは飛ばす -->/after-comment</link>
+      <description><![CDATA[<div class="a">CDATA の <b>中の</b> タグも &amp; 実体も落とす&nbsp;&#12354;&#x3044;&copy</div>]]></description>
+      <source url="http://user:pw@cdata.example.net:8080/a">CDATA 通信</source>
+      <pubDate>Sat, 28 Nov 2026 00:00:00 -0000</pubDate>
+    </item>
+    <item>
+      <title>長い説明</title>
+      <link>https://x.example/long</link>
+      <description>これは とても 長い 説明 です。 あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん 最後の語は切られる</description>
+      <source url="no-scheme.example.com/path">scheme の無い配信元</source>
+      <pubDate>not a date</pubDate>
+    </item>
+    <item>
+      <title>MiXeD Case Title が説明の頭と大文字小文字だけ違う</title>
+      <link>https://x.example/case</link>
+      <description>MIXED case TITLE が説明の頭と大文字小文字だけ違う、続き</description>
+      <source url="https://[broken">壊れた配信元の URL</source>
+      <pubDate>Fri, 27 Nov 2026 23:59:59 +0530</pubDate>
+    </item>
+    <item>
+      <title></title>
+      <link></link>
+      <description>題もリンクも空（要素はある）。説明は題と同じ始まり扱いで消える</description>
+      <pubDate> </pubDate>
+    </item>
+    <item>
+      <title>末尾がコロンの題:</title>
+      <link>https://x.example/colon</link>
+      <description>&lt;script&gt;alert(1)&lt;/script&gt; 1 &lt; 2 &amp;amp; 3 &gt; 2 &amp;notanentity; &amp;#0; &amp;#128; &amp;#xD800; &amp;#1114112; &amp;#9; &amp;ampfoo &amp;lt</description>
+      <source url="HTTPS://UPPER.Example.COM:443">大文字の配信元</source>
+      <pubDate>fri, 27 nov 2026 1:2:3 est</pubDate>
+    </item>
+    <item>
+      <title>0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ 三十文字より長い題 - 長題通信</title>
+      <link>https://x.example/long-title</link>
+      <description>0123456789abcdefghijklmnopqrst までが同じで、その先は題と違う説明</description>
+    </item>
+  </channel>
+  <channel>
+    <item><title>2 つ目の channel は読まない</title><link>https://x.example/second</link></item>
+  </channel>
+</rss>

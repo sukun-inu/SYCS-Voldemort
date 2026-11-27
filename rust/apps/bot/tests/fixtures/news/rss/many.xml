@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>many</title>
+    <item>
+      <title>連番の記事 1 - 連番通信</title>
+      <link>https://news.google.com/rss/articles/SEQ001?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 09:00:00 GMT</pubDate>
+      <description>連番の記事の本文 1。</description>
+      <source url="https://seq.example.jp">連番通信</source>
+    </item>
+    <item>
+      <title>連番の記事 2 - 連番通信</title>
+      <link>https://news.google.com/rss/articles/SEQ002?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 08:00:00 GMT</pubDate>
+      <description>連番の記事の本文 2。</description>
+      <source url="https://seq.example.jp">連番通信</source>
+    </item>
+    <item>
+      <title>連番の記事 3 - 連番通信</title>
+      <link>https://news.google.com/rss/articles/SEQ003?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 07:00:00 GMT</pubDate>
+      <description>連番の記事の本文 3。</description>
+      <source url="https://seq.example.jp">連番通信</source>
+    </item>
+    <item>
+      <title>連番の記事 4 - 連番通信</title>
+      <link>https://news.google.com/rss/articles/SEQ004?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 06:00:00 GMT</pubDate>
+      <description>連番の記事の本文 4。</description>
+      <source url="https://seq.example.jp">連番通信</source>
+    </item>
+    <item>
+      <title>連番の記事 5 - 連番通信</title>
+      <link>https://news.google.com/rss/articles/SEQ005?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 05:00:00 GMT</pubDate>
+      <description>連番の記事の本文 5。</description>
+      <source url="https://seq.example.jp">連番通信</source>
+    </item>
+    <item>
+      <title>連番の記事 6 - 連番通信</title>
+      <link>https://news.google.com/rss/articles/SEQ006?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 04:00:00 GMT</pubDate>
+      <description>連番の記事の本文 6。</description>
+      <source url="https://seq.example.jp">連番通信</source>
+    </item>
+    <item>
+      <title>連番の記事 7 - 連番通信</title>
+      <link>https://news.google.com/rss/articles/SEQ007?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 03:00:00 GMT</pubDate>
+      <description>連番の記事の本文 7。</description>
+      <source url="https://seq.example.jp">連番通信</source>
+    </item>
+    <item>
+      <title>連番の記事 8 - 連番通信</title>
+      <link>https://news.google.com/rss/articles/SEQ008?oc=5</link>
+      <pubDate>Fri, 27 Nov 2026 02:00:00 GMT</pubDate>
+      <description>連番の記事の本文 8。</description>
+      <source url="https://seq.example.jp">連番通信</source>
+    </item>
+  </channel>
+</rss>

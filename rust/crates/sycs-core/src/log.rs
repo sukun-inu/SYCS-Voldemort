@@ -71,6 +71,10 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     ("sycs_bot::groq", "ai"),
     // Python の services.earthquake_service と同じ棚（earthquake_feed も前方一致で入る）。
     ("sycs_bot::earthquake", "earthquake"),
+    // Python の services.news_service と同じ棚（RSS の読み手の部品も同じ棚に置く）。
+    ("sycs_bot::news", "news"),
+    ("sycs_bot::email_date", "news"),
+    ("sycs_bot::html_unescape", "news"),
     ("voice_check", "voice"),
     ("songbird", "voice"),
     ("davey", "voice"),
@@ -586,6 +590,7 @@ mod tests {
             ("sycs_bot::groq", "ai"),
             ("sycs_bot::earthquake", "earthquake"),
             ("sycs_bot::earthquake_feed", "earthquake"),
+            ("sycs_bot::news", "news"),
             ("sycs_bot::members", "bot"),
         ] {
             assert_eq!(category_for(target), category, "{target}");

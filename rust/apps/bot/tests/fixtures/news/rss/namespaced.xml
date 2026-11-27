@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns="http://example.com/ns" version="2.0"><channel><item><title>名前空間つきは読まない</title><link>https://x.example/ns</link></item></channel></rss>
