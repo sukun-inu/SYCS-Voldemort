@@ -9,6 +9,10 @@ use std::time::Duration;
 use serenity::all::GatewayIntents;
 use sycs_core::env::Env;
 
+use crate::groq::GroqConfig;
+use crate::message_security::DEFAULT_SCAN_CONCURRENCY;
+use crate::virustotal::VtConfig;
+
 /// Bot を動かすのに要る設定。
 #[derive(Debug, Clone)]
 pub struct BotConfig {
@@ -41,6 +45,14 @@ pub struct BotConfig {
     /// 入っているので、絞らないと、確かめている間に他のサーバーの出入りへ反応して、本番の
     /// 利用者がいるチャンネルへ書いてしまう。本番では設定しない。
     pub only_guild_id: Option<u64>,
+    /// VirusTotal（鍵・待ち時間・上限）。
+    pub vt: VtConfig,
+    /// VirusTotal を同時に走らせる数（`VT_SCAN_CONCURRENCY`、既定 4・下限 1）。
+    pub vt_scan_concurrency: usize,
+    /// Groq（鍵・同時に送る数・間隔・再試行）。
+    pub groq: GroqConfig,
+    /// 投稿の判定を覚えておく秒数（`MODERATION_CACHE_TTL_SECONDS`、既定 300・下限 10）。
+    pub moderation_cache_ttl: f64,
 }
 
 impl BotConfig {
@@ -83,6 +95,17 @@ impl BotConfig {
             only_guild_id: u64::try_from(env.int("BOT_ONLY_GUILD_ID", 0, Some(0), None))
                 .ok()
                 .filter(|id| *id > 0),
+            vt: VtConfig::from_env(env),
+            vt_scan_concurrency: usize::try_from(env.int(
+                "VT_SCAN_CONCURRENCY",
+                DEFAULT_SCAN_CONCURRENCY as i64,
+                Some(1),
+                None,
+            ))
+            .unwrap_or(1),
+            groq: GroqConfig::from_env(env),
+            moderation_cache_ttl: env.int("MODERATION_CACHE_TTL_SECONDS", 300, Some(10), None)
+                as f64,
         })
     }
 
@@ -151,12 +174,26 @@ mod tests {
         assert!(c.dev_signals_enabled);
         assert_eq!(c.only_guild_id, None);
         assert!(c.handles(1) && c.handles(2));
+        assert_eq!(c.vt_scan_concurrency, 4);
+        assert_eq!(c.moderation_cache_ttl, 300.0);
+        assert_eq!(c.vt.api_key, None);
+        assert_eq!(c.groq.api_key, None);
         let short = BotConfig::from_env(&env(&[
             ("DISCORD_BOT_TOKEN", "t"),
             ("SETTINGS_LOCK_TIMEOUT_SECONDS", "0.01"),
         ]))
         .unwrap();
         assert_eq!(short.settings_write_timeout, Duration::from_millis(200));
+        let low = BotConfig::from_env(&env(&[
+            ("DISCORD_BOT_TOKEN", "t"),
+            ("VT_SCAN_CONCURRENCY", "0"),
+            ("MODERATION_CACHE_TTL_SECONDS", "1"),
+        ]))
+        .unwrap();
+        assert_eq!(
+            (low.vt_scan_concurrency, low.moderation_cache_ttl),
+            (1, 10.0)
+        );
     }
 
     /// BOT_ONLY_GUILD_ID を設定したら、そのサーバーのイベントだけを扱うこと。

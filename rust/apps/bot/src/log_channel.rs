@@ -16,7 +16,7 @@ use chrono::{DateTime, FixedOffset, Utc};
 use serde_json::Value;
 use serenity::all::{
     Cache, ChannelId, ChannelType, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter,
-    CreateMessage, GuildId, Http, Member, User,
+    CreateMessage, GuildId, Http, Member, MessageId, User,
 };
 use sycs_core::settings::SettingsCache;
 use tracing::debug;
@@ -373,6 +373,32 @@ pub async fn log_action(
         .await
         .map_err(Box::new)?;
     Ok(true)
+}
+
+/// 送るかどうかを決めて、Embed をそのままログチャンネルへ送る。Python の `send_log_embed`（あとで書き換える
+/// 進み具合の Embed などに使う）。送らなかった・送れなかったら `None`（送れなかったことはここで残す）。
+pub async fn send_log_embed(
+    sink: &LogSink<'_>,
+    guild_id: GuildId,
+    level: Level,
+    embed: CreateEmbed,
+) -> Option<(ChannelId, MessageId)> {
+    let snapshot = sink.settings.snapshot();
+    let settings = log_settings(snapshot.guild(guild_id.get()));
+    if !should_log(&settings, level) {
+        return None;
+    }
+    let channel = text_channel(sink.cache, guild_id, settings.channel_id)?;
+    match channel
+        .send_message(sink.http, CreateMessage::new().embed(embed))
+        .await
+    {
+        Ok(message) => Some((channel, message.id)),
+        Err(e) => {
+            debug!(%guild_id, "send_log_embed failed: {e}");
+            None
+        }
+    }
 }
 
 /// そのギルドのテキストチャンネル（お知らせチャンネルを含む）。Python の

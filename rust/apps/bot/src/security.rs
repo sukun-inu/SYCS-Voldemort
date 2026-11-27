@@ -2,8 +2,7 @@
 //! VC に入ったときの荒らし対策。Python の `services/spam_detection.py`・`raid_detection.py`・
 //! `security_service.py` のうち、外部のサービス（VirusTotal・Groq）に頼らないところ。
 //!
-//! メッセージの検査の流れ（判定を集める → 消して剥がす → 報告する）は、VirusTotal と Groq を
-//! 移してからつなぐ。
+//! メッセージの検査の流れ（判定を集める → 消して剥がす → 報告する）は [`crate::message_security`]。
 //!
 //! **ロールの剥奪は元に戻せない。** 判定の数（回数・秒数・人数）と、バイパス（信頼ユーザー・
 //! バイパスロール）の読み方は Python と同じにしてある（突き合わせで確かめた）。

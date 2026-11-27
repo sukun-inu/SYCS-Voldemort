@@ -12,6 +12,7 @@ pub mod log_channel;
 pub mod members;
 pub mod message_cache;
 pub mod message_logs;
+pub mod message_security;
 pub mod moderation;
 pub mod reaction_roles;
 pub mod security;

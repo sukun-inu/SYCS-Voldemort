@@ -44,7 +44,8 @@ pub fn member_avatar_url(member: &Member) -> String {
     }
 }
 
-fn guild_avatar_url(guild_id: GuildId, user_id: UserId, hash: &ImageHash) -> String {
+/// サーバーごとのアバターの URL（discord.py の `Member.guild_avatar.url`）。
+pub fn guild_avatar_url(guild_id: GuildId, user_id: UserId, hash: &ImageHash) -> String {
     asset_url(&format!("guilds/{guild_id}/users/{user_id}/avatars"), hash)
 }
 

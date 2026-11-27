@@ -37,7 +37,7 @@ const SDK_MAX_RETRY_AFTER: f64 = 60.0;
 pub const DEFAULT_BASE_URL: &str = "https://api.groq.com";
 
 /// 設定。環境変数の名前・既定・下限は Python と同じ。
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct GroqConfig {
     /// API の鍵（`GROQ_API_KEY`）。無ければ呼ばない。
     pub api_key: Option<String>,
@@ -53,6 +53,17 @@ pub struct GroqConfig {
     pub retry_base_delay: f64,
     /// 回数制限の待ちの上限（秒、`GROQ_RETRY_MAX_DELAY_SECONDS`、既定 20・下限は始まりの値）。
     pub retry_max_delay: f64,
+}
+
+/// 鍵は表示しない（設定をログに出しても漏れないように）。
+impl std::fmt::Debug for GroqConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GroqConfig")
+            .field("api_key", &self.api_key.as_ref().map(|_| "***"))
+            .field("base_url", &self.base_url)
+            .field("max_concurrent", &self.max_concurrent)
+            .finish_non_exhaustive()
+    }
 }
 
 impl GroqConfig {
