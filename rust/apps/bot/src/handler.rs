@@ -22,7 +22,7 @@ use tracing::{debug, info, warn};
 use crate::chat::{self, Chats};
 use crate::config::BotConfig;
 use crate::earthquake::{self, Deps};
-use crate::earthquake_badges::PrerenderedBadges;
+use crate::earthquake_badges::DrawnBadges;
 use crate::earthquake_feed::{self, CacheDirectory, FeedConfig, HttpOutbox, JmaDetailUrls};
 use crate::groq::Groq;
 use crate::log_channel::{self, Author, AvatarColours, LogSink};
@@ -199,7 +199,7 @@ impl AppState {
 
     /// 地震の電文を 1 つ通知する。送ったチャンネルの数を返す。
     ///
-    /// 震度の札は付ける（[`PrerenderedBadges`]）。震度の地図はまだ移していないので付かない。
+    /// 震度の札は付ける（[`DrawnBadges`]。Rust で描く）。震度の地図はまだ移していないので付かない。
     async fn notify_earthquake(
         &self,
         ctx: &Context,
@@ -214,7 +214,7 @@ impl AppState {
             settings: &settings,
             directory: &CacheDirectory(&ctx.cache),
             outbox: &HttpOutbox(&ctx.http),
-            images: &PrerenderedBadges,
+            images: &DrawnBadges,
             urls: &self.earthquake_urls,
             handles: &handles,
         };

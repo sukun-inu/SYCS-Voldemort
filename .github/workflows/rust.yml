@@ -52,13 +52,15 @@ jobs:
           rustc --version
           cargo --version
 
-      - name: songbird のビルドに要るものと QEMU を入れる
+      - name: songbird のビルドに要るものと QEMU とフォントを入れる
         # songbird が使う opus2 は libopus を pkg-config で探し、無ければ cmake で
         # 自前ビルドする。どちらの経路でも通るように両方入れておく。
         # qemu-user はテストを本番の CPU（Sandy Bridge）のふりで動かすため。
+        # fonts-noto-cjk は地震の画像の文字（crates/sycs-text）のテストが読む。Python の本番の
+        # イメージ（python:3.13-slim の apt）と同じファイルであること（テストがハッシュで確かめる）。
         run: |
           apt-get update -qq
-          apt-get install -y -qq --no-install-recommends libopus-dev cmake pkg-config qemu-user
+          apt-get install -y -qq --no-install-recommends libopus-dev cmake pkg-config qemu-user fonts-noto-cjk
 
       - name: 整形の確認（cargo fmt）
         run: cargo fmt --all --check

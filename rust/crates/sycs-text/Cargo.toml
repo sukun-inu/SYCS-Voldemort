@@ -1,0 +1,26 @@
+[package]
+name = "sycs-text"
+version = "0.1.0"
+description = "地震の画像の文字と震度の札を、Python（Pillow）と画素まで同じに描く"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+# 版は rust/Cargo.toml の [workspace.dependencies] で決める。
+#
+# この crate と skrifa・harfrust・read-fonts は、rust/Cargo.toml の [profile.dev.package.*] で
+# 最適化を効かせてある（画素を回す処理は、最適化なしだとテストが桁違いに遅い）。
+[dependencies]
+harfrust = { workspace = true, features = ["std"] }
+image = { workspace = true, features = ["png"] }
+skrifa = { workspace = true, features = ["std"] }
+unicode-properties = { workspace = true, features = ["general-category"] }
+
+[dev-dependencies]
+hex = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }

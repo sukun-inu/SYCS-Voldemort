@@ -11,6 +11,7 @@ pub mod config;
 pub mod earthquake;
 pub mod earthquake_badges;
 pub mod earthquake_feed;
+pub mod earthquake_text;
 pub mod email_date;
 pub mod groq;
 pub mod handler;
