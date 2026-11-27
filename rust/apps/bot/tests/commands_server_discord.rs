@@ -22,6 +22,7 @@ use serenity::all::{Cache, CommandInteraction, Http};
 use sqlx::PgPool;
 use sycs_bot::commands;
 use sycs_bot::commands::picker::Pickers;
+use sycs_bot::commands::quake::Screens;
 use sycs_bot::sticky::StickyLocks;
 use sycs_core::settings::SettingsCache;
 
@@ -90,6 +91,7 @@ struct Stage {
     settings: Arc<SettingsCache>,
     pickers: Pickers,
     sticky_locks: StickyLocks,
+    quake_screens: Screens,
     seen: Arc<Mutex<Vec<Seen>>>,
 }
 
@@ -110,6 +112,7 @@ impl Stage {
             pool,
             pickers: Pickers::default(),
             sticky_locks: StickyLocks::default(),
+            quake_screens: Screens::default(),
             seen,
         }
     }
@@ -122,6 +125,7 @@ impl Stage {
             pickers: &self.pickers,
             admin_site_url: "https://admin.example/login",
             sticky_locks: &self.sticky_locks,
+            quake_screens: &self.quake_screens,
         }
     }
 

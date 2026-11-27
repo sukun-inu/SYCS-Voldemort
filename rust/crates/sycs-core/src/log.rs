@@ -587,6 +587,7 @@ mod tests {
             ("sycs_bot::user_state", "userstate"),
             ("sycs_bot::commands", "command"),
             ("sycs_bot::commands::settings", "command"),
+            ("sycs_bot::commands::quake", "command"),
             ("sycs_bot::moderation", "security"),
             ("sycs_bot::message_security", "security"),
             ("sycs_bot::groq", "ai"),
