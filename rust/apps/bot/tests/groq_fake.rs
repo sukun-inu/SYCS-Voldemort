@@ -22,7 +22,6 @@ struct Seen {
     total: usize,
     inflight: usize,
     max_inflight: usize,
-    arrivals: Vec<Instant>,
     counts: HashMap<String, usize>,
     bodies: Vec<Value>,
     auth_ok: bool,
@@ -173,7 +172,6 @@ async fn start_fake() -> (String, Shared) {
                     s.total += 1;
                     s.inflight += 1;
                     s.max_inflight = s.max_inflight.max(s.inflight);
-                    s.arrivals.push(Instant::now());
                     if header("authorization").as_deref() != Some("Bearer test-key") {
                         s.auth_ok = false;
                     }
@@ -183,7 +181,8 @@ async fn start_fake() -> (String, Shared) {
                     *c
                 };
                 match name.as_str() {
-                    "slow" => tokio::time::sleep(Duration::from_secs(1)).await,
+                    // 遅い環境でも 3 つ目が届く前に 1 つ目が終わらないよう、長めに待つ。
+                    "slow" => tokio::time::sleep(Duration::from_secs(2)).await,
                     // 答えない（時間切れを確かめる）。
                     "hang" => tokio::time::sleep(Duration::from_secs(30)).await,
                     _ => {}
@@ -356,9 +355,13 @@ async fn the_request_has_the_python_shape() {
     );
 }
 
-/// 用途ごとに同時に 3 つまで送り、送る間隔は 0.25 秒以上空けること。
+/// 用途ごとに同時に 3 つまで送ること。
+///
+/// 送る間隔（0.25 秒）は、ここでは確かめない。偽物に届いた時刻で測ると、遅い環境では送り出しが空いていても
+/// 届く間隔が詰まって見える（CI で実際に落ちた）。間隔は `groq.rs` の単体テストが、送ってよくなった時刻
+/// そのもので確かめる。
 #[tokio::test]
-async fn three_at_a_time_and_a_quarter_second_apart() {
+async fn three_at_a_time() {
     let (base, seen) = start_fake().await;
     let m = moderation(&base);
     let mut set = tokio::task::JoinSet::new();
@@ -372,11 +375,6 @@ async fn three_at_a_time_and_a_quarter_second_apart() {
     let s = seen.lock().unwrap();
     assert_eq!(s.total, 6);
     assert_eq!(s.max_inflight, 3, "同時に送る数の枠が効いていない");
-    let min_gap = s.arrivals.windows(2).map(|w| w[1] - w[0]).min().unwrap();
-    assert!(
-        min_gap >= Duration::from_millis(240),
-        "間隔が詰まった: {min_gap:?}"
-    );
 }
 
 /// 時間切れも SDK が 2 回まで再試行し、そのあと失敗にすること（回数制限の再試行はしない）。
@@ -387,12 +385,13 @@ async fn timeouts_are_retried_by_the_sdk_only() {
     let body = moderation::request_body("", "case=hang");
     let started = Instant::now();
     let result = groq
-        .chat_completion(moderation::BUCKET, Duration::from_millis(200), &body)
+        .chat_completion(moderation::BUCKET, Duration::from_secs(1), &body)
         .await;
     assert!(matches!(result, Err(GroqError::Timeout)), "{result:?}");
+    // 時間切れは、遅い環境でも送信が届いてから切れる長さ（1 秒）にしてある。
     assert_eq!(total(&seen), 3);
-    // 0.2 秒 × 3 回と、0.5 秒・1 秒（0.75〜1 倍）の待ち。
-    assert!(started.elapsed() >= Duration::from_millis(1700));
+    // 1 秒 × 3 回と、0.5 秒・1 秒（0.75〜1 倍）の待ち。
+    assert!(started.elapsed() >= Duration::from_millis(4100));
 }
 
 /// 鍵が無ければ送らずに失敗にすること。
