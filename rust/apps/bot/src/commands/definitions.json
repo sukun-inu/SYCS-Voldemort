@@ -1,0 +1,957 @@
+[
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "貴金属の現在価格",
+  "dm_permission": true,
+  "integration_types": null,
+  "name": "metal",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "金の現在価格を表示します",
+    "name": "gold",
+    "options": [
+     {
+      "description": "計算するグラム数を入力してください",
+      "name": "g",
+      "required": true,
+      "type": 10
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "銀の現在価格を表示します",
+    "name": "silver",
+    "options": [
+     {
+      "description": "計算するグラム数を入力してください",
+      "name": "g",
+      "required": true,
+      "type": 10
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "プラチナの現在価格を表示します",
+    "name": "platinum",
+    "options": [
+     {
+      "description": "計算するグラム数を入力してください",
+      "name": "g",
+      "required": true,
+      "type": 10
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "金・銀・プラチナの現在価格をまとめて表示します",
+    "name": "all",
+    "options": [
+     {
+      "description": "計算するグラム数を入力してください",
+      "name": "g",
+      "required": true,
+      "type": 10
+     }
+    ],
+    "type": 1
+   }
+  ],
+  "type": 1
+ },
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "ログの送信先とレベル",
+  "dm_permission": false,
+  "integration_types": null,
+  "name": "log",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "【管理者】ログ送信チャンネルを設定します",
+    "name": "channel",
+    "options": [
+     {
+      "channel_types": [
+       0,
+       5
+      ],
+      "description": "ログを投稿するテキストチャンネル",
+      "name": "channel",
+      "required": true,
+      "type": 7
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "【管理者】ログレベルを設定します",
+    "name": "level",
+    "options": [
+     {
+      "choices": [
+       {
+        "name": "NONE（ログを記録しない）",
+        "value": "NONE"
+       },
+       {
+        "name": "ERROR（エラーのみ）",
+        "value": "ERROR"
+       },
+       {
+        "name": "INFO（通常運用向け・推奨）",
+        "value": "INFO"
+       },
+       {
+        "name": "DEBUG（詳細・調査向け）",
+        "value": "DEBUG"
+       }
+      ],
+      "description": "記録するログの詳細さ",
+      "name": "level",
+      "required": true,
+      "type": 3
+     }
+    ],
+    "type": 1
+   }
+  ],
+  "type": 1
+ },
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "AI応答チャンネルの設定",
+  "dm_permission": false,
+  "integration_types": null,
+  "name": "chat",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "【管理者】AI応答チャンネルを設定します",
+    "name": "set",
+    "options": [
+     {
+      "channel_types": [
+       0,
+       5
+      ],
+      "description": "ChatGPTが応答するテキストチャンネル",
+      "name": "channel",
+      "required": true,
+      "type": 7
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "【管理者】AI応答チャンネル設定を解除します",
+    "name": "clear",
+    "options": [],
+    "type": 1
+   }
+  ],
+  "type": 1
+ },
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "信頼済みユーザー（検出の対象外）",
+  "dm_permission": false,
+  "integration_types": null,
+  "name": "trusted",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "【管理者】信頼済みユーザーを追加します（複数選択可）",
+    "name": "add",
+    "options": [],
+    "type": 1
+   },
+   {
+    "description": "【管理者】信頼済みユーザーを削除します（複数選択可）",
+    "name": "remove",
+    "options": [],
+    "type": 1
+   },
+   {
+    "description": "【管理者】信頼済みユーザー一覧を表示します",
+    "name": "list",
+    "options": [],
+    "type": 1
+   }
+  ],
+  "type": 1
+ },
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "バイパスロール（検出の対象外）",
+  "dm_permission": false,
+  "integration_types": null,
+  "name": "bypass",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "【管理者】バイパスロールを追加します（複数選択可）",
+    "name": "add",
+    "options": [],
+    "type": 1
+   },
+   {
+    "description": "【管理者】バイパスロールを削除します（複数選択可）",
+    "name": "remove",
+    "options": [],
+    "type": 1
+   },
+   {
+    "description": "【管理者】バイパスロール一覧を表示します",
+    "name": "list",
+    "options": [],
+    "type": 1
+   }
+  ],
+  "type": 1
+ },
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "Bot の設定とヘルプ",
+  "dm_permission": false,
+  "integration_types": null,
+  "name": "bot",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "【管理者】Bot設定を一覧表示します",
+    "name": "settings",
+    "options": [],
+    "type": 1
+   },
+   {
+    "description": "利用可能なスラッシュコマンド一覧を表示します",
+    "name": "help",
+    "options": [],
+    "type": 1
+   }
+  ],
+  "type": 1
+ },
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "入退室のあいさつ（ウェルカム / グッバイ）",
+  "dm_permission": false,
+  "integration_types": null,
+  "name": "greeting",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "入室時のあいさつ",
+    "name": "welcome",
+    "options": [
+     {
+      "description": "【管理者】ウェルカム送信チャンネルを設定します",
+      "name": "channel",
+      "options": [
+       {
+        "channel_types": [
+         0,
+         5
+        ],
+        "description": "ウェルカムメッセージを送るチャンネル",
+        "name": "channel",
+        "required": true,
+        "type": 7
+       }
+      ],
+      "type": 1
+     },
+     {
+      "description": "【管理者】ウェルカムメッセージを設定します",
+      "name": "message",
+      "options": [
+       {
+        "description": "テンプレート: {user} {username} {server} {count} が使用可能",
+        "name": "message",
+        "required": true,
+        "type": 3
+       }
+      ],
+      "type": 1
+     }
+    ],
+    "type": 2
+   },
+   {
+    "description": "退室時のあいさつ",
+    "name": "goodbye",
+    "options": [
+     {
+      "description": "【管理者】グッバイ送信チャンネルを設定します",
+      "name": "channel",
+      "options": [
+       {
+        "channel_types": [
+         0,
+         5
+        ],
+        "description": "グッバイメッセージを送るチャンネル",
+        "name": "channel",
+        "required": true,
+        "type": 7
+       }
+      ],
+      "type": 1
+     },
+     {
+      "description": "【管理者】グッバイメッセージを設定します",
+      "name": "message",
+      "options": [
+       {
+        "description": "テンプレート: {user} {username} {server} {count} が使用可能",
+        "name": "message",
+        "required": true,
+        "type": 3
+       }
+      ],
+      "type": 1
+     }
+    ],
+    "type": 2
+   },
+   {
+    "description": "ウェルカム/グッバイ設定を表示します",
+    "name": "status",
+    "options": [],
+    "type": 1
+   }
+  ],
+  "type": 1
+ },
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "VC の入退室通知",
+  "dm_permission": false,
+  "integration_types": null,
+  "name": "vcnotify",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "【管理者】VC通知チャンネルを設定します",
+    "name": "set",
+    "options": [
+     {
+      "channel_types": [
+       0,
+       5
+      ],
+      "description": "VC通知を送るテキストチャンネル",
+      "name": "channel",
+      "required": true,
+      "type": 7
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "【管理者】VC通知チャンネル設定を解除します",
+    "name": "clear",
+    "options": [],
+    "type": 1
+   }
+  ],
+  "type": 1
+ },
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "チャンネル最下部に貼り付けるメッセージ",
+  "dm_permission": false,
+  "integration_types": null,
+  "name": "sticky",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "【管理者】このチャンネルにスティッキーを設定します",
+    "name": "set",
+    "options": [
+     {
+      "description": "スティッキーとして固定するメッセージ内容",
+      "name": "content",
+      "required": true,
+      "type": 3
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "【管理者】このチャンネルのスティッキーを解除します",
+    "name": "clear",
+    "options": [],
+    "type": 1
+   },
+   {
+    "description": "スティッキー設定一覧を表示します",
+    "name": "list",
+    "options": [],
+    "type": 1
+   }
+  ],
+  "type": 1
+ },
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "リアクションでロールを付与する設定",
+  "dm_permission": false,
+  "integration_types": null,
+  "name": "reactionrole",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "【管理者】リアクションロールを追加します",
+    "name": "add",
+    "options": [
+     {
+      "description": "対象メッセージのID",
+      "name": "message_id",
+      "required": true,
+      "type": 3
+     },
+     {
+      "description": "リアクションで使う絵文字",
+      "name": "emoji",
+      "required": true,
+      "type": 3
+     },
+     {
+      "description": "付与するロール",
+      "name": "role",
+      "required": true,
+      "type": 8
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "【管理者】リアクションロールを削除します",
+    "name": "remove",
+    "options": [
+     {
+      "autocomplete": true,
+      "description": "対象メッセージのID（候補から選択できる）",
+      "name": "message_id",
+      "required": true,
+      "type": 3
+     },
+     {
+      "autocomplete": true,
+      "description": "削除するリアクション絵文字（候補から選択できる）",
+      "name": "emoji",
+      "required": true,
+      "type": 3
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "リアクションロール一覧を表示します",
+    "name": "list",
+    "options": [],
+    "type": 1
+   }
+  ],
+  "type": 1
+ },
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "ニュースフィードの配信設定",
+  "dm_permission": false,
+  "integration_types": null,
+  "name": "news",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "【管理者】Google Newsフィードを追加します",
+    "name": "add",
+    "options": [
+     {
+      "channel_types": [
+       0,
+       5
+      ],
+      "description": "ニュースを投稿するチャンネル",
+      "name": "channel",
+      "required": true,
+      "type": 7
+     },
+     {
+      "description": "検索キーワード（例: AI技術、最大100文字）",
+      "max_length": 100,
+      "min_length": 1,
+      "name": "query",
+      "required": true,
+      "type": 3
+     },
+     {
+      "description": "チェック間隔（分、最小5）",
+      "name": "interval",
+      "required": false,
+      "type": 4
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "【管理者】ニュースフィードを削除します",
+    "name": "remove",
+    "options": [
+     {
+      "autocomplete": true,
+      "description": "削除するフィード（候補から選択できる）",
+      "name": "feed_id",
+      "required": true,
+      "type": 3
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "ニュースフィード一覧を表示します",
+    "name": "list",
+    "options": [],
+    "type": 1
+   }
+  ],
+  "type": 1
+ },
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "地震アラートの設定",
+  "dm_permission": false,
+  "integration_types": null,
+  "name": "quake",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "【管理者】地震アラートチャンネルを設定します",
+    "name": "channel",
+    "options": [
+     {
+      "channel_types": [
+       0,
+       5
+      ],
+      "description": "地震情報を送るテキストチャンネル",
+      "name": "channel",
+      "required": true,
+      "type": 7
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "【管理者】地震通知の最小震度を設定します",
+    "name": "min_scale",
+    "options": [
+     {
+      "choices": [
+       {
+        "name": "震度 1 以上",
+        "value": 10
+       },
+       {
+        "name": "震度 2 以上",
+        "value": 20
+       },
+       {
+        "name": "震度 3 以上",
+        "value": 30
+       },
+       {
+        "name": "震度 4 以上",
+        "value": 40
+       },
+       {
+        "name": "震度 5弱 以上",
+        "value": 45
+       },
+       {
+        "name": "震度 5強 以上",
+        "value": 50
+       },
+       {
+        "name": "震度 6弱 以上",
+        "value": 55
+       },
+       {
+        "name": "震度 6強 以上",
+        "value": 60
+       },
+       {
+        "name": "震度 7 以上",
+        "value": 70
+       }
+      ],
+      "description": "通知する最小震度",
+      "name": "scale",
+      "required": true,
+      "type": 4
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "地震アラート設定を表示します",
+    "name": "status",
+    "options": [],
+    "type": 1
+   },
+   {
+    "description": "【管理者】地震通知タイプのオン/オフを設定します",
+    "name": "type",
+    "options": [],
+    "type": 1
+   }
+  ],
+  "type": 1
+ },
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "サーバーとユーザーの情報",
+  "dm_permission": false,
+  "integration_types": null,
+  "name": "info",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "サーバー情報を表示します",
+    "name": "server",
+    "options": [],
+    "type": 1
+   },
+   {
+    "description": "ユーザー情報を表示します",
+    "name": "user",
+    "options": [
+     {
+      "description": "情報を表示するメンバー（省略時は自分）",
+      "name": "member",
+      "required": false,
+      "type": 6
+     }
+    ],
+    "type": 1
+   }
+  ],
+  "type": 1
+ },
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "DJAudio（URL の自動MP3変換）の設定",
+  "dm_permission": false,
+  "integration_types": null,
+  "name": "djaudio",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "【管理者】DJAudio の監視チャンネルを設定します",
+    "name": "channel",
+    "options": [
+     {
+      "channel_types": [
+       0,
+       5
+      ],
+      "description": "監視するチャンネル（未指定で解除）",
+      "name": "channel",
+      "required": false,
+      "type": 7
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "【管理者】DJAudio の結果送信チャンネルを設定します（未指定で監視チャンネルに返信）",
+    "name": "output",
+    "options": [
+     {
+      "channel_types": [
+       0,
+       5
+      ],
+      "description": "結果を送信するチャンネル（未指定で解除→監視チャンネルに返信）",
+      "name": "channel",
+      "required": false,
+      "type": 7
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "DJAudio の現在設定を表示します",
+    "name": "status",
+    "options": [],
+    "type": 1
+   }
+  ],
+  "type": 1
+ },
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "TTS読み上げ設定（管理者専用）",
+  "dm_permission": true,
+  "integration_types": null,
+  "name": "tts",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "TTS読み上げを有効にする",
+    "name": "enable",
+    "options": [],
+    "type": 1
+   },
+   {
+    "description": "TTS読み上げを無効にする",
+    "name": "disable",
+    "options": [],
+    "type": 1
+   },
+   {
+    "description": "読み上げ対象のテキストチャンネルを追加する",
+    "name": "add_watch",
+    "options": [
+     {
+      "channel_types": [
+       0,
+       5
+      ],
+      "description": "読み上げるテキストチャンネル",
+      "name": "channel",
+      "required": true,
+      "type": 7
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "読み上げ対象からテキストチャンネルを削除する",
+    "name": "remove_watch",
+    "options": [
+     {
+      "channel_types": [
+       0,
+       5
+      ],
+      "description": "削除するテキストチャンネル",
+      "name": "channel",
+      "required": true,
+      "type": 7
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "ボットが参加するVCチャンネルを設定する",
+    "name": "vc",
+    "options": [
+     {
+      "channel_types": [
+       2
+      ],
+      "description": "ボットが参加するVCチャンネル",
+      "name": "channel",
+      "required": true,
+      "type": 7
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "TTS設定の現在状況を表示する",
+    "name": "status",
+    "options": [],
+    "type": 1
+   },
+   {
+    "description": "指定したVCに参加し、そのVCのコメント欄を優先読み上げ対象にする",
+    "name": "join",
+    "options": [
+     {
+      "channel_types": [
+       2
+      ],
+      "description": "参加するVCチャンネル",
+      "name": "channel",
+      "required": true,
+      "type": 7
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "ボットをVCから退出させキューをクリアする",
+    "name": "leave",
+    "options": [],
+    "type": 1
+   },
+   {
+    "description": "サーバーのデフォルト声を設定する",
+    "name": "default_voice",
+    "options": [
+     {
+      "autocomplete": true,
+      "description": "声の名前（例: Kyoko）",
+      "name": "voice",
+      "required": true,
+      "type": 3
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "メッセージ読み上げ時に発言者名を読み上げるか設定する",
+    "name": "read_name",
+    "options": [
+     {
+      "choices": [
+       {
+        "name": "on（名前を読み上げる）",
+        "value": "on"
+       },
+       {
+        "name": "off（名前を読み上げない）",
+        "value": "off"
+       }
+      ],
+      "description": "on で名前あり、off で名前なし",
+      "name": "enabled",
+      "required": true,
+      "type": 3
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "サーバーのデフォルト読み上げ速度を設定する（100〜400）",
+    "name": "default_rate",
+    "options": [
+     {
+      "description": "速度（100〜400語/分）",
+      "name": "rate",
+      "required": true,
+      "type": 4
+     }
+    ],
+    "type": 1
+   }
+  ],
+  "type": 1
+ },
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "自分のTTS声設定",
+  "dm_permission": true,
+  "integration_types": null,
+  "name": "voice",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "自分の読み上げ声と速度を設定する",
+    "name": "set",
+    "options": [
+     {
+      "autocomplete": true,
+      "description": "声の名前（例: Kyoko）",
+      "name": "voice",
+      "required": false,
+      "type": 3
+     },
+     {
+      "description": "読み上げ速度（100〜400語/分）",
+      "name": "rate",
+      "required": false,
+      "type": 4
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "自分の読み上げ設定をデフォルトに戻す",
+    "name": "reset",
+    "options": [],
+    "type": 1
+   },
+   {
+    "description": "自分の現在の読み上げ設定を表示する",
+    "name": "info",
+    "options": [],
+    "type": 1
+   }
+  ],
+  "type": 1
+ },
+ {
+  "contexts": null,
+  "default_member_permissions": null,
+  "description": "TTS読み上げ辞書",
+  "dm_permission": true,
+  "integration_types": null,
+  "name": "dict",
+  "nsfw": false,
+  "options": [
+   {
+    "description": "辞書にエントリを追加する（単語を別の読みに置き換え）",
+    "name": "add",
+    "options": [
+     {
+      "description": "置換する単語（最大50文字）",
+      "name": "word",
+      "required": true,
+      "type": 3
+     },
+     {
+      "description": "読み替え後のテキスト（最大100文字）",
+      "name": "reading",
+      "required": true,
+      "type": 3
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "辞書からエントリを削除する",
+    "name": "remove",
+    "options": [
+     {
+      "description": "削除する単語",
+      "name": "word",
+      "required": true,
+      "type": 3
+     }
+    ],
+    "type": 1
+   },
+   {
+    "description": "辞書の一覧を表示する",
+    "name": "list",
+    "options": [],
+    "type": 1
+   }
+  ],
+  "type": 1
+ }
+]

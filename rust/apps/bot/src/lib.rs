@@ -4,6 +4,7 @@
 //! ライブラリに置くのは、その間も Python との突き合わせやテストから呼べるようにするため。
 
 pub mod colorthief;
+pub mod commands;
 pub mod compat;
 pub mod config;
 pub mod groq;
