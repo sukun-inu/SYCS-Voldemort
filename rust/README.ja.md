@@ -6,7 +6,7 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 
 | 場所 | 中身 |
 |---|---|
-| `apps/bot` | Discord の Bot（serenity）。discord.py の Bot を置き換える。今は骨組み（ログ・心拍・設定のキャッシュと起動時の null の掃除・依頼の巡回・止め方）と、ログチャンネルへの書き方、メンバーの参加・退出・変更・BAN のログと歓迎・お別れ、メッセージの削除・編集のログ、スティッキー、リアクションロール、VC の出入りのログと通知、セキュリティの部品と VC の荒らし対策、VirusTotal によるリンクと添付の検査、Groq による投稿の判定、メッセージの検査（危険な投稿を消してロールを剥がす）（読み上げ・利用者の状態の記録は別の塊で足す）。部品はライブラリ（`src/lib.rs`）に置き、イベントにつなぐ前から突き合わせとテストで呼べるようにしてある。イメージは `docker/bot-rs.Dockerfile` |
+| `apps/bot` | Discord の Bot（serenity）。discord.py の Bot を置き換える。今は骨組み（ログ・心拍・設定のキャッシュと起動時の null の掃除・依頼の巡回・止め方）と、ログチャンネルへの書き方、メンバーの参加・退出・変更・BAN のログと歓迎・お別れ、メッセージの削除・編集のログ、スティッキー、リアクションロール、VC の出入りのログと通知、セキュリティの部品と VC の荒らし対策、VirusTotal によるリンクと添付の検査、Groq による投稿の判定、メッセージの検査（危険な投稿を消してロールを剥がす）、スラッシュコマンドの枠組みと /log・/chat（ほかのコマンド・読み上げ・利用者の状態の記録は別の塊で足す）。部品はライブラリ（`src/lib.rs`）に置き、イベントにつなぐ前から突き合わせとテストで呼べるようにしてある。イメージは `docker/bot-rs.Dockerfile` |
 | `crates/sycs-core` | Rust のプロセスが共通で使う土台。環境変数の読み方・接続先・ログ・メトリクス・設定の読み書き・Bot への依頼の取り出し・URL の安全確認（SSRF 対策）・期限つきキャッシュ |
 | `tools/voice-check` | serenity + songbird の Bot が、DAVE 必須の VC で音を届けられるかを人の耳で確かめる道具 |
 
@@ -36,6 +36,7 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 | VirusTotal によるリンクと添付の検査 | `services/virustotal_service.py`（＋ vt-py 0.22.0 の送り方） | `sycs_bot::virustotal` | 偽物の VirusTotal と配布元を立て、本物の Python と Rust の両方を当てて 28 例とも一致（状態・種類・数・理由。画像・ページ・ファイル・既知のファイル・同時スキャン中の取り直し・回数制限・サーバーの失敗と失敗を覚える動き・上限超え〔長さあり・なし〕・相対／絶対／終わらない／行き先なし／禁止の行き先へのリダイレクト・HEAD の拒否・404・大文字の Image/PNG・種類なし・安全でない URL）。同じ流れを `apps/bot/tests/virustotal_fake.rs` が偽物をテストの中に立てて CI で毎回確かめる。解析の待ちに全体の上限が無いのは Python と同じ（見直しの候補） |
 | Groq の呼び出しと投稿の判定 | `services/groq_client.py` / `content_moderation.py`（＋ groq SDK 1.7.0 の再試行） | `sycs_bot::groq` / `sycs_bot::moderation` | 偽物の Groq を立て、本物の Python（groq SDK ごと）と Rust の両方を当てて 30 例とも一致（判定・送った回数・送った問いの中身のハッシュ・同時に送る数・送る間隔。答えの読み方〔大文字にそろえる・WARNING・ſ〕・答えの文が無い／JSON でない・500 のあとの成功・400 は再試行しない・x-should-retry に従う・408・回数制限が続くと 9 回・SDK の外側の再試行で成功・判定を覚える／失敗は覚えない／状況と VirusTotal の数を鍵に入れる・VirusTotal で決まるとき・空白だけの本文・鍵なし・用途ごとに同時に 3 つ・0.25 秒の間隔）。同じ流れを `apps/bot/tests/groq_fake.rs` が偽物をテストの中に立てて CI で毎回確かめる。回数制限の `retry-after` に上限が無いのは Python と同じ（見直しの候補） |
 | メッセージの検査の流れ（判定を集める → 危険なら消してロールを剥がす → ログチャンネルへ報告） | `services/security_service.py` の `handle_security_for_message` | `sycs_bot::message_security` | 本物の Python の流れを、Discord・VirusTotal・Groq を記録するだけの偽物に差し替えて回し、Discord への書き込み（送る・書き換える・消す・剥がす・ログ）と Groq に渡したものを順に書き出して基準にした（40 例）。Rust が同じ順に同じ中身（Embed の題・本文・色・項目・足元、ログの項目と色、剥がすロールの並び）を出すことを `apps/bot/tests/message_security_golden.rs` が CI で毎回確かめる（応答チャンネルの会話は見ない・信頼ユーザーとバイパスロール〔@everyone も〕・VirusTotal の 10 の境・走査の失敗の理由・走査が落ちても検査を続ける・リンク数過多・進み具合の書き換えの失敗・ログチャンネルが無いとき・文字の向きの細工・新規の 7 日の境・スパムの 4 回目と窓・VC の荒らし・消すのに失敗しても剥がす・剥がすロールが無い）。走査が落ちたときの理由の名前だけ言語で違う（Python は例外の型、Rust は panic）。同時に 4 本までと、終わる順がばらばらでも結果は渡した順であることは別のテストで確かめる。バイパスの判定の失敗で措置を見送る分岐は持ち込まない（設定はメモリから引くので失敗しない）。Python は結果の Embed の書き換えで通信の失敗（Discord の応答以外）が起きると最後のログを出さずに終わるが、Rust は出す。何を危険とみなすか（スパムだけでも消して剥がす、など）は Python のまま（見直しは移行のあと） |
+| スラッシュコマンドの枠組み（定義・振り分け・権限・返事・打たれた記録）と /log・/chat | `commands/__init__.py` / `guards.py` / `interaction_utils.py` / `activity_log.py` / `settings/log.py` / `settings/chat.py` | `sycs_bot::commands` | 定義（17 グループ・58 コマンド）は、Python の Bot が同期しているものをそのまま持つ（`definitions.json`）。Python 側のテストが、いまの Python の定義と一致することを毎回確かめる（食い違わせると落ちることも確かめた）。/log・/chat は、本物の Python のコマンドの中身を、記録するだけの偽物の interaction で呼んだ 16 例と、返事の本文・本人にだけ見せるか・書き換えたあとの設定（鍵の並びまで）が一致（`apps/bot/tests/commands_golden.rs`）。Discord への応答の形（最初の応答・flags 64）と設定の表への書き込み、登録が定義の全体を送ることは、送り先を偽物の Discord に向けて確かめる（`apps/bot/tests/commands_discord.rs`）。本物の Discord では試していない（本番の Bot も同じコマンドに応えるので、打つと本番の設定が書き換わる）。管理者の判定は discord.py と同じ（持ち主か、持っているロール・@everyone のどれかに管理者の権限）。まだ移していないコマンドは、その旨を返す（一覧は `NOT_PORTED_YET`。定義・移したもの・まだのものが食い違うとテストが落ちる） |
 | ログのレベルの名前 | `WARNING` | `WARN` を `WARNING` と書く | 管理画面は `WARNING` で比べる。`WARN` のままだと「警告以上」で警告が全部消える |
 | ログのファイル名 | `bot.log` / `bot.log.2026-11-24.gz` | 同じ | 移行中に同じディレクトリで 2 通りの名前が混ざると、片方の掃除が相手を見つけられない |
 
@@ -51,7 +52,15 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
   本番では起動しない。
 - **移している間、Rust の Bot は本番の compose に入れない。** 入れるのは切り替えの塊。
   手元で動かすときは `BOT_PROCESS_NAME=bot-rs` にし、本番の Python の Bot と並べるなら
-  `BOT_DEV_SIGNALS_ENABLED=false`（依頼を取り合うと、Python 側に届かなくなる）。
+  `BOT_DEV_SIGNALS_ENABLED=false`（依頼を取り合うと、Python 側に届かなくなる）と
+  `BOT_COMMANDS_ENABLED=false`（同じトークンで 2 つつなぐと、打たれたスラッシュコマンドは両方に届く。
+  両方が応えると片方の応答が失敗し、設定を書くコマンドは二重に書く）。
+- **スラッシュコマンドの定義は `apps/bot/src/commands/definitions.json` に全部持つ。** Python の Bot が
+  起動のたびに Discord に同期しているものそのまま（作り方は
+  `apps/bot/tests/fixtures/commands/generate_definitions.py`）。登録は全体の置き換えなので、一部だけ送ると
+  残りが Discord から消える。Rust の Bot は切り替えまで登録し直さない（`BOT_SYNC_COMMANDS` の既定は偽。
+  切り替えの塊で既定を真にする）。Python 側のコマンドや discord.py が変わって食い違ったら、Python の
+  テスト（`tests/test_rust_command_definitions.py`）が落ちる。
 - **本番の Bot のトークンで手元から確かめるときは `BOT_ONLY_GUILD_ID` を付ける。** 本番の Bot は
   複数のサーバーに入っているので、絞らないと他のサーバーの出入りに反応して、本番の利用者がいる
   チャンネルへ書いてしまう。本番では付けない。

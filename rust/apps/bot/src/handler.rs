@@ -7,8 +7,8 @@ use std::sync::{Arc, OnceLock};
 
 use serenity::all::{
     Cache, ChannelId, ChunkGuildFilter, Context, CreateMessage, EventHandler, Guild, GuildId,
-    GuildMemberUpdateEvent, Member, Message, MessageId, MessageUpdateEvent, Reaction, Ready, Role,
-    RoleId, ShardManager, Timestamp, User, VoiceState,
+    GuildMemberUpdateEvent, Interaction, Member, Message, MessageId, MessageUpdateEvent, Reaction,
+    Ready, Role, RoleId, ShardManager, Timestamp, User, VoiceState,
 };
 use serenity::async_trait;
 use sqlx::PgPool;
@@ -29,7 +29,7 @@ use crate::sticky::{self, StickyCtx, StickyLocks};
 use crate::vc_notify::{self, Filter, Plan, VcTracker};
 use crate::virustotal::VirusTotal;
 use crate::welcome::{self, Kind};
-use crate::{compat, message_logs, signals};
+use crate::{commands, compat, message_logs, signals};
 
 /// Bot が動いている間ずっと持っているもの。
 pub struct AppState {
@@ -384,6 +384,35 @@ impl EventHandler for Handler {
                 "BOT_ONLY_GUILD_ID が設定されています。このサーバー以外のイベントは扱いません"
             );
         }
+        if !self.state.config.commands_enabled {
+            info!("BOT_COMMANDS_ENABLED=false: スラッシュコマンドには応えません");
+        }
+        // 登録は全体の置き換えなので、明示されたときだけ（切り替えまでは Python の Bot が登録している）。
+        if self.state.config.sync_commands {
+            match commands::sync(&ctx.http).await {
+                Ok(count) => info!("[BOT] 同期したコマンド {count} 個"),
+                Err(e) => warn!("スラッシュコマンドを登録できませんでした: {e}"),
+            }
+        }
+    }
+
+    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        // 今はスラッシュコマンドだけ（ボタン・選択・補完は、それを使うコマンドを移すときに足す）。
+        let Interaction::Command(command) = interaction else {
+            return;
+        };
+        if !self.state.config.commands_enabled {
+            return;
+        }
+        // BOT_ONLY_GUILD_ID で絞っているときは、そのサーバーの中のコマンドだけ（DM も扱わない）。
+        let handled = match command.guild_id {
+            Some(guild_id) => self.handles(guild_id),
+            None => self.state.config.only_guild_id.is_none(),
+        };
+        if !handled {
+            return;
+        }
+        commands::dispatch(&self.state.settings, &ctx.cache, &ctx.http, &command).await;
     }
 
     async fn cache_ready(&self, _ctx: Context, guilds: Vec<GuildId>) {

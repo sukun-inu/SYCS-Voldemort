@@ -1,0 +1,18 @@
+[
+  {"id": "log-channel-first-time", "path": "log channel", "who": "admin", "options": {"channel": 123}, "before": {}},
+  {"id": "log-channel-keeps-other-keys-and-shows-level", "path": "log channel", "who": "admin", "options": {"channel": 456}, "before": {"log_level": "debug", "log_channel_id": 123, "welcome": {"enabled": true}}},
+  {"id": "log-channel-refuses-non-admin", "path": "log channel", "who": "member", "options": {"channel": 123}, "before": {"log_level": "ERROR"}},
+  {"id": "log-channel-refuses-outside-guild", "path": "log channel", "who": "dm", "options": {"channel": 123}, "before": {}},
+  {"id": "log-level-with-channel", "path": "log level", "who": "admin", "options": {"level": "INFO"}, "before": {"log_channel_id": 123, "log_level": "ERROR"}},
+  {"id": "log-level-without-channel", "path": "log level", "who": "admin", "options": {"level": "NONE"}, "before": {}},
+  {"id": "log-level-lowercase-is-stored-uppercase", "path": "log level", "who": "admin", "options": {"level": "debug"}, "before": {"log_channel_id": "456"}},
+  {"id": "log-level-zero-channel-is-unset", "path": "log level", "who": "admin", "options": {"level": "ERROR"}, "before": {"log_channel_id": 0}},
+  {"id": "log-level-unknown-is-refused-without-writing", "path": "log level", "who": "admin", "options": {"level": "verbose"}, "before": {"log_level": "INFO", "log_channel_id": 123}},
+  {"id": "log-level-refuses-non-admin", "path": "log level", "who": "member", "options": {"level": "DEBUG"}, "before": {"log_level": "INFO"}},
+  {"id": "chat-set", "path": "chat set", "who": "admin", "options": {"channel": 789}, "before": {"log_level": "INFO"}},
+  {"id": "chat-set-overwrites", "path": "chat set", "who": "admin", "options": {"channel": 790}, "before": {"response_channel_id": 789, "sticky": {}}},
+  {"id": "chat-set-refuses-non-admin", "path": "chat set", "who": "member", "options": {"channel": 789}, "before": {}},
+  {"id": "chat-clear-removes-the-key", "path": "chat clear", "who": "admin", "options": {}, "before": {"response_channel_id": 789, "log_level": "INFO"}},
+  {"id": "chat-clear-when-unset", "path": "chat clear", "who": "admin", "options": {}, "before": {"log_level": "INFO"}},
+  {"id": "chat-clear-refuses-outside-guild", "path": "chat clear", "who": "dm", "options": {}, "before": {"response_channel_id": 789}}
+]

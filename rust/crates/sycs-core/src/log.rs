@@ -61,6 +61,8 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     ("sycs_bot::vc_notify", "voice"),
     ("sycs_bot::security", "security"),
     ("sycs_bot::virustotal", "security"),
+    // Python の commands（スラッシュコマンドの入口と、打たれた記録）と同じ棚。
+    ("sycs_bot::commands", "command"),
     ("sycs_bot::moderation", "security"),
     ("sycs_bot::message_security", "security"),
     // Python の services.groq_client と同じ棚（会話・要約と共有の呼び出し口）。
@@ -572,6 +574,8 @@ mod tests {
             ("sycs_bot::vc_notify", "voice"),
             ("sycs_bot::security", "security"),
             ("sycs_bot::virustotal", "security"),
+            ("sycs_bot::commands", "command"),
+            ("sycs_bot::commands::settings", "command"),
             ("sycs_bot::moderation", "security"),
             ("sycs_bot::message_security", "security"),
             ("sycs_bot::groq", "ai"),

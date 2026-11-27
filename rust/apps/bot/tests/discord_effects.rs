@@ -11,14 +11,13 @@
 //! 設定のキャッシュに Postgres が要る（`SYCS_TEST_DATABASE_URL`）。手元の `cargo test` では飛ばし、CI は
 //! `--include-ignored` で必ず回す（`crates/sycs-core/tests/postgres.rs` と同じ）。
 
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
+mod support;
+
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use serenity::all::{Cache, GuildCreateEvent, HttpBuilder, Message, RoleId};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use sqlx::{AssertSqlSafe, PgPool};
+use serenity::all::{Cache, Message, RoleId};
 use sycs_bot::log_channel::{AvatarColours, LogSink};
 use sycs_bot::message_security::{
     self, Assess, Context, DiscordEffects, Judges, Scan, post_from_message,
@@ -27,8 +26,8 @@ use sycs_bot::moderation::Verdict;
 use sycs_bot::security::{RaidDetector, SpamDetector};
 use sycs_bot::virustotal::VtResult;
 use sycs_core::settings::SettingsCache;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
+
+use support::{Seen, user};
 
 const GUILD: &str = "1399617700363370556";
 const USER: &str = "80351110224678912";
@@ -37,70 +36,8 @@ const LOG_CHANNEL: &str = "1505310388051251261";
 const VOICE: &str = "777";
 const GUILD_AVATAR: &str = "aaaabbbbccccddddeeeeffff00001111";
 
-static COUNTER: AtomicU32 = AtomicU32::new(0);
-
-/// 空のスキーマに設定の表を作り、このサーバーの設定を 1 行入れる。
-async fn settings_pool(guild_settings: &Value) -> PgPool {
-    let url = std::env::var("SYCS_TEST_DATABASE_URL")
-        .expect("SYCS_TEST_DATABASE_URL が無い（CI では必須。手元では Postgres を立てて渡す）");
-    let schema = format!(
-        "t_fx_{}_{}",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::SeqCst)
-    );
-    let admin = PgPool::connect(&url)
-        .await
-        .expect("Postgres につながらない");
-    // スキーマ名はこのテストが英数字だけで作ったもの（外から来た文字列は入らない）。
-    sqlx::query(AssertSqlSafe(format!("CREATE SCHEMA {schema}")))
-        .execute(&admin)
-        .await
-        .unwrap();
-    admin.close().await;
-    let options: PgConnectOptions = url
-        .parse::<PgConnectOptions>()
-        .unwrap()
-        .options([("search_path", schema.as_str())]);
-    let pool = PgPoolOptions::new()
-        .max_connections(4)
-        .connect_with(options)
-        .await
-        .unwrap();
-    for ddl in [
-        "CREATE TABLE bot_settings_guild (guild_key text PRIMARY KEY, data jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now())",
-        "CREATE TABLE bot_settings_state (id smallint PRIMARY KEY, version bigint NOT NULL, root jsonb NOT NULL, imported_from text, imported_at timestamptz, updated_at timestamptz NOT NULL DEFAULT now())",
-        "INSERT INTO bot_settings_state (id, version, root) VALUES (1, 1, '{}')",
-    ] {
-        sqlx::query(ddl).execute(&pool).await.unwrap();
-    }
-    sqlx::query("INSERT INTO bot_settings_guild (guild_key, data) VALUES ($1, $2::jsonb)")
-        .bind(GUILD)
-        .bind(guild_settings.to_string())
-        .execute(&pool)
-        .await
-        .unwrap();
-    pool
-}
-
 fn role(id: &str, position: i64) -> Value {
-    json!({
-        "id": id, "name": format!("r{id}"), "color": 0,
-        "colors": {"primary_color": 0, "secondary_color": null, "tertiary_color": null},
-        "hoist": false, "position": position, "permissions": "0",
-        "managed": false, "mentionable": false, "flags": 0,
-    })
-}
-
-fn text_channel(id: &str, name: &str) -> Value {
-    json!({
-        "id": id, "type": 0, "guild_id": GUILD, "name": name, "position": 0,
-        "permission_overwrites": [], "nsfw": false, "rate_limit_per_user": 0,
-    })
-}
-
-fn user(id: &str, bot: bool) -> Value {
-    json!({"id": id, "username": "nelly", "discriminator": "0", "avatar": null,
-           "global_name": "表示名", "bot": bot})
+    support::role(id, position, 0)
 }
 
 fn voice_state(user_id: &str, channel_id: &str) -> Value {
@@ -111,38 +48,37 @@ fn voice_state(user_id: &str, channel_id: &str) -> Value {
     })
 }
 
-/// サーバー（ロールは位置がばらばら）。4242 の人は、キャッシュに無い VC（888）に入っていることになっている。読み込み済みのメンバーは、メッセージに付いてくるものと違うロールを持つ。
+/// サーバー（ロールは位置がばらばら）。4242 の人は、キャッシュに無い VC（888）に入っていることになっている。
+/// 読み込み済みのメンバーは、メッセージに付いてくるものと違うロールを持つ。
 fn guild() -> Value {
-    json!({
-        "id": GUILD, "name": "Media Server", "owner_id": "1",
-        "verification_level": 0, "default_message_notifications": 0, "explicit_content_filter": 0,
+    support::guild(
+        GUILD,
+        "1",
         // 低い順は 12（位置 1）→ 11（位置 3）→ 13（位置 5）→ 14（位置 7）。
-        "roles": [role(GUILD, 0), role("11", 3), role("12", 1), role("13", 5), role("14", 7)],
-        "emojis": [], "features": [], "mfa_level": 0, "system_channel_flags": 0,
-        "premium_tier": 0, "preferred_locale": "ja", "nsfw_level": 0, "stickers": [],
-        "premium_progress_bar_enabled": false, "joined_at": "2026-01-01T00:00:00+00:00",
-        "large": false, "member_count": 2,
-        "voice_states": [voice_state(USER, VOICE), voice_state("4242", "888")],
-        "members": [{
+        json!([
+            role(GUILD, 0),
+            role("11", 3),
+            role("12", 1),
+            role("13", 5),
+            role("14", 7)
+        ]),
+        json!([{
             "user": user(USER, false), "nick": "古いニック", "avatar": GUILD_AVATAR, "roles": ["11"],
             "joined_at": "2026-01-01T00:00:00+00:00", "deaf": false, "mute": false, "flags": 0,
-        }],
-        "channels": [
-            text_channel(CHANNEL, "general"),
-            text_channel(LOG_CHANNEL, "log"),
+        }]),
+        json!([
+            support::text_channel(GUILD, CHANNEL, "general"),
+            support::text_channel(GUILD, LOG_CHANNEL, "log"),
             {"id": VOICE, "type": 2, "guild_id": GUILD, "name": "vc", "position": 0,
              "permission_overwrites": [], "nsfw": false, "bitrate": 64000, "user_limit": 0,
              "rate_limit_per_user": 0},
-        ],
-        "threads": [], "presences": [], "stage_instances": [], "guild_scheduled_events": [],
-    })
+        ]),
+        json!([voice_state(USER, VOICE), voice_state("4242", "888")]),
+    )
 }
 
 fn cache() -> Cache {
-    let cache = Cache::new();
-    let mut event: GuildCreateEvent = serde_json::from_value(guild()).expect("サーバーの JSON");
-    cache.update(&mut event);
-    cache
+    support::cache_with(guild())
 }
 
 /// ゲートウェイから届く形のメッセージ。
@@ -167,95 +103,17 @@ fn member_payload() -> Value {
     })
 }
 
-/// 偽物の Discord が受けた要求。
-#[derive(Clone, Debug)]
-struct Seen {
-    method: String,
-    path: String,
-    reason: Option<String>,
-    body: Value,
-}
-
-fn http_response(status: u16, body: &str) -> Vec<u8> {
-    format!(
-        "HTTP/1.1 {status} X\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
-        body.len()
-    )
-    .into_bytes()
-}
-
-/// 偽物の Discord。メッセージの送信・書き換えにはメッセージを返し、削除は 204、ロール 13 だけ 403。
-async fn start_fake_discord() -> (String, Arc<Mutex<Vec<Seen>>>) {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let base = format!("http://{}", listener.local_addr().unwrap());
-    let seen: Arc<Mutex<Vec<Seen>>> = Arc::default();
-    let shared = Arc::clone(&seen);
-    tokio::spawn(async move {
-        loop {
-            let Ok((mut sock, _)) = listener.accept().await else {
-                return;
-            };
-            let seen = Arc::clone(&shared);
-            tokio::spawn(async move {
-                let mut buf = Vec::new();
-                let mut tmp = [0u8; 8192];
-                let header_end = loop {
-                    let n = sock.read(&mut tmp).await.unwrap_or(0);
-                    if n == 0 {
-                        return;
-                    }
-                    buf.extend_from_slice(&tmp[..n]);
-                    if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
-                        break i + 4;
-                    }
-                };
-                let head = String::from_utf8_lossy(&buf[..header_end]).to_string();
-                let header = |name: &str| {
-                    head.lines().find_map(|l| {
-                        let (k, v) = l.split_once(':')?;
-                        k.eq_ignore_ascii_case(name).then(|| v.trim().to_string())
-                    })
-                };
-                let length: usize = header("content-length")
-                    .and_then(|v| v.parse().ok())
-                    .unwrap_or(0);
-                while buf.len() < header_end + length {
-                    let n = sock.read(&mut tmp).await.unwrap_or(0);
-                    if n == 0 {
-                        break;
-                    }
-                    buf.extend_from_slice(&tmp[..n]);
-                }
-                let mut first = head.lines().next().unwrap_or("").split(' ');
-                let method = first.next().unwrap_or("").to_string();
-                let path = first.next().unwrap_or("").to_string();
-                let body = serde_json::from_slice(&buf[header_end..]).unwrap_or(Value::Null);
-                seen.lock().unwrap().push(Seen {
-                    method: method.clone(),
-                    path: path.clone(),
-                    reason: header("x-audit-log-reason"),
-                    body,
-                });
-                let sent_message = json!({
-                    "id": "900", "channel_id": LOG_CHANNEL, "author": user("1350672236612288633", true),
-                    "content": "", "timestamp": "2026-11-27T00:00:00+00:00", "edited_timestamp": null,
-                    "tts": false, "mention_everyone": false, "mentions": [], "mention_roles": [],
-                    "attachments": [], "embeds": [], "pinned": false, "type": 0,
-                })
-                .to_string();
-                let response = match method.as_str() {
-                    "POST" | "PATCH" => http_response(200, &sent_message),
-                    "DELETE" if path.ends_with("/roles/13") => {
-                        http_response(403, r#"{"message": "Missing Permissions", "code": 50013}"#)
-                    }
-                    "DELETE" => http_response(204, ""),
-                    _ => http_response(404, r#"{"message": "unknown", "code": 0}"#),
-                };
-                let _ = sock.write_all(&response).await;
-            });
-        }
-    });
-    (base, seen)
+/// 偽物の Discord の答え方。メッセージの送信・書き換えにはメッセージを返し、削除は 204、ロール 13 だけ 403。
+fn respond(method: &str, path: &str) -> (u16, String) {
+    match method {
+        "POST" | "PATCH" => (200, support::sent_message(LOG_CHANNEL)),
+        "DELETE" if path.ends_with("/roles/13") => (
+            403,
+            r#"{"message": "Missing Permissions", "code": 50013}"#.into(),
+        ),
+        "DELETE" => (204, String::new()),
+        _ => (404, r#"{"message": "unknown", "code": 0}"#.into()),
+    }
 }
 
 /// メッセージに付いてくるメンバーの情報で組み立てること（ロールは低い順、無いロールは捨てる、アバターは
@@ -318,13 +176,10 @@ fn the_post_is_built_like_discord_py() {
 
 /// VirusTotal が危険（12）と答える投稿を、この設定のサーバーで検査して、偽物の Discord が受けた要求を返す。
 async fn check_a_dangerous_post(guild_settings: Value) -> Vec<Seen> {
-    let (base, seen) = start_fake_discord().await;
-    let http = HttpBuilder::new("test-token")
-        .proxy(base)
-        .ratelimiter_disabled(true)
-        .build();
+    let (base, seen) = support::start_fake_discord(respond).await;
+    let http = support::http_to(&base);
     let cache = cache();
-    let pool = settings_pool(&guild_settings).await;
+    let pool = support::settings_pool(GUILD, &guild_settings).await;
     let settings = SettingsCache::start(pool, Duration::from_secs(60))
         .await
         .unwrap();

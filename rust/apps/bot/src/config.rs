@@ -45,6 +45,16 @@ pub struct BotConfig {
     /// 入っているので、絞らないと、確かめている間に他のサーバーの出入りへ反応して、本番の
     /// 利用者がいるチャンネルへ書いてしまう。本番では設定しない。
     pub only_guild_id: Option<u64>,
+    /// スラッシュコマンドに応えるか（`BOT_COMMANDS_ENABLED`、既定は応える）。
+    ///
+    /// **本番の Python の Bot と並べて動かすときは偽にすること。** 同じトークンで 2 つつなぐと、打たれた
+    /// コマンドは両方に届く。両方が応えると片方の応答が失敗し、設定を書くコマンドは二重に書く。
+    pub commands_enabled: bool,
+    /// 起動時にスラッシュコマンドの定義を Discord に登録し直すか（`BOT_SYNC_COMMANDS`、既定はしない）。
+    ///
+    /// 登録は全体の置き換え。Python の Bot は起動のたびに行っている。Rust の Bot は、切り替え（B11）で
+    /// 既定を「する」に変える。それまでは、確かめたいときだけ明示して使う。
+    pub sync_commands: bool,
     /// VirusTotal（鍵・待ち時間・上限）。
     pub vt: VtConfig,
     /// VirusTotal を同時に走らせる数（`VT_SCAN_CONCURRENCY`、既定 4・下限 1）。
@@ -95,6 +105,8 @@ impl BotConfig {
             only_guild_id: u64::try_from(env.int("BOT_ONLY_GUILD_ID", 0, Some(0), None))
                 .ok()
                 .filter(|id| *id > 0),
+            commands_enabled: env.boolean("BOT_COMMANDS_ENABLED", true),
+            sync_commands: env.boolean("BOT_SYNC_COMMANDS", false),
             vt: VtConfig::from_env(env),
             vt_scan_concurrency: usize::try_from(env.int(
                 "VT_SCAN_CONCURRENCY",
@@ -174,6 +186,11 @@ mod tests {
         assert!(c.dev_signals_enabled);
         assert_eq!(c.only_guild_id, None);
         assert!(c.handles(1) && c.handles(2));
+        assert!(c.commands_enabled, "切り替えたら既定でコマンドに応える");
+        assert!(
+            !c.sync_commands,
+            "切り替え（B11）までは、明示しない限り登録し直さない"
+        );
         assert_eq!(c.vt_scan_concurrency, 4);
         assert_eq!(c.moderation_cache_ttl, 300.0);
         assert_eq!(c.vt.api_key, None);
