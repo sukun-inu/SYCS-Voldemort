@@ -17,7 +17,10 @@ use serenity::all::{ApplicationId, Cache, CommandInteraction, ComponentInteracti
 use sycs_bot::commands;
 use sycs_bot::commands::picker::Pickers;
 use sycs_bot::commands::quake::Screens;
+use sycs_bot::log_channel::AvatarColours;
+use sycs_bot::metal::{MetalConfig, MetalPrices};
 use sycs_bot::sticky::StickyLocks;
+use sycs_core::env::Env;
 use sycs_core::settings::SettingsCache;
 
 use support::{Seen, user};
@@ -33,6 +36,8 @@ const ADMINISTRATOR: u64 = 1 << 3;
 fn respond(method: &str, path: &str) -> (u16, String) {
     match method {
         "POST" if path.contains("/interactions/") => (204, String::new()),
+        // あとからの送信（/metal）は、送ったメッセージを返す。
+        "POST" if path.contains("/webhooks/") => (200, support::sent_message(CHANNEL)),
         "PUT" if path.ends_with("/commands") => (200, "[]".into()),
         _ => (404, r#"{"message": "unknown", "code": 0}"#.into()),
     }
@@ -94,6 +99,8 @@ struct Stage {
     pickers: Pickers,
     sticky_locks: StickyLocks,
     quake_screens: Screens,
+    metal: MetalPrices,
+    colours: AvatarColours,
     seen: Arc<Mutex<Vec<Seen>>>,
 }
 
@@ -110,6 +117,8 @@ impl Stage {
             pickers: Pickers::default(),
             sticky_locks: StickyLocks::default(),
             quake_screens: Screens::default(),
+            metal: MetalPrices::new(MetalConfig::from_env(&Env::from_fn(|_| None))),
+            colours: AvatarColours::new(),
             seen,
         }
     }
@@ -123,6 +132,9 @@ impl Stage {
             admin_site_url: "https://admin.example/login",
             sticky_locks: &self.sticky_locks,
             quake_screens: &self.quake_screens,
+            metal: &self.metal,
+            colours: &self.colours,
+            metals_site_url: "https://metals.example/",
         }
     }
 
@@ -501,6 +513,58 @@ async fn the_quake_type_screen_writes_only_on_save() {
     )
     .await;
     assert_eq!(stage.seen().len(), 4);
+}
+
+/// 打たれた /metal（`g` グラム）。
+fn metal_command(kind: &str, grams: f64) -> Value {
+    json!({
+        "id": "8005", "name": "metal", "type": 1,
+        "options": [{"name": kind, "type": 1, "options": [{"name": "g", "type": 10, "value": grams}]}],
+    })
+}
+
+/// /metal: 先に「考え中」（種類 5）を返し、断りの文は、あとからの送信（Webhook）で本人にだけ見せること。
+/// /metal all の 0 グラムは、考え中を返す前に、最初の応答（種類 4）で断ること。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn metal_defers_then_follows_up() {
+    // 値段の API の鍵は入れていない（取りに行かずに断る。外へは出ない）。
+    let stage = Stage::new(&json!({})).await;
+    // あとからの送信にはアプリの ID が要る（本番の Bot では、ゲートウェイの Ready で serenity が入れる）。
+    stage
+        .http
+        .set_application_id(ApplicationId::new(APP.parse().unwrap()));
+    commands::dispatch(
+        &stage.deps(),
+        &interaction(OWNER, json!([]), metal_command("gold", 10.0)),
+    )
+    .await;
+    let seen = stage.seen();
+    assert_eq!(seen.len(), 2, "{seen:#?}");
+    assert_eq!(seen[0].path, "/api/v10/interactions/7000/tok/callback");
+    assert_eq!(seen[0].body["type"], 5, "考え中");
+    assert_eq!(seen[1].method, "POST");
+    assert_eq!(seen[1].path, format!("/api/v10/webhooks/{APP}/tok"));
+    assert_eq!(
+        seen[1].body["content"],
+        "エラーだ。余の力をもってしても処理できなかった。しばらく待ってから試せ。"
+    );
+    assert_eq!(seen[1].body["flags"], 64, "断りは本人にだけ");
+
+    let stage = Stage::new(&json!({})).await;
+    commands::dispatch(
+        &stage.deps(),
+        &interaction(OWNER, json!([]), metal_command("all", 0.0)),
+    )
+    .await;
+    let seen = stage.seen();
+    assert_eq!(seen.len(), 1, "{seen:#?}");
+    assert_eq!(seen[0].body["type"], 4);
+    assert_eq!(seen[0].body["data"]["flags"], 64);
+    assert_eq!(
+        seen[0].body["data"]["content"],
+        "グラム数は正の値で指定せよ。"
+    );
 }
 
 /// /bot settings は Embed と管理画面へのリンクのボタンを、/bot help は誰にでもコマンドの一覧を返すこと。

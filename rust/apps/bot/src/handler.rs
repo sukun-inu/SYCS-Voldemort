@@ -29,6 +29,7 @@ use crate::log_channel::{self, Author, AvatarColours, LogSink};
 use crate::members::{self, LogEntry};
 use crate::message_cache::{CachedMessage, MessageCache};
 use crate::message_security::{self, DiscordEffects, Judges, Post};
+use crate::metal::MetalPrices;
 use crate::moderation::Moderation;
 use crate::news::{self, DiscordOutlet, News};
 use crate::reaction_roles::{self, Change, ReactionEvent};
@@ -78,6 +79,8 @@ pub struct AppState {
     pub pickers: commands::picker::Pickers,
     /// 開いている地震の通知の種類の画面（/quake type）の覚え。
     pub quake_screens: commands::quake::Screens,
+    /// 貴金属の値段の取り口（/metal。取った値段をしばらく覚える）。
+    pub metal: MetalPrices,
     shard_manager: OnceLock<Arc<ShardManager>>,
 }
 
@@ -101,6 +104,7 @@ impl AppState {
         let news = News::new(config.news.clone(), groq);
         let judges = Judges::new(vt, moderation, config.vt_scan_concurrency);
         let user_state = user_state::Recorder::new(pool.clone(), config.user_state.clone());
+        let metal = MetalPrices::new(config.metal.clone());
         Self {
             config,
             pool,
@@ -120,6 +124,7 @@ impl AppState {
             chats,
             pickers: commands::picker::Pickers::default(),
             quake_screens: commands::quake::Screens::default(),
+            metal,
             shard_manager: OnceLock::new(),
         }
     }
@@ -653,6 +658,9 @@ impl EventHandler for Handler {
             admin_site_url: &self.state.config.admin_site_url,
             sticky_locks: &self.state.sticky_locks,
             quake_screens: &self.state.quake_screens,
+            metal: &self.state.metal,
+            colours: &self.state.colours,
+            metals_site_url: &self.state.config.metals_site_url,
         };
         match &interaction {
             Interaction::Command(command) => commands::dispatch(&deps, command).await,

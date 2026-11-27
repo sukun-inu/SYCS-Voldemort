@@ -20,6 +20,7 @@ pub mod members;
 pub mod message_cache;
 pub mod message_logs;
 pub mod message_security;
+pub mod metal;
 pub mod moderation;
 pub mod news;
 pub mod python_repr;

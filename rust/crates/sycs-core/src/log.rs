@@ -65,6 +65,9 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     ("sycs_bot::user_state", "userstate"),
     // Python の commands（スラッシュコマンドの入口と、打たれた記録）と同じ棚。
     ("sycs_bot::commands", "command"),
+    // Python の services.metal_service・commands.metal_commands（metal）と同じ棚。
+    ("sycs_bot::metal", "metal"),
+    ("sycs_bot::commands::metal", "metal"),
     ("sycs_bot::moderation", "security"),
     ("sycs_bot::message_security", "security"),
     // Python の services.groq_client と同じ棚（会話・要約と共有の呼び出し口）。
@@ -588,6 +591,8 @@ mod tests {
             ("sycs_bot::commands", "command"),
             ("sycs_bot::commands::settings", "command"),
             ("sycs_bot::commands::quake", "command"),
+            ("sycs_bot::commands::metal", "metal"),
+            ("sycs_bot::metal", "metal"),
             ("sycs_bot::moderation", "security"),
             ("sycs_bot::message_security", "security"),
             ("sycs_bot::groq", "ai"),
