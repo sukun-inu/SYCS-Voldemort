@@ -36,6 +36,7 @@ clock = {"t": NOW}
 
 
 def embed_dict(e):
+    """Embed から、比べる項目（題・本文・色・項目・足元）だけを取り出す。"""
     d = e.to_dict()
     return {
         "title": d.get("title"),
@@ -47,10 +48,12 @@ def embed_dict(e):
 
 
 def http_error():
+    """Discord が断ったときの例外（消せない・書き換えられないときに使う）。"""
     return discord.HTTPException(MagicMock(status=404, reason="Not Found"), "Unknown Message")
 
 
 async def run(case):
+    """例を 1 つ回し、Discord への書き込みと Groq に渡したもの（順に）と、走査した URL を返す。"""
     calls = []
     scanned = []
     spam_detection._user_message_times.clear()
@@ -70,6 +73,7 @@ async def run(case):
     fail_at = set(case.get("edit_fail_at", []))
 
     async def edit(embed):
+        """進み具合の Embed の書き換え。例が指定した回で失敗させる。"""
         edits["n"] += 1
         calls.append(["edit", embed_dict(embed)])
         if edits["n"] in fail_at:
@@ -78,10 +82,12 @@ async def run(case):
     progress = SimpleNamespace(edit=edit)
 
     async def send_log_embed(bot, guild_id, level, embed):
+        """ログチャンネルへの Embed の送信。ログチャンネルが無い例では None を返す。"""
         calls.append(["send", level, embed_dict(embed)])
         return progress if case.get("log_channel", True) else None
 
     async def log_action(bot, guild_id, level, message, user=None, fields=None, embed_color=None):
+        """ログ 1 件の送信（レベル・本文・項目・色を記録する）。"""
         calls.append(
             [
                 "log",
@@ -93,6 +99,7 @@ async def run(case):
         )
 
     async def scan(session, url):
+        """VirusTotal の走査。例が決めた結果を返すか、例外を投げる。"""
         scanned.append(url)
         r = case.get("vt", {}).get(url)
         if r == "raise":
@@ -102,6 +109,7 @@ async def run(case):
         return dict(r)
 
     async def assess(text, vt_results, spam_count=0, min_interval=float("inf"), is_new_member=False):
+        """Groq の判定。渡されたものを記録して、例が決めた判定を返す。"""
         calls.append(
             [
                 "assess",
@@ -115,6 +123,7 @@ async def run(case):
         return case.get("gpt", "SAFE")
 
     async def remove_roles(*roles, reason=None):
+        """ロールの剥奪（剥がすロールの並びと理由を記録する）。"""
         calls.append(["strip", [r.id for r in roles], reason])
 
     member = MagicMock(spec=discord.Member)
@@ -138,6 +147,7 @@ async def run(case):
     )
 
     async def delete_and_record():
+        """メッセージの削除（記録してから消す。例によっては失敗する）。"""
         calls.append(["delete"])
         await delete()
 
@@ -155,6 +165,7 @@ async def run(case):
 
 
 async def main():
+    """全部の例を回して、1 行に 1 例ずつ書き出す。"""
     out = []
     for case in cases:
         calls, scanned = await run(case)
