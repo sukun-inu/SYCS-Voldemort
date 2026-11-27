@@ -624,10 +624,11 @@ impl EventHandler for Handler {
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        // スラッシュコマンドと、選択の画面の部品（補完は、それを使うコマンドを移すときに足す）。
+        // スラッシュコマンドと、選択の画面の部品と、引数の補完。
         let guild_id = match &interaction {
             Interaction::Command(command) => command.guild_id,
             Interaction::Component(component) => component.guild_id,
+            Interaction::Autocomplete(command) => command.guild_id,
             _ => return,
         };
         if !self.state.config.commands_enabled {
@@ -647,10 +648,12 @@ impl EventHandler for Handler {
             http: &ctx.http,
             pickers: &self.state.pickers,
             admin_site_url: &self.state.config.admin_site_url,
+            sticky_locks: &self.state.sticky_locks,
         };
         match &interaction {
             Interaction::Command(command) => commands::dispatch(&deps, command).await,
             Interaction::Component(component) => commands::component(&deps, component).await,
+            Interaction::Autocomplete(command) => commands::autocomplete(&deps, command).await,
             _ => {}
         }
     }

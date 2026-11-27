@@ -125,10 +125,15 @@ fn run(case: &Value) -> Value {
         guild_settings: Some(&before),
         pickers: &pickers,
         admin_site_url: ADMIN_SITE_URL,
+        place: Default::default(),
     };
     let reply = match commands::plan(route, &input).unwrap() {
         Planned::Reply(reply) => *reply,
         Planned::Write(write) => write(&mut settings),
+        // 返事のあとに仕事があるコマンド（/sticky）は、別の基準で比べる（commands_server_golden.rs）。
+        Planned::ReplyThen(..) | Planned::WriteThen(..) => {
+            panic!("返事のあとの仕事は、ここでは扱わない")
+        }
     };
     // 選択の画面: 選ぶ・確定を押す、の手順ごとの応答。
     let token = token_of(&reply);
@@ -220,6 +225,7 @@ fn a_missing_required_option_is_an_error() {
         guild_settings: None,
         pickers: &pickers,
         admin_site_url: ADMIN_SITE_URL,
+        place: Default::default(),
     };
     for path in ["log channel", "log level", "chat set"] {
         let route = commands::route(path).unwrap();

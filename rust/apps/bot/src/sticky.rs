@@ -201,6 +201,16 @@ async fn post_latest(c: &StickyCtx<'_>, guild_id: u64, channel_id: u64) {
     }
 }
 
+/// いますぐ貼り直す（/sticky set が、返事を返したあとで呼ぶ）。Python の `post_sticky`。
+///
+/// 発言のたびの貼り直しと同じ排他を通る。走っている貼り直しがあれば、終わるのを待ってから貼る。
+pub async fn post_now(c: &StickyCtx<'_>, guild_id: u64, channel_id: u64) {
+    let lock = c.locks.lock_for(channel_id);
+    let _guard = lock.lock().await;
+    c.locks.set_again(channel_id, false);
+    post_latest(c, guild_id, channel_id).await;
+}
+
 /// 管理画面からの指示（貼る・消す）を片付ける。Python の `process_pending_stickies`。
 /// `handles` が偽のギルドは飛ばす（`BOT_ONLY_GUILD_ID`）。
 pub async fn process_pending(c: &StickyCtx<'_>, handles: impl Fn(u64) -> bool) {

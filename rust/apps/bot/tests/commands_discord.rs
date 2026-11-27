@@ -16,6 +16,7 @@ use serde_json::{Value, json};
 use serenity::all::{ApplicationId, Cache, CommandInteraction, ComponentInteraction, Http};
 use sycs_bot::commands;
 use sycs_bot::commands::picker::Pickers;
+use sycs_bot::sticky::StickyLocks;
 use sycs_core::settings::SettingsCache;
 
 use support::{Seen, user};
@@ -90,6 +91,7 @@ struct Stage {
     cache: Cache,
     settings: Arc<SettingsCache>,
     pickers: Pickers,
+    sticky_locks: StickyLocks,
     seen: Arc<Mutex<Vec<Seen>>>,
 }
 
@@ -104,6 +106,7 @@ impl Stage {
                 .await
                 .unwrap(),
             pickers: Pickers::default(),
+            sticky_locks: StickyLocks::default(),
             seen,
         }
     }
@@ -115,6 +118,7 @@ impl Stage {
             http: &self.http,
             pickers: &self.pickers,
             admin_site_url: "https://admin.example/login",
+            sticky_locks: &self.sticky_locks,
         }
     }
 
@@ -225,7 +229,7 @@ async fn only_administrators_may_change_settings() {
 #[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
 async fn commands_not_ported_yet_say_so() {
     let data = json!({
-        "id": "8001", "name": "sticky", "type": 1,
+        "id": "8001", "name": "dict", "type": 1,
         "options": [{"name": "list", "type": 1, "options": []}],
     });
     let before = json!({"sticky": {}});
