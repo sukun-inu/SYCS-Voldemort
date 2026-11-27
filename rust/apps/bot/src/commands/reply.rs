@@ -1,6 +1,6 @@
 //! スラッシュコマンドの返事。Python の `commands/interaction_utils.py` と `commands/guards.py` の文言。
 
-use serenity::all::CreateEmbed;
+use serenity::all::{CreateActionRow, CreateEmbed};
 
 /// メッセージ本文の上限（文字数）。
 pub const MESSAGE_BUDGET: usize = 2000;
@@ -23,8 +23,10 @@ pub const NOT_PORTED: &str = "❌ このコマンドはまだ使えぬ。しば�
 pub struct Reply {
     /// 本文。
     pub content: Option<String>,
-    /// Embed。
-    pub embed: Option<CreateEmbed>,
+    /// Embed（並べた順に出る）。
+    pub embeds: Vec<CreateEmbed>,
+    /// ボタンや選択の部品（行ごと）。
+    pub components: Vec<CreateActionRow>,
     /// 打った人にだけ見せるか。
     pub ephemeral: bool,
 }
@@ -34,7 +36,8 @@ impl Reply {
     pub fn ephemeral(content: impl Into<String>) -> Self {
         Self {
             content: Some(content.into()),
-            embed: None,
+            embeds: Vec::new(),
+            components: Vec::new(),
             ephemeral: true,
         }
     }
