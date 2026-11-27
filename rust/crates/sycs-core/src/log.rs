@@ -53,6 +53,14 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     ("sycs_core::url_safety", "security"),
     ("sycs_core::ttl_cache", "system"),
     ("sycs_bot", "bot"),
+    // Bot の部品は、Python の対応するモジュールと同じ棚（services.welcome_service → welcome など）。
+    ("sycs_bot::welcome", "welcome"),
+    ("sycs_bot::sticky", "sticky"),
+    ("sycs_bot::reaction_roles", "reactionrole"),
+    ("sycs_bot::log_channel", "auditlog"),
+    ("sycs_bot::vc_notify", "voice"),
+    ("sycs_bot::security", "security"),
+    ("sycs_bot::virustotal", "security"),
     ("voice_check", "voice"),
     ("songbird", "voice"),
     ("davey", "voice"),
@@ -551,6 +559,19 @@ mod tests {
         assert_eq!(category_for("sycs_core::settings"), "settings");
         // Bot のログは Python の Bot と同じ棚（bot）に並ぶこと。
         assert_eq!(category_for("sycs_bot::handler"), "bot");
+        // Bot の部品は Python の対応するモジュールと同じ棚に並ぶこと。
+        for (target, category) in [
+            ("sycs_bot::welcome", "welcome"),
+            ("sycs_bot::sticky", "sticky"),
+            ("sycs_bot::reaction_roles", "reactionrole"),
+            ("sycs_bot::log_channel", "auditlog"),
+            ("sycs_bot::vc_notify", "voice"),
+            ("sycs_bot::security", "security"),
+            ("sycs_bot::virustotal", "security"),
+            ("sycs_bot::members", "bot"),
+        ] {
+            assert_eq!(category_for(target), category, "{target}");
+        }
         assert_eq!(category_for("something_new"), DEFAULT_CATEGORY);
     }
 
