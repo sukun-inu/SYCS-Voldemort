@@ -11,12 +11,16 @@
 //! 移した中身（今は /log・/chat・/trusted・/bypass・/bot）は、設定を読み書きして返事を作るだけの関数に
 //! してある（[`settings`]・[`overview`]）。人数の決まっていない選択（/trusted・/bypass の追加と削除）は、
 //! 選ぶ部品と「確定」のボタンの画面で受ける（[`picker`]）。
+//!
+//! サーバーの設定のコマンド（/greeting・/vcnotify・/sticky・/reactionrole・/news）は [`server`] に置く。
+//! 返事を送ったあとの仕事（/sticky の貼る・剥がす。[`After`]）と、引数の補完（[`autocomplete`]）もそこにある。
 
 pub mod activity;
 pub mod guards;
 pub mod overview;
 pub mod picker;
 pub mod reply;
+pub mod server;
 pub mod settings;
 
 use std::time::Instant;
@@ -33,6 +37,9 @@ use tracing::{error, info, warn};
 use self::guards::Standing;
 use self::picker::{Part, PickerKind, Pickers, Step};
 use self::reply::Reply;
+pub use self::server::autocomplete;
+use self::server::{After, Place, ServerRoute};
+use crate::sticky::StickyLocks;
 use crate::vc_notify;
 
 /// Discord に登録する定義（JSON の配列）。Python の Bot が `bot.tree.sync()` で送っているものそのまま。
@@ -103,6 +110,8 @@ pub enum Route {
     BotSettings,
     /// `/bot help`
     BotHelp,
+    /// サーバーの設定のコマンド（/greeting・/vcnotify・/sticky・/reactionrole・/news）。
+    Server(ServerRoute),
 }
 
 /// 移したコマンドの道すじ。
@@ -119,6 +128,46 @@ pub const PORTED: &[(&str, Route)] = &[
     ("bypass list", Route::BypassList),
     ("bot settings", Route::BotSettings),
     ("bot help", Route::BotHelp),
+    (
+        "greeting welcome channel",
+        Route::Server(ServerRoute::WelcomeChannel),
+    ),
+    (
+        "greeting welcome message",
+        Route::Server(ServerRoute::WelcomeMessage),
+    ),
+    (
+        "greeting goodbye channel",
+        Route::Server(ServerRoute::GoodbyeChannel),
+    ),
+    (
+        "greeting goodbye message",
+        Route::Server(ServerRoute::GoodbyeMessage),
+    ),
+    (
+        "greeting status",
+        Route::Server(ServerRoute::GreetingStatus),
+    ),
+    ("vcnotify set", Route::Server(ServerRoute::VcNotifySet)),
+    ("vcnotify clear", Route::Server(ServerRoute::VcNotifyClear)),
+    ("sticky set", Route::Server(ServerRoute::StickySet)),
+    ("sticky clear", Route::Server(ServerRoute::StickyClear)),
+    ("sticky list", Route::Server(ServerRoute::StickyList)),
+    (
+        "reactionrole add",
+        Route::Server(ServerRoute::ReactionRoleAdd),
+    ),
+    (
+        "reactionrole remove",
+        Route::Server(ServerRoute::ReactionRoleRemove),
+    ),
+    (
+        "reactionrole list",
+        Route::Server(ServerRoute::ReactionRoleList),
+    ),
+    ("news add", Route::Server(ServerRoute::NewsAdd)),
+    ("news remove", Route::Server(ServerRoute::NewsRemove)),
+    ("news list", Route::Server(ServerRoute::NewsList)),
 ];
 
 /// 定義にはあるが、中身をまだ移していないコマンド。移したら [`PORTED`] へ動かす
@@ -128,22 +177,6 @@ pub const NOT_PORTED_YET: &[&str] = &[
     "metal silver",
     "metal platinum",
     "metal all",
-    "greeting welcome channel",
-    "greeting welcome message",
-    "greeting goodbye channel",
-    "greeting goodbye message",
-    "greeting status",
-    "vcnotify set",
-    "vcnotify clear",
-    "sticky set",
-    "sticky clear",
-    "sticky list",
-    "reactionrole add",
-    "reactionrole remove",
-    "reactionrole list",
-    "news add",
-    "news remove",
-    "news list",
     "quake channel",
     "quake min_scale",
     "quake status",
@@ -223,6 +256,8 @@ pub enum CommandError {
     Write(WriteError),
     /// 必須の引数が届いていない（定義と食い違う。ふつうは起きない）。
     MissingOption(&'static str),
+    /// 設定が読めない形をしている（辞書のはずのところが文字列、など。Python では例外になるところ）。
+    BrokenSetting(&'static str),
 }
 
 impl std::fmt::Display for CommandError {
@@ -230,6 +265,7 @@ impl std::fmt::Display for CommandError {
         match self {
             Self::Write(e) => write!(f, "設定を書けませんでした: {e}"),
             Self::MissingOption(name) => write!(f, "引数 {name} がありません"),
+            Self::BrokenSetting(name) => write!(f, "設定 {name} の形が読めません"),
         }
     }
 }
@@ -272,6 +308,10 @@ pub enum Planned {
     Reply(Box<Reply>),
     /// 設定を書き換えて、その結果から返事を作る（[`SettingsCache::transact`] の中で呼ぶ）。
     Write(Box<dyn FnOnce(&mut Settings) -> Reply + Send>),
+    /// 設定に触らずに返し、返事を送ったあとで仕事をする（/sticky clear の剥がす）。
+    ReplyThen(Box<Reply>, After),
+    /// 設定を書き換えて返し、返事を送ったあとで仕事をする（/sticky set の貼る）。
+    WriteThen(Box<dyn FnOnce(&mut Settings) -> Reply + Send>, After),
 }
 
 /// コマンドの片付け方を決めるのに要るもの。
@@ -290,6 +330,8 @@ pub struct PlanInput<'a> {
     pub pickers: &'a Pickers,
     /// 管理画面の場所（リンクのボタン）。
     pub admin_site_url: &'a str,
+    /// 打たれた場所（/sticky が、打たれたチャンネルとその種類を見る）。
+    pub place: Place,
 }
 
 /// 打たれたコマンドをどう片付けるかを決める（権限・引数を見る。Discord にも DB にも触らない）。
@@ -303,6 +345,10 @@ pub fn plan(route: Route, input: &PlanInput<'_>) -> Result<Planned, CommandError
             components: overview::admin_site_row(input.admin_site_url),
             ephemeral: true,
         });
+    }
+    // サーバーの設定のコマンドは、権限を中で見る（一覧と状況の表示は、管理者でなくても打てる）。
+    if let Route::Server(route) = route {
+        return server::plan(route, input);
     }
     if let Some(text) = guards::refusal_for_admin_only(input.standing) {
         return reply(Reply::ephemeral(text));
@@ -365,6 +411,7 @@ pub fn plan(route: Route, input: &PlanInput<'_>) -> Result<Planned, CommandError
         }),
         // 上で返している。
         Route::BotHelp => reply(Reply::default()),
+        Route::Server(route) => server::plan(route, input),
     }
 }
 
@@ -380,15 +427,18 @@ pub struct Deps<'a> {
     pub pickers: &'a Pickers,
     /// 管理画面の場所。
     pub admin_site_url: &'a str,
+    /// スティッキーのチャンネルごとの排他（/sticky set が、返事のあとで貼るときに通る）。
+    pub sticky_locks: &'a StickyLocks,
 }
 
 /// 移した中身を実行して、返事を作る。
+/// 返事を送ったあとにする仕事（/sticky の貼る・剥がす）があれば、それも返す。
 pub async fn run(
     deps: &Deps<'_>,
     route: Route,
     command: &CommandInteraction,
     options: &[CommandDataOption],
-) -> Result<Reply, CommandError> {
+) -> Result<(Reply, Option<After>), CommandError> {
     let snapshot = deps.settings.snapshot();
     let input = PlanInput {
         standing: standing_of(deps.cache, command),
@@ -398,10 +448,13 @@ pub async fn run(
         guild_settings: command.guild_id.and_then(|g| snapshot.guild(g.get())),
         pickers: deps.pickers,
         admin_site_url: deps.admin_site_url,
+        place: server::place_of(deps.cache, command),
     };
     match plan(route, &input)? {
-        Planned::Reply(reply) => Ok(*reply),
-        Planned::Write(write) => Ok(deps.settings.transact(write).await?),
+        Planned::Reply(reply) => Ok((*reply, None)),
+        Planned::Write(write) => Ok((deps.settings.transact(write).await?, None)),
+        Planned::ReplyThen(reply, after) => Ok((*reply, Some(after))),
+        Planned::WriteThen(write, after) => Ok((deps.settings.transact(write).await?, Some(after))),
     }
 }
 
@@ -454,19 +507,39 @@ pub async fn dispatch(deps: &Deps<'_>, command: &CommandInteraction) {
         Some(route) => run(deps, route, command, options).await,
         None => {
             warn!("[CMD] /{path} {who} まだ移していないコマンドです");
-            Ok(Reply::ephemeral(reply::NOT_PORTED))
+            Ok((Reply::ephemeral(reply::NOT_PORTED), None))
         }
     };
-    let (reply, failure) = match outcome {
-        Ok(reply) => (reply, None),
-        Err(e) => (Reply::ephemeral(reply::FAILED), Some(e.to_string())),
+    let (reply, after, failure) = match outcome {
+        Ok((reply, after)) => (reply, after, None),
+        Err(e) => (Reply::ephemeral(reply::FAILED), None, Some(e.to_string())),
     };
     if let Some(e) = &failure {
         let ms = started.elapsed().as_millis();
         error!("{}", activity::failed_line(&path, &who, ms, e));
     }
+    let mut unsent = None;
     if let Err(e) = respond(deps.http, command, reply).await {
         warn!("[CMD] /{path} {who} 返事を送れませんでした: {e}");
+        unsent = Some(format!("返事を送れませんでした: {e}"));
+    }
+    // 中身は済んだのに返事を送れなかったとき（本文が 2000 文字を超えた、など）は、Python と同じく
+    // 「処理できなかった」と返す（設定は書かれている）。返事のあとの仕事はしない（Python も、そこで止まる）。
+    let failure = match (failure, unsent) {
+        (None, Some(e)) => {
+            let ms = started.elapsed().as_millis();
+            error!("{}", activity::failed_line(&path, &who, ms, &e));
+            let fallback = Reply::ephemeral(reply::FAILED);
+            if let Err(e) = respond(deps.http, command, fallback).await {
+                warn!("[CMD] /{path} {who} 失敗の知らせも送れませんでした: {e}");
+            }
+            Some(e)
+        }
+        (failure, _) => failure,
+    };
+    // 返事を送ったあとの仕事（/sticky set・clear の貼る・剥がす）。
+    if let (None, Some(after)) = (&failure, after) {
+        after.run(deps).await;
     }
     if failure.is_none() {
         let ms = started.elapsed().as_millis();
@@ -612,7 +685,7 @@ mod tests {
         for (path, r) in PORTED {
             assert_eq!(route(path), Some(*r));
         }
-        assert_eq!(route("sticky set"), None);
+        assert_eq!(route("tts join"), None);
     }
 
     fn options(value: Value) -> Vec<CommandDataOption> {

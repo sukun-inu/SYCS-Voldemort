@@ -1,0 +1,5647 @@
+[
+ {
+  "id": "welcome-channel-first-time",
+  "path": "greeting welcome channel",
+  "who": "admin",
+  "options": {
+   "channel": 123
+  },
+  "before": {}
+ },
+ {
+  "id": "welcome-channel-keeps-message-and-position",
+  "path": "greeting welcome channel",
+  "who": "admin",
+  "options": {
+   "channel": 456
+  },
+  "before": {
+   "log_level": "INFO",
+   "welcome": {
+    "message": "やあ {user}",
+    "channel_id": 1
+   },
+   "goodbye": {
+    "channel_id": 9
+   }
+  }
+ },
+ {
+  "id": "welcome-channel-replaces-a-broken-block",
+  "path": "greeting welcome channel",
+  "who": "admin",
+  "options": {
+   "channel": 5
+  },
+  "before": {
+   "welcome": "壊れた値"
+  }
+ },
+ {
+  "id": "welcome-channel-over-a-null-block",
+  "path": "greeting welcome channel",
+  "who": "admin",
+  "options": {
+   "channel": 5
+  },
+  "before": {
+   "welcome": null,
+   "a": 1
+  }
+ },
+ {
+  "id": "welcome-channel-refuses-non-admin",
+  "path": "greeting welcome channel",
+  "who": "member",
+  "options": {
+   "channel": 5
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "welcome-channel-refuses-outside-guild",
+  "path": "greeting welcome channel",
+  "who": "dm",
+  "options": {
+   "channel": 5
+  },
+  "before": {}
+ },
+ {
+  "id": "welcome-message-first-time",
+  "path": "greeting welcome message",
+  "who": "admin",
+  "options": {
+   "message": "{user} よ、**{server}** へ（{count} 名）"
+  },
+  "before": {}
+ },
+ {
+  "id": "welcome-message-keeps-channel",
+  "path": "greeting welcome message",
+  "who": "admin",
+  "options": {
+   "message": "一行目\n二行目 {typo}"
+  },
+  "before": {
+   "welcome": {
+    "channel_id": 77,
+    "message": "前の文"
+   },
+   "z": 0
+  }
+ },
+ {
+  "id": "welcome-message-empty",
+  "path": "greeting welcome message",
+  "who": "admin",
+  "options": {
+   "message": ""
+  },
+  "before": {
+   "welcome": {
+    "message": "前の文"
+   }
+  }
+ },
+ {
+  "id": "welcome-message-replaces-a-list-block",
+  "path": "greeting welcome message",
+  "who": "admin",
+  "options": {
+   "message": "m"
+  },
+  "before": {
+   "welcome": [
+    1,
+    2
+   ]
+  }
+ },
+ {
+  "id": "welcome-message-refuses-non-admin",
+  "path": "greeting welcome message",
+  "who": "member",
+  "options": {
+   "message": "m"
+  },
+  "before": {}
+ },
+ {
+  "id": "welcome-message-refuses-outside-guild",
+  "path": "greeting welcome message",
+  "who": "dm",
+  "options": {
+   "message": "m"
+  },
+  "before": {}
+ },
+ {
+  "id": "goodbye-channel-first-time",
+  "path": "greeting goodbye channel",
+  "who": "admin",
+  "options": {
+   "channel": 123
+  },
+  "before": {}
+ },
+ {
+  "id": "goodbye-channel-keeps-message-and-position",
+  "path": "greeting goodbye channel",
+  "who": "admin",
+  "options": {
+   "channel": 456
+  },
+  "before": {
+   "log_level": "INFO",
+   "goodbye": {
+    "message": "やあ {user}",
+    "channel_id": 1
+   },
+   "welcome": {
+    "channel_id": 9
+   }
+  }
+ },
+ {
+  "id": "goodbye-channel-replaces-a-broken-block",
+  "path": "greeting goodbye channel",
+  "who": "admin",
+  "options": {
+   "channel": 5
+  },
+  "before": {
+   "goodbye": "壊れた値"
+  }
+ },
+ {
+  "id": "goodbye-channel-over-a-null-block",
+  "path": "greeting goodbye channel",
+  "who": "admin",
+  "options": {
+   "channel": 5
+  },
+  "before": {
+   "goodbye": null,
+   "a": 1
+  }
+ },
+ {
+  "id": "goodbye-channel-refuses-non-admin",
+  "path": "greeting goodbye channel",
+  "who": "member",
+  "options": {
+   "channel": 5
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "goodbye-channel-refuses-outside-guild",
+  "path": "greeting goodbye channel",
+  "who": "dm",
+  "options": {
+   "channel": 5
+  },
+  "before": {}
+ },
+ {
+  "id": "goodbye-message-first-time",
+  "path": "greeting goodbye message",
+  "who": "admin",
+  "options": {
+   "message": "{user} よ、**{server}** へ（{count} 名）"
+  },
+  "before": {}
+ },
+ {
+  "id": "goodbye-message-keeps-channel",
+  "path": "greeting goodbye message",
+  "who": "admin",
+  "options": {
+   "message": "一行目\n二行目 {typo}"
+  },
+  "before": {
+   "goodbye": {
+    "channel_id": 77,
+    "message": "前の文"
+   },
+   "z": 0
+  }
+ },
+ {
+  "id": "goodbye-message-empty",
+  "path": "greeting goodbye message",
+  "who": "admin",
+  "options": {
+   "message": ""
+  },
+  "before": {
+   "goodbye": {
+    "message": "前の文"
+   }
+  }
+ },
+ {
+  "id": "goodbye-message-replaces-a-list-block",
+  "path": "greeting goodbye message",
+  "who": "admin",
+  "options": {
+   "message": "m"
+  },
+  "before": {
+   "goodbye": [
+    1,
+    2
+   ]
+  }
+ },
+ {
+  "id": "goodbye-message-refuses-non-admin",
+  "path": "greeting goodbye message",
+  "who": "member",
+  "options": {
+   "message": "m"
+  },
+  "before": {}
+ },
+ {
+  "id": "goodbye-message-refuses-outside-guild",
+  "path": "greeting goodbye message",
+  "who": "dm",
+  "options": {
+   "message": "m"
+  },
+  "before": {}
+ },
+ {
+  "id": "greeting-status-unset",
+  "path": "greeting status",
+  "who": "admin",
+  "options": {},
+  "before": {}
+ },
+ {
+  "id": "greeting-status-both-set",
+  "path": "greeting status",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "welcome": {
+    "channel_id": 11,
+    "message": "ようこそ {user}"
+   },
+   "goodbye": {
+    "channel_id": 22,
+    "message": "さらば"
+   }
+  }
+ },
+ {
+  "id": "greeting-status-open-to-members",
+  "path": "greeting status",
+  "who": "member",
+  "options": {},
+  "before": {
+   "welcome": {
+    "channel_id": 11
+   }
+  }
+ },
+ {
+  "id": "greeting-status-outside-guild",
+  "path": "greeting status",
+  "who": "dm",
+  "options": {},
+  "before": {}
+ },
+ {
+  "id": "greeting-status-string-and-zero-channels",
+  "path": "greeting status",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "welcome": {
+    "channel_id": "123",
+    "message": ""
+   },
+   "goodbye": {
+    "channel_id": 0
+   }
+  }
+ },
+ {
+  "id": "greeting-status-odd-values-are-written-as-python-writes-them",
+  "path": "greeting status",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "welcome": {
+    "channel_id": true,
+    "message": 5
+   },
+   "goodbye": {
+    "channel_id": 1.5,
+    "message": 0
+   }
+  }
+ },
+ {
+  "id": "greeting-status-empty-blocks",
+  "path": "greeting status",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "welcome": {},
+   "goodbye": []
+  }
+ },
+ {
+  "id": "greeting-status-empty-string-block",
+  "path": "greeting status",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "welcome": ""
+  }
+ },
+ {
+  "id": "greeting-status-broken-welcome-fails",
+  "path": "greeting status",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "welcome": "壊れた値"
+  }
+ },
+ {
+  "id": "greeting-status-null-goodbye-fails",
+  "path": "greeting status",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "goodbye": null
+  }
+ },
+ {
+  "id": "greeting-status-number-block-fails",
+  "path": "greeting status",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "welcome": 5
+  }
+ },
+ {
+  "id": "vcnotify-set-first-time",
+  "path": "vcnotify set",
+  "who": "admin",
+  "options": {
+   "channel": 500
+  },
+  "before": {}
+ },
+ {
+  "id": "vcnotify-set-overwrites-in-place",
+  "path": "vcnotify set",
+  "who": "admin",
+  "options": {
+   "channel": 501
+  },
+  "before": {
+   "vc_notify_channel_id": 500,
+   "vc_notify_role_id": 7
+  }
+ },
+ {
+  "id": "vcnotify-set-refuses-non-admin",
+  "path": "vcnotify set",
+  "who": "member",
+  "options": {
+   "channel": 500
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "vcnotify-set-refuses-outside-guild",
+  "path": "vcnotify set",
+  "who": "dm",
+  "options": {
+   "channel": 500
+  },
+  "before": {}
+ },
+ {
+  "id": "vcnotify-clear-removes-the-key",
+  "path": "vcnotify clear",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "a": 1,
+   "vc_notify_channel_id": 500,
+   "vc_notify_role_id": 7
+  }
+ },
+ {
+  "id": "vcnotify-clear-when-unset",
+  "path": "vcnotify clear",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "vcnotify-clear-refuses-non-admin",
+  "path": "vcnotify clear",
+  "who": "member",
+  "options": {},
+  "before": {
+   "vc_notify_channel_id": 500
+  }
+ },
+ {
+  "id": "vcnotify-clear-refuses-outside-guild",
+  "path": "vcnotify clear",
+  "who": "dm",
+  "options": {},
+  "before": {}
+ },
+ {
+  "id": "sticky-set-first-time",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "ルールを読むこと"
+  },
+  "before": {}
+ },
+ {
+  "id": "sticky-set-replaces-and-deletes-the-old-message",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "新しい内容"
+  },
+  "before": {
+   "sticky_messages": {
+    "10": {
+     "content": "他"
+    },
+    "1505310388051251000": {
+     "content": "古い内容",
+     "message_id": 555
+    },
+    "30": {}
+   }
+  }
+ },
+ {
+  "id": "sticky-set-turns-escaped-newlines-into-newlines",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "一行目\\n二行目\\\\n三"
+  },
+  "before": {}
+ },
+ {
+  "id": "sticky-set-in-a-news-channel",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "お知らせ"
+  },
+  "before": {},
+  "channel_type": 5
+ },
+ {
+  "id": "sticky-set-refused-in-voice-channel",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "x"
+  },
+  "before": {},
+  "channel_type": 2
+ },
+ {
+  "id": "sticky-set-refused-in-category-channel",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "x"
+  },
+  "before": {},
+  "channel_type": 4
+ },
+ {
+  "id": "sticky-set-refused-in-news-thread-channel",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "x"
+  },
+  "before": {},
+  "channel_type": 10
+ },
+ {
+  "id": "sticky-set-refused-in-public-thread-channel",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "x"
+  },
+  "before": {},
+  "channel_type": 11
+ },
+ {
+  "id": "sticky-set-refused-in-private-thread-channel",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "x"
+  },
+  "before": {},
+  "channel_type": 12
+ },
+ {
+  "id": "sticky-set-refused-in-stage-channel",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "x"
+  },
+  "before": {},
+  "channel_type": 13
+ },
+ {
+  "id": "sticky-set-refused-in-forum-channel",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "x"
+  },
+  "before": {},
+  "channel_type": 15
+ },
+ {
+  "id": "sticky-set-refused-in-media-channel",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "x"
+  },
+  "before": {},
+  "channel_type": 16
+ },
+ {
+  "id": "sticky-set-refused-in-unknown-channel",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "x"
+  },
+  "before": {},
+  "channel_type": 99
+ },
+ {
+  "id": "sticky-set-non-admin-is-refused-before-the-channel-check",
+  "path": "sticky set",
+  "who": "member",
+  "options": {
+   "content": "x"
+  },
+  "before": {},
+  "channel_type": 2
+ },
+ {
+  "id": "sticky-set-refuses-non-admin",
+  "path": "sticky set",
+  "who": "member",
+  "options": {
+   "content": "x"
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "sticky-set-refuses-outside-guild",
+  "path": "sticky set",
+  "who": "dm",
+  "options": {
+   "content": "x"
+  },
+  "before": {}
+ },
+ {
+  "id": "sticky-set-when-the-old-message-is-gone",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "貼り直し"
+  },
+  "before": {
+   "sticky_messages": {
+    "1505310388051251000": {
+     "content": "古い",
+     "message_id": 556,
+     "pending": "delete"
+    }
+   }
+  },
+  "old_message": "missing"
+ },
+ {
+  "id": "sticky-set-over-a-broken-table",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "x"
+  },
+  "before": {
+   "sticky_messages": "壊れた値",
+   "a": 1
+  }
+ },
+ {
+  "id": "sticky-set-over-a-broken-entry",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "x"
+  },
+  "before": {
+   "sticky_messages": {
+    "1505310388051251000": "壊れた値"
+   }
+  }
+ },
+ {
+  "id": "sticky-set-drops-other-keys-of-the-entry",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "x"
+  },
+  "before": {
+   "sticky_messages": {
+    "1505310388051251000": {
+     "extra": 1,
+     "message_id": 7,
+     "content": "古い"
+    }
+   }
+  }
+ },
+ {
+  "id": "sticky-set-with-a-string-message-id",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "x"
+  },
+  "before": {
+   "sticky_messages": {
+    "1505310388051251000": {
+     "content": "古い",
+     "message_id": "557"
+    }
+   }
+  }
+ },
+ {
+  "id": "sticky-set-over-a-null-message-id",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": "x"
+  },
+  "before": {
+   "sticky_messages": {
+    "1505310388051251000": {
+     "content": "古い",
+     "message_id": null
+    }
+   }
+  }
+ },
+ {
+  "id": "sticky-set-empty-content",
+  "path": "sticky set",
+  "who": "admin",
+  "options": {
+   "content": ""
+  },
+  "before": {}
+ },
+ {
+  "id": "sticky-clear-deletes-the-message-and-the-entry",
+  "path": "sticky clear",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "10": {
+     "content": "他"
+    },
+    "1505310388051251000": {
+     "content": "消す",
+     "message_id": 558
+    }
+   },
+   "a": 1
+  }
+ },
+ {
+  "id": "sticky-clear-the-last-entry-leaves-an-empty-table",
+  "path": "sticky clear",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "1505310388051251000": {
+     "content": "消す",
+     "message_id": 559
+    }
+   }
+  }
+ },
+ {
+  "id": "sticky-clear-without-a-posted-message",
+  "path": "sticky clear",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "1505310388051251000": {
+     "content": "まだ",
+     "pending": "post"
+    }
+   }
+  }
+ },
+ {
+  "id": "sticky-clear-when-nothing-is-set-creates-an-empty-table",
+  "path": "sticky clear",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "sticky-clear-another-channel-is-untouched",
+  "path": "sticky clear",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "10": {
+     "content": "他",
+     "message_id": 1
+    }
+   }
+  }
+ },
+ {
+  "id": "sticky-clear-when-the-old-message-is-gone",
+  "path": "sticky clear",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "1505310388051251000": {
+     "content": "消す",
+     "message_id": 560
+    }
+   }
+  },
+  "old_message": "missing"
+ },
+ {
+  "id": "sticky-clear-in-a-news-channel",
+  "path": "sticky clear",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "1505310388051251000": {
+     "content": "消す",
+     "message_id": 561
+    }
+   }
+  },
+  "channel_type": 5
+ },
+ {
+  "id": "sticky-clear-refused-in-voice-channel",
+  "path": "sticky clear",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "1505310388051251000": {
+     "content": "残る",
+     "message_id": 562
+    }
+   }
+  },
+  "channel_type": 2
+ },
+ {
+  "id": "sticky-clear-refused-in-thread",
+  "path": "sticky clear",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "1505310388051251000": {
+     "content": "残る"
+    }
+   }
+  },
+  "channel_type": 11
+ },
+ {
+  "id": "sticky-clear-refuses-non-admin",
+  "path": "sticky clear",
+  "who": "member",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "1505310388051251000": {
+     "content": "残る",
+     "message_id": 563
+    }
+   }
+  }
+ },
+ {
+  "id": "sticky-clear-refuses-outside-guild",
+  "path": "sticky clear",
+  "who": "dm",
+  "options": {},
+  "before": {}
+ },
+ {
+  "id": "sticky-list-empty",
+  "path": "sticky list",
+  "who": "admin",
+  "options": {},
+  "before": {}
+ },
+ {
+  "id": "sticky-list-empty-table",
+  "path": "sticky list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": {}
+  }
+ },
+ {
+  "id": "sticky-list-empty-list-is-empty",
+  "path": "sticky list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": []
+  }
+ },
+ {
+  "id": "sticky-list-several",
+  "path": "sticky list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "30": {
+     "content": "三十"
+    },
+    "10": {
+     "content": "十",
+     "message_id": 1,
+     "pending": "post"
+    },
+    "20": {}
+   }
+  }
+ },
+ {
+  "id": "sticky-list-open-to-members",
+  "path": "sticky list",
+  "who": "member",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "10": {
+     "content": "十"
+    }
+   }
+  }
+ },
+ {
+  "id": "sticky-list-outside-guild",
+  "path": "sticky list",
+  "who": "dm",
+  "options": {},
+  "before": {}
+ },
+ {
+  "id": "sticky-list-cuts-content-at-50-characters",
+  "path": "sticky list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "10": {
+     "content": "ああああああああああああああああああああああああああああああああああああああああああああああああああい"
+    },
+    "11": {
+     "content": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀x"
+    },
+    "12": {
+     "content": "cccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+   }
+  }
+ },
+ {
+  "id": "sticky-list-keeps-25-and-counts-the-rest",
+  "path": "sticky list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "100": {
+     "content": "内容0"
+    },
+    "101": {
+     "content": "内容1"
+    },
+    "102": {
+     "content": "内容2"
+    },
+    "103": {
+     "content": "内容3"
+    },
+    "104": {
+     "content": "内容4"
+    },
+    "105": {
+     "content": "内容5"
+    },
+    "106": {
+     "content": "内容6"
+    },
+    "107": {
+     "content": "内容7"
+    },
+    "108": {
+     "content": "内容8"
+    },
+    "109": {
+     "content": "内容9"
+    },
+    "110": {
+     "content": "内容10"
+    },
+    "111": {
+     "content": "内容11"
+    },
+    "112": {
+     "content": "内容12"
+    },
+    "113": {
+     "content": "内容13"
+    },
+    "114": {
+     "content": "内容14"
+    },
+    "115": {
+     "content": "内容15"
+    },
+    "116": {
+     "content": "内容16"
+    },
+    "117": {
+     "content": "内容17"
+    },
+    "118": {
+     "content": "内容18"
+    },
+    "119": {
+     "content": "内容19"
+    },
+    "120": {
+     "content": "内容20"
+    },
+    "121": {
+     "content": "内容21"
+    },
+    "122": {
+     "content": "内容22"
+    },
+    "123": {
+     "content": "内容23"
+    },
+    "124": {
+     "content": "内容24"
+    },
+    "125": {
+     "content": "内容25"
+    },
+    "126": {
+     "content": "内容26"
+    },
+    "127": {
+     "content": "内容27"
+    },
+    "128": {
+     "content": "内容28"
+    },
+    "129": {
+     "content": "内容29"
+    }
+   }
+  }
+ },
+ {
+  "id": "sticky-list-exactly-25",
+  "path": "sticky list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "100": {
+     "content": "内容0"
+    },
+    "101": {
+     "content": "内容1"
+    },
+    "102": {
+     "content": "内容2"
+    },
+    "103": {
+     "content": "内容3"
+    },
+    "104": {
+     "content": "内容4"
+    },
+    "105": {
+     "content": "内容5"
+    },
+    "106": {
+     "content": "内容6"
+    },
+    "107": {
+     "content": "内容7"
+    },
+    "108": {
+     "content": "内容8"
+    },
+    "109": {
+     "content": "内容9"
+    },
+    "110": {
+     "content": "内容10"
+    },
+    "111": {
+     "content": "内容11"
+    },
+    "112": {
+     "content": "内容12"
+    },
+    "113": {
+     "content": "内容13"
+    },
+    "114": {
+     "content": "内容14"
+    },
+    "115": {
+     "content": "内容15"
+    },
+    "116": {
+     "content": "内容16"
+    },
+    "117": {
+     "content": "内容17"
+    },
+    "118": {
+     "content": "内容18"
+    },
+    "119": {
+     "content": "内容19"
+    },
+    "120": {
+     "content": "内容20"
+    },
+    "121": {
+     "content": "内容21"
+    },
+    "122": {
+     "content": "内容22"
+    },
+    "123": {
+     "content": "内容23"
+    },
+    "124": {
+     "content": "内容24"
+    }
+   }
+  }
+ },
+ {
+  "id": "sticky-list-broken-entry-fails",
+  "path": "sticky list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "10": "壊れた値"
+   }
+  }
+ },
+ {
+  "id": "sticky-list-number-content-fails",
+  "path": "sticky list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "10": {
+     "content": 5
+    }
+   }
+  }
+ },
+ {
+  "id": "sticky-list-null-content-fails",
+  "path": "sticky list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": {
+    "10": {
+     "content": null
+    }
+   }
+  }
+ },
+ {
+  "id": "sticky-list-broken-table-fails",
+  "path": "sticky list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "sticky_messages": "壊れた値"
+  }
+ },
+ {
+  "id": "reactionrole-add-first-time",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "111",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-a-second-emoji",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "111",
+   "emoji": "🎉",
+   "role": 23
+  },
+  "before": {
+   "a": 1,
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   },
+   "z": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-overwrites-the-role-in-place",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "111",
+   "emoji": "👍",
+   "role": 99
+  },
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-add-a-new-message",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "333",
+   "emoji": "<a:wave:77>",
+   "role": 20
+  },
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-add-strips-the-emoji-but-echoes-it-as-typed",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "111",
+   "emoji": " \t👍　\n",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-strips-python-only-whitespace",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "111",
+   "emoji": "\u001c\u001f👍\u001d\u001e ",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-keeps-inner-spaces-and-zero-width",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "111",
+   "emoji": "​a b​",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-whitespace-only-emoji",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "111",
+   "emoji": "  ",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-the-everyone-role",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "111",
+   "emoji": "👍",
+   "role": 1399617700363370556
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-over-a-broken-table",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "111",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "reaction_roles": "壊れた値"
+  }
+ },
+ {
+  "id": "reactionrole-add-over-a-broken-mapping",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "111",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "reaction_roles": {
+    "111": [
+     1,
+     2
+    ],
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-add-refuses-non-admin",
+  "path": "reactionrole add",
+  "who": "member",
+  "options": {
+   "message_id": "111",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-non-admin-is-refused-before-the-id-check",
+  "path": "reactionrole add",
+  "who": "member",
+  "options": {
+   "message_id": "abc",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-refuses-outside-guild",
+  "path": "reactionrole add",
+  "who": "dm",
+  "options": {
+   "message_id": "111",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-surrounding-spaces",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": " 111\t\n",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-vertical-tab-and-form-feed",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "\u000b\f111\f\r",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-plus-sign",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "+111",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-leading-zeros",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "000111",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-zero",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "0",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-negative",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "-5",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-negative-zero",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "-0",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-underscores",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "1_000_000",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-full-width-digits",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "１２３",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-full-width-space",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "　１２３　",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-no-break-and-next-line-space",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": " 111 ",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-arabic-indic-digits",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "٣٤٥",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-devanagari-digits",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "१२३",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-mixed-scripts",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "1２٣",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-math-bold-digits",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "𝟏𝟐𝟑",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-beyond-64-bits",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "123456789012345678901234567890",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-snowflake",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "1505310388051251261",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-sign-and-full-width",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "-１",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-id-underscore-between-full-width",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "１_２",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-add-bad-id-letters",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "abc",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-empty",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-spaces-only",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "   ",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-inner-space",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "1 2",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-double-underscore",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "1__0",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-leading-underscore",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "_1",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-trailing-underscore",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "1_",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-underscore-after-sign",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "-_1",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-sign-only",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "+",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-two-signs",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "+-1",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-space-after-sign",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "- 1",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-decimal-point",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "1.0",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-hex",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "0x10",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-exponent",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "1e3",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-trailing-letter",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "12a",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-file-separator-is-not-space",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "\u001c5",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-file-separator-with-full-width",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "\u001c５",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-zero-width-space",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "​5",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-roman-numeral",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "Ⅷ",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-superscript",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "²",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-circled-digit",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "①",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-kanji-digit",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "五",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-full-width-minus",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "－5",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-full-width-plus",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "＋5",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-full-width-underscore",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "1＿0",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-nul",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "1\u00000",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-add-bad-id-delete-char",
+  "path": "reactionrole add",
+  "who": "admin",
+  "options": {
+   "message_id": "5",
+   "emoji": "👍",
+   "role": 20
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-remove-id-4300-digits-are-read",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": {
+    "repeat": "1",
+    "times": 4300
+   },
+   "emoji": "👍"
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-remove-id-4301-digits-are-refused",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": {
+    "repeat": "1",
+    "times": 4301
+   },
+   "emoji": "👍"
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-remove-id-4300-zeros-are-read",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": {
+    "repeat": "0",
+    "times": 4300
+   },
+   "emoji": "👍"
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-remove-id-4301-zeros-are-refused",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": {
+    "repeat": "0",
+    "times": 4301
+   },
+   "emoji": "👍"
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-remove-id-underscores-do-not-count-as-digits",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": {
+    "repeat": "1_",
+    "times": 4299,
+    "suffix": "1"
+   },
+   "emoji": "👍"
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-remove-id-4301-digits-with-underscores-are-refused",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": {
+    "repeat": "1_",
+    "times": 4300,
+    "suffix": "1"
+   },
+   "emoji": "👍"
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-remove-id-spaces-and-sign-do-not-count-as-digits",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": {
+    "repeat": "-1",
+    "times": 1,
+    "suffix": "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111 "
+   },
+   "emoji": "👍"
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-remove-id-4300-zeros-match-zero",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": {
+    "repeat": "0",
+    "times": 4300
+   },
+   "emoji": "👍"
+  },
+  "before": {
+   "reaction_roles": {
+    "0": {
+     "👍": 20
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-remove-one-of-two",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": "111",
+   "emoji": "👍"
+  },
+  "before": {
+   "a": 1,
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-remove-the-last-emoji-drops-the-message",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": "222",
+   "emoji": "✅"
+  },
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-remove-the-last-message-leaves-an-empty-table",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": "222",
+   "emoji": "✅"
+  },
+  "before": {
+   "reaction_roles": {
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-remove-unknown-emoji",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": "111",
+   "emoji": "🎉"
+  },
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-remove-unknown-message",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": "999",
+   "emoji": "👍"
+  },
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-remove-when-nothing-is-set",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": "111",
+   "emoji": "👍"
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "reactionrole-remove-strips-the-emoji-but-echoes-it-as-typed",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": " ０１１１ ",
+   "emoji": " 👍 "
+  },
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-remove-matches-the-stored-spelling-only",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": "111",
+   "emoji": "5"
+  },
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-remove-bad-id",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": "あいう",
+   "emoji": "👍"
+  },
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-remove-from-a-broken-table",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": "111",
+   "emoji": "👍"
+  },
+  "before": {
+   "reaction_roles": "壊れた値"
+  }
+ },
+ {
+  "id": "reactionrole-remove-from-a-broken-mapping",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "options": {
+   "message_id": "111",
+   "emoji": "👍"
+  },
+  "before": {
+   "reaction_roles": {
+    "111": "👍"
+   }
+  }
+ },
+ {
+  "id": "reactionrole-remove-refuses-non-admin",
+  "path": "reactionrole remove",
+  "who": "member",
+  "options": {
+   "message_id": "111",
+   "emoji": "👍"
+  },
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-remove-refuses-outside-guild",
+  "path": "reactionrole remove",
+  "who": "dm",
+  "options": {
+   "message_id": "111",
+   "emoji": "👍"
+  },
+  "before": {}
+ },
+ {
+  "id": "reactionrole-list-empty",
+  "path": "reactionrole list",
+  "who": "admin",
+  "options": {},
+  "before": {}
+ },
+ {
+  "id": "reactionrole-list-empty-table",
+  "path": "reactionrole list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "reaction_roles": {}
+  }
+ },
+ {
+  "id": "reactionrole-list-several",
+  "path": "reactionrole list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "222": {
+     "✅": 22
+    },
+    "111": {
+     "👍": 20,
+     "<:blob:5>": "21",
+     "🎉": null
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-list-open-to-members",
+  "path": "reactionrole list",
+  "who": "member",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-list-outside-guild",
+  "path": "reactionrole list",
+  "who": "dm",
+  "options": {},
+  "before": {}
+ },
+ {
+  "id": "reactionrole-list-keeps-20-and-counts-the-rest",
+  "path": "reactionrole list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1000": {
+     "e0_0": 500,
+     "e0_1": 501,
+     "e0_2": 502,
+     "e0_3": 503,
+     "e0_4": 504,
+     "e0_5": 505
+    },
+    "1001": {
+     "e1_0": 500,
+     "e1_1": 501,
+     "e1_2": 502,
+     "e1_3": 503,
+     "e1_4": 504,
+     "e1_5": 505
+    },
+    "1002": {
+     "e2_0": 500,
+     "e2_1": 501,
+     "e2_2": 502,
+     "e2_3": 503,
+     "e2_4": 504,
+     "e2_5": 505
+    },
+    "1003": {
+     "e3_0": 500,
+     "e3_1": 501,
+     "e3_2": 502,
+     "e3_3": 503,
+     "e3_4": 504,
+     "e3_5": 505
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-list-exactly-20",
+  "path": "reactionrole list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {
+     "e0": 0,
+     "e1": 1,
+     "e2": 2,
+     "e3": 3,
+     "e4": 4,
+     "e5": 5,
+     "e6": 6,
+     "e7": 7,
+     "e8": 8,
+     "e9": 9,
+     "e10": 10,
+     "e11": 11,
+     "e12": 12,
+     "e13": 13,
+     "e14": 14,
+     "e15": 15,
+     "e16": 16,
+     "e17": 17,
+     "e18": 18,
+     "e19": 19
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-list-long-lines-fit-2000-characters",
+  "path": "reactionrole list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {
+     "絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵0": 0,
+     "絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵1": 1,
+     "絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵2": 2,
+     "絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵3": 3,
+     "絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵4": 4,
+     "絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵5": 5,
+     "絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵6": 6,
+     "絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵7": 7,
+     "絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵8": 8,
+     "絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵9": 9,
+     "絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵10": 10,
+     "絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵11": 11,
+     "絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵12": 12,
+     "絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵13": 13,
+     "絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵14": 14
+    }
+   }
+  }
+ },
+ {
+  "id": "reactionrole-list-only-empty-mappings-shows-the-header",
+  "path": "reactionrole list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {},
+    "2": {}
+   }
+  }
+ },
+ {
+  "id": "reactionrole-list-broken-mapping-fails",
+  "path": "reactionrole list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {
+     "👍": 1
+    },
+    "2": "壊れた値"
+   }
+  }
+ },
+ {
+  "id": "reactionrole-list-broken-table-fails",
+  "path": "reactionrole list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "reaction_roles": 7
+  }
+ },
+ {
+  "id": "news-add-first-time-with-the-default-interval",
+  "path": "news add",
+  "who": "admin",
+  "options": {
+   "channel": 500,
+   "query": "AI技術"
+  },
+  "before": {}
+ },
+ {
+  "id": "news-add-with-an-interval",
+  "path": "news add",
+  "who": "admin",
+  "options": {
+   "channel": 500,
+   "query": "Rust `async`",
+   "interval": 5
+  },
+  "before": {
+   "a": 1,
+   "news_feeds": {
+    "aaaa1111": {
+     "channel_id": 500,
+     "query": "AI技術",
+     "interval": 60,
+     "last_run": 1700000000.5,
+     "seen_hashes": [
+      "h1",
+      "h2"
+     ]
+    },
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   },
+   "z": 1
+  }
+ },
+ {
+  "id": "news-add-interval-below-5-is-refused",
+  "path": "news add",
+  "who": "admin",
+  "options": {
+   "channel": 500,
+   "query": "q",
+   "interval": 4
+  },
+  "before": {
+   "news_feeds": {
+    "aaaa1111": {
+     "channel_id": 500,
+     "query": "AI技術",
+     "interval": 60,
+     "last_run": 1700000000.5,
+     "seen_hashes": [
+      "h1",
+      "h2"
+     ]
+    },
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  }
+ },
+ {
+  "id": "news-add-interval-zero-is-refused",
+  "path": "news add",
+  "who": "admin",
+  "options": {
+   "channel": 500,
+   "query": "q",
+   "interval": 0
+  },
+  "before": {}
+ },
+ {
+  "id": "news-add-negative-interval-is-refused",
+  "path": "news add",
+  "who": "admin",
+  "options": {
+   "channel": 500,
+   "query": "q",
+   "interval": -60
+  },
+  "before": {}
+ },
+ {
+  "id": "news-add-a-large-interval",
+  "path": "news add",
+  "who": "admin",
+  "options": {
+   "channel": 500,
+   "query": "q",
+   "interval": 9007199254740991
+  },
+  "before": {}
+ },
+ {
+  "id": "news-add-the-tenth-feed",
+  "path": "news add",
+  "who": "admin",
+  "options": {
+   "channel": 500,
+   "query": "q"
+  },
+  "before": {
+   "news_feeds": {
+    "00000000": {
+     "channel_id": 500,
+     "query": "q0",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000001": {
+     "channel_id": 501,
+     "query": "q1",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000002": {
+     "channel_id": 502,
+     "query": "q2",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000003": {
+     "channel_id": 503,
+     "query": "q3",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000004": {
+     "channel_id": 504,
+     "query": "q4",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000005": {
+     "channel_id": 505,
+     "query": "q5",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000006": {
+     "channel_id": 506,
+     "query": "q6",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000007": {
+     "channel_id": 507,
+     "query": "q7",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000008": {
+     "channel_id": 508,
+     "query": "q8",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  }
+ },
+ {
+  "id": "news-add-is-refused-at-10-feeds",
+  "path": "news add",
+  "who": "admin",
+  "options": {
+   "channel": 500,
+   "query": "q"
+  },
+  "before": {
+   "news_feeds": {
+    "00000000": {
+     "channel_id": 500,
+     "query": "q0",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000001": {
+     "channel_id": 501,
+     "query": "q1",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000002": {
+     "channel_id": 502,
+     "query": "q2",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000003": {
+     "channel_id": 503,
+     "query": "q3",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000004": {
+     "channel_id": 504,
+     "query": "q4",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000005": {
+     "channel_id": 505,
+     "query": "q5",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000006": {
+     "channel_id": 506,
+     "query": "q6",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000007": {
+     "channel_id": 507,
+     "query": "q7",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000008": {
+     "channel_id": 508,
+     "query": "q8",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000009": {
+     "channel_id": 509,
+     "query": "q9",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  }
+ },
+ {
+  "id": "news-add-is-refused-above-10-feeds",
+  "path": "news add",
+  "who": "admin",
+  "options": {
+   "channel": 500,
+   "query": "q"
+  },
+  "before": {
+   "news_feeds": {
+    "00000000": {
+     "channel_id": 500,
+     "query": "q0",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000001": {
+     "channel_id": 501,
+     "query": "q1",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000002": {
+     "channel_id": 502,
+     "query": "q2",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000003": {
+     "channel_id": 503,
+     "query": "q3",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000004": {
+     "channel_id": 504,
+     "query": "q4",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000005": {
+     "channel_id": 505,
+     "query": "q5",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000006": {
+     "channel_id": 506,
+     "query": "q6",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000007": {
+     "channel_id": 507,
+     "query": "q7",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000008": {
+     "channel_id": 508,
+     "query": "q8",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000009": {
+     "channel_id": 509,
+     "query": "q9",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000000a": {
+     "channel_id": 510,
+     "query": "q10",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000000b": {
+     "channel_id": 511,
+     "query": "q11",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  }
+ },
+ {
+  "id": "news-add-the-interval-is-checked-before-the-count",
+  "path": "news add",
+  "who": "admin",
+  "options": {
+   "channel": 500,
+   "query": "q",
+   "interval": 1
+  },
+  "before": {
+   "news_feeds": {
+    "00000000": {
+     "channel_id": 500,
+     "query": "q0",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000001": {
+     "channel_id": 501,
+     "query": "q1",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000002": {
+     "channel_id": 502,
+     "query": "q2",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000003": {
+     "channel_id": 503,
+     "query": "q3",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000004": {
+     "channel_id": 504,
+     "query": "q4",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000005": {
+     "channel_id": 505,
+     "query": "q5",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000006": {
+     "channel_id": 506,
+     "query": "q6",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000007": {
+     "channel_id": 507,
+     "query": "q7",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000008": {
+     "channel_id": 508,
+     "query": "q8",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000009": {
+     "channel_id": 509,
+     "query": "q9",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  }
+ },
+ {
+  "id": "news-add-over-an-empty-list-table",
+  "path": "news add",
+  "who": "admin",
+  "options": {
+   "channel": 500,
+   "query": "q"
+  },
+  "before": {
+   "news_feeds": []
+  }
+ },
+ {
+  "id": "news-add-broken-table-fails",
+  "path": "news add",
+  "who": "admin",
+  "options": {
+   "channel": 500,
+   "query": "q"
+  },
+  "before": {
+   "news_feeds": "壊れた値"
+  }
+ },
+ {
+  "id": "news-add-counts-broken-feeds-too",
+  "path": "news add",
+  "who": "admin",
+  "options": {
+   "channel": 500,
+   "query": "q"
+  },
+  "before": {
+   "news_feeds": {
+    "0": "壊れた値",
+    "1": "壊れた値",
+    "2": "壊れた値",
+    "3": "壊れた値",
+    "4": "壊れた値",
+    "5": "壊れた値",
+    "6": "壊れた値",
+    "7": "壊れた値",
+    "8": "壊れた値",
+    "9": "壊れた値"
+   }
+  }
+ },
+ {
+  "id": "news-add-refuses-non-admin",
+  "path": "news add",
+  "who": "member",
+  "options": {
+   "channel": 500,
+   "query": "q"
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "news-add-non-admin-is-refused-before-the-interval-check",
+  "path": "news add",
+  "who": "member",
+  "options": {
+   "channel": 500,
+   "query": "q",
+   "interval": 1
+  },
+  "before": {}
+ },
+ {
+  "id": "news-add-refuses-outside-guild",
+  "path": "news add",
+  "who": "dm",
+  "options": {
+   "channel": 500,
+   "query": "q"
+  },
+  "before": {}
+ },
+ {
+  "id": "news-remove-one-of-two",
+  "path": "news remove",
+  "who": "admin",
+  "options": {
+   "feed_id": "aaaa1111"
+  },
+  "before": {
+   "a": 1,
+   "news_feeds": {
+    "aaaa1111": {
+     "channel_id": 500,
+     "query": "AI技術",
+     "interval": 60,
+     "last_run": 1700000000.5,
+     "seen_hashes": [
+      "h1",
+      "h2"
+     ]
+    },
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  }
+ },
+ {
+  "id": "news-remove-the-last-feed-leaves-an-empty-table",
+  "path": "news remove",
+  "who": "admin",
+  "options": {
+   "feed_id": "bbbb2222"
+  },
+  "before": {
+   "news_feeds": {
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  }
+ },
+ {
+  "id": "news-remove-unknown",
+  "path": "news remove",
+  "who": "admin",
+  "options": {
+   "feed_id": "cccc3333"
+  },
+  "before": {
+   "news_feeds": {
+    "aaaa1111": {
+     "channel_id": 500,
+     "query": "AI技術",
+     "interval": 60,
+     "last_run": 1700000000.5,
+     "seen_hashes": [
+      "h1",
+      "h2"
+     ]
+    },
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  }
+ },
+ {
+  "id": "news-remove-when-nothing-is-set",
+  "path": "news remove",
+  "who": "admin",
+  "options": {
+   "feed_id": "aaaa1111"
+  },
+  "before": {
+   "a": 1
+  }
+ },
+ {
+  "id": "news-remove-strips-the-id-but-echoes-it-as-typed",
+  "path": "news remove",
+  "who": "admin",
+  "options": {
+   "feed_id": " \taaaa1111　"
+  },
+  "before": {
+   "news_feeds": {
+    "aaaa1111": {
+     "channel_id": 500,
+     "query": "AI技術",
+     "interval": 60,
+     "last_run": 1700000000.5,
+     "seen_hashes": [
+      "h1",
+      "h2"
+     ]
+    },
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  }
+ },
+ {
+  "id": "news-remove-is-case-sensitive",
+  "path": "news remove",
+  "who": "admin",
+  "options": {
+   "feed_id": "AAAA1111"
+  },
+  "before": {
+   "news_feeds": {
+    "aaaa1111": {
+     "channel_id": 500,
+     "query": "AI技術",
+     "interval": 60,
+     "last_run": 1700000000.5,
+     "seen_hashes": [
+      "h1",
+      "h2"
+     ]
+    },
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  }
+ },
+ {
+  "id": "news-remove-from-a-broken-table",
+  "path": "news remove",
+  "who": "admin",
+  "options": {
+   "feed_id": "aaaa1111"
+  },
+  "before": {
+   "news_feeds": [
+    "aaaa1111"
+   ]
+  }
+ },
+ {
+  "id": "news-remove-a-broken-feed",
+  "path": "news remove",
+  "who": "admin",
+  "options": {
+   "feed_id": "x"
+  },
+  "before": {
+   "news_feeds": {
+    "x": "壊れた値",
+    "y": {}
+   }
+  }
+ },
+ {
+  "id": "news-remove-refuses-non-admin",
+  "path": "news remove",
+  "who": "member",
+  "options": {
+   "feed_id": "aaaa1111"
+  },
+  "before": {
+   "news_feeds": {
+    "aaaa1111": {
+     "channel_id": 500,
+     "query": "AI技術",
+     "interval": 60,
+     "last_run": 1700000000.5,
+     "seen_hashes": [
+      "h1",
+      "h2"
+     ]
+    },
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  }
+ },
+ {
+  "id": "news-remove-refuses-outside-guild",
+  "path": "news remove",
+  "who": "dm",
+  "options": {
+   "feed_id": "aaaa1111"
+  },
+  "before": {}
+ },
+ {
+  "id": "news-list-empty",
+  "path": "news list",
+  "who": "admin",
+  "options": {},
+  "before": {}
+ },
+ {
+  "id": "news-list-empty-table",
+  "path": "news list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "news_feeds": {}
+  }
+ },
+ {
+  "id": "news-list-several",
+  "path": "news list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "aaaa1111": {
+     "channel_id": 500,
+     "query": "AI技術",
+     "interval": 60,
+     "last_run": 1700000000.5,
+     "seen_hashes": [
+      "h1",
+      "h2"
+     ]
+    },
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  }
+ },
+ {
+  "id": "news-list-open-to-members",
+  "path": "news list",
+  "who": "member",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "aaaa1111": {
+     "channel_id": 500,
+     "query": "AI技術",
+     "interval": 60,
+     "last_run": 1700000000.5,
+     "seen_hashes": [
+      "h1",
+      "h2"
+     ]
+    },
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  }
+ },
+ {
+  "id": "news-list-outside-guild",
+  "path": "news list",
+  "who": "dm",
+  "options": {},
+  "before": {}
+ },
+ {
+  "id": "news-list-missing-values-are-written-as-python-writes-them",
+  "path": "news list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "a": {},
+    "b": {
+     "query": null,
+     "channel_id": "500",
+     "interval": 7.5
+    },
+    "c": {
+     "query": "",
+     "channel_id": null,
+     "interval": true
+    }
+   }
+  }
+ },
+ {
+  "id": "news-list-cuts-the-query-at-60-characters",
+  "path": "news list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "a": {
+     "query": "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああい",
+     "channel_id": 1,
+     "interval": 5
+    },
+    "b": {
+     "query": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq😀x",
+     "channel_id": 2,
+     "interval": 5
+    }
+   }
+  }
+ },
+ {
+  "id": "news-list-keeps-10-and-counts-the-rest",
+  "path": "news list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "00000000": {
+     "channel_id": 500,
+     "query": "q0",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000001": {
+     "channel_id": 501,
+     "query": "q1",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000002": {
+     "channel_id": 502,
+     "query": "q2",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000003": {
+     "channel_id": 503,
+     "query": "q3",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000004": {
+     "channel_id": 504,
+     "query": "q4",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000005": {
+     "channel_id": 505,
+     "query": "q5",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000006": {
+     "channel_id": 506,
+     "query": "q6",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000007": {
+     "channel_id": 507,
+     "query": "q7",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000008": {
+     "channel_id": 508,
+     "query": "q8",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000009": {
+     "channel_id": 509,
+     "query": "q9",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000000a": {
+     "channel_id": 510,
+     "query": "q10",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000000b": {
+     "channel_id": 511,
+     "query": "q11",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  }
+ },
+ {
+  "id": "news-list-broken-feed-fails",
+  "path": "news list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "a": {
+     "query": "q"
+    },
+    "b": "壊れた値"
+   }
+  }
+ },
+ {
+  "id": "news-list-number-query-fails",
+  "path": "news list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "a": {
+     "query": 5
+    }
+   }
+  }
+ },
+ {
+  "id": "news-list-zero-query-is-empty",
+  "path": "news list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "a": {
+     "query": 0,
+     "channel_id": 1,
+     "interval": 5
+    }
+   }
+  }
+ },
+ {
+  "id": "news-list-broken-table-fails",
+  "path": "news list",
+  "who": "admin",
+  "options": {},
+  "before": {
+   "news_feeds": 3.5
+  }
+ },
+ {
+  "id": "ac-message-id-all-when-nothing-is-typed",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "message_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "ac-message-id-filters-by-substring",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "message_id",
+  "current": "22",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "ac-message-id-no-match",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "message_id",
+  "current": "9",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "ac-message-id-nothing-set",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "message_id",
+  "current": "",
+  "options": {},
+  "before": {}
+ },
+ {
+  "id": "ac-message-id-outside-guild",
+  "path": "reactionrole remove",
+  "who": "dm",
+  "focused": "message_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "ac-message-id-is-open-to-admins-too",
+  "path": "reactionrole remove",
+  "who": "admin",
+  "focused": "message_id",
+  "current": "1",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "ac-message-id-keeps-the-first-25",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "message_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1000": {
+     "👍": 1
+    },
+    "1001": {
+     "👍": 1
+    },
+    "1002": {
+     "👍": 1
+    },
+    "1003": {
+     "👍": 1
+    },
+    "1004": {
+     "👍": 1
+    },
+    "1005": {
+     "👍": 1
+    },
+    "1006": {
+     "👍": 1
+    },
+    "1007": {
+     "👍": 1
+    },
+    "1008": {
+     "👍": 1
+    },
+    "1009": {
+     "👍": 1
+    },
+    "1010": {
+     "👍": 1
+    },
+    "1011": {
+     "👍": 1
+    },
+    "1012": {
+     "👍": 1
+    },
+    "1013": {
+     "👍": 1
+    },
+    "1014": {
+     "👍": 1
+    },
+    "1015": {
+     "👍": 1
+    },
+    "1016": {
+     "👍": 1
+    },
+    "1017": {
+     "👍": 1
+    },
+    "1018": {
+     "👍": 1
+    },
+    "1019": {
+     "👍": 1
+    },
+    "1020": {
+     "👍": 1
+    },
+    "1021": {
+     "👍": 1
+    },
+    "1022": {
+     "👍": 1
+    },
+    "1023": {
+     "👍": 1
+    },
+    "1024": {
+     "👍": 1
+    },
+    "1025": {
+     "👍": 1
+    },
+    "1026": {
+     "👍": 1
+    },
+    "1027": {
+     "👍": 1
+    },
+    "1028": {
+     "👍": 1
+    },
+    "1029": {
+     "👍": 1
+    }
+   }
+  }
+ },
+ {
+  "id": "ac-message-id-filters-before-keeping-25",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "message_id",
+  "current": "9",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1000": {
+     "👍": 1
+    },
+    "1001": {
+     "👍": 1
+    },
+    "1002": {
+     "👍": 1
+    },
+    "1003": {
+     "👍": 1
+    },
+    "1004": {
+     "👍": 1
+    },
+    "1005": {
+     "👍": 1
+    },
+    "1006": {
+     "👍": 1
+    },
+    "1007": {
+     "👍": 1
+    },
+    "1008": {
+     "👍": 1
+    },
+    "1009": {
+     "👍": 1
+    },
+    "1010": {
+     "👍": 1
+    },
+    "1011": {
+     "👍": 1
+    },
+    "1012": {
+     "👍": 1
+    },
+    "1013": {
+     "👍": 1
+    },
+    "1014": {
+     "👍": 1
+    },
+    "1015": {
+     "👍": 1
+    },
+    "1016": {
+     "👍": 1
+    },
+    "1017": {
+     "👍": 1
+    },
+    "1018": {
+     "👍": 1
+    },
+    "1019": {
+     "👍": 1
+    },
+    "1020": {
+     "👍": 1
+    },
+    "1021": {
+     "👍": 1
+    },
+    "1022": {
+     "👍": 1
+    },
+    "1023": {
+     "👍": 1
+    },
+    "1024": {
+     "👍": 1
+    },
+    "1025": {
+     "👍": 1
+    },
+    "1026": {
+     "👍": 1
+    },
+    "1027": {
+     "👍": 1
+    },
+    "1028": {
+     "👍": 1
+    },
+    "1029": {
+     "👍": 1
+    },
+    "1030": {
+     "👍": 1
+    },
+    "1031": {
+     "👍": 1
+    },
+    "1032": {
+     "👍": 1
+    },
+    "1033": {
+     "👍": 1
+    },
+    "1034": {
+     "👍": 1
+    },
+    "1035": {
+     "👍": 1
+    },
+    "1036": {
+     "👍": 1
+    },
+    "1037": {
+     "👍": 1
+    },
+    "1038": {
+     "👍": 1
+    },
+    "1039": {
+     "👍": 1
+    },
+    "1040": {
+     "👍": 1
+    },
+    "1041": {
+     "👍": 1
+    },
+    "1042": {
+     "👍": 1
+    },
+    "1043": {
+     "👍": 1
+    },
+    "1044": {
+     "👍": 1
+    },
+    "1045": {
+     "👍": 1
+    },
+    "1046": {
+     "👍": 1
+    },
+    "1047": {
+     "👍": 1
+    },
+    "1048": {
+     "👍": 1
+    },
+    "1049": {
+     "👍": 1
+    },
+    "1050": {
+     "👍": 1
+    },
+    "1051": {
+     "👍": 1
+    },
+    "1052": {
+     "👍": 1
+    },
+    "1053": {
+     "👍": 1
+    },
+    "1054": {
+     "👍": 1
+    },
+    "1055": {
+     "👍": 1
+    },
+    "1056": {
+     "👍": 1
+    },
+    "1057": {
+     "👍": 1
+    },
+    "1058": {
+     "👍": 1
+    },
+    "1059": {
+     "👍": 1
+    },
+    "1060": {
+     "👍": 1
+    },
+    "1061": {
+     "👍": 1
+    },
+    "1062": {
+     "👍": 1
+    },
+    "1063": {
+     "👍": 1
+    },
+    "1064": {
+     "👍": 1
+    },
+    "1065": {
+     "👍": 1
+    },
+    "1066": {
+     "👍": 1
+    },
+    "1067": {
+     "👍": 1
+    },
+    "1068": {
+     "👍": 1
+    },
+    "1069": {
+     "👍": 1
+    },
+    "1070": {
+     "👍": 1
+    },
+    "1071": {
+     "👍": 1
+    },
+    "1072": {
+     "👍": 1
+    },
+    "1073": {
+     "👍": 1
+    },
+    "1074": {
+     "👍": 1
+    },
+    "1075": {
+     "👍": 1
+    },
+    "1076": {
+     "👍": 1
+    },
+    "1077": {
+     "👍": 1
+    },
+    "1078": {
+     "👍": 1
+    },
+    "1079": {
+     "👍": 1
+    },
+    "1080": {
+     "👍": 1
+    },
+    "1081": {
+     "👍": 1
+    },
+    "1082": {
+     "👍": 1
+    },
+    "1083": {
+     "👍": 1
+    },
+    "1084": {
+     "👍": 1
+    },
+    "1085": {
+     "👍": 1
+    },
+    "1086": {
+     "👍": 1
+    },
+    "1087": {
+     "👍": 1
+    },
+    "1088": {
+     "👍": 1
+    },
+    "1089": {
+     "👍": 1
+    },
+    "1090": {
+     "👍": 1
+    },
+    "1091": {
+     "👍": 1
+    },
+    "1092": {
+     "👍": 1
+    },
+    "1093": {
+     "👍": 1
+    },
+    "1094": {
+     "👍": 1
+    },
+    "1095": {
+     "👍": 1
+    },
+    "1096": {
+     "👍": 1
+    },
+    "1097": {
+     "👍": 1
+    },
+    "1098": {
+     "👍": 1
+    },
+    "1099": {
+     "👍": 1
+    }
+   }
+  }
+ },
+ {
+  "id": "ac-message-id-counts-lists-and-strings-too",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "message_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {},
+    "2": [
+     1,
+     2,
+     3
+    ],
+    "3": "あいう😀"
+   }
+  }
+ },
+ {
+  "id": "ac-message-id-number-mapping-fails",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "message_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {
+     "👍": 1
+    },
+    "2": 5
+   }
+  }
+ },
+ {
+  "id": "ac-message-id-null-mapping-fails",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "message_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "2": null
+   }
+  }
+ },
+ {
+  "id": "ac-message-id-filtered-out-broken-mapping-does-not-fail",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "message_id",
+  "current": "1",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {
+     "👍": 1
+    },
+    "2": 5
+   }
+  }
+ },
+ {
+  "id": "ac-message-id-cuts-the-name-at-100-characters",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "message_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777": {
+     "👍": 1
+    },
+    "88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888": {
+     "👍": 1,
+     "✅": 2
+    }
+   }
+  }
+ },
+ {
+  "id": "ac-message-id-broken-table-fails",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "message_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": "壊れた値"
+  }
+ },
+ {
+  "id": "ac-message-id-empty-list-table",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "message_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": []
+  }
+ },
+ {
+  "id": "ac-message-id-is-case-sensitive",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "message_id",
+  "current": "A",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "abc": {
+     "👍": 1
+    },
+    "ABC": {
+     "👍": 1
+    }
+   }
+  }
+ },
+ {
+  "id": "ac-emoji-all-messages-when-no-message-is-chosen",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-only-the-chosen-message",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {
+   "message_id": "111"
+  },
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-unknown-message-falls-back-to-all",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {
+   "message_id": "999"
+  },
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-the-message-id-is-matched-as-typed",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {
+   "message_id": " 111"
+  },
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-empty-message-id-means-all",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {
+   "message_id": ""
+  },
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-empty-mapping-falls-back-to-all",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {
+   "message_id": "111"
+  },
+  "before": {
+   "reaction_roles": {
+    "111": {},
+    "222": {
+     "✅": 22
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-filter-ignores-case",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "BLOB",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-filter-lowercases-like-python",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "ΣΑΣ",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {
+     "<:σας:1>": 20,
+     "<:İ:2>": 21,
+     "<:i̇:3>": 22
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-filter-dotted-capital-i",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "İ",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {
+     "<:σας:1>": 20,
+     "<:İ:2>": 21,
+     "<:i̇:3>": 22
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-no-match",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "zzz",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-unknown-role-shows-the-id",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者"
+  }
+ },
+ {
+  "id": "ac-emoji-role-ids-are-looked-up-like-a-python-dict",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {
+     "a": "20",
+     "b": 20.0,
+     "c": 20.5,
+     "d": null,
+     "e": true,
+     "f": -20,
+     "g": 0
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-list-role-id-fails",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {
+     "a": [
+      20
+     ]
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-dict-role-id-fails",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {
+     "a": {
+      "id": 20
+     }
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-filtered-out-broken-role-id-does-not-fail",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "b",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {
+     "a": [
+      20
+     ],
+     "b": 20
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-stops-at-25",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {
+     "e0": 20,
+     "e1": 20,
+     "e2": 20,
+     "e3": 20,
+     "e4": 20,
+     "e5": 20,
+     "e6": 20,
+     "e7": 20,
+     "e8": 20,
+     "e9": 20,
+     "e10": 20,
+     "e11": 20,
+     "e12": 20,
+     "e13": 20,
+     "e14": 20,
+     "e15": 20,
+     "e16": 20,
+     "e17": 20,
+     "e18": 20,
+     "e19": 20,
+     "e20": 20,
+     "e21": 20,
+     "e22": 20,
+     "e23": 20,
+     "e24": 20,
+     "e25": 20,
+     "e26": 20,
+     "e27": 20,
+     "e28": 20,
+     "e29": 20
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-a-broken-mapping-after-the-25th-is-never-reached",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {
+     "e0": 20,
+     "e1": 20,
+     "e2": 20,
+     "e3": 20,
+     "e4": 20,
+     "e5": 20,
+     "e6": 20,
+     "e7": 20,
+     "e8": 20,
+     "e9": 20,
+     "e10": 20,
+     "e11": 20,
+     "e12": 20,
+     "e13": 20,
+     "e14": 20,
+     "e15": 20,
+     "e16": 20,
+     "e17": 20,
+     "e18": 20,
+     "e19": 20,
+     "e20": 20,
+     "e21": 20,
+     "e22": 20,
+     "e23": 20,
+     "e24": 20
+    },
+    "2": "壊れた値"
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-a-broken-mapping-before-the-25th-fails",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {
+     "e0": 20,
+     "e1": 20,
+     "e2": 20,
+     "e3": 20,
+     "e4": 20,
+     "e5": 20,
+     "e6": 20,
+     "e7": 20,
+     "e8": 20,
+     "e9": 20,
+     "e10": 20,
+     "e11": 20,
+     "e12": 20,
+     "e13": 20,
+     "e14": 20,
+     "e15": 20,
+     "e16": 20,
+     "e17": 20,
+     "e18": 20,
+     "e19": 20,
+     "e20": 20,
+     "e21": 20,
+     "e22": 20,
+     "e23": 20
+    },
+    "2": "壊れた値"
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-an-empty-string-mapping-fails-too",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": ""
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-chosen-broken-mapping-fails",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {
+   "message_id": "111"
+  },
+  "before": {
+   "reaction_roles": {
+    "111": "👍",
+    "222": {
+     "✅": 22
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-chosen-empty-list-mapping-falls-back-and-fails-there",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {
+   "message_id": "111"
+  },
+  "before": {
+   "reaction_roles": {
+    "111": [],
+    "222": {
+     "✅": 22
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-chosen-zero-mapping-falls-back",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {
+   "message_id": "111"
+  },
+  "before": {
+   "reaction_roles": {
+    "222": {
+     "✅": 22
+    },
+    "111": 0
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-cuts-the-name-at-100-characters",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "1": {
+     "絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵絵": 20,
+     "字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字字": 20
+    }
+   }
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-nothing-set",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {},
+  "before": {},
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-emoji-outside-guild",
+  "path": "reactionrole remove",
+  "who": "dm",
+  "focused": "emoji",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": {
+    "111": {
+     "👍": 20,
+     "<:blob:5>": 21
+    },
+    "222": {
+     "✅": 22
+    }
+   }
+  }
+ },
+ {
+  "id": "ac-emoji-broken-table-fails",
+  "path": "reactionrole remove",
+  "who": "member",
+  "focused": "emoji",
+  "current": "",
+  "options": {},
+  "before": {
+   "reaction_roles": 5
+  },
+  "roles": {
+   "20": "参加者",
+   "21": "Blob 係",
+   "22": "確認済み"
+  }
+ },
+ {
+  "id": "ac-feed-all-when-nothing-is-typed",
+  "path": "news remove",
+  "who": "member",
+  "focused": "feed_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "aaaa1111": {
+     "channel_id": 500,
+     "query": "AI技術",
+     "interval": 60,
+     "last_run": 1700000000.5,
+     "seen_hashes": [
+      "h1",
+      "h2"
+     ]
+    },
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  },
+  "channels": {
+   "500": "ニュース",
+   "501": "tech-news"
+  }
+ },
+ {
+  "id": "ac-feed-filters-by-id-ignoring-case",
+  "path": "news remove",
+  "who": "member",
+  "focused": "feed_id",
+  "current": "BBBB",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "aaaa1111": {
+     "channel_id": 500,
+     "query": "AI技術",
+     "interval": 60,
+     "last_run": 1700000000.5,
+     "seen_hashes": [
+      "h1",
+      "h2"
+     ]
+    },
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  },
+  "channels": {
+   "500": "ニュース",
+   "501": "tech-news"
+  }
+ },
+ {
+  "id": "ac-feed-filters-by-query-ignoring-case",
+  "path": "news remove",
+  "who": "member",
+  "focused": "feed_id",
+  "current": "rust",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "aaaa1111": {
+     "channel_id": 500,
+     "query": "AI技術",
+     "interval": 60,
+     "last_run": 1700000000.5,
+     "seen_hashes": [
+      "h1",
+      "h2"
+     ]
+    },
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  },
+  "channels": {
+   "500": "ニュース",
+   "501": "tech-news"
+  }
+ },
+ {
+  "id": "ac-feed-no-match",
+  "path": "news remove",
+  "who": "member",
+  "focused": "feed_id",
+  "current": "zzz",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "aaaa1111": {
+     "channel_id": 500,
+     "query": "AI技術",
+     "interval": 60,
+     "last_run": 1700000000.5,
+     "seen_hashes": [
+      "h1",
+      "h2"
+     ]
+    },
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  },
+  "channels": {
+   "500": "ニュース",
+   "501": "tech-news"
+  }
+ },
+ {
+  "id": "ac-feed-unknown-channel",
+  "path": "news remove",
+  "who": "member",
+  "focused": "feed_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "aaaa1111": {
+     "channel_id": 500,
+     "query": "AI技術",
+     "interval": 60,
+     "last_run": 1700000000.5,
+     "seen_hashes": [
+      "h1",
+      "h2"
+     ]
+    },
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  },
+  "channels": {
+   "500": "ニュース"
+  }
+ },
+ {
+  "id": "ac-feed-channel-ids-are-looked-up-like-a-python-dict",
+  "path": "news remove",
+  "who": "member",
+  "focused": "feed_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "a": {
+     "query": "q",
+     "channel_id": "500"
+    },
+    "b": {
+     "query": "q",
+     "channel_id": 500.0
+    },
+    "c": {
+     "query": "q"
+    },
+    "d": {
+     "query": "q",
+     "channel_id": null
+    }
+   }
+  },
+  "channels": {
+   "500": "ニュース",
+   "501": "tech-news"
+  }
+ },
+ {
+  "id": "ac-feed-odd-queries-are-written-as-python-writes-them",
+  "path": "news remove",
+  "who": "member",
+  "focused": "feed_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "a": {
+     "query": 5,
+     "channel_id": 500
+    },
+    "b": {
+     "query": null
+    },
+    "c": {},
+    "d": {
+     "query": true
+    }
+   }
+  },
+  "channels": {
+   "500": "ニュース",
+   "501": "tech-news"
+  }
+ },
+ {
+  "id": "ac-feed-filter-matches-the-written-query",
+  "path": "news remove",
+  "who": "member",
+  "focused": "feed_id",
+  "current": "none",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "a": {
+     "query": 5
+    },
+    "b": {
+     "query": null
+    }
+   }
+  },
+  "channels": {
+   "500": "ニュース",
+   "501": "tech-news"
+  }
+ },
+ {
+  "id": "ac-feed-keeps-the-first-25",
+  "path": "news remove",
+  "who": "member",
+  "focused": "feed_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "00000000": {
+     "channel_id": 500,
+     "query": "q0",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000001": {
+     "channel_id": 501,
+     "query": "q1",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000002": {
+     "channel_id": 502,
+     "query": "q2",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000003": {
+     "channel_id": 503,
+     "query": "q3",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000004": {
+     "channel_id": 504,
+     "query": "q4",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000005": {
+     "channel_id": 505,
+     "query": "q5",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000006": {
+     "channel_id": 506,
+     "query": "q6",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000007": {
+     "channel_id": 507,
+     "query": "q7",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000008": {
+     "channel_id": 508,
+     "query": "q8",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000009": {
+     "channel_id": 509,
+     "query": "q9",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000000a": {
+     "channel_id": 510,
+     "query": "q10",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000000b": {
+     "channel_id": 511,
+     "query": "q11",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000000c": {
+     "channel_id": 512,
+     "query": "q12",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000000d": {
+     "channel_id": 513,
+     "query": "q13",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000000e": {
+     "channel_id": 514,
+     "query": "q14",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000000f": {
+     "channel_id": 515,
+     "query": "q15",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000010": {
+     "channel_id": 516,
+     "query": "q16",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000011": {
+     "channel_id": 517,
+     "query": "q17",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000012": {
+     "channel_id": 518,
+     "query": "q18",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000013": {
+     "channel_id": 519,
+     "query": "q19",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000014": {
+     "channel_id": 520,
+     "query": "q20",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000015": {
+     "channel_id": 521,
+     "query": "q21",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000016": {
+     "channel_id": 522,
+     "query": "q22",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000017": {
+     "channel_id": 523,
+     "query": "q23",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000018": {
+     "channel_id": 524,
+     "query": "q24",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000019": {
+     "channel_id": 525,
+     "query": "q25",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000001a": {
+     "channel_id": 526,
+     "query": "q26",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000001b": {
+     "channel_id": 527,
+     "query": "q27",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000001c": {
+     "channel_id": 528,
+     "query": "q28",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000001d": {
+     "channel_id": 529,
+     "query": "q29",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  },
+  "channels": {
+   "500": "ニュース",
+   "501": "tech-news"
+  }
+ },
+ {
+  "id": "ac-feed-cuts-the-name-at-100-characters",
+  "path": "news remove",
+  "who": "member",
+  "focused": "feed_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "aaaa1111": {
+     "query": "長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長長",
+     "channel_id": 500
+    },
+    "bbbb2222": {
+     "query": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+     "channel_id": 500
+    }
+   }
+  },
+  "channels": {
+   "500": "ニュース",
+   "501": "tech-news"
+  }
+ },
+ {
+  "id": "ac-feed-broken-feed-fails",
+  "path": "news remove",
+  "who": "member",
+  "focused": "feed_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "a": {
+     "query": "q"
+    },
+    "b": "壊れた値"
+   }
+  },
+  "channels": {
+   "500": "ニュース",
+   "501": "tech-news"
+  }
+ },
+ {
+  "id": "ac-feed-broken-feed-fails-even-beyond-the-25th",
+  "path": "news remove",
+  "who": "member",
+  "focused": "feed_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "00000000": {
+     "channel_id": 500,
+     "query": "q0",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000001": {
+     "channel_id": 501,
+     "query": "q1",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000002": {
+     "channel_id": 502,
+     "query": "q2",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000003": {
+     "channel_id": 503,
+     "query": "q3",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000004": {
+     "channel_id": 504,
+     "query": "q4",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000005": {
+     "channel_id": 505,
+     "query": "q5",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000006": {
+     "channel_id": 506,
+     "query": "q6",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000007": {
+     "channel_id": 507,
+     "query": "q7",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000008": {
+     "channel_id": 508,
+     "query": "q8",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000009": {
+     "channel_id": 509,
+     "query": "q9",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000000a": {
+     "channel_id": 510,
+     "query": "q10",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000000b": {
+     "channel_id": 511,
+     "query": "q11",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000000c": {
+     "channel_id": 512,
+     "query": "q12",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000000d": {
+     "channel_id": 513,
+     "query": "q13",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000000e": {
+     "channel_id": 514,
+     "query": "q14",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "0000000f": {
+     "channel_id": 515,
+     "query": "q15",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000010": {
+     "channel_id": 516,
+     "query": "q16",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000011": {
+     "channel_id": 517,
+     "query": "q17",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000012": {
+     "channel_id": 518,
+     "query": "q18",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000013": {
+     "channel_id": 519,
+     "query": "q19",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000014": {
+     "channel_id": 520,
+     "query": "q20",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000015": {
+     "channel_id": 521,
+     "query": "q21",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000016": {
+     "channel_id": 522,
+     "query": "q22",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000017": {
+     "channel_id": 523,
+     "query": "q23",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000018": {
+     "channel_id": 524,
+     "query": "q24",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "00000019": {
+     "channel_id": 525,
+     "query": "q25",
+     "interval": 60,
+     "last_run": 0.0,
+     "seen_hashes": []
+    },
+    "zz": "壊れた値"
+   }
+  },
+  "channels": {
+   "500": "ニュース",
+   "501": "tech-news"
+  }
+ },
+ {
+  "id": "ac-feed-list-channel-id-fails",
+  "path": "news remove",
+  "who": "member",
+  "focused": "feed_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "a": {
+     "query": "q",
+     "channel_id": [
+      500
+     ]
+    }
+   }
+  },
+  "channels": {
+   "500": "ニュース",
+   "501": "tech-news"
+  }
+ },
+ {
+  "id": "ac-feed-filtered-out-broken-channel-id-does-not-fail",
+  "path": "news remove",
+  "who": "member",
+  "focused": "feed_id",
+  "current": "keep",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "a": {
+     "query": "q",
+     "channel_id": [
+      500
+     ]
+    },
+    "b": {
+     "query": "keep"
+    }
+   }
+  },
+  "channels": {
+   "500": "ニュース",
+   "501": "tech-news"
+  }
+ },
+ {
+  "id": "ac-feed-nothing-set",
+  "path": "news remove",
+  "who": "member",
+  "focused": "feed_id",
+  "current": "",
+  "options": {},
+  "before": {},
+  "channels": {
+   "500": "ニュース",
+   "501": "tech-news"
+  }
+ },
+ {
+  "id": "ac-feed-outside-guild",
+  "path": "news remove",
+  "who": "dm",
+  "focused": "feed_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "aaaa1111": {
+     "channel_id": 500,
+     "query": "AI技術",
+     "interval": 60,
+     "last_run": 1700000000.5,
+     "seen_hashes": [
+      "h1",
+      "h2"
+     ]
+    },
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  }
+ },
+ {
+  "id": "ac-feed-is-open-to-admins-too",
+  "path": "news remove",
+  "who": "admin",
+  "focused": "feed_id",
+  "current": "ai",
+  "options": {},
+  "before": {
+   "news_feeds": {
+    "aaaa1111": {
+     "channel_id": 500,
+     "query": "AI技術",
+     "interval": 60,
+     "last_run": 1700000000.5,
+     "seen_hashes": [
+      "h1",
+      "h2"
+     ]
+    },
+    "bbbb2222": {
+     "channel_id": 501,
+     "query": "Rust",
+     "interval": 5,
+     "last_run": 0.0,
+     "seen_hashes": []
+    }
+   }
+  },
+  "channels": {
+   "500": "ニュース",
+   "501": "tech-news"
+  }
+ },
+ {
+  "id": "ac-feed-broken-table-fails",
+  "path": "news remove",
+  "who": "member",
+  "focused": "feed_id",
+  "current": "",
+  "options": {},
+  "before": {
+   "news_feeds": "壊れた値"
+  },
+  "channels": {
+   "500": "ニュース",
+   "501": "tech-news"
+  }
+ }
+]
