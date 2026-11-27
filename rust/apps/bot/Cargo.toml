@@ -13,6 +13,7 @@ workspace = true
 # 版は rust/Cargo.toml の [workspace.dependencies] で決める。
 [dependencies]
 chrono = { workspace = true, features = ["clock", "std"] }
+futures-util = { workspace = true, features = ["std", "sink"] }
 hex = { workspace = true }
 image = { workspace = true, features = ["png", "gif"] }
 regex = { workspace = true }
@@ -30,6 +31,7 @@ serenity = { workspace = true, features = [
 sqlx = { workspace = true, features = ["runtime-tokio", "postgres"] }
 sycs-core = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
+tokio-tungstenite = { workspace = true, features = ["connect", "handshake", "rustls-tls-webpki-roots"] }
 tracing = { workspace = true }
 
 [dev-dependencies]

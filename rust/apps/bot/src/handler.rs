@@ -1,10 +1,10 @@
 //! Discord のイベントを受ける。Python の `events/` にあたる（今は ready・メンバーの出入りと変更・BAN・
 //! メッセージの検査・メッセージの削除と編集のログ・スティッキー・リアクションロール・VC の出入り・
-//! 利用者の状態の記録・スラッシュコマンド）。
+//! 利用者の状態の記録・スラッシュコマンド・地震の通知）。
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use chrono::Utc;
 use serenity::all::{
@@ -20,6 +20,9 @@ use sycs_core::settings::SettingsCache;
 use tracing::{debug, info, warn};
 
 use crate::config::BotConfig;
+use crate::earthquake::{self, Deps};
+use crate::earthquake_badges::PrerenderedBadges;
+use crate::earthquake_feed::{self, CacheDirectory, FeedConfig, HttpOutbox, JmaDetailUrls};
 use crate::groq::Groq;
 use crate::log_channel::{self, Author, AvatarColours, LogSink};
 use crate::members::{self, LogEntry};
@@ -61,6 +64,10 @@ pub struct AppState {
     pub raid: RaidDetector,
     /// メッセージの検査に使う VirusTotal と Groq。
     pub judges: Judges,
+    /// 地震の通知に付ける、気象庁の詳細ページのリンク（一覧の取得と、決めたリンクの覚え）。
+    pub earthquake_urls: JmaDetailUrls,
+    /// 地震の電文の受け取り（動いているもの）。つなぎ直すときに止める。
+    earthquake_feed: Mutex<Option<tokio::task::JoinHandle<()>>>,
     shard_manager: OnceLock<Arc<ShardManager>>,
 }
 
@@ -90,6 +97,8 @@ impl AppState {
             spam: SpamDetector::default(),
             raid: RaidDetector::default(),
             judges,
+            earthquake_urls: JmaDetailUrls::default(),
+            earthquake_feed: Mutex::new(None),
             shard_manager: OnceLock::new(),
         }
     }
@@ -108,18 +117,100 @@ impl AppState {
         }
     }
 
-    /// 管理画面からの依頼のうち、移した用途を実行する。
-    async fn run_task(&self, ctx: &Context, task: signals::Task) {
+    /// 管理画面からの依頼のうち、移した用途を実行する。`payload` は依頼の中身。
+    async fn run_task(self: &Arc<Self>, ctx: &Context, task: signals::Task, payload: String) {
         match task {
             signals::Task::Sticky => {
                 sticky::process_pending(&self.sticky(ctx), |g| self.config.handles(g)).await;
             }
+            signals::Task::EarthquakeReconnect => self.restart_earthquake_feed(ctx),
+            signals::Task::EqReplay => self.replay_earthquake(ctx, &payload).await,
         }
+    }
+
+    /// 地震の電文の受け取りを始める（動いていれば止めてから）。Python の `_signal_earthquake_reconnect`。
+    ///
+    /// 始め直すと、重複を見るための id の覚えも空になる（Python と同じ）。
+    fn restart_earthquake_feed(self: &Arc<Self>, ctx: &Context) {
+        let (state, ctx) = (Arc::clone(self), ctx.clone());
+        let task = tokio::spawn(earthquake_feed::run_forever(
+            FeedConfig::default(),
+            move |kind, event| {
+                let (state, ctx) = (Arc::clone(&state), ctx.clone());
+                async move {
+                    state
+                        .notify_earthquake(&ctx, kind, &event, None, None)
+                        .await;
+                }
+            },
+        ));
+        let mut running = self
+            .earthquake_feed
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        if let Some(old) = running.replace(task) {
+            old.abort();
+        }
+    }
+
+    /// 地震の電文を 1 つ通知する。送ったチャンネルの数を返す。
+    ///
+    /// 震度の札は付ける（[`PrerenderedBadges`]）。震度の地図はまだ移していないので付かない。
+    async fn notify_earthquake(
+        &self,
+        ctx: &Context,
+        kind: earthquake_feed::Kind,
+        event: &serde_json::Value,
+        only_guild: Option<u64>,
+        override_channel: Option<i64>,
+    ) -> usize {
+        let settings = self.settings.snapshot();
+        let handles = |guild_id: u64| self.config.handles(guild_id);
+        let deps = Deps {
+            settings: &settings,
+            directory: &CacheDirectory(&ctx.cache),
+            outbox: &HttpOutbox(&ctx.http),
+            images: &PrerenderedBadges,
+            urls: &self.earthquake_urls,
+            handles: &handles,
+        };
+        match kind {
+            earthquake_feed::Kind::Quake => {
+                earthquake::notify_quake(&deps, event, only_guild, override_channel).await
+            }
+            earthquake_feed::Kind::Tsunami => earthquake::notify_tsunami(&deps, event).await,
+            earthquake_feed::Kind::Eew(notify_type) => {
+                earthquake::notify_eew(&deps, event, notify_type).await
+            }
+        }
+    }
+
+    /// 開発者パネルの「地震リプレイ」。記録済みの電文を、本番と同じ経路で流し直す。Python の
+    /// `_signal_eq_replay`。
+    async fn replay_earthquake(&self, ctx: &Context, payload: &str) {
+        let replay = match earthquake::parse_replay(payload) {
+            Ok(replay) => replay,
+            Err(e) => {
+                warn!("[DEV] eq_replay: 依頼を読めないので何もしませんでした: {e}");
+                return;
+            }
+        };
+        let sent = self
+            .notify_earthquake(
+                ctx,
+                earthquake_feed::Kind::Quake,
+                &replay.event,
+                replay.guild_id,
+                replay.channel_id,
+            )
+            .await;
+        // 0 件のときの理由は、通知の側が警告で出す。
+        info!("[DEV] eq_replay: {sent} 件へ送信");
     }
 }
 
-/// 全サーバーを読み終えたら（来なければ [`CACHE_READY_TIMEOUT`] で見切って）、スティッキーと
-/// 管理画面からの依頼の巡回を始める。
+/// 全サーバーを読み終えたら（来なければ [`CACHE_READY_TIMEOUT`] で見切って）、スティッキー・地震の電文の
+/// 受け取り・管理画面からの依頼の巡回を始める。
 async fn start_after_cache_ready(
     ctx: Context,
     state: Arc<AppState>,
@@ -135,12 +226,17 @@ async fn start_after_cache_ready(
         );
     }
     tokio::spawn(sticky_forever(ctx.clone(), Arc::clone(&state)));
+    if state.config.background_worker {
+        state.restart_earthquake_feed(&ctx);
+    } else {
+        info!("BOT_BACKGROUND_WORKER=false: 地震の電文は受け取りません");
+    }
     if state.config.dev_signals_enabled {
         let pool = state.pool.clone();
-        tokio::spawn(signals::run_forever(pool, move |task| {
+        tokio::spawn(signals::run_forever(pool, move |task, payload| {
             let state = Arc::clone(&state);
             let ctx = ctx.clone();
-            async move { state.run_task(&ctx, task).await }
+            async move { state.run_task(&ctx, task, payload).await }
         }));
     } else {
         info!("BOT_DEV_SIGNALS_ENABLED=false: 管理画面からの依頼は取り出しません");

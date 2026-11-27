@@ -22,6 +22,8 @@ members = ["apps/bot", "crates/sycs-core", "tools/voice-check"]
 [workspace.dependencies]
 chrono = { version = "=0.4.45", default-features = false }
 flate2 = { version = "=1.1.11" }
+# 地震の通知を全部の送り先へ並べて送るのと、WebSocket の読み書き（既にロックにある版）。
+futures-util = { version = "=0.3.34", default-features = false }
 # ハッシュの 16 進表記（既にロックにある版）。
 hex = { version = "=0.4.3" }
 # URL の安全確認で、ASCII 以外のホスト名を reqwest と同じ変換（UTS46）にする。
@@ -46,6 +48,8 @@ symphonia = { version = "=0.5.5" }
 sycs-core = { path = "crates/sycs-core" }
 tempfile = { version = "=3.27.0" }
 tokio = { version = "=1.54.1" }
+# 地震の電文の受け取り（P2P地震情報の WebSocket）。songbird が既に使っている版・同じ TLS（rustls）。
+tokio-tungstenite = { version = "=0.26.2", default-features = false }
 tracing = { version = "=0.1.44" }
 tracing-subscriber = { version = "=0.3.23", default-features = false }
 # URL の安全確認の NFKC（Python の urlsplit の検査と同じ）。url crate が既に使っている版。

@@ -3967,6 +3967,7 @@ name = "sycs-bot"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "futures-util",
  "hex",
  "image",
  "regex",
@@ -3977,6 +3978,7 @@ dependencies = [
  "sqlx",
  "sycs-core",
  "tokio",
+ "tokio-tungstenite 0.26.2",
  "tracing",
 ]
 

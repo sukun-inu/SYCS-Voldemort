@@ -34,6 +34,10 @@ pub const KNOWN_TASKS: &[&str] = &[
 pub enum Task {
     /// スティッキーの指示（貼る・消す）をいま片付ける。
     Sticky,
+    /// 地震の電文の受け取りをつなぎ直す。
+    EarthquakeReconnect,
+    /// 地震の電文を、本番と同じ経路で流し直す（中身は依頼の `payload`）。
+    EqReplay,
 }
 
 /// 1 件をどう扱ったか。
@@ -51,6 +55,8 @@ pub enum Outcome {
 pub fn route(task: &str) -> Outcome {
     match task {
         "sticky" => Outcome::Run(Task::Sticky),
+        "earthquake_reconnect" => Outcome::Run(Task::EarthquakeReconnect),
+        "eq_replay" => Outcome::Run(Task::EqReplay),
         t if KNOWN_TASKS.contains(&t) || t.starts_with("test_") => Outcome::NotPortedYet,
         _ => Outcome::Unknown,
     }
@@ -78,11 +84,11 @@ pub fn handle_all(batch: &[Signal]) -> Vec<Outcome> {
         .collect()
 }
 
-/// 止められるまで巡回する。移した用途は `run` で実行する。データベースに届かなければ警告を
+/// 止められるまで巡回する。移した用途は `run` で実行する（依頼の中身 `payload` も渡す）。データベースに届かなければ警告を
 /// 出して次の巡回で取り直す（取り出しと削除は同じ文なので、取り出せなかった依頼は表に残っている）。
 pub async fn run_forever<F, Fut>(pool: PgPool, run: F)
 where
-    F: Fn(Task) -> Fut,
+    F: Fn(Task, String) -> Fut,
     Fut: Future<Output = ()>,
 {
     loop {
@@ -90,7 +96,7 @@ where
             Ok(batch) => {
                 for (signal, outcome) in batch.iter().zip(handle_all(&batch)) {
                     if let Outcome::Run(task) = outcome {
-                        run(task).await;
+                        run(task, signal.payload.clone()).await;
                         info!(task = %signal.task, id = signal.id, "シグナル完了");
                     }
                 }
@@ -120,7 +126,12 @@ mod tests {
     fn known_tasks_are_not_ported_yet_and_others_are_unknown() {
         assert_eq!(route("sticky"), Outcome::Run(Task::Sticky));
         assert_eq!(route("news_feeds"), Outcome::NotPortedYet);
-        assert_eq!(route("eq_replay"), Outcome::NotPortedYet);
+        assert_eq!(route("eq_replay"), Outcome::Run(Task::EqReplay));
+        assert_eq!(
+            route("earthquake_reconnect"),
+            Outcome::Run(Task::EarthquakeReconnect)
+        );
+        assert_eq!(route("user_state_repair"), Outcome::NotPortedYet);
         assert_eq!(route("test_welcome"), Outcome::NotPortedYet);
         assert_eq!(route("mystery"), Outcome::Unknown);
     }
@@ -152,7 +163,7 @@ mod tests {
     /// 1 件ずつ扱い、件数ぶんの結果が返ること。
     #[test]
     fn every_claimed_signal_is_handled_in_order() {
-        let outcomes = handle_all(&[signal("sticky"), signal("eq_replay"), signal("nope")]);
+        let outcomes = handle_all(&[signal("sticky"), signal("news_feeds"), signal("nope")]);
         assert_eq!(
             outcomes,
             [
