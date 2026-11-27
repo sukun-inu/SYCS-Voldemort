@@ -13,7 +13,7 @@
 
 [workspace]
 resolver = "3"
-members = ["apps/bot", "crates/sycs-core", "tools/voice-check"]
+members = ["apps/bot", "crates/sycs-core", "crates/sycs-text", "tools/voice-check"]
 
 # 依存の版はここで 1 回だけ決める（各 crate は `{ workspace = true }` で受け取る）。
 #
@@ -24,6 +24,8 @@ chrono = { version = "=0.4.45", default-features = false }
 flate2 = { version = "=1.1.11" }
 # 地震の通知を全部の送り先へ並べて送るのと、WebSocket の読み書き（既にロックにある版）。
 futures-util = { version = "=0.3.34", default-features = false }
+# 地震の画像の文字を Pillow と同じに並べる（HarfBuzz の Rust への写し。raqm＝HarfBuzz と同じ並びを出す）。
+harfrust = { version = "=0.16.2", default-features = false }
 # ハッシュの 16 進表記（既にロックにある版）。
 hex = { version = "=0.4.3" }
 # URL の安全確認で、ASCII 以外のホスト名を reqwest と同じ変換（UTS46）にする。
@@ -46,10 +48,13 @@ serde_json = { version = "=1.0.154" }
 # VirusTotal の URL の鍵とファイルのハッシュ（sqlx が既に使っている版）。
 sha2 = { version = "=0.10.9" }
 serenity = { version = "=0.12.5", default-features = false }
+# 地震の画像の文字の輪郭とヒンティング（FreeType と同じ点を出す、Google の Fontations）。
+skrifa = { version = "=0.50.0", default-features = false }
 songbird = { version = "=0.6.1" }
 sqlx = { version = "=0.9.1", default-features = false }
 symphonia = { version = "=0.5.5" }
 sycs-core = { path = "crates/sycs-core" }
+sycs-text = { path = "crates/sycs-text" }
 tempfile = { version = "=3.27.0" }
 tokio = { version = "=1.54.1" }
 # 地震の電文の受け取り（P2P地震情報の WebSocket）。songbird が既に使っている版・同じ TLS（rustls）。
@@ -58,6 +63,8 @@ tracing = { version = "=0.1.44" }
 tracing-subscriber = { version = "=0.3.23", default-features = false }
 # URL の安全確認の NFKC（Python の urlsplit の検査と同じ）。url crate が既に使っている版。
 unicode-normalization = { version = "=0.1.26" }
+# 文字の種類（重ねる記号か）で、raqm と同じに用字を決める（idna が既に使っている版）。
+unicode-properties = { version = "=0.1.5", default-features = false }
 
 [workspace.package]
 edition = "2024"
@@ -75,3 +82,25 @@ missing_docs = "warn"
 [workspace.lints.clippy]
 # CI では -D warnings で回すので、warn がそのまま落ちる条件になる。
 all = { level = "warn", priority = -1 }
+
+# 地震の画像の文字（crates/sycs-text）は、画素を 1 つずつ回す。最適化なし（cargo test・cargo build の既定）だと
+# 桁違いに遅く、CI のテスト（QEMU の Sandy Bridge のふり）が終わらない。この crate と、字の形を出す依存だけ
+# 最適化を効かせる（Bot 本体と他の依存のビルドは変わらない。release は元から最適化される）。
+[profile.dev.package.sycs-text]
+opt-level = 3
+
+[profile.dev.package.skrifa]
+opt-level = 3
+
+[profile.dev.package.read-fonts]
+opt-level = 3
+
+[profile.dev.package.font-types]
+opt-level = 3
+
+[profile.dev.package.harfrust]
+opt-level = 3
+
+# 基準と比べるハッシュ（文字のテストは 1 回に数百 MB の画素を通す。最適化なしだと QEMU の上で分単位になる）。
+[profile.dev.package.sha2]
+opt-level = 3
