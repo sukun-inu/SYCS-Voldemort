@@ -19,6 +19,7 @@ use sycs_core::metrics::Reporter;
 use sycs_core::settings::SettingsCache;
 use tracing::{debug, info, warn};
 
+use crate::chat::{self, Chats};
 use crate::config::BotConfig;
 use crate::earthquake::{self, Deps};
 use crate::earthquake_badges::PrerenderedBadges;
@@ -71,6 +72,8 @@ pub struct AppState {
     earthquake_feed: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// ニュースの取得と要約。
     pub news: News,
+    /// AI の会話の覚え（応答チャンネルでの受け答え）。
+    pub chats: Chats,
     /// 開いている選択の画面（/trusted・/bypass）の覚え。
     pub pickers: commands::picker::Pickers,
     shard_manager: OnceLock<Arc<ShardManager>>,
@@ -85,12 +88,14 @@ impl AppState {
         reporter: Arc<Reporter>,
     ) -> Self {
         let vt = Arc::new(VirusTotal::new(config.vt.clone()));
-        // Groq は用途ごとの枠を共有するので、プロセスに 1 つだけ作って配る（投稿の判定とニュースの要約）。
+        // Groq は用途ごとの枠を共有するので、プロセスに 1 つだけ作って配る（投稿の判定・ニュースの要約・
+        // AI の会話）。
         let groq = Arc::new(Groq::new(config.groq.clone()));
         let moderation = Arc::new(Moderation::new(
             Arc::clone(&groq),
             config.moderation_cache_ttl,
         ));
+        let chats = Chats::new(Arc::clone(&groq));
         let news = News::new(config.news.clone(), groq);
         let judges = Judges::new(vt, moderation, config.vt_scan_concurrency);
         let user_state = user_state::Recorder::new(pool.clone(), config.user_state.clone());
@@ -110,6 +115,7 @@ impl AppState {
             earthquake_urls: JmaDetailUrls::default(),
             earthquake_feed: Mutex::new(None),
             news,
+            chats,
             pickers: commands::picker::Pickers::default(),
             shard_manager: OnceLock::new(),
         }
@@ -391,6 +397,50 @@ impl Handler {
         message_security::check_message(&fx, &cx, post).await;
     }
 
+    /// 応答チャンネルへの投稿に、AI の返事を書く。Python の `handle_chatgpt_message`。
+    async fn chat(
+        &self,
+        ctx: &Context,
+        guild_id: GuildId,
+        message: &Message,
+        author: Option<&Author>,
+    ) {
+        let snapshot = self.state.settings.snapshot();
+        let incoming = chat::Incoming {
+            guild_id: guild_id.get(),
+            channel_id: message.channel_id.get(),
+            user_id: message.author.id.get(),
+            content: &message.content,
+            from_self: message.author.id == ctx.cache.current_user().id,
+        };
+        let outlet = chat::DiscordOutlet {
+            sink: LogSink {
+                cache: &ctx.cache,
+                http: &ctx.http,
+                settings: &self.state.settings,
+                colours: &self.state.colours,
+            },
+            guild_id,
+            channel_id: message.channel_id,
+            // サーバーごとのアバターが分かるときはそちら（検査のために組み立てたもの）。
+            author: author
+                .cloned()
+                .unwrap_or_else(|| Author::from_user(&message.author)),
+        };
+        let unix_now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0.0, |d| d.as_secs_f64());
+        chat::handle(
+            &self.state.chats,
+            snapshot.guild(guild_id.get()),
+            &incoming,
+            &outlet,
+            unix_now,
+            log_channel::now_jst(),
+        )
+        .await;
+    }
+
     /// 歓迎・お別れを送る。失敗は警告にする。
     async fn greet(&self, ctx: &Context, guild: &GuildFacts, kind: Kind, user: &User) {
         let snapshot = self.state.settings.snapshot();
@@ -632,8 +682,8 @@ impl EventHandler for Handler {
         if new_message.author.bot || !self.handles(guild_id) {
             return;
         }
-        // 検査とスティッキーは並べて走らせる（Python の _dispatch_message の gather と同じ。VirusTotal の
-        // 待ちでスティッキーを遅らせない）。
+        // 検査・スティッキー・AI の会話は並べて走らせる（Python の _dispatch_message の gather と同じ。
+        // VirusTotal や Groq の待ちで、ほかを遅らせない）。
         let post = message_security::post_from_message(&ctx.cache, &new_message);
         let security = async {
             if let Some(post) = &post {
@@ -643,7 +693,13 @@ impl EventHandler for Handler {
         let sticky_ctx = self.state.sticky(&ctx);
         let sticky =
             sticky::handle_message(&sticky_ctx, guild_id.get(), new_message.channel_id.get());
-        tokio::join!(security, sticky);
+        let chat = self.chat(
+            &ctx,
+            guild_id,
+            &new_message,
+            post.as_ref().map(|p| &p.author),
+        );
+        tokio::join!(security, sticky, chat);
     }
 
     async fn message_delete(
