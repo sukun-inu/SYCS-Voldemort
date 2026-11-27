@@ -16,6 +16,7 @@ use serde_json::{Value, json};
 use serenity::all::{ApplicationId, Cache, CommandInteraction, ComponentInteraction, Http};
 use sycs_bot::commands;
 use sycs_bot::commands::picker::Pickers;
+use sycs_bot::commands::quake::Screens;
 use sycs_bot::sticky::StickyLocks;
 use sycs_core::settings::SettingsCache;
 
@@ -92,6 +93,7 @@ struct Stage {
     settings: Arc<SettingsCache>,
     pickers: Pickers,
     sticky_locks: StickyLocks,
+    quake_screens: Screens,
     seen: Arc<Mutex<Vec<Seen>>>,
 }
 
@@ -107,6 +109,7 @@ impl Stage {
                 .unwrap(),
             pickers: Pickers::default(),
             sticky_locks: StickyLocks::default(),
+            quake_screens: Screens::default(),
             seen,
         }
     }
@@ -119,6 +122,7 @@ impl Stage {
             pickers: &self.pickers,
             admin_site_url: "https://admin.example/login",
             sticky_locks: &self.sticky_locks,
+            quake_screens: &self.quake_screens,
         }
     }
 
@@ -387,6 +391,116 @@ async fn the_bypass_picker_reads_role_selections() {
         "バイパスロールから除いた: <@&30>, <@&99>\n（バイパスロール数: 2）"
     );
     assert_eq!(stage.guild_settings()["bypass_role_ids"], json!([20, 40]));
+}
+
+/// 返事の部品をすべて（行をまたいで）並べる。
+fn buttons_of(body: &Value) -> Vec<Value> {
+    body["data"]["components"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|row| row["components"].as_array().cloned().unwrap_or_default())
+        .collect()
+}
+
+/// 部品の ID のうち、この終わり方をするもの。
+fn button_id(buttons: &[Value], suffix: &str) -> String {
+    buttons
+        .iter()
+        .filter_map(|b| b["custom_id"].as_str())
+        .find(|id| id.ends_with(suffix))
+        .unwrap_or_else(|| panic!("{suffix} のボタンが無い: {buttons:?}"))
+        .to_string()
+}
+
+/// /quake type: 開く → 種類を切り替える（画面を描き直すだけで、まだ書かない）→ 保存で書いて、部品を外す。
+/// 本人でない人は押せないこと。保存のあとは、同じ画面のボタンに応えないこと。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn the_quake_type_screen_writes_only_on_save() {
+    let stage = Stage::new(&json!({"earthquake": {"channel_id": 500}})).await;
+    let open = json!({
+        "id": "8004", "name": "quake", "type": 1,
+        "options": [{"name": "type", "type": 1, "options": []}],
+    });
+    commands::dispatch(&stage.deps(), &interaction(OWNER, json!([]), open)).await;
+    let opened = &stage.seen()[0];
+    assert_eq!(opened.body["type"], 4);
+    assert_eq!(opened.body["data"]["flags"], 64);
+    assert_eq!(
+        opened.body["data"]["embeds"][0]["title"],
+        "地震通知タイプ設定"
+    );
+    let buttons = buttons_of(&opened.body);
+    assert_eq!(buttons.len(), 6, "種類 5 つと保存");
+    let tsunami = button_id(&buttons, ":toggle:tsunami");
+    let save = button_id(&buttons, ":save");
+
+    // 本人でない人が押しても、本人にだけ見える断りが返るだけ。
+    commands::component(
+        &stage.deps(),
+        &component("7020", SOMEONE, &tsunami, 2, Value::Null),
+    )
+    .await;
+    let refused = &stage.seen()[1];
+    assert_eq!(refused.body["type"], 4);
+    assert_eq!(refused.body["data"]["flags"], 64);
+    assert_eq!(
+        refused.body["data"]["content"],
+        "貴様にその操作の権限はない。"
+    );
+
+    // 切り替える: 画面を書き換える（種類 7）。津波情報が無効になる。まだ書かない。
+    commands::component(
+        &stage.deps(),
+        &component("7021", OWNER, &tsunami, 2, Value::Null),
+    )
+    .await;
+    let redrawn = &stage.seen()[2];
+    assert_eq!(redrawn.body["type"], 7);
+    let field = redrawn.body["data"]["embeds"][0]["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["name"] == "津波情報")
+        .cloned()
+        .unwrap();
+    assert_eq!(field["value"], "❌ 無効");
+    assert!(
+        stage.guild_settings()["earthquake"]
+            .get("notify_types")
+            .is_none(),
+        "保存の前に書いた"
+    );
+
+    // 保存: 書いて、本文を結果にして部品を外す。チャンネルの設定は残す。
+    commands::component(
+        &stage.deps(),
+        &component("7022", OWNER, &save, 2, Value::Null),
+    )
+    .await;
+    let done = &stage.seen()[3];
+    assert_eq!(done.body["type"], 7);
+    assert_eq!(done.body["data"]["content"], "✅ 余の意志を刻んだ。");
+    assert_eq!(done.body["data"]["components"], json!([]));
+    assert_eq!(
+        stage.guild_settings()["earthquake"],
+        json!({
+            "channel_id": 500,
+            "notify_types": {
+                "eew_forecast": true, "eew_warning": true, "tsunami": false,
+                "quake_info": true, "bot_news": true,
+            },
+        })
+    );
+
+    // 保存のあとは、同じ画面のボタンに応えない。
+    commands::component(
+        &stage.deps(),
+        &component("7023", OWNER, &tsunami, 2, Value::Null),
+    )
+    .await;
+    assert_eq!(stage.seen().len(), 4);
 }
 
 /// /bot settings は Embed と管理画面へのリンクのボタンを、/bot help は誰にでもコマンドの一覧を返すこと。

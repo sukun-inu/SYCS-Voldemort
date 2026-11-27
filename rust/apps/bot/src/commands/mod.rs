@@ -17,8 +17,10 @@
 
 pub mod activity;
 pub mod guards;
+pub mod info;
 pub mod overview;
 pub mod picker;
+pub mod quake;
 pub mod reply;
 pub mod server;
 pub mod settings;
@@ -112,6 +114,18 @@ pub enum Route {
     BotHelp,
     /// サーバーの設定のコマンド（/greeting・/vcnotify・/sticky・/reactionrole・/news）。
     Server(ServerRoute),
+    /// `/quake channel`
+    QuakeChannel,
+    /// `/quake min_scale`
+    QuakeMinScale,
+    /// `/quake status`
+    QuakeStatus,
+    /// `/quake type`
+    QuakeType,
+    /// `/info server`
+    InfoServer,
+    /// `/info user`
+    InfoUser,
 }
 
 /// 移したコマンドの道すじ。
@@ -168,6 +182,12 @@ pub const PORTED: &[(&str, Route)] = &[
     ("news add", Route::Server(ServerRoute::NewsAdd)),
     ("news remove", Route::Server(ServerRoute::NewsRemove)),
     ("news list", Route::Server(ServerRoute::NewsList)),
+    ("quake channel", Route::QuakeChannel),
+    ("quake min_scale", Route::QuakeMinScale),
+    ("quake status", Route::QuakeStatus),
+    ("quake type", Route::QuakeType),
+    ("info server", Route::InfoServer),
+    ("info user", Route::InfoUser),
 ];
 
 /// 定義にはあるが、中身をまだ移していないコマンド。移したら [`PORTED`] へ動かす
@@ -177,12 +197,6 @@ pub const NOT_PORTED_YET: &[&str] = &[
     "metal silver",
     "metal platinum",
     "metal all",
-    "quake channel",
-    "quake min_scale",
-    "quake status",
-    "quake type",
-    "info server",
-    "info user",
     "djaudio channel",
     "djaudio output",
     "djaudio status",
@@ -258,6 +272,8 @@ pub enum CommandError {
     MissingOption(&'static str),
     /// 設定が読めない形をしている（辞書のはずのところが文字列、など。Python では例外になるところ）。
     BrokenSetting(&'static str),
+    /// [`plan`] を通さないコマンド（[`run`] が先に分ける）を [`plan`] に渡した。
+    NotPlanned,
 }
 
 impl std::fmt::Display for CommandError {
@@ -266,6 +282,7 @@ impl std::fmt::Display for CommandError {
             Self::Write(e) => write!(f, "設定を書けませんでした: {e}"),
             Self::MissingOption(name) => write!(f, "引数 {name} がありません"),
             Self::BrokenSetting(name) => write!(f, "設定 {name} の形が読めません"),
+            Self::NotPlanned => write!(f, "plan を通さないコマンドです"),
         }
     }
 }
@@ -412,6 +429,13 @@ pub fn plan(route: Route, input: &PlanInput<'_>) -> Result<Planned, CommandError
         // 上で返している。
         Route::BotHelp => reply(Reply::default()),
         Route::Server(route) => server::plan(route, input),
+        // 地震・情報は [`run`] が先に分ける（権限の見方・要るものが違う）。
+        Route::QuakeChannel
+        | Route::QuakeMinScale
+        | Route::QuakeStatus
+        | Route::QuakeType
+        | Route::InfoServer
+        | Route::InfoUser => Err(CommandError::NotPlanned),
     }
 }
 
@@ -429,6 +453,8 @@ pub struct Deps<'a> {
     pub admin_site_url: &'a str,
     /// スティッキーのチャンネルごとの排他（/sticky set が、返事のあとで貼るときに通る）。
     pub sticky_locks: &'a StickyLocks,
+    /// 開いている地震の通知の種類の画面（/quake type）の覚え。
+    pub quake_screens: &'a quake::Screens,
 }
 
 /// 移した中身を実行して、返事を作る。
@@ -439,6 +465,13 @@ pub async fn run(
     command: &CommandInteraction,
     options: &[CommandDataOption],
 ) -> Result<(Reply, Option<After>), CommandError> {
+    // 地震・情報のコマンドは、権限の見方と要るもの（地震の画面の覚え・キャッシュ）が違うので、先に分ける。
+    if let Some(outcome) = quake::run(deps, route, command, options).await {
+        return outcome.map(|reply| (reply, None));
+    }
+    if let Some(outcome) = info::run(deps, route, command, options) {
+        return outcome.map(|reply| (reply, None));
+    }
     let snapshot = deps.settings.snapshot();
     let input = PlanInput {
         standing: standing_of(deps.cache, command),
@@ -551,6 +584,10 @@ pub async fn dispatch(deps: &Deps<'_>, command: &CommandInteraction) {
 ///
 /// この Bot が開いた画面でない・時間切れのものには応えない（Python の View も、時間切れのあとは応えない）。
 pub async fn component(deps: &Deps<'_>, interaction: &ComponentInteraction) {
+    // 地震の通知の種類の画面（/quake type）の部品。
+    if quake::parse_custom_id(&interaction.data.custom_id).is_some() {
+        return quake::component(deps, interaction).await;
+    }
     let Some((token, part)) = picker::parse_custom_id(&interaction.data.custom_id) else {
         return;
     };

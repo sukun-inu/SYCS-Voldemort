@@ -76,6 +76,8 @@ pub struct AppState {
     pub chats: Chats,
     /// 開いている選択の画面（/trusted・/bypass）の覚え。
     pub pickers: commands::picker::Pickers,
+    /// 開いている地震の通知の種類の画面（/quake type）の覚え。
+    pub quake_screens: commands::quake::Screens,
     shard_manager: OnceLock<Arc<ShardManager>>,
 }
 
@@ -117,6 +119,7 @@ impl AppState {
             news,
             chats,
             pickers: commands::picker::Pickers::default(),
+            quake_screens: commands::quake::Screens::default(),
             shard_manager: OnceLock::new(),
         }
     }
@@ -649,6 +652,7 @@ impl EventHandler for Handler {
             pickers: &self.state.pickers,
             admin_site_url: &self.state.config.admin_site_url,
             sticky_locks: &self.state.sticky_locks,
+            quake_screens: &self.state.quake_screens,
         };
         match &interaction {
             Interaction::Command(command) => commands::dispatch(&deps, command).await,
