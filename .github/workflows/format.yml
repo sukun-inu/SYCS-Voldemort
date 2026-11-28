@@ -1,6 +1,6 @@
 name: 整形
 
-# rustfmt（rust/）と black（Python）で整形し直し、管理画面の文書（docs/ADMIN.ja.md）を作り直した差分を作る。整形がずれていたら、差分を成果物 format に置いて落ちる。
+# rustfmt（rust/）と black（Python）で整形し直し、管理画面の文書（docs/ADMIN.ja.md）と Cargo.lock を作り直した差分を作る。整形がずれていたら、差分を成果物 format に置いて落ちる。
 # 取ってきて当てる:
 #   gh run download <run の ID> -n format && git apply format.patch
 #
@@ -35,6 +35,9 @@ jobs:
         # docs/ADMIN.ja.md の設定の表は webapp_admin/schema/panels/ から作る（「テスト」の generate_admin_docs.py --check
         # がずれを落とす）。設定を足したときの文書の直しも、ここで返す。
         run: |
+          # 依存を足したときの Cargo.lock も、ここで作り直す（手元では cargo を動かさない）。cargo metadata は、
+          # 足りない分だけを足し、ほかの依存の版は動かさない（--locked の CI はずれていると落ちるだけ）。
+          (cd rust && cargo metadata --format-version 1 > /dev/null)
           (cd rust && cargo fmt --all)
           python -m black -q .
           python tools/generate_admin_docs.py
