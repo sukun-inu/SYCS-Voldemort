@@ -14,6 +14,9 @@
 //!   ロールと権限の控え、最後に入った・抜けた時刻
 //! - メンバーのときだけ、ロール（位置の高い順）と権限（`guild_permissions` と同じ計算。所有者と管理者は
 //!   全部、タイムアウト中は閲覧だけ）・信頼ユーザー・バイパスロール・Bot かを控える
+//! - 退出（キックも）のとき、いま BAN 中（最新状態の BAN の旗が立っている）なら BAN を残す。状態は `banned`
+//!   のまま（同期が BAN 一覧から直すときと同じ形）で、履歴の状態も同じ（Python の `_keep_ban_on_leave`）。
+//!   BAN の直後に届く退出が、最新状態を「left・BAN でない」で上書きしていたのを直したもの
 //! - 履歴と最新状態は 1 つのトランザクションで書く。失敗しても呼んだ側（イベントの処理）は止めない
 //! - 表が無いなどの失敗（SQLSTATE 42 系）は、表を作り直して 1 回だけやり直す（自己修復）
 //! - 保管期間（既定 10 年。短くはできない）を過ぎた履歴の掃除を、6 時間に 1 回、記録のついでにする。
@@ -40,7 +43,7 @@ use serenity::all::{
     Cache, GuildId, Http, Member, Permissions, Role, RoleId, Timestamp, User, UserId,
 };
 use serenity::model::guild::audit_log::{Action, MemberAction};
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 use sycs_core::env::Env;
 use tracing::{debug, error, info, warn};
 
@@ -152,6 +155,10 @@ const UPDATE_CURRENT: &str = "UPDATE user_state_current SET \
     last_joined_at = CASE WHEN $15 THEN $8::timestamptz ELSE last_joined_at END, \
     last_left_at = CASE WHEN $16 THEN $8::timestamptz ELSE last_left_at END \
     WHERE guild_id = $1 AND user_id = $2";
+
+/// いま BAN 中かを読み、行の錠を取る（退出・キックのとき。[`Write::keep_ban`]）。
+const SELECT_BANNED_FOR_UPDATE: &str =
+    "SELECT is_banned FROM user_state_current WHERE guild_id = $1 AND user_id = $2 FOR UPDATE";
 
 const DELETE_OLD_EVENTS: &str = "DELETE FROM user_state_event WHERE event_at < $1::timestamptz";
 
@@ -819,6 +826,24 @@ pub struct Write {
     pub joined: bool,
     /// 退出・キック・BAN のイベントか（最後に抜けた時刻を書く）。
     pub left: bool,
+    /// 退出・キックのイベントか（いま BAN 中なら BAN を残す。[`Write::keep_ban`]）。
+    pub keeps_ban: bool,
+}
+
+impl Write {
+    /// いま BAN 中（最新状態の BAN の旗が立っている）の人の退出なら、状態を `banned`・BAN の旗を立てたままに
+    /// する。Python の `_keep_ban_on_leave`。
+    ///
+    /// BAN すると Discord は BAN と退出の 2 つを送り、退出は（キックかを監査ログで見分ける待ちのぶん）たいてい
+    /// あとに届く。そのまま書くと最新状態が「left・BAN でない」に戻る。形は同期が BAN 一覧から直すときと同じ
+    /// （`banned`・BAN 中）にする（違う形だと、同期がまた直しに来て履歴が増える）。履歴の状態も同じ値になる。
+    /// 種類と、最後に抜けた時刻はそのまま。
+    pub fn keep_ban(&mut self, currently_banned: bool) {
+        if self.keeps_ban && currently_banned {
+            self.status_after = "banned".into();
+            self.is_banned = Some(true);
+        }
+    }
 }
 
 fn truthy(text: String) -> Option<String> {
@@ -902,9 +927,33 @@ pub fn plan(event: &Event, guild_settings: Option<&Value>, now: DateTime<Utc>) -
             event_type.as_str(),
             "member_leave" | "member_kick" | "member_ban"
         ),
+        keeps_ban: matches!(event_type.as_str(), "member_leave" | "member_kick"),
         event_type,
         status_after,
     }
+}
+
+/// いま BAN 中か（最新状態の BAN の旗）を、行の錠を取って読む。行が無ければ空の行を足してから読む（同時に来た
+/// BAN が行を作っている最中なら、それを待ってから読む）。
+async fn currently_banned(conn: &mut PgConnection, w: &Write) -> Result<bool, sqlx::Error> {
+    if let Some(banned) = read_banned(conn, w).await? {
+        return Ok(banned);
+    }
+    sqlx::query(INSERT_BLANK_CURRENT)
+        .bind(w.guild_id)
+        .bind(w.user_id)
+        .execute(&mut *conn)
+        .await?;
+    Ok(read_banned(conn, w).await?.unwrap_or(false))
+}
+
+/// 最新状態の BAN の旗を、行の錠を取って読む（行が無ければ `None`）。
+async fn read_banned(conn: &mut PgConnection, w: &Write) -> Result<Option<bool>, sqlx::Error> {
+    sqlx::query_scalar::<_, bool>(SELECT_BANNED_FOR_UPDATE)
+        .bind(w.guild_id)
+        .bind(w.user_id)
+        .fetch_optional(conn)
+        .await
 }
 
 /// 自己修復（表の作り直し）で直りうる失敗か。Python の `_is_repairable_db_error`。
@@ -1005,10 +1054,23 @@ impl Recorder {
     ///
     /// **2 つを同じコミットに入れること。** 別々にすると、あいだで落ちたときに、履歴には残っているのに
     /// 最新状態が古いまま、という食い違いが残る（管理画面はこの 2 つを並べて出す）。
+    ///
+    /// 退出・キックのときは、先に最新状態の行の錠を取って、いま BAN 中かを読む（[`Write::keep_ban`]。履歴の
+    /// 状態もそれで決まる）。
     async fn write(&self, w: &Write) -> Result<(), sqlx::Error> {
         let at = pg_time(w.at);
         let until = w.timed_out_until.map(pg_time);
         let mut tx = self.pool.begin().await?;
+        let settled: Write;
+        let w = if w.keeps_ban {
+            let banned = currently_banned(&mut tx, w).await?;
+            let mut kept = w.clone();
+            kept.keep_ban(banned);
+            settled = kept;
+            &settled
+        } else {
+            w
+        };
         sqlx::query(INSERT_EVENT)
             .bind(w.guild_id)
             .bind(w.user_id)
@@ -1427,6 +1489,58 @@ mod tests {
         let mut e = bare("member_timeout_cleared", "active");
         e.timed_out_until = Some(at("2026-11-26T00:00:00Z"));
         assert!(!plan(&e, None, now).clears_timeout);
+    }
+
+    /// 退出・キックのときだけ、いま BAN 中なら状態を banned・BAN の旗を立てたままにする（Python の
+    /// `_keep_ban_on_leave`）。BAN 中でなければ、渡されたとおり。
+    #[test]
+    fn a_leave_keeps_the_ban_only_while_banned() {
+        let now = at("2026-11-25T00:05:00Z");
+        let settled = |event_type: &str, status: &str, banned_now: bool| {
+            let mut e = bare(event_type, status);
+            e.in_guild = Some(false);
+            e.is_banned = Some(false);
+            let mut w = plan(&e, None, now);
+            w.keep_ban(banned_now);
+            (
+                w.status_after,
+                w.is_banned,
+                w.in_guild,
+                w.event_type,
+                w.left,
+            )
+        };
+        let kept = |t: &str| {
+            (
+                String::from("banned"),
+                Some(true),
+                Some(false),
+                t.to_string(),
+                true,
+            )
+        };
+        assert_eq!(settled("member_leave", "left", true), kept("member_leave"));
+        assert_eq!(settled("Member_Kick", "kicked", true), kept("member_kick"));
+        assert_eq!(
+            settled("member_leave", "left", false),
+            (
+                "left".into(),
+                Some(false),
+                Some(false),
+                "member_leave".into(),
+                true
+            )
+        );
+        // 退出でない種類は、BAN 中でもそのまま（BAN の解除・参加・VC など）。
+        for (t, status) in [
+            ("member_unban", "unbanned"),
+            ("member_join", "active"),
+            ("voice_leave", "active"),
+            ("member_ban", "banned"),
+        ] {
+            let (got, banned, ..) = settled(t, status, true);
+            assert_eq!((got.as_str(), banned), (status, Some(false)), "{t}");
+        }
     }
 
     fn person(display: &str, username: &str) -> Person {

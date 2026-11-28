@@ -17,9 +17,9 @@
 //! - 失敗したら取り消して、表が無いなどなら作り直して 1 回だけやり直す。それでも駄目なら 0 件として返す
 //!   （数えかけの値を返さない）
 //!
-//! Python と同じにしてあるが危ういところ（見直しの候補）: 控えの JSON に対になっていないサロゲート（`\ud800`
-//! など）が入った行があると、Python は書き直した文字を Postgres へ送れずに、そのサーバーの修復が毎回まるごと
-//! 失敗する。こちらも同じく、そのサーバーの修復を失敗として 0 件を返す。
+//! - 控えの JSON に対になっていないサロゲート（`\ud800` など）が入った行は、それを U+FFFD にして書き直す
+//!   （Python の `_replace_lone_surrogates`）。直す前の Python は書き直した文字を Postgres へ送れず、その
+//!   サーバーの修復が毎回まるごと取り消されていた（ほかの壊れた行も直らなかった）
 
 use chrono::{DateTime, Utc};
 use tracing::error;
@@ -44,19 +44,12 @@ pub struct RepairStats {
     pub timeout_fixed: u64,
 }
 
-/// 控えの JSON を揃えた結果。
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum JsonFix {
-    /// そのままでよい。
-    Keep,
-    /// この文字に書き換える。
-    Set(String),
-    /// 書き換えるべきだが、Postgres へ送れない文字（対になっていないサロゲート）になる。
-    Unwritable,
-}
-
-/// 控えの JSON 1 つを揃える。Python の `_repair_json_columns` の 1 列ぶん。
-fn fix_json(raw: &str, want: pyjson::Kind) -> JsonFix {
+/// 控えの JSON 1 つを揃える。書き換えるなら新しい文字（そのままでよければ `None`）。Python の
+/// `_repair_json_columns` の 1 列ぶん。
+///
+/// 対になっていないサロゲートは U+FFFD にした文字で書き換える（Python の `_replace_lone_surrogates`。
+/// [`pyjson::loads_dumps`] の文字は、もとから U+FFFD に置いてある）。
+fn fix_json(raw: &str, want: pyjson::Kind) -> Option<String> {
     let empty = match want {
         pyjson::Kind::List => "[]",
         _ => "{}",
@@ -68,31 +61,19 @@ fn fix_json(raw: &str, want: pyjson::Kind) -> JsonFix {
         pyjson::loads_dumps(raw)
     };
     let Some(parsed) = parsed else {
-        return if raw == empty {
-            JsonFix::Keep
-        } else {
-            JsonFix::Set(empty.into())
-        };
+        return (raw != empty).then(|| empty.into());
     };
     if parsed.kind != want {
-        return JsonFix::Set(empty.into());
+        return Some(empty.into());
     }
-    if parsed.lone_surrogate {
-        return JsonFix::Unwritable;
-    }
-    if parsed.text == raw {
-        JsonFix::Keep
-    } else {
-        JsonFix::Set(parsed.text)
-    }
+    (parsed.text != raw).then_some(parsed.text)
 }
 
-/// 1 行を直す。直せない（送れない文字になる）ものがあれば `false`。Python の `_repair_row`。
+/// 1 行を直す。Python の `_repair_row`。
 ///
 /// **直した行だけ**最後に書き換えた時刻を進める（全部の行に触ると、誰がいつ抜けたのかが読めなくなる）。
-pub fn repair_row(row: &mut CurrentRow, now: DateTime<Utc>, stats: &mut RepairStats) -> bool {
+pub fn repair_row(row: &mut CurrentRow, now: DateTime<Utc>, stats: &mut RepairStats) {
     let mut changed = false;
-    let mut writable = true;
 
     // 状態（Python の `_repair_status`）。
     let normalized = user_state::sanitize_status(&row.status);
@@ -107,18 +88,10 @@ pub fn repair_row(row: &mut CurrentRow, now: DateTime<Utc>, stats: &mut RepairSt
         (&mut row.roles_json, pyjson::Kind::List),
         (&mut row.abilities_json, pyjson::Kind::Dict),
     ] {
-        match fix_json(column, want) {
-            JsonFix::Keep => {}
-            JsonFix::Set(text) => {
-                *column = text;
-                stats.json_fixed += 1;
-                changed = true;
-            }
-            JsonFix::Unwritable => {
-                stats.json_fixed += 1;
-                changed = true;
-                writable = false;
-            }
+        if let Some(text) = fix_json(column, want) {
+            *column = text;
+            stats.json_fixed += 1;
+            changed = true;
         }
     }
 
@@ -157,20 +130,7 @@ pub fn repair_row(row: &mut CurrentRow, now: DateTime<Utc>, stats: &mut RepairSt
         row.updated_at = Some(now);
         stats.rows_fixed += 1;
     }
-    writable
 }
-
-/// 修復で送れない文字に当たったときの誤り（Python では Postgres へ送る段で落ちる）。
-#[derive(Debug)]
-struct Unwritable;
-
-impl std::fmt::Display for Unwritable {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("surrogates not allowed（対になっていないサロゲートは送れません）")
-    }
-}
-
-impl std::error::Error for Unwritable {}
 
 /// 走査と修復を 1 回ぶん。失敗したら誤りを返す（取り消しとやり直しは呼んだ側）。Python の `_repair_attempt`。
 async fn repair_attempt(
@@ -202,14 +162,10 @@ async fn repair_attempt(
         .collect::<Result<Vec<_>, _>>()?;
     stats.rows_scanned = rows.len() as u64;
     let mut repaired = Vec::with_capacity(rows.len());
-    let mut writable = true;
     for before in rows {
         let mut after = before.clone();
-        writable &= repair_row(&mut after, now, &mut stats);
+        repair_row(&mut after, now, &mut stats);
         repaired.push((before, after));
-    }
-    if !writable {
-        return Err(sqlx::Error::Encode(Box::new(Unwritable)));
     }
     for (before, after) in &repaired {
         user_state_sync::update_changed(&mut tx, before, after).await?;
@@ -906,7 +862,7 @@ mod tests {
         let mut fine = CurrentRow::blank(1, false);
         fine.status = "active".into();
         let before = fine.clone();
-        assert!(repair_row(&mut fine, now, &mut stats));
+        repair_row(&mut fine, now, &mut stats);
         assert_eq!(fine, before);
         assert_eq!(stats, RepairStats::default());
 
@@ -917,7 +873,7 @@ mod tests {
         broken.abilities_json = "[]".into();
         broken.is_timed_out = true;
         broken.timed_out_until = Some(at("2026-11-27T00:00:00Z"));
-        assert!(repair_row(&mut broken, now, &mut stats));
+        repair_row(&mut broken, now, &mut stats);
         assert_eq!(broken.status, "banned");
         assert!(broken.is_banned && !broken.is_in_guild && !broken.is_timed_out);
         assert_eq!(broken.roles_json, "[1, 2]");
@@ -937,37 +893,42 @@ mod tests {
 
         let mut away = CurrentRow::blank(3, true);
         away.status = "active".into();
-        assert!(repair_row(&mut away, now, &mut stats));
+        repair_row(&mut away, now, &mut stats);
         assert!(
             !away.is_banned && !away.is_in_guild,
             "active では在室に手を出さない"
         );
     }
 
-    /// 読めない・空の控えは空の入れ物に、対になっていないサロゲートは書けないものとして扱うこと。
+    /// 読めない・空の控えは空の入れ物に、対になっていないサロゲートは U+FFFD にして書き直すこと
+    /// （Python の `_replace_lone_surrogates`）。書き直したものは、次の修復で直したと数えない。
     #[test]
-    fn unreadable_and_unwritable_json() {
-        assert_eq!(fix_json("", pyjson::Kind::List), JsonFix::Set("[]".into()));
-        assert_eq!(fix_json("[", pyjson::Kind::List), JsonFix::Set("[]".into()));
-        assert_eq!(fix_json("[]", pyjson::Kind::List), JsonFix::Keep);
-        assert_eq!(
-            fix_json("null", pyjson::Kind::Dict),
-            JsonFix::Set("{}".into())
-        );
+    fn unreadable_json_and_lone_surrogates() {
+        assert_eq!(fix_json("", pyjson::Kind::List), Some("[]".into()));
+        assert_eq!(fix_json("[", pyjson::Kind::List), Some("[]".into()));
+        assert_eq!(fix_json("[]", pyjson::Kind::List), None);
+        assert_eq!(fix_json("null", pyjson::Kind::Dict), Some("{}".into()));
         assert_eq!(
             fix_json(r#"["\ud800"]"#, pyjson::Kind::List),
-            JsonFix::Unwritable
+            Some("[\"\u{FFFD}\"]".into())
         );
         assert_eq!(
             fix_json(r#"{"a": "\ud800", "a": 1}"#, pyjson::Kind::Dict),
-            JsonFix::Set(r#"{"a": 1}"#.into())
+            Some(r#"{"a": 1}"#.into())
         );
+        assert_eq!(fix_json("[\"\u{FFFD}\"]", pyjson::Kind::List), None);
+        let now = at("2026-11-28T00:00:00Z");
+        let mut stats = RepairStats::default();
         let mut row = CurrentRow::blank(1, false);
-        row.roles_json = r#"["\udc00"]"#.into();
-        assert!(!repair_row(
-            &mut row,
-            at("2026-11-28T00:00:00Z"),
-            &mut RepairStats::default()
-        ));
+        row.status = "active".into();
+        row.roles_json = r#"["\udc00", "😀"]"#.into();
+        repair_row(&mut row, now, &mut stats);
+        assert_eq!(row.roles_json, "[\"\u{FFFD}\", \"\u{1F600}\"]");
+        assert_eq!(row.updated_at, Some(now));
+        assert_eq!((stats.rows_fixed, stats.json_fixed), (1, 1));
+        let again = row.clone();
+        repair_row(&mut row, now, &mut stats);
+        assert_eq!(row, again);
+        assert_eq!((stats.rows_fixed, stats.json_fixed), (1, 1));
     }
 }

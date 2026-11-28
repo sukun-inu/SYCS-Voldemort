@@ -15,6 +15,9 @@
 //!   書き方と同じ。他の列は、あいだに来たイベントの書いた値を残す）。履歴は足した順
 //! - 履歴を書くのは、新しく見つけた人・BAN に変わった人・退出とみなした人だけ（同期のたびに同じ BAN を
 //!   積まない）
+//! - タイムアウトは、メンバー一覧の期限（`communication_disabled_until`）に揃える。期限の無い人はタイムアウト中を
+//!   下ろす（Bot が止まっていた間に早めに解かれたものが、期限まで残っていたのを直したもの）。BAN 一覧の人には
+//!   触らない
 //! - 失敗したら取り消し、表が無いなどなら作り直して 1 回だけやり直す。それでも駄目なら 0 件として返す
 //! - Discord からの取り方: メンバーも BAN も 1000 件ずつ、`after` で続きを取る。メンバーは 1 ページの中を逆順に
 //!   並べる（discord.py と同じ）。メンバーの上限（`USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD`）が 1000 未満なら
@@ -23,7 +26,8 @@
 //!   （一覧が全部とは限らない）。BAN が取れなければ、取れた分だけで続ける
 //! - 巡回: 起動して 20 秒後に 1 回（履歴も書く）。180 秒後から 30 分ごとに、同期（既定では履歴を書かない）・
 //!   修復・Bot が抜けたサーバーの設定の掃除。両方が同時に走らないよう、1 つの錠で囲む。サーバーの間は 1 秒
-//!   空ける（失敗したときも）。1 つのサーバーが失敗しても、他は続ける
+//!   空ける（失敗したときも）。1 つのサーバーが失敗しても、他は続ける。`BOT_BACKGROUND_WORKER` が真の
+//!   プロセスだけが受け持つ（[`tasks_to_start`]。Bot を並べても、同期は 1 つのプロセスだけが書く）
 //!
 //! Python と変えたところ:
 //!
@@ -50,6 +54,7 @@ use sycs_core::settings::SettingsCache;
 use tokio::sync::Mutex;
 use tracing::{error, info, warn};
 
+use crate::config::BotConfig;
 use crate::guild_retention;
 use crate::handler::AppState;
 use crate::user_state::{self, GuildView, Person, Recorder};
@@ -513,6 +518,13 @@ pub fn plan_sync(
                 abilities_json: snapshot.map(|s| s.1.as_str()),
             },
         );
+        // 一覧に期限が無い＝いまはタイムアウトされていない。Bot が止まっていた間に早めに解かれたタイムアウトを
+        // 下ろす（[`apply_update`] は期限なしを「分からない」として古い期限を残すため）。変わった列だけ書く。
+        if m.timed_out_until.is_none() {
+            let row = &mut rows[i].after;
+            row.timed_out_until = None;
+            row.is_timed_out = false;
+        }
         if created && ctx.write_events {
             events.push(ctx.event(m.user_id, "sync_discovered_member", "active"));
             stats.events_written += 1;
@@ -1246,13 +1258,24 @@ fn spawn_logged(label: &'static str, work: impl Future<Output = ()> + Send + 'st
     });
 }
 
-/// 起動の後の同期と、定期の同期・修復・掃除を、設定に従って動かし始める。Python の on_ready のうち
-/// 利用者の状態のところ。1 プロセスで 1 回だけ呼ぶこと（呼ぶ側の ready が守っている）。
+/// このプロセスで動かすもの（起動の後の同期, 定期の同期・修復・掃除）。Python の on_ready の条件。
 ///
-/// Python と同じく `BOT_BACKGROUND_WORKER` では止めない（`USER_STATE_SYNC_ON_READY`・
-/// `USER_STATE_AUTO_REPAIR_ENABLED` で決める）。
+/// **`BOT_BACKGROUND_WORKER` が偽のプロセスは、どちらも動かさない。** Bot を並べたとき、全部のプロセスが同じ表へ
+/// 同期を書き、起動のたびに同期の履歴が台数ぶん積まれ、設定の掃除も台数ぶん回るのを防ぐ。受け持つプロセスの
+/// 中では、`USER_STATE_SYNC_ON_READY`・`USER_STATE_AUTO_REPAIR_ENABLED` がそのまま効く。
+pub fn tasks_to_start(config: &BotConfig) -> (bool, bool) {
+    let sync = &config.user_state_sync;
+    (
+        config.background_worker && sync.sync_on_ready,
+        config.background_worker && sync.auto_repair,
+    )
+}
+
+/// 起動の後の同期と、定期の同期・修復・掃除を、設定に従って動かし始める（[`tasks_to_start`]）。Python の
+/// on_ready のうち利用者の状態のところ。1 プロセスで 1 回だけ呼ぶこと（呼ぶ側の ready が守っている）。
 pub fn start(ctx: &Context, state: &Arc<AppState>) {
     let config = &state.config.user_state_sync;
+    let (on_ready, auto_repair) = tasks_to_start(&state.config);
     let lock = Arc::new(Mutex::new(()));
     let launch = |label: &'static str, repair: bool| {
         let (http, cache, state, lock) = (
@@ -1277,14 +1300,14 @@ pub fn start(ctx: &Context, state: &Arc<AppState>) {
             }
         });
     };
-    if config.sync_on_ready {
+    if on_ready {
         launch("[BOT_SETUP] user_state sync fatal error", false);
         info!(
             "[BOT] USER_STATE_SYNC_ON_READY=true: background sync task started (delay={}s)",
             config.sync_delay.as_secs()
         );
     }
-    if config.auto_repair {
+    if auto_repair {
         launch("[BOT_SETUP] user_state auto_repair fatal error", true);
         info!(
             "[BOT] USER_STATE_AUTO_REPAIR_ENABLED=true: periodic repair started (interval={}s)",
@@ -1515,5 +1538,67 @@ mod tests {
         let kinds: Vec<&str> = p.events.iter().map(|e| e.event_type.as_str()).collect();
         assert_eq!(kinds, vec!["sync_discovered_member", "sync_discovered_ban"]);
         assert_eq!((p.stats.created, p.stats.updated), (1, 2));
+    }
+
+    /// タイムアウトはメンバー一覧の期限に揃えること: 期限の無い人はタイムアウト中を下ろし（Bot が止まっていた
+    /// 間に早めに解かれたもの）、期限のある人はその期限にする（過ぎていれば旗だけ下ろす）。BAN 一覧の人には
+    /// 触らない。
+    #[test]
+    fn the_timeout_follows_the_member_list() {
+        let until = at("2026-12-31T00:00:00Z");
+        let past = at("2026-11-01T00:00:00Z");
+        let timed = |user_id: i64| {
+            let mut row = existing(user_id, 20 + user_id, "active", true, false);
+            row.is_timed_out = true;
+            row.timed_out_until = Some(until);
+            row
+        };
+        let mut still = seen(2);
+        still.timed_out_until = Some(until);
+        let mut over = seen(3);
+        over.timed_out_until = Some(past);
+        let p = plan_sync(
+            vec![timed(1), timed(2), timed(3), timed(4)],
+            &[seen(1), still, over],
+            &[seen(4)],
+            true,
+            &ctx(false),
+        );
+        let by: Map<i64, &CurrentRow> =
+            p.rows.iter().map(|r| (r.after.user_id, &r.after)).collect();
+        let timeout = |id: i64| (by[&id].is_timed_out, by[&id].timed_out_until);
+        assert_eq!(timeout(1), (false, None), "一覧に期限が無い人");
+        assert_eq!(timeout(2), (true, Some(until)));
+        assert_eq!(timeout(3), (false, Some(past)));
+        assert_eq!(timeout(4), (true, Some(until)), "BAN 一覧の人には触らない");
+    }
+
+    /// 起動の後の同期と定期の同期・修復は、`BOT_BACKGROUND_WORKER` が真のプロセスだけが受け持ち、その中で
+    /// それぞれの旗で決まること（Python の on_ready の条件）。
+    #[test]
+    fn only_the_background_worker_syncs() {
+        let tasks = |pairs: &[(&str, &str)]| {
+            let mut all = vec![("DISCORD_BOT_TOKEN", "t")];
+            all.extend_from_slice(pairs);
+            tasks_to_start(&BotConfig::from_env(&env(&all)).unwrap())
+        };
+        // 何も設定しなければ（本番の 1 プロセス）、両方を動かす。
+        assert_eq!(tasks(&[]), (true, true));
+        assert_eq!(tasks(&[("BOT_BACKGROUND_WORKER", "false")]), (false, false));
+        let flags_on = [
+            ("USER_STATE_SYNC_ON_READY", "true"),
+            ("USER_STATE_AUTO_REPAIR_ENABLED", "true"),
+        ];
+        let mut worker_off = flags_on.to_vec();
+        worker_off.push(("BOT_BACKGROUND_WORKER", "0"));
+        assert_eq!(tasks(&worker_off), (false, false), "旗が真でも止める");
+        assert_eq!(
+            tasks(&[("USER_STATE_SYNC_ON_READY", "false")]),
+            (false, true)
+        );
+        assert_eq!(
+            tasks(&[("USER_STATE_AUTO_REPAIR_ENABLED", "false")]),
+            (true, false)
+        );
     }
 }

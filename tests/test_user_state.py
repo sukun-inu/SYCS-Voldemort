@@ -630,6 +630,110 @@ class RecordUserStateEventTests(_DbBackedTestCase):
         self.assertFalse(detail["current"]["is_timed_out"])
         self.assertIsNone(detail["current"]["timed_out_until"])
 
+    def _record_at(self, minute: int, event_type: str, status_after: str, **kwargs):
+        """1件を決めた時刻（2026-11-28 00:mm UTC）で記録する。並びを時刻で決めるため。"""
+        _run(
+            uss.record_user_state_event(
+                guild_id=1,
+                user_id=10,
+                event_type=event_type,
+                status_after=status_after,
+                event_at=datetime(2026, 11, 28, 0, minute, tzinfo=timezone.utc),
+                **kwargs,
+            )
+        )
+
+    def test_a_leave_right_after_a_ban_keeps_the_ban(self):
+        """BAN の直後に届く退出は、BAN を下ろさないこと（状態も banned のまま）。
+
+        BAN すると Discord は BAN と退出の2つを送り、退出のほうが（キックかを監査ログで
+        見分ける待ちのぶん）あとに届く。そのまま書くと最新状態が「left・BAN でない」に
+        戻り、同期が BAN 一覧から直すまで BAN が見えない。形は同期が直すときと同じ
+        （banned・BAN 中・居ない）にし、履歴の status_after も同じにする。
+        """
+        self._record_at(0, "member_ban", "banned", in_guild=False, is_banned=True)
+        self._record_at(1, "member_leave", "left", in_guild=False, is_banned=False)
+
+        detail = _run(uss.get_user_state_detail(1, 10))
+        current = detail["current"]
+        self.assertEqual(
+            (current["status"], current["is_banned"], current["is_in_guild"], current["last_event_type"]),
+            ("banned", True, False, "member_leave"),
+        )
+        self.assertEqual(
+            [(e["event_type"], e["status_after"]) for e in detail["events"]],
+            [("member_leave", "banned"), ("member_ban", "banned")],
+        )
+
+    def test_a_kick_of_a_banned_member_keeps_the_ban_too(self):
+        """キックとして記録する退出でも、BAN 中なら BAN を残すこと。"""
+        self._record_at(0, "member_ban", "banned", in_guild=False, is_banned=True)
+        self._record_at(1, "member_kick", "kicked", in_guild=False, is_banned=False)
+
+        detail = _run(uss.get_user_state_detail(1, 10))
+        self.assertEqual((detail["current"]["status"], detail["current"]["is_banned"]), ("banned", True))
+        self.assertEqual(detail["events"][0]["status_after"], "banned")
+
+    def test_a_leave_after_the_ban_was_lifted_is_a_plain_leave(self):
+        """BAN を解除したあとの退出は、ふつうの退出（left・BAN でない）になること。
+
+        BAN の旗だけを見て決めている。状態の文字（banned かどうか）で決めると、解除の
+        あとに旗が下りているのに BAN へ戻してしまう、という取り違えをここで押さえる。
+        """
+        self._record_at(0, "member_ban", "banned", in_guild=False, is_banned=True)
+        self._record_at(1, "member_unban", "unbanned", in_guild=False, is_banned=False)
+        self._record_at(2, "member_join", "active", in_guild=True, is_banned=False)
+        self._record_at(3, "member_leave", "left", in_guild=False, is_banned=False)
+
+        detail = _run(uss.get_user_state_detail(1, 10))
+        self.assertEqual((detail["current"]["status"], detail["current"]["is_banned"]), ("left", False))
+        self.assertEqual(detail["events"][0]["status_after"], "left")
+
+    def test_the_ban_flag_decides_not_the_status_text(self):
+        """BAN を残すかは BAN の旗で決め、状態の文字（banned かどうか）では決めないこと。
+
+        旗だけ立っている行（状態が分からない値）では BAN を残し、状態は banned でも旗が
+        下りている行（修復の前など）では、ふつうの退出にする。
+        """
+        self._record_at(0, "odd_event", "weird status", in_guild=False, is_banned=True)
+        self._record_at(1, "member_leave", "left", in_guild=False, is_banned=False)
+        current = _run(uss.get_user_state_detail(1, 10))["current"]
+        self.assertEqual((current["status"], current["is_banned"]), ("banned", True))
+
+        _run(
+            uss.record_user_state_event(
+                guild_id=1, user_id=11, event_type="member_ban", status_after="banned", is_banned=False
+            )
+        )
+        _run(
+            uss.record_user_state_event(
+                guild_id=1, user_id=11, event_type="member_leave", status_after="left", is_banned=False
+            )
+        )
+        current = _run(uss.get_user_state_detail(1, 11))["current"]
+        self.assertEqual((current["status"], current["is_banned"]), ("left", False))
+
+    def test_other_events_of_a_banned_member_still_follow_their_arguments(self):
+        """BAN を残すのは退出だけで、ほかの種類は渡されたとおりに書くこと。"""
+        self._record_at(0, "member_ban", "banned", in_guild=False, is_banned=True)
+        self._record_at(1, "member_unban", "unbanned", in_guild=False, is_banned=False)
+
+        detail = _run(uss.get_user_state_detail(1, 10))
+        self.assertEqual((detail["current"]["status"], detail["current"]["is_banned"]), ("unbanned", False))
+
+    def test_the_sync_has_nothing_to_fix_after_a_kept_ban(self):
+        """BAN を残した形は同期が直すときと同じなので、次の同期が BAN の履歴を足さないこと。
+
+        形が食い違うと、同期は「BAN に変わった」と見て sync_discovered_ban を1行足す
+        （直す前は、BAN のたびに起動後の同期でこの行が増えていた）。
+        """
+        self._record_at(0, "member_ban", "banned", in_guild=False, is_banned=True)
+        self._record_at(1, "member_leave", "left", in_guild=False, is_banned=False)
+
+        stats = _run(uss.sync_guild_user_states(guild_id=1, members=[], banned_users=[SimpleNamespace(id=10)]))
+
+        self.assertEqual((stats["updated"], stats["events_written"]), (1, 0))
+
     def test_actor_with_zero_id_is_recorded_as_none(self):
         """actor.id が 0/falsy の場合、actor_user_id は 0 ではなく None として保存されることを確認する。"""
         actor = SimpleNamespace(id=0, name="system", display_name="System")
@@ -851,6 +955,52 @@ class SyncGuildUserStatesTests(_DbBackedTestCase):
         self.assertEqual(stats["left_reconciled"], 0)
         detail = _run(uss.get_user_state_detail(1, 1))
         self.assertEqual(detail["current"]["status"], "banned")
+
+    def test_a_timeout_lifted_while_the_bot_was_down_is_cleared(self):
+        """メンバー一覧にタイムアウトの期限が無い人は、タイムアウト中を下ろすこと。
+
+        Bot が止まっていた間に早めに解除されたタイムアウトは、解除のイベントが届かない。
+        同期が期限を渡さない（None＝分からない）扱いのままだと、古い期限が残って、期限が
+        来るまで「タイムアウト中」と表示され続ける。
+        """
+        until = datetime.now(timezone.utc) + timedelta(days=3)
+        _run(uss.sync_guild_user_states(guild_id=1, members=[_member(id=1, timed_out_until=until)], banned_users=[]))
+        self.assertTrue(_run(uss.get_user_state_detail(1, 1))["current"]["is_timed_out"])
+
+        _run(uss.sync_guild_user_states(guild_id=1, members=[_member(id=1, timed_out_until=None)], banned_users=[]))
+
+        current = _run(uss.get_user_state_detail(1, 1))["current"]
+        self.assertFalse(current["is_timed_out"])
+        self.assertIsNone(current["timed_out_until"])
+
+    def test_a_timeout_still_in_the_member_list_is_kept(self):
+        """一覧に期限がある人は、その期限とタイムアウト中のまま残すこと（過ぎた期限は旗だけ下ろす）。"""
+        until = datetime.now(timezone.utc) + timedelta(days=3)
+        past = datetime.now(timezone.utc) - timedelta(days=3)
+        members = [_member(id=1, timed_out_until=until), _member(id=2, timed_out_until=past)]
+        _run(uss.sync_guild_user_states(guild_id=1, members=members, banned_users=[]))
+        _run(uss.sync_guild_user_states(guild_id=1, members=members, banned_users=[]))
+
+        still = _run(uss.get_user_state_detail(1, 1))["current"]
+        self.assertTrue(still["is_timed_out"])
+        self.assertEqual(_naive_utc(still["timed_out_until"]), until.replace(tzinfo=None))
+        over = _run(uss.get_user_state_detail(1, 2))["current"]
+        self.assertFalse(over["is_timed_out"])
+        self.assertEqual(_naive_utc(over["timed_out_until"]), past.replace(tzinfo=None))
+
+    def test_the_ban_list_does_not_touch_the_timeout(self):
+        """BAN 一覧の人（メンバー一覧に居ない）のタイムアウトは、同期で揃え直さないこと。
+
+        揃え直すのはメンバー一覧から分かるときだけ。BAN 一覧には期限が載らない。
+        """
+        until = datetime.now(timezone.utc) + timedelta(days=3)
+        _run(uss.sync_guild_user_states(guild_id=1, members=[_member(id=1, timed_out_until=until)], banned_users=[]))
+
+        _run(uss.sync_guild_user_states(guild_id=1, members=[], banned_users=[SimpleNamespace(id=1)]))
+
+        current = _run(uss.get_user_state_detail(1, 1))["current"]
+        self.assertTrue(current["is_timed_out"])
+        self.assertEqual(_naive_utc(current["timed_out_until"]), until.replace(tzinfo=None))
 
     def test_write_events_on_sync_false_suppresses_event_rows(self):
         member = _member(id=1, name="a")
@@ -1165,6 +1315,48 @@ class RepairUserStateIntegrityTests(_DbBackedTestCase):
         self.assertEqual(stats["rows_scanned"], 1)
         detail_g2 = _run(uss.get_user_state_detail(2, 1))
         self.assertEqual(detail_g2["current"]["status"], "  ACTIVE  ")
+
+    def test_a_lone_surrogate_does_not_stop_the_rest_of_the_guild(self):
+        """控えの JSON に対になっていないサロゲートがある行も直し、同じサーバーの残りの行も直すこと。
+
+        直す前は、書き直した文字（サロゲートがそのまま残る）を DB へ送る段で落ち、
+        そのサーバーの修復が丸ごと取り消されていた。毎回同じ行で落ちるので、ほかの
+        壊れた行もずっと直らない。読めない文字は U+FFFD にして書き直す。
+        """
+        self._insert_raw(user_id=1, status="active", roles_json='["\\ud800", "ok"]', abilities_json='{"k": "\\udfff"}')
+        self._insert_raw(user_id=2, status="  LEFT  ", is_in_guild=True)
+
+        stats = _run(uss.repair_user_state_integrity(guild_id=1))
+
+        self.assertEqual(
+            (stats["rows_scanned"], stats["rows_fixed"], stats["json_fixed"], stats["status_fixed"]),
+            (2, 2, 2, 1),
+        )
+        with self._sync_session() as session:
+            rows = {r.user_id: r for r in session.scalars(select(UserStateCurrent)).all()}
+        self.assertEqual(rows[1].roles_json, '["\ufffd", "ok"]')
+        self.assertEqual(rows[1].abilities_json, '{"k": "\ufffd"}')
+        self.assertEqual((rows[2].status, rows[2].is_in_guild), ("left", False))
+
+    def test_a_replaced_surrogate_is_not_counted_again(self):
+        """U+FFFD にして書き直した行は、次の修復で直したと数えないこと（毎回数え続けない）。"""
+        self._insert_raw(user_id=1, status="active", roles_json='["\\ud83d"]')
+        _run(uss.repair_user_state_integrity(guild_id=1))
+
+        again = _run(uss.repair_user_state_integrity(guild_id=1))
+
+        self.assertEqual((again["rows_fixed"], again["json_fixed"]), (0, 0))
+
+    def test_a_paired_surrogate_is_kept_as_one_character(self):
+        """対になったサロゲート（絵文字など）は1文字として読み、置き換えないこと。"""
+        self._insert_raw(user_id=1, status="active", roles_json='["\\ud83d\\ude00"]')
+
+        stats = _run(uss.repair_user_state_integrity(guild_id=1))
+
+        self.assertEqual(stats["json_fixed"], 1)
+        with self._sync_session() as session:
+            row = session.scalars(select(UserStateCurrent)).one()
+        self.assertEqual(row.roles_json, '["😀"]')
 
     def test_max_rows_is_clamped_to_a_minimum_of_100(self):
         """max_rows に極端に小さい値を渡しても、下限100へ引き上げられて全行が対象になることを確認する。"""

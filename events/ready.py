@@ -48,8 +48,8 @@ def register(bot: Bot, state: EventState, loops: BackgroundLoops) -> None:
         start()する。
 
         BOT_BACKGROUND_WORKER=false のときはニュース・スティッキー・地震
-        監視・djaudioキャッシュ掃除だけを止める（ステータス更新と
-        dev_signal_taskは常時起動）。
+        監視・djaudioキャッシュ掃除・ユーザー状態の同期と定期修復を止める
+        （ステータス更新と dev_signal_task は常時起動）。
         """
         # ループが動き出した後に仕掛ける（install は実行中のループを要る）。
         # on_ready は再接続のたびに呼ばれるが、install 側が二重を弾く。
@@ -91,7 +91,11 @@ def register(bot: Bot, state: EventState, loops: BackgroundLoops) -> None:
         else:
             logger.info("[BOT] BOT_BACKGROUND_WORKER=false: periodic background jobs are disabled")
 
-        if _USER_STATE_SYNC_ON_READY and not state.user_state_sync_started:
+        # ユーザー状態の起動後の同期と定期修復も、背景ジョブ担当（BOT_BACKGROUND_WORKER=true）の
+        # プロセスだけが受け持つ。Bot を複数並べたとき、全部のプロセスが同じ表へ同期を書き、
+        # 起動のたびに同期の履歴が台数ぶん積まれ、設定の掃除も台数ぶん回るのを防ぐ。担当の
+        # プロセスの中では、USER_STATE_SYNC_ON_READY・USER_STATE_AUTO_REPAIR_ENABLED がそのまま効く。
+        if _BOT_BACKGROUND_WORKER and _USER_STATE_SYNC_ON_READY and not state.user_state_sync_started:
             state.user_state_sync_started = True
             state.user_state_sync_task = asyncio.create_task(_sync_user_state_on_ready(bot, state.user_state_sync_lock))
             logger.info(
@@ -99,7 +103,7 @@ def register(bot: Bot, state: EventState, loops: BackgroundLoops) -> None:
                 _USER_STATE_SYNC_DELAY_SECONDS,
             )
 
-        if _USER_STATE_AUTO_REPAIR_ENABLED and not state.user_state_repair_started:
+        if _BOT_BACKGROUND_WORKER and _USER_STATE_AUTO_REPAIR_ENABLED and not state.user_state_repair_started:
             state.user_state_repair_started = True
             state.user_state_repair_task = asyncio.create_task(
                 _user_state_auto_repair_loop(bot, state.user_state_sync_lock)

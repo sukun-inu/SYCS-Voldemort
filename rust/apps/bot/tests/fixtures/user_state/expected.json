@@ -484,7 +484,7 @@
    "events": [
     [
      "member_leave",
-     "left",
+     "banned",
      null,
      null,
      null,
@@ -496,9 +496,9 @@
     "trusted",
     "trusted",
     "https://cdn.discordapp.com/avatars/80351110224678914/a_fedcba9876543210fedcba9876543210.gif?size=1024",
-    "left",
+    "banned",
     false,
-    false,
+    true,
     false,
     null,
     "[{\"id\": 1500000000000000020, \"name\": \"bypass\", \"position\": 2}]",
@@ -839,6 +839,102 @@
     true,
     true
    ]
+  },
+  {
+   "events": [
+    [
+     "member_ban",
+     "banned",
+     null,
+     null,
+     null,
+     "{\"roles\": [{\"id\": 1500000000000000010, \"name\": \"low\", \"position\": 1}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": true}}",
+     "2026-11-25T02:30:00.000000"
+    ]
+   ],
+   "current": [
+    "helperbot",
+    "helperbot",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "banned",
+    false,
+    true,
+    false,
+    null,
+    "[{\"id\": 1500000000000000010, \"name\": \"low\", \"position\": 1}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": true}",
+    "member_ban",
+    "2026-11-25T02:30:00.000000",
+    "2026-11-25T02:10:00.000000",
+    "2026-11-25T02:30:00.000000",
+    "2026-11-25T02:30:00.000000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_kick",
+     "banned",
+     80351110224678920,
+     "実行した人",
+     "荒らし行為のため",
+     "{\"member_count\": 42, \"roles\": [{\"id\": 1500000000000000010, \"name\": \"low\", \"position\": 1}], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": true}}",
+     "2026-11-25T02:30:00.400000"
+    ]
+   ],
+   "current": [
+    "helperbot",
+    "helperbot",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "banned",
+    false,
+    true,
+    false,
+    null,
+    "[{\"id\": 1500000000000000010, \"name\": \"low\", \"position\": 1}]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": true}",
+    "member_kick",
+    "2026-11-25T02:30:00.400000",
+    "2026-11-25T02:10:00.000000",
+    "2026-11-25T02:30:00.400000",
+    "2026-11-25T02:30:00.400000",
+    true,
+    true
+   ]
+  },
+  {
+   "events": [
+    [
+     "member_leave",
+     "left",
+     null,
+     null,
+     null,
+     "{\"member_count\": 41, \"roles\": [], \"abilities\": {\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}}",
+     "2026-11-25T04:10:00.000000"
+    ]
+   ],
+   "current": [
+    "newcomer",
+    "初めての退出",
+    "https://cdn.discordapp.com/embed/avatars/5.png",
+    "left",
+    false,
+    false,
+    false,
+    null,
+    "[]",
+    "{\"administrator\": false, \"manage_guild\": false, \"kick_members\": false, \"ban_members\": false, \"moderate_members\": true, \"manage_roles\": false, \"trusted_user\": false, \"bypass_role\": false, \"is_bot\": false}",
+    "member_leave",
+    "2026-11-25T04:10:00.000000",
+    null,
+    "2026-11-25T04:10:00.000000",
+    "2026-11-25T04:10:00.000000",
+    true,
+    true
+   ]
   }
  ],
  "audit": [
@@ -915,8 +1011,8 @@
   ]
  ],
  "totals": {
-  "events": 27,
-  "current": 9
+  "events": 30,
+  "current": 10
  },
  "schema": {
   "columns": [

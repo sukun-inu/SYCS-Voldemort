@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, NamedTuple, Sequence
 
@@ -404,6 +405,29 @@ def _event_payload_for(
     return event_payload
 
 
+# 退出（キックも）の種類。いま BAN 中の人の退出では BAN を残す（_keep_ban_on_leave）。
+_LEAVE_EVENT_TYPES = frozenset({"member_leave", "member_kick"})
+
+
+def _keep_ban_on_leave(current, event_type: str, status_after: str, is_banned: bool | None) -> tuple[str, bool | None]:
+    """いま BAN 中（最新状態の BAN の旗が立っている）の人の退出なら、状態を banned・旗を立てたままにする。
+
+    BAN すると Discord は BAN と退出の2つを送る。退出は監査ログでキックかどうかを見分けるのを待つ
+    （見つからなければ 1.2 秒）ので、たいてい BAN のあとに届く。そのまま書くと、最新状態が
+    「left・BAN でない」に戻り、30 分ごとの同期が BAN 一覧から直すまで（そのたびに履歴が1行増える）
+    BAN が見えなくなっていた。
+
+    形は同期が BAN 一覧から直すとき（_sync_bans）と同じ status=banned・is_banned=True にする。
+    left のまま旗だけ残すと、同期は「banned でない」と見てまた直しに来る。履歴の status_after も
+    同じ値にする（その行の「このあとの状態」と最新状態を食い違わせない）。種類（member_leave /
+    member_kick）と最後に抜けた時刻はそのまま書く。BAN を解除したあとの退出は、旗が下りているので
+    ふつうの退出になる。
+    """
+    if event_type in _LEAVE_EVENT_TYPES and bool(current.is_banned):
+        return "banned", True
+    return status_after, is_banned
+
+
 def _find_or_create_current(session, guild_id: int, user_id: int, rows):
     """最新状態の行を取り出す。無ければ空の行を作って session へ足す。"""
     current = rows.first()
@@ -445,9 +469,21 @@ async def _write_state_event(
     **2つを同じコミットに入れること。** 別々にすると、あいだで落ちたときに
     履歴には残っているのに最新状態が古いまま、という食い違いが残る。管理画面は
     この2つを並べて出すので、見た人はどちらを信じるか分からない。
+
+    最新状態を先に読む。退出のときは、いま BAN 中かどうかで履歴の status_after も
+    変わる（_keep_ban_on_leave）。
     """
     async with SessionLocal() as session:
         try:
+            rows = await session.scalars(
+                select(UserStateCurrent).where(
+                    UserStateCurrent.guild_id == int(guild_id),
+                    UserStateCurrent.user_id == int(user_id),
+                )
+            )
+            current = _find_or_create_current(session, guild_id, user_id, rows)
+            status_after, is_banned = _keep_ban_on_leave(current, event_type, status_after, is_banned)
+
             session.add(
                 UserStateEvent(
                     guild_id=int(guild_id),
@@ -461,14 +497,6 @@ async def _write_state_event(
                     event_at=now,
                 )
             )
-
-            rows = await session.scalars(
-                select(UserStateCurrent).where(
-                    UserStateCurrent.guild_id == int(guild_id),
-                    UserStateCurrent.user_id == int(user_id),
-                )
-            )
-            current = _find_or_create_current(session, guild_id, user_id, rows)
 
             _update_current_state_fields(
                 current,
@@ -795,12 +823,31 @@ def _repair_status(row, stats: dict[str, int]) -> bool:
     return True
 
 
+# 対になっていないサロゲート。Python の文字列には入るが、UTF-8 にできないので Postgres へ送れない。
+_LONE_SURROGATE = re.compile("[\ud800-\udfff]")
+
+
+def _replace_lone_surrogates(text: str) -> str:
+    """対になっていないサロゲートを U+FFFD（置き換えの文字）にする。
+
+    控えの JSON に `\\ud800` のような逃がし方で対になっていないサロゲートが入っていると（手で DB を
+    直した行など）、json.loads が読んだ文字にそのまま残る。書き直した文字を Postgres へ送る段
+    （UTF-8 にする段。asyncpg の DataError）で落ち、そのサーバーの修復が丸ごと取り消されて、
+    毎回同じ行で落ち続けていた（ほかの壊れた行も直らない）。
+
+    json.loads は対になったサロゲートを1文字にまとめるので、ここに残るのは対になっていないもの
+    だけ。U+FFFD にした文字は次の修復で読み直しても変わらないので、直したと数え続けない。
+    """
+    return _LONE_SURROGATE.sub("\ufffd", text)
+
+
 def _repair_json_columns(row, stats: dict[str, int]) -> bool:
     """roles_json / abilities_json を、読める形と決まった書き方へ揃える。直したら True。
 
     型が違う（配列のはずが文字列など）ものは空へ倒す。型は合っていても
     書き方が違うものは書き直す。揃えておかないと、同じ中身なのに毎回
-    「直った」と数え続けることになる。
+    「直った」と数え続けることになる。対になっていないサロゲートは U+FFFD に
+    して書き直す（_replace_lone_surrogates）。
     """
     changed = False
     for column, loader, empty in (
@@ -814,7 +861,7 @@ def _repair_json_columns(row, stats: dict[str, int]) -> bool:
             stats["json_fixed"] += 1
             changed = True
             continue
-        normalized = _safe_json_dumps(value, empty)
+        normalized = _replace_lone_surrogates(_safe_json_dumps(value, empty))
         if normalized != raw:
             setattr(row, column, normalized)
             stats["json_fixed"] += 1
@@ -1029,6 +1076,7 @@ def _sync_members(
         else:
             stats["updated"] += 1
 
+        timed_out_until = getattr(member, "timed_out_until", None)
         _update_current_state_fields(
             current,
             event_type=f"sync_member_{ctx.source}",
@@ -1037,10 +1085,17 @@ def _sync_members(
             user_fields=_extract_user_fields(member),
             in_guild=True,
             is_banned=False,
-            timed_out_until=getattr(member, "timed_out_until", None),
+            timed_out_until=timed_out_until,
             role_snapshot=_extract_role_snapshot(member),
             ability_snapshot=_extract_ability_snapshot(member, ctx.guild_id),
         )
+        if timed_out_until is None:
+            # メンバー一覧に期限が無い＝いまはタイムアウトされていない。_update_current_state_fields は
+            # None を「分からない」として古い期限を残すので、Bot が止まっていた間に早めに解かれた
+            # タイムアウトが、期限まで「タイムアウト中」のまま残っていた。ここで一覧に揃える
+            # （同じ値なら書かない。SQLAlchemy は変わった列だけを書く）。
+            current.timed_out_until = None
+            current.is_timed_out = False
 
         if created and ctx.write_events:
             session.add(
