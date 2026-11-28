@@ -51,7 +51,17 @@ _USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD = env_int(
     50000,
     minimum=100,
 )
-_USER_STATE_AUTO_REPAIR_WRITE_EVENTS = env_bool("USER_STATE_AUTO_REPAIR_WRITE_EVENTS", False)
+# 定期の同期（30 分ごと）でも、見つけた違い（記録に無かった人・記録に無かった BAN・抜けていた人）を
+# 履歴に 1 件 1 行で書く。違いが無ければ何も書かない（起動の後の同期と同じ書き方）。以前の既定は偽で、
+# Bot が動いている間に取りこぼした退出や BAN が、最新の状態にだけ現れて履歴に残らなかった
+# （本人の決定 2026-11-28、トラッカーの rust-10 の (j)・決めごとの U6）。
+_USER_STATE_AUTO_REPAIR_WRITE_EVENTS = env_bool("USER_STATE_AUTO_REPAIR_WRITE_EVENTS", True)
+
+
+# 監査ログを 1 回に読む件数。以前は 10 件で、短い間にキックや BAN が 10 件を超えると実行者が分からなく
+# なっていた。読む回数は同じ 1 回のまま件数だけ広げる（本人の決定 2026-11-28、rust-10 の (c)・決めごとの U2）。
+# 時間の枠（window_seconds の 20 秒）は変えない（広げると、同じ人の前のキックの実行者を拾いうる）。
+_AUDIT_LOG_LIMIT = 50
 
 
 async def _find_recent_audit_entry(
@@ -79,7 +89,7 @@ async def _find_recent_audit_entry(
     for attempt in range(retries + 1):
         try:
             now_utc = discord.utils.utcnow()
-            async for entry in guild.audit_logs(limit=10, action=action):
+            async for entry in guild.audit_logs(limit=_AUDIT_LOG_LIMIT, action=action):
                 target = getattr(entry, "target", None)
                 if getattr(target, "id", None) != target_user_id:
                     continue

@@ -1271,17 +1271,19 @@ impl EventHandler for Handler {
             debug!(%guild_id, user_id = %user.id, "キャッシュにいないメンバーの退出なので、ログもお別れも出しません");
             return;
         };
-        // キックだったかを監査ログで見分ける。Python と同じく、ログより先に調べる（監査ログへの反映が
-        // 遅れることがあるので、見つからなければ 0.6 秒おきに 2 回まで読み直す。ふつうの退出では、その
-        // ぶんログも遅れる）。Bot に監査ログを見る権限が無ければ、読みに行かない。
-        let kick =
-            user_state::audit_lookup(&ctx.cache, &ctx.http, guild_id, MemberAction::Kick, user.id)
-                .await;
+        // ログとお別れを先に出し、キックだったかはそのあとで監査ログで見分けて記録する（Python と同じ。本人の決定
+        // 2026-11-28、rust-10 の (b)・決めごとの U1）。監査ログは反映が遅れることがあるので、見つからなければ
+        // 0.6 秒おきに 2 回まで読み直す。先に読むと、ふつうの退出のたびにログとお別れが 1.2 秒あまり遅れていた
+        // （どちらも中身はキックかどうかで変わらない）。Bot に監査ログを見る権限が無ければ、読みに行かない。
         let guild = GuildFacts::of(&ctx.cache, guild_id);
         let roles = guild.sorted_roles(&member.roles);
         let entry = members::removal_entry(&user, &roles, guild.member_count.unwrap_or(0));
         self.log(&ctx, guild_id, entry, Author::from_member(&member), "退出")
             .await;
+        self.greet(&ctx, &guild, Kind::Goodbye, &member.user).await;
+        let kick =
+            user_state::audit_lookup(&ctx.cache, &ctx.http, guild_id, MemberAction::Kick, user.id)
+                .await;
         self.record_state(user_state::Event::member_removal(
             &member,
             &guild.view(),
@@ -1290,7 +1292,6 @@ impl EventHandler for Handler {
             Utc::now(),
         ))
         .await;
-        self.greet(&ctx, &guild, Kind::Goodbye, &member.user).await;
     }
 
     async fn guild_member_update(

@@ -82,7 +82,9 @@ pub struct SyncConfig {
     pub repair_start_delay: Duration,
     /// 1 サーバーの修復で見る行の上限（`USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD`、既定 50000・下限 100）。
     pub repair_max_rows: i64,
-    /// 定期の同期でも履歴を書くか（`USER_STATE_AUTO_REPAIR_WRITE_EVENTS`、既定は偽）。
+    /// 定期の同期でも履歴を書くか（`USER_STATE_AUTO_REPAIR_WRITE_EVENTS`、既定は真）。書くのは見つけた違いだけ
+    /// （起動の後の同期と同じ）。以前の既定は偽で、取りこぼした退出や BAN が履歴に残らなかった（本人の決定
+    /// 2026-11-28、rust-10 の (j)・決めごとの U6）。
     pub repair_write_events: bool,
     /// Bot が抜けたサーバーの設定を消すまでの日数（`GUILD_SETTINGS_ABANDONED_AFTER_DAYS`、既定 3650・下限 1）。
     pub abandoned_after_days: i64,
@@ -127,7 +129,7 @@ impl SyncConfig {
                 Some(100),
                 None,
             ),
-            repair_write_events: env.boolean("USER_STATE_AUTO_REPAIR_WRITE_EVENTS", false),
+            repair_write_events: env.boolean("USER_STATE_AUTO_REPAIR_WRITE_EVENTS", true),
             abandoned_after_days: env.int(
                 "GUILD_SETTINGS_ABANDONED_AFTER_DAYS",
                 guild_retention::ABANDONED_AFTER_DAYS,
@@ -1340,7 +1342,7 @@ mod tests {
     #[test]
     fn the_defaults_and_floors_match_python() {
         let c = SyncConfig::default();
-        assert!(c.sync_on_ready && c.auto_repair && !c.repair_write_events);
+        assert!(c.sync_on_ready && c.auto_repair && c.repair_write_events);
         assert_eq!(c.sync_delay, Duration::from_secs(20));
         assert_eq!(c.guild_pause, Duration::from_secs(1));
         assert_eq!(c.max_members_per_guild, 0);
@@ -1358,9 +1360,9 @@ mod tests {
             ("GUILD_SETTINGS_ABANDONED_AFTER_DAYS", "0"),
             ("USER_STATE_SYNC_ON_READY", "false"),
             ("USER_STATE_AUTO_REPAIR_ENABLED", "0"),
-            ("USER_STATE_AUTO_REPAIR_WRITE_EVENTS", "yes"),
+            ("USER_STATE_AUTO_REPAIR_WRITE_EVENTS", "no"),
         ]));
-        assert!(!low.sync_on_ready && !low.auto_repair && low.repair_write_events);
+        assert!(!low.sync_on_ready && !low.auto_repair && !low.repair_write_events);
         assert_eq!(low.sync_delay, Duration::ZERO);
         assert_eq!(low.guild_pause, Duration::ZERO);
         assert_eq!(low.max_members_per_guild, 0);

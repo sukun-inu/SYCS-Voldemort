@@ -798,6 +798,33 @@ class MemberRemoveTests(unittest.TestCase):
         self.assertEqual(record.call_args.kwargs["event_type"], "member_leave")
         goodbye.assert_called_once()
 
+    def test_log_and_goodbye_go_out_before_the_audit_log_lookup(self):
+        """ログとお別れは、監査ログを読む前に出す（rust-10 の (b)・U1）。記録は監査ログを見てから。
+
+        監査ログは見つからなければ 0.6 秒おきに 2 回まで読み直すので、先に読むと、ふつうの退出のたびに
+        ログとお別れが 1.2 秒あまり遅れていた。直す前のコードでは、監査ログが最初に来るので落ちる。
+        """
+        member = self._member()
+        order = []
+
+        def step(name, value=None):
+            """呼ばれた順を order に残す偽物の関数を作る。"""
+
+            async def fake(*_args, **_kwargs):
+                order.append(name)
+                return value
+
+            return fake
+
+        with (
+            patch.object(members, "_find_recent_audit_entry", step("audit")),
+            patch.object(members, "log_action", step("log")),
+            patch.object(members, "record_user_state_event", step("record")),
+            patch.object(members, "send_goodbye", step("goodbye")),
+        ):
+            _run(members._on_member_remove(object(), member))
+        self.assertEqual(order, ["log", "goodbye", "audit", "record"])
+
 
 class MemberUpdateTests(unittest.TestCase):
     """on_member_update: ニックネーム/ロール/タイムアウトのどれが変わったかで
