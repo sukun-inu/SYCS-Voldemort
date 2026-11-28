@@ -37,7 +37,9 @@ use tracing::{error, info, warn};
 
 use crate::errors::Crash;
 use crate::python;
-use crate::users::{Detail, EventRow, MAX_EVENT_LIMIT, MAX_LIMIT, StateRow, StoreFuture, UserStates};
+use crate::users::{
+    Detail, EventRow, MAX_EVENT_LIMIT, MAX_LIMIT, StateRow, StoreFuture, UserStates,
+};
 
 /// 最新状態の行を読む列（時刻は UNIX マイクロ秒の整数で受ける。Bot の `user_state_sync` と同じ読み方）。
 macro_rules! select_current {

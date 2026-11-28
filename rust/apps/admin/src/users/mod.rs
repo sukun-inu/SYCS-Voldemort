@@ -504,6 +504,10 @@ mod tests {
         assert_eq!(crash.message, message);
         let crash = int_error(&Value::Null);
         assert_eq!(crash.kind, "TypeError");
-        assert!(crash.message.ends_with("not 'NoneType'"), "{}", crash.message);
+        assert!(
+            crash.message.ends_with("not 'NoneType'"),
+            "{}",
+            crash.message
+        );
     }
 }

@@ -220,7 +220,9 @@ fn rows(value: &Value) -> Result<Vec<StateRow>, String> {
 }
 
 fn count(value: &Value) -> Result<i64, String> {
-    value.as_i64().ok_or_else(|| format!("件数が整数でない: {value}"))
+    value
+        .as_i64()
+        .ok_or_else(|| format!("件数が整数でない: {value}"))
 }
 
 /// 例の service を Rust の型にする（Postgres の services が返さない値なら `Err`）。

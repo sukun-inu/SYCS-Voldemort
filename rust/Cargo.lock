@@ -4131,6 +4131,7 @@ dependencies = [
  "reqwest",
  "serde_json",
  "sha1 0.10.7",
+ "sqlx",
  "sycs-core",
  "sycs-web",
  "tempfile",

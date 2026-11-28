@@ -129,7 +129,12 @@ async fn main() -> ExitCode {
         pages,
         reporter,
     };
-    let admin = AdminApp::new(config, &resolved.secret, deps, routes::default_routes(&site));
+    let admin = AdminApp::new(
+        config,
+        &resolved.secret,
+        deps,
+        routes::default_routes(&site),
+    );
     let state = Arc::new(admin.with_users(Arc::new(PgUserStates::new(pool))));
     let listener = match listen.bind().await {
         Ok(listener) => listener,
