@@ -283,6 +283,8 @@ async fn audit_selection_matches_python() {
     }
     assert_eq!(user_state::AUDIT_RETRY_DELAY, Duration::from_millis(600));
     assert_eq!(user_state::AUDIT_WINDOW_SECONDS, 20);
+    // 1 回に読む件数（Python の _AUDIT_LOG_LIMIT。決めごとの U2 で 10 から 50 にした）。
+    assert_eq!(user_state::AUDIT_LIMIT, 50);
 }
 
 // ── ここから下は本物の Postgres が要る ──────────────────────────────────
