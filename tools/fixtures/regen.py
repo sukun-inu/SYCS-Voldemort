@@ -53,6 +53,8 @@ GENERATORS = [
     # どちらも道具が自分の隣に書き出す（標準出力は使わない）。
     ("admin_schema", ".", ["rust/apps/admin/tests/fixtures/schema/generate.py"], None, False),
     ("admin_users_state", ".", ["rust/apps/admin/tests/fixtures/users_state/generate.py"], None, False),
+    # Web（rust/apps/web）: API の基準（expected.json）。道具が自分の隣に書き出す（W3 の下ごしらえ）。
+    ("web_prices_calculate", ".", ["rust/apps/web/tests/fixtures/prices_calculate/generate.py"], None, False),
 ]
 
 
