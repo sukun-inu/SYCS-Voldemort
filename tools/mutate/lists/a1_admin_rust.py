@@ -60,10 +60,10 @@ MUTS = [
         "    let body = if point <= -4 || point > 15 {",
     ),
     (
-        "base64 の詰め物で止まらない",
+        "base64 の終わりの = が 1 つ足りなくても読む",
         PY,
-        "                if quad + pads >= 4 {",
-        "                if quad + pads >= 5 {",
+        "    if quad == 1 || (quad != 0 && usize::from(quad) + pads < 4) {",
+        "    if quad == 1 || (quad != 0 && usize::from(quad) + pads < 3) {",
     ),
     (
         "Cookie の 8 進の先頭に 4〜7 も許す",

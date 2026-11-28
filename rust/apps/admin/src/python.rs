@@ -199,13 +199,18 @@ fn b64_value(byte: u8) -> Option<u8> {
 
 /// `base64.b64decode(data)`（`validate=False`。`binascii.a2b_base64(data, strict_mode=False)`）。
 ///
-/// 字でないものは黙って飛ばし、`=` の詰め物で終わる。数が合わなければ（字が 4 の倍数＋1、詰め物が足りない）`None`。
+/// 字でないものは黙って飛ばす。`=` は数えるだけで読み進め（途中の `=` は無かったことになる。RFC 4648 の 3.3。
+/// CPython 3.13 の今の版）、字が来たら数え直す。終わりで、字が 4 の倍数＋1 なら `None`、4 の倍数でなく、そのあとの
+/// `=` の数と合わせて 4 に届かなければ `None`（`Incorrect padding`）。
 /// `urlsafe` なら先に `-` を `+`、`_` を `/` に直す（`base64.urlsafe_b64decode`。`+` と `/` もそのまま読む）。
+///
+/// 前の CPython は、2 文字目より後の `=` で読み終えていた（`e30=junk` が `{}` になった）。今の版は読み進めるので
+/// `e30=junk` は読めず、`abc=d` は `abcd` と同じに読む（基準 `session/` の `b64decode` で確かめた）。
 pub fn b64decode(data: &[u8], urlsafe: bool) -> Option<Vec<u8>> {
     let mut out = Vec::with_capacity(data.len() / 4 * 3 + 3);
     let mut quad = 0u8;
     let mut left = 0u8;
-    let mut pads = 0u8;
+    let mut pads = 0usize;
     for &raw in data {
         let byte = match (urlsafe, raw) {
             (true, b'-') => b'+',
@@ -213,15 +218,10 @@ pub fn b64decode(data: &[u8], urlsafe: bool) -> Option<Vec<u8>> {
             _ => raw,
         };
         if byte == b'=' {
-            // C の `quad_pos >= 2 && quad_pos + ++pads >= 4`（詰め物は 2 文字目より後でだけ数える）。
-            if quad >= 2 {
-                pads += 1;
-                if quad + pads >= 4 {
-                    return Some(out);
-                }
-            }
+            pads += 1;
             continue;
         }
+        // 字でないものは飛ばす（`=` の数はそのまま）。
         let Some(value) = b64_value(byte) else {
             continue;
         };
@@ -248,7 +248,10 @@ pub fn b64decode(data: &[u8], urlsafe: bool) -> Option<Vec<u8>> {
             }
         }
     }
-    (quad == 0).then_some(out)
+    if quad == 1 || (quad != 0 && usize::from(quad) + pads < 4) {
+        return None;
+    }
+    Some(out)
 }
 
 /// itsdangerous の `base64_decode`（足りない `=` を足してから `urlsafe_b64decode`）。
@@ -708,12 +711,17 @@ mod tests {
         assert_eq!(dumps(&json!([]), DEFAULT), "[]");
     }
 
-    /// base64 を Python と同じに緩く読むこと（字でないものは飛ばす・詰め物で止まる・数が合わなければ読めない）。
+    /// base64 を Python と同じに緩く読むこと（字でないものは飛ばす・途中の `=` は読み飛ばして続ける・終わりの `=` で
+    /// 数を合わせる・数が合わなければ読めない）。
     #[test]
     fn base64_is_read_leniently_like_binascii() {
         assert_eq!(b64decode(b"e30=", false).unwrap(), b"{}");
         assert_eq!(b64decode(b"e3!0=", false).unwrap(), b"{}");
-        assert_eq!(b64decode(b"e30=junk", false).unwrap(), b"{}");
+        assert!(b64decode(b"e30=junk", false).is_none());
+        assert_eq!(b64decode(b"abc=d", false).unwrap(), [0x69, 0xb7, 0x1d]);
+        assert_eq!(b64decode(b"ab==cd", false).unwrap(), [0x69, 0xb7, 0x1d]);
+        assert_eq!(b64decode(b"YQ=!=", false).unwrap(), b"a");
+        assert!(b64decode(b"a=b=", false).is_none());
         assert!(b64decode(b"e30", false).is_none());
         assert!(b64decode(b"e", false).is_none());
         assert_eq!(b64decode(b"!!!", false).unwrap(), b"");
