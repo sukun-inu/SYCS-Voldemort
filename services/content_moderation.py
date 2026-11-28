@@ -1,18 +1,24 @@
 import hashlib
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from groq import AsyncGroq
 
 from config import GROQ_API_KEY
 from envutil import env_int
+from services import spam_detection
 from services.groq_client import create_chat_completion, get_groq_client
+from services.spam_detection import SpamCheck
 from services.ttl_cache import TTLCache
 from services.virustotal_service import MALICIOUS_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
 _GROQ_BUCKET = "moderation"
+
+# 「新しいアカウント」とみなす日数（アカウントを作ってから。rust-09 の S5）。AI に渡す文にも日数を書くので
+# ここに置き、security_service はここから読む（逆向きに読むと import が輪になる）。
+NEW_ACCOUNT_THRESHOLD_DAYS = env_int("NEW_ACCOUNT_THRESHOLD_DAYS", 7, minimum=1)
 
 # 同じ入力に対する判定を短く覚えておく時間（秒）。
 #
@@ -65,12 +71,37 @@ def _get_groq_client() -> AsyncGroq:
     return get_groq_client(timeout=20.0, bucket=_GROQ_BUCKET)
 
 
+def _context_lines(spam: SpamCheck, is_new_member: bool, is_new_account: bool) -> List[str]:
+    """AI に渡す状況の行（スパム・高頻度・新規・新しいアカウント）。
+
+    スパムは、当たった条件ごとに 1 行（何の条件で・何回か。S3）。繰り返しは、またがったチャンネルの数も書く。
+    """
+    lines: List[str] = []
+    if spam.repeat:
+        lines.append(
+            f"【スパム警告】直近{spam_detection.SPAM_REPEAT_WINDOW_SECONDS}秒間に同じ内容を"
+            f"{spam.repeat_count}回投稿しています（{spam.repeat_channels}チャンネル）。"
+        )
+    if spam.flood:
+        lines.append(
+            f"【スパム警告】直近{spam_detection.SPAM_FLOOD_WINDOW_SECONDS}秒間に"
+            f"{spam.flood_count}回メッセージを送信しています。"
+        )
+    if spam.min_interval != float("inf") and spam.min_interval < 2.0:
+        lines.append(f"【高頻度】メッセージ送信間隔が最短{spam.min_interval:.1f}秒と非常に短いです。")
+    if is_new_member:
+        lines.append("【新規】このユーザーはサーバー参加から7日未満の新規メンバーです。")
+    if is_new_account:
+        lines.append(f"【新しいアカウント】このユーザーのアカウントは作成から{NEW_ACCOUNT_THRESHOLD_DAYS}日未満です。")
+    return lines
+
+
 async def gpt_assess(
     text: str,
     vt_results: List[Dict[str, Any]],
-    spam_count: int = 0,
-    min_interval: float = float("inf"),
+    spam: Optional[SpamCheck] = None,
     is_new_member: bool = False,
+    is_new_account: bool = False,
 ) -> str:
     """投稿を DANGEROUS / SUSPICIOUS / SAFE / UNKNOWN のいずれかに判定する。
 
@@ -81,6 +112,8 @@ async def gpt_assess(
     キーはあるのに呼び出し自体が失敗した場合は UNKNOWN を返し、
     呼び出し元（security_service.gpt_icon）でSUSPICIOUSと同じ警戒表示に
     倒す。「判定できなかった」を「安全」と混同しないため。
+
+    spam はスパムの判定の結果（spam_detection.check_spam。無ければ「スパムではない」）。
     """
     vt_verdict = _vt_verdict(vt_results)
     if vt_verdict is not None:
@@ -89,14 +122,7 @@ async def gpt_assess(
     if not GROQ_API_KEY:
         return "SAFE"
 
-    context_lines: list[str] = []
-    if spam_count >= 4:
-        context_lines.append(f"【スパム警告】このユーザーは直近15秒間に{spam_count}回メッセージを送信しています。")
-    if min_interval != float("inf") and min_interval < 2.0:
-        context_lines.append(f"【高頻度】メッセージ送信間隔が最短{min_interval:.1f}秒と非常に短いです。")
-    if is_new_member:
-        context_lines.append("【新規】このユーザーはサーバー参加から7日未満の新規メンバーです。")
-
+    context_lines = _context_lines(spam or SpamCheck(), is_new_member, is_new_account)
     context_block = ("\n".join(context_lines) + "\n\n") if context_lines else ""
 
     # 判じるものが何も無いなら呼ばない。画像だけの投稿などで実際に起きる。

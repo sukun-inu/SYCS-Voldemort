@@ -851,23 +851,28 @@ class GptAssessGroqTests(unittest.TestCase):
         return next(m["content"] for m in messages if m["role"] == "user")
 
     def test_spam_warning_line_appears_at_the_threshold(self):
+        """量の条件に当たったら、何秒に何回かを書いた警告の行が入る（rust-09 の S3）。"""
         mock_create = self._mock_completion("SAFE")
+        spam = spam_detection.SpamCheck(flood=True, flood_count=8)
         with (
             patch.object(content_moderation, "GROQ_API_KEY", "key"),
             patch.object(content_moderation, "get_groq_client", Mock(return_value=Mock())),
             patch.object(content_moderation, "create_chat_completion", mock_create),
         ):
-            asyncio.run(content_moderation.gpt_assess("hello", [], spam_count=4))
-        self.assertIn("スパム警告", self._sent_prompt(mock_create))
+            asyncio.run(content_moderation.gpt_assess("hello", [], spam=spam))
+        want = "【スパム警告】直近10秒間に8回メッセージを送信しています。"
+        self.assertIn(want, self._sent_prompt(mock_create))
 
     def test_spam_warning_line_is_absent_just_below_the_threshold(self):
+        """どちらの条件にも当たっていなければ、回数があっても警告の行は入らない。"""
         mock_create = self._mock_completion("SAFE")
+        spam = spam_detection.SpamCheck(flood_count=7, repeat_count=2)
         with (
             patch.object(content_moderation, "GROQ_API_KEY", "key"),
             patch.object(content_moderation, "get_groq_client", Mock(return_value=Mock())),
             patch.object(content_moderation, "create_chat_completion", mock_create),
         ):
-            asyncio.run(content_moderation.gpt_assess("hello", [], spam_count=3))
+            asyncio.run(content_moderation.gpt_assess("hello", [], spam=spam))
         self.assertNotIn("スパム警告", self._sent_prompt(mock_create))
 
     def test_high_frequency_line_appears_just_under_two_seconds(self):
@@ -877,7 +882,7 @@ class GptAssessGroqTests(unittest.TestCase):
             patch.object(content_moderation, "get_groq_client", Mock(return_value=Mock())),
             patch.object(content_moderation, "create_chat_completion", mock_create),
         ):
-            asyncio.run(content_moderation.gpt_assess("hello", [], min_interval=1.9))
+            asyncio.run(content_moderation.gpt_assess("hello", [], spam=spam_detection.SpamCheck(min_interval=1.9)))
         self.assertIn("高頻度", self._sent_prompt(mock_create))
 
     def test_high_frequency_line_is_absent_exactly_at_two_seconds(self):
@@ -887,7 +892,7 @@ class GptAssessGroqTests(unittest.TestCase):
             patch.object(content_moderation, "get_groq_client", Mock(return_value=Mock())),
             patch.object(content_moderation, "create_chat_completion", mock_create),
         ):
-            asyncio.run(content_moderation.gpt_assess("hello", [], min_interval=2.0))
+            asyncio.run(content_moderation.gpt_assess("hello", [], spam=spam_detection.SpamCheck(min_interval=2.0)))
         self.assertNotIn("高頻度", self._sent_prompt(mock_create))
 
     def test_infinite_interval_never_shows_the_high_frequency_line(self):
@@ -939,184 +944,297 @@ class _FakeClock:
 
 
 class SpamDetectionTests(unittest.TestCase):
-    """しきい値ちょうど・時間窓ちょうどの境界と、掃除タイマーの境界を確認する。"""
+    """スパムの 2 つの条件（同じ内容の繰り返し・量の多さ）の境界と、掃除タイマーの境界を確認する（rust-09 の S3）。"""
 
     def setUp(self):
-        self._orig_history = {k: list(v) for k, v in spam_detection._user_message_times.items()}
+        """記録を退避して空にし、時刻を止める。"""
+        self._orig_history = {k: list(v) for k, v in spam_detection._user_posts.items()}
         self._orig_counter = spam_detection._cleanup_counter
-        spam_detection._user_message_times.clear()
+        spam_detection._user_posts.clear()
         spam_detection._cleanup_counter = 0
         self.clock = _FakeClock()
         self._time_patch = patch.object(spam_detection, "time", self.clock)
         self._time_patch.start()
+        self._next_id = 0
 
     def tearDown(self):
+        """記録と時刻を元に戻す。"""
         self._time_patch.stop()
-        spam_detection._user_message_times.clear()
-        spam_detection._user_message_times.update(self._orig_history)
+        spam_detection._user_posts.clear()
+        spam_detection._user_posts.update(self._orig_history)
         spam_detection._cleanup_counter = self._orig_counter
 
-    def test_below_threshold_is_not_spam(self):
-        result = None
-        for _ in range(spam_detection.SPAM_REPEAT_THRESHOLD - 1):
-            result = spam_detection.check_spam(1, 1)
-        is_spam, count, _ = result
-        self.assertFalse(is_spam)
-        self.assertEqual(count, spam_detection.SPAM_REPEAT_THRESHOLD - 1)
+    def _post(self, content="同じ文", guild=1, user=1, channel=10, files=()):
+        """投稿を 1 件数える（メッセージの ID は 1 から順に振る）。"""
+        self._next_id += 1
+        return spam_detection.check_spam(guild, user, channel, self._next_id, content, list(files))
 
-    def test_exactly_at_threshold_is_spam(self):
-        """しきい値ちょうどで発火する境界。`>=` を `>` に崩すと1件遅れて発火する。"""
+    def test_repeat_below_threshold_is_not_spam(self):
+        """同じ内容がしきい値の 1 回手前なら、スパムではなく、消す投稿も返さない。"""
         result = None
-        for _ in range(spam_detection.SPAM_REPEAT_THRESHOLD):
-            result = spam_detection.check_spam(1, 1)
-        is_spam, count, _ = result
-        self.assertTrue(is_spam)
-        self.assertEqual(count, spam_detection.SPAM_REPEAT_THRESHOLD)
+        for _ in range(spam_detection.SPAM_REPEAT_COUNT - 1):
+            result = self._post()
+        self.assertFalse(result.is_spam)
+        self.assertEqual(result.repeat_count, spam_detection.SPAM_REPEAT_COUNT - 1)
+        self.assertEqual(result.posts, ())
+
+    def test_repeat_exactly_at_threshold_is_spam(self):
+        """同じ内容がしきい値ちょうどで当たり、数えた投稿を全部（記録の順に）返す。`>=` を `>` に崩すと落ちる。"""
+        results = [self._post() for _ in range(spam_detection.SPAM_REPEAT_COUNT)]
+        last = results[-1]
+        self.assertTrue(last.repeat)
+        self.assertFalse(last.flood)
+        self.assertEqual(last.posts, tuple((10, i) for i in range(1, spam_detection.SPAM_REPEAT_COUNT + 1)))
+        self.assertEqual(last.counted, spam_detection.SPAM_REPEAT_COUNT)
+
+    def test_posts_already_returned_are_not_returned_again(self):
+        """一度返した投稿は二度返さない（消し直さない）が、回数には数え続ける。"""
+        for _ in range(spam_detection.SPAM_REPEAT_COUNT):
+            self._post()
+        again = self._post()
+        self.assertTrue(again.repeat)
+        self.assertEqual(again.repeat_count, spam_detection.SPAM_REPEAT_COUNT + 1)
+        self.assertEqual(again.posts, ((10, spam_detection.SPAM_REPEAT_COUNT + 1),))
+
+    def test_repeat_counts_across_channels(self):
+        """チャンネルをまたいでも同じ内容なら数え、またいだチャンネルの数を返す。"""
+        result = None
+        for channel in (10, 11, 12):
+            result = self._post(channel=channel)
+        self.assertTrue(result.repeat)
+        self.assertEqual(result.repeat_channels, 3)
+        self.assertEqual([c for c, _ in result.posts], [10, 11, 12])
+
+    def test_repeat_window_edge_is_dropped(self):
+        """繰り返しの窓ちょうど前の投稿は数えない（now - t < 窓）。"""
+        self._post()
+        self.clock.now += spam_detection.SPAM_REPEAT_WINDOW_SECONDS
+        self._post()
+        result = self._post()
+        self.assertEqual(result.repeat_count, 2)
+        self.assertFalse(result.is_spam)
+
+    def test_repeat_window_inside_still_counts(self):
+        """繰り返しの窓の少し内側の投稿は数える。"""
+        self._post()
+        self.clock.now += spam_detection.SPAM_REPEAT_WINDOW_SECONDS - 0.001
+        self._post()
+        self.assertTrue(self._post().repeat)
+
+    def test_flood_counts_different_contents(self):
+        """内容が違っても、量の窓の中でしきい値ちょうどで当たる（1 回手前では当たらない）。"""
+        result = None
+        for i in range(spam_detection.SPAM_FLOOD_COUNT - 1):
+            result = self._post(content=f"文{i}")
+        self.assertFalse(result.is_spam)
+        result = self._post(content="最後")
+        self.assertTrue(result.flood)
+        self.assertFalse(result.repeat)
+        self.assertEqual(result.flood_count, spam_detection.SPAM_FLOOD_COUNT)
+        self.assertEqual(len(result.posts), spam_detection.SPAM_FLOOD_COUNT)
+
+    def test_flood_window_edge_is_dropped(self):
+        """量の窓ちょうど前の投稿は数えない。"""
+        self._post(content="古い")
+        self.clock.now += spam_detection.SPAM_FLOOD_WINDOW_SECONDS
+        self.assertEqual(self._post(content="新しい").flood_count, 1)
+
+    def test_flood_window_inside_still_counts(self):
+        """量の窓の少し内側の投稿は数える。"""
+        self._post(content="古い")
+        self.clock.now += spam_detection.SPAM_FLOOD_WINDOW_SECONDS - 0.001
+        self.assertEqual(self._post(content="新しい").flood_count, 2)
 
     def test_min_interval_is_the_smallest_gap(self):
-        spam_detection.check_spam(1, 1)
+        """いちばん短い間隔（量の窓の中）。"""
+        self._post(content="a")
         self.clock.now += 1.0
-        spam_detection.check_spam(1, 1)
+        self._post(content="b")
         self.clock.now += 5.0
-        _, _, min_interval = spam_detection.check_spam(1, 1)
-        self.assertAlmostEqual(min_interval, 1.0)
+        self.assertAlmostEqual(self._post(content="c").min_interval, 1.0)
 
     def test_single_message_has_infinite_min_interval(self):
-        _, _, min_interval = spam_detection.check_spam(1, 1)
-        self.assertEqual(min_interval, float("inf"))
+        """1 回だけなら間隔は無限大。"""
+        self.assertEqual(self._post().min_interval, float("inf"))
 
-    def test_message_exactly_at_the_window_edge_is_dropped(self):
-        """窓境界の off-by-one。ちょうど窓幅ぶん古いメッセージは数えない仕様。"""
-        spam_detection.check_spam(1, 1)
-        self.clock.now += spam_detection.SPAM_TIME_WINDOW
-        _, count, _ = spam_detection.check_spam(1, 1)
-        self.assertEqual(count, 1)
+    def test_same_content_is_compared_after_nfkc_casefold_and_spaces(self):
+        """全角・大文字小文字・空白の打ち方だけが違う本文は同じ内容。ß は ss（lower ではなく casefold）。"""
+        key = spam_detection.content_key
+        self.assertEqual(key("ＦＲＥＥ　　ＮＩＴＲＯ", []), key("  free\tnitro ", []))
+        self.assertEqual(key("STRASSE", []), key("straße", []))
+        self.assertNotEqual(key("free nitro", []), key("free nitro!", []))
+        self.assertNotEqual(key("free nitro", []), key("free nitr0", []))
 
-    def test_message_just_inside_the_window_still_counts(self):
-        spam_detection.check_spam(1, 1)
-        self.clock.now += spam_detection.SPAM_TIME_WINDOW - 0.001
-        _, count, _ = spam_detection.check_spam(1, 1)
-        self.assertEqual(count, 2)
+    def test_attachments_are_part_of_the_content(self):
+        """添付は（ファイル名, 大きさ）。どちらかが違えば別の内容。本文も添付も空なら鍵は無い。"""
+        key = spam_detection.content_key
+        self.assertEqual(key("", [("a.png", 10)]), key("", [("a.png", 10)]))
+        self.assertNotEqual(key("", [("a.png", 10)]), key("", [("a.png", 11)]))
+        self.assertNotEqual(key("", [("a.png", 10)]), key("", [("b.png", 10)]))
+        self.assertNotEqual(key("x", [("a.png", 10)]), key("x", []))
+        self.assertIsNone(key("  ", []))
+
+    def test_empty_posts_count_only_for_flood(self):
+        """本文も添付も空の投稿は、繰り返しには数えず、量にだけ数える。"""
+        result = None
+        for _ in range(spam_detection.SPAM_REPEAT_COUNT):
+            result = self._post(content="")
+        self.assertEqual(result.repeat_count, 0)
+        self.assertFalse(result.repeat)
+        self.assertEqual(result.flood_count, spam_detection.SPAM_REPEAT_COUNT)
 
     def test_different_users_are_tracked_independently(self):
-        for _ in range(spam_detection.SPAM_REPEAT_THRESHOLD):
-            spam_detection.check_spam(1, 100)
-        is_spam_other, count_other, _ = spam_detection.check_spam(1, 200)
-        self.assertFalse(is_spam_other)
-        self.assertEqual(count_other, 1)
+        """ほかの人の投稿は数えない。"""
+        for _ in range(spam_detection.SPAM_REPEAT_COUNT):
+            self._post(user=100)
+        other = self._post(user=200)
+        self.assertFalse(other.is_spam)
+        self.assertEqual(other.flood_count, 1)
 
     def test_different_guilds_are_tracked_independently(self):
-        for _ in range(spam_detection.SPAM_REPEAT_THRESHOLD):
-            spam_detection.check_spam(1, 100)
-        is_spam_other, count_other, _ = spam_detection.check_spam(2, 100)
-        self.assertFalse(is_spam_other)
-        self.assertEqual(count_other, 1)
+        """ほかのサーバーの投稿は数えない。"""
+        for _ in range(spam_detection.SPAM_REPEAT_COUNT):
+            self._post(guild=1, user=100)
+        other = self._post(guild=2, user=100)
+        self.assertFalse(other.is_spam)
+        self.assertEqual(other.flood_count, 1)
 
     def test_cleanup_boundary_leaves_stale_entries_until_the_interval_is_reached(self):
         """掃除は _CLEANUP_INTERVAL 回目でようやく走る。1回早すぎても遅すぎても壊れる。"""
         stale_key = (99, 999)
-        spam_detection._user_message_times[stale_key] = [self.clock.now - spam_detection.SPAM_TIME_WINDOW - 1]
+        keep = max(spam_detection.SPAM_REPEAT_WINDOW_SECONDS, spam_detection.SPAM_FLOOD_WINDOW_SECONDS)
+        spam_detection._user_posts[stale_key] = [spam_detection._Post(self.clock.now - keep - 1, 1, 1, None)]
 
         for _ in range(spam_detection._CLEANUP_INTERVAL - 1):
-            spam_detection.check_spam(1, 1)
-        self.assertIn(stale_key, spam_detection._user_message_times, "早すぎるタイミングで掃除された")
+            self._post()
+        self.assertIn(stale_key, spam_detection._user_posts, "早すぎるタイミングで掃除された")
 
-        spam_detection.check_spam(1, 1)  # ちょうど _CLEANUP_INTERVAL 回目
-        self.assertNotIn(stale_key, spam_detection._user_message_times, "しきい値に達しても掃除されなかった")
-        self.assertIn((1, 1), spam_detection._user_message_times)
+        self._post()  # ちょうど _CLEANUP_INTERVAL 回目
+        self.assertNotIn(stale_key, spam_detection._user_posts, "しきい値に達しても掃除されなかった")
+        self.assertIn((1, 1), spam_detection._user_posts)
 
 
 class RaidDetectionTests(unittest.TestCase):
-    """VC 大量参加の検出。人数しきい値・時間窓・名前の同一視の3つが要。"""
+    """VC の荒らしの検出（rust-09 の S4）。入って間もない人の人数・時間窓・同じ人を 1 人と数えること・措置の覚え。"""
 
     def setUp(self):
+        """記録を退避して空にし、時刻を止める。"""
         self._orig_history = {k: list(v) for k, v in raid_detection._vc_join_history.items()}
+        self._orig_enforced = {k: dict(v) for k, v in raid_detection._vc_enforced.items()}
         self._orig_counter = raid_detection._cleanup_counter
         raid_detection._vc_join_history.clear()
+        raid_detection._vc_enforced.clear()
         raid_detection._cleanup_counter = 0
         self.clock = _FakeClock()
         self._time_patch = patch.object(raid_detection, "time", self.clock)
         self._time_patch.start()
 
     def tearDown(self):
+        """記録と時刻を元に戻す。"""
         self._time_patch.stop()
         raid_detection._vc_join_history.clear()
         raid_detection._vc_join_history.update(self._orig_history)
+        raid_detection._vc_enforced.clear()
+        raid_detection._vc_enforced.update(self._orig_enforced)
         raid_detection._cleanup_counter = self._orig_counter
 
-    def _member(self, name: str, uid: int):
+    def _member(self, uid: int):
+        """ID だけを持つメンバー（名前は見ない）。"""
         member = Mock(spec=discord.Member)
-        member.display_name = name
         member.id = uid
         return member
 
+    def _join(self, uid, channel_id=1):
+        """VC への参加を 1 回記録し、措置する人の ID を返す。"""
+        return [m.id for m, _ in raid_detection.check_vc_raid(self._member(uid), channel_id)]
+
     def test_below_threshold_is_not_a_raid(self):
-        result = False
+        """入って間もない人がしきい値の 1 人手前なら、荒らしにならない。"""
         for i in range(raid_detection.VC_RAID_THRESHOLD - 1):
-            result = raid_detection.check_vc_raid(self._member(f"Raid{i}", i), channel_id=1)
-        self.assertFalse(result)
+            self.assertEqual(self._join(i), [])
 
-    def test_exactly_at_threshold_is_a_raid(self):
-        """人数しきい値ちょうどで発火する境界。"""
-        result = False
+    def test_exactly_at_threshold_everyone_counted_is_returned_in_join_order(self):
+        """しきい値ちょうどで、数に入った全員を最初に入った順に返す。"""
+        for i in range(raid_detection.VC_RAID_THRESHOLD - 1):
+            self._join(i)
+        self.assertEqual(self._join(99), list(range(raid_detection.VC_RAID_THRESHOLD - 1)) + [99])
+
+    def test_names_are_not_looked_at(self):
+        """名前がばらばらでも、入って間もない人が 5 人なら荒らし（以前は名前の先頭が同じ人だけを数えていた）。"""
+        result = []
+        for i, name in enumerate(["Alice", "Bob__", "Carol", "Dave1", "Eve__"]):
+            member = self._member(i)
+            member.display_name = name
+            result = raid_detection.check_vc_raid(member, 1)
+        self.assertEqual(len(result), 5)
+
+    def test_the_same_person_rejoining_counts_once(self):
+        """同じ人は何度入り直しても 1 人（以前は入り直しも 1 回ずつ数えていた）。"""
+        for _ in range(raid_detection.VC_RAID_THRESHOLD + 2):
+            self.assertEqual(self._join(7), [])
+        self.assertEqual(self._join(8), [])
+
+    def test_later_joiners_in_the_window_are_acted_on_once(self):
+        """当たったあとに同じ窓の中で入った人にも措置する。同じ人には二度措置しない。"""
         for i in range(raid_detection.VC_RAID_THRESHOLD):
-            result = raid_detection.check_vc_raid(self._member(f"Raid{i}", i), channel_id=1)
-        self.assertTrue(result)
+            self._join(i)
+        self.assertEqual(self._join(50), [50])
+        self.assertEqual(self._join(50), [], "同じ人に二度措置した")
+        self.assertEqual(self._join(0), [], "最初の人に二度措置した")
 
-    def test_different_name_prefixes_are_not_grouped_together(self):
-        names = ["Alice", "Bob__", "Carol", "Dave1", "Eve__"]
-        result = False
-        for i, name in enumerate(names):
-            result = raid_detection.check_vc_raid(self._member(name, i), channel_id=1)
-        self.assertFalse(result)
-
-    def test_names_sharing_only_the_prefix_length_are_grouped(self):
-        """先頭 VC_RAID_SIMILAR_PREFIX 文字だけが比較対象。その先が違っても同一視する。"""
-        names = ["Raid-alpha", "Raid-beta", "Raid-gamma", "Raid-delta", "Raid-epsilon"]
-        result = False
-        for i, name in enumerate(names):
-            result = raid_detection.check_vc_raid(self._member(name, i), channel_id=1)
-        self.assertTrue(result)
-
-    def test_names_differing_within_the_prefix_are_not_grouped(self):
-        """5文字目より前で違えば別グループ（プレフィックス長ちょうどの境界）。"""
-        names = ["AAAA1", "AAAB2", "AAAC3", "AAAD4", "AAAE5"]
-        result = False
-        for i, name in enumerate(names):
-            result = raid_detection.check_vc_raid(self._member(name, i), channel_id=1)
-        self.assertFalse(result)
+    def test_the_bypass_check_failure_travels_with_the_person(self):
+        """バイパスの判定に失敗した人は、その印を付けて返す（呼ぶ側がその人への措置だけを見送る）。"""
+        for i in range(raid_detection.VC_RAID_THRESHOLD - 1):
+            raid_detection.check_vc_raid(self._member(i), 1, check_failed=(i == 2))
+        result = raid_detection.check_vc_raid(self._member(9), 1, False)
+        want = [(0, False), (1, False), (2, True), (3, False), (9, False)]
+        self.assertEqual([(m.id, failed) for m, failed in result], want)
 
     def test_different_channels_are_tracked_independently(self):
+        """別のチャンネルの参加は数えない。"""
         for i in range(raid_detection.VC_RAID_THRESHOLD - 1):
-            raid_detection.check_vc_raid(self._member(f"Raid{i}", i), channel_id=1)
-        result = raid_detection.check_vc_raid(self._member("Raid9", 9), channel_id=2)
-        self.assertFalse(result)
+            self._join(i, channel_id=1)
+        self.assertEqual(self._join(9, channel_id=2), [])
 
     def test_join_exactly_at_the_window_edge_is_dropped(self):
+        """窓ちょうど前の参加は数えない。"""
         for i in range(raid_detection.VC_RAID_THRESHOLD - 1):
-            raid_detection.check_vc_raid(self._member(f"Raid{i}", i), channel_id=1)
-        self.clock.now += raid_detection.VC_RAID_WINDOW_SEC
-        result = raid_detection.check_vc_raid(self._member("Raid9", 9), channel_id=1)
-        self.assertFalse(result)
+            self._join(i)
+        self.clock.now += raid_detection.VC_RAID_WINDOW_SECONDS
+        self.assertEqual(self._join(9), [])
 
     def test_join_just_inside_the_window_still_counts(self):
+        """窓の少し内側の参加は数える。"""
         for i in range(raid_detection.VC_RAID_THRESHOLD - 1):
-            raid_detection.check_vc_raid(self._member(f"Raid{i}", i), channel_id=1)
-        self.clock.now += raid_detection.VC_RAID_WINDOW_SEC - 0.001
-        result = raid_detection.check_vc_raid(self._member("Raid9", 9), channel_id=1)
-        self.assertTrue(result)
+            self._join(i)
+        self.clock.now += raid_detection.VC_RAID_WINDOW_SECONDS - 0.001
+        self.assertEqual(len(self._join(9)), raid_detection.VC_RAID_THRESHOLD)
+
+    def test_peeking_sees_only_counted_people_and_adds_nothing(self):
+        """発言からは記録を足さずに見る。数に入った人だけが荒らし。措置済みは窓の間だけ覚える。"""
+        for i in range(raid_detection.VC_RAID_THRESHOLD):
+            self._join(i)
+        self.assertTrue(raid_detection.is_vc_raid_ongoing(1, 0))
+        self.assertFalse(raid_detection.is_vc_raid_ongoing(1, 77), "数に入っていない人")
+        self.assertTrue(raid_detection.was_enforced(1, 0))
+        self.assertFalse(raid_detection.was_enforced(1, 77))
+        self.assertEqual(len(raid_detection._vc_join_history[1]), raid_detection.VC_RAID_THRESHOLD)
+        self.clock.now += raid_detection.VC_RAID_WINDOW_SECONDS
+        self.assertFalse(raid_detection.was_enforced(1, 0), "窓を過ぎても覚えている")
+        self.assertFalse(raid_detection.is_vc_raid_ongoing(1, 0))
 
     def test_cleanup_boundary_leaves_stale_entries_until_the_interval_is_reached(self):
+        """掃除は _CLEANUP_INTERVAL 回目でようやく走る。"""
         stale_channel = 999
         raid_detection._vc_join_history[stale_channel] = [
-            (self.clock.now - raid_detection.VC_RAID_WINDOW_SEC - 1, "AAAA", 1)
+            (self.clock.now - raid_detection.VC_RAID_WINDOW_SECONDS - 1, 1, self._member(1), False)
         ]
 
         for i in range(raid_detection._CLEANUP_INTERVAL - 1):
-            raid_detection.check_vc_raid(self._member(f"N{i}", i), channel_id=1)
+            self._join(i)
         self.assertIn(stale_channel, raid_detection._vc_join_history, "早すぎるタイミングで掃除された")
 
-        raid_detection.check_vc_raid(self._member("last", 9999), channel_id=1)
+        self._join(9999)
         self.assertNotIn(stale_channel, raid_detection._vc_join_history, "しきい値に達しても掃除されなかった")
         self.assertIn(1, raid_detection._vc_join_history)
 

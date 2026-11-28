@@ -41,8 +41,8 @@ MUTS = [
     (
         "発言も荒らしに数える",
         "rust/apps/bot/src/message_security.rs",
-        "&& cx.raid.peek(channel, (cx.clock)())",
-        "&& cx.raid.check(channel, &post.display_name, (cx.clock)())",
+        "Some(channel) => cx.raid.peek(channel, post.user_id.get(), (cx.clock)()),",
+        "Some(channel) => {\n            cx.raid.check(channel, post.user_id.get(), (cx.clock)());\n            cx.raid.peek(channel, post.user_id.get(), (cx.clock)())\n        }",
     ),
     (
         "畳んだ印をいちばん軽いものにする",

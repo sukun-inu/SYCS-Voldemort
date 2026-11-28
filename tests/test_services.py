@@ -3993,7 +3993,7 @@ class GptAssessCallReductionTests(unittest.TestCase):
         """
         with patch.object(self.mod, "create_chat_completion", AsyncMock(return_value=self._reply())) as call:
             asyncio.run(self.mod.gpt_assess("こんにちは", []))
-            asyncio.run(self.mod.gpt_assess("こんにちは", [], spam_count=5))
+            asyncio.run(self.mod.gpt_assess("こんにちは", [], spam=self.mod.SpamCheck(flood=True, flood_count=8)))
 
         self.assertEqual(call.await_count, 2)
 
@@ -4492,10 +4492,15 @@ class SecurityFailSafeTests(unittest.TestCase):
         after = Mock()
         after.channel = self._voice_channel()
 
+        def fake_raid(member, channel_id, check_failed=False):
+            """荒らしなら、いま入った人だけを措置する人として返す（判定に失敗したかの印も付けて）。"""
+            return [(member, check_failed)] if raid else []
+
         with (
             patch.object(self.sec, "get_trusted_user_ids", trusted),
             patch.object(self.sec, "get_bypass_role_ids", lambda g: []),
-            patch.object(self.sec, "check_vc_raid", lambda m, c: raid),
+            patch.object(self.sec, "is_fresh_joiner", lambda m: True),
+            patch.object(self.sec, "check_vc_raid", fake_raid),
             patch.object(self.sec, "strip_roles", fake_strip),
             patch.object(self.sec, "log_action", fake_log),
             patch.object(self.sec.logger, "error"),
@@ -4600,9 +4605,8 @@ class MessageSecurityOutcomeTests(unittest.TestCase):
             patch.object(self.sec, "get_trusted_user_ids", trusted),
             patch.object(self.sec, "get_bypass_role_ids", lambda g: []),
             patch.object(self.sec, "get_response_channel_id", lambda g: None),
-            patch.object(self.sec, "check_spam", lambda g, u: (False, 0, 0.0)),
+            patch.object(self.sec, "check_spam", lambda *args: self.sec.SpamCheck()),
             patch.object(self.sec, "gpt_assess", AsyncMock(return_value=gpt)),
-            patch.object(self.sec, "check_vc_raid", lambda m, c: False),
             patch.object(self.sec, "strip_roles", fake_strip),
             patch.object(self.sec, "log_action", fake_log),
             patch.object(self.sec, "send_log_embed", AsyncMock()),
@@ -4682,6 +4686,9 @@ class MessageSecurityOutcomeTests(unittest.TestCase):
 
         バイパスは「信頼しているので見ない」であって「見たうえで許す」では
         ない。外部への問い合わせが走っていたら、そこが崩れている。
+
+        飛ばしたことはログファイルにだけ書き、ログチャンネルには出さない（rust-09 の S7。以前は
+        「セキュリティ検査スキップ」をログチャンネルへ出していた）。
         """
         with patch.object(self.sec, "gpt_assess", AsyncMock(return_value="SAFE")) as gpt:
             with (
@@ -4689,12 +4696,14 @@ class MessageSecurityOutcomeTests(unittest.TestCase):
                 patch.object(self.sec, "get_bypass_role_ids", lambda g: []),
                 patch.object(self.sec, "get_response_channel_id", lambda g: None),
                 patch.object(self.sec, "log_action", AsyncMock(side_effect=self._remember)),
+                self.assertLogs(self.sec.logger, level="INFO") as captured,
             ):
                 asyncio.run(self.sec.handle_security_for_message(Mock(), self._message()))
 
         gpt.assert_not_awaited()
         self.assertEqual(self.deleted, [])
-        self.assertTrue(any("スキップ" in m for m in self.logged), self.logged)
+        self.assertEqual(self.logged, [], "飛ばしたことをログチャンネルに出した")
+        self.assertTrue(any("trusted_user" in line for line in captured.output), captured.output)
 
     def test_a_safe_message_is_left_alone(self):
         """安全なら何もしないこと。"""

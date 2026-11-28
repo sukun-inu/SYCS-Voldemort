@@ -49,6 +49,8 @@ tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time", "process", "sync"] }
 tokio-tungstenite = { workspace = true, features = ["connect", "handshake", "rustls-tls-webpki-roots"] }
 tracing = { workspace = true }
+# スパムの「同じ内容」の比べ方（本文を NFKC にする。Python の unicodedata.normalize）。sycs-core が既に使っている版。
+unicode-normalization = { workspace = true }
 
 [dev-dependencies]
 # VirusTotal の結合テストで、偽物の HTTP サーバーをテストの中に立てる。

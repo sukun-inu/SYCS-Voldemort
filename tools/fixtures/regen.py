@@ -32,6 +32,8 @@ F = "rust/apps/bot/tests/fixtures"
 GENERATORS = [
     ("url_safety", ".", ["rust/crates/sycs-core/tests/fixtures/url_safety/generate.py"], None, False),
     ("message_security", f"{F}/message_security", ["generate.py", "cases.json"], "expected.jsonl", False),
+    # スパムの「同じ内容」の比べ方に使う casefold の表（Rust の src に置く。rust-09 の S3）。
+    ("casefold", ".", [f"{F}/message_security/generate_casefold.py"], "rust/apps/bot/src/security_casefold.tsv", False),
     ("chat", f"{F}/chat", ["generate.py", "cases.json"], "expected.jsonl", False),
     (
         "user_state",

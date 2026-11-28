@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use sycs_bot::groq::{Groq, GroqConfig, GroqError};
 use sycs_bot::moderation::{self, AssessInput, Moderation, Verdict};
+use sycs_bot::security::SpamCheck;
 use sycs_bot::virustotal::VtResult;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -235,25 +236,34 @@ fn vt(pairs: &[(i64, i64)]) -> Vec<VtResult> {
 }
 
 async fn assess(m: &Moderation, text: &str) -> Verdict {
-    assess_with(m, text, &[], 1, f64::INFINITY, false).await
+    assess_with(m, text, &[], &SpamCheck::default(), false).await
 }
 
 async fn assess_with(
     m: &Moderation,
     text: &str,
     vt_results: &[VtResult],
-    spam_count: usize,
-    min_interval: f64,
+    spam: &SpamCheck,
     is_new_member: bool,
 ) -> Verdict {
     m.assess(&AssessInput {
         text,
         vt_results,
-        spam_count,
-        min_interval,
+        spam,
         is_new_member,
+        new_account_days: None,
     })
     .await
+}
+
+/// 量の条件に当たったスパム（10 秒に 8 回）。いちばん短い間隔も決められる。
+fn flood(min_interval: f64) -> SpamCheck {
+    SpamCheck {
+        flood: true,
+        flood_count: 8,
+        min_interval,
+        ..SpamCheck::default()
+    }
 }
 
 fn total(seen: &Shared) -> usize {
@@ -309,12 +319,25 @@ async fn verdicts_are_cached_but_failures_are_not() {
     assert_eq!(total(&seen), 3, "失敗を覚えた");
     let before = total(&seen);
     let t = "case=safe#k";
-    assess_with(&m, t, &[], 1, f64::INFINITY, false).await;
-    assess_with(&m, t, &[], 5, f64::INFINITY, false).await;
-    assess_with(&m, t, &[], 1, f64::INFINITY, true).await;
-    assess_with(&m, t, &[], 1, 1.5, false).await;
-    assess_with(&m, t, &vt(&[(0, 0)]), 1, f64::INFINITY, false).await;
-    assert_eq!(total(&seen) - before, 5, "状況の違いを同じ鍵にした");
+    let quiet = SpamCheck::default();
+    let fast = SpamCheck {
+        min_interval: 1.5,
+        ..SpamCheck::default()
+    };
+    assess_with(&m, t, &[], &quiet, false).await;
+    assess_with(&m, t, &[], &flood(f64::INFINITY), false).await;
+    assess_with(&m, t, &[], &quiet, true).await;
+    assess_with(&m, t, &[], &fast, false).await;
+    assess_with(&m, t, &vt(&[(0, 0)]), &quiet, false).await;
+    let new_account = AssessInput {
+        text: t,
+        vt_results: &[],
+        spam: &quiet,
+        is_new_member: false,
+        new_account_days: Some(7),
+    };
+    m.assess(&new_account).await;
+    assert_eq!(total(&seen) - before, 6, "状況の違いを同じ鍵にした");
 }
 
 /// VirusTotal で決まるとき・鍵が無いとき・本文が空白だけのときは呼ばないこと。
@@ -322,9 +345,10 @@ async fn verdicts_are_cached_but_failures_are_not() {
 async fn some_inputs_never_reach_groq() {
     let (base, seen) = start_fake().await;
     let m = moderation(&base);
-    let d = assess_with(&m, "case=safe#v", &vt(&[(0, 0), (12, 0)]), 1, 1e9, false).await;
+    let quiet = SpamCheck::default();
+    let d = assess_with(&m, "case=safe#v", &vt(&[(0, 0), (12, 0)]), &quiet, false).await;
     assert_eq!(d, Verdict::Dangerous);
-    let s = assess_with(&m, "case=safe#v", &vt(&[(0, 1), (30, 0)]), 1, 1e9, false).await;
+    let s = assess_with(&m, "case=safe#v", &vt(&[(0, 1), (30, 0)]), &quiet, false).await;
     assert_eq!(s, Verdict::Dangerous, "いちばん重い結果で決める");
     assert_eq!(
         assess(&m, "  \n\u{1C}\u{3000}").await,
@@ -333,8 +357,8 @@ async fn some_inputs_never_reach_groq() {
     );
     assert_eq!(total(&seen), 0);
     // 走査の結果があれば、本文が空白でも尋ねる。引っかからなかった結果（-1 を含む）も尋ねる。
-    assess_with(&m, " ", &vt(&[(0, 0)]), 1, 1e9, false).await;
-    assess_with(&m, "case=safe#w", &vt(&[(0, 0), (-1, -1)]), 1, 1e9, false).await;
+    assess_with(&m, " ", &vt(&[(0, 0)]), &quiet, false).await;
+    assess_with(&m, "case=safe#w", &vt(&[(0, 0), (-1, -1)]), &quiet, false).await;
     assert_eq!(total(&seen), 2);
     let no_key = Moderation::new(Arc::new(Groq::new(config(&base, None))), 300.0);
     assert_eq!(assess(&no_key, "case=dangerous#n").await, Verdict::Safe);
@@ -347,15 +371,16 @@ async fn the_request_has_the_python_shape() {
     let (base, seen) = start_fake().await;
     let m = moderation(&base);
     let text = "case=prompt\n本文😀 <https://a.example>";
-    assess_with(&m, text, &[], 5, 0.75, true).await;
+    let spam = flood(0.75);
+    assess_with(&m, text, &[], &spam, true).await;
     let body = seen.lock().unwrap().bodies[0].clone();
-    let context = moderation::context_block(5, 0.75, true);
+    let context = moderation::context_block(&spam, true, None);
     assert_eq!(body, moderation::request_body(&context, text));
     assert_eq!(body["model"], "openai/gpt-oss-20b");
     assert_eq!(
         body["messages"][1]["content"].as_str().unwrap(),
         format!(
-            "{}【スパム警告】このユーザーは直近15秒間に5回メッセージを送信しています。\n\
+            "{}【スパム警告】直近10秒間に8回メッセージを送信しています。\n\
              【高頻度】メッセージ送信間隔が最短0.8秒と非常に短いです。\n\
              【新規】このユーザーはサーバー参加から7日未満の新規メンバーです。\n\n投稿内容:\n{text}",
             moderation::prompt("", "").trim_end_matches("投稿内容:\n")

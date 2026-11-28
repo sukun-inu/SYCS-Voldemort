@@ -2,7 +2,8 @@
 //!
 //! 基準（`fixtures/message_security/expected.jsonl`）は、本物の Python の `handle_security_for_message` を
 //! 同じ偽物（Discord・VirusTotal・Groq を記録するだけ）に差し替えて回したもの（`generate.py`）。
-//! Discord への書き込み（送る・書き換える・消す・剥がす・ログ）と Groq に渡したものを、順に比べる。
+//! Discord への書き込み（送る・書き換える・消す・タイムアウト・剥がす・ログ）と Groq に渡したものを、順に比べる。
+//! 例の書き方（前の投稿・VC への参加・権限・失敗のさせ方）は `generate.py` の先頭の説明のとおり。
 //!
 //! 走査が落ちたときの理由の名前だけは言語で違う（Python は例外の型、Rust は panic）ので、比べる前に
 //! そろえる。
@@ -17,16 +18,19 @@ use serde_json::{Value, json};
 use serenity::all::{ChannelId, CreateEmbed, GuildId, MessageId, RoleId, UserId};
 use sycs_bot::log_channel::{Author, Level};
 use sycs_bot::message_security::{
-    self, Assess, AssessRequest, Context, Effects, Judges, LogMessage, Post, Scan,
+    self, Assess, AssessRequest, Context, DeleteFailure, Effects, Judges, LogMessage, Post, Scan,
 };
 use sycs_bot::moderation::Verdict;
-use sycs_bot::security::{RaidDetector, SpamDetector, StripFailure};
+use sycs_bot::security::{RaidDetector, SecurityConfig, SpamDetector, SpamInput, StripFailure};
 use sycs_bot::virustotal::VtResult;
 
 const GUILD: u64 = 1_399_617_700_363_370_556;
 const USER: u64 = 80_351_110_224_678_912;
 const CHANNEL: u64 = 1_505_310_388_051_251_261;
+/// 検査するメッセージ（Python の基準の `MESSAGE`）。前の投稿は 100 から順に振る。
+const MESSAGE: u64 = 2;
 const NOW: f64 = 1_795_565_100.25;
+const DISCORD_EPOCH_MS: i64 = 1_420_070_400_000;
 
 fn clock() -> f64 {
     NOW
@@ -65,11 +69,50 @@ struct Fake {
     log_channel: bool,
     edit_fail_at: HashSet<usize>,
     edits: AtomicUsize,
-    delete_fails: bool,
+    /// この ID の投稿を消すと、ほかの失敗にする。
+    delete_fail: HashSet<u64>,
+    /// この ID の投稿は、既に消えていたことにする。
+    delete_gone: HashSet<u64>,
+    /// タイムアウトの断り方（`forbidden`・`error`）。
+    timeout_fail: Option<String>,
     /// このロールで権限不足にする。
     strip_fail_at: Option<u64>,
     /// このロールでほかの失敗にする。
     strip_error_at: Option<u64>,
+}
+
+impl Fake {
+    /// 例から作る（消す・タイムアウト・剥がすの失敗のさせ方）。
+    fn new(case: &Value, calls: &Calls) -> Self {
+        let ids = |key: &str| -> HashSet<u64> {
+            let listed = case[key].as_array().into_iter().flatten();
+            listed.filter_map(Value::as_u64).collect()
+        };
+        let mut delete_fail = ids("delete_fail_ids");
+        let mut delete_gone = ids("delete_gone_ids");
+        if case["delete_fails"].as_bool().unwrap_or(false) {
+            delete_fail.insert(MESSAGE);
+        }
+        if case["delete_gone"].as_bool().unwrap_or(false) {
+            delete_gone.insert(MESSAGE);
+        }
+        Self {
+            calls: Arc::clone(calls),
+            log_channel: case["log_channel"].as_bool().unwrap_or(true),
+            edit_fail_at: case["edit_fail_at"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|n| n.as_u64().unwrap() as usize)
+                .collect(),
+            edits: AtomicUsize::new(0),
+            delete_fail,
+            delete_gone,
+            timeout_fail: case["timeout_fail"].as_str().map(str::to_string),
+            strip_fail_at: case["strip_fail_at"].as_u64(),
+            strip_error_at: case["strip_error_at"].as_u64(),
+        }
+    }
 }
 
 impl Effects for Fake {
@@ -95,12 +138,30 @@ impl Effects for Fake {
         }
     }
 
-    async fn delete_message(&self) -> Result<(), String> {
-        self.calls.lock().unwrap().push(json!(["delete"]));
-        if self.delete_fails {
-            Err("404 Unknown Message".into())
-        } else {
-            Ok(())
+    async fn delete_message(
+        &self,
+        channel: ChannelId,
+        message: MessageId,
+    ) -> Result<(), DeleteFailure> {
+        let record = json!(["delete", channel.get(), message.get()]);
+        self.calls.lock().unwrap().push(record);
+        // Python の基準と同じ順に見る（ほかの失敗が先）。
+        if self.delete_fail.contains(&message.get()) {
+            return Err(DeleteFailure::Failed("404 Unknown Message".into()));
+        }
+        if self.delete_gone.contains(&message.get()) {
+            return Err(DeleteFailure::Gone);
+        }
+        Ok(())
+    }
+
+    async fn timeout(&self, seconds: i64) -> Result<(), StripFailure> {
+        let record = json!(["timeout", seconds, "セキュリティ違反"]);
+        self.calls.lock().unwrap().push(record);
+        match self.timeout_fail.as_deref() {
+            Some("forbidden") => Err(StripFailure::Forbidden),
+            Some(_) => Err(StripFailure::Failed("404 Unknown Member".into())),
+            None => Ok(()),
         }
     }
 
@@ -181,18 +242,27 @@ fn judges(case: &Value, calls: &Calls, scanned: &Arc<Mutex<Vec<String>>>) -> Jud
             .iter()
             .map(|v| json!([v.malicious, v.suspicious]))
             .collect();
-        let interval = if r.min_interval.is_infinite() {
+        let interval = if r.spam.min_interval.is_infinite() {
             json!("inf")
         } else {
-            json!(r.min_interval)
+            json!(r.spam.min_interval)
         };
+        let s = &r.spam;
+        let spam = json!([
+            s.repeat,
+            s.repeat_count,
+            s.repeat_channels,
+            s.flood,
+            s.flood_count
+        ]);
         log.lock().unwrap().push(json!([
             "assess",
             r.text,
             vt,
-            r.spam_count,
+            spam,
             interval,
-            r.is_new_member
+            r.is_new_member,
+            r.new_account_days.is_some()
         ]));
         Box::pin(async move { verdict })
     });
@@ -201,6 +271,32 @@ fn judges(case: &Value, calls: &Calls, scanned: &Arc<Mutex<Vec<String>>>) -> Jud
         assess,
         scan_concurrency: message_security::DEFAULT_SCAN_CONCURRENCY,
     }
+}
+
+/// 発言した人の ID。`account_days_ago` があれば、その日時に作ったアカウントの ID（Python の基準の `member_id`）。
+fn member_id(case: &Value) -> u64 {
+    let Some(days) = case["account_days_ago"].as_f64() else {
+        return USER;
+    };
+    let ms = ((NOW - days * 86_400.0) * 1000.0) as i64;
+    u64::try_from(ms - DISCORD_EPOCH_MS).unwrap() << 22
+}
+
+/// 添付 1 つ（URL・ファイル名・大きさ）。URL だけなら、ファイル名は URL の最後、大きさは 0（Python の基準と同じ）。
+fn attachment(entry: &Value) -> (String, String, u64) {
+    if let Some(url) = entry.as_str() {
+        let name = url.rsplit('/').next().unwrap_or("").to_string();
+        return (url.to_string(), name, 0);
+    }
+    let url = entry[0].as_str().unwrap().to_string();
+    let name = entry[1].as_str().unwrap().to_string();
+    (url, name, entry[2].as_u64().unwrap())
+}
+
+fn attachments(list: &Value) -> Vec<(String, String, u64)> {
+    list.as_array()
+        .map(|a| a.iter().map(attachment).collect())
+        .unwrap_or_default()
 }
 
 fn post(case: &Value) -> Post {
@@ -212,16 +308,15 @@ fn post(case: &Value) -> Post {
             DateTime::from_timestamp(at.floor() as i64, ((at - at.floor()) * 1e9) as u32)
         }
     };
+    let files = attachments(&case["attachments"]);
     Post {
         guild_id: GuildId::new(GUILD),
         channel_id: ChannelId::new(case["channel"].as_u64().unwrap_or(CHANNEL)),
-        message_id: MessageId::new(2),
-        user_id: UserId::new(USER),
+        message_id: MessageId::new(MESSAGE),
+        user_id: UserId::new(member_id(case)),
         content: case["content"].as_str().unwrap_or("").into(),
-        attachments: case["attachments"]
-            .as_array()
-            .map(|a| a.iter().map(|u| u.as_str().unwrap().to_string()).collect())
-            .unwrap_or_default(),
+        attachments: files.iter().map(|(url, _, _)| url.clone()).collect(),
+        attachment_files: files.into_iter().map(|(_, n, s)| (n, s)).collect(),
         roles: case["roles"]
             .as_array()
             .map(|a| a.iter().map(|r| RoleId::new(r.as_u64().unwrap())).collect())
@@ -229,6 +324,8 @@ fn post(case: &Value) -> Post {
         joined_at,
         voice_channel: case["voice"].as_u64(),
         display_name: case["name"].as_str().unwrap_or("nelly").into(),
+        is_admin: case["admin"].as_bool().unwrap_or(false),
+        bot_can_timeout: case["can_timeout"].as_bool().unwrap_or(true),
         author: Author {
             id: USER,
             name: "nelly".into(),
@@ -237,41 +334,63 @@ fn post(case: &Value) -> Post {
     }
 }
 
+/// 前の投稿を、スパムの記録に入れる（Python の基準の `record_prior`）。数なら秒（この投稿と同じ本文・添付・
+/// チャンネル）、`{"dt", "content", "channel", "attachments"}` なら中身を変えられる。ID は 100 から順に振る。
+fn record_prior_posts(case: &Value, spam: &SpamDetector) {
+    let empty = Vec::new();
+    let priors = case["prior_posts"].as_array().unwrap_or(&empty);
+    for (i, entry) in priors.iter().enumerate() {
+        let (dt, prior) = match entry.as_f64() {
+            Some(dt) => (dt, &Value::Null),
+            None => (entry["dt"].as_f64().unwrap(), entry),
+        };
+        let pick = |key: &str| {
+            if prior.get(key).is_some() {
+                prior[key].clone()
+            } else {
+                case[key].clone()
+            }
+        };
+        let content = pick("content").as_str().unwrap_or("").to_string();
+        let files: Vec<(String, u64)> = attachments(&pick("attachments"))
+            .into_iter()
+            .map(|(_, name, size)| (name, size))
+            .collect();
+        let input = SpamInput {
+            guild_id: GUILD,
+            user_id: member_id(case),
+            channel_id: pick("channel").as_u64().unwrap_or(CHANNEL),
+            message_id: 100 + i as u64,
+            content: &content,
+            attachments: &files,
+        };
+        spam.check(&input, NOW + dt);
+    }
+}
+
 async fn run(case: &Value) -> Value {
     let calls: Calls = Arc::default();
     let scanned: Arc<Mutex<Vec<String>>> = Arc::default();
     let spam = SpamDetector::default();
     let raid = RaidDetector::default();
-    for dt in case["prior_posts"].as_array().into_iter().flatten() {
-        spam.check(GUILD, USER, NOW + dt.as_f64().unwrap());
-    }
+    record_prior_posts(case, &spam);
     let voice = case["voice"].as_u64().unwrap_or(0);
     for j in case["prior_joins"].as_array().into_iter().flatten() {
-        raid.check(voice, j[1].as_str().unwrap(), NOW + j[0].as_f64().unwrap());
+        let who = j[1].as_u64().unwrap_or_else(|| member_id(case));
+        raid.check(voice, who, NOW + j[0].as_f64().unwrap());
     }
     let judges = judges(case, &calls, &scanned);
     let settings = case.get("settings").cloned().unwrap_or(json!({}));
+    let config = SecurityConfig::default();
     let cx = Context {
         settings: Some(&settings),
+        config: &config,
         spam: &spam,
         raid: &raid,
         judges: &judges,
         clock,
     };
-    let fx = Fake {
-        calls: Arc::clone(&calls),
-        log_channel: case["log_channel"].as_bool().unwrap_or(true),
-        edit_fail_at: case["edit_fail_at"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .map(|n| n.as_u64().unwrap() as usize)
-            .collect(),
-        edits: AtomicUsize::new(0),
-        delete_fails: case["delete_fails"].as_bool().unwrap_or(false),
-        strip_fail_at: case["strip_fail_at"].as_u64(),
-        strip_error_at: case["strip_error_at"].as_u64(),
-    };
+    let fx = Fake::new(case, &calls);
     message_security::check_message(&fx, &cx, &post(case)).await;
     let mut scanned = scanned.lock().unwrap().clone();
     scanned.sort();
@@ -343,23 +462,17 @@ async fn scans_run_four_at_a_time_and_keep_their_order() {
     };
     let (spam, raid) = (SpamDetector::default(), RaidDetector::default());
     let settings = json!({});
+    let config = SecurityConfig::default();
     let cx = Context {
         settings: Some(&settings),
+        config: &config,
         spam: &spam,
         raid: &raid,
         judges: &judges,
         clock,
     };
     let calls: Calls = Arc::default();
-    let fx = Fake {
-        calls: Arc::clone(&calls),
-        log_channel: true,
-        edit_fail_at: HashSet::new(),
-        edits: AtomicUsize::new(0),
-        delete_fails: false,
-        strip_fail_at: None,
-        strip_error_at: None,
-    };
+    let fx = Fake::new(&json!({}), &calls);
     let mut p = post(&json!({"content": urls.join(" ")}));
     p.content = urls.join(" ");
     message_security::check_message(&fx, &cx, &p).await;
