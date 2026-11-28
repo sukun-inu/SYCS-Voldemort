@@ -1,0 +1,3497 @@
+{
+ "generated_by": "rust/apps/admin/tests/fixtures/schema/generate.py",
+ "vocabulary": {
+  "widgets": [
+   "text",
+   "textarea",
+   "int",
+   "duration",
+   "bool",
+   "select",
+   "channel",
+   "voice_channel",
+   "role",
+   "checklist",
+   "snowflake"
+  ],
+  "choice_sources": [
+   "channels",
+   "voice_channels",
+   "roles",
+   "tts_voices"
+  ],
+  "implied_sources": {
+   "channel": "channels",
+   "voice_channel": "voice_channels",
+   "role": "roles"
+  },
+  "max_str_len": 2000,
+  "duration_units": [
+   [
+    "日",
+    86400
+   ],
+   [
+    "時間",
+    3600
+   ],
+   [
+    "分",
+    60
+   ],
+   [
+    "秒",
+    1
+   ]
+  ]
+ },
+ "panels": [
+  {
+   "id": "monitoring",
+   "dev_only": false,
+   "custom": true,
+   "badge": null,
+   "wire": {
+    "id": "monitoring",
+    "title": "システム監視",
+    "icon": "bi-activity",
+    "group": "概要",
+    "path": null,
+    "kind": "custom",
+    "client": "monitor",
+    "layout": "stack",
+    "window": {
+     "w": 720,
+     "h": 620
+    },
+    "sections": []
+   },
+   "tile": {
+    "id": "monitoring",
+    "title": "システム監視",
+    "icon": "bi-activity",
+    "url": null,
+    "badge": null,
+    "window": {
+     "w": 720,
+     "h": 620
+    }
+   },
+   "fields": [],
+   "collections": []
+  },
+  {
+   "id": "user-state",
+   "dev_only": false,
+   "custom": true,
+   "badge": null,
+   "wire": {
+    "id": "user-state",
+    "title": "ユーザー状態監査",
+    "icon": "bi-person-lines-fill",
+    "group": "概要",
+    "path": "/admin/users/state",
+    "kind": "custom",
+    "client": "user_state",
+    "layout": "stack",
+    "window": {
+     "w": 980,
+     "h": 720
+    },
+    "sections": []
+   },
+   "tile": {
+    "id": "user-state",
+    "title": "ユーザー状態監査",
+    "icon": "bi-person-lines-fill",
+    "url": "/admin/users/state",
+    "badge": null,
+    "window": {
+     "w": 980,
+     "h": 720
+    }
+   },
+   "fields": [],
+   "collections": []
+  },
+  {
+   "id": "logging",
+   "dev_only": false,
+   "custom": false,
+   "badge": null,
+   "wire": {
+    "id": "logging",
+    "title": "ログ設定",
+    "icon": "bi-journal-text",
+    "group": "基本設定",
+    "path": "/admin/settings/logging",
+    "kind": "schema",
+    "client": null,
+    "layout": "stack",
+    "window": {
+     "w": 720,
+     "h": 560
+    },
+    "sections": [
+     {
+      "title": "ログチャンネル / レベル",
+      "fields": [
+       {
+        "key": "log_channel_id",
+        "label": "ログを送信するチャンネル",
+        "widget": "channel",
+        "nullable": true,
+        "required": false,
+        "help": "未設定にするとログ出力を止めます。",
+        "choice_source": "channels"
+       },
+       {
+        "key": "log_level",
+        "label": "ログレベル",
+        "widget": "select",
+        "nullable": false,
+        "required": false,
+        "help": "通常運用は INFO、調査時だけ DEBUG にすると読みやすく保てます。",
+        "default": "INFO",
+        "choices": [
+         {
+          "value": "NONE",
+          "label": "NONE"
+         },
+         {
+          "value": "ERROR",
+          "label": "ERROR"
+         },
+         {
+          "value": "INFO",
+          "label": "INFO"
+         },
+         {
+          "value": "DEBUG",
+          "label": "DEBUG"
+         }
+        ]
+       }
+      ],
+      "collections": []
+     },
+     {
+      "title": "ChatGPT 応答チャンネル",
+      "fields": [
+       {
+        "key": "chatgpt_channel_id",
+        "label": "ChatGPT が応答するチャンネル",
+        "widget": "channel",
+        "nullable": true,
+        "required": false,
+        "help": "未設定の場合は ChatGPT は応答しません。",
+        "choice_source": "channels"
+       }
+      ],
+      "collections": []
+     }
+    ]
+   },
+   "tile": {
+    "id": "logging",
+    "title": "ログ設定",
+    "icon": "bi-journal-text",
+    "url": "/admin/settings/logging",
+    "badge": null,
+    "window": {
+     "w": 720,
+     "h": 560
+    }
+   },
+   "fields": [
+    {
+     "section": 0,
+     "key": "log_channel_id",
+     "get": "webapp_admin.schema.panels.logging._log_channel",
+     "set": "services.logging_service.set_log_channel"
+    },
+    {
+     "section": 0,
+     "key": "log_level",
+     "get": "webapp_admin.schema.panels.logging._log_level",
+     "set": "services.logging_service.set_log_level"
+    },
+    {
+     "section": 1,
+     "key": "chatgpt_channel_id",
+     "get": "webapp_admin.schema.panels.logging._chatgpt_channel",
+     "set": "services.settings_store.set_response_channel_id"
+    }
+   ],
+   "collections": []
+  },
+  {
+   "id": "welcome",
+   "dev_only": false,
+   "custom": false,
+   "badge": null,
+   "wire": {
+    "id": "welcome",
+    "title": "ウェルカム/グッバイ",
+    "icon": "bi-person-plus-fill",
+    "group": "基本設定",
+    "path": "/admin/settings/welcome",
+    "kind": "schema",
+    "client": null,
+    "layout": "stack",
+    "window": {
+     "w": 760,
+     "h": 620
+    },
+    "sections": [
+     {
+      "title": "ウェルカムメッセージ",
+      "fields": [
+       {
+        "key": "welcome_channel_id",
+        "label": "送信先チャンネル",
+        "widget": "channel",
+        "nullable": true,
+        "required": false,
+        "help": "未設定にすると参加時のメッセージを送りません。",
+        "choice_source": "channels"
+       },
+       {
+        "key": "welcome_message",
+        "label": "本文",
+        "widget": "textarea",
+        "nullable": true,
+        "required": false,
+        "help": "使えるテンプレート変数: {user}=メンション / {username}=ユーザー名 / {server}=サーバー名 / {count}=メンバー数",
+        "max_len": 1000
+       }
+      ],
+      "collections": []
+     },
+     {
+      "title": "グッバイメッセージ",
+      "fields": [
+       {
+        "key": "goodbye_channel_id",
+        "label": "送信先チャンネル",
+        "widget": "channel",
+        "nullable": true,
+        "required": false,
+        "help": "未設定にすると退出時のメッセージを送りません。",
+        "choice_source": "channels"
+       },
+       {
+        "key": "goodbye_message",
+        "label": "本文",
+        "widget": "textarea",
+        "nullable": true,
+        "required": false,
+        "help": "使えるテンプレート変数: {user}=メンション / {username}=ユーザー名 / {server}=サーバー名 / {count}=メンバー数",
+        "max_len": 1000
+       }
+      ],
+      "collections": []
+     }
+    ]
+   },
+   "tile": {
+    "id": "welcome",
+    "title": "ウェルカム/グッバイ",
+    "icon": "bi-person-plus-fill",
+    "url": "/admin/settings/welcome",
+    "badge": null,
+    "window": {
+     "w": 760,
+     "h": 620
+    }
+   },
+   "fields": [
+    {
+     "section": 0,
+     "key": "welcome_channel_id",
+     "get": "webapp_admin.schema.panels.welcome._welcome_channel",
+     "set": "services.settings_store.set_welcome_channel"
+    },
+    {
+     "section": 0,
+     "key": "welcome_message",
+     "get": "webapp_admin.schema.panels.welcome._welcome_message",
+     "set": "services.settings_store.set_welcome_message"
+    },
+    {
+     "section": 1,
+     "key": "goodbye_channel_id",
+     "get": "webapp_admin.schema.panels.welcome._goodbye_channel",
+     "set": "services.settings_store.set_goodbye_channel"
+    },
+    {
+     "section": 1,
+     "key": "goodbye_message",
+     "get": "webapp_admin.schema.panels.welcome._goodbye_message",
+     "set": "services.settings_store.set_goodbye_message"
+    }
+   ],
+   "collections": []
+  },
+  {
+   "id": "vc-notify",
+   "dev_only": false,
+   "custom": false,
+   "badge": null,
+   "wire": {
+    "id": "vc-notify",
+    "title": "VC 通知",
+    "icon": "bi-mic-fill",
+    "group": "基本設定",
+    "path": "/admin/settings/vc-notify",
+    "kind": "schema",
+    "client": null,
+    "layout": "stack",
+    "window": {
+     "w": 720,
+     "h": 560
+    },
+    "sections": [
+     {
+      "title": "通知先",
+      "fields": [
+       {
+        "key": "vc_notify_channel_id",
+        "label": "通知を送るチャンネル",
+        "widget": "channel",
+        "nullable": true,
+        "required": false,
+        "help": "未設定にすると VC の参加・退出を通知しません。",
+        "choice_source": "channels"
+       },
+       {
+        "key": "vc_notify_role_id",
+        "label": "メンションするロール",
+        "widget": "role",
+        "nullable": true,
+        "required": false,
+        "help": "未設定ならメンションなしで通知します。",
+        "choice_source": "roles"
+       }
+      ],
+      "collections": []
+     },
+     {
+      "title": "通知の絞り込み",
+      "fields": [
+       {
+        "key": "vc_notify_filter_role_id",
+        "label": "通知対象のロール",
+        "widget": "role",
+        "nullable": true,
+        "required": false,
+        "help": "指定するとそのロールを持つ人の入退室だけを通知します。未設定なら全員が対象です。",
+        "choice_source": "roles"
+       }
+      ],
+      "collections": []
+     }
+    ]
+   },
+   "tile": {
+    "id": "vc-notify",
+    "title": "VC 通知",
+    "icon": "bi-mic-fill",
+    "url": "/admin/settings/vc-notify",
+    "badge": null,
+    "window": {
+     "w": 720,
+     "h": 560
+    }
+   },
+   "fields": [
+    {
+     "section": 0,
+     "key": "vc_notify_channel_id",
+     "get": "webapp_admin.schema.panels.vc_notify._channel",
+     "set": "services.settings_store.set_vc_notify_channel_id"
+    },
+    {
+     "section": 0,
+     "key": "vc_notify_role_id",
+     "get": "webapp_admin.schema.panels.vc_notify._role",
+     "set": "services.settings_store.set_vc_notify_role_id"
+    },
+    {
+     "section": 1,
+     "key": "vc_notify_filter_role_id",
+     "get": "webapp_admin.schema.panels.vc_notify._filter_role",
+     "set": "services.settings_store.set_vc_notify_filter_role_id"
+    }
+   ],
+   "collections": []
+  },
+  {
+   "id": "guild-data",
+   "dev_only": false,
+   "custom": true,
+   "badge": null,
+   "wire": {
+    "id": "guild-data",
+    "title": "サーバーのデータ",
+    "icon": "bi-trash",
+    "group": "基本設定",
+    "path": null,
+    "kind": "custom",
+    "client": "guild_data",
+    "layout": "stack",
+    "window": {
+     "w": 680,
+     "h": 730
+    },
+    "sections": []
+   },
+   "tile": {
+    "id": "guild-data",
+    "title": "サーバーのデータ",
+    "icon": "bi-trash",
+    "url": null,
+    "badge": null,
+    "window": {
+     "w": 680,
+     "h": 730
+    }
+   },
+   "fields": [],
+   "collections": []
+  },
+  {
+   "id": "earthquake",
+   "dev_only": false,
+   "custom": false,
+   "badge": null,
+   "wire": {
+    "id": "earthquake",
+    "title": "地震アラート",
+    "icon": "bi-exclamation-triangle-fill",
+    "group": "自動通知",
+    "path": "/admin/settings/earthquake",
+    "kind": "schema",
+    "client": null,
+    "layout": "stack",
+    "window": {
+     "w": 760,
+     "h": 620
+    },
+    "sections": [
+     {
+      "title": "通知先と条件",
+      "fields": [
+       {
+        "key": "channel_id",
+        "label": "アラートを送るチャンネル",
+        "widget": "channel",
+        "nullable": true,
+        "required": false,
+        "help": "未設定にすると地震アラートを送りません。",
+        "choice_source": "channels"
+       },
+       {
+        "key": "min_scale",
+        "label": "通知する最小震度",
+        "widget": "select",
+        "nullable": false,
+        "required": false,
+        "help": "この震度以上の地震だけを通知します。",
+        "default": 30,
+        "choices": [
+         {
+          "value": "10",
+          "label": "1"
+         },
+         {
+          "value": "20",
+          "label": "2"
+         },
+         {
+          "value": "30",
+          "label": "3"
+         },
+         {
+          "value": "40",
+          "label": "4"
+         },
+         {
+          "value": "45",
+          "label": "5弱"
+         },
+         {
+          "value": "50",
+          "label": "5強"
+         },
+         {
+          "value": "55",
+          "label": "6弱"
+         },
+         {
+          "value": "60",
+          "label": "6強"
+         },
+         {
+          "value": "70",
+          "label": "7"
+         }
+        ]
+       }
+      ],
+      "collections": []
+     },
+     {
+      "title": "通知タイプ",
+      "fields": [
+       {
+        "key": "notify_types",
+        "label": "通知する情報の種類",
+        "widget": "checklist",
+        "nullable": false,
+        "required": false,
+        "choices": [
+         {
+          "value": "eew_forecast",
+          "label": "緊急地震速報（予報）"
+         },
+         {
+          "value": "eew_warning",
+          "label": "緊急地震速報（警報）"
+         },
+         {
+          "value": "tsunami",
+          "label": "津波情報"
+         },
+         {
+          "value": "quake_info",
+          "label": "地震情報"
+         },
+         {
+          "value": "bot_news",
+          "label": "ボットに関するお知らせ"
+         }
+        ]
+       }
+      ],
+      "collections": []
+     }
+    ]
+   },
+   "tile": {
+    "id": "earthquake",
+    "title": "地震アラート",
+    "icon": "bi-exclamation-triangle-fill",
+    "url": "/admin/settings/earthquake",
+    "badge": null,
+    "window": {
+     "w": 760,
+     "h": 620
+    }
+   },
+   "fields": [
+    {
+     "section": 0,
+     "key": "channel_id",
+     "get": "webapp_admin.schema.panels.earthquake._channel",
+     "set": "services.settings_store.set_earthquake_channel"
+    },
+    {
+     "section": 0,
+     "key": "min_scale",
+     "get": "webapp_admin.schema.panels.earthquake._min_scale",
+     "set": "webapp_admin.schema.panels.earthquake._set_min_scale"
+    },
+    {
+     "section": 1,
+     "key": "notify_types",
+     "get": "webapp_admin.schema.panels.earthquake._notify_types",
+     "set": "webapp_admin.schema.panels.earthquake._set_notify_types"
+    }
+   ],
+   "collections": []
+  },
+  {
+   "id": "news-feeds",
+   "dev_only": false,
+   "custom": false,
+   "badge": "webapp_admin.schema.panels.news_feeds.<lambda>[news-feeds.badge]",
+   "wire": {
+    "id": "news-feeds",
+    "title": "ニュースフィード",
+    "icon": "bi-newspaper",
+    "group": "自動通知",
+    "path": "/admin/settings/news-feeds",
+    "kind": "schema",
+    "client": null,
+    "layout": "stack",
+    "window": {
+     "w": 820,
+     "h": 640
+    },
+    "sections": [
+     {
+      "title": "フィード",
+      "fields": [],
+      "collections": [
+       {
+        "key": "feeds",
+        "label": "登録済みフィード",
+        "id_key": "id",
+        "item_label": "フィード",
+        "fields": [
+         {
+          "key": "channel_id",
+          "label": "送信先チャンネル",
+          "widget": "channel",
+          "nullable": false,
+          "required": true,
+          "choice_source": "channels"
+         },
+         {
+          "key": "query",
+          "label": "検索クエリ",
+          "widget": "text",
+          "nullable": false,
+          "required": true,
+          "max_len": 200
+         },
+         {
+          "key": "interval",
+          "label": "取得間隔（分）",
+          "widget": "int",
+          "nullable": false,
+          "required": false,
+          "min": 5,
+          "max": 1440,
+          "default": 60
+         }
+        ],
+        "can_add": true,
+        "can_remove": true,
+        "can_update": true,
+        "max_items": 10,
+        "help": "最大 10 件まで登録できます。"
+       }
+      ]
+     }
+    ]
+   },
+   "tile": {
+    "id": "news-feeds",
+    "title": "ニュースフィード",
+    "icon": "bi-newspaper",
+    "url": "/admin/settings/news-feeds",
+    "badge": null,
+    "window": {
+     "w": 820,
+     "h": 640
+    }
+   },
+   "fields": [],
+   "collections": [
+    {
+     "section": 0,
+     "key": "feeds",
+     "item_fields": [
+      "channel_id",
+      "query",
+      "interval"
+     ],
+     "list": "webapp_admin.schema.panels.news_feeds._list",
+     "add": "webapp_admin.schema.panels.news_feeds._add",
+     "update": "webapp_admin.schema.panels.news_feeds._update",
+     "remove": "services.settings_store.remove_news_feed"
+    }
+   ]
+  },
+  {
+   "id": "sticky",
+   "dev_only": false,
+   "custom": false,
+   "badge": "webapp_admin.schema.panels.sticky.<lambda>[sticky.badge]",
+   "wire": {
+    "id": "sticky",
+    "title": "スティッキー",
+    "icon": "bi-pin-angle-fill",
+    "group": "チャンネル機能",
+    "path": "/admin/settings/sticky",
+    "kind": "schema",
+    "client": null,
+    "layout": "stack",
+    "window": {
+     "w": 820,
+     "h": 640
+    },
+    "sections": [
+     {
+      "title": "スティッキーメッセージ",
+      "fields": [],
+      "collections": [
+       {
+        "key": "stickies",
+        "label": "設定済みチャンネル",
+        "id_key": "channel_id",
+        "item_label": "スティッキー",
+        "fields": [
+         {
+          "key": "channel_id",
+          "label": "チャンネル",
+          "widget": "channel",
+          "nullable": false,
+          "required": true,
+          "choice_source": "channels"
+         },
+         {
+          "key": "content",
+          "label": "本文",
+          "widget": "textarea",
+          "nullable": false,
+          "required": true,
+          "max_len": 1000
+         }
+        ],
+        "can_add": true,
+        "can_remove": true,
+        "can_update": true,
+        "help": "チャンネルに新しい投稿があるたび、最後に貼り直されます。"
+       }
+      ]
+     }
+    ]
+   },
+   "tile": {
+    "id": "sticky",
+    "title": "スティッキー",
+    "icon": "bi-pin-angle-fill",
+    "url": "/admin/settings/sticky",
+    "badge": null,
+    "window": {
+     "w": 820,
+     "h": 640
+    }
+   },
+   "fields": [],
+   "collections": [
+    {
+     "section": 0,
+     "key": "stickies",
+     "item_fields": [
+      "channel_id",
+      "content"
+     ],
+     "list": "webapp_admin.schema.panels.sticky._list",
+     "add": "webapp_admin.schema.panels.sticky._add",
+     "update": "webapp_admin.schema.panels.sticky._update",
+     "remove": "webapp_admin.schema.panels.sticky._remove"
+    }
+   ]
+  },
+  {
+   "id": "reaction-roles",
+   "dev_only": false,
+   "custom": false,
+   "badge": "webapp_admin.schema.panels.reaction_roles._count",
+   "wire": {
+    "id": "reaction-roles",
+    "title": "リアクションロール",
+    "icon": "bi-emoji-smile-fill",
+    "group": "チャンネル機能",
+    "path": "/admin/settings/reaction-roles",
+    "kind": "schema",
+    "client": null,
+    "layout": "stack",
+    "window": {
+     "w": 820,
+     "h": 640
+    },
+    "sections": [
+     {
+      "title": "リアクションロール",
+      "fields": [],
+      "collections": [
+       {
+        "key": "reaction_roles",
+        "label": "登録済みの割り当て",
+        "id_key": "id",
+        "item_label": "割り当て",
+        "fields": [
+         {
+          "key": "message_id",
+          "label": "メッセージID",
+          "widget": "snowflake",
+          "nullable": false,
+          "required": true,
+          "help": "Discord で対象メッセージを右クリック →「IDをコピー」で取得できます。",
+          "max_len": 20
+         },
+         {
+          "key": "emoji",
+          "label": "絵文字",
+          "widget": "text",
+          "nullable": false,
+          "required": true,
+          "max_len": 50
+         },
+         {
+          "key": "role_id",
+          "label": "付与するロール",
+          "widget": "role",
+          "nullable": false,
+          "required": true,
+          "choice_source": "roles"
+         }
+        ],
+        "can_add": true,
+        "can_remove": true,
+        "can_update": false,
+        "help": "対象メッセージに指定の絵文字が付くと、ロールを付与・剥奪します。"
+       }
+      ]
+     }
+    ]
+   },
+   "tile": {
+    "id": "reaction-roles",
+    "title": "リアクションロール",
+    "icon": "bi-emoji-smile-fill",
+    "url": "/admin/settings/reaction-roles",
+    "badge": null,
+    "window": {
+     "w": 820,
+     "h": 640
+    }
+   },
+   "fields": [],
+   "collections": [
+    {
+     "section": 0,
+     "key": "reaction_roles",
+     "item_fields": [
+      "message_id",
+      "emoji",
+      "role_id"
+     ],
+     "list": "webapp_admin.schema.panels.reaction_roles._list",
+     "add": "webapp_admin.schema.panels.reaction_roles._add",
+     "update": null,
+     "remove": "webapp_admin.schema.panels.reaction_roles._remove"
+    }
+   ]
+  },
+  {
+   "id": "djaudio",
+   "dev_only": false,
+   "custom": false,
+   "badge": null,
+   "wire": {
+    "id": "djaudio",
+    "title": "DJAudio-DL",
+    "icon": "bi-music-note-beamed",
+    "group": "メディア",
+    "path": "/admin/settings/djaudio",
+    "kind": "schema",
+    "client": null,
+    "layout": "stack",
+    "window": {
+     "w": 760,
+     "h": 620
+    },
+    "sections": [
+     {
+      "title": "チャンネル",
+      "fields": [
+       {
+        "key": "channel_id",
+        "label": "URL を監視するチャンネル",
+        "widget": "channel",
+        "nullable": true,
+        "required": false,
+        "help": "未設定にすると DJAudio-DL は反応しません。",
+        "choice_source": "channels"
+       },
+       {
+        "key": "output_channel_id",
+        "label": "結果を送るチャンネル",
+        "widget": "channel",
+        "nullable": true,
+        "required": false,
+        "help": "未設定なら監視チャンネルに返信します。",
+        "choice_source": "channels"
+       }
+      ],
+      "collections": []
+     },
+     {
+      "title": "制限",
+      "fields": [
+       {
+        "key": "cache_ttl",
+        "label": "キャッシュ保持時間",
+        "widget": "duration",
+        "nullable": false,
+        "required": false,
+        "help": "ダウンロードリンクが切れるまでの時間です。長くするほどサーバーのディスクを使います。",
+        "min": 60,
+        "max": 2592000,
+        "default": 600
+       },
+       {
+        "key": "cooldown",
+        "label": "クールダウン（秒）",
+        "widget": "int",
+        "nullable": false,
+        "required": false,
+        "help": "同じ利用者が連続で実行できるまでの間隔です。",
+        "min": 0,
+        "max": 3600,
+        "default": 30
+       },
+       {
+        "key": "max_urls",
+        "label": "1メッセージあたりの URL 上限",
+        "widget": "int",
+        "nullable": false,
+        "required": false,
+        "min": 1,
+        "max": 10,
+        "default": 3
+       }
+      ],
+      "collections": []
+     }
+    ]
+   },
+   "tile": {
+    "id": "djaudio",
+    "title": "DJAudio-DL",
+    "icon": "bi-music-note-beamed",
+    "url": "/admin/settings/djaudio",
+    "badge": null,
+    "window": {
+     "w": 760,
+     "h": 620
+    }
+   },
+   "fields": [
+    {
+     "section": 0,
+     "key": "channel_id",
+     "get": "webapp_admin.schema.panels.djaudio._watch_channel",
+     "set": "services.settings_store.set_djaudio_watch_channel"
+    },
+    {
+     "section": 0,
+     "key": "output_channel_id",
+     "get": "webapp_admin.schema.panels.djaudio._output_channel",
+     "set": "services.settings_store.set_djaudio_output_channel"
+    },
+    {
+     "section": 1,
+     "key": "cache_ttl",
+     "get": "services.settings_store.get_djaudio_cache_ttl",
+     "set": "webapp_admin.schema.panels.djaudio._set_limit.<locals>.setter[key=cache_ttl]"
+    },
+    {
+     "section": 1,
+     "key": "cooldown",
+     "get": "services.settings_store.get_djaudio_cooldown",
+     "set": "webapp_admin.schema.panels.djaudio._set_limit.<locals>.setter[key=cooldown]"
+    },
+    {
+     "section": 1,
+     "key": "max_urls",
+     "get": "services.settings_store.get_djaudio_max_urls",
+     "set": "webapp_admin.schema.panels.djaudio._set_limit.<locals>.setter[key=max_urls]"
+    }
+   ],
+   "collections": []
+  },
+  {
+   "id": "tts",
+   "dev_only": false,
+   "custom": false,
+   "badge": null,
+   "wire": {
+    "id": "tts",
+    "title": "TTS 読み上げ",
+    "icon": "bi-soundwave",
+    "group": "メディア",
+    "path": "/admin/settings/tts",
+    "kind": "schema",
+    "client": null,
+    "layout": "tabs",
+    "window": {
+     "w": 860,
+     "h": 700
+    },
+    "sections": [
+     {
+      "title": "有効化",
+      "fields": [
+       {
+        "key": "enabled",
+        "label": "TTS 読み上げを有効にする",
+        "widget": "bool",
+        "nullable": false,
+        "required": false,
+        "default": false
+       },
+       {
+        "key": "vc_notify",
+        "label": "VC の参加・退出をアナウンスする",
+        "widget": "bool",
+        "nullable": false,
+        "required": false,
+        "default": false,
+        "enabled_when": "enabled"
+       }
+      ],
+      "collections": []
+     },
+     {
+      "title": "接続先 VC",
+      "fields": [
+       {
+        "key": "vc_channel_id",
+        "label": "読み上げを流すボイスチャンネル",
+        "widget": "voice_channel",
+        "nullable": true,
+        "required": false,
+        "help": "未設定の場合は自動参加しません。",
+        "enabled_when": "enabled",
+        "choice_source": "voice_channels"
+       }
+      ],
+      "collections": []
+     },
+     {
+      "title": "読み上げ対象チャンネル",
+      "fields": [],
+      "collections": [
+       {
+        "key": "watch_channels",
+        "label": "読み上げ対象",
+        "id_key": "channel_id",
+        "item_label": "チャンネル",
+        "fields": [
+         {
+          "key": "channel_id",
+          "label": "チャンネル",
+          "widget": "channel",
+          "nullable": false,
+          "required": true,
+          "choice_source": "channels"
+         }
+        ],
+        "can_add": true,
+        "can_remove": true,
+        "can_update": false,
+        "help": "ここに追加したテキストチャンネルの投稿を読み上げます。"
+       }
+      ]
+     },
+     {
+      "title": "デフォルト声設定",
+      "fields": [
+       {
+        "key": "default_voice",
+        "label": "声",
+        "widget": "select",
+        "nullable": false,
+        "required": false,
+        "help": "TTS API に接続できないときは声の名前を直接入力できます。",
+        "default": "Kyoko",
+        "free_text": true,
+        "choice_source": "tts_voices"
+       },
+       {
+        "key": "default_rate",
+        "label": "読み上げ速度（語/分）",
+        "widget": "int",
+        "nullable": false,
+        "required": false,
+        "min": 100,
+        "max": 400,
+        "default": 200
+       },
+       {
+        "key": "max_length",
+        "label": "メッセージ字数制限",
+        "widget": "int",
+        "nullable": false,
+        "required": false,
+        "help": "本文の読み上げ上限。超過分は「以下省略」と読まれます。",
+        "min": 10,
+        "max": 500,
+        "default": 100
+       },
+       {
+        "key": "speak_max_length",
+        "label": "読み上げ最大文字数",
+        "widget": "int",
+        "nullable": false,
+        "required": false,
+        "help": "「名前。本文」全体の上限です。",
+        "min": 10,
+        "max": 500,
+        "default": 200
+       },
+       {
+        "key": "read_name",
+        "label": "発言者名を読み上げる",
+        "widget": "bool",
+        "nullable": false,
+        "required": false,
+        "default": true
+       }
+      ],
+      "collections": []
+     },
+     {
+      "title": "読み上げ辞書",
+      "fields": [],
+      "collections": [
+       {
+        "key": "dictionary",
+        "label": "辞書",
+        "id_key": "word",
+        "item_label": "単語",
+        "fields": [
+         {
+          "key": "word",
+          "label": "単語",
+          "widget": "text",
+          "nullable": false,
+          "required": true,
+          "max_len": 50
+         },
+         {
+          "key": "reading",
+          "label": "読み",
+          "widget": "text",
+          "nullable": false,
+          "required": true,
+          "max_len": 100
+         }
+        ],
+        "can_add": true,
+        "can_remove": true,
+        "can_update": false,
+        "help": "登録した単語は読み上げ時に置き換えられます。"
+       }
+      ]
+     },
+     {
+      "title": "ユーザー個別設定",
+      "fields": [],
+      "collections": [
+       {
+        "key": "user_settings",
+        "label": "個別に声を設定しているユーザー",
+        "id_key": "user_id",
+        "item_label": "ユーザー設定",
+        "fields": [
+         {
+          "key": "user_id",
+          "label": "ユーザーID",
+          "widget": "snowflake",
+          "nullable": false,
+          "required": false
+         },
+         {
+          "key": "voice",
+          "label": "声",
+          "widget": "text",
+          "nullable": true,
+          "required": false
+         },
+         {
+          "key": "rate",
+          "label": "速度",
+          "widget": "int",
+          "nullable": true,
+          "required": false
+         }
+        ],
+        "can_add": false,
+        "can_remove": true,
+        "can_update": false,
+        "help": "利用者が /voice コマンドで設定した内容です。ここではリセットのみ行えます。"
+       }
+      ]
+     }
+    ]
+   },
+   "tile": {
+    "id": "tts",
+    "title": "TTS 読み上げ",
+    "icon": "bi-soundwave",
+    "url": "/admin/settings/tts",
+    "badge": null,
+    "window": {
+     "w": 860,
+     "h": 700
+    }
+   },
+   "fields": [
+    {
+     "section": 0,
+     "key": "enabled",
+     "get": "webapp_admin.schema.panels.tts._enabled",
+     "set": "services.tts_store.set_tts_enabled"
+    },
+    {
+     "section": 0,
+     "key": "vc_notify",
+     "get": "webapp_admin.schema.panels.tts._vc_notify",
+     "set": "services.tts_store.set_tts_vc_notify"
+    },
+    {
+     "section": 1,
+     "key": "vc_channel_id",
+     "get": "webapp_admin.schema.panels.tts._vc_channel",
+     "set": "webapp_admin.schema.panels.tts._set_vc_channel"
+    },
+    {
+     "section": 3,
+     "key": "default_voice",
+     "get": "webapp_admin.schema.panels.tts._voice",
+     "set": "webapp_admin.schema.panels.tts._set_voice"
+    },
+    {
+     "section": 3,
+     "key": "default_rate",
+     "get": "webapp_admin.schema.panels.tts._int_setting.<locals>.getter[fallback=200,key=default_rate]",
+     "set": "webapp_admin.schema.panels.tts._set_rate"
+    },
+    {
+     "section": 3,
+     "key": "max_length",
+     "get": "webapp_admin.schema.panels.tts._int_setting.<locals>.getter[fallback=100,key=max_length]",
+     "set": "webapp_admin.schema.panels.tts._set_max_length"
+    },
+    {
+     "section": 3,
+     "key": "speak_max_length",
+     "get": "webapp_admin.schema.panels.tts._int_setting.<locals>.getter[fallback=200,key=speak_max_length]",
+     "set": "webapp_admin.schema.panels.tts._set_speak_max_length"
+    },
+    {
+     "section": 3,
+     "key": "read_name",
+     "get": "webapp_admin.schema.panels.tts._read_name",
+     "set": "services.tts_store.set_tts_read_name"
+    }
+   ],
+   "collections": [
+    {
+     "section": 2,
+     "key": "watch_channels",
+     "item_fields": [
+      "channel_id"
+     ],
+     "list": "webapp_admin.schema.panels.tts._watch_list",
+     "add": "webapp_admin.schema.panels.tts._watch_add",
+     "update": null,
+     "remove": "webapp_admin.schema.panels.tts._watch_remove"
+    },
+    {
+     "section": 4,
+     "key": "dictionary",
+     "item_fields": [
+      "word",
+      "reading"
+     ],
+     "list": "webapp_admin.schema.panels.tts._dict_list",
+     "add": "webapp_admin.schema.panels.tts._dict_add",
+     "update": null,
+     "remove": "webapp_admin.schema.panels.tts._dict_remove"
+    },
+    {
+     "section": 5,
+     "key": "user_settings",
+     "item_fields": [
+      "user_id",
+      "voice",
+      "rate"
+     ],
+     "list": "webapp_admin.schema.panels.tts._user_list",
+     "add": null,
+     "update": null,
+     "remove": "webapp_admin.schema.panels.tts._user_reset"
+    }
+   ]
+  },
+  {
+   "id": "security",
+   "dev_only": false,
+   "custom": false,
+   "badge": "webapp_admin.schema.panels.security._count",
+   "wire": {
+    "id": "security",
+    "title": "セキュリティ設定",
+    "icon": "bi-shield-fill-check",
+    "group": "セキュリティ",
+    "path": "/admin/settings/security",
+    "kind": "schema",
+    "client": null,
+    "layout": "stack",
+    "window": {
+     "w": 820,
+     "h": 620
+    },
+    "sections": [
+     {
+      "title": "措置",
+      "fields": [
+       {
+        "key": "security_timeout_enabled",
+        "label": "危険な投稿・スパム・VC の荒らしにタイムアウトを使う",
+        "widget": "bool",
+        "nullable": false,
+        "required": false,
+        "help": "有効にするには Bot に「メンバーをタイムアウト」の権限も要ります。有効なら危険なものは 24 時間、スパムだけなら 10 分のタイムアウトにします。無効なら（既定）、危険なものはロールを外し、スパムは消すだけです。",
+        "default": false
+       }
+      ],
+      "collections": []
+     },
+     {
+      "title": "信頼済みユーザー",
+      "fields": [],
+      "collections": [
+       {
+        "key": "trusted_users",
+        "label": "信頼済みユーザー",
+        "id_key": "user_id",
+        "item_label": "ユーザー",
+        "fields": [
+         {
+          "key": "user_id",
+          "label": "ユーザーID",
+          "widget": "snowflake",
+          "nullable": false,
+          "required": true,
+          "max_len": 20
+         }
+        ],
+        "can_add": true,
+        "can_remove": true,
+        "can_update": false,
+        "help": "スパム・レイド検出の対象から外します。"
+       }
+      ]
+     },
+     {
+      "title": "セキュリティバイパスロール",
+      "fields": [],
+      "collections": [
+       {
+        "key": "bypass_roles",
+        "label": "バイパスロール",
+        "id_key": "role_id",
+        "item_label": "ロール",
+        "fields": [
+         {
+          "key": "role_id",
+          "label": "ロール",
+          "widget": "role",
+          "nullable": false,
+          "required": true,
+          "choice_source": "roles"
+         }
+        ],
+        "can_add": true,
+        "can_remove": true,
+        "can_update": false,
+        "help": "このロールを持つ人は検出の対象外になります。"
+       }
+      ]
+     }
+    ]
+   },
+   "tile": {
+    "id": "security",
+    "title": "セキュリティ設定",
+    "icon": "bi-shield-fill-check",
+    "url": "/admin/settings/security",
+    "badge": null,
+    "window": {
+     "w": 820,
+     "h": 620
+    }
+   },
+   "fields": [
+    {
+     "section": 0,
+     "key": "security_timeout_enabled",
+     "get": "services.settings_store.get_security_timeout_enabled",
+     "set": "services.settings_store.set_security_timeout_enabled"
+    }
+   ],
+   "collections": [
+    {
+     "section": 1,
+     "key": "trusted_users",
+     "item_fields": [
+      "user_id"
+     ],
+     "list": "webapp_admin.schema.panels.security._trusted_list",
+     "add": "webapp_admin.schema.panels.security._trusted_add",
+     "update": null,
+     "remove": "webapp_admin.schema.panels.security._trusted_remove"
+    },
+    {
+     "section": 2,
+     "key": "bypass_roles",
+     "item_fields": [
+      "role_id"
+     ],
+     "list": "webapp_admin.schema.panels.security._bypass_list",
+     "add": "webapp_admin.schema.panels.security._bypass_add",
+     "update": null,
+     "remove": "webapp_admin.schema.panels.security._bypass_remove"
+    }
+   ]
+  },
+  {
+   "id": "dev",
+   "dev_only": true,
+   "custom": true,
+   "badge": null,
+   "wire": {
+    "id": "dev",
+    "title": "開発者パネル",
+    "icon": "bi-bug-fill",
+    "group": "開発者",
+    "path": "/admin/dev",
+    "kind": "custom",
+    "client": "dev",
+    "layout": "stack",
+    "window": {
+     "w": 1000,
+     "h": 760
+    },
+    "sections": []
+   },
+   "tile": {
+    "id": "dev",
+    "title": "開発者パネル",
+    "icon": "bi-bug-fill",
+    "url": "/admin/dev",
+    "badge": null,
+    "window": {
+     "w": 1000,
+     "h": 760
+    }
+   },
+   "fields": [],
+   "collections": []
+  },
+  {
+   "id": "sql",
+   "dev_only": true,
+   "custom": true,
+   "badge": null,
+   "wire": {
+    "id": "sql",
+    "title": "SQL エディタ",
+    "icon": "bi-database-fill",
+    "group": "開発者",
+    "path": null,
+    "kind": "custom",
+    "client": "sql",
+    "layout": "stack",
+    "window": {
+     "w": 1100,
+     "h": 780
+    },
+    "sections": []
+   },
+   "tile": {
+    "id": "sql",
+    "title": "SQL エディタ",
+    "icon": "bi-database-fill",
+    "url": null,
+    "badge": null,
+    "window": {
+     "w": 1100,
+     "h": 780
+    }
+   },
+   "fields": [],
+   "collections": []
+  }
+ ],
+ "functions": {
+  "services.logging_service.get_log_settings": {
+   "module": "services.logging_service",
+   "qualname": "get_log_settings",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.logging_service._get_default_settings",
+    "services.settings_store.get_guild_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "INFO",
+    "channel_id",
+    "level",
+    "log_channel_id",
+    "log_level"
+   ],
+   "constants": {}
+  },
+  "services.logging_service.set_log_channel": {
+   "module": "services.logging_service",
+   "qualname": "set_log_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.update_guild_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "log_channel_id"
+   ],
+   "constants": {}
+  },
+  "services.logging_service.set_log_level": {
+   "module": "services.logging_service",
+   "qualname": "set_log_level",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.update_guild_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "log_level"
+   ],
+   "constants": {}
+  },
+  "services.settings_store._get_or_create_guild": {
+   "module": "services.settings_store",
+   "qualname": "_get_or_create_guild",
+   "kind": "function",
+   "bound": {},
+   "calls": [],
+   "helpers": [],
+   "identifiers": [
+    "guilds"
+   ],
+   "constants": {}
+  },
+  "services.settings_store._mutate_settings": {
+   "module": "services.settings_store",
+   "qualname": "_mutate_settings",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._drop_nulls_in_guilds",
+    "services.settings_store._load_all_from_disk",
+    "services.settings_store._postgres",
+    "services.settings_store._save_all",
+    "services.settings_store._settings_file_lock",
+    "services.settings_store._stamp_touched",
+    "services.settings_store._use_postgres"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "data",
+    "guilds",
+    "return"
+   ],
+   "constants": {}
+  },
+  "services.settings_store._update_nested": {
+   "module": "services.settings_store",
+   "qualname": "_update_nested",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "data",
+    "return"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.add_bypass_roles": {
+   "module": "services.settings_store",
+   "qualname": "add_bypass_roles",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings",
+    "services.settings_store._parse_id_list"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "bypass_role_ids",
+    "data",
+    "return"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.add_news_feed": {
+   "module": "services.settings_store",
+   "qualname": "add_news_feed",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "channel_id",
+    "data",
+    "interval",
+    "last_run",
+    "news_feeds",
+    "query",
+    "return",
+    "seen_hashes"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.add_reaction_role": {
+   "module": "services.settings_store",
+   "qualname": "add_reaction_role",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "data",
+    "reaction_roles",
+    "return"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.add_trusted_users": {
+   "module": "services.settings_store",
+   "qualname": "add_trusted_users",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings",
+    "services.settings_store._parse_id_list"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "data",
+    "return",
+    "trusted_user_ids"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_bypass_role_ids": {
+   "module": "services.settings_store",
+   "qualname": "get_bypass_role_ids",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._parse_id_list",
+    "services.settings_store.get_guild_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "bypass_role_ids"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_djaudio_cache_ttl": {
+   "module": "services.settings_store",
+   "qualname": "get_djaudio_cache_ttl",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_djaudio_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "DJAUDIO_CACHE_TTL",
+    "cache_ttl"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_djaudio_cooldown": {
+   "module": "services.settings_store",
+   "qualname": "get_djaudio_cooldown",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_djaudio_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "DJAUDIO_COOLDOWN",
+    "cooldown"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_djaudio_max_urls": {
+   "module": "services.settings_store",
+   "qualname": "get_djaudio_max_urls",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_djaudio_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "DJAUDIO_MAX_URLS",
+    "max_urls"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_djaudio_output_channel": {
+   "module": "services.settings_store",
+   "qualname": "get_djaudio_output_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._read_int",
+    "services.settings_store.get_guild_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "djaudio",
+    "output_channel_id"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_djaudio_settings": {
+   "module": "services.settings_store",
+   "qualname": "get_djaudio_settings",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_djaudio_top_level",
+    "services.settings_store.get_guild_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "cache_ttl",
+    "cooldown",
+    "djaudio",
+    "max_urls"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_djaudio_watch_channel": {
+   "module": "services.settings_store",
+   "qualname": "get_djaudio_watch_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._read_int",
+    "services.settings_store.get_guild_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "channel_id",
+    "djaudio",
+    "djaudio_watch_channel",
+    "djaudio_watch_channel_id",
+    "watch_channel_id"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_earthquake_notify_types": {
+   "module": "services.settings_store",
+   "qualname": "get_earthquake_notify_types",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_dict_setting"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "earthquake",
+    "notify_types"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_earthquake_settings": {
+   "module": "services.settings_store",
+   "qualname": "get_earthquake_settings",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_dict_setting"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "earthquake"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_goodbye_settings": {
+   "module": "services.settings_store",
+   "qualname": "get_goodbye_settings",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_dict_setting"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "goodbye"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_guild_settings": {
+   "module": "services.settings_store",
+   "qualname": "get_guild_settings",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._load_all"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "guilds"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_news_feeds": {
+   "module": "services.settings_store",
+   "qualname": "get_news_feeds",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_dict_setting"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "news_feeds"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_reaction_roles": {
+   "module": "services.settings_store",
+   "qualname": "get_reaction_roles",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_dict_setting"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "reaction_roles"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_response_channel_id": {
+   "module": "services.settings_store",
+   "qualname": "get_response_channel_id",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_int_setting"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "response_channel_id"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_security_timeout_enabled": {
+   "module": "services.settings_store",
+   "qualname": "get_security_timeout_enabled",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_guild_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "security_timeout_enabled"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_sticky_messages": {
+   "module": "services.settings_store",
+   "qualname": "get_sticky_messages",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_dict_setting"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "sticky_messages"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_trusted_user_ids": {
+   "module": "services.settings_store",
+   "qualname": "get_trusted_user_ids",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._parse_id_list",
+    "services.settings_store.get_guild_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "trusted_user_ids"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_vc_notify_channel_id": {
+   "module": "services.settings_store",
+   "qualname": "get_vc_notify_channel_id",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_int_setting"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "vc_notify_channel_id"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_vc_notify_filter_role_id": {
+   "module": "services.settings_store",
+   "qualname": "get_vc_notify_filter_role_id",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_int_setting"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "vc_notify_filter_role_id"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_vc_notify_role_id": {
+   "module": "services.settings_store",
+   "qualname": "get_vc_notify_role_id",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_int_setting"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "vc_notify_role_id"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.get_welcome_settings": {
+   "module": "services.settings_store",
+   "qualname": "get_welcome_settings",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_dict_setting"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "welcome"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.mark_sticky_pending_delete": {
+   "module": "services.settings_store",
+   "qualname": "mark_sticky_pending_delete",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "data",
+    "delete",
+    "pending",
+    "return",
+    "sticky_messages"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.remove_bypass_roles": {
+   "module": "services.settings_store",
+   "qualname": "remove_bypass_roles",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings",
+    "services.settings_store._parse_id_list"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "bypass_role_ids",
+    "data",
+    "return"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.remove_news_feed": {
+   "module": "services.settings_store",
+   "qualname": "remove_news_feed",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "data",
+    "news_feeds",
+    "return"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.remove_reaction_role": {
+   "module": "services.settings_store",
+   "qualname": "remove_reaction_role",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "data",
+    "reaction_roles",
+    "return"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.remove_trusted_users": {
+   "module": "services.settings_store",
+   "qualname": "remove_trusted_users",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings",
+    "services.settings_store._parse_id_list"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "data",
+    "return",
+    "trusted_user_ids"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.set_djaudio_output_channel": {
+   "module": "services.settings_store",
+   "qualname": "set_djaudio_output_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "data",
+    "djaudio",
+    "output_channel_id",
+    "return"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.set_djaudio_settings": {
+   "module": "services.settings_store",
+   "qualname": "set_djaudio_settings",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings",
+    "services.settings_store._read_int"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "cache_ttl",
+    "cooldown",
+    "data",
+    "djaudio",
+    "djaudio_cache_ttl",
+    "djaudio_cooldown",
+    "djaudio_max_urls",
+    "max_urls",
+    "return"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.set_djaudio_watch_channel": {
+   "module": "services.settings_store",
+   "qualname": "set_djaudio_watch_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "data",
+    "djaudio",
+    "djaudio_watch_channel",
+    "djaudio_watch_channel_id",
+    "return",
+    "watch_channel_id"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.set_earthquake_channel": {
+   "module": "services.settings_store",
+   "qualname": "set_earthquake_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._update_nested"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "channel_id",
+    "earthquake"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.set_earthquake_min_scale": {
+   "module": "services.settings_store",
+   "qualname": "set_earthquake_min_scale",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._update_nested"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "earthquake",
+    "min_scale"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.set_earthquake_notify_types": {
+   "module": "services.settings_store",
+   "qualname": "set_earthquake_notify_types",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._update_nested"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "earthquake",
+    "notify_types"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.set_goodbye_channel": {
+   "module": "services.settings_store",
+   "qualname": "set_goodbye_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._update_nested"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "channel_id",
+    "goodbye"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.set_goodbye_message": {
+   "module": "services.settings_store",
+   "qualname": "set_goodbye_message",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._update_nested"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "goodbye",
+    "message"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.set_response_channel_id": {
+   "module": "services.settings_store",
+   "qualname": "set_response_channel_id",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.update_guild_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "response_channel_id"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.set_security_timeout_enabled": {
+   "module": "services.settings_store",
+   "qualname": "set_security_timeout_enabled",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.update_guild_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "security_timeout_enabled"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.set_sticky_message": {
+   "module": "services.settings_store",
+   "qualname": "set_sticky_message",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "content",
+    "data",
+    "message_id",
+    "pending",
+    "post",
+    "return",
+    "sticky_messages"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.set_vc_notify_channel_id": {
+   "module": "services.settings_store",
+   "qualname": "set_vc_notify_channel_id",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.update_guild_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "vc_notify_channel_id"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.set_vc_notify_filter_role_id": {
+   "module": "services.settings_store",
+   "qualname": "set_vc_notify_filter_role_id",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.update_guild_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "vc_notify_filter_role_id"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.set_vc_notify_role_id": {
+   "module": "services.settings_store",
+   "qualname": "set_vc_notify_role_id",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.update_guild_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "vc_notify_role_id"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.set_welcome_channel": {
+   "module": "services.settings_store",
+   "qualname": "set_welcome_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._update_nested"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "channel_id",
+    "welcome"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.set_welcome_message": {
+   "module": "services.settings_store",
+   "qualname": "set_welcome_message",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._update_nested"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "message",
+    "welcome"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.update_guild_settings": {
+   "module": "services.settings_store",
+   "qualname": "update_guild_settings",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._mutate_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "data",
+    "guilds",
+    "return"
+   ],
+   "constants": {}
+  },
+  "services.settings_store.update_news_feed": {
+   "module": "services.settings_store",
+   "qualname": "update_news_feed",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "channel_id",
+    "data",
+    "interval",
+    "news_feeds",
+    "query",
+    "return"
+   ],
+   "constants": {}
+  },
+  "services.tts_store.add_tts_dictionary_entry": {
+   "module": "services.tts_store",
+   "qualname": "add_tts_dictionary_entry",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "data",
+    "dictionary",
+    "return",
+    "tts"
+   ],
+   "constants": {}
+  },
+  "services.tts_store.get_tts_dictionary": {
+   "module": "services.tts_store",
+   "qualname": "get_tts_dictionary",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.get_tts_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "dictionary"
+   ],
+   "constants": {}
+  },
+  "services.tts_store.get_tts_settings": {
+   "module": "services.tts_store",
+   "qualname": "get_tts_settings",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_dict_setting"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "tts"
+   ],
+   "constants": {}
+  },
+  "services.tts_store.remove_tts_dictionary_entry": {
+   "module": "services.tts_store",
+   "qualname": "remove_tts_dictionary_entry",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "data",
+    "dictionary",
+    "return",
+    "tts"
+   ],
+   "constants": {}
+  },
+  "services.tts_store.reset_user_tts_settings": {
+   "module": "services.tts_store",
+   "qualname": "reset_user_tts_settings",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "data",
+    "return",
+    "tts",
+    "user_settings"
+   ],
+   "constants": {}
+  },
+  "services.tts_store.set_tts_channels": {
+   "module": "services.tts_store",
+   "qualname": "set_tts_channels",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._get_or_create_guild",
+    "services.settings_store._mutate_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "data",
+    "return",
+    "tts",
+    "vc_channel_id",
+    "watch_channel_ids"
+   ],
+   "constants": {}
+  },
+  "services.tts_store.set_tts_default_rate": {
+   "module": "services.tts_store",
+   "qualname": "set_tts_default_rate",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._update_nested"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "default_rate",
+    "tts"
+   ],
+   "constants": {}
+  },
+  "services.tts_store.set_tts_default_voice": {
+   "module": "services.tts_store",
+   "qualname": "set_tts_default_voice",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._update_nested"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "default_voice",
+    "tts"
+   ],
+   "constants": {}
+  },
+  "services.tts_store.set_tts_enabled": {
+   "module": "services.tts_store",
+   "qualname": "set_tts_enabled",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._update_nested"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "enabled",
+    "tts"
+   ],
+   "constants": {}
+  },
+  "services.tts_store.set_tts_max_lengths": {
+   "module": "services.tts_store",
+   "qualname": "set_tts_max_lengths",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._update_nested"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "max_length",
+    "speak_max_length",
+    "tts"
+   ],
+   "constants": {}
+  },
+  "services.tts_store.set_tts_read_name": {
+   "module": "services.tts_store",
+   "qualname": "set_tts_read_name",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._update_nested"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "read_name",
+    "tts"
+   ],
+   "constants": {}
+  },
+  "services.tts_store.set_tts_vc_notify": {
+   "module": "services.tts_store",
+   "qualname": "set_tts_vc_notify",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store._update_nested"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "tts",
+    "vc_notify"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.djaudio._output_channel": {
+   "module": "webapp_admin.schema.panels.djaudio",
+   "qualname": "_output_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_djaudio_output_channel"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.djaudio._set_limit.<locals>.setter[key=cache_ttl]": {
+   "module": "webapp_admin.schema.panels.djaudio",
+   "qualname": "_set_limit.<locals>.setter",
+   "kind": "closure",
+   "bound": {
+    "key": "cache_ttl"
+   },
+   "calls": [
+    "services.settings_store.set_djaudio_settings"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.djaudio._set_limit.<locals>.setter[key=cooldown]": {
+   "module": "webapp_admin.schema.panels.djaudio",
+   "qualname": "_set_limit.<locals>.setter",
+   "kind": "closure",
+   "bound": {
+    "key": "cooldown"
+   },
+   "calls": [
+    "services.settings_store.set_djaudio_settings"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.djaudio._set_limit.<locals>.setter[key=max_urls]": {
+   "module": "webapp_admin.schema.panels.djaudio",
+   "qualname": "_set_limit.<locals>.setter",
+   "kind": "closure",
+   "bound": {
+    "key": "max_urls"
+   },
+   "calls": [
+    "services.settings_store.set_djaudio_settings"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.djaudio._watch_channel": {
+   "module": "webapp_admin.schema.panels.djaudio",
+   "qualname": "_watch_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_djaudio_watch_channel"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.earthquake._channel": {
+   "module": "webapp_admin.schema.panels.earthquake",
+   "qualname": "_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_earthquake_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "channel_id"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.earthquake._min_scale": {
+   "module": "webapp_admin.schema.panels.earthquake",
+   "qualname": "_min_scale",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_earthquake_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "min_scale"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.earthquake._notify_types": {
+   "module": "webapp_admin.schema.panels.earthquake",
+   "qualname": "_notify_types",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_earthquake_notify_types"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.earthquake._set_min_scale": {
+   "module": "webapp_admin.schema.panels.earthquake",
+   "qualname": "_set_min_scale",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.set_earthquake_min_scale"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.earthquake._set_notify_types": {
+   "module": "webapp_admin.schema.panels.earthquake",
+   "qualname": "_set_notify_types",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.set_earthquake_notify_types"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {
+    "NOTIFY_TYPES": [
+     [
+      "eew_forecast",
+      "緊急地震速報（予報）"
+     ],
+     [
+      "eew_warning",
+      "緊急地震速報（警報）"
+     ],
+     [
+      "tsunami",
+      "津波情報"
+     ],
+     [
+      "quake_info",
+      "地震情報"
+     ],
+     [
+      "bot_news",
+      "ボットに関するお知らせ"
+     ]
+    ]
+   }
+  },
+  "webapp_admin.schema.panels.logging._chatgpt_channel": {
+   "module": "webapp_admin.schema.panels.logging",
+   "qualname": "_chatgpt_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_response_channel_id"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.logging._log_channel": {
+   "module": "webapp_admin.schema.panels.logging",
+   "qualname": "_log_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.logging_service.get_log_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "channel_id"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.logging._log_level": {
+   "module": "webapp_admin.schema.panels.logging",
+   "qualname": "_log_level",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.logging_service.get_log_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "INFO",
+    "level"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.news_feeds.<lambda>[news-feeds.badge]": {
+   "module": "webapp_admin.schema.panels.news_feeds",
+   "qualname": "<lambda>",
+   "kind": "lambda",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_news_feeds"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.news_feeds._add": {
+   "module": "webapp_admin.schema.panels.news_feeds",
+   "qualname": "_add",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.add_news_feed"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "channel_id",
+    "interval",
+    "query"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.news_feeds._list": {
+   "module": "webapp_admin.schema.panels.news_feeds",
+   "qualname": "_list",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_news_feeds"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "channel_id",
+    "id",
+    "interval",
+    "last_run",
+    "query"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.news_feeds._update": {
+   "module": "webapp_admin.schema.panels.news_feeds",
+   "qualname": "_update",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.update_news_feed"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "channel_id",
+    "interval",
+    "query"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.reaction_roles._add": {
+   "module": "webapp_admin.schema.panels.reaction_roles",
+   "qualname": "_add",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.add_reaction_role"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "emoji",
+    "message_id",
+    "role_id"
+   ],
+   "constants": {
+    "_ID_SEPARATOR": ":"
+   }
+  },
+  "webapp_admin.schema.panels.reaction_roles._count": {
+   "module": "webapp_admin.schema.panels.reaction_roles",
+   "qualname": "_count",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_reaction_roles"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.reaction_roles._list": {
+   "module": "webapp_admin.schema.panels.reaction_roles",
+   "qualname": "_list",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_reaction_roles"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "emoji",
+    "id",
+    "message_id",
+    "role_id"
+   ],
+   "constants": {
+    "_ID_SEPARATOR": ":"
+   }
+  },
+  "webapp_admin.schema.panels.reaction_roles._remove": {
+   "module": "webapp_admin.schema.panels.reaction_roles",
+   "qualname": "_remove",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.remove_reaction_role"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {
+    "_ID_SEPARATOR": ":"
+   }
+  },
+  "webapp_admin.schema.panels.security._bypass_add": {
+   "module": "webapp_admin.schema.panels.security",
+   "qualname": "_bypass_add",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.add_bypass_roles"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "role_id"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.security._bypass_list": {
+   "module": "webapp_admin.schema.panels.security",
+   "qualname": "_bypass_list",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_bypass_role_ids"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "id",
+    "role_id"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.security._bypass_remove": {
+   "module": "webapp_admin.schema.panels.security",
+   "qualname": "_bypass_remove",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.remove_bypass_roles"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.security._count": {
+   "module": "webapp_admin.schema.panels.security",
+   "qualname": "_count",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_bypass_role_ids",
+    "services.settings_store.get_trusted_user_ids"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.security._trusted_add": {
+   "module": "webapp_admin.schema.panels.security",
+   "qualname": "_trusted_add",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.add_trusted_users"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "user_id"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.security._trusted_list": {
+   "module": "webapp_admin.schema.panels.security",
+   "qualname": "_trusted_list",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_trusted_user_ids"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "id",
+    "user_id"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.security._trusted_remove": {
+   "module": "webapp_admin.schema.panels.security",
+   "qualname": "_trusted_remove",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.remove_trusted_users"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.sticky.<lambda>[sticky.badge]": {
+   "module": "webapp_admin.schema.panels.sticky",
+   "qualname": "<lambda>",
+   "kind": "lambda",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_sticky_messages"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.sticky._add": {
+   "module": "webapp_admin.schema.panels.sticky",
+   "qualname": "_add",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.set_sticky_message"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "channel_id",
+    "content"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.sticky._list": {
+   "module": "webapp_admin.schema.panels.sticky",
+   "qualname": "_list",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_sticky_messages"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "channel_id",
+    "content",
+    "id",
+    "message_id"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.sticky._remove": {
+   "module": "webapp_admin.schema.panels.sticky",
+   "qualname": "_remove",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.mark_sticky_pending_delete"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.sticky._update": {
+   "module": "webapp_admin.schema.panels.sticky",
+   "qualname": "_update",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.set_sticky_message"
+   ],
+   "helpers": [
+    "webapp_admin.schema.panels.sticky._add"
+   ],
+   "identifiers": [
+    "channel_id",
+    "content"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._dict_add": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_dict_add",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.add_tts_dictionary_entry"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "reading",
+    "word"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._dict_list": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_dict_list",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.get_tts_dictionary"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "id",
+    "reading",
+    "word"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._dict_remove": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_dict_remove",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.remove_tts_dictionary_entry"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._enabled": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_enabled",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.get_tts_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "enabled"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._int_setting.<locals>.getter[fallback=100,key=max_length]": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_int_setting.<locals>.getter",
+   "kind": "closure",
+   "bound": {
+    "fallback": 100,
+    "key": "max_length"
+   },
+   "calls": [
+    "services.tts_store.get_tts_settings"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._int_setting.<locals>.getter[fallback=200,key=default_rate]": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_int_setting.<locals>.getter",
+   "kind": "closure",
+   "bound": {
+    "fallback": 200,
+    "key": "default_rate"
+   },
+   "calls": [
+    "services.tts_store.get_tts_settings"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._int_setting.<locals>.getter[fallback=200,key=speak_max_length]": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_int_setting.<locals>.getter",
+   "kind": "closure",
+   "bound": {
+    "fallback": 200,
+    "key": "speak_max_length"
+   },
+   "calls": [
+    "services.tts_store.get_tts_settings"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._read_name": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_read_name",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.get_tts_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "read_name"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._set_max_length": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_set_max_length",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.get_tts_settings",
+    "services.tts_store.set_tts_max_lengths"
+   ],
+   "helpers": [
+    "webapp_admin.schema.panels.tts._int_setting.<locals>.getter[fallback=200,key=speak_max_length]"
+   ],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._set_rate": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_set_rate",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.set_tts_default_rate"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._set_speak_max_length": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_set_speak_max_length",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.get_tts_settings",
+    "services.tts_store.set_tts_max_lengths"
+   ],
+   "helpers": [
+    "webapp_admin.schema.panels.tts._int_setting.<locals>.getter[fallback=100,key=max_length]"
+   ],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._set_vc_channel": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_set_vc_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.get_tts_settings",
+    "services.tts_store.set_tts_channels"
+   ],
+   "helpers": [
+    "webapp_admin.schema.panels.tts._watch_ids"
+   ],
+   "identifiers": [
+    "watch_channel_ids"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._set_voice": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_set_voice",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.set_tts_default_voice"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._user_list": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_user_list",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.get_tts_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "id",
+    "rate",
+    "user_id",
+    "user_settings",
+    "voice"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._user_reset": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_user_reset",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.reset_user_tts_settings"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._vc_channel": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_vc_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.get_tts_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "vc_channel_id"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._vc_notify": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_vc_notify",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.get_tts_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "vc_notify"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._voice": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_voice",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.get_tts_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "default_voice"
+   ],
+   "constants": {
+    "DEFAULT_VOICE": "Kyoko"
+   }
+  },
+  "webapp_admin.schema.panels.tts._watch_add": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_watch_add",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.get_tts_settings",
+    "services.tts_store.set_tts_channels"
+   ],
+   "helpers": [
+    "webapp_admin.schema.panels.tts._watch_ids"
+   ],
+   "identifiers": [
+    "channel_id",
+    "vc_channel_id",
+    "watch_channel_ids"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._watch_ids": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_watch_ids",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.get_tts_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "watch_channel_ids"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._watch_list": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_watch_list",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.get_tts_settings"
+   ],
+   "helpers": [
+    "webapp_admin.schema.panels.tts._watch_ids"
+   ],
+   "identifiers": [
+    "channel_id",
+    "id",
+    "watch_channel_ids"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.tts._watch_remove": {
+   "module": "webapp_admin.schema.panels.tts",
+   "qualname": "_watch_remove",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.tts_store.get_tts_settings",
+    "services.tts_store.set_tts_channels"
+   ],
+   "helpers": [
+    "webapp_admin.schema.panels.tts._watch_ids"
+   ],
+   "identifiers": [
+    "vc_channel_id",
+    "watch_channel_ids"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.vc_notify._channel": {
+   "module": "webapp_admin.schema.panels.vc_notify",
+   "qualname": "_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_vc_notify_channel_id"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.vc_notify._filter_role": {
+   "module": "webapp_admin.schema.panels.vc_notify",
+   "qualname": "_filter_role",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_vc_notify_filter_role_id"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.vc_notify._role": {
+   "module": "webapp_admin.schema.panels.vc_notify",
+   "qualname": "_role",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_vc_notify_role_id"
+   ],
+   "helpers": [],
+   "identifiers": [],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.welcome._goodbye_channel": {
+   "module": "webapp_admin.schema.panels.welcome",
+   "qualname": "_goodbye_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_goodbye_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "channel_id"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.welcome._goodbye_message": {
+   "module": "webapp_admin.schema.panels.welcome",
+   "qualname": "_goodbye_message",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_goodbye_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "message"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.welcome._welcome_channel": {
+   "module": "webapp_admin.schema.panels.welcome",
+   "qualname": "_welcome_channel",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_welcome_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "channel_id"
+   ],
+   "constants": {}
+  },
+  "webapp_admin.schema.panels.welcome._welcome_message": {
+   "module": "webapp_admin.schema.panels.welcome",
+   "qualname": "_welcome_message",
+   "kind": "function",
+   "bound": {},
+   "calls": [
+    "services.settings_store.get_welcome_settings"
+   ],
+   "helpers": [],
+   "identifiers": [
+    "message"
+   ],
+   "constants": {}
+  }
+ },
+ "problems": []
+}

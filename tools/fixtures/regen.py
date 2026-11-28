@@ -49,6 +49,10 @@ GENERATORS = [
         f"{F}/user_state_sync/expected.json",
         True,
     ),
+    # 管理画面（rust/apps/admin）: 設定パネルの定義の書き出し（schema.json）と、API の基準（expected.json）。
+    # どちらも道具が自分の隣に書き出す（標準出力は使わない）。
+    ("admin_schema", ".", ["rust/apps/admin/tests/fixtures/schema/generate.py"], None, False),
+    ("admin_users_state", ".", ["rust/apps/admin/tests/fixtures/users_state/generate.py"], None, False),
 ]
 
 
