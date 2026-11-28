@@ -15,6 +15,7 @@ use crate::message_security::DEFAULT_SCAN_CONCURRENCY;
 use crate::metal::MetalConfig;
 use crate::news::NewsConfig;
 use crate::user_state::UserStateConfig;
+use crate::user_state_sync::SyncConfig as UserStateSyncConfig;
 use crate::virustotal::VtConfig;
 
 /// Bot を動かすのに要る設定。
@@ -57,6 +58,12 @@ pub struct BotConfig {
     pub background_worker: bool,
     /// 利用者の状態の記録（履歴を残す日数・掃除の間隔）。
     pub user_state: UserStateConfig,
+    /// 利用者の状態の同期・定期の修復・Bot が抜けたサーバーの設定の掃除（`USER_STATE_SYNC_ON_READY` など）。
+    ///
+    /// Python と同じく `BOT_BACKGROUND_WORKER` では止まらない。**本番の Python の Bot と並べて動かすときは
+    /// `USER_STATE_SYNC_ON_READY` と `USER_STATE_AUTO_REPAIR_ENABLED` を偽にすること**（同じ表へ両方が同期を
+    /// 書き、起動のたびに同期の履歴が二重に積まれる）。
+    pub user_state_sync: UserStateSyncConfig,
     /// スラッシュコマンドに応えるか（`BOT_COMMANDS_ENABLED`、既定は応える）。
     ///
     /// **本番の Python の Bot と並べて動かすときは偽にすること。** 同じトークンで 2 つつなぐと、打たれた
@@ -129,6 +136,7 @@ impl BotConfig {
                 .filter(|id| *id > 0),
             background_worker: env.boolean("BOT_BACKGROUND_WORKER", true),
             user_state: UserStateConfig::from_env(env),
+            user_state_sync: UserStateSyncConfig::from_env(env),
             commands_enabled: env.boolean("BOT_COMMANDS_ENABLED", true),
             sync_commands: env.boolean("BOT_SYNC_COMMANDS", false),
             admin_site_url: env.string("ADMIN_SITE_URL", DEFAULT_ADMIN_SITE_URL),
@@ -223,6 +231,7 @@ mod tests {
         assert!(c.background_worker);
         assert_eq!(c.only_guild_id, None);
         assert_eq!(c.user_state, UserStateConfig::default());
+        assert_eq!(c.user_state_sync, UserStateSyncConfig::default());
         assert!(c.handles(1) && c.handles(2));
         assert!(c.commands_enabled, "切り替えたら既定でコマンドに応える");
         assert!(

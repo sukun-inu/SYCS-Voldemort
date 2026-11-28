@@ -26,7 +26,8 @@
 //! - 同じ人のイベントが重なっても、最新状態は 1 件ずつ順に当たる（行の錠で待つ）。Python は読んでから書く
 //!   ので、重なると後から書いた方が先の変更を古い値で上書きしうる
 //!
-//! まだ移していないもの: 起動時と定期の同期（`sync_guild_user_states`）・整合性の修復・ギルドのデータの削除。
+//! 起動時と定期の同期は [`crate::user_state_sync`]、整合性の修復とギルドのデータの削除は
+//! [`crate::user_state_repair`] が持つ（どちらもここの部品を使う）。
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
@@ -256,7 +257,7 @@ pub fn to_utc(ts: Timestamp) -> Option<DateTime<Utc>> {
 }
 
 /// マイクロ秒より細かいところを落とす（Python の datetime はマイクロ秒まで）。
-fn micros(dt: DateTime<Utc>) -> DateTime<Utc> {
+pub(crate) fn micros(dt: DateTime<Utc>) -> DateTime<Utc> {
     DateTime::from_timestamp_micros(dt.timestamp_micros()).unwrap_or(dt)
 }
 
@@ -271,7 +272,7 @@ pub fn isoformat(dt: DateTime<Utc>) -> String {
 }
 
 /// Postgres に渡す時刻の文字（マイクロ秒まで必ず書く）。
-fn pg_time(dt: DateTime<Utc>) -> String {
+pub(crate) fn pg_time(dt: DateTime<Utc>) -> String {
     micros(dt).format("%Y-%m-%dT%H:%M:%S%.6f+00:00").to_string()
 }
 
@@ -281,7 +282,7 @@ pub fn snowflake_time(id: u64) -> DateTime<Utc> {
 }
 
 /// Python の `text[:n]`（文字で数える）。
-fn head(text: &str, n: usize) -> String {
+pub(crate) fn head(text: &str, n: usize) -> String {
     text.chars().take(n).collect()
 }
 
@@ -936,6 +937,11 @@ impl Recorder {
         }
     }
 
+    /// 書き込み先の接続の束（同期・修復が同じ表を読み書きする）。
+    pub(crate) fn pool(&self) -> &PgPool {
+        &self.pool
+    }
+
     /// 表があることを確かめる（無ければ作る）。最初の 1 回だけ動き、あとはすぐ戻る。`force` なら
     /// もう一度作りにいく（自己修復）。Python の `ensure_user_state_db`。
     pub async fn ensure_tables(&self, force: bool) -> Result<(), sqlx::Error> {
@@ -1048,7 +1054,7 @@ impl Recorder {
 
     /// 保管期間を過ぎた履歴を消す。間隔が経っていなければ何もしない。Python の
     /// `_cleanup_old_events_if_needed`（最後に掃除した時刻はメモリにだけ持つので、起動の直後は必ず 1 回動く）。
-    async fn cleanup_if_needed(&self, now: DateTime<Utc>) -> Result<(), sqlx::Error> {
+    pub(crate) async fn cleanup_if_needed(&self, now: DateTime<Utc>) -> Result<(), sqlx::Error> {
         let last = *self.last_cleanup.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(last) = last
             && (now - last) < TimeDelta::seconds(self.config.cleanup_interval_seconds)
@@ -1079,7 +1085,7 @@ impl Recorder {
     }
 
     /// 直りうる失敗なら、表を作り直して「やり直してよい」と伝える。Python の `_try_db_self_heal`。
-    async fn try_self_heal(&self, context: &str, error: &sqlx::Error) -> bool {
+    pub(crate) async fn try_self_heal(&self, context: &str, error: &sqlx::Error) -> bool {
         if !is_repairable(error) {
             return false;
         }
