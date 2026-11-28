@@ -171,6 +171,58 @@
    "headers": [
     [
      "x-forwarded-for",
+     "198.51.100.52:abc"
+    ]
+   ],
+   "client": "198.51.100.52:abc",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
+     "[2001:db8::7]:8443"
+    ]
+   ],
+   "client": "2001:db8::7",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
+     "[2001:db8::8]"
+    ]
+   ],
+   "client": "2001:db8::8",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "127.0.0.1",
+   "headers": [
+    [
+     "x-forwarded-for",
+     "198.51.100.51, 172.18.0.1:9999"
+    ]
+   ],
+   "client": "198.51.100.51",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
      "unknown"
     ]
    ],

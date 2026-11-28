@@ -406,6 +406,9 @@ mod tests {
         assert_eq!(without_port("2001:db8::7"), "2001:db8::7");
         assert_eq!(without_port("unknown"), "unknown");
         let trusted = TrustedHosts::parse(DEFAULT_TRUSTED_PROXIES);
-        assert_eq!(trusted.client_host("198.51.100.51, 172.18.0.1:9999"), "198.51.100.51");
+        assert_eq!(
+            trusted.client_host("198.51.100.51, 172.18.0.1:9999"),
+            "198.51.100.51"
+        );
     }
 }
