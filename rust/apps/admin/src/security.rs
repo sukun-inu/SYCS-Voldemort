@@ -387,7 +387,9 @@ mod tests {
             "application/x-www-form-urlencoded"
         );
         assert_eq!(
-            content_type(&form_headers(" \tapplication/x-www-form-urlencoded\t ; a=b")),
+            content_type(&form_headers(
+                " \tapplication/x-www-form-urlencoded\t ; a=b"
+            )),
             "application/x-www-form-urlencoded"
         );
         let mut nbsp = HeaderMap::new();
@@ -395,7 +397,10 @@ mod tests {
             "content-type",
             HeaderValue::from_bytes(b"\xa0application/x-www-form-urlencoded").unwrap(),
         );
-        assert_eq!(content_type(&nbsp), "\u{a0}application/x-www-form-urlencoded");
+        assert_eq!(
+            content_type(&nbsp),
+            "\u{a0}application/x-www-form-urlencoded"
+        );
         assert_eq!(content_type(&form_headers("A\";B\"; c=d")), "a\";b\"");
         assert_eq!(content_type(&HeaderMap::new()), "");
     }
