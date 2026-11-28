@@ -18,6 +18,7 @@ hex = { workspace = true }
 image = { workspace = true, features = ["png", "gif"] }
 md-5 = { workspace = true }
 percent-encoding = { workspace = true }
+png = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls", "multipart"] }
 roxmltree = { workspace = true }
@@ -33,6 +34,7 @@ serenity = { workspace = true, features = [
 ] }
 sqlx = { workspace = true, features = ["runtime-tokio", "postgres"] }
 sycs-core = { workspace = true }
+sycs-imaging = { workspace = true }
 sycs-text = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
 tokio-tungstenite = { workspace = true, features = ["connect", "handshake", "rustls-tls-webpki-roots"] }

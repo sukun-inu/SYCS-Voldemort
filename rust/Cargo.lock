@@ -4044,6 +4044,7 @@ dependencies = [
  "image",
  "md-5",
  "percent-encoding",
+ "png",
  "regex",
  "reqwest",
  "roxmltree",
@@ -4052,6 +4053,7 @@ dependencies = [
  "sha2 0.10.9",
  "sqlx",
  "sycs-core",
+ "sycs-imaging",
  "sycs-text",
  "tokio",
  "tokio-tungstenite 0.26.2",
@@ -4075,6 +4077,13 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "unicode-normalization",
+]
+
+[[package]]
+name = "sycs-imaging"
+version = "0.1.0"
+dependencies = [
+ "image",
 ]
 
 [[package]]

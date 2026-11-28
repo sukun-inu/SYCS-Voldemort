@@ -24,6 +24,7 @@ use crate::config::BotConfig;
 use crate::earthquake::{self, Deps};
 use crate::earthquake_badges::DrawnBadges;
 use crate::earthquake_feed::{self, CacheDirectory, FeedConfig, HttpOutbox, JmaDetailUrls};
+use crate::earthquake_map::{self, Fonts, WithMap};
 use crate::groq::Groq;
 use crate::log_channel::{self, Author, AvatarColours, LogSink};
 use crate::members::{self, LogEntry};
@@ -69,6 +70,8 @@ pub struct AppState {
     pub judges: Judges,
     /// 地震の通知に付ける、気象庁の詳細ページのリンク（一覧の取得と、決めたリンクの覚え）。
     pub earthquake_urls: JmaDetailUrls,
+    /// 地震の通知に付ける画像（最大震度の札と、震度の地図）。地図はタイルを取る口を使い回す。
+    pub earthquake_images: WithMap<DrawnBadges, Fonts>,
     /// 地震の電文の受け取り（動いているもの）。つなぎ直すときに止める。
     earthquake_feed: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// ニュースの取得と要約。
@@ -122,6 +125,10 @@ impl AppState {
             raid: RaidDetector::default(),
             judges,
             earthquake_urls: JmaDetailUrls::default(),
+            earthquake_images: WithMap {
+                badges: DrawnBadges,
+                map: earthquake_map::production_renderer(),
+            },
             earthquake_feed: Mutex::new(None),
             news,
             chats,
@@ -203,7 +210,8 @@ impl AppState {
 
     /// 地震の電文を 1 つ通知する。送ったチャンネルの数を返す。
     ///
-    /// 震度の札は付ける（[`DrawnBadges`]。Rust で描く）。震度の地図はまだ移していないので付かない。
+    /// 最大震度の札（[`DrawnBadges`]）と、震度の地図（震度 3 以上で、震源と観測点が分かるとき。
+    /// [`earthquake_map`]）を付ける。
     async fn notify_earthquake(
         &self,
         ctx: &Context,
@@ -218,7 +226,7 @@ impl AppState {
             settings: &settings,
             directory: &CacheDirectory(&ctx.cache),
             outbox: &HttpOutbox(&ctx.http),
-            images: &DrawnBadges,
+            images: &self.earthquake_images,
             urls: &self.earthquake_urls,
             handles: &handles,
         };

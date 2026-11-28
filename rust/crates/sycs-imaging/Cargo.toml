@@ -1,0 +1,15 @@
+[package]
+name = "sycs-imaging"
+version = "0.1.0"
+description = "Pillow（Python の画像ライブラリ）と画素まで同じ結果を出す画像処理（図形・重ね合わせ・拡大縮小・ぼかし）"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+# 版は rust/Cargo.toml の [workspace.dependencies] で決める。
+[dependencies]
+image = { workspace = true }
