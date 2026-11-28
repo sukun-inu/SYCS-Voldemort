@@ -20,7 +20,8 @@ use serde_json::Value;
 /// 文字の種類ごとの範囲（種類・始め・終わり。16 進）。Bot と同じ表。
 const CLASSES_TSV: &str = include_str!("../../bot/src/python_char_classes.tsv");
 
-/// `str.isdigit()` は真で `str.isdecimal()` は偽の文字（Unicode の Numeric_Type=Digit。上付き・下付き・丸数字など）。
+/// `str.isdigit()` は真で `str.isdecimal()` は偽の文字（上付き・下付き・丸数字など。Python 3.13 の答えから写した。
+/// Mende Kikakui の数字〔U+1E8C7〜〕は、Python では数字ではない）。
 pub const DIGIT_NOT_DECIMAL: &[(u32, u32)] = &[
     (0x00B2, 0x00B3),
     (0x00B9, 0x00B9),
@@ -41,7 +42,6 @@ pub const DIGIT_NOT_DECIMAL: &[(u32, u32)] = &[
     (0x10A40, 0x10A43),
     (0x10E60, 0x10E68),
     (0x11052, 0x1105A),
-    (0x1E8C7, 0x1E8CF),
     (0x1F100, 0x1F10A),
 ];
 

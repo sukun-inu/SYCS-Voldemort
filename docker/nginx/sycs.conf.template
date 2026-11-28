@@ -84,8 +84,8 @@ server {
     }
 
     # 配信のファイル（内側の場所。外からは 404）。X-Accel-Redirect で来たときは、配信の答えの Content-Type・
-    # Content-Disposition がそのまま使われる。ほかの見出しは nginx が捨てるので、配信が付けたセキュリティの見出しを
-    # ここで写す（$upstream_http_* は、内側へ移ったあとも配信の答えのものを指す）。Range・大きさ・日付・ETag は nginx。
+    # Content-Disposition がそのまま使われる。ほかの見出しは nginx が捨てるので、配信が付けたセキュリティの見出しと
+    # Vary をここで写す（$upstream_http_* は、内側へ移ったあとも配信の答えのものを指す）。Range・大きさ・日付・ETag は nginx。
     location /_sycs_djaudio/ {
         internal;
         alias ${SYCS_DJAUDIO_CACHE_DIR}/;
@@ -94,6 +94,7 @@ server {
         add_header Referrer-Policy $upstream_http_referrer_policy always;
         add_header Strict-Transport-Security $upstream_http_strict_transport_security always;
         add_header Content-Security-Policy $upstream_http_content_security_policy always;
+        add_header Vary $upstream_http_vary always;
     }
 
     # 管理画面の静的ファイル（イメージに焼き込んだもの。CSS と JS は Python のイメージと同じく最小化してある）。
@@ -112,6 +113,8 @@ server {
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Strict-Transport-Security $sycs_admin_hsts always;
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" always;
+        # 管理画面は starlette の SessionMiddleware がどの答えにも付ける（基準で確かめた）。
+        add_header Vary "Cookie" always;
     }
 
     location @sycs_admin {

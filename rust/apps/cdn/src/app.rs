@@ -3,8 +3,10 @@
 //! 本番の Python では、`services/djaudio_cdn.py` の `dlaudio_router` が管理画面のアプリ（`webapp_admin/app.py`）に
 //! 入っていて、答えはその層を全部通ったものになる。ここはその層を、外から順に同じに写している。
 //!
-//! 1. レート制限（slowapi の `SlowAPIMiddleware`。経路ごと・接続元ごとに 1 分 300 回）。超えたときの答えは
-//!    [`rate_limited`] のとおり、Python では 500 になる
+//! 1. セッション（starlette の `SessionMiddleware`。いちばん外）。配信はセッションを使わないが、管理画面の
+//!    セッションの見張り（`session_serialization_guard_middleware`）がセッションに触るので、答えには必ず
+//!    `Vary: Cookie` が付く。レート制限（slowapi の `SlowAPIMiddleware`）もこの内側にあるが、既定の 1 分 300 回は
+//!    この経路には効いていない（基準の「回数の制限」で 301 回目も 410）。なので Rust も数えない
 //! 2. セキュリティの見出し（`_apply_security_headers`。CSP・X-Frame-Options など。`FLASK_SECURE_COOKIES` なら HSTS）
 //! 3. 数（`metrics_middleware`。`requests_total`・`http_responses_total`。拾えなかった例外は `exceptions_total` と 500）
 //! 4. 経路（Starlette の引き方。戻したパスで引き、`$` は末尾の改行 1 つの前でも当たる。メソッド違いは 405、
@@ -39,7 +41,6 @@ use sycs_web::proxy::{self, Forwarded, TrustedHosts};
 use tracing::{error, info, warn};
 
 use crate::cache::{self, Cache, Crash};
-use crate::limit::FixedWindow;
 use crate::page;
 use crate::python;
 
@@ -48,10 +49,6 @@ use crate::python;
 pub const ACCEL_PREFIX: &str = "/_sycs_djaudio/";
 /// 置き場の既定（Python の config と Bot と同じ）。
 pub const DEFAULT_CACHE_DIR: &str = "/app/data/djaudio_cache";
-/// 1 つの窓で許す回数（Python の `default_limits=["300/minute"]`）。
-pub const RATE_LIMIT: u32 = 300;
-/// 窓の長さ（秒）。
-pub const RATE_WINDOW_SECONDS: f64 = 60.0;
 /// 数のラベル（`app="cdn"`）とログの名前（`cdn.log`・`cdn.jsonl`）。Python の `cdn_main.py` と同じ名前。
 pub const APP_NAME: &str = "cdn";
 
@@ -213,15 +210,6 @@ impl<'a> Route<'a> {
         }
         None
     }
-
-    /// Python の関数の名前（レート制限を経路ごとに数える鍵。slowapi と同じ）。
-    pub fn endpoint(&self) -> &'static str {
-        match self {
-            Self::Health => "services.djaudio_cdn.dlaudio_health",
-            Self::Files { .. } => "services.djaudio_cdn.serve_file",
-            Self::Info { .. } => "services.djaudio_cdn.file_info",
-        }
-    }
 }
 
 /// `<prefix>{a}/{b}`（どちらも `/` を含まない 1 文字以上）。
@@ -236,7 +224,6 @@ pub struct App {
     config: Config,
     cache: Cache,
     clock: Clock,
-    limiter: FixedWindow,
     metrics: HttpMetrics,
 }
 
@@ -246,7 +233,6 @@ impl App {
         Self {
             cache: Cache::new(config.cache_dir.clone()),
             clock,
-            limiter: FixedWindow::new(RATE_LIMIT, RATE_WINDOW_SECONDS),
             metrics: HttpMetrics::new(APP_NAME, reporter),
             config,
         }
@@ -268,19 +254,6 @@ impl App {
         let peer = request.peer.map(|ip| ip.to_string());
         let forwarded = proxy::resolve(&self.config.trusted, peer.as_deref(), &request.headers);
         let now = (self.clock)();
-        // 1. レート制限（いちばん外。経路とメソッドが両方合ったものだけを数える）。
-        if request.method == Method::GET
-            && let Some(route) = Route::find(&path)
-        {
-            let client = forwarded.client.as_deref().unwrap_or("127.0.0.1");
-            if !self.limiter.hit(route.endpoint(), client, now) {
-                warn!(
-                    "ratelimit {RATE_LIMIT} per 1 minute ({client}) exceeded at endpoint: {}",
-                    route.endpoint()
-                );
-                return rate_limited();
-            }
-        }
         // 3〜5. 数と、経路と本体。
         let mut reply = match self.route(request, &path, &forwarded, now) {
             Ok(reply) => {
@@ -303,6 +276,8 @@ impl App {
         };
         // 2. セキュリティの見出し。
         self.add_security_headers(&path, &mut reply);
+        // 1. セッション（いちばん外）。
+        reply.set("vary", "Cookie");
         reply
     }
 
@@ -547,21 +522,6 @@ fn error_reply(
     }
     let shown = detail.or(description).unwrap_or(message);
     html_reply(status, page::render_link_error_page(status, shown))
-}
-
-/// 1 分 300 回を超えたときの答え。**Python では 429 ではなく、素の 500 になる**ので、それを写している。
-///
-/// 管理画面は slowapi の `SlowAPIMiddleware`（同期の版）を使い、超えたときの扱い（`rate_limit_handler`）を
-/// `async def` で登録している。同期の版はその関数を呼んだだけのもの（await していない coroutine）を応答として返す
-/// ので、Starlette がそれを応答として呼べずに例外になり、いちばん外の `ServerErrorMiddleware` が
-/// `Internal Server Error` を返す（セキュリティの見出しも付かず、数にも入らない）。基準
-/// （`tests/fixtures/dlaudio/expected.json` の「回数の制限」）がこれを確かめる。直すかどうかは見直しの候補。
-pub fn rate_limited() -> Reply {
-    Reply {
-        status: 500,
-        headers: vec![("content-type", "text/plain; charset=utf-8".to_string())],
-        body: b"Internal Server Error".to_vec(),
-    }
 }
 
 fn json_reply(status: u16, value: &Value) -> Reply {
@@ -822,22 +782,18 @@ mod tests {
         );
     }
 
-    /// 1 分 300 回を超えたら、見出しの無い素の 500 になり、数にも入らないこと。ほかの経路は別に数えること。
+    /// 回数で断らないこと（Python の管理画面の既定の 1 分 300 回は、この経路には効いていない）。
+    /// どの答えにも `Vary: Cookie` が付き、全部が数に入ること。
     #[test]
-    fn the_301st_request_in_a_minute_is_refused_like_python() {
+    fn many_requests_are_not_refused_like_python() {
         let dir = tempfile::tempdir().unwrap();
         let (app, reporter) = app(dir.path());
         let files = get(&format!("/dlaudio/files/999/{TOKEN}"));
-        for _ in 0..RATE_LIMIT {
-            assert_eq!(app.respond(&files).status, 410);
+        for _ in 0..400 {
+            let reply = app.respond(&files);
+            assert_eq!(reply.status, 410);
+            assert_eq!(reply.header("vary"), Some("Cookie"));
         }
-        let refused = app.respond(&files);
-        assert_eq!(refused, rate_limited());
-        assert_eq!(
-            app.respond(&get(&format!("/dlaudio/info/999/{TOKEN}")))
-                .status,
-            410
-        );
         let counted: i64 = reporter
             .counters()
             .drain()
@@ -845,7 +801,7 @@ mod tests {
             .filter(|(name, _, _)| name == "requests_total")
             .map(|(_, _, n)| n)
             .sum();
-        assert_eq!(counted, i64::from(RATE_LIMIT) + 1);
+        assert_eq!(counted, 400);
     }
 
     /// ファイルは中身を送らず、nginx の内側の場所を指し、名前の書き方が starlette の FileResponse と同じこと。

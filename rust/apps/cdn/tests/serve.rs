@@ -12,8 +12,13 @@ use sycs_web::probe::{self, Answer};
 use sycs_web::proxy::{DEFAULT_TRUSTED_PROXIES, TrustedHosts};
 use sycs_web::serve;
 
+/// 見出し（名前と値）の並び。
+type Headers<'a> = &'a [(&'a str, &'a str)];
+/// 尋ねる 1 回（メソッド・パス・見出し）。
+type Question<'a> = (&'a str, &'a str, Headers<'a>);
+
 const TOKEN: &str = "0123456789abcdef0123456789abcdef";
-const NO_HEADERS: &[(&str, &str)] = &[];
+const NO_HEADERS: Headers<'static> = &[];
 
 fn config(dir: &Path, trusted: &str) -> Config {
     Config {
@@ -24,7 +29,7 @@ fn config(dir: &Path, trusted: &str) -> Config {
 }
 
 /// 待ち受けて、順に尋ね、止める。
-async fn ask(config: Config, requests: &[(&str, &str, &[(&str, &str)])]) -> Vec<Answer> {
+async fn ask(config: Config, requests: &[Question<'_>]) -> Vec<Answer> {
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
         .await
         .unwrap();
@@ -81,6 +86,7 @@ async fn a_file_is_handed_to_nginx_over_http() {
         Some("attachment; filename=\"song.mp3\"")
     );
     assert_eq!(file.header("x-frame-options"), Some("DENY"));
+    assert_eq!(file.header("vary"), Some("Cookie"));
     assert!(file.body.is_empty(), "中身を送った");
     let health = &answers[1];
     assert_eq!(health.status, 200);
@@ -92,7 +98,7 @@ async fn a_file_is_handed_to_nginx_over_http() {
 #[tokio::test]
 async fn only_a_trusted_proxy_decides_the_scheme() {
     let dir = tempfile::tempdir().unwrap();
-    let headers: &[(&str, &str)] = &[
+    let headers: Headers<'_> = &[
         ("host", "mcdn.example.test"),
         ("x-forwarded-proto", "https"),
     ];

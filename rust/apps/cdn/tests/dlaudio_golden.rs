@@ -20,7 +20,10 @@ use sycs_cdn::app::{ACCEL_PREFIX, App, Config, Incoming, Reply};
 use sycs_core::metrics::Reporter;
 use sycs_web::proxy::{DEFAULT_TRUSTED_PROXIES, TrustedHosts};
 
-/// Python の見出しのうち比べないもの（大きさ・日付・ETag・Range は nginx が付ける）。
+/// Python の見出しのうち比べないもの（大きさ・日付・ETag・Range は nginx が付ける。Rust は付けない）。
+///
+/// starlette の FileResponse の `last-modified`・`etag` はファイルの mtime と大きさから作る。基準を作るときは mtime を
+/// 決まった時刻に揃えてあるので値は毎回同じだが、Rust の答えでは nginx が自分の形で付けるので、ここでは比べない。
 const NGINX_OWNS: [&str; 6] = [
     "content-length",
     "etag",
@@ -222,8 +225,11 @@ fn every_route_answers_like_python() {
     );
 }
 
+/// 1 文字の判定（Python の `str.isalnum()` などの写し）。
+type CharTest = fn(char) -> bool;
+
 /// その判定が真になる文字の範囲（サロゲートは文字でないので偽）。
-fn ranges_of(test: fn(char) -> bool) -> Vec<(u64, u64)> {
+fn ranges_of(test: CharTest) -> Vec<(u64, u64)> {
     let mut out = Vec::new();
     let mut start: Option<u32> = None;
     for code in 0..=0x10_FFFF_u32 {
@@ -246,7 +252,7 @@ fn ranges_of(test: fn(char) -> bool) -> Vec<(u64, u64)> {
 #[test]
 fn python_character_classes_match() {
     let data = expected();
-    let tests: [(&str, fn(char) -> bool); 2] = [
+    let tests: [(&str, CharTest); 2] = [
         ("isalnum", sycs_cdn::python::is_alnum_char),
         ("isdigit", sycs_cdn::python::is_digit_char),
     ];

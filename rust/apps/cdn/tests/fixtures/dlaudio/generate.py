@@ -70,8 +70,12 @@ def file_bytes(spec):
     return bytes.fromhex(spec["hex"])
 
 
-def place(files):
-    """置き場を空にして例のファイルを置き、置いたものを Rust が同じに置ける形（16 進・ディレクトリ）で返す。"""
+def place(files, mtime):
+    """置き場を空にして例のファイルを置き、置いたものを Rust が同じに置ける形（16 進・ディレクトリ）で返す。
+
+    置いたものの更新時刻は mtime（止めた時刻）に揃える。starlette の FileResponse は、ファイルの更新時刻と大きさから
+    last-modified と etag を作るので、揃えないと作り直すたびに基準が変わる。
+    """
     shutil.rmtree(CACHE)
     os.makedirs(CACHE)
     placed = []
@@ -80,11 +84,12 @@ def place(files):
         if spec.get("dir"):
             os.makedirs(path)
             placed.append({"name": spec["name"], "dir": True})
-            continue
-        content = file_bytes(spec)
-        with open(path, "wb") as f:
-            f.write(content)
-        placed.append({"name": spec["name"], "hex": content.hex()})
+        else:
+            content = file_bytes(spec)
+            with open(path, "wb") as f:
+                f.write(content)
+            placed.append({"name": spec["name"], "hex": content.hex()})
+        os.utime(path, (mtime, mtime))
     return placed
 
 
@@ -121,10 +126,10 @@ def record_response(response, method):
     return out
 
 
-def run_case(client, case):
-    """1 つの例を回し、置いたもの・リクエストと応答・残ったファイルを返す。"""
+def run_case(client, case, now):
+    """1 つの例を回し、置いたもの・リクエストと応答・残ったファイルを返す（置いたものの更新時刻は now に揃える）。"""
     limiter.reset()
-    placed = place(case.get("files", []))
+    placed = place(case.get("files", []), now)
     secure = case.get("secure_cookies", False)
     if secure:
         # 管理画面はリクエストのたびにこの変数を読んで HSTS を付ける。
@@ -172,7 +177,7 @@ def main():
     clock = FrozenClock(now)
     client = TestClient(app, raise_server_exceptions=False)
     with patch.object(djaudio_cache, "datetime", clock), patch.object(djaudio_cdn, "datetime", clock):
-        cases = [run_case(client, case) for case in data["cases"]]
+        cases = [run_case(client, case, now) for case in data["cases"]]
     result = {
         "now": now,
         "cases": cases,

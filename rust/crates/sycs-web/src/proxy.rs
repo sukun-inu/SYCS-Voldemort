@@ -130,7 +130,10 @@ impl TrustedHosts {
     ///
     /// プロキシは右へ足していくので、右から見て最初の「信頼しない相手」が接続元。全部が信頼する相手なら、いちばん左。
     pub fn client_host(&self, x_forwarded_for: &str) -> String {
-        let hosts = raw_hosts(x_forwarded_for);
+        let hosts: Vec<String> = raw_hosts(x_forwarded_for)
+            .iter()
+            .map(|host| without_port(host.as_str()))
+            .collect();
         if self.always {
             return hosts[0].clone();
         }
@@ -155,6 +158,23 @@ fn raw_hosts(value: &str) -> Vec<String> {
         .split(',')
         .map(|item| python_strip(item).to_string())
         .collect()
+}
+
+/// `X-Forwarded-For` の 1 項目から、ポートを落とした接続元。uvicorn は `198.51.100.3:5678` を `198.51.100.3` と読む
+/// （基準で確かめた）。
+///
+/// `[IPv6]:ポート`・`[IPv6]` は括弧の中。`:` がちょうど 1 つ（IPv4 か名前にポート）なら `:` の前。`:` が 2 つ以上
+/// （括弧の無い IPv6）はそのまま。落としたあとの形で、信頼する相手かを見る。
+fn without_port(host: &str) -> String {
+    if let Some(rest) = host.strip_prefix('[')
+        && let Some((inside, _)) = rest.split_once(']')
+    {
+        return inside.to_string();
+    }
+    match host.split_once(':') {
+        Some((before, after)) if !after.contains(':') => before.to_string(),
+        _ => host.to_string(),
+    }
 }
 
 /// アプリに渡す接続元と scheme。
@@ -376,5 +396,16 @@ mod tests {
         assert!(TrustedHosts::parse("0.0.0.0/0").contains(Some("8.8.8.8")));
         assert!(!TrustedHosts::parse("0.0.0.0/0").contains(Some("::1")));
         assert!(TrustedHosts::parse("testclient").contains(Some("testclient")));
+    }
+
+    /// `X-Forwarded-For` の項目のポートを落とし、落とした形で信頼する相手かを見ること。括弧の無い IPv6 は触らない。
+    #[test]
+    fn ports_in_forwarded_for_are_dropped() {
+        assert_eq!(without_port("198.51.100.3:5678"), "198.51.100.3");
+        assert_eq!(without_port("[2001:db8::7]:8443"), "2001:db8::7");
+        assert_eq!(without_port("2001:db8::7"), "2001:db8::7");
+        assert_eq!(without_port("unknown"), "unknown");
+        let trusted = TrustedHosts::parse(DEFAULT_TRUSTED_PROXIES);
+        assert_eq!(trusted.client_host("198.51.100.51, 172.18.0.1:9999"), "198.51.100.51");
     }
 }

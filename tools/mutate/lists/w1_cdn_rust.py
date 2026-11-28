@@ -56,10 +56,10 @@ MUTS = [
     ),
     ("HSTS をいつも付ける", A, "        if self.config.secure_cookies {", "        if true {"),
     (
-        "1 分 300 回の制限を掛けない",
+        "Vary: Cookie を付けない（管理画面のセッションの層は、どの答えにも付ける）",
         A,
-        "            if !self.limiter.hit(route.endpoint(), client, now) {",
-        "            if !self.limiter.hit(route.endpoint(), client, now) && false {",
+        '        reply.set("vary", "Cookie");',
+        '        reply.set("x-vary", "Cookie");',
     ),
     (
         "残りの分を 61 秒で割る",
@@ -140,5 +140,11 @@ MUTS = [
         X,
         "    if !trusted.contains(peer) {",
         "    if false {",
+    ),
+    (
+        "X-Forwarded-For の項目のポートを落とさない",
+        X,
+        "            .map(|host| without_port(host.as_str()))",
+        "            .map(|host| host.clone())",
     ),
 ]

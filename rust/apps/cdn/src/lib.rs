@@ -9,11 +9,12 @@
 //! - [`app`] 経路と答え（管理画面の層の写し）
 //! - [`cache`] 置き場の読み方（Python の `services/djaudio_cache.py` の配信が使う分）
 //! - [`page`] 断るときの文面とページ
-//! - [`limit`] レート制限（1 分 300 回）
 //! - [`python`] Python の文字の判定・`quote`・`html.escape`
+//!
+//! 回数で断ることはしない（Python の管理画面の既定の 1 分 300 回は、この経路には効いていなかった。基準の
+//! 「回数の制限」）。
 
 pub mod app;
 pub mod cache;
-pub mod limit;
 pub mod page;
 pub mod python;
