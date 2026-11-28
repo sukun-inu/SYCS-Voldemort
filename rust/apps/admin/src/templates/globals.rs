@@ -220,8 +220,8 @@ pub fn python_realpath(filename: &str) -> String {
             format!("{path}/{name}")
         };
         // 読めない名前（無い・長すぎる）は、Python と同じく字面のまま進む（strict=False）。
-        let is_link = std::fs::symlink_metadata(&newpath)
-            .is_ok_and(|meta| meta.file_type().is_symlink());
+        let is_link =
+            std::fs::symlink_metadata(&newpath).is_ok_and(|meta| meta.file_type().is_symlink());
         if !is_link {
             path = newpath;
             continue;

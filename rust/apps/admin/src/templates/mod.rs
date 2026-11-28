@@ -302,9 +302,7 @@ impl Pages {
         env.set_keep_trailing_newline(false);
         env.set_trim_blocks(false);
         env.set_lstrip_blocks(false);
-        env.set_formatter(|out, state, value| {
-            markup::write_value(out, state.auto_escape(), value)
-        });
+        env.set_formatter(|out, state, value| markup::write_value(out, state.auto_escape(), value));
         globals::register(
             &mut env,
             Arc::new(Assets::new(

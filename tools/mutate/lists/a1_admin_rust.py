@@ -90,7 +90,7 @@ MUTS = [
         "    if false {",
     ),
     (
-        "check_dev が user の偽を見ない（{\"user\": {}} を 303 にしない）",
+        'check_dev が user の偽を見ない（{"user": {}} を 303 にしない）',
         SEC,
         '    let Some(user) = session.get("user").filter(|user| python::truthy(user)) else {',
         '    let Some(user) = session.get("user") else {',

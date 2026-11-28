@@ -182,13 +182,20 @@ impl Incidents {
         map.insert("end_at".to_string(), at(incident.end_epoch));
         map.insert(
             "duration_seconds".to_string(),
-            epoch_value(incident.duration_seconds.map(|d| (d * 1000.0).round_ties_even() / 1000.0)),
+            epoch_value(
+                incident
+                    .duration_seconds
+                    .map(|d| (d * 1000.0).round_ties_even() / 1000.0),
+            ),
         );
         map.insert("metadata".to_string(), Value::Object(incident.metadata));
         let value = Value::Object(map);
         let line = python::dumps(&value, python::COMPACT);
         if let Err(e) = self.append(&line) {
-            warn!("インシデントを書けませんでした（{}）: {e}", self.file().display());
+            warn!(
+                "インシデントを書けませんでした（{}）: {e}",
+                self.file().display()
+            );
         }
         value
     }
@@ -358,7 +365,8 @@ mod tests {
     #[test]
     fn incidents_are_written_like_python() {
         let dir = tempfile::tempdir().unwrap();
-        let metrics = AdminMetrics::new(Arc::new(Reporter::new("test", None)), incidents(dir.path()));
+        let metrics =
+            AdminMetrics::new(Arc::new(Reporter::new("test", None)), incidents(dir.path()));
         let snapshot = Snapshot {
             method: "GET".to_string(),
             path: "/x".to_string(),
@@ -379,7 +387,9 @@ mod tests {
              \"metadata\":{\"status_code\":503,\"method\":\"GET\",\"path\":\"/x\",\"endpoint\":null,\
              \"remote_addr\":\"testclient\"}}"
         );
-        assert!(lines[1].contains("\"title\":\"RuntimeError\",\"message\":\"Unhandled exception\""));
+        assert!(
+            lines[1].contains("\"title\":\"RuntimeError\",\"message\":\"Unhandled exception\"")
+        );
     }
 
     /// 2000 行を超え、512KB を超えたら、最後の 2000 行だけを残すこと。
@@ -408,7 +418,10 @@ mod tests {
             monitor_dir(|key| (key == "SETTINGS_DIR").then(|| "/s".to_string())),
             PathBuf::from("/s/admin_monitor")
         );
-        assert_eq!(monitor_dir(|_| None), PathBuf::from("/app/data/admin_monitor"));
+        assert_eq!(
+            monitor_dir(|_| None),
+            PathBuf::from("/app/data/admin_monitor")
+        );
         assert_eq!(
             monitor_dir(|key| (key == "ADMIN_MONITOR_DIR").then(String::new)),
             PathBuf::new()
@@ -419,7 +432,8 @@ mod tests {
     #[test]
     fn tps_counts_the_last_fifteen_seconds() {
         let dir = tempfile::tempdir().unwrap();
-        let metrics = AdminMetrics::new(Arc::new(Reporter::new("test", None)), incidents(dir.path()));
+        let metrics =
+            AdminMetrics::new(Arc::new(Reporter::new("test", None)), incidents(dir.path()));
         for t in [100.0, 130.0, 140.0, 144.0] {
             metrics.record_request(t);
         }

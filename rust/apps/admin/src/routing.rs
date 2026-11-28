@@ -56,8 +56,9 @@ fn compile(template: &str) -> (Regex, Vec<String>) {
     }
     pattern.push_str(&regex::escape(rest));
     pattern.push_str("\n?\\z");
-    let regex = Regex::new(&pattern)
-        .unwrap_or_else(|e| panic!("経路の形 {template} を正規表現にできない（コードの書き間違い）: {e}"));
+    let regex = Regex::new(&pattern).unwrap_or_else(|e| {
+        panic!("経路の形 {template} を正規表現にできない（コードの書き間違い）: {e}")
+    });
     (regex, names)
 }
 
@@ -177,7 +178,10 @@ pub fn find<'a>(routes: &'a [Route], method: &Method, path: &str) -> Found<'a> {
         } else {
             format!("{path}/")
         };
-        if routes.iter().any(|route| route.capture(&candidate).is_some()) {
+        if routes
+            .iter()
+            .any(|route| route.capture(&candidate).is_some())
+        {
             return Found::Redirect(candidate);
         }
     }
@@ -221,20 +225,32 @@ mod tests {
     fn routes_are_found_like_starlette() {
         let routes = table();
         let get = Method::GET;
-        assert_eq!(kind(&find(&routes, &get, "/admin/users/state\n")), "ok /admin/users/state []");
+        assert_eq!(
+            kind(&find(&routes, &get, "/admin/users/state\n")),
+            "ok /admin/users/state []"
+        );
         assert_eq!(kind(&find(&routes, &get, "/admin/users/state\n\n")), "404");
         assert_eq!(
             kind(&find(&routes, &get, "/admin/apps/a\n")),
             "ok /admin/apps/{app_id} [(\"app_id\", \"a\\n\")]"
         );
-        assert_eq!(kind(&find(&routes, &Method::POST, "/admin/apps/a")), "405 GET");
-        assert_eq!(kind(&find(&routes, &Method::HEAD, "/admin/users/state")), "405 GET");
+        assert_eq!(
+            kind(&find(&routes, &Method::POST, "/admin/apps/a")),
+            "405 GET"
+        );
+        assert_eq!(
+            kind(&find(&routes, &Method::HEAD, "/admin/users/state")),
+            "405 GET"
+        );
         assert_eq!(
             kind(&find(&routes, &Method::POST, "/admin/users/state///")),
             "307 /admin/users/state"
         );
         assert_eq!(kind(&find(&routes, &get, "/static")), "307 /static/");
-        assert_eq!(kind(&find(&routes, &Method::DELETE, "/static/a.css")), "ok /static [(\"path\", \"a.css\")]");
+        assert_eq!(
+            kind(&find(&routes, &Method::DELETE, "/static/a.css")),
+            "ok /static [(\"path\", \"a.css\")]"
+        );
         assert_eq!(kind(&find(&routes, &get, "/static/a\nb")), "404");
         assert_eq!(kind(&find(&routes, &get, "/")), "404");
     }

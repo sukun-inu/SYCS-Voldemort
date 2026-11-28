@@ -711,7 +711,10 @@ mod tests {
         assert!(b64decode(b"e", false).is_none());
         assert_eq!(b64decode(b"!!!", false).unwrap(), b"");
         assert_eq!(b64decode(b"-_8", true), b64decode(b"+/8", false));
-        assert_eq!(itsdangerous_b64decode(b"azbsgA").unwrap(), vec![0x6b, 0x36, 0xec, 0x80]);
+        assert_eq!(
+            itsdangerous_b64decode(b"azbsgA").unwrap(),
+            vec![0x6b, 0x36, 0xec, 0x80]
+        );
         assert_eq!(b64encode(&[0x6b, 0x36, 0xec, 0x80], true, false), "azbsgA");
         assert_eq!(b64encode(b"{}", false, true), "e30=");
         assert_eq!(b64encode(b"", false, true), "");
@@ -780,7 +783,10 @@ mod tests {
         assert_eq!(url_path("/admin/api?x/y#z"), "/admin/api");
         assert_eq!(form_unquote(b"a+b%20c%E3%81%82"), "a b cあ");
         assert_eq!(form_unquote(b"%E3%81\xe9%82"), "\u{fffd}\u{e9}\u{fffd}");
-        assert_eq!(quote("/a b/あ#x", ":/%#?=@[]!$&'()*+,;"), "/a%20b/%E3%81%82#x");
+        assert_eq!(
+            quote("/a b/あ#x", ":/%#?=@[]!$&'()*+,;"),
+            "/a%20b/%E3%81%82#x"
+        );
     }
 
     /// str() と真偽が Python と同じであること。

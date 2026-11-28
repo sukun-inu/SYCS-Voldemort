@@ -28,9 +28,14 @@ const API: &str = "/admin/api/__a1";
 const PAGE: &str = "/__a1";
 
 fn expected() -> Value {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/errors/expected.json");
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/errors/expected.json"
+    );
     let text = std::fs::read_to_string(path).unwrap_or_else(|e| {
-        panic!("基準が読めません（{path}）: {e}。CI の「基準」が作ったものを取ってきてコミットすること")
+        panic!(
+            "基準が読めません（{path}）: {e}。CI の「基準」が作ったものを取ってきてコミットすること"
+        )
     });
     serde_json::from_str(&text).unwrap()
 }
@@ -101,8 +106,12 @@ fn probes() -> Vec<Route> {
     let crash = || {
         handler(|_app, req: Req| async move {
             let kind = query_param(&req, "type").unwrap_or_else(|| "RuntimeError".to_string());
-            let repeat: usize = query_param(&req, "repeat").and_then(|r| r.parse().ok()).unwrap_or(1);
-            let message = query_param(&req, "message").unwrap_or_default().repeat(repeat);
+            let repeat: usize = query_param(&req, "repeat")
+                .and_then(|r| r.parse().ok())
+                .unwrap_or(1);
+            let message = query_param(&req, "message")
+                .unwrap_or_default()
+                .repeat(repeat);
             Err::<Reply, Failure>(Crash::new(&kind, message).into())
         })
     };
@@ -288,7 +297,12 @@ fn compare(want: &Value, got: &Reply, head: bool) -> Vec<String> {
         .as_array()
         .unwrap()
         .iter()
-        .map(|p| (p[0].as_str().unwrap().to_string(), p[1].as_str().unwrap().to_string()))
+        .map(|p| {
+            (
+                p[0].as_str().unwrap().to_string(),
+                p[1].as_str().unwrap().to_string(),
+            )
+        })
         .filter(|(n, _)| !skip(n))
         .collect();
     let rust: Vec<(String, String)> = pairs(&got.headers)
@@ -300,7 +314,9 @@ fn compare(want: &Value, got: &Reply, head: bool) -> Vec<String> {
         })
         .collect();
     if python != rust {
-        wrong.push(format!("見出し:\n    Python {python:?}\n    Rust   {rust:?}"));
+        wrong.push(format!(
+            "見出し:\n    Python {python:?}\n    Rust   {rust:?}"
+        ));
     }
     let body = want["body"].as_str().unwrap();
     if !html && !head && got.body != body.as_bytes() {
@@ -334,7 +350,12 @@ fn app(data: &Value, case: &Value, dir: &std::path::Path) -> Arc<AdminApp> {
     };
     let mut table = routes::default_routes();
     table.extend(probes());
-    Arc::new(AdminApp::new(config, data["secret"].as_str().unwrap(), deps, table))
+    Arc::new(AdminApp::new(
+        config,
+        data["secret"].as_str().unwrap(),
+        deps,
+        table,
+    ))
 }
 
 /// 足した数（名前とラベルの順）。
@@ -382,10 +403,17 @@ async fn the_skeleton_answers_like_python() {
         }
         let got = counters(&app);
         if got != case["counters"] {
-            wrong.push(format!("「{name}」の数:\n    Python {}\n    Rust   {got}", case["counters"]));
+            wrong.push(format!(
+                "「{name}」の数:\n    Python {}\n    Rust   {got}",
+                case["counters"]
+            ));
         }
         let text = std::fs::read_to_string(dir.path().join(INCIDENTS_FILE)).unwrap_or_default();
-        let lines: Vec<Value> = text.split('\n').filter(|l| !l.is_empty()).map(|l| json!(l)).collect();
+        let lines: Vec<Value> = text
+            .split('\n')
+            .filter(|l| !l.is_empty())
+            .map(|l| json!(l))
+            .collect();
         if Value::Array(lines.clone()) != case["incidents"] {
             wrong.push(format!(
                 "「{name}」のインシデント:\n    Python {}\n    Rust   {}",
@@ -395,5 +423,10 @@ async fn the_skeleton_answers_like_python() {
         }
     }
     assert!(requests >= 150, "基準の要求が足りない（{requests}）");
-    assert!(wrong.is_empty(), "Python と違う（{} 件）:\n{}", wrong.len(), wrong.join("\n"));
+    assert!(
+        wrong.is_empty(),
+        "Python と違う（{} 件）:\n{}",
+        wrong.len(),
+        wrong.join("\n")
+    );
 }

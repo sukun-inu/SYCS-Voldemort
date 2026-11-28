@@ -161,7 +161,10 @@ async fn self_check() -> ExitCode {
     }
     match answer {
         Ok(answer) if answer.status == 303 && answer.header("location") == Some("/admin/login") => {
-            println!("管理画面の確かめ: 応答を受け取りました（{} → /admin/login）", answer.status);
+            println!(
+                "管理画面の確かめ: 応答を受け取りました（{} → /admin/login）",
+                answer.status
+            );
             ExitCode::SUCCESS
         }
         Ok(answer) => {

@@ -63,7 +63,10 @@ pub fn is_dev_user(session: &Session, dev_user_id: &str) -> Result<bool, Crash> 
         Some(other) => {
             return Err(Crash::new(
                 "AttributeError",
-                format!("'{}' object has no attribute 'get'", python::type_name(other)),
+                format!(
+                    "'{}' object has no attribute 'get'",
+                    python::type_name(other)
+                ),
             ));
         }
     };
@@ -153,7 +156,9 @@ pub fn check_csrf(
 
 /// その名前の最初の見出し（latin-1 として読む。starlette の `request.headers.get`）。
 pub fn first_header(headers: &HeaderMap, name: &str) -> Option<String> {
-    headers.get(name).map(|value| python::latin1(value.as_bytes()))
+    headers
+        .get(name)
+        .map(|value| python::latin1(value.as_bytes()))
 }
 
 /// 読んだフォーム（starlette の `FormData`。同じ名前が並べば、`get` は最後のもの）。
@@ -215,7 +220,10 @@ fn first_segment(value: &str) -> String {
     if end < 0 {
         end = len;
     }
-    let (from, to) = (usize::try_from(start).unwrap_or(0), usize::try_from(end).unwrap_or(0));
+    let (from, to) = (
+        usize::try_from(start).unwrap_or(0),
+        usize::try_from(end).unwrap_or(0),
+    );
     if from >= to {
         return String::new();
     }
@@ -266,10 +274,7 @@ pub fn read_form(headers: &HeaderMap, body: &[u8]) -> Result<Form, HttpError> {
         if name.len() + value.len() > MAX_PART_SIZE {
             return Err(HttpError::with_detail(
                 400,
-                &format!(
-                    "Field exceeded maximum size of {}KB.",
-                    MAX_PART_SIZE / 1024
-                ),
+                &format!("Field exceeded maximum size of {}KB.", MAX_PART_SIZE / 1024),
             ));
         }
         items.push((python::form_unquote(name), python::form_unquote(value)));
@@ -330,11 +335,20 @@ mod tests {
         let mut headers = form_headers("application/x-www-form-urlencoded");
         let post = Method::POST;
         assert_eq!(check_csrf(&Method::GET, &logged_in, &headers, b""), Ok(()));
-        assert_eq!(check_csrf(&post, &session(json!({})), &headers, b""), Ok(()));
+        assert_eq!(
+            check_csrf(&post, &session(json!({})), &headers, b""),
+            Ok(())
+        );
         let good = format!("csrf_token={TOKEN}");
-        assert_eq!(check_csrf(&post, &logged_in, &headers, good.as_bytes()), Ok(()));
+        assert_eq!(
+            check_csrf(&post, &logged_in, &headers, good.as_bytes()),
+            Ok(())
+        );
         headers.insert("x-csrftoken", HeaderValue::from_static(TOKEN));
-        assert_eq!(check_csrf(&post, &logged_in, &headers, b"csrf_token="), Ok(()));
+        assert_eq!(
+            check_csrf(&post, &logged_in, &headers, b"csrf_token="),
+            Ok(())
+        );
         assert_eq!(
             check_csrf(&post, &logged_in, &headers, b"csrf_token=bad"),
             Err(HttpError::new(403).into())
@@ -358,7 +372,9 @@ mod tests {
             "application/x-www-form-urlencoded"
         );
         assert_eq!(
-            content_type(&form_headers("Application/X-WWW-Form-Urlencoded; charset=utf-8")),
+            content_type(&form_headers(
+                "Application/X-WWW-Form-Urlencoded; charset=utf-8"
+            )),
             "Application/X-WWW-Form-Urlencoded"
         );
         assert_eq!(content_type(&form_headers("a\";b\"; c=d")), "a\";b\"");
@@ -375,14 +391,25 @@ mod tests {
         assert_eq!(form.get("c"), Some("x y!"));
         assert_eq!(form.get(""), Some("v"));
         let many = "a=1&".repeat(MAX_FIELDS + 1);
-        assert_eq!(read_form(&headers, many.as_bytes()).unwrap_err().status, 400);
+        assert_eq!(
+            read_form(&headers, many.as_bytes()).unwrap_err().status,
+            400
+        );
         assert!(read_form(&headers, "a=1&".repeat(MAX_FIELDS).as_bytes()).is_ok());
         let big = format!("a={}", "x".repeat(MAX_PART_SIZE));
         assert_eq!(
-            read_form(&headers, big.as_bytes()).unwrap_err().detail.as_deref(),
+            read_form(&headers, big.as_bytes())
+                .unwrap_err()
+                .detail
+                .as_deref(),
             Some("Field exceeded maximum size of 1024KB.")
         );
-        assert!(read_form(&form_headers("application/json"), b"a=1").unwrap().items().is_empty());
+        assert!(
+            read_form(&form_headers("application/json"), b"a=1")
+                .unwrap()
+                .items()
+                .is_empty()
+        );
     }
 
     /// 印は無ければ作って入れ（書き換えた印が立つ）、あればそれを返すこと。

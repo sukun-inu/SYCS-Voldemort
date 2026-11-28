@@ -88,7 +88,8 @@ impl Signer {
     pub fn sign(&self, value: &[u8], timestamp: u64) -> Vec<u8> {
         let mut signed = value.to_vec();
         signed.push(b'.');
-        signed.extend_from_slice(python::b64encode(&int_to_bytes(timestamp), true, false).as_bytes());
+        signed
+            .extend_from_slice(python::b64encode(&int_to_bytes(timestamp), true, false).as_bytes());
         let signature = python::b64encode(&self.mac(&signed), true, false);
         signed.push(b'.');
         signed.extend_from_slice(signature.as_bytes());
@@ -454,7 +455,9 @@ fn utf16(bytes: &[u8], big_endian: bool) -> Option<String> {
             u16::from_le_bytes([pair[0], pair[1]])
         }
     });
-    char::decode_utf16(units).collect::<Result<String, _>>().ok()
+    char::decode_utf16(units)
+        .collect::<Result<String, _>>()
+        .ok()
 }
 
 fn utf32(bytes: &[u8], big_endian: bool) -> Option<String> {
@@ -557,7 +560,11 @@ mod tests {
         let cookies = Cookies::new(SECRET, false);
         let signer = cookies.signer();
         let data = python::b64encode(br#"{"a": 1}"#, false, true);
-        for (signed_at, loaded) in [(NOW - MAX_AGE, true), (NOW - MAX_AGE - 1, false), (NOW + 1, false)] {
+        for (signed_at, loaded) in [
+            (NOW - MAX_AGE, true),
+            (NOW - MAX_AGE - 1, false),
+            (NOW + 1, false),
+        ] {
             let value = signer.sign(data.as_bytes(), u64::try_from(signed_at).unwrap());
             let cookie = format!("admin_session={}", String::from_utf8(value).unwrap());
             let session = cookies.load(&headers(&cookie), NOW).unwrap();
@@ -567,7 +574,9 @@ mod tests {
         let cookie = format!("admin_session={}", String::from_utf8(far).unwrap());
         assert_eq!(cookies.load(&headers(&cookie), NOW), Err(Broken));
         let other = Cookies::new("another-secret", false);
-        let value = other.signer().sign(data.as_bytes(), u64::try_from(NOW).unwrap());
+        let value = other
+            .signer()
+            .sign(data.as_bytes(), u64::try_from(NOW).unwrap());
         let cookie = format!("admin_session={}", String::from_utf8(value).unwrap());
         assert!(!cookies.load(&headers(&cookie), NOW).unwrap().was_loaded());
     }
@@ -588,8 +597,12 @@ mod tests {
             let session = load(payload).unwrap();
             assert!(session.was_loaded() && session.is_empty());
         }
-        let pairs = load(python::b64encode(br#"[["k", 1], "ab"]"#, false, true).as_bytes()).unwrap();
-        assert_eq!(Value::Object(pairs.data().clone()), json!({"k": 1, "a": "b"}));
+        let pairs =
+            load(python::b64encode(br#"[["k", 1], "ab"]"#, false, true).as_bytes()).unwrap();
+        assert_eq!(
+            Value::Object(pairs.data().clone()),
+            json!({"k": 1, "a": "b"})
+        );
     }
 
     /// 読んだだけなら Set-Cookie を出さず、書き換えたら出し、空にしたら消す Cookie を出すこと（secure の印も）。
@@ -633,7 +646,12 @@ mod tests {
             ])
         );
         assert_eq!(compact_admin_guilds(Some(&json!({"a": 1}))), json!([]));
-        let mut session = Session::loaded(json!({"admin_guilds": null, "x": 1}).as_object().unwrap().clone());
+        let mut session = Session::loaded(
+            json!({"admin_guilds": null, "x": 1})
+                .as_object()
+                .unwrap()
+                .clone(),
+        );
         sanitize(&mut session);
         assert!(session.modified());
         assert_eq!(dumps_of(&session), r#"{"admin_guilds": [], "x": 1}"#);

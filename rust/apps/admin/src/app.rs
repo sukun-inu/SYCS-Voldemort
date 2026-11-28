@@ -464,9 +464,8 @@ impl AdminApp {
 
     /// `check_csrf`。
     pub fn check_csrf(&self, req: &Req) -> Result<(), Failure> {
-        req.session.with(|session| {
-            security::check_csrf(&req.method, session, &req.headers, &req.body)
-        })
+        req.session
+            .with(|session| security::check_csrf(&req.method, session, &req.headers, &req.body))
     }
 
     /// 1 つのリクエストに答える（層の順はモジュールの説明）。
@@ -484,7 +483,9 @@ impl AdminApp {
         let session = match self.cookies.load(&incoming.headers, signed_now) {
             Ok(session) => SessionHandle::new(session),
             Err(session::Broken) => {
-                error!("セッションの Cookie の署名は合うのに中身が読めません（素の 500 を返します）");
+                error!(
+                    "セッションの Cookie の署名は合うのに中身が読めません（素の 500 を返します）"
+                );
                 return plain_server_error();
             }
         };
@@ -601,7 +602,12 @@ impl AdminApp {
     }
 
     /// 係が返した失敗を答えにする（Python の例外の係）。
-    fn failure_reply(&self, ctx: &ErrorContext<'_>, session: &SessionHandle, failure: Failure) -> Reply {
+    fn failure_reply(
+        &self,
+        ctx: &ErrorContext<'_>,
+        session: &SessionHandle,
+        failure: Failure,
+    ) -> Reply {
         match failure {
             Failure::NeedsLogin => Reply::redirect(303, "/admin/login"),
             Failure::NeedsGuild => Reply::redirect(303, "/admin/guilds"),
@@ -617,7 +623,12 @@ impl AdminApp {
     }
 
     /// `_http_exception_response`（理由が英語の既定の文なら落とし、日本語の文と同じなら補足には出さない）。
-    fn http_error_reply(&self, ctx: &ErrorContext<'_>, session: &SessionHandle, error: &HttpError) -> Reply {
+    fn http_error_reply(
+        &self,
+        ctx: &ErrorContext<'_>,
+        session: &SessionHandle,
+        error: &HttpError,
+    ) -> Reply {
         let message = errors::message(error.status);
         let detail = error
             .detail
@@ -795,7 +806,10 @@ mod tests {
         assert_eq!(last.status, 429);
         assert_eq!(last.header("vary"), None);
         assert_eq!(last.header("x-frame-options"), None);
-        assert_eq!(last.body, br#"{"error":"Rate limit exceeded: 300 per 1 minute"}"#);
+        assert_eq!(
+            last.body,
+            br#"{"error":"Rate limit exceeded: 300 per 1 minute"}"#
+        );
         let other = app.respond(get("/admin/settings/logging")).await;
         assert_eq!(other.status, 303);
         assert_eq!(other.header("vary"), Some("Cookie"));
@@ -823,10 +837,7 @@ mod tests {
         reply.set("x", "3");
         reply.add_vary("Cookie");
         assert_eq!(reply.header("vary"), Some("Accept, Cookie"));
-        assert_eq!(
-            reply.headers.iter().filter(|(n, _)| n == "x").count(),
-            1
-        );
+        assert_eq!(reply.headers.iter().filter(|(n, _)| n == "x").count(), 1);
         assert_eq!(reply.header("x"), Some("3"));
     }
 }

@@ -95,7 +95,10 @@ mod tests {
     /// 旧 URL の表が、設定パネルの定義の書き出し（schema.json の wire.path と id）と同じ並び・同じ中身であること。
     #[test]
     fn legacy_paths_match_the_panel_schema() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/schema/schema.json");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/schema/schema.json"
+        );
         let schema: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
         let from_schema: Vec<(String, String)> = schema["panels"]
             .as_array()
@@ -103,7 +106,10 @@ mod tests {
             .iter()
             .filter_map(|panel| {
                 let wire = &panel["wire"];
-                Some((wire["path"].as_str()?.to_string(), wire["id"].as_str()?.to_string()))
+                Some((
+                    wire["path"].as_str()?.to_string(),
+                    wire["id"].as_str()?.to_string(),
+                ))
             })
             .collect();
         let ours: Vec<(String, String)> = LEGACY_PANELS

@@ -191,7 +191,8 @@ fn first_difference(want: &str, got: &str) -> String {
         .zip(got.chars())
         .take_while(|(a, b)| a == b)
         .count();
-    let around = |text: &str| -> String { text.chars().skip(at.saturating_sub(40)).take(80).collect() };
+    let around =
+        |text: &str| -> String { text.chars().skip(at.saturating_sub(40)).take(80).collect() };
     format!(
         "{at} 文字目から。Python …{:?}… / Rust …{:?}…",
         around(want),
@@ -340,7 +341,10 @@ fn pages_render_like_python() {
         let page = Page::from_template(template)
             .unwrap_or_else(|| panic!("「{name}」: 知らないテンプレート {template}"));
         if item["content_type"].as_str() != Some(HTML_CONTENT_TYPE) {
-            wrong.push(format!("「{name}」: Content-Type が {}", item["content_type"]));
+            wrong.push(format!(
+                "「{name}」: Content-Type が {}",
+                item["content_type"]
+            ));
         }
         let mut session = object(&item["session"]);
         let embedded = is_embedded(pair_value(&item["headers"], "sec-fetch-dest"));
@@ -395,7 +399,9 @@ fn routes_render_like_python() {
             200
         };
         if status != want_status {
-            wrong.push(format!("「{name}」: 状態が {status}（例では {want_status}）"));
+            wrong.push(format!(
+                "「{name}」: 状態が {status}（例では {want_status}）"
+            ));
         }
         if pair_value(&response["headers"], "content-type") != Some(HTML_CONTENT_TYPE) {
             wrong.push(format!("「{name}」: Content-Type が HTML でない"));

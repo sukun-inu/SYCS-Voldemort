@@ -134,7 +134,8 @@ pub fn resolve(
         });
     }
     let generated = generate();
-    let created = fs::create_dir_all(settings_dir).and_then(|()| create_exclusive(&secret_file, &generated));
+    let created =
+        fs::create_dir_all(settings_dir).and_then(|()| create_exclusive(&secret_file, &generated));
     match created {
         Ok(()) => {
             info!(
@@ -208,7 +209,13 @@ mod tests {
         let first = resolve(None, &dir.path().join("a/b"), fixed).unwrap();
         assert_eq!(first.source, Source::Generated);
         let second = resolve(None, &dir.path().join("a/b"), || "x".repeat(64)).unwrap();
-        assert_eq!(second, Resolved { secret: fixed(), source: Source::File });
+        assert_eq!(
+            second,
+            Resolved {
+                secret: fixed(),
+                source: Source::File
+            }
+        );
     }
 
     /// 短すぎるファイルは使わず、上書きもせず、その場限りの鍵になること。改行は \n にそろえてから数えること。
@@ -218,10 +225,20 @@ mod tests {
         std::fs::write(dir.path().join(SECRET_FILENAME), "short").unwrap();
         let got = resolve(None, dir.path(), fixed).unwrap();
         assert_eq!(got.source, Source::Temporary);
-        assert_eq!(std::fs::read(dir.path().join(SECRET_FILENAME)).unwrap(), b"short");
-        std::fs::write(dir.path().join(SECRET_FILENAME), format!("{}\r\n{}", "a".repeat(20), "b".repeat(20))).unwrap();
+        assert_eq!(
+            std::fs::read(dir.path().join(SECRET_FILENAME)).unwrap(),
+            b"short"
+        );
+        std::fs::write(
+            dir.path().join(SECRET_FILENAME),
+            format!("{}\r\n{}", "a".repeat(20), "b".repeat(20)),
+        )
+        .unwrap();
         let got = resolve(None, dir.path(), fixed).unwrap();
-        assert_eq!(got.secret, format!("{}\n{}", "a".repeat(20), "b".repeat(20)));
+        assert_eq!(
+            got.secret,
+            format!("{}\n{}", "a".repeat(20), "b".repeat(20))
+        );
     }
 
     /// UTF-8 でないファイルでは起動しないこと（Python と同じ）。
@@ -238,6 +255,10 @@ mod tests {
         assert_eq!(hex_lower(&[0x00, 0xab, 0x0f]), "00ab0f");
         let token = token_hex(32);
         assert_eq!(token.len(), 64);
-        assert!(token.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+        assert!(
+            token
+                .chars()
+                .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+        );
     }
 }

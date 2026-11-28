@@ -18,15 +18,22 @@ use sycs_admin::session::{self, Cookies, Session, Signer};
 const LONG_VALUE: usize = 200;
 
 fn expected() -> Value {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/session/expected.json");
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/session/expected.json"
+    );
     let text = std::fs::read_to_string(path).unwrap_or_else(|e| {
-        panic!("基準が読めません（{path}）: {e}。CI の「基準」が作ったものを取ってきてコミットすること")
+        panic!(
+            "基準が読めません（{path}）: {e}。CI の「基準」が作ったものを取ってきてコミットすること"
+        )
     });
     serde_json::from_str(&text).unwrap()
 }
 
 fn text(value: &Value) -> &str {
-    value.as_str().unwrap_or_else(|| panic!("文字ではない: {value}"))
+    value
+        .as_str()
+        .unwrap_or_else(|| panic!("文字ではない: {value}"))
 }
 
 fn object(value: &Value) -> Map<String, Value> {
@@ -60,7 +67,12 @@ fn skipped(case: &Value) -> bool {
 }
 
 fn report(wrong: &[String]) {
-    assert!(wrong.is_empty(), "Python と違う（{} 件）:\n{}", wrong.len(), wrong.join("\n"));
+    assert!(
+        wrong.is_empty(),
+        "Python と違う（{} 件）:\n{}",
+        wrong.len(),
+        wrong.join("\n")
+    );
 }
 
 /// セッションの中身・秘密鍵・時刻から作った Cookie の値と、json.dumps の書き方が、Python と同じこと。
@@ -73,12 +85,18 @@ fn cookies_are_signed_like_starlette() {
         let session = Session::loaded(object(&case["session"]));
         let json = python::dumps(&case["session"], python::DEFAULT);
         if json != text(&case["json"]) {
-            wrong.push(format!("「{name}」の JSON: Python {} / Rust {json}", case["json"]));
+            wrong.push(format!(
+                "「{name}」の JSON: Python {} / Rust {json}",
+                case["json"]
+            ));
         }
         let cookies = Cookies::new(text(&case["secret"]), false);
         let got = cookies.encode(&session, case["signed_at"].as_i64().unwrap());
         if got != text(&case["cookie"]) {
-            wrong.push(format!("「{name}」の Cookie: Python {} / Rust {got}", case["cookie"]));
+            wrong.push(format!(
+                "「{name}」の Cookie: Python {} / Rust {got}",
+                case["cookie"]
+            ));
         }
     }
     for case in data["raw"].as_array().unwrap() {
@@ -87,7 +105,10 @@ fn cookies_are_signed_like_starlette() {
         let signed = signer.sign(&payload, case["signed_at"].as_u64().unwrap());
         let got = String::from_utf8(signed).unwrap();
         if got != text(&case["cookie"]) {
-            wrong.push(format!("「{}」の Cookie: Python {} / Rust {got}", case["name"], case["cookie"]));
+            wrong.push(format!(
+                "「{}」の Cookie: Python {} / Rust {got}",
+                case["name"], case["cookie"]
+            ));
         }
     }
     report(&wrong);
@@ -140,14 +161,19 @@ fn cookies_are_read_and_rewritten_like_starlette() {
                 continue;
             }
             (Ok(_), Some(raised)) => {
-                wrong.push(format!("「{name}」: Python は {raised} で落ちるのに Rust は読めた"));
+                wrong.push(format!(
+                    "「{name}」: Python は {raised} で落ちるのに Rust は読めた"
+                ));
                 continue;
             }
             (Ok(session), None) => session,
         };
         let read = python::dumps(&Value::Object(session.data().clone()), python::DEFAULT);
         if read != text(&case["session_json"]) {
-            wrong.push(format!("「{name}」の読んだ中身: Python {} / Rust {read}", case["session_json"]));
+            wrong.push(format!(
+                "「{name}」の読んだ中身: Python {} / Rust {read}",
+                case["session_json"]
+            ));
         }
         apply(&mut session, &case["ops"]);
         let mut reply = Reply::new(200, Some("text/plain"), b"ok".to_vec());
@@ -159,7 +185,11 @@ fn cookies_are_read_and_rewritten_like_starlette() {
             .map(|(n, v)| json!([n, v]))
             .collect();
         if Value::Array(got.clone()) != case["headers"] {
-            wrong.push(format!("「{name}」の見出し:\n    Python {}\n    Rust   {}", case["headers"], json!(got)));
+            wrong.push(format!(
+                "「{name}」の見出し:\n    Python {}\n    Rust   {}",
+                case["headers"],
+                json!(got)
+            ));
         }
     }
     assert!(compared >= 50, "読み方の例が足りない（{compared}）");
@@ -210,7 +240,9 @@ fn secrets_are_resolved_like_python() {
             (Err(_), Some(_)) => continue,
             (Ok(got), None) => got,
             (got, raised) => {
-                wrong.push(format!("「{name}」: Python の例外 {raised:?} / Rust {got:?}"));
+                wrong.push(format!(
+                    "「{name}」: Python の例外 {raised:?} / Rust {got:?}"
+                ));
                 continue;
             }
         };
@@ -221,12 +253,18 @@ fn secrets_are_resolved_like_python() {
             Source::Temporary => "temporary",
         };
         if source != text(&want["source"]) {
-            wrong.push(format!("「{name}」の出どころ: Python {} / Rust {source}", want["source"]));
+            wrong.push(format!(
+                "「{name}」の出どころ: Python {} / Rust {source}",
+                want["source"]
+            ));
         }
         if let Some(secret) = want["secret"].as_str()
             && secret != got.secret
         {
-            wrong.push(format!("「{name}」の鍵: Python {secret:?} / Rust {:?}", got.secret));
+            wrong.push(format!(
+                "「{name}」の鍵: Python {secret:?} / Rust {:?}",
+                got.secret
+            ));
         }
         let file = settings.join(secret::SECRET_FILENAME);
         let after = std::fs::metadata(&file)
@@ -242,20 +280,27 @@ fn secrets_are_resolved_like_python() {
                     wrong.push(format!("「{name}」: 作った鍵をファイルに書いていない"));
                 }
                 if want["file_is_the_secret"].as_bool() != Some(true) {
-                    wrong.push(format!("「{name}」: Python のファイルが返した鍵と違う（{want}）"));
+                    wrong.push(format!(
+                        "「{name}」: Python のファイルが返した鍵と違う（{want}）"
+                    ));
                 }
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::PermissionsExt as _;
                     let mode = std::fs::metadata(&file).unwrap().permissions().mode() & 0o777;
                     if Some(format!("{mode:#o}").as_str()) != want["mode"].as_str() {
-                        wrong.push(format!("「{name}」の権限: Python {} / Rust {mode:#o}", want["mode"]));
+                        wrong.push(format!(
+                            "「{name}」の権限: Python {} / Rust {mode:#o}",
+                            want["mode"]
+                        ));
                     }
                 }
             }
             _ => {
                 if python_after != rust_after {
-                    wrong.push(format!("「{name}」のファイル: Python {python_after:?} / Rust {rust_after:?}"));
+                    wrong.push(format!(
+                        "「{name}」のファイル: Python {python_after:?} / Rust {rust_after:?}"
+                    ));
                 }
             }
         }
@@ -263,7 +308,9 @@ fn secrets_are_resolved_like_python() {
         if matches!(source, "generated" | "temporary")
             && (want["length"].as_u64() != Some(64) || want["is_hex"].as_bool() != Some(true))
         {
-            wrong.push(format!("「{name}」: Python の鍵が 64 文字の 16 進ではない（{want}）"));
+            wrong.push(format!(
+                "「{name}」: Python の鍵が 64 文字の 16 進ではない（{want}）"
+            ));
         }
     }
     report(&wrong);
@@ -306,22 +353,43 @@ fn forms_are_read_like_starlette() {
         let name = text(&case["name"]);
         let mut headers = HeaderMap::new();
         if let Some(content_type) = case["content_type"].as_str() {
-            headers.insert("content-type", HeaderValue::from_bytes(&latin1_bytes(content_type)).unwrap());
+            headers.insert(
+                "content-type",
+                HeaderValue::from_bytes(&latin1_bytes(content_type)).unwrap(),
+            );
         }
         let body = form_body(&case["body"]);
-        match (security::read_form(&headers, &body), case["status"].as_u64()) {
+        match (
+            security::read_form(&headers, &body),
+            case["status"].as_u64(),
+        ) {
             (Ok(form), None) => {
-                let got: Vec<Value> = form.items().iter().map(|(k, v)| json!([k, short(v)])).collect();
+                let got: Vec<Value> = form
+                    .items()
+                    .iter()
+                    .map(|(k, v)| json!([k, short(v)]))
+                    .collect();
                 if Value::Array(got.clone()) != case["items"] {
-                    wrong.push(format!("「{name}」の欄: Python {} / Rust {}", case["items"], json!(got)));
+                    wrong.push(format!(
+                        "「{name}」の欄: Python {} / Rust {}",
+                        case["items"],
+                        json!(got)
+                    ));
                 }
             }
             (Err(error), Some(status)) => {
-                if u64::from(error.status) != status || error.detail.as_deref() != case["detail"].as_str() {
-                    wrong.push(format!("「{name}」: Python {status} {} / Rust {error:?}", case["detail"]));
+                if u64::from(error.status) != status
+                    || error.detail.as_deref() != case["detail"].as_str()
+                {
+                    wrong.push(format!(
+                        "「{name}」: Python {status} {} / Rust {error:?}",
+                        case["detail"]
+                    ));
                 }
             }
-            (got, status) => wrong.push(format!("「{name}」: Python の状態 {status:?} / Rust {got:?}")),
+            (got, status) => wrong.push(format!(
+                "「{name}」: Python の状態 {status:?} / Rust {got:?}"
+            )),
         }
     }
     report(&wrong);
@@ -337,20 +405,28 @@ fn python_values_are_written_and_read_alike() {
         let default = python::dumps(value, python::DEFAULT);
         let compact = python::dumps(value, python::COMPACT);
         if default != text(&case["default"]) || compact != text(&case["compact"]) {
-            wrong.push(format!("dumps {value}: Python {} {} / Rust {default} {compact}", case["default"], case["compact"]));
+            wrong.push(format!(
+                "dumps {value}: Python {} {} / Rust {default} {compact}",
+                case["default"], case["compact"]
+            ));
         }
     }
     for case in data["floats"].as_array().unwrap() {
         let got = python::float_repr(case["value"].as_f64().unwrap());
         if got != text(&case["repr"]) {
-            wrong.push(format!("repr {}: Python {} / Rust {got}", case["value"], case["repr"]));
+            wrong.push(format!(
+                "repr {}: Python {} / Rust {got}",
+                case["value"], case["repr"]
+            ));
         }
     }
     for case in data["b64decode"].as_array().unwrap() {
         let input = latin1_bytes(text(&case["input"]));
         let standard = python::b64decode(&input, false).map(|b| secret::hex_lower(&b));
         let signed = python::itsdangerous_b64decode(&input).map(|b| secret::hex_lower(&b));
-        if standard.as_deref() != case["standard"].as_str() || signed.as_deref() != case["itsdangerous"].as_str() {
+        if standard.as_deref() != case["standard"].as_str()
+            || signed.as_deref() != case["itsdangerous"].as_str()
+        {
             wrong.push(format!(
                 "b64decode {}: Python {} {} / Rust {standard:?} {signed:?}",
                 case["input"], case["standard"], case["itsdangerous"]
@@ -371,19 +447,30 @@ fn cookie_headers_ints_and_guilds_match_python() {
             .map(|(k, v)| json!([k, v]))
             .collect();
         if Value::Array(parsed.clone()) != case["cookies"] {
-            wrong.push(format!("Cookie {}: Python {} / Rust {}", case["headers"], case["cookies"], json!(parsed)));
+            wrong.push(format!(
+                "Cookie {}: Python {} / Rust {}",
+                case["headers"],
+                case["cookies"],
+                json!(parsed)
+            ));
         }
     }
     for case in data["ints"].as_array().unwrap() {
         let got = python::int_text(&case["value"]);
         if got.as_deref() != case["text"].as_str() {
-            wrong.push(format!("int {}: Python {} {} / Rust {got:?}", case["value"], case["text"], case["raised"]));
+            wrong.push(format!(
+                "int {}: Python {} {} / Rust {got:?}",
+                case["value"], case["text"], case["raised"]
+            ));
         }
     }
     for case in data["compact"].as_array().unwrap() {
         let got = session::compact_admin_guilds(Some(&case["value"]));
         if got != case["compact"] {
-            wrong.push(format!("compact {}: Python {} / Rust {got}", case["value"], case["compact"]));
+            wrong.push(format!(
+                "compact {}: Python {} / Rust {got}",
+                case["value"], case["compact"]
+            ));
         }
     }
     report(&wrong);
