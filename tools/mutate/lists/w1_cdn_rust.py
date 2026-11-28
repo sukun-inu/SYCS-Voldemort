@@ -147,4 +147,16 @@ MUTS = [
         "            .map(|host| without_port(host.as_str()))",
         "            .map(|host| host.clone())",
     ),
+    (
+        "数でないポートも落とす（uvicorn は int() で読めるときだけ落とす）",
+        X,
+        "        && digits.chars().all(|c| c.is_ascii_digit() || c == '_')",
+        "        && digits.chars().all(|c| c != ':')",
+    ),
+    (
+        "X-Forwarded-For が 2 つあるとき、最後の 1 つだけを読む（uvicorn はつなぐ）",
+        X,
+        '        let host = trusted.client_host(&x_forwarded_for.join(", "));',
+        '        let host = trusted.client_host(x_forwarded_for.last().map_or("", String::as_str));',
+    ),
 ]

@@ -126,9 +126,10 @@ impl TrustedHosts {
         }
     }
 
-    /// `X-Forwarded-For` から接続元を選ぶ。uvicorn の `get_trusted_client_host`。
+    /// `X-Forwarded-For` から接続元を選ぶ。uvicorn の `get_trusted_client_address`。
     ///
     /// プロキシは右へ足していくので、右から見て最初の「信頼しない相手」が接続元。全部が信頼する相手なら、いちばん左。
+    /// どの項目も、ポートを落としてから（`without_port`）信頼する相手かを見る。
     pub fn client_host(&self, x_forwarded_for: &str) -> String {
         let hosts: Vec<String> = raw_hosts(x_forwarded_for)
             .iter()
@@ -160,21 +161,45 @@ fn raw_hosts(value: &str) -> Vec<String> {
         .collect()
 }
 
-/// `X-Forwarded-For` の 1 項目から、ポートを落とした接続元。uvicorn は `198.51.100.3:5678` を `198.51.100.3` と読む
-/// （基準で確かめた）。
+/// `X-Forwarded-For` の 1 項目から、ポートを落とした接続元。uvicorn 0.54 の `_parse_host_port` の写し
+/// （uvicorn 0.54.0 の `uvicorn/middleware/proxy_headers.py` を読んで写した）。
 ///
-/// `[IPv6]:ポート`・`[IPv6]` は括弧の中。`:` がちょうど 1 つ（IPv4 か名前にポート）なら `:` の前。`:` が 2 つ以上
-/// （括弧の無い IPv6）はそのまま。落としたあとの形で、信頼する相手かを見る。
+/// - `[` で始まるもの: `]` が無ければそのまま。`]` のあとが空か `:` で始まれば括弧の中（`:` のあとが数でなくても
+///   括弧の中）。ほかの何かが続けばそのまま
+/// - `:` がちょうど 1 つ: `:` のあとが Python の `int()` で読めるときだけ `:` の前。読めなければ（`abc`・空など）そのまま
+/// - ほか（`:` が無い・括弧の無い IPv6）: そのまま
 fn without_port(host: &str) -> String {
-    if let Some(rest) = host.strip_prefix('[')
-        && let Some((inside, _)) = rest.split_once(']')
+    if let Some(after_bracket) = host.strip_prefix('[') {
+        let Some(end) = after_bracket.find(']') else {
+            return host.to_string();
+        };
+        let remainder = &after_bracket[end + 1..];
+        if remainder.is_empty() || remainder.starts_with(':') {
+            return after_bracket[..end].to_string();
+        }
+        return host.to_string();
+    }
+    if host.matches(':').count() == 1
+        && let Some((before, port)) = host.rsplit_once(':')
+        && python_int(port)
     {
-        return inside.to_string();
+        return before.to_string();
     }
-    match host.split_once(':') {
-        Some((before, after)) if !after.contains(':') => before.to_string(),
-        _ => host.to_string(),
-    }
+    host.to_string()
+}
+
+/// Python の `int(文字)`（10 進）が読めるか。前後の空白・`+`・`-`・数の間の `_`（1 つずつ）を許す。
+///
+/// 見出しの値は latin-1 として読んでいるので、数字は ASCII の 0〜9 だけを見ればよい（latin-1 の範囲の
+/// ほかの数字〔`²` など〕は、Python の `int()` も読まない）。
+fn python_int(text: &str) -> bool {
+    let text = python_strip(text);
+    let digits = text.strip_prefix(['+', '-']).unwrap_or(text);
+    !digits.is_empty()
+        && !digits.starts_with('_')
+        && !digits.ends_with('_')
+        && !digits.contains("__")
+        && digits.chars().all(|c| c.is_ascii_digit() || c == '_')
 }
 
 /// アプリに渡す接続元と scheme。
@@ -189,8 +214,8 @@ pub struct Forwarded {
 /// 直接つないできた相手（`peer`）と見出しから、アプリに渡す接続元と scheme を決める。uvicorn の
 /// `ProxyHeadersMiddleware.__call__`。
 ///
-/// 見出しが 2 つ以上あるときは最後のもの（uvicorn は `dict(scope["headers"])` で読む）。値は latin-1 として読み、
-/// Python の `strip()` と同じ空白を落とす。`X-Forwarded-Proto` は小文字の 4 つだけを受け付ける。
+/// 値は latin-1 として読み、Python の `strip()` と同じ空白を落とす。`X-Forwarded-Proto` は 2 つ以上あれば最後のもので、
+/// 小文字の 4 つだけを受け付ける。`X-Forwarded-For` は 2 つ以上あれば `, ` でつないで 1 つとして読む（uvicorn 0.54 と同じ）。
 pub fn resolve(trusted: &TrustedHosts, peer: Option<&str>, headers: &HeaderMap) -> Forwarded {
     let mut forwarded = Forwarded {
         client: peer.map(str::to_string),
@@ -205,8 +230,13 @@ pub fn resolve(trusted: &TrustedHosts, peer: Option<&str>, headers: &HeaderMap) 
             forwarded.scheme = proto.to_string();
         }
     }
-    if let Some(x_forwarded_for) = last_header(headers, "x-forwarded-for") {
-        let host = trusted.client_host(&x_forwarded_for);
+    let x_forwarded_for: Vec<String> = headers
+        .get_all("x-forwarded-for")
+        .iter()
+        .map(|value| latin1(value.as_bytes()))
+        .collect();
+    if !x_forwarded_for.is_empty() {
+        let host = trusted.client_host(&x_forwarded_for.join(", "));
         // 空（`X-Forwarded-For:` だけ、など）なら、直接の相手のまま（uvicorn と同じ）。
         if !host.is_empty() {
             forwarded.client = Some(host);
@@ -398,17 +428,45 @@ mod tests {
         assert!(TrustedHosts::parse("testclient").contains(Some("testclient")));
     }
 
-    /// `X-Forwarded-For` の項目のポートを落とし、落とした形で信頼する相手かを見ること。括弧の無い IPv6 は触らない。
+    /// `X-Forwarded-For` の項目のポートを uvicorn と同じに落とし、落とした形で信頼する相手かを見ること。
+    ///
+    /// `:` のあとが数でなければ落とさない（括弧つきの IPv6 は、数でなくても括弧の中）。括弧の無い IPv6 は触らない。
     #[test]
-    fn ports_in_forwarded_for_are_dropped() {
-        assert_eq!(without_port("198.51.100.3:5678"), "198.51.100.3");
-        assert_eq!(without_port("[2001:db8::7]:8443"), "2001:db8::7");
-        assert_eq!(without_port("2001:db8::7"), "2001:db8::7");
-        assert_eq!(without_port("unknown"), "unknown");
+    fn ports_in_forwarded_for_are_dropped_like_uvicorn() {
+        for (raw, host) in [
+            ("198.51.100.3:5678", "198.51.100.3"),
+            ("198.51.100.52:abc", "198.51.100.52:abc"),
+            ("198.51.100.53:", "198.51.100.53:"),
+            ("198.51.100.55:8_080", "198.51.100.55"),
+            ("198.51.100.56:+80", "198.51.100.56"),
+            ("198.51.100.59:1_", "198.51.100.59:1_"),
+            ("[2001:db8::7]:8443", "2001:db8::7"),
+            ("[2001:db8::8]", "2001:db8::8"),
+            ("[2001:db8::9]:abc", "2001:db8::9"),
+            ("[2001:db8::a]x", "[2001:db8::a]x"),
+            ("[2001:db8::b", "[2001:db8::b"),
+            ("2001:db8::7", "2001:db8::7"),
+            ("unknown", "unknown"),
+        ] {
+            assert_eq!(without_port(raw), host, "{raw}");
+        }
         let trusted = TrustedHosts::parse(DEFAULT_TRUSTED_PROXIES);
         assert_eq!(
             trusted.client_host("198.51.100.51, 172.18.0.1:9999"),
             "198.51.100.51"
         );
+    }
+
+    /// `X-Forwarded-For` が 2 つ以上あれば、つないで 1 つとして読むこと（最後の 1 つだけを読むと、信頼する nginx が
+    /// 足した項目しか見えない）。
+    #[test]
+    fn several_forwarded_for_headers_are_joined() {
+        let trusted = TrustedHosts::parse(DEFAULT_TRUSTED_PROXIES);
+        let forwarded = headers(&[
+            ("x-forwarded-for", "198.51.100.60"),
+            ("x-forwarded-for", "172.18.0.1"),
+        ]);
+        let got = resolve(&trusted, Some("172.18.0.2"), &forwarded);
+        assert_eq!(got.client.as_deref(), Some("198.51.100.60"));
     }
 }
