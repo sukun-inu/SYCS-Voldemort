@@ -170,6 +170,8 @@ async fn run(case: &Value) -> Value {
         },
         ids: SoundCloudIds::default(),
         cache: Cache::new(root.path().join("cache")),
+        // Deezer はつながらない場所に向ける（Python の基準も補いを止めて作った。つながらなければ補わずに登録する）。
+        deezer: sycs_bot::djaudio_meta::Deezer::new("http://127.0.0.1:9"),
     };
     let runs = case["runs"]
         .as_array()
