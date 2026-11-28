@@ -1,7 +1,10 @@
 //! Groq の呼び出しと投稿の判定を、テストの中で立てた偽物の Groq に当てて確かめる。
 //!
 //! 本物の Python（services/content_moderation.py ＋ groq SDK 1.7.0）とは、同じ形の偽物に両方を当てて
-//! 30 例とも一致することを確かめた（変更のコミットに記録）。ここではその流れを CI で毎回回す。
+//! 30 例とも一致することを確かめた（変更のコミットに記録）。rust-09 の (f)(g) で直したあと（SDK の再試行を切り、
+//! 1 回の判定で送るのは GROQ_MAX_RETRIES + 1 回まで・retry-after に上限・VirusTotal はいちばん重い結果）の 21 例
+//! （判定・送った回数。極端な retry-after と時間切れを含む）も、直した Python と一致することを確かめた。
+//! ここではその流れを CI で毎回回す。
 //!
 //! 偽物は本文の `case=名前` で答え方を変える（Python の確かめに使った fakegroq.py と同じ）。
 
@@ -86,6 +89,8 @@ fn answer(name: &str, n: usize) -> Vec<u8> {
         "rl2" => completion(json!("SUSPICIOUS")),
         "rl3" if n <= 3 => error(429, &rl),
         "rl3" => completion(json!("DANGEROUS")),
+        "rlhuge" if n <= 2 => error(429, &[("retry-after", "100000")]),
+        "rlhuge" => completion(json!("SUSPICIOUS")),
         _ => error(404, &[]),
     }
 }
@@ -205,6 +210,7 @@ fn config(base: &str, key: Option<&str>) -> GroqConfig {
         max_retries: 2,
         retry_base_delay: 2.0,
         retry_max_delay: 20.0,
+        max_retry_after: 30.0,
     }
 }
 
@@ -254,7 +260,7 @@ fn total(seen: &Shared) -> usize {
     seen.lock().unwrap().total
 }
 
-/// 答えの読み方と、SDK の再試行・回数制限の再試行で送る回数が Python と同じであること。
+/// 答えの読み方と、再試行で送る回数が Python と同じであること（1 回の判定で送るのは GROQ_MAX_RETRIES + 1 回まで）。
 #[tokio::test]
 async fn verdicts_and_retries_match_python() {
     let (base, seen) = start_fake().await;
@@ -276,9 +282,11 @@ async fn verdicts_and_retries_match_python() {
         ("case=nore500", Verdict::Unknown, 1),
         ("case=xretry400", Verdict::Safe, 2),
         ("case=retry408", Verdict::Suspicious, 2),
-        ("case=ratelimit", Verdict::Unknown, 9),
+        // 回数制限が続いても 3 回まで（以前は SDK の再試行と掛け算で 9 回）。
+        ("case=ratelimit", Verdict::Unknown, 3),
         ("case=rl2", Verdict::Suspicious, 3),
-        ("case=rl3", Verdict::Dangerous, 4),
+        // 3 回とも回数制限なら諦める（以前は SDK の再試行で 4 回目まで送り、DANGEROUS を受けていた）。
+        ("case=rl3", Verdict::Unknown, 3),
     ];
     for (text, want, sends) in cases {
         let before = total(&seen);
@@ -317,7 +325,7 @@ async fn some_inputs_never_reach_groq() {
     let d = assess_with(&m, "case=safe#v", &vt(&[(0, 0), (12, 0)]), 1, 1e9, false).await;
     assert_eq!(d, Verdict::Dangerous);
     let s = assess_with(&m, "case=safe#v", &vt(&[(0, 1), (30, 0)]), 1, 1e9, false).await;
-    assert_eq!(s, Verdict::Suspicious, "最初に当たった結果で決める");
+    assert_eq!(s, Verdict::Dangerous, "いちばん重い結果で決める");
     assert_eq!(
         assess(&m, "  \n\u{1C}\u{3000}").await,
         Verdict::Safe,
@@ -377,11 +385,13 @@ async fn three_at_a_time() {
     assert_eq!(s.max_inflight, 3, "同時に送る数の枠が効いていない");
 }
 
-/// 時間切れも SDK が 2 回まで再試行し、そのあと失敗にすること（回数制限の再試行はしない）。
+/// 時間切れも 2 回まで再試行し（送るのは 3 回）、そのあと失敗にすること（SDK が再試行していたもの）。
 #[tokio::test]
-async fn timeouts_are_retried_by_the_sdk_only() {
+async fn timeouts_are_retried_up_to_the_limit() {
     let (base, seen) = start_fake().await;
-    let groq = Groq::new(config(&base, Some("test-key")));
+    let mut c = config(&base, Some("test-key"));
+    c.retry_base_delay = 0.5;
+    let groq = Groq::new(c);
     let body = moderation::request_body("", "case=hang");
     let started = Instant::now();
     let result = groq
@@ -390,8 +400,23 @@ async fn timeouts_are_retried_by_the_sdk_only() {
     assert!(matches!(result, Err(GroqError::Timeout)), "{result:?}");
     // 時間切れは、遅い環境でも送信が届いてから切れる長さ（1 秒）にしてある。
     assert_eq!(total(&seen), 3);
-    // 1 秒 × 3 回と、0.5 秒・1 秒（0.75〜1 倍）の待ち。
-    assert!(started.elapsed() >= Duration::from_millis(4100));
+    // 1 秒 × 3 回と、0.5 秒・1 秒（倍々）の待ち。
+    assert!(started.elapsed() >= Duration::from_millis(4400));
+}
+
+/// 極端な retry-after（10 万秒）でも、上限（GROQ_MAX_RETRY_AFTER_SECONDS）だけ待って再試行すること（rust-09 の
+/// (g)。上限が無いと、用途の枠を持ったまま待ち続ける）。
+#[tokio::test]
+async fn an_extreme_retry_after_is_capped() {
+    let (base, seen) = start_fake().await;
+    let mut c = config(&base, Some("test-key"));
+    c.max_retry_after = 0.05;
+    let m = Moderation::new(Arc::new(Groq::new(c)), 300.0);
+    let verdict = tokio::time::timeout(Duration::from_secs(20), assess(&m, "case=rlhuge"))
+        .await
+        .expect("retry-after のぶん待ち続けた");
+    assert_eq!(verdict, Verdict::Suspicious);
+    assert_eq!(total(&seen), 3);
 }
 
 /// 鍵が無ければ送らずに失敗にすること。

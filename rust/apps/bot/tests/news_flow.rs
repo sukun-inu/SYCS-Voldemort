@@ -450,6 +450,7 @@ fn news_for(fakes: &Fakes, key: Option<&str>, fetch_timeout: Duration) -> News {
         max_retries: 2,
         retry_base_delay: 2.0,
         retry_max_delay: 20.0,
+        max_retry_after: 30.0,
     });
     let config = NewsConfig {
         summary_model: news::DEFAULT_SUMMARY_MODEL.into(),

@@ -4398,7 +4398,11 @@ class VirusTotalTimeoutAndFailureCacheTests(unittest.TestCase):
                 return False
 
             def scan_url(self, url, wait_for_completion=False):
-                return SimpleNamespace(stats={"malicious": 0, "suspicious": 0})
+                # 送った直後の解析（まだ id だけ）。終わりは get_object で問い合わせる。
+                return SimpleNamespace(id="a1")
+
+            def get_object(self, path, *args):
+                return SimpleNamespace(status="completed", stats={"malicious": 0, "suspicious": 0})
 
         with patch.object(self.vt_service.vt, "Client", OkClient):
             result = asyncio.run(self.vt_service.vt_check_url("https://example.com/d"))
@@ -4478,7 +4482,7 @@ class SecurityFailSafeTests(unittest.TestCase):
 
         async def fake_strip(member):
             stripped.append(member.id)
-            return True, "removed"
+            return self.sec.StripResult(True, "removed")
 
         async def fake_log(bot, guild_id, level, message, **kwargs):
             logged.append(message)
@@ -4586,7 +4590,7 @@ class MessageSecurityOutcomeTests(unittest.TestCase):
 
         async def fake_strip(member):
             self.stripped.append(member.id)
-            return True, "removed"
+            return self.sec.StripResult(True, "removed")
 
         async def fake_log(bot, guild_id, level, message, **kwargs):
             self.logged.append(message)

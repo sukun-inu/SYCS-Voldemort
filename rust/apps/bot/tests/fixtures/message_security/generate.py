@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 os.environ.setdefault("SETTINGS_DIR", tempfile.mkdtemp())
 sys.path.insert(0, "/app")
+import aiohttp  # noqa: E402
 import discord  # noqa: E402
 from services import raid_detection, security_service as ss, settings_store, spam_detection  # noqa: E402
 
@@ -52,6 +53,11 @@ def http_error():
     return discord.HTTPException(MagicMock(status=404, reason="Not Found"), "Unknown Message")
 
 
+def forbidden():
+    """権限が足りないときの例外（ロールを剥がせないときに使う）。"""
+    return discord.Forbidden(MagicMock(status=403, reason="Forbidden"), "Missing Permissions")
+
+
 async def run(case):
     """例を 1 つ回し、Discord への書き込みと Groq に渡したもの（順に）と、走査した URL を返す。"""
     calls = []
@@ -77,6 +83,9 @@ async def run(case):
         edits["n"] += 1
         calls.append(["edit", embed_dict(embed)])
         if edits["n"] in fail_at:
+            # 例が "network" と決めたら、Discord の応答ではない通信の失敗にする。
+            if case.get("edit_error") == "network":
+                raise aiohttp.ClientConnectionError("Connection reset by peer")
             raise http_error()
 
     progress = SimpleNamespace(edit=edit)
@@ -123,8 +132,12 @@ async def run(case):
         return case.get("gpt", "SAFE")
 
     async def remove_roles(*roles, reason=None):
-        """ロールの剥奪（剥がすロールの並びと理由を記録する）。"""
+        """ロールの剥奪（剥がすロールの並びと理由を記録する）。例が決めたロールで失敗させる。"""
         calls.append(["strip", [r.id for r in roles], reason])
+        if case.get("strip_fail_at") in [r.id for r in roles]:
+            raise forbidden()
+        if case.get("strip_error_at") in [r.id for r in roles]:
+            raise http_error()
 
     member = MagicMock(spec=discord.Member)
     member.bot = False
@@ -183,5 +196,6 @@ with (
     patch.object(ss.logger, "warning"),
     patch.object(ss.logger, "exception"),
     patch.object(ss.logger, "info"),
+    patch.object(ss.logger, "error"),
 ):
     asyncio.run(main())

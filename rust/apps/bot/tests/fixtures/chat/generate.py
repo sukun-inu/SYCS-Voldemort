@@ -4,7 +4,7 @@
 現在の日時）。どの依頼でも同じなので、依頼の中では `<system>` と書く:
 
 - talk: 本物の `ChatGPT.input_message` を、このスクリプトの中に立てた偽物の Groq につないで呼ぶ。届いた依頼の数と
-  最後の依頼の中身、返事、履歴を書き出す（Groq の SDK の再試行・誤りの文の作り方まで本物を通る）。
+  最後の依頼の中身、返事、履歴を書き出す（再試行と、失敗したときに返す決まった文・履歴に入れないことまで本物を通る）。
 - split: 本物の `send_large_message` が、長い文をどこで切って送るか。
 - flow: 本物の `handle_chatgpt_message` を、記録するだけの偽物の message で呼ぶ。入力中の表示・送った文・
   ログ（`log_action` に渡したもの）を、起きた順に書き出す。
@@ -82,7 +82,7 @@ class FakeGroq(BaseHTTPRequestHandler):
         body, content_type = reply_body(reply)
         self.send_response(status)
         if status >= 400:
-            # 再試行の待ちを短くする（SDK は retry-after-ms、その外側の再試行は retry-after を読む）。
+            # 再試行の待ちを短くする（再試行は retry-after を読む。retry-after-ms はもう読まれない）。
             self.send_header("retry-after-ms", "1")
             self.send_header("retry-after", "0")
         self.send_header("Content-Type", content_type)

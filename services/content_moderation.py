@@ -41,6 +41,25 @@ def _verdict_key(text: str, vt_results: List[Dict[str, Any]], context_block: str
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
+def _vt_verdict(vt_results: List[Dict[str, Any]]) -> str | None:
+    """VirusTotal の結果だけで決まる判定。決まらなければ None（Groq に尋ねる）。
+
+    **いちばん重い結果で決める**（危険 > 疑わしい）。以前は先頭から見て最初に
+    引っかかった結果で返していたので、前に「疑わしい」、後ろに「危険」がある
+    投稿が SUSPICIOUS になっていた（rust-09 の (f)）。重さの決め方は
+    security_service._run_vt_scans の VT_DANGEROUS / VT_SUSPICIOUS と同じ
+    （危険と判定したエンジンの最大が MALICIOUS_THRESHOLD 以上なら危険、
+    危険・疑わしいのどちらかが 1 つでもあれば疑わしい）。
+    """
+    mal_max = max((int(r.get("malicious", 0) or 0) for r in vt_results), default=0)
+    sus_max = max((int(r.get("suspicious", 0) or 0) for r in vt_results), default=0)
+    if mal_max >= MALICIOUS_THRESHOLD:
+        return "DANGEROUS"
+    if mal_max > 0 or sus_max > 0:
+        return "SUSPICIOUS"
+    return None
+
+
 def _get_groq_client() -> AsyncGroq:
     """モデレーション専用のbucket("moderation")でGroqクライアントを取得する。"""
     return get_groq_client(timeout=20.0, bucket=_GROQ_BUCKET)
@@ -63,13 +82,9 @@ async def gpt_assess(
     呼び出し元（security_service.gpt_icon）でSUSPICIOUSと同じ警戒表示に
     倒す。「判定できなかった」を「安全」と混同しないため。
     """
-    for r in vt_results:
-        mal = int(r.get("malicious", 0) or 0)
-        sus = int(r.get("suspicious", 0) or 0)
-        if mal >= MALICIOUS_THRESHOLD:
-            return "DANGEROUS"
-        if mal > 0 or sus > 0:
-            return "SUSPICIOUS"
+    vt_verdict = _vt_verdict(vt_results)
+    if vt_verdict is not None:
+        return vt_verdict
 
     if not GROQ_API_KEY:
         return "SAFE"

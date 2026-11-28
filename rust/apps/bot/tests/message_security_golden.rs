@@ -20,7 +20,7 @@ use sycs_bot::message_security::{
     self, Assess, AssessRequest, Context, Effects, Judges, LogMessage, Post, Scan,
 };
 use sycs_bot::moderation::Verdict;
-use sycs_bot::security::{RaidDetector, SpamDetector, Stripped};
+use sycs_bot::security::{RaidDetector, SpamDetector, StripFailure};
 use sycs_bot::virustotal::VtResult;
 
 const GUILD: u64 = 1_399_617_700_363_370_556;
@@ -66,6 +66,10 @@ struct Fake {
     edit_fail_at: HashSet<usize>,
     edits: AtomicUsize,
     delete_fails: bool,
+    /// このロールで権限不足にする。
+    strip_fail_at: Option<u64>,
+    /// このロールでほかの失敗にする。
+    strip_error_at: Option<u64>,
 }
 
 impl Effects for Fake {
@@ -100,17 +104,19 @@ impl Effects for Fake {
         }
     }
 
-    async fn strip_roles(&self, roles: &[RoleId]) -> Stripped {
-        // 本物（security::strip_roles）も、剥がすロールが無ければ Discord に送らない。
-        if roles.is_empty() {
-            return Stripped::NoRoles;
-        }
-        let ids: Vec<u64> = roles.iter().map(|r| r.get()).collect();
+    async fn remove_role(&self, role: RoleId) -> Result<(), StripFailure> {
+        // Python の基準も 1 つずつ記録する（discord.py の remove_roles を 1 つずつ呼ぶ）。
         self.calls
             .lock()
             .unwrap()
-            .push(json!(["strip", ids, "セキュリティ違反"]));
-        Stripped::Removed
+            .push(json!(["strip", [role.get()], "セキュリティ違反"]));
+        if self.strip_fail_at == Some(role.get()) {
+            return Err(StripFailure::Forbidden);
+        }
+        if self.strip_error_at == Some(role.get()) {
+            return Err(StripFailure::Failed("404 Unknown Role".into()));
+        }
+        Ok(())
     }
 
     async fn log_action(
@@ -263,6 +269,8 @@ async fn run(case: &Value) -> Value {
             .collect(),
         edits: AtomicUsize::new(0),
         delete_fails: case["delete_fails"].as_bool().unwrap_or(false),
+        strip_fail_at: case["strip_fail_at"].as_u64(),
+        strip_error_at: case["strip_error_at"].as_u64(),
     };
     message_security::check_message(&fx, &cx, &post(case)).await;
     let mut scanned = scanned.lock().unwrap().clone();
@@ -349,6 +357,8 @@ async fn scans_run_four_at_a_time_and_keep_their_order() {
         edit_fail_at: HashSet::new(),
         edits: AtomicUsize::new(0),
         delete_fails: false,
+        strip_fail_at: None,
+        strip_error_at: None,
     };
     let mut p = post(&json!({"content": urls.join(" ")}));
     p.content = urls.join(" ");

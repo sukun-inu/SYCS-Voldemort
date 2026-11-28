@@ -12,6 +12,13 @@ logger = logging.getLogger(__name__)
 MAX_HISTORY_ENTRIES = 20
 _GROQ_BUCKET = "chat"
 
+# Groq への問い合わせが失敗したときに返す文（commands/chat_commands の失敗の文と同じ）。
+#
+# 以前は Groq の誤りの文をそのまま返していた。回数制限の文には Groq の組織の ID や
+# 利用枠の名前が入り、それが応答チャンネルに書かれ、履歴にも残って次の問い合わせで
+# Groq に送り返されていた（rust-09 の (j)）。誤りの中身はログにだけ残す。
+FAILURE_REPLY = "ヴォルデモートでも手こずるとはな… 少し待ってから試せ。"
+
 
 def _get_groq_client() -> AsyncGroq:
     """会話AI専用のbucket("chat")でGroqクライアントを取得する。
@@ -44,9 +51,13 @@ class ChatGPT:
 
     async def input_message(self, input_text: str) -> str:
         """1発言を履歴に積んで応答を得る。API呼び出しが失敗しても例外を
-        外へ投げず、エラー内容を文字列にしてそのまま返答扱いで返す
+        外へ投げず、決まった文（FAILURE_REPLY）を返答扱いで返す
         （呼び出し元のDiscordコマンドが例外処理を持たないため、ここで
-        必ず文字列を返し切る）。失敗時のエラー文言も履歴に残る。
+        必ず文字列を返し切る）。
+
+        失敗の中身（Groq の誤りの文）はログにだけ残し、利用者には返さない。
+        失敗の文は履歴にも入れない（入れると次の問い合わせで Groq に送り返す）。
+        発言そのものは履歴に残る（答えの無い発言として、次の問い合わせに入る）。
         """
         current_time = datetime.now(_JST).strftime("%Y-%m-%d %H:%M:%S")
         system_with_time = {
@@ -64,9 +75,11 @@ class ChatGPT:
         try:
             reply = await self._call_chat_api(messages)
             final = reply.get("content") or "返答が得られなかった。"
-        except Exception as e:
+        except Exception:
+            # 中身（例外の文と traceback）はここにだけ残す。
             logger.exception("Groq API 呼び出し中にエラー発生")
-            final = f"Groq API 呼び出し中にエラー発生: {e}"
+            self._trim_history()
+            return FAILURE_REPLY
 
         self.history.append({"role": "assistant", "content": final})
         self._trim_history()

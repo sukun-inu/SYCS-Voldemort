@@ -3,6 +3,7 @@ import hashlib
 import logging
 import os
 import tempfile
+import time
 from typing import Any, Dict, Optional
 from urllib.parse import urljoin
 
@@ -31,6 +32,27 @@ VT_SCAN_TIMEOUT_SEC = env_int("VT_SCAN_TIMEOUT_SECONDS", 30, minimum=5)
 VT_FAILURE_CACHE_TTL = env_int("VT_FAILURE_CACHE_TTL_SECONDS", 300, minimum=10)
 VT_MAX_REDIRECTS = env_int("VT_MAX_REDIRECTS", 5, minimum=0)
 VT_MAX_DOWNLOAD_BYTES = env_int("VT_MAX_DOWNLOAD_BYTES", 20 * 1024 * 1024, minimum=1)
+
+# 解析の終わりを問い合わせる間隔（秒）。vt-py の wait_for_completion と同じ 20 秒。
+VT_ANALYSIS_POLL_SEC = 20
+# 解析の終わりを待つ全体の上限（秒）。
+#
+# vt-py の wait_for_completion=True は、終わるまで 20 秒おきに問い合わせ続け、
+# 全体の上限が無い。解析が終わらないと、そのメッセージの検査（GPT の判定・
+# 削除・剥奪・報告）がいつまでも返らず、スレッドプールの 1 本も塞がったままに
+# なる（rust-09 の (b)）。超えたら、ほかの失敗と同じく「走査できなかった」にする。
+#
+# 下限は問い合わせの間隔と同じ 20 秒。それより短いと、vt-py と同じ間隔（20 秒）で
+# 1 度も問い合わせ直せないまま諦めることになり、ほとんどの解析が「走査できなかった」になる。
+VT_ANALYSIS_TIMEOUT_SEC = env_int("VT_ANALYSIS_TIMEOUT_SECONDS", 300, minimum=VT_ANALYSIS_POLL_SEC)
+
+
+class VTAnalysisTimeout(Exception):
+    """解析が VT_ANALYSIS_TIMEOUT_SEC のうちに終わらなかった。
+
+    文（str）が結果の reason になる（"analysis_timeout>300" の形）。
+    """
+
 
 # URL 1件ごとに鍵が増える。追い出しの無い素の dict だったため、大量の
 # 異なる URL がスキャンされ続けると TTL の6時間が経つまで際限なく膨らんでいた。
@@ -126,6 +148,25 @@ async def fetch_content_type(session: aiohttp.ClientSession, url: str) -> str:
         return ""
 
 
+def _wait_for_analysis(client: vt.Client, analysis: Any) -> Any:
+    """解析が終わるまで問い合わせ、終わった解析を返す（同期。to_thread の中で呼ぶ）。
+
+    問い合わせ方は vt-py の wait_for_completion（_wait_for_analysis_completion）と
+    同じ: すぐに 1 回問い合わせ、終わっていなければ VT_ANALYSIS_POLL_SEC 待って
+    問い合わせ直す。違いは全体の上限（VT_ANALYSIS_TIMEOUT_SEC）があることだけ。
+    待つのは残りの時間までにするので、上限を大きく過ぎてから諦めることはない。
+    """
+    deadline = time.monotonic() + VT_ANALYSIS_TIMEOUT_SEC
+    while True:
+        analysis = client.get_object("/analyses/{}", analysis.id)
+        if analysis.status == "completed":
+            return analysis
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise VTAnalysisTimeout(f"analysis_timeout>{VT_ANALYSIS_TIMEOUT_SEC}")
+        time.sleep(min(VT_ANALYSIS_POLL_SEC, remaining))
+
+
 def is_file_content_type(content_type: str) -> bool:
     """VirusTotalへファイルとして送るべき Content-Type かどうか。
     application/* と application/octet-stream 系だけを対象にする
@@ -163,7 +204,9 @@ async def vt_check_url(url: str) -> Dict[str, Any]:
             持たないため、asyncio.to_thread に包んで呼ぶ。
             """
             with vt.Client(VIRUSTOTAL_API_KEY, timeout=VT_SCAN_TIMEOUT_SEC) as client:
-                analysis = client.scan_url(url, wait_for_completion=True)
+                # 終わりを待つのは _wait_for_analysis（全体の上限つき）。vt-py の
+                # wait_for_completion=True には上限が無い。
+                analysis = _wait_for_analysis(client, client.scan_url(url))
                 stats = analysis.stats
                 return {
                     "status": "ok",
@@ -232,7 +275,9 @@ async def vt_check_file(content: bytes) -> Dict[str, Any]:
             try:
                 with vt.Client(VIRUSTOTAL_API_KEY, timeout=VT_SCAN_TIMEOUT_SEC) as client:
                     with open(tmp_path, "rb") as f:
-                        analysis = client.scan_file(f, wait_for_completion=True)
+                        submitted = client.scan_file(f)
+                    # URL と同じく、終わりを待つのは全体の上限つきの _wait_for_analysis。
+                    analysis = _wait_for_analysis(client, submitted)
                     stats = analysis.stats
                     return {
                         "status": "ok",

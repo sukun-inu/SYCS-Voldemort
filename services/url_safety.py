@@ -76,9 +76,15 @@ def _is_public_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     """SSRF対策の核。private/loopback/link-local/multicast/reservedの
     どれかに該当すれば拒否する。IPv4-mapped IPv6を先に開くのは
     _unwrap_ipv4_mapped のdocstring参照。
+
+    マルチキャスト（224.0.0.0/4・ff00::/8）は is_global だけでは拒否されない。
+    Python の表（IANA の特別用途アドレスの表）ではマルチキャストが「globally
+    reachable」に数えられ、is_global が True になるため。説明どおりに拒否する
+    よう、is_multicast を別に見る（rust-09 の (a)）。
     """
-    # is_global=False のアドレス（private / loopback / link-local / multicast / reserved など）を拒否
-    return _unwrap_ipv4_mapped(ip).is_global
+    resolved = _unwrap_ipv4_mapped(ip)
+    # is_global=False のアドレス（private / loopback / link-local / reserved など）と、マルチキャストを拒否
+    return resolved.is_global and not resolved.is_multicast
 
 
 def _ascii_hostname(hostname: str) -> str:

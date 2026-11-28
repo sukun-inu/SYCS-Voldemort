@@ -1,7 +1,8 @@
 //! VirusTotal の呼び出しを、テストの中で立てた偽物の VirusTotal と配布元に当てて確かめる。
 //!
 //! 本物の Python（services/virustotal_service.py ＋ vt-py 0.22.0）とは、同じ形の偽物に両方を当てて
-//! 26 例とも一致することを確かめた（変更のコミットに記録）。ここではその流れを CI で毎回回す。
+//! 26 例とも一致することを確かめた（変更のコミットに記録）。終わらない解析（URL・ファイル）の例は rust-09 の (b) で
+//! 足し、直した Python とも同じ結果（`analysis_timeout>1`）になることを確かめた。ここではその流れを CI で毎回回す。
 //!
 //! 偽物は `127.0.0.1` に立つ（内部のアドレス）ので、安全確認だけ差し替える（`blocked.example` を拒否する）。
 
@@ -81,12 +82,13 @@ fn route(method: &str, path: &str, body: &[u8], base: &str, hits: &Hits) -> Vec<
         let file = |ct: &str, data: &[u8]| response(200, Some(ct), &[], data, head);
         return match name {
             "image.png" => file("image/png", b"png"),
-            "page.html" | "malicious.html" | "vt-error.html" | "vt-quota.html" => {
+            "page.html" | "malicious.html" | "vt-error.html" | "vt-quota.html" | "never.html" => {
                 file("text/html; charset=utf-8", b"<html></html>")
             }
             "upper.png" => file("Image/PNG", b"png"),
             "file.exe" => file("application/octet-stream", b"evil payload"),
             "known.bin" => file("application/octet-stream", b"known file"),
+            "never.bin" => file("application/octet-stream", b"never ending"),
             "conflict.bin" => file("application/x-msdownload", b"conflict data"),
             "big.bin" => file("application/octet-stream", &[b'x'; 1500]),
             "bigchunked.bin" if !head => {
@@ -142,6 +144,14 @@ fn route(method: &str, path: &str, body: &[u8], base: &str, hits: &Hits) -> Vec<
                     429,
                     serde_json::json!({"error": {"code": "QuotaExceededError", "message": "quota"}}),
                 )
+            } else if url.contains("never") {
+                response(
+                    200,
+                    Some("application/json"),
+                    &[],
+                    analyses("u-never").as_bytes(),
+                    false,
+                )
             } else if url.contains("malicious") {
                 response(
                     200,
@@ -170,6 +180,14 @@ fn route(method: &str, path: &str, body: &[u8], base: &str, hits: &Hits) -> Vec<
                     409,
                     serde_json::json!({"error": {"code": "ConflictError", "message": "already being scanned"}}),
                 )
+            } else if text.contains("never ending") {
+                response(
+                    200,
+                    Some("application/json"),
+                    &[],
+                    analyses("f-never").as_bytes(),
+                    false,
+                )
             } else if text.contains("evil") {
                 response(
                     200,
@@ -195,8 +213,8 @@ fn route(method: &str, path: &str, body: &[u8], base: &str, hits: &Hits) -> Vec<
                 "f-evil" => stats(20, 1),
                 _ => stats(0, 0),
             };
-            // 1 回目は待ち、2 回目で終わる（問い合わせを続けることを確かめる）。
-            if count < 2 {
+            // 1 回目は待ち、2 回目で終わる（問い合わせを続けることを確かめる）。`-never` は終わらない。
+            if count < 2 || id.ends_with("-never") {
                 json(
                     200,
                     serde_json::json!({"data": {"type": "analysis", "id": id, "attributes": {"status": "queued"}}}),
@@ -291,6 +309,7 @@ fn client(fake: &Fake, key: Option<&str>) -> VirusTotal {
     config.api_key = key.map(String::from);
     config.api_base = fake.base.clone();
     config.poll_interval = Duration::from_millis(20);
+    config.analysis_timeout = Duration::from_secs(1);
     let check: AddressCheck = Arc::new(|url: String| {
         Box::pin(async move {
             if url.contains("blocked") {
@@ -438,6 +457,29 @@ async fn redirects_are_followed_safely() {
             Some("unsafe_url:non_public_ip:blocked")
         )
     );
+}
+
+/// 終わらない解析は、全体の上限（ここでは 1 秒）で諦めて「走査できなかった」にすること（Python の
+/// `_wait_for_analysis`。rust-09 の (b)）。すぐに 1 回、間隔（0.02 秒）を空けて問い合わせ直し続け、上限のあとは
+/// 問い合わせない。
+#[tokio::test]
+async fn analyses_that_never_end_are_given_up() {
+    let fake = start_fake().await;
+    let vt = client(&fake, Some("k"));
+    let t = |name: &str| format!("{}/t/{name}", fake.base);
+    let given_up = |kind: &str| r("error", kind, 0, 0, Some("analysis_timeout>1"));
+    assert_eq!(vt.scan_target(&t("never.html")).await, given_up("url"));
+    assert_eq!(vt.scan_target(&t("never.bin")).await, given_up("file"));
+    let polls = |id: &str| fake.hits.lock().unwrap()[&format!("GET /api/v3/analyses/{id}")];
+    for id in ["u-never", "f-never"] {
+        // 1 秒・0.02 秒おきなら、多くても 52 回（遅い環境では減るだけで、増えはしない）。少なくとも 3 回は
+        // 問い合わせる（間隔を空けて問い合わせ直し続ける。1 秒あれば遅い環境でも届く）。
+        assert!((3..=52).contains(&polls(id)), "{id}: {} 回", polls(id));
+    }
+    // 終わらない URL の失敗も、ほかの失敗と同じく覚えて叩き直さない。
+    let before = polls("u-never");
+    assert_eq!(vt.scan_target(&t("never.html")).await, given_up("url"));
+    assert_eq!(polls("u-never"), before, "失敗を覚えずに問い合わせ直した");
 }
 
 /// 鍵が無ければ API を呼ばずに skip（URL もファイルも）。

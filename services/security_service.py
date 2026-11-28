@@ -10,7 +10,7 @@ from envutil import env_int
 from services.content_moderation import gpt_assess
 from services.http_client import get_session
 from services.logging_service import log_action, send_log_embed
-from services.raid_detection import check_vc_raid
+from services.raid_detection import check_vc_raid, is_vc_raid_ongoing
 from services.settings_store import get_bypass_role_ids, get_response_channel_id, get_trusted_user_ids
 from services.spam_detection import SPAM_TIME_WINDOW, check_spam
 from services.virustotal_service import MALICIOUS_THRESHOLD, vt_scan_target
@@ -130,26 +130,97 @@ def is_security_bypassed(member: discord.Member) -> BypassResult:
     return BypassResult(False)
 
 
-async def strip_roles(member: discord.Member) -> Tuple[bool, str]:
+class StripResult(NamedTuple):
+    """ロールの剥奪の結果。
+
+    ok と reason は以前の戻り値（(bool, str)）と同じ。reason は "removed"・
+    "no_roles"・"forbidden"・ほかの失敗の文。removed と kept で、どのロールを
+    剥がせて、どのロールが残ったかを持つ（ログチャンネルの報告に出す。rust-09 の (i)）。
+    """
+
+    ok: bool
+    reason: str
+    removed: Tuple[Any, ...] = ()
+    kept: Tuple[Any, ...] = ()
+
+
+async def strip_roles(member: discord.Member) -> StripResult:
     """@everyone 以外の全ロールを剥奪する。
 
     剥奪対象が無ければ何もせず成功扱い（"no_roles"）。権限不足
     （discord.Forbidden）は個別に区別して返し、呼び出し側でログの
     出し分けができるようにする。
+
+    1 つずつ外し、失敗したらそこで止める。discord.py の remove_roles（atomic）も
+    1 つずつ送って失敗で止まるので、Discord へ送るものは以前と同じ。1 つずつ
+    呼ぶのは、どこまで剥がせたか（removed）と、何が残ったか（kept: 失敗した
+    ロールと、そのあと試さなかったロール）を知るため。
     """
+    roles: List[Any] = []
+    removed: List[Any] = []
     try:
         roles = [r for r in member.roles if not r.is_default()]
         if not roles:
-            return True, "no_roles"
+            return StripResult(True, "no_roles")
 
-        await member.remove_roles(*roles, reason="セキュリティ違反")
-        return True, "removed"
+        for role in roles:
+            await member.remove_roles(role, reason="セキュリティ違反")
+            removed.append(role)
+        return StripResult(True, "removed", tuple(removed))
 
     except discord.Forbidden:
-        return False, "forbidden"
+        return StripResult(False, "forbidden", tuple(removed), tuple(roles[len(removed) :]))
     except Exception as e:
         logger.error("[SECURITY] strip roles failed: %s", e)
-        return False, str(e)
+        return StripResult(False, str(e), tuple(removed), tuple(roles[len(removed) :]))
+
+
+def _fold(items: Sequence[str], *, budget: int, unit: str, joiner: str) -> str:
+    """一覧を文字数の予算に収める。はみ出す分は「…他N{unit}」の形で畳む。
+
+    commands/interaction_utils.cap_list_for_message（header・limit なし）と同じ畳み方。
+    services から commands を読まないので、同じ決まりでここに置く。省略の行の長さも
+    予算に含め、収まるまで後ろから削る。
+    """
+    fitted: List[str] = []
+    for item in items:
+        if len(joiner.join(fitted + [item])) > budget:
+            break
+        fitted.append(item)
+    omitted = len(items) - len(fitted)
+    while True:
+        if omitted <= 0:
+            return joiner.join(fitted)
+        omission = f"…他{omitted}{unit}"
+        text = joiner.join(fitted)
+        candidate = f"{text}{joiner}{omission}" if text else omission
+        if len(candidate) <= budget or not fitted:
+            return candidate
+        fitted.pop()
+        omitted += 1
+
+
+EMBED_FIELD_VALUE_LIMIT = 1024
+
+
+def strip_fields(result: StripResult) -> Dict[str, str]:
+    """剥がした結果を、ログチャンネルの報告に足す項目にする（rust-09 の (i)）。
+
+    「剥がしたロール」は必ず出す（無ければ「なし」）。残ったロールがあれば
+    「剥がせなかったロール（権限不足）」か「剥がせなかったロール（失敗）」を足す
+    （失敗の文は Discord の誤りの文なので、項目には出さずログにだけ残す）。
+    ロールはメンションで並べ、1 つの項目の上限（1024 文字）に収める。
+    """
+
+    def mentions(roles: Tuple[Any, ...]) -> str:
+        """ロールのメンションを並べ、項目の上限に収める（はみ出す分は「…他N個」）。"""
+        return _fold([f"<@&{r.id}>" for r in roles], budget=EMBED_FIELD_VALUE_LIMIT, unit="個", joiner=" ")
+
+    fields = {"剥がしたロール": mentions(result.removed) if result.removed else "なし"}
+    if result.kept:
+        why = "権限不足" if result.reason == "forbidden" else "失敗"
+        fields[f"剥がせなかったロール（{why}）"] = mentions(result.kept)
+    return fields
 
 
 # ==================================================
@@ -215,6 +286,40 @@ def reason_icon(reason: str) -> str:
     return REASON_ICONS.get(base, "[INFO]")
 
 
+# Discord の Embed の上限。超えると Discord が送信（書き換え）ごと断り、報告が届かない。
+EMBED_DESCRIPTION_LIMIT = 4096
+EMBED_FIELD_COUNT_LIMIT = 25
+EMBED_TOTAL_LIMIT = 6000
+# 畳んだ走査の結果の印は、隠れたものの中でいちばん重いもの（危険 > 注意 > 安全）。
+_ICON_WEIGHT = {ALERT_ICON: 2, WARN_ICON: 1, SAFE_ICON: 0}
+
+
+def _target_fields(vt_results: List[Dict[str, Any]], room: int) -> List[Tuple[str, str]]:
+    """走査の結果を 1 件 1 項目にする。room 個を超えるなら、最後の 1 項目に残りを畳む。
+
+    畳んだ項目は「{印} ターゲット {最初}〜{最後}」と「…他N件」。印は隠れた結果の
+    中でいちばん重いもの（隠れた中に危険があれば、畳んでも危険の印が見える）。
+    """
+    fields = []
+    for idx, r in enumerate(vt_results, 1):
+        icon = vt_icon(r.get("malicious", 0), r.get("suspicious", 0), r.get("status"))
+        fields.append(
+            (
+                f"{icon} ターゲット {idx} ({r.get('type')})",
+                f"Status: `{r.get('status')}` | Malicious: `{r.get('malicious')}` | "
+                f"Suspicious: `{r.get('suspicious')}`",
+            )
+        )
+    if len(fields) <= room:
+        return fields
+    shown = room - 1
+    hidden = vt_results[shown:]
+    icons = [vt_icon(r.get("malicious", 0), r.get("suspicious", 0), r.get("status")) for r in hidden]
+    worst = max(icons, key=lambda i: _ICON_WEIGHT[i])
+    fold = (f"{worst} ターゲット {shown + 1}〜{len(vt_results)}", f"…他{len(hidden)}件")
+    return fields[:shown] + [fold]
+
+
 def build_final_embed(
     vt_results: List[Dict[str, Any]],
     gpt_result: str,
@@ -225,6 +330,13 @@ def build_final_embed(
 
     危険度に応じて色とタイトルを決める際、GPT判定の UNKNOWN（判定失敗）
     を安全側と混同しないよう独立した分岐にしてある。
+
+    Discord の上限（項目 25 個・説明 4096 文字・全体 6000 文字）に収める（rust-09 の (c)）。
+    リンクの多い投稿は全部を走査するので、そのままだと上限を超え、Discord が送信ごと
+    断って報告が届かなかった。走査の結果の項目は、GPT 判定と判定理由の項目を残して
+    入るだけ並べ、残りは最後の 1 項目に「…他N件」で畳む。説明（ログの行）は、題・
+    項目・足元を引いた残り（4096 文字まで）に収め、はみ出す行を「…他N行」で畳む。
+    走査する数そのものは変えない。
     """
     is_vt_dangerous = "VT_DANGEROUS" in reasons
     is_vc_raid = "VC_RAID" in reasons
@@ -249,26 +361,21 @@ def build_final_embed(
         color = discord.Color.green()
         title = "検査完了：問題なし"
 
-    embed = discord.Embed(title=title, description="\n".join(logs), color=color)
-
-    for idx, r in enumerate(vt_results, 1):
-        icon = vt_icon(r.get("malicious", 0), r.get("suspicious", 0), r.get("status"))
-        embed.add_field(
-            name=f"{icon} ターゲット {idx} ({r.get('type')})",
-            value=(
-                f"Status: `{r.get('status')}` | Malicious: `{r.get('malicious')}` | "
-                f"Suspicious: `{r.get('suspicious')}`"
-            ),
-            inline=False,
-        )
-
-    embed.add_field(name=f"{gpt_icon(gpt_result)} GPT判定", value=f"結果: `{gpt_result}`", inline=False)
-
+    tail = [(f"{gpt_icon(gpt_result)} GPT判定", f"結果: `{gpt_result}`")]
     if reasons:
-        icons = " / ".join([reason_icon(r) + r for r in reasons])
-        embed.add_field(name="判定理由", value=icons, inline=False)
+        tail.append(("判定理由", " / ".join([reason_icon(r) + r for r in reasons])))
+    fields = _target_fields(vt_results, EMBED_FIELD_COUNT_LIMIT - len(tail)) + tail
+    footer = f"実行時間: {now_jst()}"
 
-    embed.set_footer(text=f"実行時間: {now_jst()}")
+    # 説明に使えるのは、題・項目・足元を引いた残り（説明そのものの上限 4096 文字まで）。
+    used = len(title) + len(footer) + sum(len(name) + len(value) for name, value in fields)
+    budget = min(EMBED_DESCRIPTION_LIMIT, EMBED_TOTAL_LIMIT - used)
+    description = _fold(logs, budget=budget, unit="行", joiner="\n")
+
+    embed = discord.Embed(title=title, description=description, color=color)
+    for name, value in fields:
+        embed.add_field(name=name, value=value, inline=False)
+    embed.set_footer(text=footer)
     return embed
 
 
@@ -518,8 +625,10 @@ async def _collect_findings(
         reason_flags.append("NEW_MEMBER")
         logs.append("新規メンバー")
 
+    # VC にいる人の発言は、VC の荒らしの記録に入れない（数えるのは VC への参加だけ）。
+    # 参加の記録がいま荒らしの形になっているかだけを見る（rust-09 の (e)）。
     if member.voice and member.voice.channel:
-        if check_vc_raid(member, member.voice.channel.id):
+        if is_vc_raid_ongoing(member.voice.channel.id):
             danger = True
             reason_flags.append("VC_RAID")
             logs.append("VCレイド検出")
@@ -579,12 +688,14 @@ async def _enforce_or_withhold(
     findings: _Findings,
     bypass: BypassResult,
     logs: List[str],
-) -> None:
+) -> Optional[StripResult]:
     """危険なら消して剥がす。ただしバイパス判定に失敗しているなら見送る。
 
     **見送りの判定を、削除・剥奪より先に置くこと。** 順序を入れ替えると、
     設定を読めなかっただけでロールが消える。元に戻せない操作なので、
     ここは「分からないなら触らない」に倒す。
+
+    剥がしたときは、その結果を返す（報告に出す）。剥がさなかったら None。
     """
     if findings.danger and bypass.check_failed:
         await _withhold_enforcement(bot, guild_id, member, findings, logs)
@@ -593,7 +704,8 @@ async def _enforce_or_withhold(
             await message.delete()
         except discord.HTTPException as e:
             logger.warning("[security] message delete failed: %s", e)
-        await strip_roles(member)
+        return await strip_roles(member)
+    return None
 
 
 async def _report_result(
@@ -604,21 +716,38 @@ async def _report_result(
     links: List[str],
     attachments: Sequence,
     logs: List[str],
+    stripped: Optional[StripResult] = None,
 ) -> None:
-    """検査結果を、ログチャンネルへだけ送る（テキストチャンネルには送らない）。"""
+    """検査結果を、ログチャンネルへだけ送る（テキストチャンネルには送らない）。
+
+    最後の「メッセージセキュリティ検査」のログは、途中の送信・書き換えが
+    どう失敗しても必ず出す。剥がしたときは、剥がした結果の項目を足す。
+    """
     embed = build_final_embed(findings.vt_results, findings.gpt_result, findings.reason_flags, logs)
 
     if links or attachments:
         if findings.progress_msg:
             try:
                 await findings.progress_msg.edit(embed=embed)
-            except discord.HTTPException as e:
+            except Exception as e:
+                # Discord の応答（HTTPException）だけでなく、通信の失敗（aiohttp の
+                # ClientError・時間切れ）も受け止める。以前は HTTPException だけで、
+                # 通信の失敗だとここで抜け、最後のログを出さずに終わっていた
+                # （rust-09 の (h)。Rust は出していた）。
                 logger.warning("[security] progress_msg edit failed: %s", e)
         else:
             await send_log_embed(bot, guild_id, "ERROR" if findings.danger else "INFO", embed)
     elif findings.danger:
         await send_log_embed(bot, guild_id, "ERROR", embed)
 
+    fields = {
+        "理由": ", ".join(findings.reason_flags) or "なし",
+        "GPT判定": findings.gpt_result,
+        "リンク数": str(len(links)),
+        "スパム回数": str(findings.spam_count) if findings.spam_count > 1 else "なし",
+    }
+    if stripped is not None:
+        fields.update(strip_fields(stripped))
     try:
         await log_action(
             bot,
@@ -626,12 +755,7 @@ async def _report_result(
             "ERROR" if findings.danger else "INFO",
             "メッセージセキュリティ検査",
             user=member,
-            fields={
-                "理由": ", ".join(findings.reason_flags) or "なし",
-                "GPT判定": findings.gpt_result,
-                "リンク数": str(len(links)),
-                "スパム回数": str(findings.spam_count) if findings.spam_count > 1 else "なし",
-            },
+            fields=fields,
             embed_color=discord.Color.red() if findings.danger else discord.Color.green(),
         )
     except Exception:
@@ -679,8 +803,8 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
         logs.append("⚠️ バイパス判定に失敗（強制措置は行わない）")
 
     findings = await _collect_findings(bot, guild_id, member, content, links, attachments, logs)
-    await _enforce_or_withhold(bot, message, guild_id, member, findings, bypass, logs)
-    await _report_result(bot, guild_id, member, findings, links, attachments, logs)
+    stripped = await _enforce_or_withhold(bot, message, guild_id, member, findings, bypass, logs)
+    await _report_result(bot, guild_id, member, findings, links, attachments, logs, stripped)
 
 
 # ==================================================
@@ -734,7 +858,7 @@ async def handle_security_for_voice_join(
                 logger.debug("log_action failed on VC raid", exc_info=True)
             return
 
-        await strip_roles(member)
+        stripped = await strip_roles(member)
 
         try:
             await log_action(
@@ -743,7 +867,8 @@ async def handle_security_for_voice_join(
                 "ERROR",
                 "VCレイド検出",
                 user=member,
-                fields={"チャンネル": channel.mention},
+                # 剥がした結果も出す（rust-09 の (i)）。
+                fields={"チャンネル": channel.mention, **strip_fields(stripped)},
                 embed_color=discord.Color.red(),
             )
         except Exception:

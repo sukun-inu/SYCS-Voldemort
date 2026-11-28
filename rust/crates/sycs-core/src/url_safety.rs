@@ -9,8 +9,9 @@
 //! - URL の分解: Python 3.13 の `urlsplit` と同じ決まり（先頭の制御文字と空白を落とす・タブと改行を
 //!   取り除く・括弧の検査・`@` の右の最後の部分をホストにする・`%` の手前だけを小文字にする）。分解
 //!   できない URL は `invalid_url`（Python では ValueError が漏れて、メッセージの検査を止めていた。5b9cb87）
-//! - 公開アドレスか: Python 3.13 の `ipaddress` の `is_global` と同じ表（IPv4-mapped の IPv6 は中の IPv4 で判定）。
-//!   マルチキャストは公開扱いになる（Python と同じ。見直しの候補として控えてある）
+//! - 公開アドレスか: Python 3.13 の `ipaddress` の `is_global` と同じ表（IPv4-mapped の IPv6 は中の IPv4 で判定）に、
+//!   マルチキャスト（224.0.0.0/4・ff00::/8）の拒否を足したもの（Python の `_is_public_ip` と同じ。`is_global` だけでは
+//!   マルチキャストが公開扱いで通っていた。rust-09 の (a)）
 //! - 拒否の理由の名前（`missing_scheme`・`non_public_ip:…` など）
 //!
 //! # 違うもの
@@ -151,13 +152,14 @@ fn ipv4_mapped(ip: IpAddr) -> Option<Ipv4Addr> {
     }
 }
 
-/// 公開アドレスか。Python 3.13 の `ip.is_global`（IPv4-mapped は中の IPv4 で）。
+/// 公開アドレスか。Python の `_is_public_ip`: 3.13 の `ip.is_global` で、マルチキャストでないもの（IPv4-mapped は
+/// 中の IPv4 で）。
 pub fn is_public_ip(ip: IpAddr) -> bool {
     match ipv4_mapped(ip) {
-        Some(v4) => v4_is_global(v4),
+        Some(v4) => v4_is_global(v4) && !v4.is_multicast(),
         None => match ip {
-            IpAddr::V4(v4) => v4_is_global(v4),
-            IpAddr::V6(v6) => !v6_is_private(v6),
+            IpAddr::V4(v4) => v4_is_global(v4) && !v4.is_multicast(),
+            IpAddr::V6(v6) => !v6_is_private(v6) && !v6.is_multicast(),
         },
     }
 }
@@ -521,7 +523,7 @@ mod tests {
         );
     }
 
-    /// Python 3.13 の表の境目（private の例外・共有アドレス・マルチキャスト）。
+    /// Python の表の境目（private の例外・共有アドレス・マルチキャスト）。
     #[test]
     fn the_public_table_matches_python() {
         let public = |s: &str| is_public_ip(s.parse().unwrap());
@@ -529,13 +531,19 @@ mod tests {
         assert!(!public("192.0.0.8"));
         assert!(!public("100.127.255.255"));
         assert!(public("100.128.0.0"));
-        assert!(public("224.0.0.1"), "Python はマルチキャストを公開扱い");
+        // マルチキャストは公開扱いにしない（is_global は真だが、Python の _is_public_ip が別に拒否する）。
+        assert!(!public("224.0.0.1"));
+        assert!(!public("239.255.255.255"));
+        assert!(public("223.255.255.255"));
+        assert!(!public("::ffff:224.0.0.251"));
         assert!(!public("240.0.0.1"));
         assert!(!public("2001:db8::1"));
         assert!(public("2001:3::1"), "private の例外は公開");
         assert!(!public("fd00::1"));
         assert!(public("2606:4700::1111"));
-        assert!(public("ff02::1"), "Python はマルチキャストを公開扱い");
+        assert!(!public("ff02::1"));
+        assert!(!public("ff00::"));
+        assert!(public("feff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"));
     }
 
     /// ホスト名は小文字にし（% の後ろはそのまま）、括弧とポートを外す。

@@ -514,15 +514,15 @@ true
 ],
 [
 "224.0.0.0",
-true
+false
 ],
 [
 "224.31.80.87",
-true
+false
 ],
 [
 "239.255.255.255",
-true
+false
 ],
 [
 "240.0.0.0",
@@ -986,7 +986,7 @@ true
 ],
 [
 "::ffff:234.180.119.210",
-true
+false
 ],
 [
 "::ffff:242.140.16.93",
@@ -1210,7 +1210,7 @@ true
 ],
 [
 "ff00::",
-true
+false
 ],
 [
 "ff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
@@ -1218,7 +1218,7 @@ true
 ],
 [
 "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
-true
+false
 ]
 ],
 "urls": [
@@ -1368,11 +1368,11 @@ true
 ],
 [
 "http://[ff02::1]/",
-"ok"
+"non_public_ip"
 ],
 [
 "http://224.0.0.1/",
-"ok"
+"non_public_ip"
 ],
 [
 "http://255.255.255.255/",

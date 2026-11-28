@@ -34,7 +34,7 @@ use crate::metal::MetalPrices;
 use crate::moderation::Moderation;
 use crate::news::{self, DiscordOutlet, News};
 use crate::reaction_roles::{self, Change, ReactionEvent};
-use crate::security::{self, RaidDetector, SpamDetector, Stripped};
+use crate::security::{self, RaidDetector, SpamDetector, StripFailure};
 use crate::sticky::{self, StickyCtx, StickyLocks};
 use crate::user_state::{self, GuildView};
 use crate::vc_notify::{self, Filter, Plan, VcTracker};
@@ -727,7 +727,7 @@ impl Handler {
 impl Handler {
     /// VC に入った・移ったときの荒らし対策。Python の `handle_security_for_voice_join`。
     ///
-    /// 似た名前の人が続けて入ったら、その人のロールを全部剥がしてログに残す。信頼ユーザー・
+    /// 似た名前の人が続けて入ったら、その人のロールを全部剥がしてログに残す（剥がせたロールと残ったロールも）。信頼ユーザー・
     /// バイパスロールの人は数えない（Python と同じく、記録にも入れない）。
     async fn vc_raid_check(
         &self,
@@ -763,13 +763,14 @@ impl Handler {
         }
         let stripped = security::strip_roles(&ctx.http, guild_id, member.user.id, &held).await;
         warn!(%guild_id, user_id = %member.user.id, ?stripped, "[SECURITY] VCレイド検出");
-        if stripped == Stripped::Forbidden {
+        if stripped.failure == Some(StripFailure::Forbidden) {
             warn!(%guild_id, "VCレイドのロール剥奪に失敗しました（権限が足りません）");
         }
         let entry = LogEntry {
             level: log_channel::Level::Error,
             message: "VCレイド検出".into(),
-            fields: vec![("チャンネル".into(), format!("<#{channel}>"))],
+            // 剥がした結果も出す（Python と同じ。rust-09 の (i)）。
+            fields: security::vc_raid_fields(channel, &stripped),
             colour: Some(members::RED),
         };
         self.log(
