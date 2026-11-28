@@ -108,6 +108,8 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     ("sycs_admin::metrics", "metrics"),
     // 利用者の状態の読み出しは、Python の services.user_state_service（userstate）と同じ棚。
     ("sycs_admin::users::store", "userstate"),
+    // サーバーのデータの削除（設定パネルの書く側。A6）は、Python の services.guild_retention（userstate）と同じ棚。
+    ("sycs_admin::apps::guild_data", "userstate"),
     ("voice_check", "voice"),
     ("songbird", "voice"),
     ("davey", "voice"),
@@ -673,6 +675,9 @@ mod tests {
             ("sycs_admin::users", "admin"),
             ("sycs_admin::users::store", "userstate"),
             ("sycs_core::user_state", "userstate"),
+            // 設定パネルの書く側（A6）: 経路は admin、サーバーのデータの削除は userstate。
+            ("sycs_admin::apps::write", "admin"),
+            ("sycs_admin::apps::guild_data", "userstate"),
         ] {
             assert_eq!(category_for(target), category, "{target}");
         }

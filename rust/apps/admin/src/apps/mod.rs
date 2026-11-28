@@ -1,12 +1,15 @@
-//! 設定パネルの読む側（rust-06 の A5）。Python の `webapp_admin/api/apps.py` の `list_apps`・`get_app` と、
-//! 宣言（`webapp_admin/schema/`）から作る答え。
+//! 設定パネル（rust-06 の A5 の読む側と A6 の書く側）。Python の `webapp_admin/api/apps.py` と、宣言
+//! （`webapp_admin/schema/`）から作る答え。
 //!
 //! | 経路 | 確かめ | 答え |
 //! |---|---|---|
 //! | GET /admin/api/apps | サーバー | `{"groups": [{"label", "apps": [タイル…]}…]}`（`PANELS` の並びのままグループ分け。開発者でなければ dev_only を隠す。バッジは数え、0 か失敗なら null） |
 //! | GET /admin/api/apps/{app_id} | サーバー | 無い・開発者専用（開発者でない）は 404。custom は宣言だけ。ほかは宣言 ＋ `choices`・`values`・`collections`（1 項目の失敗は既定値か空で埋めて `errors`） |
+//! | PUT /admin/api/apps/{app_id} | サーバー・CSRF | 変えた項目だけを検証して書く（A6。[`write`]） |
+//! | POST・PUT・DELETE /admin/api/apps/{app_id}/collections/{key}… | サーバー・CSRF | 一覧の 1 件を足す・変える・消す（A6） |
+//! | DELETE /admin/api/guild-data | サーバー・CSRF | サーバーのデータを全部消す（A6。[`guild_data`]） |
 //!
-//! どちらもルーターの中の経路（既定の回数の制限は掛からない）で、答えは `SafeJSONResponse`（2^53-1 を超える整数は文字。
+//! どれもルーターの中の経路（既定の回数の制限は掛からない）で、答えは `SafeJSONResponse`（2^53-1 を超える整数は文字。
 //! [`crate::jsonsafe`]）。サーバーの ID は `int(session["guild_id"])`（読めなければ Python と同じ例外で 500）。
 //! custom のパネルは ID を読まない（壊れた ID でも 200）。
 //!
@@ -14,19 +17,28 @@
 //! - [`getters`] 値を読む関数（Python の関数の名前で引く）
 //! - [`choices`] 選択肢（チャンネル・ロール・声）
 //! - [`voices`] 読み上げの声の一覧（TTS の API）
-//! - [`store`] 設定の置き場（Postgres。Bot と同じ `sycs_core::settings`）
+//! - [`store`] 設定の置き場（Postgres。Bot と同じ `sycs_core::settings`。書けば Bot に知らせが届く）
+//! - [`validation`] 入力の検証（A6）
+//! - [`setters`] 値を書く関数（Python の関数の名前で引く。A6）
+//! - [`write`] 書く側の経路（A6）
+//! - [`guild_data`] サーバーのデータの削除（設定と利用者の状態。A6）
 //!
 //! 公開トップの Bot のサーバー数が 0 か失敗のときのフォールバック（設定のあるサーバーの数）も、ここの置き場から数える
 //! （[`stored_guild_count`]。A3 の `GuildCount` に渡す）。
 //!
-//! 書く側（PUT・一覧の追加・更新・削除・サーバーのデータの削除）は A6。基準は `tests/fixtures/apps_read/`（偽物の
-//! Discord・TTS に当てた本物の Python の答え）と `tests/fixtures/getters/`（設定の JSON → 読む関数の答え）。
+//! 基準は `tests/fixtures/apps_read/`（偽物の Discord・TTS に当てた本物の Python の答え）・`tests/fixtures/getters/`
+//! （設定の JSON → 読む関数の答え）・`tests/fixtures/validation/`（入力欄 × 入力 → 検証の答え）・
+//! `tests/fixtures/apps_write/`（本物の Python に書く要求を送った答えと、書いたあとの設定）。
 
 pub mod choices;
 pub mod getters;
+pub mod guild_data;
 pub mod schema;
+pub mod setters;
 pub mod store;
+pub mod validation;
 pub mod voices;
+pub mod write;
 
 use std::future::Future;
 use std::sync::Arc;
@@ -48,27 +60,47 @@ use crate::views::Site;
 
 use choices::Choices;
 use getters::{Ctx, DjaudioDefaults};
+use guild_data::UserStateEraser;
 use schema::Panel;
 use store::SettingsStore;
 use voices::Voices;
 
-/// 設定パネルが使うもの（設定の置き場・選択肢・DJAudio の環境変数）。[`Site`] が持ち回る。
-#[derive(Debug)]
+/// 設定パネルが使うもの（設定の置き場・選択肢・DJAudio の環境変数・利用者の状態を消すもの）。[`Site`] が持ち回る。
 pub struct Panels {
     settings: Arc<SettingsStore>,
     choices: Choices,
     djaudio: DjaudioDefaults,
+    user_states: Arc<dyn UserStateEraser>,
+}
+
+impl std::fmt::Debug for Panels {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Panels")
+            .field("settings", &self.settings)
+            .field("choices", &self.choices)
+            .field("djaudio", &self.djaudio)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Panels {
-    /// 作る（宣言をここで読む。壊れていれば起動で止まる）。
+    /// 作る（宣言と入力欄の規則をここで読む。壊れていれば起動で止まる）。利用者の状態を消すものはつないでいない
+    /// （[`guild_data::Unconfigured`]。つなぐのは [`Panels::with_user_state_eraser`]）。
     pub fn new(settings: Arc<SettingsStore>, voices: Voices, djaudio: DjaudioDefaults) -> Self {
         let _ = schema::schema();
+        let _ = validation::all_rules();
         Self {
             settings,
             choices: Choices::new(voices),
             djaudio,
+            user_states: Arc::new(guild_data::Unconfigured),
         }
+    }
+
+    /// サーバーのデータの削除で、利用者の状態を消すもの（本番は [`guild_data::PgUserStateEraser`]。A6）を入れる。
+    pub fn with_user_state_eraser(mut self, eraser: Arc<dyn UserStateEraser>) -> Self {
+        self.user_states = eraser;
+        self
     }
 
     /// 環境変数から作る（`TTS_BASE_URL`・`DJAUDIO_*`）。設定の置き場は [`store::from_env`] で作って渡す。
@@ -127,12 +159,31 @@ where
     handler(move |app: Arc<AdminApp>, req: Req| f(app, req, Arc::clone(&site)))
 }
 
-/// `api/apps.py` の読む側の経路（`/admin/api` の下。Python の登録の順。PUT と一覧の操作は A6 がこの後ろに足す）。
+/// `api/apps.py` の経路（`/admin/api` の下。Python の登録の順: 読む側 2 本〔A5〕、書く側 5 本〔A6〕）。同じパスの
+/// 経路は、405 の `Allow` が最初の経路のもの（`/admin/api/apps/{app_id}` に POST すれば `Allow: GET`）。
 pub fn routes(site: &Arc<Site>) -> Vec<Route> {
     let get = [Method::GET];
+    let item = "/admin/api/apps/{app_id}/collections/{key}/{item_id}";
     vec![
         Route::new("/admin/api/apps", &get, with_site(site, list_apps)),
         Route::new("/admin/api/apps/{app_id}", &get, with_site(site, get_app)),
+        Route::new(
+            "/admin/api/apps/{app_id}",
+            &[Method::PUT],
+            with_site(site, write::save_app),
+        ),
+        Route::new(
+            "/admin/api/apps/{app_id}/collections/{key}",
+            &[Method::POST],
+            with_site(site, write::add_item),
+        ),
+        Route::new(item, &[Method::PUT], with_site(site, write::update_item)),
+        Route::new(item, &[Method::DELETE], with_site(site, write::remove_item)),
+        Route::new(
+            "/admin/api/guild-data",
+            &[Method::DELETE],
+            with_site(site, write::delete_guild_data),
+        ),
     ]
 }
 
@@ -322,6 +373,41 @@ mod tests {
                 .all(|route| !route.default_limit())
         );
         assert_eq!(routes[apps].allow(), "GET");
+    }
+
+    /// 書く側の経路（A6）が読む側の後ろに Python の登録の順で入り、同じパスにほかのメソッドを送ったときの 405 の
+    /// `Allow` は最初の経路のもの（`/admin/api/apps/{app_id}` なら GET）であること。
+    #[test]
+    fn the_write_routes_follow_the_read_routes() {
+        let routes = default_routes(&crate::views::tests::test_site());
+        let listed: Vec<String> = routes
+            .iter()
+            .filter(|route| {
+                route.template().starts_with("/admin/api/apps")
+                    || route.template() == "/admin/api/guild-data"
+            })
+            .map(|route| format!("{} {}", route.allow(), route.template()))
+            .collect();
+        let item = "/admin/api/apps/{app_id}/collections/{key}/{item_id}";
+        assert_eq!(
+            listed,
+            [
+                "GET /admin/api/apps".to_string(),
+                "GET /admin/api/apps/{app_id}".to_string(),
+                "PUT /admin/api/apps/{app_id}".to_string(),
+                "POST /admin/api/apps/{app_id}/collections/{key}".to_string(),
+                format!("PUT {item}"),
+                format!("DELETE {item}"),
+                "DELETE /admin/api/guild-data".to_string(),
+            ]
+        );
+        let found = crate::routing::find(&routes, &Method::POST, "/admin/api/apps/logging");
+        assert!(matches!(
+            found,
+            crate::routing::Found::MethodNotAllowed(route) if route.allow() == "GET"
+        ));
+        assert!(routes.iter().all(|route| !route.template().starts_with("/admin/api/")
+            || !route.default_limit()));
     }
 
     /// タイルのグループ分けが PANELS の並びのままで、開発者でなければ dev_only を隠し、設定が読めなければバッジは null。

@@ -40,6 +40,7 @@ use tracing::{error, info, warn};
 
 use sycs_admin::APP_NAME;
 use sycs_admin::app::{self, AdminApp, Config, Deps, OsRandom};
+use sycs_admin::apps::guild_data::PgUserStateEraser;
 use sycs_admin::apps::{self, Panels};
 use sycs_admin::auth::{DISCORD_API, Discord, DiscordConfig, StoredGuildCount};
 use sycs_admin::db;
@@ -122,6 +123,9 @@ async fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    // 利用者の状態の読み出し（A4）と、サーバーのデータの削除で消すもの（A6）は、同じ束と同じ「表を作ったか」を使う。
+    let users = Arc::new(PgUserStates::new(pool.clone()));
+    let eraser = Arc::new(PgUserStateEraser::new(pool, Arc::clone(&users)));
     let config = Config::from_env(&env);
     info!(
         "管理画面を起動します: {}:{} 秘密鍵={:?} 監視の置き場={} 信頼するプロキシ={}（X-Forwarded-For をここからだけ受け取る）",
@@ -136,7 +140,7 @@ async fn main() -> ExitCode {
     let settings = Arc::new(apps::store::from_env(&env));
     let stored = apps::stored_guild_count(&settings);
     let panels = match Panels::from_env(&env, settings) {
-        Ok(panels) => Arc::new(panels),
+        Ok(panels) => Arc::new(panels.with_user_state_eraser(eraser)),
         Err(e) => {
             error!("読み上げの API の口を作れません: {e}");
             return ExitCode::FAILURE;
@@ -167,7 +171,7 @@ async fn main() -> ExitCode {
         routes::default_routes(&site),
     );
     let admin = admin.with_monitor(Arc::new(Monitor::from_env(&env, app::system_clock())));
-    let state = Arc::new(admin.with_users(Arc::new(PgUserStates::new(pool))));
+    let state = Arc::new(admin.with_users(users));
     // 監視の巡回（起動のときの停止の記録と心拍、そのあと間隔ごと）。Python は app を作るときにスレッドで始める。
     let _watch = monitor::watch::spawn(Arc::clone(&state));
     let listener = match listen.bind().await {
