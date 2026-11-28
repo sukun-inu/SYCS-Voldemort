@@ -165,13 +165,16 @@ impl After {
 
 /// そのサーバーの設定の入れ物（無ければ空で作る。辞書でなければ空に置き換える）。Python の
 /// `_get_or_create_guild`。
-fn guild_entry(settings: &mut Settings, guild_id: u64) -> &mut Map<String, Value> {
+pub(crate) fn guild_entry(settings: &mut Settings, guild_id: u64) -> &mut Map<String, Value> {
     child_of(settings.guilds.entry(guild_id.to_string()).or_default())
 }
 
 /// 辞書の中の辞書（無ければ末尾に空で作る。辞書でなければ、その場所で空に置き換える）。Python の
 /// `x = parent.get(key, {})` → 辞書でなければ `{}` → 書き換え → `parent[key] = x`。
-fn child<'a>(parent: &'a mut Map<String, Value>, key: &str) -> &'a mut Map<String, Value> {
+pub(crate) fn child<'a>(
+    parent: &'a mut Map<String, Value>,
+    key: &str,
+) -> &'a mut Map<String, Value> {
     child_of(parent.entry(key).or_insert(Value::Null))
 }
 

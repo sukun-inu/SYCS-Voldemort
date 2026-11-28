@@ -25,6 +25,7 @@ pub mod quake;
 pub mod reply;
 pub mod server;
 pub mod settings;
+pub mod tts;
 
 use std::time::Instant;
 
@@ -40,7 +41,6 @@ use tracing::{error, info, warn};
 use self::guards::Standing;
 use self::picker::{Part, PickerKind, Pickers, Step};
 use self::reply::Reply;
-pub use self::server::autocomplete;
 use self::server::{After, Place, ServerRoute};
 use crate::sticky::StickyLocks;
 use crate::vc_notify;
@@ -135,6 +135,8 @@ pub enum Route {
     MetalPlatinum,
     /// `/metal all`
     MetalAll,
+    /// 読み上げの設定のコマンド（/tts・/voice・/dict）。
+    Tts(tts::TtsRoute),
 }
 
 /// 移したコマンドの道すじ。
@@ -201,6 +203,21 @@ pub const PORTED: &[(&str, Route)] = &[
     ("metal silver", Route::MetalSilver),
     ("metal platinum", Route::MetalPlatinum),
     ("metal all", Route::MetalAll),
+    ("tts enable", Route::Tts(tts::TtsRoute::Enable)),
+    ("tts disable", Route::Tts(tts::TtsRoute::Disable)),
+    ("tts add_watch", Route::Tts(tts::TtsRoute::AddWatch)),
+    ("tts remove_watch", Route::Tts(tts::TtsRoute::RemoveWatch)),
+    ("tts vc", Route::Tts(tts::TtsRoute::Vc)),
+    ("tts status", Route::Tts(tts::TtsRoute::Status)),
+    ("tts default_voice", Route::Tts(tts::TtsRoute::DefaultVoice)),
+    ("tts read_name", Route::Tts(tts::TtsRoute::ReadName)),
+    ("tts default_rate", Route::Tts(tts::TtsRoute::DefaultRate)),
+    ("voice set", Route::Tts(tts::TtsRoute::VoiceSet)),
+    ("voice reset", Route::Tts(tts::TtsRoute::VoiceReset)),
+    ("voice info", Route::Tts(tts::TtsRoute::VoiceInfo)),
+    ("dict add", Route::Tts(tts::TtsRoute::DictAdd)),
+    ("dict remove", Route::Tts(tts::TtsRoute::DictRemove)),
+    ("dict list", Route::Tts(tts::TtsRoute::DictList)),
 ];
 
 /// 定義にはあるが、中身をまだ移していないコマンド。移したら [`PORTED`] へ動かす
@@ -209,23 +226,8 @@ pub const NOT_PORTED_YET: &[&str] = &[
     "djaudio channel",
     "djaudio output",
     "djaudio status",
-    "tts enable",
-    "tts disable",
-    "tts add_watch",
-    "tts remove_watch",
-    "tts vc",
-    "tts status",
     "tts join",
     "tts leave",
-    "tts default_voice",
-    "tts read_name",
-    "tts default_rate",
-    "voice set",
-    "voice reset",
-    "voice info",
-    "dict add",
-    "dict remove",
-    "dict list",
 ];
 
 /// 道すじから、移した中身を引く。
@@ -448,7 +450,8 @@ pub fn plan(route: Route, input: &PlanInput<'_>) -> Result<Planned, CommandError
         | Route::MetalGold
         | Route::MetalSilver
         | Route::MetalPlatinum
-        | Route::MetalAll => Err(CommandError::NotPlanned),
+        | Route::MetalAll
+        | Route::Tts(_) => Err(CommandError::NotPlanned),
     }
 }
 
@@ -474,6 +477,8 @@ pub struct Deps<'a> {
     pub colours: &'a crate::log_channel::AvatarColours,
     /// 貴金属トラッカーの場所（/metal のリンクのボタン）。
     pub metals_site_url: &'a str,
+    /// 合成の API（/tts default_voice・/voice set の声の補完）。
+    pub tts: &'a crate::tts::TtsApi,
 }
 
 /// 移した中身を実行して、返事を作る。
@@ -489,6 +494,9 @@ pub async fn run(
         return outcome.map(|reply| (reply, None));
     }
     if let Some(outcome) = info::run(deps, route, command, options) {
+        return outcome.map(|reply| (reply, None));
+    }
+    if let Some(outcome) = tts::run(deps, route, command, options).await {
         return outcome.map(|reply| (reply, None));
     }
     let snapshot = deps.settings.snapshot();
@@ -607,6 +615,15 @@ pub async fn dispatch(deps: &Deps<'_>, command: &CommandInteraction) {
         let ms = started.elapsed().as_millis();
         info!("{}", activity::completed_line(&path, &who, ms));
     }
+}
+
+/// 引数の補完の問い合わせを 1 つ片付ける。声（[`tts::autocomplete`]）と、サーバーの設定のコマンドの
+/// 補完（[`server::autocomplete`]）。どれでもなければ応えない。
+pub async fn autocomplete(deps: &Deps<'_>, interaction: &CommandInteraction) {
+    if tts::autocomplete(deps, interaction).await {
+        return;
+    }
+    server::autocomplete(deps, interaction).await;
 }
 
 /// 触られた部品（選択・ボタン）を 1 つ片付ける。いまは、信頼済みユーザー・バイパスロールの選択の画面だけ。

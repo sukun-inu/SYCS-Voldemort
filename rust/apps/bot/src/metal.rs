@@ -226,7 +226,7 @@ fn transport_error(error: reqwest::Error) -> MetalError {
 }
 
 /// aiohttp が JSON として読む種類か（`application/json` か `application/…+json`）。
-fn is_json_content_type(content_type: &str) -> bool {
+pub(crate) fn is_json_content_type(content_type: &str) -> bool {
     static JSON: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"^application/(?:[\w.+-]+?\+)?json").expect("正しい正規表現"));
     JSON.is_match(content_type)

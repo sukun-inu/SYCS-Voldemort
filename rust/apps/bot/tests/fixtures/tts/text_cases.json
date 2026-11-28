@@ -1,0 +1,66 @@
+{
+  "clean": [
+    {"text": "こんにちは", "max": 100},
+    {"text": "  前後の空白  ", "max": 100},
+    {"text": "\u001c\u001d区切りの制御文字\u001e\u001f", "max": 100},
+    {"text": "　全角の空白　", "max": 100},
+    {"text": "   \u0085", "max": 100},
+    {"text": "見て https://example.com/a?b=c ここ", "max": 100},
+    {"text": "http://a.example　全角の空白の手前まで", "max": 100},
+    {"text": "https://example.com/日本語のパス\u001cつづき", "max": 100},
+    {"text": "httpsx://not.a.url と https:// だけ", "max": 100},
+    {"text": "HTTPS://upper.example", "max": 100},
+    {"text": "<@123> と <@!456> と <@&789> と <#1011>", "max": 100},
+    {"text": "<@> <@!> <#> <@&> <@abc>", "max": 100},
+    {"text": "<@١٢٣> 全角の数字 <@１２３>", "max": 100},
+    {"text": "<:smile:123> <a:dance:456> <:名前:789>", "max": 100},
+    {"text": "<:a-b:1> <:a_b:2> <:é:3> <:ab́:4> <:x‿y:5>", "max": 100},
+    {"text": "<:: 1> <:x:> <a::9>", "max": 100},
+    {"text": "あいうえおかきくけこ", "max": 5},
+    {"text": "あいうえお", "max": 5},
+    {"text": "😀😀😀😀😀😀", "max": 3},
+    {"text": "   ", "max": 100},
+    {"text": "", "max": 100},
+    {"text": "https://only.example", "max": 2},
+    {"text": "改行\nを\r\n含む", "max": 100}
+  ],
+  "dictionary": [
+    {"text": "鈴木さんとすずきさん", "dict": {"鈴木": "すずき", "すずき": "スズキ"}},
+    {"text": "エーアイ研のエーアイ", "dict": {"エーアイ": "AI", "エーアイ研": "AIラボ"}},
+    {"text": "abcabc", "dict": {"ab": "1", "bc": "2"}},
+    {"text": "abcabc", "dict": {"bc": "2", "ab": "1"}},
+    {"text": "同じ長さの語", "dict": {"同じ": "おなじ", "長さ": "ながさ", "の語": "のご"}},
+    {"text": "a.b*c(d)", "dict": {".": "ドット", "*": "スター", "(d)": "カッコD"}},
+    {"text": "空の見出し", "dict": {"": "何でも"}},
+    {"text": "何もない", "dict": {}},
+    {"text": "AAA", "dict": {"a": "x"}},
+    {"text": "😀と😀", "dict": {"😀": "えがお"}},
+    {"text": "\\ と $1", "dict": {"\\": "バックスラッシュ", "$1": "ドル"}}
+  ],
+  "speak": [
+    {"settings": {"enabled": true, "vc_channel_id": 1}, "user": {}, "name": "ネリー", "text": "やあ"},
+    {"settings": {"enabled": true, "vc_channel_id": 1, "read_name": false}, "user": {}, "name": "ネリー", "text": "やあ"},
+    {"settings": {"enabled": true, "vc_channel_id": 1, "default_voice": "Otoya", "default_rate": 250}, "user": {}, "name": "a", "text": "b"},
+    {"settings": {"enabled": true, "vc_channel_id": 1, "default_voice": "Otoya", "default_rate": 250}, "user": {"voice": "Kyoko", "rate": 300}, "name": "a", "text": "b"},
+    {"settings": {"enabled": true, "vc_channel_id": 1, "default_voice": "", "default_rate": 0}, "user": {"voice": "", "rate": 0}, "name": "a", "text": "b"},
+    {"settings": {"enabled": true, "vc_channel_id": 1, "max_length": 3, "speak_max_length": 5}, "user": {}, "name": "ながいなまえ", "text": "本文が長い"},
+    {"settings": {"enabled": true, "vc_channel_id": 1, "speak_max_length": 4}, "user": {}, "name": "名前", "text": "本文"},
+    {"settings": {"enabled": true, "vc_channel_id": 1, "dictionary": {"鈴木": "すずき"}}, "user": {}, "name": "鈴木", "text": "鈴木です"},
+    {"settings": {"enabled": true, "vc_channel_id": 1}, "user": {}, "name": "a", "text": "   "},
+    {"settings": {"enabled": true, "vc_channel_id": 1}, "user": {}, "name": "a", "text": "https://example.com"},
+    {"settings": {"enabled": false, "vc_channel_id": 1}, "user": {}, "name": "a", "text": "b"},
+    {"settings": {"enabled": true}, "user": {}, "name": "a", "text": "b"},
+    {"settings": {"enabled": true, "vc_channel_id": 0}, "user": {}, "name": "a", "text": "b"},
+    {"settings": {"enabled": 1, "vc_channel_id": "5"}, "user": {}, "name": "a", "text": "b"},
+    {"settings": {"enabled": true, "vc_channel_id": 1, "max_length": "4"}, "user": {"rate": "180"}, "name": "a", "text": "あいうえおか"}
+  ],
+  "vc_event": [
+    {"settings": {"enabled": true, "vc_channel_id": 1, "vc_notify": true}, "name": "ネリー", "event": "join"},
+    {"settings": {"enabled": true, "vc_channel_id": 1, "vc_notify": true}, "name": "ネリー", "event": "leave"},
+    {"settings": {"enabled": true, "vc_channel_id": 1, "vc_notify": true, "dictionary": {"ネリー": "ねりー"}}, "name": "ネリー", "event": "join"},
+    {"settings": {"enabled": true, "vc_channel_id": 1, "vc_notify": false}, "name": "a", "event": "join"},
+    {"settings": {"enabled": true, "vc_channel_id": 1}, "name": "a", "event": "join"},
+    {"settings": {"enabled": true, "vc_notify": true}, "name": "a", "event": "join"},
+    {"settings": {"enabled": true, "vc_channel_id": 1, "vc_notify": true, "default_voice": "Otoya", "default_rate": 150}, "name": "", "event": "leave"}
+  ]
+}

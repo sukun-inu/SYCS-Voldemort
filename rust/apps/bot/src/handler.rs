@@ -81,6 +81,8 @@ pub struct AppState {
     pub quake_screens: commands::quake::Screens,
     /// 貴金属の値段の取り口（/metal。取った値段をしばらく覚える）。
     pub metal: MetalPrices,
+    /// 合成の API（声の一覧）。
+    pub tts: crate::tts::TtsApi,
     shard_manager: OnceLock<Arc<ShardManager>>,
 }
 
@@ -105,6 +107,7 @@ impl AppState {
         let judges = Judges::new(vt, moderation, config.vt_scan_concurrency);
         let user_state = user_state::Recorder::new(pool.clone(), config.user_state.clone());
         let metal = MetalPrices::new(config.metal.clone());
+        let tts = crate::tts::TtsApi::new(&config.tts_base_url);
         Self {
             config,
             pool,
@@ -125,6 +128,7 @@ impl AppState {
             pickers: commands::picker::Pickers::default(),
             quake_screens: commands::quake::Screens::default(),
             metal,
+            tts,
             shard_manager: OnceLock::new(),
         }
     }
@@ -661,6 +665,7 @@ impl EventHandler for Handler {
             metal: &self.state.metal,
             colours: &self.state.colours,
             metals_site_url: &self.state.config.metals_site_url,
+            tts: &self.state.tts,
         };
         match &interaction {
             Interaction::Command(command) => commands::dispatch(&deps, command).await,

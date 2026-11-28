@@ -20,6 +20,7 @@ use sycs_bot::commands::quake::Screens;
 use sycs_bot::log_channel::AvatarColours;
 use sycs_bot::metal::{MetalConfig, MetalPrices};
 use sycs_bot::sticky::StickyLocks;
+use sycs_bot::tts::TtsApi;
 use sycs_core::env::Env;
 use sycs_core::settings::SettingsCache;
 
@@ -101,6 +102,7 @@ struct Stage {
     quake_screens: Screens,
     metal: MetalPrices,
     colours: AvatarColours,
+    tts: TtsApi,
     seen: Arc<Mutex<Vec<Seen>>>,
 }
 
@@ -119,6 +121,7 @@ impl Stage {
             quake_screens: Screens::default(),
             metal: MetalPrices::new(MetalConfig::from_env(&Env::from_fn(|_| None))),
             colours: AvatarColours::new(),
+            tts: TtsApi::new("http://127.0.0.1:9"),
             seen,
         }
     }
@@ -135,6 +138,7 @@ impl Stage {
             metal: &self.metal,
             colours: &self.colours,
             metals_site_url: "https://metals.example/",
+            tts: &self.tts,
         }
     }
 
@@ -245,8 +249,8 @@ async fn only_administrators_may_change_settings() {
 #[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
 async fn commands_not_ported_yet_say_so() {
     let data = json!({
-        "id": "8001", "name": "dict", "type": 1,
-        "options": [{"name": "list", "type": 1, "options": []}],
+        "id": "8001", "name": "tts", "type": 1,
+        "options": [{"name": "leave", "type": 1, "options": []}],
     });
     let before = json!({"sticky": {}});
     let (seen, after) = dispatch(interaction(OWNER, json!([]), data), before.clone()).await;
