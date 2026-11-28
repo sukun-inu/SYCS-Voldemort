@@ -2212,6 +2212,63 @@ class TtsDictionaryCoverageTests(unittest.TestCase):
         self.assertEqual(spoken, "すずき。やあ")
 
 
+class TtsSkipsSynthesisWhenVcIsEmptyTests(unittest.TestCase):
+    """読み上げる VC に人間が 1 人もいなければ、合成の API を呼ばないこと（発言・入退室の両方）。
+
+    以前は合成してから、鳴らす直前に「VC空のためスキップ」で捨てていた。誰もいない VC のために、
+    発言のたびに合成の API を呼んでいた（本番のログで見つかった）。
+    """
+
+    def setUp(self):
+        from services import tts_service as tts
+
+        self.tts = tts
+        self.tts._queues.pop(7, None)
+        self.addCleanup(self.tts._queues.pop, 7, None)
+
+    def _guild(self, *bots):
+        """VC（ID 99）に、bots の並び（True は Bot、False は人間）の人が居るサーバー。"""
+        vc = Mock(spec=discord.VoiceChannel)
+        vc.members = [SimpleNamespace(bot=b) for b in bots]
+        return SimpleNamespace(id=7, get_channel=lambda cid: vc if cid == 99 else None)
+
+    def _synthesized(self, run):
+        """run を回し、合成の API を呼んだか。"""
+        synth = AsyncMock(return_value=("http://x/a.wav", 1))
+        settings = {"enabled": True, "vc_notify": True, "vc_channel_id": 99}
+        with (
+            patch.object(self.tts, "_synthesize", synth),
+            patch("services.tts_store.get_tts_settings", lambda gid: settings),
+            patch("services.tts_store.get_tts_dictionary", lambda gid: {}),
+            patch("services.tts_store.get_user_tts_settings", lambda gid, uid: {}),
+            patch.object(self.tts, "get_effective_vc_watch", lambda gid, s: (99, [])),
+            patch.object(self.tts.asyncio, "create_task", lambda coro: coro.close()),
+        ):
+            asyncio.run(run())
+        return synth.await_count > 0
+
+    def test_nobody_or_only_bots_means_no_synthesis(self):
+        member = SimpleNamespace(id=1, display_name="すずき")
+        for bots in ((), (True,), (True, True)):
+            guild = self._guild(*bots)
+            with self.subTest(bots=bots):
+                self.assertFalse(self._synthesized(lambda: self.tts.enqueue_message(Mock(), guild, member, "やあ")))
+                self.assertFalse(self._synthesized(lambda: self.tts.enqueue_vc_event(Mock(), guild, member, "leave")))
+        self.assertNotIn(7, self.tts._queues, "空の VC 向けに順番待ちへ入れた")
+
+    def test_a_human_in_the_vc_is_read(self):
+        member = SimpleNamespace(id=1, display_name="すずき")
+        guild = self._guild(True, False)
+        self.assertTrue(self._synthesized(lambda: self.tts.enqueue_message(Mock(), guild, member, "やあ")))
+        self.assertTrue(self._synthesized(lambda: self.tts.enqueue_vc_event(Mock(), guild, member, "join")))
+
+    def test_an_unknown_or_non_voice_channel_is_still_read(self):
+        """VC が見つからない・VC でないときは、判断できないので今までどおり読む（鳴らす直前の確かめと同じ）。"""
+        member = SimpleNamespace(id=1, display_name="すずき")
+        guild = SimpleNamespace(id=7, get_channel=lambda cid: None)
+        self.assertTrue(self._synthesized(lambda: self.tts.enqueue_message(Mock(), guild, member, "やあ")))
+
+
 class SettingsStoreTests(unittest.TestCase):
     def setUp(self):
         self.guild_id = 4242

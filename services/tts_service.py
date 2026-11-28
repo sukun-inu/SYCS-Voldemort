@@ -156,6 +156,18 @@ async def _connect_or_move(guild: discord.Guild, vc_channel_id: int) -> discord.
     return await voice_session.acquire(guild, vc_channel_id)
 
 
+def _vc_has_no_humans(guild: discord.Guild, vc_channel_id: int) -> bool:
+    """VC に人間が 1 人もいないか（空か、Bot だけ）。VC でない・見つからないときは False（判断できないので読む）。
+
+    合成の前と、鳴らす直前の両方で使う。合成の前に見ないと、誰もいない VC のために合成の API を呼んでから、
+    鳴らす直前に捨てることになる（本番のログで見つかった。発言のたびに API を無駄に呼んでいた）。鳴らす直前
+    にも見るのは、合成している間に全員が抜けることがあるため（抜けたあとで接続し直す幽霊接続を防ぐ）。
+    """
+    get_channel = getattr(guild, "get_channel", None)
+    ch = get_channel(vc_channel_id) if get_channel else None
+    return isinstance(ch, discord.VoiceChannel) and not any(m for m in ch.members if not m.bot)
+
+
 async def _player_loop(bot: Bot, guild_id: int) -> None:
     """1ギルドにつき1つだけ動く、キューから取り出して順に読み上げる
     常駐タスク。キューが _IDLE_TIMEOUT_SEC の間空ならVCから退出して
@@ -183,8 +195,7 @@ async def _player_loop(bot: Bot, guild_id: int) -> None:
             continue
 
         # 再接続前にVCに人間がいるか確認（disconnect後に合成が完了した場合の幽霊接続を防ぐ）
-        ch = guild.get_channel(vc_channel_id)
-        if isinstance(ch, discord.VoiceChannel) and not any(m for m in ch.members if not m.bot):
+        if _vc_has_no_humans(guild, vc_channel_id):
             logger.info("[TTS] VC空のためスキップ guild=%s", guild_id)
             queue.task_done()
             continue
@@ -279,6 +290,9 @@ async def enqueue_message(
     if len(speak_text) > speak_max:
         speak_text = speak_text[:speak_max]
 
+    if _vc_has_no_humans(guild, int(vc_channel_id)):
+        logger.info("[TTS] VC空のため合成しない guild=%s", guild.id)
+        return
     audio_url, synth_ms = await _synthesize(speak_text, voice, rate)
     if not audio_url:
         return
@@ -316,6 +330,10 @@ async def enqueue_vc_event(
     voice = str(settings.get("default_voice") or _DEFAULT_VOICE)
     rate = int(settings.get("default_rate") or _DEFAULT_RATE)
 
+    # 退出で最後の人が抜けたときなど、誰もいない VC に向けて入退室を読んでも聞く人がいない。
+    if _vc_has_no_humans(guild, int(vc_channel_id)):
+        logger.info("[TTS] VC空のため合成しない guild=%s", guild.id)
+        return
     audio_url, synth_ms = await _synthesize(text, voice, rate)
     if not audio_url:
         return
