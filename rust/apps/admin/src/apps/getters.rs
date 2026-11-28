@@ -93,28 +93,76 @@ pub const GETTERS: &[(&str, Getter)] = &[
         "services.settings_store.get_djaudio_cache_ttl",
         djaudio_cache_ttl,
     ),
-    ("services.settings_store.get_djaudio_cooldown", djaudio_cooldown),
-    ("services.settings_store.get_djaudio_max_urls", djaudio_max_urls),
+    (
+        "services.settings_store.get_djaudio_cooldown",
+        djaudio_cooldown,
+    ),
+    (
+        "services.settings_store.get_djaudio_max_urls",
+        djaudio_max_urls,
+    ),
     (
         "services.settings_store.get_security_timeout_enabled",
         security_timeout_enabled,
     ),
-    ("webapp_admin.schema.panels.djaudio._output_channel", djaudio_output_channel),
-    ("webapp_admin.schema.panels.djaudio._watch_channel", djaudio_watch_channel),
-    ("webapp_admin.schema.panels.earthquake._channel", earthquake_channel),
-    ("webapp_admin.schema.panels.earthquake._min_scale", earthquake_min_scale),
-    ("webapp_admin.schema.panels.earthquake._notify_types", earthquake_notify_types),
-    ("webapp_admin.schema.panels.logging._chatgpt_channel", chatgpt_channel),
-    ("webapp_admin.schema.panels.logging._log_channel", log_channel),
+    (
+        "webapp_admin.schema.panels.djaudio._output_channel",
+        djaudio_output_channel,
+    ),
+    (
+        "webapp_admin.schema.panels.djaudio._watch_channel",
+        djaudio_watch_channel,
+    ),
+    (
+        "webapp_admin.schema.panels.earthquake._channel",
+        earthquake_channel,
+    ),
+    (
+        "webapp_admin.schema.panels.earthquake._min_scale",
+        earthquake_min_scale,
+    ),
+    (
+        "webapp_admin.schema.panels.earthquake._notify_types",
+        earthquake_notify_types,
+    ),
+    (
+        "webapp_admin.schema.panels.logging._chatgpt_channel",
+        chatgpt_channel,
+    ),
+    (
+        "webapp_admin.schema.panels.logging._log_channel",
+        log_channel,
+    ),
     ("webapp_admin.schema.panels.logging._log_level", log_level),
-    ("webapp_admin.schema.panels.news_feeds.<lambda>[news-feeds.badge]", news_feeds_badge),
-    ("webapp_admin.schema.panels.news_feeds._list", news_feeds_list),
-    ("webapp_admin.schema.panels.reaction_roles._count", reaction_roles_count),
-    ("webapp_admin.schema.panels.reaction_roles._list", reaction_roles_list),
-    ("webapp_admin.schema.panels.security._bypass_list", security_bypass_list),
+    (
+        "webapp_admin.schema.panels.news_feeds.<lambda>[news-feeds.badge]",
+        news_feeds_badge,
+    ),
+    (
+        "webapp_admin.schema.panels.news_feeds._list",
+        news_feeds_list,
+    ),
+    (
+        "webapp_admin.schema.panels.reaction_roles._count",
+        reaction_roles_count,
+    ),
+    (
+        "webapp_admin.schema.panels.reaction_roles._list",
+        reaction_roles_list,
+    ),
+    (
+        "webapp_admin.schema.panels.security._bypass_list",
+        security_bypass_list,
+    ),
     ("webapp_admin.schema.panels.security._count", security_count),
-    ("webapp_admin.schema.panels.security._trusted_list", security_trusted_list),
-    ("webapp_admin.schema.panels.sticky.<lambda>[sticky.badge]", sticky_badge),
+    (
+        "webapp_admin.schema.panels.security._trusted_list",
+        security_trusted_list,
+    ),
+    (
+        "webapp_admin.schema.panels.sticky.<lambda>[sticky.badge]",
+        sticky_badge,
+    ),
     ("webapp_admin.schema.panels.sticky._list", sticky_list),
     ("webapp_admin.schema.panels.tts._dict_list", tts_dict_list),
     ("webapp_admin.schema.panels.tts._enabled", tts_enabled),
@@ -136,13 +184,31 @@ pub const GETTERS: &[(&str, Getter)] = &[
     ("webapp_admin.schema.panels.tts._vc_notify", tts_vc_notify),
     ("webapp_admin.schema.panels.tts._voice", tts_voice),
     ("webapp_admin.schema.panels.tts._watch_list", tts_watch_list),
-    ("webapp_admin.schema.panels.vc_notify._channel", vc_notify_channel),
-    ("webapp_admin.schema.panels.vc_notify._filter_role", vc_notify_filter_role),
+    (
+        "webapp_admin.schema.panels.vc_notify._channel",
+        vc_notify_channel,
+    ),
+    (
+        "webapp_admin.schema.panels.vc_notify._filter_role",
+        vc_notify_filter_role,
+    ),
     ("webapp_admin.schema.panels.vc_notify._role", vc_notify_role),
-    ("webapp_admin.schema.panels.welcome._goodbye_channel", goodbye_channel),
-    ("webapp_admin.schema.panels.welcome._goodbye_message", goodbye_message),
-    ("webapp_admin.schema.panels.welcome._welcome_channel", welcome_channel),
-    ("webapp_admin.schema.panels.welcome._welcome_message", welcome_message),
+    (
+        "webapp_admin.schema.panels.welcome._goodbye_channel",
+        goodbye_channel,
+    ),
+    (
+        "webapp_admin.schema.panels.welcome._goodbye_message",
+        goodbye_message,
+    ),
+    (
+        "webapp_admin.schema.panels.welcome._welcome_channel",
+        welcome_channel,
+    ),
+    (
+        "webapp_admin.schema.panels.welcome._welcome_message",
+        welcome_message,
+    ),
 ];
 
 /// 名前で引く。
@@ -347,7 +413,10 @@ fn log_level(ctx: &Ctx<'_>) -> Result<Value, Crash> {
 /// `_chatgpt_channel`（`get_response_channel_id(guild_id) or None`）。
 fn chatgpt_channel(ctx: &Ctx<'_>) -> Result<Value, Crash> {
     let guild = guild_settings(ctx)?;
-    Ok(int_or_none(&int_or_zero(get(&guild, "response_channel_id"))))
+    Ok(int_or_none(&int_or_zero(get(
+        &guild,
+        "response_channel_id",
+    ))))
 }
 
 // ── ウェルカム・グッバイ（welcome.py） ───────────────────────────
@@ -527,17 +596,29 @@ fn tts_settings(ctx: &Ctx<'_>) -> Result<Map<String, Value>, Crash> {
 
 /// `tts._enabled`（`bool(get("enabled", False))`）。
 fn tts_enabled(ctx: &Ctx<'_>) -> Result<Value, Crash> {
-    Ok(Value::Bool(truthy_or(&tts_settings(ctx)?, "enabled", false)))
+    Ok(Value::Bool(truthy_or(
+        &tts_settings(ctx)?,
+        "enabled",
+        false,
+    )))
 }
 
 /// `tts._vc_notify`。
 fn tts_vc_notify(ctx: &Ctx<'_>) -> Result<Value, Crash> {
-    Ok(Value::Bool(truthy_or(&tts_settings(ctx)?, "vc_notify", false)))
+    Ok(Value::Bool(truthy_or(
+        &tts_settings(ctx)?,
+        "vc_notify",
+        false,
+    )))
 }
 
 /// `tts._read_name`（未設定なら真）。
 fn tts_read_name(ctx: &Ctx<'_>) -> Result<Value, Crash> {
-    Ok(Value::Bool(truthy_or(&tts_settings(ctx)?, "read_name", true)))
+    Ok(Value::Bool(truthy_or(
+        &tts_settings(ctx)?,
+        "read_name",
+        true,
+    )))
 }
 
 /// `tts._vc_channel`（`get("vc_channel_id") or None`）。
@@ -702,7 +783,10 @@ fn security_trusted_list(ctx: &Ctx<'_>) -> Result<Value, Crash> {
 /// `_bypass_list`（`get_bypass_role_ids`）。
 fn security_bypass_list(ctx: &Ctx<'_>) -> Result<Value, Crash> {
     let guild = guild_settings(ctx)?;
-    Ok(id_rows(parse_id_list(get(&guild, "bypass_role_ids")), "role_id"))
+    Ok(id_rows(
+        parse_id_list(get(&guild, "bypass_role_ids")),
+        "role_id",
+    ))
 }
 
 /// `security._count`（信頼済みとバイパスの数の和）。
@@ -764,7 +848,10 @@ fn sticky_list(ctx: &Ctx<'_>) -> Result<Value, Crash> {
             Some(python::object(vec![
                 ("id", Value::String(channel_id.clone())),
                 ("channel_id", Value::String(channel_id.clone())),
-                ("content", get_or(entry, "content", Value::String(String::new()))),
+                (
+                    "content",
+                    get_or(entry, "content", Value::String(String::new())),
+                ),
                 ("message_id", get(entry, "message_id").clone()),
             ]))
         })
@@ -847,7 +934,10 @@ mod tests {
             wanted.extend(panel.collections.iter().filter_map(|c| c.list.clone()));
             wanted.extend(panel.badge.clone());
         }
-        let known: BTreeSet<String> = GETTERS.iter().map(|(name, _)| (*name).to_string()).collect();
+        let known: BTreeSet<String> = GETTERS
+            .iter()
+            .map(|(name, _)| (*name).to_string())
+            .collect();
         assert_eq!(known.len(), GETTERS.len(), "表に同じ名前が 2 つある");
         assert_eq!(wanted, known);
         let names: Vec<&str> = GETTERS.iter().map(|(name, _)| *name).collect();
@@ -860,7 +950,9 @@ mod tests {
     #[test]
     fn notify_type_keys_match_python() {
         let source = include_str!("../../../../../services/settings_store.py");
-        let start = source.find("_NOTIFY_TYPE_KEYS: tuple[str, ...] = (").unwrap();
+        let start = source
+            .find("_NOTIFY_TYPE_KEYS: tuple[str, ...] = (")
+            .unwrap();
         let end = start + source[start..].find(')').unwrap();
         let keys: Vec<&str> = source[start..end]
             .lines()
@@ -951,10 +1043,16 @@ mod tests {
             djaudio: &DjaudioDefaults::PYTHON,
         };
         for (name, _) in GETTERS {
-            assert_eq!(call(name, &ctx), Err(Crash::new(NOT_LOADED, "読めない")), "{name}");
+            assert_eq!(
+                call(name, &ctx),
+                Err(Crash::new(NOT_LOADED, "読めない")),
+                "{name}"
+            );
         }
         assert_eq!(
-            call("webapp_admin.schema.panels.nothing._x", &ctx).unwrap_err().kind,
+            call("webapp_admin.schema.panels.nothing._x", &ctx)
+                .unwrap_err()
+                .kind,
             "NotImplementedError"
         );
     }
@@ -964,14 +1062,23 @@ mod tests {
     fn earthquake_getters_catch_like_python() {
         let name = "webapp_admin.schema.panels.earthquake._min_scale";
         assert_eq!(read(name, json!({"earthquake": 5})), Ok(json!(30)));
-        assert_eq!(read(name, json!({"earthquake": {"min_scale": 45.7}})), Ok(json!(45)));
+        assert_eq!(
+            read(name, json!({"earthquake": {"min_scale": 45.7}})),
+            Ok(json!(45))
+        );
         let types = "webapp_admin.schema.panels.earthquake._notify_types";
         assert_eq!(
             read(types, json!({"earthquake": {"notify_types": []}})),
-            Err(Crash::new("AttributeError", "'list' object has no attribute 'get'"))
+            Err(Crash::new(
+                "AttributeError",
+                "'list' object has no attribute 'get'"
+            ))
         );
         assert_eq!(
-            read(types, json!({"earthquake": {"notify_types": {"tsunami": 0, "x": true}}})),
+            read(
+                types,
+                json!({"earthquake": {"notify_types": {"tsunami": 0, "x": true}}})
+            ),
             Ok(json!({
                 "eew_forecast": true,
                 "eew_warning": true,

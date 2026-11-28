@@ -76,8 +76,7 @@ pub fn python_float(text: &str) -> Option<f64> {
             }
             let before = i.checked_sub(1).and_then(|j| chars.get(j));
             let after = chars.get(i + 1);
-            if !before.is_some_and(char::is_ascii_digit)
-                || !after.is_some_and(char::is_ascii_digit)
+            if !before.is_some_and(char::is_ascii_digit) || !after.is_some_and(char::is_ascii_digit)
             {
                 return None;
             }
@@ -210,7 +209,10 @@ fn sorted_by_keys(items: Vec<Value>, keys: Vec<SortKey>) -> Result<Vec<Value>, S
         return Ok(items);
     }
     let mut pairs: Vec<(SortKey, Value)> = keys.into_iter().zip(items).collect();
-    if pairs.iter().all(|(key, _)| matches!(key, SortKey::Number(_))) {
+    if pairs
+        .iter()
+        .all(|(key, _)| matches!(key, SortKey::Number(_)))
+    {
         pairs.sort_by(|(a, _), (b, _)| match (a, b) {
             (SortKey::Number(a), SortKey::Number(b)) => {
                 a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
@@ -262,8 +264,7 @@ pub fn of_type(channels: &[Value], channel_type: i64) -> Result<Vec<Value>, Stri
 
 /// `c[key]`（無ければ KeyError の文）。
 fn field<'a>(item: &'a Value, key: &str) -> Result<&'a Value, String> {
-    item.get(key)
-        .ok_or_else(|| format!("KeyError: '{key}'"))
+    item.get(key).ok_or_else(|| format!("KeyError: '{key}'"))
 }
 
 /// `_channels`（`{"value": str(c["id"]), "label": f"# {c['name']}"}`）。
@@ -288,7 +289,10 @@ pub fn voice_choices(channels: &[Value]) -> Result<Vec<Value>, String> {
         .map(|channel| {
             let id = python::str_of(field(channel, "id")?);
             let label = field(channel, "name")?.clone();
-            Ok(python::object(vec![("value", Value::String(id)), ("label", label)]))
+            Ok(python::object(vec![
+                ("value", Value::String(id)),
+                ("label", label),
+            ]))
         })
         .collect()
 }
@@ -345,16 +349,18 @@ pub fn role_choices(roles: &[Value]) -> Result<Vec<Value>, String> {
         .map(|role| {
             let id = python::str_of(field(role, "id")?);
             let label = field(role, "name")?.clone();
-            Ok(python::object(vec![("value", Value::String(id)), ("label", label)]))
+            Ok(python::object(vec![
+                ("value", Value::String(id)),
+                ("label", label),
+            ]))
         })
         .collect()
 }
 
 /// `get_guild_roles`（取れない・読めない・崩れた形は空。理由はログに残す）。
 pub async fn guild_roles(discord: &Discord, guild_id: &str) -> Vec<Value> {
-    let answer: Result<BotGet, String> = discord
-        .bot_get(&format!("/guilds/{guild_id}/roles"))
-        .await;
+    let answer: Result<BotGet, String> =
+        discord.bot_get(&format!("/guilds/{guild_id}/roles")).await;
     let sorted = answer
         .and_then(|answer| answer.json)
         .and_then(|data| sorted_roles(&data));
@@ -494,12 +500,22 @@ mod tests {
         );
         let voices = voice_choices(channels.as_array().unwrap()).unwrap();
         assert_eq!(json!(voices), json!([{"value": "5", "label": "v"}]));
-        assert!(of_type(&[json!("x")], 0).unwrap_err().starts_with("AttributeError"));
-        let mixed = [json!({"type": 0, "position": "1"}), json!({"type": 0, "position": 1})];
+        assert!(
+            of_type(&[json!("x")], 0)
+                .unwrap_err()
+                .starts_with("AttributeError")
+        );
+        let mixed = [
+            json!({"type": 0, "position": "1"}),
+            json!({"type": 0, "position": 1}),
+        ];
         assert!(of_type(&mixed, 0).is_err());
         let one = [json!({"type": 0, "position": null, "id": 1, "name": "n"})];
         assert_eq!(of_type(&one, 0).unwrap().len(), 1);
-        let names = [json!({"type": 0, "position": "b"}), json!({"type": 0, "position": "a"})];
+        let names = [
+            json!({"type": 0, "position": "b"}),
+            json!({"type": 0, "position": "a"}),
+        ];
         assert_eq!(of_type(&names, 0).unwrap()[0]["position"], "a");
         assert_eq!(
             text_choices(&[json!({"type": 0, "id": 1})]).unwrap_err(),
@@ -531,6 +547,9 @@ mod tests {
         assert!(sorted_roles(&json!({"a": 1})).is_err());
         assert!(sorted_roles(&json!({})).unwrap().is_empty());
         assert!(sorted_roles(&Value::Null).is_err());
-        assert_eq!(role_choices(&[json!({"name": "x"})]).unwrap_err(), "KeyError: 'id'");
+        assert_eq!(
+            role_choices(&[json!({"name": "x"})]).unwrap_err(),
+            "KeyError: 'id'"
+        );
     }
 }

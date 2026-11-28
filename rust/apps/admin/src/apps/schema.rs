@@ -266,8 +266,7 @@ fn wire_field(field: &Value, what: &str) -> Result<(Widget, Value, Option<Choice
     let default = field.get("default").cloned().unwrap_or(Value::Null);
     let source = match field.get("choice_source") {
         Some(Value::String(text)) => Some(
-            ChoiceSource::parse(text)
-                .ok_or_else(|| format!("{what}: 知らない供給元 {text}"))?,
+            ChoiceSource::parse(text).ok_or_else(|| format!("{what}: 知らない供給元 {text}"))?,
         ),
         Some(_) => return Err(format!("{what}.choice_source が文字ではない")),
         None => widget.implied_source(),
@@ -321,13 +320,7 @@ fn parse_panel(panel: &Value) -> Result<Panel, String> {
     for collection in array_of(&panel["collections"], &format!("{id}.collections"))? {
         let key = text_of(&collection["key"], &format!("{id}.collections[].key"))?;
         let what = format!("{id}.{key}");
-        let item = wire_item(
-            sections,
-            &collection["section"],
-            "collections",
-            &key,
-            &what,
-        )?;
+        let item = wire_item(sections, &collection["section"], "collections", &key, &what)?;
         let mut item_sources = Vec::new();
         for (i, item_field) in array_of(&item["fields"], &format!("{what}.fields"))?
             .iter()
@@ -518,7 +511,11 @@ mod tests {
     #[test]
     fn fields_carry_their_widget_and_default() {
         let logging = schema().panel("logging").unwrap();
-        let level = logging.fields.iter().find(|f| f.key == "log_level").unwrap();
+        let level = logging
+            .fields
+            .iter()
+            .find(|f| f.key == "log_level")
+            .unwrap();
         assert_eq!(level.widget, Widget::Select);
         assert_eq!(level.default, json!("INFO"));
         assert_eq!(level.source, None);
@@ -529,7 +526,11 @@ mod tests {
         let quake = schema().panel("earthquake").unwrap();
         assert_eq!(quake.fields[1].default, json!(30));
         let tts = schema().panel("tts").unwrap();
-        let voice = tts.fields.iter().find(|f| f.key == "default_voice").unwrap();
+        let voice = tts
+            .fields
+            .iter()
+            .find(|f| f.key == "default_voice")
+            .unwrap();
         assert_eq!(voice.source, Some(ChoiceSource::TtsVoices));
     }
 
@@ -551,14 +552,21 @@ mod tests {
         );
         assert_eq!(to_json_value(Widget::Bool, &null, &json!("0")), json!(true));
         assert_eq!(
-            to_json_value(Widget::Checklist, &null, &json!({"a": true, "b": 0, "c": [1]})),
+            to_json_value(
+                Widget::Checklist,
+                &null,
+                &json!({"a": true, "b": 0, "c": [1]})
+            ),
             json!(["a", "c"])
         );
         assert_eq!(
             to_json_value(Widget::Checklist, &null, &json!([1, "x", null])),
             json!(["1", "x", "None"])
         );
-        assert_eq!(to_json_value(Widget::Checklist, &null, &json!("ab")), json!([]));
+        assert_eq!(
+            to_json_value(Widget::Checklist, &null, &json!("ab")),
+            json!([])
+        );
         assert_eq!(
             to_json_value(Widget::Int, &json!(60), &json!(" １２ ")),
             json!(12)
@@ -567,9 +575,15 @@ mod tests {
             to_json_value(Widget::Duration, &json!(600), &json!("abc")),
             json!(600)
         );
-        assert_eq!(to_json_value(Widget::Text, &null, &json!(true)), json!("True"));
+        assert_eq!(
+            to_json_value(Widget::Text, &null, &json!(true)),
+            json!("True")
+        );
         assert_eq!(to_json_value(Widget::Select, &null, &null), null);
-        assert_eq!(int_value("18446744073709551616"), json!("18446744073709551616"));
+        assert_eq!(
+            int_value("18446744073709551616"),
+            json!("18446744073709551616")
+        );
         assert_eq!(int_value("-5"), json!(-5));
     }
 

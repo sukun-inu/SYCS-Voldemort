@@ -1,4 +1,5 @@
-"""設定パネルの値を読む関数（Field.get・Collection.list・Panel.badge）と Field.to_json_value の基準を、本物の Python で作る。
+"""設定パネルの値を読む関数（Field.get・Collection.list・Panel.badge）と Field.to_json_value の基準を、
+本物の Python で作る。
 
 Rust の管理画面（rust/apps/admin）の tests/getters_golden.rs が読む。宣言（webapp_admin/schema/registry.py の PANELS）が
 指す読む関数を全部、例の設定の JSON ごとに呼び、答え（値か、例外の型の名前と文）を書く。関数の名前は schema.json と

@@ -316,7 +316,11 @@ mod tests {
         assert_eq!(position("/admin/api/apps/{app_id}"), apps + 1);
         assert!(position("/admin/overview") < apps);
         assert!(apps < position(LEGACY_PANELS[0].0));
-        assert!(routes[apps..apps + 2].iter().all(|route| !route.default_limit()));
+        assert!(
+            routes[apps..apps + 2]
+                .iter()
+                .all(|route| !route.default_limit())
+        );
         assert_eq!(routes[apps].allow(), "GET");
     }
 
@@ -343,7 +347,10 @@ mod tests {
         ];
         assert_eq!(labels, want);
         let with_dev = app_groups(&ctx, true);
-        assert_eq!(with_dev.as_array().unwrap().last().unwrap()["label"], "開発者");
+        assert_eq!(
+            with_dev.as_array().unwrap().last().unwrap()["label"],
+            "開発者"
+        );
         for group in groups.as_array().unwrap() {
             for tile in group["apps"].as_array().unwrap() {
                 assert_eq!(tile["badge"], Value::Null);

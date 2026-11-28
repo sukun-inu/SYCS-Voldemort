@@ -252,7 +252,9 @@ mod tests {
     #[test]
     fn the_not_loaded_message_matches_python() {
         let source = include_str!("../../../../../services/settings_pg.py");
-        assert!(source.contains("f\"設定を Postgres から {self._load_timeout:.0f} 秒以内に読み込めませんでした。\""));
+        assert!(source.contains(
+            "f\"設定を Postgres から {self._load_timeout:.0f} 秒以内に読み込めませんでした。\""
+        ));
         assert!(source.contains("\"接続先と、ログの [settings] の警告を確かめてください。\""));
         assert_eq!(
             not_loaded_message(Duration::from_secs(30)),

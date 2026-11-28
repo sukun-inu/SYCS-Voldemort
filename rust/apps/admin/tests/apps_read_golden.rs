@@ -215,8 +215,20 @@ async fn run_case(data: &Value, case: &Value, pages: &Arc<Pages>, fakes: &Fakes)
         for problem in compare_reply(&step["response"], &reply, request.method == Method::HEAD) {
             wrong.push(format!("{label}: {problem}"));
         }
-        compare_requests(&label, "Discord ", &step["discord"], &fakes.discord.take(), &mut wrong);
-        compare_requests(&label, "読み上げの API ", &step["tts"], &fakes.tts.take(), &mut wrong);
+        compare_requests(
+            &label,
+            "Discord ",
+            &step["discord"],
+            &fakes.discord.take(),
+            &mut wrong,
+        );
+        compare_requests(
+            &label,
+            "読み上げの API ",
+            &step["tts"],
+            &fakes.tts.take(),
+            &mut wrong,
+        );
     }
     let got = counters(&app);
     if got != case["counters"] {

@@ -173,7 +173,10 @@ mod tests {
     #[tokio::test]
     async fn the_timeout_matches_python_and_disabled_is_empty() {
         let source = include_str!("../../../../../webapp_admin/schema/choices.py");
-        assert!(source.contains("_VOICES_TIMEOUT = 3.0"), "choices.py の _VOICES_TIMEOUT が違う");
+        assert!(
+            source.contains("_VOICES_TIMEOUT = 3.0"),
+            "choices.py の _VOICES_TIMEOUT が違う"
+        );
         assert_eq!(VOICES_TIMEOUT, Duration::from_secs_f64(3.0));
         assert_eq!(Voices::disabled().choices().await, Ok(Vec::new()));
     }
