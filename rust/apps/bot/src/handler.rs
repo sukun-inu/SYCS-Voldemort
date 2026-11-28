@@ -507,7 +507,16 @@ impl Handler {
     }
 
     /// 合成して、読み上げの係に積む。合成に失敗したら積まない（Python と同じ）。
+    ///
+    /// 読み上げる VC に人間が 1 人もいなければ、合成の API を呼ばない（Python の `_vc_has_no_humans`。鳴らす直前
+    /// にも同じ確かめがある。合成している間に全員が抜けることがあるため）。VC でない・見つからないときは読む。
     async fn speak(&self, guild: u64, utterance: crate::tts::Utterance) {
+        if let Ok(vc) = u64::try_from(utterance.vc_channel_id)
+            && crate::tts_voice::nobody_to_hear(self.state.voice_out.as_ref(), guild, vc)
+        {
+            info!("[TTS] VC空のため合成しない guild={guild}");
+            return;
+        }
         let (url, synth_ms) = self
             .state
             .tts

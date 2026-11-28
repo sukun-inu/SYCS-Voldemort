@@ -28,6 +28,15 @@ pub const RECONNECT_DELAY: Duration = Duration::from_secs(2);
 /// 待ち受けの結果を返す箱。
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
+/// 読み上げる VC に聞く人間が 1 人もいないか（空か、Bot だけ）。VC でない・見つからないときは `false`
+/// （判断できないので読む）。Python の `_vc_has_no_humans`。
+///
+/// 合成の前と、鳴らす直前の両方で見る。合成の前に見ないと、誰もいない VC のために合成の API を呼んでから捨てる
+/// （本番のログで見つかった）。鳴らす直前にも見るのは、合成している間に全員が抜けることがあるため。
+pub fn nobody_to_hear(out: &(impl VoiceOut + ?Sized), guild: u64, vc: u64) -> bool {
+    out.humans_in(guild, vc) == Some(0)
+}
+
 /// VC への接続と再生の口。
 pub trait VoiceOut: Send + Sync + 'static {
     /// その VC につなぐ（既に別の VC なら移る）。つながったら `true`。Python の `voice_session.acquire`。
@@ -268,8 +277,8 @@ async fn player_loop(
     retry_delay: Duration,
 ) {
     while let Some(item) = queue.recv().await {
-        // 切ったあとに合成が終わったものを、空の VC で鳴らしに行かない。
-        if out.humans_in(guild, item.vc_channel_id) == Some(0) {
+        // 合成している間に全員が抜けたものを、空の VC で鳴らしに行かない。
+        if nobody_to_hear(out.as_ref(), guild, item.vc_channel_id) {
             info!("[TTS] VC空のためスキップ guild={guild}");
             continue;
         }
@@ -378,6 +387,21 @@ mod tests {
     }
 
     /// 積んだ順に、つないでから鳴らすこと。
+    /// 聞く人がいないのは、VC に人間が 0 人と分かったときだけ（分からない・1 人以上なら読む）。
+    #[test]
+    fn nobody_to_hear_only_when_the_vc_is_known_empty() {
+        let fake = Fake::default();
+        for (humans, expected) in [
+            (Some(0), true),
+            (Some(1), false),
+            (Some(3), false),
+            (None, false),
+        ] {
+            *fake.humans.lock().unwrap() = humans;
+            assert_eq!(nobody_to_hear(&fake, 1, 50), expected, "{humans:?}");
+        }
+    }
+
     #[tokio::test]
     async fn items_are_played_in_order() {
         let fake = Arc::new(Fake::default());
