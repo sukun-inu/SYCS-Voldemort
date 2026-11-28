@@ -125,15 +125,6 @@ fn is_executable(path: &Path) -> bool {
     std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
 }
 
-/// メタデータの補い（Deezer）。B10b で写す。いまは何もしない（`Ok(false)`。Python の「見つからない」と同じ扱い）。
-async fn enrich_metadata(
-    _mp3: &Path,
-    _info: &serde_json::Map<String, Value>,
-    _site: &str,
-) -> Result<bool, String> {
-    Ok(false)
-}
-
 /// 本物の落とし口（yt-dlp → 題 → 置き場へ登録）。Python の `_download_and_register`。
 pub struct Service {
     /// yt-dlp・ffmpeg・client_id の取り方。
@@ -142,6 +133,8 @@ pub struct Service {
     pub ids: SoundCloudIds,
     /// 置き場。
     pub cache: Cache,
+    /// メタデータの補い（Deezer。既定は本物の API。テストでは偽物に向ける）。
+    pub deezer: crate::djaudio_meta::Deezer,
 }
 
 impl Service {
@@ -151,6 +144,7 @@ impl Service {
             tools: config.tools.clone(),
             ids: SoundCloudIds::default(),
             cache: Cache::new(&config.cache_dir),
+            deezer: crate::djaudio_meta::Deezer::new(crate::djaudio_meta::DEFAULT_BASE),
         }
     }
 }
@@ -167,8 +161,17 @@ impl Downloader for Service {
         for mp3 in files {
             let info = download::load_info_json(&mp3)?;
             let title = match info.as_ref().filter(|v| python_truthy(Some(v))) {
-                Some(Value::Object(meta)) => {
-                    enrich_metadata(&mp3, meta, site::detect_site(meta)).await?;
+                Some(value @ Value::Object(meta)) => {
+                    // Python は戻り値を見ない（補えなかっただけなら、そのまま登録する）。例外が外へ抜ける入力
+                    // （Err）だけが、その URL の失敗になる。
+                    crate::djaudio_meta::enrich_metadata(
+                        &self.deezer,
+                        &mp3,
+                        value,
+                        site::detect_site(meta),
+                    )
+                    .await
+                    .map_err(|e| format!("メタデータの補いで例外: {e}"))?;
                     download::format_title(meta)
                 }
                 // 辞書でない info.json（配列・文字など）は、Python では `.get` が無くて例外になる。

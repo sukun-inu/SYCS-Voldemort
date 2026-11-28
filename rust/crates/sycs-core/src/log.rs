@@ -635,6 +635,8 @@ mod tests {
             ("sycs_bot::voice_session", "voice"),
             ("sycs_bot::djaudio::flow", "djaudio"),
             ("sycs_bot::commands::djaudio", "djaudio"),
+            ("sycs_bot::djaudio_meta", "djaudio"),
+            ("sycs_bot::djaudio_meta::id3", "djaudio"),
             ("sycs_bot::members", "bot"),
         ] {
             assert_eq!(category_for(target), category, "{target}");
