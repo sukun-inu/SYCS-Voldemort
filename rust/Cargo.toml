@@ -26,6 +26,8 @@ flate2 = { version = "=1.1.11" }
 futures-util = { version = "=0.3.34", default-features = false }
 # 地震の画像の文字を Pillow と同じに並べる（HarfBuzz の Rust への写し。raqm＝HarfBuzz と同じ並びを出す）。
 harfrust = { version = "=0.16.2", default-features = false }
+# DJAudio の配信の印（Python の uuid4 と同じく OS の乱数）。ロックに既にある版。
+getrandom = { version = "=0.3.4" }
 # ハッシュの 16 進表記（既にロックにある版）。
 hex = { version = "=0.4.3" }
 # URL の安全確認で、ASCII 以外のホスト名を reqwest と同じ変換（UTS46）にする。

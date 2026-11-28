@@ -105,6 +105,7 @@ struct Stage {
     colours: AvatarColours,
     tts: TtsApi,
     speaker: Speaker,
+    djaudio: sycs_bot::djaudio::Config,
     seen: Arc<Mutex<Vec<Seen>>>,
 }
 
@@ -125,6 +126,7 @@ impl Stage {
             colours: AvatarColours::new(),
             tts: TtsApi::new("http://127.0.0.1:9"),
             speaker: Speaker::new(Arc::new(NoVoice)),
+            djaudio: sycs_bot::djaudio::Config::from_env(&Env::from_fn(|_| None)),
             seen,
         }
     }
@@ -143,6 +145,7 @@ impl Stage {
             metals_site_url: "https://metals.example/",
             tts: &self.tts,
             speaker: &self.speaker,
+            djaudio: &self.djaudio,
         }
     }
 
@@ -248,13 +251,14 @@ async fn only_administrators_may_change_settings() {
     assert_eq!(after, before, "断ったのに設定を書いた");
 }
 
-/// まだ移していないコマンドには、その旨を返して何も書かないこと。
+/// 移したものに無いコマンドには、その旨を返して何も書かないこと。定義のコマンドは全部移したので、ここに来るのは
+/// Discord に古い定義が残っているとき（登録し直す前に打たれたもの）だけ。
 #[tokio::test]
 #[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
 async fn commands_not_ported_yet_say_so() {
     let data = json!({
         "id": "8001", "name": "djaudio", "type": 1,
-        "options": [{"name": "status", "type": 1, "options": []}],
+        "options": [{"name": "nope", "type": 1, "options": []}],
     });
     let before = json!({"sticky": {}});
     let (seen, after) = dispatch(interaction(OWNER, json!([]), data), before.clone()).await;
@@ -661,4 +665,69 @@ async fn bot_settings_and_help_reply_with_embeds_and_a_link() {
         body["components"][0]["components"][0]["label"],
         "⚙️ Web管理画面を開く"
     );
+}
+
+/// /djaudio channel を打つ（`permissions` は、打った人がそのチャンネルで持つ権限）。
+fn djaudio_channel(user_id: &str, permissions: &str) -> CommandInteraction {
+    let data = json!({
+        "id": "8002", "name": "djaudio", "type": 1,
+        "options": [{"name": "channel", "type": 1, "options": [
+            {"name": "channel", "type": 7, "value": LOG_CHANNEL}
+        ]}],
+        "resolved": {"channels": {LOG_CHANNEL: {
+            "id": LOG_CHANNEL, "name": "log", "type": 0, "permissions": "0"
+        }}},
+    });
+    let mut command = serde_json::to_value(interaction(user_id, json!([]), data)).unwrap();
+    command["member"]["permissions"] = json!(permissions);
+    serde_json::from_value(command).expect("コマンドの JSON")
+}
+
+/// /djaudio は、チャンネルの管理の権限が無ければ 2 通で断り（2 通目は応答のあとからの送信）、権限のある管理者なら
+/// 監視チャンネルを新旧の置き場に書いて、Embed とリンクのボタンで返すこと。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn djaudio_refuses_twice_without_the_permission() {
+    let stage = Stage::new(&json!({})).await;
+    stage
+        .http
+        .set_application_id(ApplicationId::new(APP.parse().unwrap()));
+    commands::dispatch(&stage.deps(), &djaudio_channel(OWNER, "0")).await;
+    let seen = stage.seen();
+    assert_eq!(seen.len(), 2, "{seen:#?}");
+    assert_eq!(seen[0].path, "/api/v10/interactions/7000/tok/callback");
+    assert_eq!(seen[0].body["type"], 4);
+    assert_eq!(seen[0].body["data"]["flags"], 64);
+    assert_eq!(
+        seen[0].body["data"]["content"],
+        "❌ チャンネル管理の権限がなければ使えぬ。"
+    );
+    assert_eq!(seen[1].path, format!("/api/v10/webhooks/{APP}/tok"));
+    assert_eq!(seen[1].body["flags"], 64);
+    assert_eq!(
+        seen[1].body["content"],
+        "❌ 余のコマンドを使う権限が貴様にはない。"
+    );
+    assert_eq!(stage.guild_settings(), json!({}), "断ったのに設定を書いた");
+
+    // 16 はチャンネルの管理（MANAGE_CHANNELS）。
+    let stage = Stage::new(&json!({})).await;
+    commands::dispatch(&stage.deps(), &djaudio_channel(OWNER, "16")).await;
+    let seen = stage.seen();
+    assert_eq!(seen.len(), 1, "{seen:#?}");
+    assert_eq!(seen[0].body["type"], 4);
+    assert_eq!(seen[0].body["data"]["flags"], 64);
+    assert_eq!(
+        seen[0].body["data"]["embeds"][0]["title"],
+        "✅ DJAudio チャンネル設定完了"
+    );
+    assert_eq!(
+        seen[0].body["data"]["components"][0]["components"][0]["style"],
+        5
+    );
+    let after = stage.guild_settings();
+    let id: u64 = LOG_CHANNEL.parse().unwrap();
+    assert_eq!(after["djaudio_watch_channel_id"], id);
+    assert_eq!(after["djaudio_watch_channel"], id);
+    assert_eq!(after["djaudio"]["watch_channel_id"], id);
 }

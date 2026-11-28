@@ -261,6 +261,14 @@ pub fn netloc(url: &str) -> Result<String, UrlSafetyError> {
         .map_err(|e| err(format!("invalid_url:{e}")))
 }
 
+/// Python の `urlparse(url).hostname`（小文字にしたホストの名前。無ければ `None`）。分解できない URL
+/// （括弧の合わない `https://[abc` など）は `Err`（Python は ValueError）。
+pub fn hostname_of(url: &str) -> Result<Option<String>, UrlSafetyError> {
+    urlsplit(url)
+        .map(|parts| hostname(&parts.netloc))
+        .map_err(|e| err(format!("invalid_url:{e}")))
+}
+
 /// 分解した URL のうち、安全確認に要るところ。
 struct Parts {
     scheme: String,

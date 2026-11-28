@@ -60,9 +60,106 @@ pub fn is(class: Class, c: char) -> bool {
     after > 0 && code <= table[after - 1].1
 }
 
+/// Python の小文字の表（`l`）と、`Σ` の判定に使う 2 つの範囲（`c` = Cased、`i` = Case_Ignorable）。
+/// `tests/fixtures/djaudio/generate_case.py` で Python 3.13 から作る。
+const CASE_TSV: &str = include_str!("python_case.tsv");
+
+/// 小文字の表と範囲を読んだもの。
+struct CaseTables {
+    lower: std::collections::HashMap<char, String>,
+    cased: Vec<(u32, u32)>,
+    ignorable: Vec<(u32, u32)>,
+}
+
+fn case_tables() -> &'static CaseTables {
+    static TABLES: OnceLock<CaseTables> = OnceLock::new();
+    TABLES.get_or_init(|| {
+        let mut tables = CaseTables {
+            lower: std::collections::HashMap::new(),
+            cased: Vec::new(),
+            ignorable: Vec::new(),
+        };
+        let hex = |s: &str| u32::from_str_radix(s, 16).ok();
+        for line in CASE_TSV.lines() {
+            let mut parts = line.trim_end().split('\t');
+            match (parts.next(), parts.next(), parts.next()) {
+                (Some("l"), Some(from), Some(to)) => {
+                    if let Some(from) = hex(from).and_then(char::from_u32) {
+                        let to: String = to
+                            .split(' ')
+                            .filter_map(|x| hex(x).and_then(char::from_u32))
+                            .collect();
+                        tables.lower.insert(from, to);
+                    }
+                }
+                (Some(kind @ ("c" | "i")), Some(start), Some(end)) => {
+                    if let (Some(start), Some(end)) = (hex(start), hex(end)) {
+                        let list = if kind == "c" {
+                            &mut tables.cased
+                        } else {
+                            &mut tables.ignorable
+                        };
+                        list.push((start, end));
+                    }
+                }
+                _ => {}
+            }
+        }
+        tables
+    })
+}
+
+fn in_ranges(ranges: &[(u32, u32)], c: char) -> bool {
+    let code = u32::from(c);
+    let after = ranges.partition_point(|(start, _)| *start <= code);
+    after > 0 && code <= ranges[after - 1].1
+}
+
+/// Python の `str.lower()`（Python 3.13 の表どおり。`Σ` は、前に大文字小文字のある文字があり、後ろに無ければ `ς`）。
+pub fn lower(text: &str) -> String {
+    let tables = case_tables();
+    let chars: Vec<char> = text.chars().collect();
+    let cased = |c: char| in_ranges(&tables.cased, c);
+    let ignorable = |c: char| in_ranges(&tables.ignorable, c);
+    let mut out = String::with_capacity(text.len());
+    for (i, &c) in chars.iter().enumerate() {
+        if c == '\u{3a3}' {
+            // CPython の handle_capital_sigma。
+            let before = chars[..i].iter().rev().find(|c| !ignorable(**c));
+            let mut last = before.is_some_and(|c| cased(*c));
+            if last && i + 1 < chars.len() {
+                last = chars[i + 1..]
+                    .iter()
+                    .find(|c| !ignorable(**c))
+                    .is_none_or(|c| !cased(*c));
+            }
+            out.push(if last { '\u{3c2}' } else { '\u{3c3}' });
+            continue;
+        }
+        match tables.lower.get(&c) {
+            Some(lowered) => out.push_str(lowered),
+            None => out.push(c),
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 小文字は Python と同じ（`İ` は 2 文字になる、`Σ` は語の終わりで `ς`、ケルビンの記号は `k`）。
+    #[test]
+    fn lower_follows_python() {
+        assert!(case_tables().lower.len() > 1400);
+        assert_eq!(lower("ABC Ä"), "abc ä");
+        assert_eq!(lower("\u{130}"), "i\u{307}");
+        assert_eq!(lower("\u{212a}"), "k");
+        assert_eq!(lower("ΣΑΣ ΟΔΟΣ."), "σας οδος.");
+        assert_eq!(lower("Σ"), "σ");
+        assert_eq!(lower("AΣ'b"), "aσ'b");
+        assert_eq!(lower("AΣ'"), "aς'");
+    }
 
     /// 表が読めていて、Python と Rust で見方が違う文字を、Python と同じに見ること。
     #[test]

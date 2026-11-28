@@ -92,6 +92,8 @@ pub struct BotConfig {
     pub metals_site_url: String,
     /// 合成の API の場所（`TTS_BASE_URL`。既定 `http://localhost:8080`。末尾の `/` は落とす）。
     pub tts_base_url: String,
+    /// DJAudio（配信のリンクの頭・置き場・既定の値・同時に落とす数・待つ長さ・yt-dlp と ffmpeg）。
+    pub djaudio: crate::djaudio::Config,
 }
 
 impl BotConfig {
@@ -162,6 +164,7 @@ impl BotConfig {
                 .unwrap_or_else(|| crate::tts::DEFAULT_BASE_URL.to_string())
                 .trim_end_matches('/')
                 .to_string(),
+            djaudio: crate::djaudio::Config::from_env(env),
         })
     }
 
