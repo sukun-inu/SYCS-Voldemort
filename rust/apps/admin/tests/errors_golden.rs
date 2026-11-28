@@ -5,10 +5,11 @@
 //! starlette の TestClient で回して作った。例は cases.json）。ここでも同じ形の経路（[`probes`]）を同じ順に足し、例ごとに
 //! 新しい app（数・回数の制限・インシデントの置き場が空）を作って、同じ要求を [`AdminApp::respond`] に渡す。
 //!
-//! 比べるもの: 状態・見出し（名前の順。同じ名前の中は足した順）・本文（バイトまで）、例ごとに足した数と、
-//! `incidents.jsonl` に足された行。**HTML の答えは、本文と大きさを比べない**（`error.html` は A2 が描く。A1 は仮の
-//! ページ）。Set-Cookie（描くときに入る CSRF の印を含む）を含むほかの見出しは比べる。
+//! 比べるもの: 状態・見出し（名前の順。同じ名前の中は足した順）・本文（バイトまで。HTML のエラーのページも、本物の
+//! テンプレート〔A2〕で描いて比べる。資材の URL は Python と同じく static の置き場を無い場所にした `?v=admin` の形）、
+//! 例ごとに足した数と、`incidents.jsonl` に足された行。
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -16,11 +17,14 @@ use axum::body::Bytes;
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method};
 use serde_json::{Value, json};
 use sycs_admin::app::{AdminApp, Config, Deps, Incoming, Random, Reply, Req, handler};
-use sycs_admin::errors::{Crash, Failure, HttpError, PlainPages};
+use sycs_admin::auth::{Discord, DiscordConfig};
+use sycs_admin::errors::{Crash, Failure, HttpError};
 use sycs_admin::metrics::INCIDENTS_FILE;
 use sycs_admin::python;
 use sycs_admin::routes;
 use sycs_admin::routing::Route;
+use sycs_admin::templates::{Pages, PagesConfig};
+use sycs_admin::views::Site;
 use sycs_core::metrics::Reporter;
 use sycs_web::proxy::{DEFAULT_TRUSTED_PROXIES, TrustedHosts};
 
@@ -289,10 +293,6 @@ fn compare(want: &Value, got: &Reply, head: bool) -> Vec<String> {
     if u64::from(got.status) != status {
         wrong.push(format!("状態: Python {status} / Rust {}", got.status));
     }
-    let html = got
-        .header("content-type")
-        .is_some_and(|t| t.starts_with("text/html"));
-    let skip = |name: &str| html && name == "content-length";
     let python: Vec<(String, String)> = want["headers"]
         .as_array()
         .unwrap()
@@ -303,11 +303,9 @@ fn compare(want: &Value, got: &Reply, head: bool) -> Vec<String> {
                 p[1].as_str().unwrap().to_string(),
             )
         })
-        .filter(|(n, _)| !skip(n))
         .collect();
     let rust: Vec<(String, String)> = pairs(&got.headers)
         .into_iter()
-        .filter(|(n, _)| !skip(n))
         .map(|(n, v)| {
             let v = if n == "allow" { sorted_allow(&v) } else { v };
             (n, v)
@@ -319,7 +317,7 @@ fn compare(want: &Value, got: &Reply, head: bool) -> Vec<String> {
         ));
     }
     let body = want["body"].as_str().unwrap();
-    if !html && !head && got.body != body.as_bytes() {
+    if !head && got.body != body.as_bytes() {
         wrong.push(format!(
             "本文:\n    Python {body:?}\n    Rust   {:?}",
             String::from_utf8_lossy(&got.body)
@@ -328,8 +326,37 @@ fn compare(want: &Value, got: &Reply, head: bool) -> Vec<String> {
     wrong
 }
 
+/// 本物のテンプレート（リポジトリの `webapp_admin/templates`。static は無い場所）と、経路の係が使うもの
+/// （Discord にはつながない。この基準の例は Discord を呼ぶ経路を踏まない）。
+fn shared_site() -> (Arc<Pages>, Arc<Site>) {
+    let config = PagesConfig {
+        templates_dir: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../webapp_admin/templates"),
+        static_dir: PathBuf::from("/nonexistent-admin-fixture-static"),
+        asset_version: "admin".to_string(),
+    };
+    let pages = Arc::new(Pages::load(&config).unwrap());
+    let discord = Discord::new(
+        DiscordConfig::from_lookup(|_| None),
+        "http://127.0.0.1:9/api/v10",
+    )
+    .unwrap();
+    let site = Site::new(
+        Arc::clone(&pages),
+        Arc::new(discord),
+        Arc::new(|| Ok(0)),
+        Arc::new(|| "unused-state".to_string()),
+    );
+    (pages, Arc::new(site))
+}
+
 /// 例ごとの app（数・回数の制限・インシデントの置き場が空。乱数は 1 から）。
-fn app(data: &Value, case: &Value, dir: &std::path::Path) -> Arc<AdminApp> {
+fn app(
+    data: &Value,
+    case: &Value,
+    dir: &std::path::Path,
+    shared: &(Arc<Pages>, Arc<Site>),
+) -> Arc<AdminApp> {
     let now = data["now"].as_f64().unwrap() + data["now_fraction"].as_f64().unwrap();
     let config = Config {
         secure_cookies: case["secure"].as_bool().unwrap_or(false),
@@ -345,10 +372,10 @@ fn app(data: &Value, case: &Value, dir: &std::path::Path) -> Arc<AdminApp> {
             tokens: AtomicU64::new(0),
             ids: AtomicU64::new(0),
         }),
-        pages: Arc::new(PlainPages),
+        pages: shared.0.clone(),
         reporter: Arc::new(Reporter::new("test", None)),
     };
-    let mut table = routes::default_routes();
+    let mut table = routes::default_routes(&shared.1);
     table.extend(probes());
     Arc::new(AdminApp::new(
         config,
@@ -375,6 +402,7 @@ async fn the_skeleton_answers_like_python() {
     let data = expected();
     let cases = data["cases"].as_array().unwrap();
     assert!(cases.len() >= 50, "基準の例が足りない（{}）", cases.len());
+    let shared = shared_site();
     let mut wrong = Vec::new();
     let mut requests = 0;
     for case in cases {
@@ -384,7 +412,7 @@ async fn the_skeleton_answers_like_python() {
             continue;
         }
         let dir = tempfile::tempdir().unwrap();
-        let app = app(&data, case, dir.path());
+        let app = app(&data, case, dir.path(), &shared);
         for (i, step) in case["steps"].as_array().unwrap().iter().enumerate() {
             let request = incoming(&step["request"]);
             let repeat = step["repeat"].as_u64().unwrap_or(1);

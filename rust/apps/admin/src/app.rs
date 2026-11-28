@@ -796,7 +796,7 @@ mod tests {
             pages: Arc::new(PlainPages),
             reporter: Arc::new(Reporter::new("test", None)),
         };
-        let mut routes = crate::routes::default_routes();
+        let mut routes = crate::routes::default_routes(&crate::views::tests::test_site());
         routes.extend(extra);
         Arc::new(AdminApp::new(config, "secret", deps, routes))
     }

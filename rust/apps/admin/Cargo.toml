@@ -24,6 +24,8 @@ minijinja = { workspace = true, features = ["loader"] }
 percent-encoding = { workspace = true }
 # 経路の引き方を Starlette の正規表現と同じにする（`$` の扱いだけ書き換える）。
 regex = { workspace = true }
+# Discord の API（ログインの OAuth と、Bot のトークンで引くサーバーとメンバー。A3）。Bot と同じ版・同じ TLS（rustls）。
+reqwest = { workspace = true, features = ["rustls-tls"] }
 # セッションの中身を、入れた鍵の順のまま読み書きする（Python の dict と同じ順）。
 serde_json = { workspace = true, features = ["preserve_order"] }
 sha1 = { workspace = true }
