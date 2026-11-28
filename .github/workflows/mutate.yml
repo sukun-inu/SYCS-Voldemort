@@ -1,0 +1,79 @@
+name: 変異テスト
+
+# コードを 1 か所ずつわざと壊して、テストが落ちることを確かめる（テストが振る舞いを本当に見ているか）。
+# 一覧は tools/mutate/lists/ の下に書き、手で回す:
+#   gh workflow run mutate.yml --ref <ブランチ> -f list=tools/mutate/lists/<名前>.py
+# 結果は run の Summary に表で出る。1 つでも捕まらなければ落ちる。道具は tools/mutate/run.py。
+#
+# **手元の PC では回さない**（変異の数だけビルドとテストを繰り返すので重い。本人の指示 2026-11-28）。
+on:
+  workflow_dispatch:
+    inputs:
+      list:
+        description: 変異の一覧（tools/mutate/lists/ の下の .py）
+        required: true
+
+jobs:
+  kind:
+    name: 一覧の種類を読む
+    runs-on: ubuntu-latest
+    outputs:
+      kind: ${{ steps.read.outputs.kind }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: read
+        env:
+          LIST: ${{ inputs.list }}
+        run: |
+          kind=$(python3 -c 'import runpy, sys; print(runpy.run_path(sys.argv[1])["KIND"])' "$LIST")
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+
+  rust:
+    name: Rust の変異
+    needs: kind
+    if: needs.kind.outputs.kind == 'rust'
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    # rust.yml と同じイメージ（版は rust/rust-toolchain.toml と揃える）。テストは本番の CPU のふりをしない
+    # （QEMU は遅い。変異が捕まるかを見るだけなので、ふつうに動かせば足りる）。
+    container: rust:1.100.0-slim-bookworm
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: ci-only
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: ビルドに要るものとフォントを入れる
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends libopus-dev cmake pkg-config fonts-noto-cjk python3
+      - name: Rust を入れる
+        working-directory: rust
+        run: rustup toolchain install
+      - name: 変異を当てて回す
+        env:
+          LIST: ${{ inputs.list }}
+          SYCS_TEST_DATABASE_URL: postgres://postgres:ci-only@postgres:5432/postgres
+        run: python3 tools/mutate/run.py "$LIST"
+
+  python:
+    name: Python の変異
+    needs: kind
+    if: needs.kind.outputs.kind == 'python'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    container: python:3.13-slim
+    steps:
+      - uses: actions/checkout@v7
+      - name: 依存を入れる
+        run: pip install -q -r requirements.txt -r requirements-dev.txt
+      - name: 変異を当てて回す
+        env:
+          LIST: ${{ inputs.list }}
+        run: python tools/mutate/run.py "$LIST"
