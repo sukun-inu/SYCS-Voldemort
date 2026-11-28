@@ -26,7 +26,7 @@
 | イメージに deno（JavaScript の実行環境）を入れた。いまの yt-dlp は、deno が無いと YouTube を非推奨の取り方で取り、形式が欠けることがある（その警告は DJAudio が付ける `--no-warnings` で出ていなかった）。yt-dlp は PATH の deno を自分で見つける | DJAudio が YouTube の URL を本来の取り方で落とすようになる。イメージが 100MB ほど大きくなる | 再デプロイのときにビルドし直す |
 | ニュースの配信で、送った記事の印を直近 100 件しか覚えていなかった。Google News の RSS は 1 回に 100〜106 件ほど返すので、古い記事の印が押し出されて「まだ送っていない」に戻り、**同じ記事を巡回のたびに送り直し続けることがあった**。覚える数を 300 件にした（`services/settings_store.py` の `NEWS_SEEN_HASHES_KEEP`） | 上げたあとの巡回から送り直しが止まる。上げる前にすでに押し出されていた記事（1 フィードに数件）は、もう 1 回だけ送られうる（そこで覚えるので、それ以後は送らない） | なし |
 | `rust/` を足した（Rust への移行の置き場と、VC の確認用の道具） | 本番には関係しない | なし |
-| compose の Bot のサービスに `BOT_DOCKERFILE`（Bot の実装を選ぶ。既定は Python）と `BOT_SYNC_COMMANDS`（既定は真）を足した | **何も設定しなければ今までどおり Python の Bot が動く**（Python の Bot は `BOT_SYNC_COMMANDS` を読まない）。Rust の Bot への切り替えは 5. | なし |
+| compose の Bot のサービスに、Bot の実装を選ぶ `BOT_IMAGE`・`BOT_PULL_POLICY`・`BOT_DOCKERFILE` と、`BOT_SYNC_COMMANDS`（既定は真）を足した | **何も設定しなければ今までどおり Python の Bot が動く**（このサーバーで作る。Python の Bot は `BOT_SYNC_COMMANDS` を読まない）。既定では立ち上げのたびにこのサーバーでイメージを作る（`pull_policy: build`。今も再デプロイのたびに作り直しているので、実際の差はない）。Rust の Bot への切り替えは 5. | なし |
 
 依存の更新の中身と理由は `requirements.txt` のコメントにあります。特に SQLAlchemy は
 `SQLAlchemy[asyncio]` と書いてあることが必要です（外すと全プロセスが起動できない）。
@@ -89,8 +89,8 @@ python scripts/export_settings_to_file.py
 ## 5. Rust の Bot に切り替える
 
 Bot（`sycs-voldemort` のコンテナ）だけを、Python の Bot から Rust の Bot に入れ替えます。管理画面・Web・配信
-（`/dlaudio`）は Python のままです。環境変数の名前と意味は Python と同じにしてあるので、**変えるのは 1 つだけ**
-です。
+（`/dlaudio`）は Python のままです。環境変数の名前と意味は Python と同じにしてあるので、**足すのは Bot の実装を
+選ぶ環境変数 3 つだけ**です。
 
 **切り替える前に満たしていること。**
 
@@ -99,13 +99,21 @@ Bot（`sycs-voldemort` のコンテナ）だけを、Python の Bot から Rust 
 - `main` に「DJAudio のメタデータの補い（Deezer。トラッカーの B10b）」が入っている。入っていない版で切り替えると、
   DJAudio の MP3 に曲名・アーティスト・カバー画像のタグが付かなくなる
 
-**手順。**
+**手順。** Rust の Bot のイメージは、CI が `main` への push のたびに作って GHCR に置いています
+（`ghcr.io/sukun-inu/sycs-voldemort-bot-rs`。テストが全部通った版だけ）。本番のサーバーはそれを取ってくるだけで、
+Rust のコンパイルはしません。
 
-1. Portainer のスタックの環境変数に `BOT_DOCKERFILE=docker/bot-rs.Dockerfile` を足す。ほかは変えない。
+1. 取ってこられることを確かめる。本番のサーバーで `docker pull ghcr.io/sukun-inu/sycs-voldemort-bot-rs:main` が
+   ログインなしで通ること
+2. Portainer のスタックの環境変数に 3 つ足す。ほかは変えない。
+   - `BOT_IMAGE=ghcr.io/sukun-inu/sycs-voldemort-bot-rs:main`（版を決め打ちにするなら `:sha-<コミット>`）
+   - `BOT_PULL_POLICY=always`（作らずに取ってくる）
+   - `BOT_DOCKERFILE=docker/bot-rs.Dockerfile`（Portainer で「作り直す」を選んでも、Rust の Bot を作るように。
+     作ることになると、このサーバーでコンパイルするので 30 分以上かかる）
    （`BOT_SYNC_COMMANDS` を偽にしていないこと。偽だとスラッシュコマンドの定義を登録し直さない）
-2. スタックをリポジトリから取り直し、イメージを作り直して再デプロイする。Bot のイメージが Rust のものになる
-   （最初のビルドは 10〜20 分かかる）。同じ名前のコンテナを作り直すので、Python の Bot と同時には動かない。
-3. 下の表を確かめる。
+3. スタックを再デプロイする（イメージを取り直す設定で）。同じ名前のコンテナを作り直すので、Python の Bot と
+   同時には動かない。新しい `main` の版に上げるときも、同じく再デプロイするだけ（`:main` を取り直す）
+4. 下の表を確かめる
 
 | 確かめること | どう確かめるか | 何がまずいと失敗するか |
 |---|---|---|
@@ -117,7 +125,8 @@ Bot（`sycs-voldemort` のコンテナ）だけを、Python の Bot から Rust 
 | DJAudio | 監視チャンネルに YouTube の URL を貼り、⏳ → ✅ とリンクが返り、リンクから落とせる（配信は今までどおり管理画面のコンテナ） | 失敗が続くなら、ログのカテゴリ `djaudio` の行（yt-dlp の誤りの末尾も出る） |
 | ログが続いている | `bot.log`・`bot.jsonl` に、Python の Bot の行のあとから Rust の Bot の行が続く（同じファイル名） | |
 
-**戻し方。** `BOT_DOCKERFILE` を消して（Python の `Dockerfile` に戻して）再デプロイします。
+**戻し方。** 足した 3 つの環境変数を消して再デプロイします（このサーバーで Python の Bot を作る）。Rust の Bot の
+ひとつ前の版に戻したいだけなら、`BOT_IMAGE` を `:sha-<ひとつ前のコミット>` にして再デプロイします。
 
 - 設定・利用者の状態・依頼は、Python と Rust で同じ表を同じ形で使っているので、戻しても失いません（Rust の Bot が
   書いた分も Python の Bot が読めます）。

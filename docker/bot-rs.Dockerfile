@@ -2,9 +2,10 @@
 #
 #   docker build -f docker/bot-rs.Dockerfile -t sycs-bot-rs .
 #
-# 本番の compose では、Bot のサービス（sycs-voldemort）が BOT_DOCKERFILE でこのファイルを選んだときだけ使う
-# （既定は Python の Dockerfile。切り替えと戻し方は docs/UPGRADE.ja.md の 5.）。CI がビルドし、下の cpu-check の
-# 段で、本番の CPU（Sandy Bridge）のふりで起動できることを確かめる。
+# CI がビルドし、下の cpu-check の段で、本番の CPU（Sandy Bridge）のふりで起動できることを確かめてから、main の版を
+# GHCR（ghcr.io/<持ち主>/sycs-voldemort-bot-rs）に置く（.github/workflows/rust.yml）。本番はそれを取ってくるだけで、
+# 本番のサーバーではこのファイルからは作らない（compose の BOT_IMAGE。BOT_DOCKERFILE は Portainer で「作り直す」を
+# 選んだときの備え）。既定は Python の Bot のまま。切り替えと戻し方は docs/UPGRADE.ja.md の 5.。
 #
 # ■ 版
 #

@@ -190,11 +190,20 @@ services:
     mem_limit: 256m
 
   sycs-voldemort:
+    # Bot の実装を選ぶ。**既定は Python**（このサーバーで Dockerfile から作る）。Rust の Bot は CI が作って
+    # GHCR に置いたイメージを取ってくる（このサーバーでは Rust をコンパイルしない）。切り替えるときは 3 つ:
+    #   BOT_IMAGE=ghcr.io/sukun-inu/sycs-voldemort-bot-rs:main   取ってくるイメージ
+    #   BOT_PULL_POLICY=always                                   作らずに取ってくる
+    #   BOT_DOCKERFILE=docker/bot-rs.Dockerfile                  「作り直す」を選んでも Rust の Bot を作るように
+    # 環境変数の名前と意味は Python と同じなので、ほかは変えなくてよい。切り替え・確かめ方・戻し方は
+    # docs/UPGRADE.ja.md の 5.。
+    #
+    # 既定の pull_policy は build（立ち上げのたびにこのサーバーで作る。どこからも取ってこない）。missing に
+    # しないこと: 手元にしか無いはずの名前を、まず Docker Hub に取りに行く（同じ名前を置かれると、それを動かす）。
+    image: ${BOT_IMAGE:-sycs-voldemort-bot:local}
+    pull_policy: ${BOT_PULL_POLICY:-build}
     build:
       context: .
-      # Bot の実装を選ぶ。既定は Python（Dockerfile）。Rust の Bot に切り替えるときだけ
-      # BOT_DOCKERFILE=docker/bot-rs.Dockerfile にする（環境変数の名前と意味は同じなので、
-      # ほかは変えなくてよい）。切り替え・確かめ方・戻し方は docs/UPGRADE.ja.md の 5.。
       dockerfile: ${BOT_DOCKERFILE:-Dockerfile}
     container_name: sycs-voldemort
     restart: unless-stopped
