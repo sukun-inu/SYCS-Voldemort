@@ -57,6 +57,8 @@ GENERATORS = [
     ("web_proxy", ".", ["rust/crates/sycs-web/tests/fixtures/proxy/generate.py"], None, False),
     # 配信（/dlaudio/。管理画面のアプリに入っている dlaudio_router。Rust の apps/cdn。W1・rust-07）。
     ("cdn_dlaudio", ".", ["rust/apps/cdn/tests/fixtures/dlaudio/generate.py"], None, False),
+    # Web（rust/apps/web）: API の基準（expected.json）。道具が自分の隣に書き出す（W3 の下ごしらえ）。
+    ("web_prices_calculate", ".", ["rust/apps/web/tests/fixtures/prices_calculate/generate.py"], None, False),
 ]
 
 
