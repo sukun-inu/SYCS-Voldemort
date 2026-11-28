@@ -13,7 +13,7 @@
 
 [workspace]
 resolver = "3"
-members = ["apps/bot", "crates/sycs-core", "crates/sycs-text", "tools/voice-check"]
+members = ["apps/bot", "crates/sycs-core", "crates/sycs-imaging", "crates/sycs-text", "tools/voice-check"]
 
 # 依存の版はここで 1 回だけ決める（各 crate は `{ workspace = true }` で受け取る）。
 #
@@ -37,6 +37,9 @@ indexmap = { version = "=2.14.2" }
 # ニュースの「送った記事」の印（リンクの md5。Python の hashlib.md5 と同じ値にする）。sqlx が既に使っている版。
 md-5 = { version = "=0.11.0", default-features = false }
 percent-encoding = { version = "=2.3.2" }
+# 地震の地図のタイル（PNG）を、ファイルに入っている色の形のまま読む（明るさへの直し方を Pillow に
+# 合わせるため）。image が既に使っている版。
+png = { version = "=0.18.1" }
 redis = { version = "=1.8.3", default-features = false }
 # リアクションロールの絵文字の照合で、Python と同じ正規表現をそのまま使う（ログのフィルタが既に使っている版）。
 regex = { version = "=1.13.2" }
@@ -54,6 +57,8 @@ songbird = { version = "=0.6.1" }
 sqlx = { version = "=0.9.1", default-features = false }
 symphonia = { version = "=0.5.5" }
 sycs-core = { path = "crates/sycs-core" }
+# Pillow と画素まで同じ結果を出す画像処理（地震の地図の図形・ぼかし・重ね合わせ・拡大縮小）。
+sycs-imaging = { path = "crates/sycs-imaging" }
 sycs-text = { path = "crates/sycs-text" }
 tempfile = { version = "=3.27.0" }
 tokio = { version = "=1.54.1" }
@@ -103,4 +108,10 @@ opt-level = 3
 
 # 基準と比べるハッシュ（文字のテストは 1 回に数百 MB の画素を通す。最適化なしだと QEMU の上で分単位になる）。
 [profile.dev.package.sha2]
+opt-level = 3
+
+# 地震の地図の図形・ぼかし・重ね合わせ・拡大縮小（crates/sycs-imaging）も、画素を 1 つずつ回す。最適化なしだと
+# 地図 1 枚（2400×1440 で描いて縮める）に 5 秒かかり、CI（QEMU の Sandy Bridge のふり）ではその数倍になる
+# （地図 12 枚の突き合わせが 7 分）。この crate だけ最適化すれば 1 枚 0.3 秒で済む。
+[profile.dev.package.sycs-imaging]
 opt-level = 3
