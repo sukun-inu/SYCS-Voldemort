@@ -37,6 +37,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
     -o /usr/local/bin/yt-dlp && chmod a+rx /usr/local/bin/yt-dlp
 
+# deno は、yt-dlp が YouTube の問題（署名・n パラメータ）を解くのに使う JavaScript の実行環境。
+# 無いと yt-dlp は YouTube を非推奨の取り方で取り、形式が欠けることがある（その警告は
+# services/djaudio_service.py が付ける --no-warnings で出ない）。yt-dlp は PATH の deno を
+# 自分で見つける（解く部品の yt_dlp_ejs は上の yt-dlp に入っている）。yt-dlp と同じく最新にする。
+# 本番の CPU（Sandy Bridge）で JavaScript が走ることは QEMU で確かめた。
+COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
+
 # アプリ本体をコピー
 COPY . .
 
