@@ -1,0 +1,27 @@
+[package]
+name = "sycs-cdn"
+version = "0.1.0"
+description = "DJAudio-DL の配信（/dlaudio/）。Python の services/djaudio_cdn.py を置き換え、ファイルは nginx に送らせる（X-Accel-Redirect）"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+# 版は rust/Cargo.toml の [workspace.dependencies] で決める。
+[dependencies]
+axum = { workspace = true, features = ["http1", "tokio"] }
+# 情報の JSON を、書いてある鍵の順のまま読み書きする（Python の dict と同じ順。sycs-core も同じ機能を使っている）。
+serde_json = { workspace = true, features = ["preserve_order"] }
+sycs-core = { workspace = true }
+sycs-web = { workspace = true }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+# 基準の置いたファイル（16 進）を戻す。Bot が既に使っている版。
+hex = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync"] }

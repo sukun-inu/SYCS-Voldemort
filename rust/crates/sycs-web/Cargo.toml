@@ -1,0 +1,25 @@
+[package]
+name = "sycs-web"
+version = "0.1.0"
+description = "Rust の web のアプリ（配信・管理画面・公開サイト）が共通で使う土台（待ち受け・ログの置き場・メトリクス・信頼するプロキシ・健康の確認）"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+# 版は rust/Cargo.toml の [workspace.dependencies] で決める。
+[dependencies]
+# HTTP の受け口（tokio の上。serenity と同じ下回り）。HTTP/1.1 だけ（前に nginx が立つ）。
+axum = { workspace = true, features = ["http1", "tokio"] }
+# URL のパスの %XX を戻す（uvicorn と同じ戻し方）。sycs-core が既に使っている版。
+percent-encoding = { workspace = true }
+sycs-core = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "signal", "time"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

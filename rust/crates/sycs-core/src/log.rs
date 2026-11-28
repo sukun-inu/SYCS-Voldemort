@@ -90,6 +90,13 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     // Python の services.djaudio_*・commands.djaudio_commands（djaudio）と同じ棚。
     ("sycs_bot::djaudio", "djaudio"),
     ("sycs_bot::commands::djaudio", "djaudio"),
+    // Rust の web の土台（待ち受け・信頼するプロキシ・メトリクス）は、Python の uvicorn・starlette と同じ棚。
+    ("sycs_web", "http"),
+    ("axum", "http"),
+    // 配信は Python の services.djaudio_cdn・cdn_main と同じ棚。置き場を読むところは、Python の
+    // services.djaudio_cache（djaudio）と同じ棚。
+    ("sycs_cdn", "cdn"),
+    ("sycs_cdn::cache", "djaudio"),
     ("voice_check", "voice"),
     ("songbird", "voice"),
     ("davey", "voice"),
@@ -638,6 +645,11 @@ mod tests {
             ("sycs_bot::djaudio_meta", "djaudio"),
             ("sycs_bot::djaudio_meta::id3", "djaudio"),
             ("sycs_bot::members", "bot"),
+            // 配信（Rust の apps/cdn）は Python の配信と同じ棚、置き場を読むところは djaudio、土台は http。
+            ("sycs_cdn::app", "cdn"),
+            ("sycs_cdn::cache", "djaudio"),
+            ("sycs_web::serve", "http"),
+            ("sycs_web::proxy", "http"),
         ] {
             assert_eq!(category_for(target), category, "{target}");
         }

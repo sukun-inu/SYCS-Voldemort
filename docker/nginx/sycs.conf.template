@@ -1,0 +1,163 @@
+# 管理画面（5001）と Web（8000）の受け口。公式イメージの入口が envsubst で SYCS_ で始まる環境変数を埋め、
+# /tmp/nginx/sycs.conf に書く（NGINX_ENVSUBST_FILTER=^SYCS_。nginx 自身の $変数 は埋めない）。
+#
+#   SYCS_ADMIN_UPSTREAM     管理画面のアプリ（既定 sycs-voldemort-admin:5001。Python。Rust の管理画面ができたら切り替える）
+#   SYCS_WEB_UPSTREAM       Web のアプリ（既定 sycs-voldemort-web:8000。Python）
+#   SYCS_CDN_UPSTREAM       配信（既定 sycs-voldemort-cdn:5002。Rust の apps/cdn。Python の管理画面へ戻すなら
+#                           sycs-voldemort-admin:5001 にする。Python はファイルを自分で送る）
+#   SYCS_DJAUDIO_CACHE_DIR  配信のファイルの置き場（既定 /app/data/djaudio_cache。Bot と同じボリュームを読み取り専用で）
+#   SYCS_RESOLVER           上流の名前を引く DNS（既定 127.0.0.11。Docker の中の DNS）
+#   SYCS_SECURE_COOKIES     管理画面の FLASK_SECURE_COOKIES と同じ値（真なら、nginx が返す管理画面の /static/ にも HSTS）
+#
+# ■ 上流は名前を、リクエストのたびに引く
+#
+# proxy_pass に変数を渡しているのはそのため（resolver で引き直す）。名前を直に書くと、nginx の起動のときに
+# 引けない（管理画面が再起動中など）だけで nginx が起動しない。変数で渡したときは、リクエストの URI を
+# クライアントが送ったまま（%XX を戻さず、.. も畳まずに）上流へ渡す。Python も Rust も、自分で戻して引く。
+#
+# ■ 上流へ渡す見出し
+#
+#   Host               クライアントが送ったまま（Python は Host から付け替え先の URL を作り、Web は ALLOWED_HOSTS で見る）
+#   X-Forwarded-For    受けたものに、nginx の前の相手（$remote_addr）を足す。nginx は信頼するプロキシの帯域
+#                      （TRUSTED_PROXY_CIDRS の既定の 172.16.0.0/12）に入るので、上流は右から信頼しない相手を探して
+#                      本当の接続元を得る。nginx を挟む前（Cloudflare のトンネル → アプリ）と同じ相手になる
+#   X-Real-IP          受けたものをそのまま（nginx は作らない。Web の Python は X-Real-IP を X-Forwarded-For より先に
+#                      読むので、nginx が自分の前の相手で埋めると数え先が変わる）
+#   X-Forwarded-Proto  受けたものをそのまま（トンネルが付けたもの。無ければ付けない＝上流は http とみなす。前と同じ）
+
+resolver ${SYCS_RESOLVER} valid=10s ipv6=off;
+resolver_timeout 5s;
+
+# 管理画面の HSTS（_apply_security_headers。FLASK_SECURE_COOKIES が 1/true/yes/on のときだけ）。空なら付かない。
+map "${SYCS_SECURE_COOKIES}" $sycs_admin_hsts {
+    default "";
+    "~*^(1|true|yes|on)$" "max-age=31536000; includeSubDomains";
+}
+
+# Web の /static/ の Cache-Control（webapp/app.py の VersionedStaticFiles）。問い合わせに「v=」で始まる 3 文字以上の
+# 部分があれば内容ハッシュつきの URL なので 1 年、無ければ 5 分。200 のときだけ付ける（304・206 などには付けない）。
+map $args $sycs_web_static_versioned {
+    default 0;
+    "~(^|&)v=[^&]" 1;
+}
+map "$status:$sycs_web_static_versioned" $sycs_web_static_cache_control {
+    default "";
+    "200:1" "public, max-age=31536000, immutable";
+    "200:0" "public, max-age=300, must-revalidate";
+}
+
+proxy_http_version 1.1;
+proxy_set_header Connection "";
+proxy_set_header Host $http_host;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Real-IP $http_x_real_ip;
+proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+# 管理画面の SQL や開発者パネルの重い処理を、nginx が先に打ち切らないように長めにする（前の Cloudflare は 100 秒）。
+proxy_read_timeout 300s;
+proxy_send_timeout 300s;
+# 大きい応答を /tmp（tmpfs。メモリ）に溜めない。クライアントが遅ければ、上流からの読み取りを待たせる。
+proxy_max_temp_file_size 0;
+# Python のアプリは本文の大きさを nginx の既定（1MB）では切っていない（設定の取り込みは 512KB を超えると自分で断る）。
+# 前の Cloudflare の上限（100MB）に合わせる。
+client_max_body_size 100m;
+
+server {
+    listen 5001;
+    server_name _;
+
+    set $sycs_admin_upstream "http://${SYCS_ADMIN_UPSTREAM}";
+    set $sycs_cdn_upstream "http://${SYCS_CDN_UPSTREAM}";
+
+    location / {
+        proxy_pass $sycs_admin_upstream;
+    }
+
+    # /dlaudio（末尾の / 無し）は管理画面へ。これが無いと nginx が /dlaudio/ への 301 を自分で返す
+    # （Python は 404。/dlaudio/ の下の経路ではないので、配信には回さない）。
+    location = /dlaudio {
+        proxy_pass $sycs_admin_upstream;
+    }
+
+    # 配信のリンク。Rust の配信がリンクを確かめ、X-Accel-Redirect でこの下の内側の場所を指す。
+    location /dlaudio/ {
+        proxy_pass $sycs_cdn_upstream;
+    }
+
+    # 配信のファイル（内側の場所。外からは 404）。X-Accel-Redirect で来たときは、配信の答えの Content-Type・
+    # Content-Disposition がそのまま使われる。ほかの見出しは nginx が捨てるので、配信が付けたセキュリティの見出しと
+    # Vary をここで写す（$upstream_http_* は、内側へ移ったあとも配信の答えのものを指す）。Range・大きさ・日付・ETag は nginx。
+    location /_sycs_djaudio/ {
+        internal;
+        alias ${SYCS_DJAUDIO_CACHE_DIR}/;
+        add_header X-Content-Type-Options $upstream_http_x_content_type_options always;
+        add_header X-Frame-Options $upstream_http_x_frame_options always;
+        add_header Referrer-Policy $upstream_http_referrer_policy always;
+        add_header Strict-Transport-Security $upstream_http_strict_transport_security always;
+        add_header Content-Security-Policy $upstream_http_content_security_policy always;
+        add_header Vary $upstream_http_vary always;
+    }
+
+    # 管理画面の静的ファイル（イメージに焼き込んだもの。CSS と JS は Python のイメージと同じく最小化してある）。
+    # 見出しは管理画面の _apply_security_headers と同じ（/static は毎回確かめさせる no-cache）。無いファイル・
+    # GET と HEAD 以外は管理画面のアプリへ回す（404・405 のページを Python と同じにするため）。
+    location /static/ {
+        root /srv/admin;
+        include /etc/nginx/sycs-static-types.conf;
+        try_files $uri @sycs_admin;
+        error_page 405 = @sycs_admin;
+        add_header Cache-Control "no-cache, max-age=0, must-revalidate" always;
+        add_header Pragma "no-cache" always;
+        add_header Expires "0" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Strict-Transport-Security $sycs_admin_hsts always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" always;
+        # 管理画面は starlette の SessionMiddleware がどの答えにも付ける（基準で確かめた）。
+        add_header Vary "Cookie" always;
+    }
+
+    location @sycs_admin {
+        proxy_pass $sycs_admin_upstream;
+    }
+}
+
+server {
+    listen 8000;
+    server_name _;
+
+    set $sycs_web_upstream "http://${SYCS_WEB_UPSTREAM}";
+
+    location / {
+        proxy_pass $sycs_web_upstream;
+    }
+
+    # Web の静的ファイル（イメージに焼き込んだもの。Python のイメージも最小化していない）。見出しは webapp/security.py の
+    # SecurityHeadersMiddleware と同じ、Cache-Control は VersionedStaticFiles と同じ、圧縮は GZipMiddleware
+    # （500 バイト以上・型を問わない）と同じ。無いファイル・GET と HEAD 以外は Web のアプリへ回す。
+    location /static/ {
+        root /srv/web;
+        include /etc/nginx/sycs-static-types.conf;
+        try_files $uri @sycs_web;
+        error_page 405 = @sycs_web;
+        gzip on;
+        gzip_comp_level 9;
+        gzip_min_length 500;
+        gzip_proxied any;
+        gzip_types *;
+        gzip_vary on;
+        add_header Cache-Control $sycs_web_static_cache_control always;
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header Cross-Origin-Opener-Policy "same-origin" always;
+        add_header Cross-Origin-Resource-Policy "same-origin" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; script-src-elem 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https: https://cloudflareinsights.com https://static.cloudflareinsights.com; manifest-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+    }
+
+    location @sycs_web {
+        proxy_pass $sycs_web_upstream;
+    }
+}

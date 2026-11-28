@@ -52,6 +52,11 @@ def test_command(kind: str, path: str) -> tuple[list[str], Path]:
         packages = ["-p", "sycs-core", "-p", "sycs-bot"]
     elif path.startswith("rust/crates/sycs-text/"):
         packages = ["-p", "sycs-text", "-p", "sycs-bot"]
+    elif path.startswith("rust/crates/sycs-web/"):
+        # web の土台は、使う側（配信）のテストでも確かめる。
+        packages = ["-p", "sycs-web", "-p", "sycs-cdn"]
+    elif path.startswith("rust/apps/cdn/"):
+        packages = ["-p", "sycs-cdn"]
     return ["cargo", "test", "--locked", "-q", *packages, "--", "--include-ignored"], ROOT / "rust"
 
 

@@ -322,8 +322,13 @@ services:
       # Valkey が無くても管理画面は使える。
       valkey:
         condition: service_started
+    # 既定はいまと同じ（ホストの全部の口の 5001）。nginx（下の profile nginx）がホストの 5001 を受けるときは、
+    # ここを別の口へ逃がす（例: ADMIN_HOST_BIND=127.0.0.1・ADMIN_HOST_PORT=15001）。ADMIN_HOST_PORT には番号だけを
+    # 書くこと（IP は ADMIN_HOST_BIND。空ならいまと同じ全部の口）。
     ports:
-      - "${ADMIN_HOST_PORT:-5001}:5001"
+      - target: 5001
+        published: "${ADMIN_HOST_PORT:-5001}"
+        host_ip: "${ADMIN_HOST_BIND:-}"
     environment:
       - TZ=Asia/Tokyo
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
@@ -430,8 +435,12 @@ services:
       # 起動順だけ揃えて、繋がらない場合は遮断器に任せる。
       valkey:
         condition: service_started
+    # 既定はいまと同じ（ホストの全部の口の 8001）。nginx がホストの 8001 を受けるときは、管理画面と同じく
+    # WEB_HOST_BIND・WEB_HOST_PORT で別の口へ逃がす。
     ports:
-      - "${WEB_HOST_PORT:-8001}:8000"
+      - target: 8000
+        published: "${WEB_HOST_PORT:-8001}"
+        host_ip: "${WEB_HOST_BIND:-}"
     environment:
       - TZ=Asia/Tokyo
       - METALPRICE_API_KEY=${METALPRICE_API_KEY}
@@ -507,6 +516,97 @@ services:
       - /tmp
     pids_limit: 512
     mem_limit: 1g
+
+  # 配信（/dlaudio/）の Rust 版（rust/apps/cdn）。nginx の後ろで、リンクを確かめて X-Accel-Redirect を返す（ファイルの
+  # 中身は nginx が置き場から送る）。答えは Python の管理画面の /dlaudio/ と同じ（基準で確かめてある）。
+  #
+  # **既定では起動しない**（profile nginx。COMPOSE_PROFILES=nginx で、下の nginx と一緒に起きる）。イメージは CI が
+  # 作って GHCR に置いたもの（このサーバーでは Rust をコンパイルしない）。切り替え・確かめ方・戻し方は
+  # docs/UPGRADE.ja.md の 6.。
+  #
+  # 置き場は Bot と同じボリューム。期限の切れたリンクを開かれたら消すので、書ける形で付ける（Python の管理画面と同じ）。
+  sycs-voldemort-cdn:
+    image: ${CDN_IMAGE:-ghcr.io/sukun-inu/sycs-voldemort-cdn-rs:main}
+    pull_policy: ${CDN_PULL_POLICY:-always}
+    build:
+      context: .
+      dockerfile: docker/cdn-rs.Dockerfile
+    container_name: sycs-voldemort-cdn
+    profiles:
+      - nginx
+    restart: unless-stopped
+    depends_on:
+      # web / admin と同じ理由で service_started（healthy を待たない）。Valkey は数を送るのに使うだけ。
+      valkey:
+        condition: service_started
+    environment:
+      - TZ=Asia/Tokyo
+      - CDN_PORT=5002
+      - SETTINGS_DIR=/app/data
+      # 30 秒ごとに Valkey へ心拍と数を置く（管理画面の /metrics に sycs_up{app="cdn"} が出る）。
+      - VALKEY_URL=${VALKEY_URL:-redis://valkey:6379/0}
+      - METRICS_REPORT_INTERVAL_SECONDS=${METRICS_REPORT_INTERVAL_SECONDS:-30}
+      # 管理画面と同じ値にすること（真なら、配信の答えにも HSTS を付ける。Python の管理画面と同じ）。
+      - FLASK_SECURE_COOKIES=${FLASK_SECURE_COOKIES:-false}
+      # nginx のコンテナ（Docker のブリッジ）から来た X-Forwarded-For だけを信じる。管理画面と同じ値にすること。
+      - TRUSTED_PROXY_CIDRS=${TRUSTED_PROXY_CIDRS:-127.0.0.1/32,::1/128,172.16.0.0/12}
+      - LOG_RETENTION_DAYS=${LOG_RETENTION_DAYS:-3650}
+    volumes:
+      - app_data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 128
+    mem_limit: 256m
+
+  # 管理画面（ホストの 5001）・Web（ホストの 8001）・配信（/dlaudio/）の前に立つ nginx（docker/nginx/）。
+  # ホストの同じ口で受けるので、Cloudflare のトンネルの設定は変えなくてよい。静的ファイル（/static/）は焼き込んだ
+  # ものを Python と同じ見出しで返し、配信のファイルは Rust の配信が確かめたものを置き場から送り、ほかは上流へ回す。
+  #
+  # **既定では起動しない**（profile nginx）。起こすときは、管理画面と Web のホストの口を先に逃がす（ADMIN_HOST_BIND・
+  # ADMIN_HOST_PORT・WEB_HOST_BIND・WEB_HOST_PORT。同じ口は 2 つのコンテナで取り合えない）。手順は docs/UPGRADE.ja.md の 6.。
+  sycs-voldemort-nginx:
+    image: ${NGINX_IMAGE:-ghcr.io/sukun-inu/sycs-voldemort-nginx:main}
+    pull_policy: ${NGINX_PULL_POLICY:-always}
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    container_name: sycs-voldemort-nginx
+    profiles:
+      - nginx
+    restart: unless-stopped
+    # 起きる順だけ揃える。上流の名前はリクエストのたびに引くので、上流が落ちていても nginx は起きる（502 を返す）。
+    depends_on:
+      sycs-voldemort-admin:
+        condition: service_started
+      sycs-voldemort-web:
+        condition: service_started
+      sycs-voldemort-cdn:
+        condition: service_started
+    ports:
+      - "${NGINX_ADMIN_HOST_PORT:-5001}:5001"
+      - "${NGINX_WEB_HOST_PORT:-8001}:8000"
+    environment:
+      - TZ=Asia/Tokyo
+      # 上流。Rust の管理画面・Web ができたら、ここを切り替える。配信を Python の管理画面へ戻すなら
+      # NGINX_CDN_UPSTREAM=sycs-voldemort-admin:5001（Python はファイルを自分で送る）。
+      - SYCS_ADMIN_UPSTREAM=${NGINX_ADMIN_UPSTREAM:-sycs-voldemort-admin:5001}
+      - SYCS_WEB_UPSTREAM=${NGINX_WEB_UPSTREAM:-sycs-voldemort-web:8000}
+      - SYCS_CDN_UPSTREAM=${NGINX_CDN_UPSTREAM:-sycs-voldemort-cdn:5002}
+      # 管理画面の /static/ に HSTS を付けるか（管理画面の FLASK_SECURE_COOKIES と同じ値）。
+      - SYCS_SECURE_COOKIES=${FLASK_SECURE_COOKIES:-false}
+    volumes:
+      # 配信のファイルを送るためだけ。読み取り専用で付ける。
+      - app_data:/app/data:ro
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 128
+    mem_limit: 128m
 
 volumes:
   postgres_data:

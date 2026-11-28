@@ -13,13 +13,24 @@
 
 [workspace]
 resolver = "3"
-members = ["apps/bot", "crates/sycs-core", "crates/sycs-imaging", "crates/sycs-text", "tools/voice-check"]
+members = [
+    "apps/bot",
+    "apps/cdn",
+    "crates/sycs-core",
+    "crates/sycs-imaging",
+    "crates/sycs-text",
+    "crates/sycs-web",
+    "tools/voice-check",
+]
 
 # 依存の版はここで 1 回だけ決める（各 crate は `{ workspace = true }` で受け取る）。
 #
 # crate ごとに版を書いていると、Bot と道具と土台で serenity や sqlx の版が食い違い、
 # 1 つだけ上げ忘れる。版は = で固定する（冒頭の方針）。features は各 crate が足す。
 [workspace.dependencies]
+# Rust の web のアプリ（配信・管理画面・公開サイト）の HTTP の受け口（tokio と hyper の上。serenity と同じ下回り）。
+# 前に nginx が立つので HTTP/1.1 だけを使う（features は各 crate が足す）。
+axum = { version = "=0.8.4", default-features = false }
 chrono = { version = "=0.4.45", default-features = false }
 flate2 = { version = "=1.1.11" }
 # 地震の通知を全部の送り先へ並べて送るのと、WebSocket の読み書き（既にロックにある版）。
@@ -62,6 +73,8 @@ sycs-core = { path = "crates/sycs-core" }
 # Pillow と画素まで同じ結果を出す画像処理（地震の地図の図形・ぼかし・重ね合わせ・拡大縮小）。
 sycs-imaging = { path = "crates/sycs-imaging" }
 sycs-text = { path = "crates/sycs-text" }
+# Rust の web のアプリが共通で使う土台（待ち受け・信頼するプロキシ・メトリクス・/health）。
+sycs-web = { path = "crates/sycs-web" }
 tempfile = { version = "=3.27.0" }
 tokio = { version = "=1.54.1" }
 # 地震の電文の受け取り（P2P地震情報の WebSocket）。songbird が既に使っている版・同じ TLS（rustls）。
