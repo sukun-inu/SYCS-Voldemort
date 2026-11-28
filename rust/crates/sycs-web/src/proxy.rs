@@ -297,10 +297,18 @@ fn prefix_number(text: &str, max: u8) -> Option<u8> {
 
 /// 左から 1 が続き、そのあと 0 が続く形なら、その 1 の数。Python の `_prefix_from_ip_int`。
 fn contiguous_prefix(value: u32) -> Option<u8> {
-    let zeros = if value == 0 { 32 } else { value.trailing_zeros() };
+    let zeros = if value == 0 {
+        32
+    } else {
+        value.trailing_zeros()
+    };
     let prefix = 32 - zeros;
     let ones = if zeros == 32 { 0 } else { value >> zeros };
-    let all_ones = if prefix == 0 { 0 } else { u32::MAX >> (32 - prefix) };
+    let all_ones = if prefix == 0 {
+        0
+    } else {
+        u32::MAX >> (32 - prefix)
+    };
     if ones == all_ones {
         u8::try_from(prefix).ok()
     } else {

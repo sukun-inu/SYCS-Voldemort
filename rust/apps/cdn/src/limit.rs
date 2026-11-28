@@ -40,7 +40,10 @@ impl FixedWindow {
 
     /// 1 回数え、まだ上限の内なら真。`scope` は経路（Python の関数の名前）、`key` は接続元。`now` は秒。
     pub fn hit(&self, scope: &str, key: &str, now: f64) -> bool {
-        let mut state = self.state.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if state.entries.len() > PRUNE_OVER && now - state.last_prune >= self.window {
             state.entries.retain(|_, (ends, _)| *ends > now);
             state.last_prune = now;

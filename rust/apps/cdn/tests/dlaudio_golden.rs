@@ -33,9 +33,14 @@ const NGINX_OWNS: [&str; 6] = [
 const RUST_ONLY: [&str; 2] = ["content-length", "x-accel-redirect"];
 
 fn expected() -> Value {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/dlaudio/expected.json");
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/dlaudio/expected.json"
+    );
     let text = std::fs::read_to_string(path).unwrap_or_else(|e| {
-        panic!("基準が読めません（{path}）: {e}。CI の「基準」が作ったものを取ってきてコミットすること")
+        panic!(
+            "基準が読めません（{path}）: {e}。CI の「基準」が作ったものを取ってきてコミットすること"
+        )
     });
     serde_json::from_str(&text).unwrap()
 }
@@ -118,7 +123,10 @@ fn compare(want: &Value, got: &Reply, dir: &Path, head: bool) -> Vec<String> {
     }
     if let Some(body_hex) = want["body_hex"].as_str() {
         let body = hex::decode(body_hex).unwrap();
-        match got.header("x-accel-redirect").and_then(|v| v.strip_prefix(ACCEL_PREFIX)) {
+        match got
+            .header("x-accel-redirect")
+            .and_then(|v| v.strip_prefix(ACCEL_PREFIX))
+        {
             Some(name) => match std::fs::read(dir.join(name)) {
                 Ok(content) if content == body => {}
                 Ok(_) => wrong.push(format!(
@@ -200,7 +208,9 @@ fn every_route_answers_like_python() {
             .collect();
         let got = remaining(dir.path());
         if want != got {
-            wrong.push(format!("「{name}」: 残ったファイル Python {want:?} / Rust {got:?}"));
+            wrong.push(format!(
+                "「{name}」: 残ったファイル Python {want:?} / Rust {got:?}"
+            ));
         }
     }
     assert!(requests >= 100, "基準のリクエストが足りない（{requests}）");

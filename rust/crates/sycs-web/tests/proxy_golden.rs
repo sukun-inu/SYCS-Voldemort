@@ -13,9 +13,14 @@ use serde_json::Value;
 use sycs_web::proxy::{self, TrustedHosts};
 
 fn expected() -> Value {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/proxy/expected.json");
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/proxy/expected.json"
+    );
     let text = std::fs::read_to_string(path).unwrap_or_else(|e| {
-        panic!("基準が読めません（{path}）: {e}。CI の「基準」が作ったものを取ってきてコミットすること")
+        panic!(
+            "基準が読めません（{path}）: {e}。CI の「基準」が作ったものを取ってきてコミットすること"
+        )
     });
     serde_json::from_str(&text).unwrap()
 }

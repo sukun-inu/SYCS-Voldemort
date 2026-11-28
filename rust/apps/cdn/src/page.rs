@@ -10,8 +10,7 @@ use crate::python::html_escape;
 pub const LINK_INVALID: &str =
     "リンクが正しくありません。Discordに投稿されたリンクをそのまま開いてください。";
 /// 情報が無い・期限切れ・本体が無い（410）。
-pub const LINK_EXPIRED: &str =
-    "このリンクの有効期限が切れました。Discordでもう一度URLを投稿して、新しいリンクを取得してください。";
+pub const LINK_EXPIRED: &str = "このリンクの有効期限が切れました。Discordでもう一度URLを投稿して、新しいリンクを取得してください。";
 /// 別のサーバー向けのリンク（403）。
 pub const LINK_WRONG_GUILD: &str = "このリンクは別のサーバー向けに発行されたものです。";
 /// 拾えなかった例外（500。管理画面の `_unhandled_request_response` と `_exception_group_response`）。

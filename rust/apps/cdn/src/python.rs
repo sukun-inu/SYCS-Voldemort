@@ -66,10 +66,9 @@ fn tables() -> &'static Tables {
             else {
                 continue;
             };
-            let (Ok(start), Ok(end)) = (
-                u32::from_str_radix(start, 16),
-                u32::from_str_radix(end, 16),
-            ) else {
+            let (Ok(start), Ok(end)) =
+                (u32::from_str_radix(start, 16), u32::from_str_radix(end, 16))
+            else {
                 continue;
             };
             match tag {
@@ -217,7 +216,10 @@ mod tests {
         assert_eq!(quote("Song Title.mp3", "/"), "Song%20Title.mp3");
         assert_eq!(quote("曲.mp3", "/"), "%E6%9B%B2.mp3");
         assert_eq!(quote("a/b~c_d-e", "/"), "a/b~c_d-e");
-        assert_eq!(quote("a:b?c=d&e%20\n", ":/%#?=@[]!$&'()*+,;"), "a:b?c=d&e%20%0A");
+        assert_eq!(
+            quote("a:b?c=d&e%20\n", ":/%#?=@[]!$&'()*+,;"),
+            "a:b?c=d&e%20%0A"
+        );
     }
 
     /// `html.escape` が 5 つの文字を逃がすこと。

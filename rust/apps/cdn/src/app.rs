@@ -342,10 +342,22 @@ impl App {
         now: f64,
     ) -> Result<Reply, Crash> {
         if !valid_link(guild_id, token) {
-            return Ok(http_exception(request, path, 404, Some(page::LINK_INVALID), false));
+            return Ok(http_exception(
+                request,
+                path,
+                404,
+                Some(page::LINK_INVALID),
+                false,
+            ));
         }
         let Some(meta) = self.cache.get_meta(token, now)? else {
-            return Ok(http_exception(request, path, 410, Some(page::LINK_EXPIRED), false));
+            return Ok(http_exception(
+                request,
+                path,
+                410,
+                Some(page::LINK_EXPIRED),
+                false,
+            ));
         };
         if !same_guild(&meta, guild_id) {
             // リンクを別のサーバーへ転送されたとき。期限切れとは別に、ログに残す。
@@ -353,10 +365,22 @@ impl App {
                 "guild_id 不一致: URL={guild_id} meta={} token={token}",
                 python::str_of(meta.get("guild_id"))
             );
-            return Ok(http_exception(request, path, 403, Some(page::LINK_WRONG_GUILD), false));
+            return Ok(http_exception(
+                request,
+                path,
+                403,
+                Some(page::LINK_WRONG_GUILD),
+                false,
+            ));
         }
         let Some((payload, extension)) = self.cache.payload_of(token, &meta) else {
-            return Ok(http_exception(request, path, 410, Some(page::LINK_EXPIRED), false));
+            return Ok(http_exception(
+                request,
+                path,
+                410,
+                Some(page::LINK_EXPIRED),
+                false,
+            ));
         };
         let name = download_name(meta.get("filename"), token, extension)?;
         check_regular_file(&payload)?;
@@ -374,13 +398,31 @@ impl App {
         now: f64,
     ) -> Result<Reply, Crash> {
         if !valid_link(guild_id, token) {
-            return Ok(http_exception(request, path, 404, Some(page::LINK_INVALID), false));
+            return Ok(http_exception(
+                request,
+                path,
+                404,
+                Some(page::LINK_INVALID),
+                false,
+            ));
         }
         let Some(meta) = self.cache.get_meta(token, now)? else {
-            return Ok(http_exception(request, path, 410, Some(page::LINK_EXPIRED), false));
+            return Ok(http_exception(
+                request,
+                path,
+                410,
+                Some(page::LINK_EXPIRED),
+                false,
+            ));
         };
         if !same_guild(&meta, guild_id) {
-            return Ok(http_exception(request, path, 403, Some(page::LINK_WRONG_GUILD), false));
+            return Ok(http_exception(
+                request,
+                path,
+                403,
+                Some(page::LINK_WRONG_GUILD),
+                false,
+            ));
         }
         let remaining = remaining_seconds(meta.get("expires_at"), now)?;
         let body = json!({
@@ -405,7 +447,10 @@ impl App {
         reply.set("x-frame-options", "DENY");
         reply.set("referrer-policy", "strict-origin-when-cross-origin");
         if self.config.secure_cookies {
-            reply.set("strict-transport-security", "max-age=31536000; includeSubDomains");
+            reply.set(
+                "strict-transport-security",
+                "max-age=31536000; includeSubDomains",
+            );
         }
         reply.set("content-security-policy", CONTENT_SECURITY_POLICY);
     }
@@ -425,13 +470,22 @@ fn not_routed(request: &Incoming, path: &str, forwarded: &Forwarded) -> Reply {
         }
     }
     // Starlette の `not_found` も理由を渡さずに断る（英語の既定の文が入り、管理画面がそれを落とす）。
-    http_exception(request, path, 404, Some(page::default_reason_phrase(404)), false)
+    http_exception(
+        request,
+        path,
+        404,
+        Some(page::default_reason_phrase(404)),
+        false,
+    )
 }
 
 /// 付け替え先への 307。Starlette の `URL(scope=…)` と `RedirectResponse`（Host の見出しと scheme から組み立て、
 /// 問い合わせを付け、`quote` で逃がす）。Host が無ければパスだけにする（Python は待ち受けの口を使う）。
 fn redirect(request: &Incoming, candidate: &str, forwarded: &Forwarded) -> Reply {
-    let host = request.headers.get("host").map(|v| proxy::latin1(v.as_bytes()));
+    let host = request
+        .headers
+        .get("host")
+        .map(|v| proxy::latin1(v.as_bytes()));
     let mut url = match host {
         Some(host) => format!("{}://{host}{candidate}", forwarded.scheme),
         None => candidate.to_string(),
@@ -611,9 +665,15 @@ fn file_reply(token: &str, extension: &str, name: &str) -> Reply {
     Reply {
         status: 200,
         headers: vec![
-            ("content-type", cache::content_type_for(extension).to_string()),
+            (
+                "content-type",
+                cache::content_type_for(extension).to_string(),
+            ),
             ("content-disposition", disposition),
-            ("x-accel-redirect", format!("{ACCEL_PREFIX}{token}{extension}")),
+            (
+                "x-accel-redirect",
+                format!("{ACCEL_PREFIX}{token}{extension}"),
+            ),
         ],
         body: Vec::new(),
     }
@@ -679,7 +739,10 @@ mod tests {
             secure_cookies: false,
             trusted: TrustedHosts::parse(DEFAULT_TRUSTED_PROXIES),
         };
-        (App::new(config, Arc::new(|| 1_800_000_000.25), Arc::clone(&reporter)), reporter)
+        (
+            App::new(config, Arc::new(|| 1_800_000_000.25), Arc::clone(&reporter)),
+            reporter,
+        )
     }
 
     fn get(target: &str) -> Incoming {
@@ -723,9 +786,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (app, reporter) = app(dir.path());
         assert_eq!(app.respond(&get("/dlaudio/nothing")).status, 404);
-        assert_eq!(app.respond(&get(&format!("/dlaudio/files/999/{TOKEN}"))).status, 410);
+        assert_eq!(
+            app.respond(&get(&format!("/dlaudio/files/999/{TOKEN}")))
+                .status,
+            410
+        );
         std::fs::create_dir(dir.path().join(format!("{TOKEN}.json"))).unwrap();
-        assert_eq!(app.respond(&get(&format!("/dlaudio/info/999/{TOKEN}"))).status, 500);
+        assert_eq!(
+            app.respond(&get(&format!("/dlaudio/info/999/{TOKEN}")))
+                .status,
+            500
+        );
         let mut drained = reporter.counters().drain();
         drained.sort();
         assert_eq!(
@@ -762,7 +833,11 @@ mod tests {
         }
         let refused = app.respond(&files);
         assert_eq!(refused, rate_limited());
-        assert_eq!(app.respond(&get(&format!("/dlaudio/info/999/{TOKEN}"))).status, 410);
+        assert_eq!(
+            app.respond(&get(&format!("/dlaudio/info/999/{TOKEN}")))
+                .status,
+            410
+        );
         let counted: i64 = reporter
             .counters()
             .drain()
@@ -803,13 +878,19 @@ mod tests {
     #[test]
     fn download_names_are_made_like_python() {
         let name = |raw: Value| download_name(Some(&raw), TOKEN, ".mp3");
-        assert_eq!(name(json!("曲名【公式】 (MV).mp3")).unwrap(), "曲名公式 MV.mp3");
+        assert_eq!(
+            name(json!("曲名【公式】 (MV).mp3")).unwrap(),
+            "曲名公式 MV.mp3"
+        );
         assert_eq!(name(json!("abc")).unwrap(), "abc.mp3");
         assert_eq!(name(json!("???")).unwrap(), format!("{TOKEN}.mp3"));
         assert_eq!(name(json!(["ab", " ", "c?", ".mp3"])).unwrap(), "ab.mp3");
         assert_eq!(name(json!({"x y": 1, "zz": 2})).unwrap(), "zz.mp3");
         assert_eq!(name(json!(null)).unwrap_err().kind, "TypeError");
         assert_eq!(name(json!([1])).unwrap_err().kind, "AttributeError");
-        assert_eq!(download_name(None, TOKEN, ".zip").unwrap(), format!("{TOKEN}.zip"));
+        assert_eq!(
+            download_name(None, TOKEN, ".zip").unwrap(),
+            format!("{TOKEN}.zip")
+        );
     }
 }

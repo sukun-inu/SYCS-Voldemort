@@ -25,7 +25,9 @@ fn config(dir: &Path, trusted: &str) -> Config {
 
 /// 待ち受けて、順に尋ね、止める。
 async fn ask(config: Config, requests: &[(&str, &str, &[(&str, &str)])]) -> Vec<Answer> {
-    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .unwrap();
     let addr = listener.local_addr().unwrap();
     let state = Arc::new(App::new(
         config,
@@ -90,7 +92,10 @@ async fn a_file_is_handed_to_nginx_over_http() {
 #[tokio::test]
 async fn only_a_trusted_proxy_decides_the_scheme() {
     let dir = tempfile::tempdir().unwrap();
-    let headers: &[(&str, &str)] = &[("host", "mcdn.example.test"), ("x-forwarded-proto", "https")];
+    let headers: &[(&str, &str)] = &[
+        ("host", "mcdn.example.test"),
+        ("x-forwarded-proto", "https"),
+    ];
     let trusted = ask(
         config(dir.path(), DEFAULT_TRUSTED_PROXIES),
         &[("GET", "/dlaudio/health/", headers)],

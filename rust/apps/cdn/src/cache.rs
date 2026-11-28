@@ -38,7 +38,9 @@ pub fn content_type_for(extension: &str) -> &'static str {
     EXTENSIONS
         .iter()
         .find(|(known, _)| *known == lowered)
-        .map_or("application/octet-stream", |(_, content_type)| *content_type)
+        .map_or("application/octet-stream", |(_, content_type)| {
+            *content_type
+        })
 }
 
 /// 情報の `extension` から、本体の拡張子を決める。Python の `str(meta.get("extension") or ".mp3")` が
@@ -92,7 +94,10 @@ impl Crash {
     pub fn no_attribute(value: &Value, attribute: &str) -> Self {
         Self::new(
             "AttributeError",
-            format!("'{}' object has no attribute '{attribute}'", type_name(value)),
+            format!(
+                "'{}' object has no attribute '{attribute}'",
+                type_name(value)
+            ),
         )
     }
 }
@@ -108,7 +113,10 @@ impl Cache {
     pub fn new(dir: impl Into<PathBuf>) -> Self {
         let dir = dir.into();
         if let Err(e) = std::fs::create_dir_all(&dir) {
-            warn!("DJAudio のキャッシュの置き場を作れませんでした {}: {e}", dir.display());
+            warn!(
+                "DJAudio のキャッシュの置き場を作れませんでした {}: {e}",
+                dir.display()
+            );
         }
         Self { dir }
     }
@@ -138,7 +146,8 @@ impl Cache {
         meta: &Map<String, Value>,
     ) -> Option<(PathBuf, &'static str)> {
         let extension = extension_of(meta.get("extension"))?;
-        self.existing(token, extension).map(|path| (path, extension))
+        self.existing(token, extension)
+            .map(|path| (path, extension))
     }
 
     /// `<token><拡張子>` があれば、その場所（Python の `path.exists()`。ディレクトリでも、あればある）。
@@ -202,7 +211,11 @@ impl Cache {
 
     /// 本体（あり得る拡張子の全部）と情報を消す。Python の `_delete_entry`（無いものは黙って飛ばす）。
     pub fn delete_entry(&self, token: &str) {
-        for suffix in EXTENSIONS.iter().map(|(extension, _)| *extension).chain([".json"]) {
+        for suffix in EXTENSIONS
+            .iter()
+            .map(|(extension, _)| *extension)
+            .chain([".json"])
+        {
             let path = self.dir.join(format!("{token}{suffix}"));
             match std::fs::remove_file(&path) {
                 Ok(()) => {}
