@@ -442,9 +442,16 @@ impl<S: Subscriber> Layer<S> for FileLayer {
     }
 }
 
+/// `RUST_LOG` が無いときの絞り込み。INFO から出す。ただし songbird（読み上げの音声）は WARN から。
+///
+/// songbird は 1 回鳴らすたびに INFO を 10 行ほど出す（曲の出し入れ・話し中の切り替え）。読み上げは発言の
+/// たびに鳴るので、ログがそれで埋まる。音声の暗号（DAVE）の失敗は warn・error で出るので、WARN からでも
+/// 気づける。接続・切断・再生の始まりは、Bot 自身が INFO で残す（`[voice] 切断しました`・`[TTS] 再生開始`）。
+pub const DEFAULT_FILTER: &str = "info,songbird=warn";
+
 /// プロセスのログを設置する。`<dir>/<name>.log` と `<dir>/<name>.jsonl` に書く。
 ///
-/// 絞り込みは `RUST_LOG`（既定 `info`）。保管個数は `LOG_RETENTION_DAYS`（Python と同じ変数）。
+/// 絞り込みは `RUST_LOG`（既定は [`DEFAULT_FILTER`]）。保管個数は `LOG_RETENTION_DAYS`（Python と同じ変数）。
 /// 2 回目以降の呼び出しは何もしない（既に設置されていれば、tracing がそれを返す）。
 pub fn init(dir: &Path, name: &str) -> io::Result<()> {
     use tracing_subscriber::prelude::*;
@@ -454,7 +461,8 @@ pub fn init(dir: &Path, name: &str) -> io::Result<()> {
     let retention = env.int("LOG_RETENTION_DAYS", DEFAULT_RETENTION_DAYS, Some(1), None);
     let retention = usize::try_from(retention).unwrap_or(usize::MAX);
     let files = LogFiles::open(dir, name, retention, Local::now().date_naive())?;
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(DEFAULT_FILTER));
     let _ = registry()
         .with(filter)
         .with(FileLayer::new(files, true))
@@ -470,6 +478,14 @@ mod tests {
     use flate2::read::GzDecoder;
 
     use super::*;
+
+    /// 既定の絞り込みが読める形で、songbird だけを WARN からにしていること。
+    #[test]
+    fn the_default_filter_quiets_songbird_only() {
+        assert!(tracing_subscriber::EnvFilter::try_new(DEFAULT_FILTER).is_ok());
+        let parts: Vec<&str> = DEFAULT_FILTER.split(',').collect();
+        assert_eq!(parts, ["info", "songbird=warn"]);
+    }
 
     fn at(date: &str, time: &str) -> DateTime<FixedOffset> {
         FixedOffset::east_opt(9 * 3600)
