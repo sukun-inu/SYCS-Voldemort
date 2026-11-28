@@ -94,6 +94,8 @@ const DETAIL_EVENTS: &str = "SELECT id, event_type, status_after, actor_user_id,
 
 /// `str.isdigit()` が真で `str.isdecimal()` が偽の文字の範囲（Unicode の Numeric_Type=Digit。上付き・丸囲みの数字
 /// など。Python 3.13 の表と同じことを、基準 `users_state_db` の `digit_only` が確かめる）。`int()` は読めない。
+/// Mende Kikakui の数字（U+1E8C7〜1E8CF）は Python 3.13 では数字ではない（配信の W1 でも同じだった）。U+1F100 台は
+/// 1F10A まで（1F10B・1F10C は数字ではない）。どちらも基準で分かった。
 pub const DIGIT_ONLY: &[(u32, u32)] = &[
     (0x00B2, 0x00B3),
     (0x00B9, 0x00B9),
@@ -114,8 +116,7 @@ pub const DIGIT_ONLY: &[(u32, u32)] = &[
     (0x10A40, 0x10A43),
     (0x10E60, 0x10E68),
     (0x11052, 0x1105A),
-    (0x1E8C7, 0x1E8CF),
-    (0x1F100, 0x1F10C),
+    (0x1F100, 0x1F10A),
 ];
 
 /// 絞り込み（`_apply_state_filter`）。
