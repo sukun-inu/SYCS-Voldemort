@@ -46,6 +46,8 @@ max-complexity = 23
 # 設置している。import 時に出るログも同じファイルへ入れるための順番なので、
 # 先頭へ寄せると意味が変わる。
 "webapp_admin/app.py" = ["E402"]
+# 変異テストの一覧は、置き換える前と後のコードを 1 つの文字列のまま持つ（割ると当てる場所が変わる）。
+"tools/mutate/lists/*" = ["E501"]
 
 [tool.mypy]
 python_version = "3.13"

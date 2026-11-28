@@ -1,0 +1,71 @@
+name: 基準
+
+# Rust のテストが読む基準（rust/**/tests/fixtures/）が、リポジトリの Python から作ったものと同じかを確かめる。
+# Rust は「Python と同じ答え」を基準で確かめているので、Python を直したのに基準を作り直していないと、
+# Rust のテストは古い Python と突き合わせたまま通ってしまう。それを落とす。
+#
+# 作り直しで差分が出たら、作り直した基準を成果物（fixtures）として置いて落ちる。取ってきてコミットする:
+#   gh run download <run の ID> -n fixtures && tar -xzf fixtures.tgz
+#
+# **手元の PC では回さない**（本人の指示 2026-11-28）。作り直す基準の一覧は tools/fixtures/regen.py。
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  regen:
+    name: 基準を本番と同じ Python で作り直して比べる
+    runs-on: ubuntu-latest
+    # 本番の Python の Bot と同じイメージ（Dockerfile の python:3.13-slim）。
+    container: python:3.13-slim
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: ci-only
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: git を入れる
+        # 先に入れておかないと、checkout が git を使わずに中身だけを落としてくる（差分を見られない）。
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends git
+
+      - name: リポジトリを取得
+        uses: actions/checkout@v7
+
+      - name: 本番と同じ依存を入れる
+        run: pip install -q -r requirements.txt
+
+      - name: 基準を作り直す
+        env:
+          PG_ADMIN_DSN: postgresql://postgres:ci-only@postgres:5432/postgres
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          # 生成の道具は、リポジトリの直下が /app にある前提で書いてある（sys.path に /app を足す）。
+          ln -sfn "$GITHUB_WORKSPACE" /app
+          python tools/fixtures/regen.py
+
+      - name: リポジトリの基準と比べる
+        id: diff
+        run: |
+          git status --porcelain
+          if [ -n "$(git status --porcelain)" ]; then
+            git diff --stat
+            git status --porcelain | awk '{print $2}' | tar -czf /tmp/fixtures.tgz -T -
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "基準が、リポジトリの Python から作ったものと違う（上の一覧）。作り直したものを成果物 fixtures に置いた"
+            exit 1
+          fi
+          echo "基準は、リポジトリの Python から作ったものと同じ"
+
+      - name: 作り直した基準を置く（違ったとき）
+        if: failure() && steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fixtures
+          path: /tmp/fixtures.tgz
