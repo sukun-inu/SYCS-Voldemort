@@ -1843,7 +1843,10 @@ mod tests {
         let off = json!({"security_timeout_enabled": false});
         assert!(use_timeout(Some(&on), true));
         assert!(!use_timeout(Some(&on), false), "権限が無ければ使わない");
-        assert!(!use_timeout(Some(&off), true), "無効なら権限があっても使わない");
+        assert!(
+            !use_timeout(Some(&off), true),
+            "無効なら権限があっても使わない"
+        );
         assert!(!use_timeout(None, true), "未設定は無効");
     }
 
