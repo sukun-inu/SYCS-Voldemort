@@ -1,0 +1,3014 @@
+{
+ "generated_by": "rust/apps/admin/tests/fixtures/monitor/generate.py",
+ "base_url": "http://testserver",
+ "cookie_name": "admin_session",
+ "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+ "now": 1798761600,
+ "max_age": 3600,
+ "id_base": 2801795072,
+ "cases": [
+  {
+   "name": "metrics_without_cookie",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/metrics",
+    "headers": []
+   },
+   "calls": [],
+   "response": {
+    "status": 303,
+    "headers": [
+     [
+      "content-length",
+      "0"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "location",
+      "/admin/login"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "",
+    "json": null
+   }
+  },
+  {
+   "name": "metrics_without_guild",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/metrics",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiJ9.azbsgA.soh6Y4hptsBbJjB_r2v9rigonzQ"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 303,
+    "headers": [
+     [
+      "content-length",
+      "0"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "location",
+      "/admin/guilds"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "",
+    "json": null
+   }
+  },
+  {
+   "name": "metrics_post_is_not_allowed",
+   "request": {
+    "method": "POST",
+    "target": "/admin/api/metrics",
+    "headers": []
+   },
+   "calls": [],
+   "response": {
+    "status": 405,
+    "headers": [
+     [
+      "allow",
+      "GET"
+     ],
+     [
+      "content-length",
+      "67"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":\"このURLでは受け付けていない操作です。\"}",
+    "json": {
+     "detail": "このURLでは受け付けていない操作です。"
+    }
+   }
+  },
+  {
+   "name": "metrics_basic",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/metrics",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "507"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"updated_at\":\"10:02:03\",\"metrics\":{\"cpu\":{\"label\":\"CPU\",\"percent\":12.3,\"display\":\"12.3%\",\"detail\":\"論理コア 8\",\"tone\":\"success\"},\"memory\":{\"label\":\"Memory\",\"percent\":45.6,\"display\":\"45.6%\",\"detail\":\"3.5 GB / 7.7 GB\",\"tone\":\"success\"},\"tps\":{\"label\":\"TPS\",\"percent\":0.53,\"display\":\"0.27 req/s\",\"detail\":\"目標 50 req/s の 1%\",\"tone\":\"success\"},\"sla\":{\"label\":\"SLA\",\"percent\":100.0,\"display\":\"100.00%\",\"detail\":\"記録済み停止 0s\",\"tone\":\"success\"}},\"runtime\":{\"admin_app\":\"1h 2m\",\"host\":\"12d 6h\"}}",
+    "json": {
+     "updated_at": "10:02:03",
+     "metrics": {
+      "cpu": {
+       "label": "CPU",
+       "percent": 12.3,
+       "display": "12.3%",
+       "detail": "論理コア 8",
+       "tone": "success"
+      },
+      "memory": {
+       "label": "Memory",
+       "percent": 45.6,
+       "display": "45.6%",
+       "detail": "3.5 GB / 7.7 GB",
+       "tone": "success"
+      },
+      "tps": {
+       "label": "TPS",
+       "percent": 0.53,
+       "display": "0.27 req/s",
+       "detail": "目標 50 req/s の 1%",
+       "tone": "success"
+      },
+      "sla": {
+       "label": "SLA",
+       "percent": 100.0,
+       "display": "100.00%",
+       "detail": "記録済み停止 0s",
+       "tone": "success"
+      }
+     },
+     "runtime": {
+      "admin_app": "1h 2m",
+      "host": "12d 6h"
+     }
+    }
+   }
+  },
+  {
+   "name": "metrics_tones",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/metrics",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "514"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"updated_at\":\"10:02:03\",\"metrics\":{\"cpu\":{\"label\":\"CPU\",\"percent\":95.0,\"display\":\"95.0%\",\"detail\":\"論理コア 1\",\"tone\":\"danger\"},\"memory\":{\"label\":\"Memory\",\"percent\":72.0,\"display\":\"72.0%\",\"detail\":\"1023.0 B / 1024.0 KB\",\"tone\":\"warning\"},\"tps\":{\"label\":\"TPS\",\"percent\":100.0,\"display\":\"0.67 req/s\",\"detail\":\"目標 0.5 req/s の 100%\",\"tone\":\"danger\"},\"sla\":{\"label\":\"SLA\",\"percent\":100.0,\"display\":\"100.00%\",\"detail\":\"記録済み停止 0s\",\"tone\":\"success\"}},\"runtime\":{\"admin_app\":\"0s\",\"host\":\"20834d 1h\"}}",
+    "json": {
+     "updated_at": "10:02:03",
+     "metrics": {
+      "cpu": {
+       "label": "CPU",
+       "percent": 95.0,
+       "display": "95.0%",
+       "detail": "論理コア 1",
+       "tone": "danger"
+      },
+      "memory": {
+       "label": "Memory",
+       "percent": 72.0,
+       "display": "72.0%",
+       "detail": "1023.0 B / 1024.0 KB",
+       "tone": "warning"
+      },
+      "tps": {
+       "label": "TPS",
+       "percent": 100.0,
+       "display": "0.67 req/s",
+       "detail": "目標 0.5 req/s の 100%",
+       "tone": "danger"
+      },
+      "sla": {
+       "label": "SLA",
+       "percent": 100.0,
+       "display": "100.00%",
+       "detail": "記録済み停止 0s",
+       "tone": "success"
+      }
+     },
+     "runtime": {
+      "admin_app": "0s",
+      "host": "20834d 1h"
+     }
+    }
+   }
+  },
+  {
+   "name": "metrics_custom_thresholds",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/metrics",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "516"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"updated_at\":\"10:02:03\",\"metrics\":{\"cpu\":{\"label\":\"CPU\",\"percent\":45.0,\"display\":\"45.0%\",\"detail\":\"論理コア 1\",\"tone\":\"warning\"},\"memory\":{\"label\":\"Memory\",\"percent\":40.5,\"display\":\"40.5%\",\"detail\":\"3.0 TB / 2048.0 TB\",\"tone\":\"danger\"},\"tps\":{\"label\":\"TPS\",\"percent\":0.0,\"display\":\"0.00 req/s\",\"detail\":\"目標 1.23457e+06 req/s の 0%\",\"tone\":\"success\"},\"sla\":{\"label\":\"SLA\",\"percent\":100.0,\"display\":\"100.00%\",\"detail\":\"記録済み停止 0s\",\"tone\":\"success\"}},\"runtime\":{\"admin_app\":\"1158d 2h\",\"host\":\"0s\"}}",
+    "json": {
+     "updated_at": "10:02:03",
+     "metrics": {
+      "cpu": {
+       "label": "CPU",
+       "percent": 45.0,
+       "display": "45.0%",
+       "detail": "論理コア 1",
+       "tone": "warning"
+      },
+      "memory": {
+       "label": "Memory",
+       "percent": 40.5,
+       "display": "40.5%",
+       "detail": "3.0 TB / 2048.0 TB",
+       "tone": "danger"
+      },
+      "tps": {
+       "label": "TPS",
+       "percent": 0.0,
+       "display": "0.00 req/s",
+       "detail": "目標 1.23457e+06 req/s の 0%",
+       "tone": "success"
+      },
+      "sla": {
+       "label": "SLA",
+       "percent": 100.0,
+       "display": "100.00%",
+       "detail": "記録済み停止 0s",
+       "tone": "success"
+      }
+     },
+     "runtime": {
+      "admin_app": "1158d 2h",
+      "host": "0s"
+     }
+    }
+   }
+  },
+  {
+   "name": "metrics_tps_target_floor",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/metrics",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "506"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"updated_at\":\"10:02:03\",\"metrics\":{\"cpu\":{\"label\":\"CPU\",\"percent\":0.0,\"display\":\"0.0%\",\"detail\":\"論理コア 2\",\"tone\":\"success\"},\"memory\":{\"label\":\"Memory\",\"percent\":0.0,\"display\":\"0.0%\",\"detail\":\"0.0 B / 0.0 B\",\"tone\":\"success\"},\"tps\":{\"label\":\"TPS\",\"percent\":100.0,\"display\":\"0.07 req/s\",\"detail\":\"目標 0.01 req/s の 100%\",\"tone\":\"danger\"},\"sla\":{\"label\":\"SLA\",\"percent\":100.0,\"display\":\"100.00%\",\"detail\":\"記録済み停止 0s\",\"tone\":\"success\"}},\"runtime\":{\"admin_app\":\"5m 23s\",\"host\":\"17h 2m\"}}",
+    "json": {
+     "updated_at": "10:02:03",
+     "metrics": {
+      "cpu": {
+       "label": "CPU",
+       "percent": 0.0,
+       "display": "0.0%",
+       "detail": "論理コア 2",
+       "tone": "success"
+      },
+      "memory": {
+       "label": "Memory",
+       "percent": 0.0,
+       "display": "0.0%",
+       "detail": "0.0 B / 0.0 B",
+       "tone": "success"
+      },
+      "tps": {
+       "label": "TPS",
+       "percent": 100.0,
+       "display": "0.07 req/s",
+       "detail": "目標 0.01 req/s の 100%",
+       "tone": "danger"
+      },
+      "sla": {
+       "label": "SLA",
+       "percent": 100.0,
+       "display": "100.00%",
+       "detail": "記録済み停止 0s",
+       "tone": "success"
+      }
+     },
+     "runtime": {
+      "admin_app": "5m 23s",
+      "host": "17h 2m"
+     }
+    }
+   }
+  },
+  {
+   "name": "metrics_rounding",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/metrics",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "505"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"updated_at\":\"10:02:03\",\"metrics\":{\"cpu\":{\"label\":\"CPU\",\"percent\":12.25,\"display\":\"12.2%\",\"detail\":\"論理コア 64\",\"tone\":\"success\"},\"memory\":{\"label\":\"Memory\",\"percent\":100.0,\"display\":\"100.0%\",\"detail\":\"1.5 MB / 1.0 GB\",\"tone\":\"danger\"},\"tps\":{\"label\":\"TPS\",\"percent\":2.22,\"display\":\"0.07 req/s\",\"detail\":\"目標 3 req/s の 2%\",\"tone\":\"success\"},\"sla\":{\"label\":\"SLA\",\"percent\":100.0,\"display\":\"100.00%\",\"detail\":\"記録済み停止 0s\",\"tone\":\"success\"}},\"runtime\":{\"admin_app\":\"0s\",\"host\":\"1m 0s\"}}",
+    "json": {
+     "updated_at": "10:02:03",
+     "metrics": {
+      "cpu": {
+       "label": "CPU",
+       "percent": 12.25,
+       "display": "12.2%",
+       "detail": "論理コア 64",
+       "tone": "success"
+      },
+      "memory": {
+       "label": "Memory",
+       "percent": 100.0,
+       "display": "100.0%",
+       "detail": "1.5 MB / 1.0 GB",
+       "tone": "danger"
+      },
+      "tps": {
+       "label": "TPS",
+       "percent": 2.22,
+       "display": "0.07 req/s",
+       "detail": "目標 3 req/s の 2%",
+       "tone": "success"
+      },
+      "sla": {
+       "label": "SLA",
+       "percent": 100.0,
+       "display": "100.00%",
+       "detail": "記録済み停止 0s",
+       "tone": "success"
+      }
+     },
+     "runtime": {
+      "admin_app": "0s",
+      "host": "1m 0s"
+     }
+    }
+   }
+  },
+  {
+   "name": "metrics_sla_with_downtime",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/metrics",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "507"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"updated_at\":\"10:02:03\",\"metrics\":{\"cpu\":{\"label\":\"CPU\",\"percent\":1.0,\"display\":\"1.0%\",\"detail\":\"論理コア 4\",\"tone\":\"success\"},\"memory\":{\"label\":\"Memory\",\"percent\":10.0,\"display\":\"10.0%\",\"detail\":\"1.0 KB / 10.0 KB\",\"tone\":\"success\"},\"tps\":{\"label\":\"TPS\",\"percent\":0.0,\"display\":\"0.00 req/s\",\"detail\":\"目標 50 req/s の 0%\",\"tone\":\"success\"},\"sla\":{\"label\":\"SLA\",\"percent\":99.71,\"display\":\"99.71%\",\"detail\":\"記録済み停止 1h 2m\",\"tone\":\"warning\"}},\"runtime\":{\"admin_app\":\"1h 2m\",\"host\":\"12d 6h\"}}",
+    "json": {
+     "updated_at": "10:02:03",
+     "metrics": {
+      "cpu": {
+       "label": "CPU",
+       "percent": 1.0,
+       "display": "1.0%",
+       "detail": "論理コア 4",
+       "tone": "success"
+      },
+      "memory": {
+       "label": "Memory",
+       "percent": 10.0,
+       "display": "10.0%",
+       "detail": "1.0 KB / 10.0 KB",
+       "tone": "success"
+      },
+      "tps": {
+       "label": "TPS",
+       "percent": 0.0,
+       "display": "0.00 req/s",
+       "detail": "目標 50 req/s の 0%",
+       "tone": "success"
+      },
+      "sla": {
+       "label": "SLA",
+       "percent": 99.71,
+       "display": "99.71%",
+       "detail": "記録済み停止 1h 2m",
+       "tone": "warning"
+      }
+     },
+     "runtime": {
+      "admin_app": "1h 2m",
+      "host": "12d 6h"
+     }
+    }
+   }
+  },
+  {
+   "name": "metrics_sla_month_just_started",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/metrics",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "499"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"updated_at\":\"09:00:00\",\"metrics\":{\"cpu\":{\"label\":\"CPU\",\"percent\":3.4,\"display\":\"3.4%\",\"detail\":\"論理コア 4\",\"tone\":\"success\"},\"memory\":{\"label\":\"Memory\",\"percent\":20.0,\"display\":\"20.0%\",\"detail\":\"2.0 KB / 10.0 KB\",\"tone\":\"success\"},\"tps\":{\"label\":\"TPS\",\"percent\":0.0,\"display\":\"0.00 req/s\",\"detail\":\"目標 50 req/s の 0%\",\"tone\":\"success\"},\"sla\":{\"label\":\"SLA\",\"percent\":87.5,\"display\":\"87.50%\",\"detail\":\"記録済み停止 0s\",\"tone\":\"danger\"}},\"runtime\":{\"admin_app\":\"1s\",\"host\":\"8d 19h\"}}",
+    "json": {
+     "updated_at": "09:00:00",
+     "metrics": {
+      "cpu": {
+       "label": "CPU",
+       "percent": 3.4,
+       "display": "3.4%",
+       "detail": "論理コア 4",
+       "tone": "success"
+      },
+      "memory": {
+       "label": "Memory",
+       "percent": 20.0,
+       "display": "20.0%",
+       "detail": "2.0 KB / 10.0 KB",
+       "tone": "success"
+      },
+      "tps": {
+       "label": "TPS",
+       "percent": 0.0,
+       "display": "0.00 req/s",
+       "detail": "目標 50 req/s の 0%",
+       "tone": "success"
+      },
+      "sla": {
+       "label": "SLA",
+       "percent": 87.5,
+       "display": "87.50%",
+       "detail": "記録済み停止 0s",
+       "tone": "danger"
+      }
+     },
+     "runtime": {
+      "admin_app": "1s",
+      "host": "8d 19h"
+     }
+    }
+   }
+  },
+  {
+   "name": "metrics_sla_rounds_into_the_next_month",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/metrics",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "506"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"updated_at\":\"09:00:00\",\"metrics\":{\"cpu\":{\"label\":\"CPU\",\"percent\":3.4,\"display\":\"3.4%\",\"detail\":\"論理コア 4\",\"tone\":\"success\"},\"memory\":{\"label\":\"Memory\",\"percent\":20.0,\"display\":\"20.0%\",\"detail\":\"2.0 KB / 10.0 KB\",\"tone\":\"success\"},\"tps\":{\"label\":\"TPS\",\"percent\":0.0,\"display\":\"0.00 req/s\",\"detail\":\"目標 50 req/s の 0%\",\"tone\":\"success\"},\"sla\":{\"label\":\"SLA\",\"percent\":100.0,\"display\":\"100.00%\",\"detail\":\"記録済み停止 0s\",\"tone\":\"success\"}},\"runtime\":{\"admin_app\":\"9m 59s\",\"host\":\"8d 19h\"}}",
+    "json": {
+     "updated_at": "09:00:00",
+     "metrics": {
+      "cpu": {
+       "label": "CPU",
+       "percent": 3.4,
+       "display": "3.4%",
+       "detail": "論理コア 4",
+       "tone": "success"
+      },
+      "memory": {
+       "label": "Memory",
+       "percent": 20.0,
+       "display": "20.0%",
+       "detail": "2.0 KB / 10.0 KB",
+       "tone": "success"
+      },
+      "tps": {
+       "label": "TPS",
+       "percent": 0.0,
+       "display": "0.00 req/s",
+       "detail": "目標 50 req/s の 0%",
+       "tone": "success"
+      },
+      "sla": {
+       "label": "SLA",
+       "percent": 100.0,
+       "display": "100.00%",
+       "detail": "記録済み停止 0s",
+       "tone": "success"
+      }
+     },
+     "runtime": {
+      "admin_app": "9m 59s",
+      "host": "8d 19h"
+     }
+    }
+   }
+  },
+  {
+   "name": "metrics_host_fails",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/metrics",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 500,
+    "headers": [
+     [
+      "content-length",
+      "58"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":\"サーバーエラーが発生しました。\"}",
+    "json": {
+     "detail": "サーバーエラーが発生しました。"
+    }
+   }
+  },
+  {
+   "name": "metrics_incidents_not_utf8",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/metrics",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 500,
+    "headers": [
+     [
+      "content-length",
+      "58"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":\"サーバーエラーが発生しました。\"}",
+    "json": {
+     "detail": "サーバーエラーが発生しました。"
+    }
+   }
+  },
+  {
+   "name": "incidents_without_cookie",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/incidents",
+    "headers": []
+   },
+   "calls": [],
+   "response": {
+    "status": 303,
+    "headers": [
+     [
+      "content-length",
+      "0"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "location",
+      "/admin/login"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "",
+    "json": null
+   }
+  },
+  {
+   "name": "incidents_without_guild",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/incidents",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiJ9.azbsgA.soh6Y4hptsBbJjB_r2v9rigonzQ"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 303,
+    "headers": [
+     [
+      "content-length",
+      "0"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "location",
+      "/admin/guilds"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "",
+    "json": null
+   }
+  },
+  {
+   "name": "incidents_without_a_file",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/incidents",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "16"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"incidents\":[]}",
+    "json": {
+     "incidents": []
+    }
+   }
+  },
+  {
+   "name": "incidents_listing",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/incidents",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "2757"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"incidents\":[{\"id\":\"last\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"cr-only\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"after-nel\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"nel\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"after-fs\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"fs\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"after-vt\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"vt\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"crlf\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":null,\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{\"b\":2,\"a\":{\"nested\":[true,false,null,1.5e-07,9007199254740993,-3]}}},{\"id\":null,\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":\"11574074074d 1h\",\"metadata\":{}},{\"id\":null,\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":\"23h 59m\",\"metadata\":{}},{\"id\":null,\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":\"0s\",\"metadata\":{}},{\"id\":null,\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"😀 é é \\\"quoted\\\" \\\\ back\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":7,\"kind\":null,\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":\"1s\",\"metadata\":[1,\"a\"]},{\"id\":null,\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"0002\",\"kind\":\"downtime\",\"severity\":\"critical\",\"title\":\"管理UIダウンタイム\",\"message\":\"前回 heartbeat から復帰までの空白をダウンタイムとして記録しました。\",\"created_at\":\"\",\"duration\":\"1h 2m\",\"metadata\":{\"grace_seconds\":120.0,\"source\":\"startup_heartbeat_gap\"}},{\"id\":\"0001\",\"kind\":\"http_error\",\"severity\":\"critical\",\"title\":\"HTTP 500\",\"message\":\"管理UIで 5xx レスポンスが発生しました。\",\"created_at\":\"2026-12-23T07:46:40.500000+00:00\",\"duration\":null,\"metadata\":{\"status_code\":500,\"method\":\"GET\",\"path\":\"/x\",\"endpoint\":null,\"remote_addr\":\"203.0.113.5\"}}]}",
+    "json": {
+     "incidents": [
+      {
+       "id": "last",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "cr-only",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "after-nel",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "nel",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "after-fs",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "fs",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "after-vt",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "vt",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "crlf",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": null,
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {
+        "b": 2,
+        "a": {
+         "nested": [
+          true,
+          false,
+          null,
+          1.5e-07,
+          9007199254740993,
+          -3
+         ]
+        }
+       }
+      },
+      {
+       "id": null,
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": "11574074074d 1h",
+       "metadata": {}
+      },
+      {
+       "id": null,
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": "23h 59m",
+       "metadata": {}
+      },
+      {
+       "id": null,
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": "0s",
+       "metadata": {}
+      },
+      {
+       "id": null,
+       "kind": "unknown",
+       "severity": "info",
+       "title": "😀 é é \"quoted\" \\ back",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": 7,
+       "kind": null,
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": "1s",
+       "metadata": [
+        1,
+        "a"
+       ]
+      },
+      {
+       "id": null,
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "0002",
+       "kind": "downtime",
+       "severity": "critical",
+       "title": "管理UIダウンタイム",
+       "message": "前回 heartbeat から復帰までの空白をダウンタイムとして記録しました。",
+       "created_at": "",
+       "duration": "1h 2m",
+       "metadata": {
+        "grace_seconds": 120.0,
+        "source": "startup_heartbeat_gap"
+       }
+      },
+      {
+       "id": "0001",
+       "kind": "http_error",
+       "severity": "critical",
+       "title": "HTTP 500",
+       "message": "管理UIで 5xx レスポンスが発生しました。",
+       "created_at": "2026-12-23T07:46:40.500000+00:00",
+       "duration": null,
+       "metadata": {
+        "status_code": 500,
+        "method": "GET",
+        "path": "/x",
+        "endpoint": null,
+        "remote_addr": "203.0.113.5"
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "incidents_limit_is_thirty",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/incidents",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "3795"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"incidents\":[{\"id\":\"n35\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n34\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n33\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n32\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n31\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n30\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n29\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n28\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n27\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n26\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n25\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n24\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n23\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n22\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n21\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n20\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n19\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n18\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n17\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n16\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n15\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n14\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n13\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n12\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n11\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n10\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n09\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n08\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n07\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}},{\"id\":\"n06\",\"kind\":\"unknown\",\"severity\":\"info\",\"title\":\"Incident\",\"message\":\"\",\"created_at\":\"\",\"duration\":null,\"metadata\":{}}]}",
+    "json": {
+     "incidents": [
+      {
+       "id": "n35",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n34",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n33",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n32",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n31",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n30",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n29",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n28",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n27",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n26",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n25",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n24",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n23",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n22",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n21",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n20",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n19",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n18",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n17",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n16",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n15",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n14",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n13",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n12",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n11",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n10",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n09",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n08",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n07",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      },
+      {
+       "id": "n06",
+       "kind": "unknown",
+       "severity": "info",
+       "title": "Incident",
+       "message": "",
+       "created_at": "",
+       "duration": null,
+       "metadata": {}
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "incidents_not_utf8",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/incidents",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 500,
+    "headers": [
+     [
+      "content-length",
+      "58"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":\"サーバーエラーが発生しました。\"}",
+    "json": {
+     "detail": "サーバーエラーが発生しました。"
+    }
+   }
+  },
+  {
+   "name": "incidents_trailing_slash",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/incidents/",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 307,
+    "headers": [
+     [
+      "content-length",
+      "0"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "location",
+      "http://testserver/admin/api/incidents"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogbnVsbCwgImF2YXRhciI6IG51bGx9LCAiYWRtaW5fZ3VpbGRzIjogW3siaWQiOiAiMTIzNDU2Nzg5MDEyMzQ1Njc4IiwgIm5hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImljb24iOiBudWxsfV0sICJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiX2NzcmZfdG9rZW4iOiAiMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsICJndWlsZF9pZCI6IDEyMzQ1Njc4OTAxMjM0NTY3OCwgImd1aWxkX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGM4XHU5YmQ2IiwgImd1aWxkX2ljb24iOiBudWxsfQ==.azbsgA.PreEiRCpCbcc_X3IrXFtXds4VwE; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "",
+    "json": null
+   }
+  }
+ ],
+ "functions": {
+  "format_duration": [
+   [
+    "0",
+    "0s"
+   ],
+   [
+    "0.9",
+    "0s"
+   ],
+   [
+    "59.9",
+    "59s"
+   ],
+   [
+    "60",
+    "1m 0s"
+   ],
+   [
+    "61.5",
+    "1m 1s"
+   ],
+   [
+    "3599.999",
+    "59m 59s"
+   ],
+   [
+    "3600",
+    "1h 0m"
+   ],
+   [
+    "3661",
+    "1h 1m"
+   ],
+   [
+    "86399",
+    "23h 59m"
+   ],
+   [
+    "86400",
+    "1d 0h"
+   ],
+   [
+    "90061.5",
+    "1d 1h"
+   ],
+   [
+    "-5",
+    "0s"
+   ],
+   [
+    "-0.5",
+    "0s"
+   ],
+   [
+    "1e10",
+    "115740d 17h"
+   ],
+   [
+    "123456789.9",
+    "1428d 21h"
+   ],
+   [
+    "1e15",
+    "11574074074d 1h"
+   ]
+  ],
+  "format_bytes": [
+   [
+    "0",
+    "0.0 B"
+   ],
+   [
+    "1",
+    "1.0 B"
+   ],
+   [
+    "1023",
+    "1023.0 B"
+   ],
+   [
+    "1023.96",
+    "1024.0 B"
+   ],
+   [
+    "1023.95",
+    "1024.0 B"
+   ],
+   [
+    "1024",
+    "1.0 KB"
+   ],
+   [
+    "1536",
+    "1.5 KB"
+   ],
+   [
+    "1048575",
+    "1024.0 KB"
+   ],
+   [
+    "1048576",
+    "1.0 MB"
+   ],
+   [
+    "1572864",
+    "1.5 MB"
+   ],
+   [
+    "1073741824",
+    "1.0 GB"
+   ],
+   [
+    "8241242112",
+    "7.7 GB"
+   ],
+   [
+    "1099511627776",
+    "1.0 TB"
+   ],
+   [
+    "1125899906842624",
+    "1024.0 TB"
+   ],
+   [
+    "1e18",
+    "909494.7 TB"
+   ],
+   [
+    "-1",
+    "-1.0 B"
+   ]
+  ],
+  "load_tone": [
+   [
+    "90",
+    "90",
+    "danger"
+   ],
+   [
+    "89.99",
+    "90",
+    "warning"
+   ],
+   [
+    "72",
+    "90",
+    "warning"
+   ],
+   [
+    "71.99",
+    "90",
+    "success"
+   ],
+   [
+    "0",
+    "0.01",
+    "success"
+   ],
+   [
+    "0.008",
+    "0.01",
+    "warning"
+   ],
+   [
+    "100",
+    "100",
+    "danger"
+   ],
+   [
+    "80",
+    "100",
+    "warning"
+   ],
+   [
+    "79.999",
+    "100",
+    "success"
+   ],
+   [
+    "50",
+    "0",
+    "danger"
+   ],
+   [
+    "-1",
+    "0",
+    "success"
+   ]
+  ],
+  "sla_tone": [
+   [
+    "100",
+    "success"
+   ],
+   [
+    "99.9",
+    "success"
+   ],
+   [
+    "99.89",
+    "warning"
+   ],
+   [
+    "99.0",
+    "warning"
+   ],
+   [
+    "98.99",
+    "danger"
+   ],
+   [
+    "0",
+    "danger"
+   ],
+   [
+    "-1",
+    "danger"
+   ]
+  ],
+  "clamp_percent": [
+   [
+    "-1",
+    "0.0"
+   ],
+   [
+    "-0.0",
+    "-0.0"
+   ],
+   [
+    "0",
+    "0.0"
+   ],
+   [
+    "0.004",
+    "0.0"
+   ],
+   [
+    "0.005",
+    "0.01"
+   ],
+   [
+    "0.015",
+    "0.01"
+   ],
+   [
+    "55.555",
+    "55.55"
+   ],
+   [
+    "12.3449999",
+    "12.34"
+   ],
+   [
+    "99.995",
+    "100.0"
+   ],
+   [
+    "100",
+    "100.0"
+   ],
+   [
+    "100.004",
+    "100.0"
+   ],
+   [
+    "100.005",
+    "100.0"
+   ],
+   [
+    "250",
+    "100.0"
+   ],
+   [
+    "1e-9",
+    "0.0"
+   ],
+   [
+    "33.333333333333336",
+    "33.33"
+   ]
+  ],
+  "fixed": [
+   [
+    "0.125",
+    2,
+    "0.12"
+   ],
+   [
+    "0.375",
+    2,
+    "0.38"
+   ],
+   [
+    "2.5",
+    0,
+    "2"
+   ],
+   [
+    "3.5",
+    0,
+    "4"
+   ],
+   [
+    "0.5",
+    0,
+    "0"
+   ],
+   [
+    "1.5",
+    0,
+    "2"
+   ],
+   [
+    "2.675",
+    2,
+    "2.67"
+   ],
+   [
+    "1.45",
+    1,
+    "1.4"
+   ],
+   [
+    "1.55",
+    1,
+    "1.6"
+   ],
+   [
+    "0.05",
+    1,
+    "0.1"
+   ],
+   [
+    "0.25",
+    1,
+    "0.2"
+   ],
+   [
+    "0.35",
+    1,
+    "0.3"
+   ],
+   [
+    "-0.04",
+    1,
+    "-0.0"
+   ],
+   [
+    "-0.0",
+    1,
+    "-0.0"
+   ],
+   [
+    "0",
+    2,
+    "0.00"
+   ],
+   [
+    "123",
+    1,
+    "123.0"
+   ],
+   [
+    "1e22",
+    0,
+    "10000000000000000000000"
+   ],
+   [
+    "1e-7",
+    2,
+    "0.00"
+   ],
+   [
+    "99.995",
+    2,
+    "100.00"
+   ],
+   [
+    "12.3449999",
+    2,
+    "12.34"
+   ],
+   [
+    "1234.5",
+    0,
+    "1234"
+   ],
+   [
+    "0.26666666666666666",
+    2,
+    "0.27"
+   ],
+   [
+    "5e-324",
+    1,
+    "0.0"
+   ],
+   [
+    "1.7976931348623157e308",
+    0,
+    "179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368"
+   ],
+   [
+    "-2.5",
+    0,
+    "-2"
+   ],
+   [
+    "-1.25",
+    1,
+    "-1.2"
+   ],
+   [
+    "0.6666666666666666",
+    2,
+    "0.67"
+   ],
+   [
+    "133.33333333333331",
+    0,
+    "133"
+   ],
+   [
+    "1023.95",
+    1,
+    "1024.0"
+   ]
+  ],
+  "general": [
+   [
+    "50",
+    "50"
+   ],
+   [
+    "0.01",
+    "0.01"
+   ],
+   [
+    "0.5",
+    "0.5"
+   ],
+   [
+    "90",
+    "90"
+   ],
+   [
+    "99.9",
+    "99.9"
+   ],
+   [
+    "100",
+    "100"
+   ],
+   [
+    "1e6",
+    "1e+06"
+   ],
+   [
+    "999999",
+    "999999"
+   ],
+   [
+    "999999.5",
+    "1e+06"
+   ],
+   [
+    "999999.4",
+    "999999"
+   ],
+   [
+    "123456.5",
+    "123456"
+   ],
+   [
+    "123457.5",
+    "123458"
+   ],
+   [
+    "1234567",
+    "1.23457e+06"
+   ],
+   [
+    "0.0001",
+    "0.0001"
+   ],
+   [
+    "0.00001",
+    "1e-05"
+   ],
+   [
+    "0.000123456789",
+    "0.000123457"
+   ],
+   [
+    "1e-300",
+    "1e-300"
+   ],
+   [
+    "5e-324",
+    "4.94066e-324"
+   ],
+   [
+    "1.7976931348623157e308",
+    "1.79769e+308"
+   ],
+   [
+    "-2.5",
+    "-2.5"
+   ],
+   [
+    "-0.0",
+    "-0"
+   ],
+   [
+    "0",
+    "0"
+   ],
+   [
+    "1234567.5",
+    "1.23457e+06"
+   ],
+   [
+    "12345678901234567890",
+    "1.23457e+19"
+   ],
+   [
+    "0.1",
+    "0.1"
+   ],
+   [
+    "1e16",
+    "1e+16"
+   ],
+   [
+    "100000",
+    "100000"
+   ],
+   [
+    "1e5",
+    "100000"
+   ],
+   [
+    "12.5",
+    "12.5"
+   ]
+  ],
+  "round": [
+   [
+    "2.675",
+    2,
+    "2.67"
+   ],
+   [
+    "0.125",
+    2,
+    "0.12"
+   ],
+   [
+    "0.135",
+    2,
+    "0.14"
+   ],
+   [
+    "1.005",
+    2,
+    "1.0"
+   ],
+   [
+    "99.995",
+    2,
+    "100.0"
+   ],
+   [
+    "-0.004",
+    2,
+    "-0.0"
+   ],
+   [
+    "12.345",
+    1,
+    "12.3"
+   ],
+   [
+    "12.35",
+    1,
+    "12.3"
+   ],
+   [
+    "1e16",
+    2,
+    "1e+16"
+   ],
+   [
+    "5e-324",
+    2,
+    "0.0"
+   ],
+   [
+    "0.5",
+    0,
+    "0.0"
+   ],
+   [
+    "1.5",
+    0,
+    "2.0"
+   ],
+   [
+    "2.5",
+    0,
+    "2.0"
+   ],
+   [
+    "45.65",
+    1,
+    "45.6"
+   ],
+   [
+    "33.33333333",
+    1,
+    "33.3"
+   ],
+   [
+    "66.66666666",
+    1,
+    "66.7"
+   ],
+   [
+    "46.30989",
+    1,
+    "46.3"
+   ]
+  ],
+  "sum": [
+   [
+    [
+     "0.3",
+     "0",
+     "0",
+     "0.7",
+     "0",
+     "0",
+     "0",
+     "0",
+     "0.1",
+     "0"
+    ],
+    "1.0999999999999999"
+   ],
+   [
+    [
+     "0.1",
+     "0.2",
+     "0.3"
+    ],
+    "0.6"
+   ],
+   [
+    [
+     "1e16",
+     "1",
+     "-1e16"
+    ],
+    "1.0"
+   ],
+   [
+    [
+     "0.01",
+     "0.02",
+     "0.03",
+     "0.04",
+     "0.05",
+     "0.06",
+     "0.07"
+    ],
+    "0.28"
+   ],
+   [
+    [
+     "123.45",
+     "0.0",
+     "67.89",
+     "1000.01",
+     "0.03",
+     "0.0",
+     "0.0",
+     "0.0",
+     "0.0",
+     "0.0"
+    ],
+    "1191.3799999999999"
+   ],
+   [
+    [
+     "1e308",
+     "1e308"
+    ],
+    "inf"
+   ],
+   [
+    [
+     "0",
+     "0"
+    ],
+    "0.0"
+   ],
+   [
+    [
+     "1.0000000000145519",
+     "0.0",
+     "0.5",
+     "1.0",
+     "0.5",
+     "0.0",
+     "0.0",
+     "0.0",
+     "0.5",
+     "0.0"
+    ],
+    "3.500000000014552"
+   ]
+  ]
+ },
+ "procfs": [
+  {
+   "name": "modern_kernel",
+   "memory": {
+    "value": {
+     "total": 8241213440,
+     "used": 3816509440,
+     "percent": "46.3"
+    }
+   },
+   "boot_time": {
+    "value": "1798700000.0"
+   },
+   "cpu_percent": {
+    "value": "50.0"
+   }
+  },
+  {
+   "name": "busy_and_idle_in_odd_amounts",
+   "memory": {
+    "value": {
+     "total": 1024000,
+     "used": 683008,
+     "percent": "66.7"
+    }
+   },
+   "boot_time": {
+    "value": "1798700000.0"
+   },
+   "cpu_percent": {
+    "value": "33.3"
+   }
+  },
+  {
+   "name": "counters_that_went_backwards",
+   "memory": {
+    "value": {
+     "total": 2097152,
+     "used": 561152,
+     "percent": "26.8"
+    }
+   },
+   "boot_time": {
+    "value": "1798700000.0"
+   },
+   "cpu_percent": {
+    "value": "66.7"
+   }
+  },
+  {
+   "name": "nothing_changed",
+   "memory": {
+    "value": {
+     "total": 3072,
+     "used": 2048,
+     "percent": "66.7"
+    }
+   },
+   "boot_time": {
+    "value": "1798700000.0"
+   },
+   "cpu_percent": {
+    "value": "0.0"
+   }
+  },
+  {
+   "name": "eleven_fields_and_guest_time",
+   "memory": {
+    "value": {
+     "total": 8241213440,
+     "used": 7716577280,
+     "percent": "93.6"
+    }
+   },
+   "boot_time": {
+    "value": "1798700000.75"
+   },
+   "cpu_percent": {
+    "value": "61.5"
+   }
+  },
+  {
+   "name": "estimate_from_zoneinfo",
+   "memory": {
+    "value": {
+     "total": 8241213440,
+     "used": 3900154880,
+     "percent": "47.3"
+    }
+   },
+   "boot_time": {
+    "value": "1798700000.0"
+   },
+   "cpu_percent": {
+    "value": "0.0"
+   }
+  },
+  {
+   "name": "estimate_with_a_large_watermark",
+   "memory": {
+    "value": {
+     "total": 8241213440,
+     "used": 8241213440,
+     "percent": "100.0"
+    }
+   },
+   "boot_time": {
+    "value": "1798700000.0"
+   },
+   "cpu_percent": {
+    "value": "0.0"
+   }
+  },
+  {
+   "name": "available_zero_without_zoneinfo",
+   "memory": {
+    "value": {
+     "total": 8241213440,
+     "used": 5314603008,
+     "percent": "64.5"
+    }
+   },
+   "boot_time": {
+    "value": "1798700000.0"
+   },
+   "cpu_percent": {
+    "value": "0.0"
+   }
+  },
+  {
+   "name": "fallback_without_file_lru",
+   "memory": {
+    "value": {
+     "total": 8241213440,
+     "used": 5314603008,
+     "percent": "64.5"
+    }
+   },
+   "boot_time": {
+    "value": "1798700000.0"
+   },
+   "cpu_percent": {
+    "value": "0.0"
+   }
+  },
+  {
+   "name": "available_over_total",
+   "memory": {
+    "value": {
+     "total": 1024000,
+     "used": 768000,
+     "percent": "75.0"
+    }
+   },
+   "boot_time": {
+    "value": "1798700000.0"
+   },
+   "cpu_percent": {
+    "value": "0.0"
+   }
+  },
+  {
+   "name": "total_zero",
+   "memory": {
+    "value": {
+     "total": 0,
+     "used": -7168,
+     "percent": "0.0"
+    }
+   },
+   "boot_time": {
+    "value": "1798700000.0"
+   },
+   "cpu_percent": {
+    "value": "0.0"
+   }
+  },
+  {
+   "name": "duplicate_names_use_the_last",
+   "memory": {
+    "value": {
+     "total": 2048000,
+     "used": 1536000,
+     "percent": "75.0"
+    }
+   },
+   "boot_time": {
+    "value": "1798700000.0"
+   },
+   "cpu_percent": {
+    "value": "0.0"
+   }
+  },
+  {
+   "name": "missing_memtotal",
+   "memory": {
+    "error": "KeyError"
+   },
+   "boot_time": {
+    "value": "1798700000.0"
+   },
+   "cpu_percent": {
+    "value": "0.0"
+   }
+  },
+  {
+   "name": "blank_line_in_meminfo",
+   "memory": {
+    "error": "IndexError"
+   },
+   "boot_time": {
+    "value": "1798700000.0"
+   },
+   "cpu_percent": {
+    "value": "0.0"
+   }
+  },
+  {
+   "name": "meminfo_value_not_a_number",
+   "memory": {
+    "error": "ValueError"
+   },
+   "boot_time": {
+    "value": "1798700000.0"
+   },
+   "cpu_percent": {
+    "value": "0.0"
+   }
+  },
+  {
+   "name": "zoneinfo_low_without_a_value",
+   "memory": {
+    "error": "IndexError"
+   },
+   "boot_time": {
+    "value": "1798700000.0"
+   },
+   "cpu_percent": {
+    "value": "0.0"
+   }
+  },
+  {
+   "name": "no_btime",
+   "memory": {
+    "value": {
+     "total": 10240,
+     "used": 5120,
+     "percent": "50.0"
+    }
+   },
+   "boot_time": {
+    "error": "RuntimeError"
+   },
+   "cpu_percent": {
+    "value": "0.0"
+   }
+  },
+  {
+   "name": "btime_without_a_value",
+   "memory": {
+    "value": {
+     "total": 10240,
+     "used": 5120,
+     "percent": "50.0"
+    }
+   },
+   "boot_time": {
+    "error": "IndexError"
+   },
+   "cpu_percent": {
+    "value": "0.0"
+   }
+  }
+ ],
+ "downtime": [
+  {
+   "name": "no_heartbeat",
+   "error": null,
+   "lines": []
+  },
+  {
+   "name": "within_grace",
+   "error": null,
+   "lines": []
+  },
+  {
+   "name": "exactly_the_grace",
+   "error": null,
+   "lines": []
+  },
+  {
+   "name": "beyond_the_grace",
+   "error": null,
+   "lines": [
+    "{\"id\":\"000000000000000000000000a7000001\",\"kind\":\"downtime\",\"severity\":\"critical\",\"title\":\"管理UIダウンタイム\",\"message\":\"前回 heartbeat から復帰までの空白をダウンタイムとして記録しました。\",\"created_epoch\":1800000000.5,\"created_at\":\"2027-01-15T08:00:00.500000+00:00\",\"start_epoch\":1799999000.25,\"start_at\":\"2027-01-15T07:43:20.250000+00:00\",\"end_epoch\":1800000000.5,\"end_at\":\"2027-01-15T08:00:00.500000+00:00\",\"duration_seconds\":1000.25,\"metadata\":{\"grace_seconds\":120.0,\"source\":\"startup_heartbeat_gap\"}}"
+   ]
+  },
+  {
+   "name": "custom_grace_is_longer",
+   "error": null,
+   "lines": []
+  },
+  {
+   "name": "custom_grace_has_a_floor",
+   "error": null,
+   "lines": [
+    "{\"id\":\"000000000000000000000000a7000001\",\"kind\":\"downtime\",\"severity\":\"critical\",\"title\":\"管理UIダウンタイム\",\"message\":\"前回 heartbeat から復帰までの空白をダウンタイムとして記録しました。\",\"created_epoch\":1800000000.5,\"created_at\":\"2027-01-15T08:00:00.500000+00:00\",\"start_epoch\":1799999999.0,\"start_at\":\"2027-01-15T07:59:59+00:00\",\"end_epoch\":1800000000.5,\"end_at\":\"2027-01-15T08:00:00.500000+00:00\",\"duration_seconds\":1.5,\"metadata\":{\"grace_seconds\":1.0,\"source\":\"startup_heartbeat_gap\"}}"
+   ]
+  },
+  {
+   "name": "integer_epoch",
+   "error": null,
+   "lines": [
+    "{\"id\":\"000000000000000000000000a7000001\",\"kind\":\"downtime\",\"severity\":\"critical\",\"title\":\"管理UIダウンタイム\",\"message\":\"前回 heartbeat から復帰までの空白をダウンタイムとして記録しました。\",\"created_epoch\":1800000000.5,\"created_at\":\"2027-01-15T08:00:00.500000+00:00\",\"start_epoch\":1799990000.0,\"start_at\":\"2027-01-15T05:13:20+00:00\",\"end_epoch\":1800000000.5,\"end_at\":\"2027-01-15T08:00:00.500000+00:00\",\"duration_seconds\":10000.5,\"metadata\":{\"grace_seconds\":120.0,\"source\":\"startup_heartbeat_gap\"}}"
+   ]
+  },
+  {
+   "name": "boolean_epoch",
+   "error": null,
+   "lines": [
+    "{\"id\":\"000000000000000000000000a7000001\",\"kind\":\"downtime\",\"severity\":\"critical\",\"title\":\"管理UIダウンタイム\",\"message\":\"前回 heartbeat から復帰までの空白をダウンタイムとして記録しました。\",\"created_epoch\":1800000000.5,\"created_at\":\"2027-01-15T08:00:00.500000+00:00\",\"start_epoch\":1.0,\"start_at\":\"1970-01-01T00:00:01+00:00\",\"end_epoch\":1800000000.5,\"end_at\":\"2027-01-15T08:00:00.500000+00:00\",\"duration_seconds\":1799999999.5,\"metadata\":{\"grace_seconds\":120.0,\"source\":\"startup_heartbeat_gap\"}}"
+   ]
+  },
+  {
+   "name": "zero_epoch",
+   "error": null,
+   "lines": [
+    "{\"id\":\"000000000000000000000000a7000001\",\"kind\":\"downtime\",\"severity\":\"critical\",\"title\":\"管理UIダウンタイム\",\"message\":\"前回 heartbeat から復帰までの空白をダウンタイムとして記録しました。\",\"created_epoch\":1800000000.5,\"created_at\":\"2027-01-15T08:00:00.500000+00:00\",\"start_epoch\":0.0,\"start_at\":null,\"end_epoch\":1800000000.5,\"end_at\":\"2027-01-15T08:00:00.500000+00:00\",\"duration_seconds\":1800000000.5,\"metadata\":{\"grace_seconds\":120.0,\"source\":\"startup_heartbeat_gap\"}}"
+   ]
+  },
+  {
+   "name": "sixteen_digit_epoch",
+   "error": null,
+   "lines": [
+    "{\"id\":\"000000000000000000000000a7000001\",\"kind\":\"downtime\",\"severity\":\"critical\",\"title\":\"管理UIダウンタイム\",\"message\":\"前回 heartbeat から復帰までの空白をダウンタイムとして記録しました。\",\"created_epoch\":1800000000.5,\"created_at\":\"2027-01-15T08:00:00.500000+00:00\",\"start_epoch\":1799999000.123456,\"start_at\":\"2027-01-15T07:43:20.123456+00:00\",\"end_epoch\":1800000000.5,\"end_at\":\"2027-01-15T08:00:00.500000+00:00\",\"duration_seconds\":1000.377,\"metadata\":{\"grace_seconds\":120.0,\"source\":\"startup_heartbeat_gap\"}}"
+   ]
+  },
+  {
+   "name": "duration_rounds_to_three_places",
+   "error": null,
+   "lines": [
+    "{\"id\":\"000000000000000000000000a7000001\",\"kind\":\"downtime\",\"severity\":\"critical\",\"title\":\"管理UIダウンタイム\",\"message\":\"前回 heartbeat から復帰までの空白をダウンタイムとして記録しました。\",\"created_epoch\":1800000000.0005,\"created_at\":\"2027-01-15T08:00:00.000500+00:00\",\"start_epoch\":1799999000.0,\"start_at\":\"2027-01-15T07:43:20+00:00\",\"end_epoch\":1800000000.0005,\"end_at\":\"2027-01-15T08:00:00.000500+00:00\",\"duration_seconds\":1000.0,\"metadata\":{\"grace_seconds\":120.0,\"source\":\"startup_heartbeat_gap\"}}"
+   ]
+  },
+  {
+   "name": "text_epoch",
+   "error": null,
+   "lines": []
+  },
+  {
+   "name": "missing_epoch",
+   "error": null,
+   "lines": []
+  },
+  {
+   "name": "not_an_object",
+   "error": null,
+   "lines": []
+  },
+  {
+   "name": "broken_json",
+   "error": null,
+   "lines": []
+  },
+  {
+   "name": "empty_file",
+   "error": null,
+   "lines": []
+  },
+  {
+   "name": "heartbeat_in_the_future",
+   "error": null,
+   "lines": []
+  },
+  {
+   "name": "not_utf8",
+   "error": "UnicodeDecodeError",
+   "lines": []
+  }
+ ],
+ "heartbeat": [
+  {
+   "name": "basic",
+   "text": "{\n  \"last_seen_epoch\": 1800000000.25,\n  \"last_seen_at\": \"2027-01-15T08:00:00.250000+00:00\",\n  \"pid\": 7,\n  \"app_started_epoch\": 1799990000.0,\n  \"app_started_at\": \"2027-01-15T05:13:20+00:00\"\n}",
+   "files": [
+    "heartbeat.json"
+   ]
+  },
+  {
+   "name": "whole_seconds",
+   "text": "{\n  \"last_seen_epoch\": 1800000000.0,\n  \"last_seen_at\": \"2027-01-15T08:00:00+00:00\",\n  \"pid\": 4242,\n  \"app_started_epoch\": 1800000000.0,\n  \"app_started_at\": \"2027-01-15T08:00:00+00:00\"\n}",
+   "files": [
+    "heartbeat.json"
+   ]
+  },
+  {
+   "name": "micro_seconds",
+   "text": "{\n  \"last_seen_epoch\": 1800000000.000001,\n  \"last_seen_at\": \"2027-01-15T08:00:00.000001+00:00\",\n  \"pid\": 1,\n  \"app_started_epoch\": 0.5,\n  \"app_started_at\": \"1970-01-01T00:00:00.500000+00:00\"\n}",
+   "files": [
+    "heartbeat.json"
+   ]
+  }
+ ],
+ "alerts": [
+  {
+   "name": "below_every_threshold",
+   "lines": []
+  },
+  {
+   "name": "over_and_cooldown",
+   "lines": [
+    "{\"id\":\"000000000000000000000000a7000001\",\"kind\":\"resource_alert\",\"severity\":\"warning\",\"title\":\"CPU 使用率アラート\",\"message\":\"95.5% がしきい値 90% を超えました。\",\"created_epoch\":1800000000.0,\"created_at\":\"2027-01-15T08:00:00+00:00\",\"start_epoch\":null,\"start_at\":null,\"end_epoch\":null,\"end_at\":null,\"duration_seconds\":null,\"metadata\":{\"metric\":\"cpu\",\"percent\":95.5,\"threshold\":90.0,\"detail\":\"論理コア 8\"}}",
+    "{\"id\":\"000000000000000000000000a7000002\",\"kind\":\"resource_alert\",\"severity\":\"warning\",\"title\":\"Memory 使用率アラート\",\"message\":\"90.0% がしきい値 90% を超えました。\",\"created_epoch\":1800000000.0,\"created_at\":\"2027-01-15T08:00:00+00:00\",\"start_epoch\":null,\"start_at\":null,\"end_epoch\":null,\"end_at\":null,\"duration_seconds\":null,\"metadata\":{\"metric\":\"memory\",\"percent\":90.0,\"threshold\":90.0,\"detail\":\"7.0 GB / 7.7 GB\"}}",
+    "{\"id\":\"000000000000000000000000a7000003\",\"kind\":\"resource_alert\",\"severity\":\"warning\",\"title\":\"TPS 使用率アラート\",\"message\":\"100.0% がしきい値 100% を超えました。\",\"created_epoch\":1800000000.0,\"created_at\":\"2027-01-15T08:00:00+00:00\",\"start_epoch\":null,\"start_at\":null,\"end_epoch\":null,\"end_at\":null,\"duration_seconds\":null,\"metadata\":{\"metric\":\"tps\",\"percent\":100.0,\"threshold\":100.0,\"detail\":\"目標 50 req/s の 100%\"}}",
+    "{\"id\":\"000000000000000000000000a7000004\",\"kind\":\"resource_alert\",\"severity\":\"warning\",\"title\":\"CPU 使用率アラート\",\"message\":\"98.0% がしきい値 90% を超えました。\",\"created_epoch\":1800000300.0,\"created_at\":\"2027-01-15T08:05:00+00:00\",\"start_epoch\":null,\"start_at\":null,\"end_epoch\":null,\"end_at\":null,\"duration_seconds\":null,\"metadata\":{\"metric\":\"cpu\",\"percent\":98.0,\"threshold\":90.0,\"detail\":\"論理コア 8\"}}",
+    "{\"id\":\"000000000000000000000000a7000005\",\"kind\":\"resource_alert\",\"severity\":\"warning\",\"title\":\"Memory 使用率アラート\",\"message\":\"91.0% がしきい値 90% を超えました。\",\"created_epoch\":1800000300.0,\"created_at\":\"2027-01-15T08:05:00+00:00\",\"start_epoch\":null,\"start_at\":null,\"end_epoch\":null,\"end_at\":null,\"duration_seconds\":null,\"metadata\":{\"metric\":\"memory\",\"percent\":91.0,\"threshold\":90.0,\"detail\":\"7.1 GB / 7.7 GB\"}}"
+   ]
+  },
+  {
+   "name": "custom_thresholds_and_no_cooldown",
+   "lines": [
+    "{\"id\":\"000000000000000000000000a7000001\",\"kind\":\"resource_alert\",\"severity\":\"warning\",\"title\":\"CPU 使用率アラート\",\"message\":\"50.0% がしきい値 50% を超えました。\",\"created_epoch\":1800000000.0,\"created_at\":\"2027-01-15T08:00:00+00:00\",\"start_epoch\":null,\"start_at\":null,\"end_epoch\":null,\"end_at\":null,\"duration_seconds\":null,\"metadata\":{\"metric\":\"cpu\",\"percent\":50.0,\"threshold\":50.0,\"detail\":\"論理コア 2\"}}",
+    "{\"id\":\"000000000000000000000000a7000002\",\"kind\":\"resource_alert\",\"severity\":\"warning\",\"title\":\"TPS 使用率アラート\",\"message\":\"12.5% がしきい値 12.5% を超えました。\",\"created_epoch\":1800000000.0,\"created_at\":\"2027-01-15T08:00:00+00:00\",\"start_epoch\":null,\"start_at\":null,\"end_epoch\":null,\"end_at\":null,\"duration_seconds\":null,\"metadata\":{\"metric\":\"tps\",\"percent\":12.5,\"threshold\":12.5,\"detail\":\"目標 50 req/s の 12%\"}}",
+    "{\"id\":\"000000000000000000000000a7000003\",\"kind\":\"resource_alert\",\"severity\":\"warning\",\"title\":\"CPU 使用率アラート\",\"message\":\"95.2% がしきい値 50% を超えました。\",\"created_epoch\":1800000000.0,\"created_at\":\"2027-01-15T08:00:00+00:00\",\"start_epoch\":null,\"start_at\":null,\"end_epoch\":null,\"end_at\":null,\"duration_seconds\":null,\"metadata\":{\"metric\":\"cpu\",\"percent\":95.25,\"threshold\":50.0,\"detail\":\"論理コア 2\"}}",
+    "{\"id\":\"000000000000000000000000a7000004\",\"kind\":\"resource_alert\",\"severity\":\"warning\",\"title\":\"CPU 使用率アラート\",\"message\":\"95.3% がしきい値 50% を超えました。\",\"created_epoch\":1800000001.0,\"created_at\":\"2027-01-15T08:00:01+00:00\",\"start_epoch\":null,\"start_at\":null,\"end_epoch\":null,\"end_at\":null,\"duration_seconds\":null,\"metadata\":{\"metric\":\"cpu\",\"percent\":95.35,\"threshold\":50.0,\"detail\":\"論理コア 2\"}}",
+    "{\"id\":\"000000000000000000000000a7000005\",\"kind\":\"resource_alert\",\"severity\":\"warning\",\"title\":\"TPS 使用率アラート\",\"message\":\"33.3% がしきい値 12.5% を超えました。\",\"created_epoch\":1800000001.0,\"created_at\":\"2027-01-15T08:00:01+00:00\",\"start_epoch\":null,\"start_at\":null,\"end_epoch\":null,\"end_at\":null,\"duration_seconds\":null,\"metadata\":{\"metric\":\"tps\",\"percent\":33.33,\"threshold\":12.5,\"detail\":\"目標 50 req/s の 33%\"}}"
+   ]
+  },
+  {
+   "name": "negative_cooldown_has_a_floor",
+   "lines": [
+    "{\"id\":\"000000000000000000000000a7000001\",\"kind\":\"resource_alert\",\"severity\":\"warning\",\"title\":\"CPU 使用率アラート\",\"message\":\"0.0% がしきい値 0% を超えました。\",\"created_epoch\":1800000000.0,\"created_at\":\"2027-01-15T08:00:00+00:00\",\"start_epoch\":null,\"start_at\":null,\"end_epoch\":null,\"end_at\":null,\"duration_seconds\":null,\"metadata\":{\"metric\":\"cpu\",\"percent\":0.0,\"threshold\":0.0,\"detail\":\"論理コア 1\"}}",
+    "{\"id\":\"000000000000000000000000a7000002\",\"kind\":\"resource_alert\",\"severity\":\"warning\",\"title\":\"CPU 使用率アラート\",\"message\":\"0.0% がしきい値 0% を超えました。\",\"created_epoch\":1800000000.0,\"created_at\":\"2027-01-15T08:00:00+00:00\",\"start_epoch\":null,\"start_at\":null,\"end_epoch\":null,\"end_at\":null,\"duration_seconds\":null,\"metadata\":{\"metric\":\"cpu\",\"percent\":0.0,\"threshold\":0.0,\"detail\":\"論理コア 1\"}}"
+   ]
+  },
+  {
+   "name": "time_goes_backwards",
+   "lines": [
+    "{\"id\":\"000000000000000000000000a7000001\",\"kind\":\"resource_alert\",\"severity\":\"warning\",\"title\":\"CPU 使用率アラート\",\"message\":\"99.0% がしきい値 90% を超えました。\",\"created_epoch\":1800000000.0,\"created_at\":\"2027-01-15T08:00:00+00:00\",\"start_epoch\":null,\"start_at\":null,\"end_epoch\":null,\"end_at\":null,\"duration_seconds\":null,\"metadata\":{\"metric\":\"cpu\",\"percent\":99.0,\"threshold\":90.0,\"detail\":\"論理コア 8\"}}"
+   ]
+  }
+ ]
+}

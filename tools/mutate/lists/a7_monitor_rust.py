@@ -69,7 +69,7 @@ MUTS = [
         "            let seconds = py_max(0.0, now - value);",
         "            let seconds = now - value;",
     ),
-    ("ラベルの値の \" を逃がさない", P, "        .replace('\"', \"\\\\\\\"\")", "        .replace('\"', \"\\\"\")"),
+    ('ラベルの値の " を逃がさない', P, '        .replace(\'"\', "\\\\\\"")', '        .replace(\'"\', "\\"")'),
     (
         "Valkey を使えるかをいつも 1 にする",
         P,

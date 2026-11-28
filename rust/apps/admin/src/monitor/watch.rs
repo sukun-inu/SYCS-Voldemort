@@ -25,9 +25,9 @@ use tracing::warn;
 
 use crate::app::AdminApp;
 use crate::metrics::{Incidents, NewIncident, iso};
+use crate::monitor::Settings;
 use crate::monitor::dashboard::{self, Meter, py_number};
 use crate::monitor::pyfloat::{fixed, general};
-use crate::monitor::Settings;
 use crate::python;
 
 /// 心拍のファイルの名前。

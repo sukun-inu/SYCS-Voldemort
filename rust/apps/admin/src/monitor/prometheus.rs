@@ -92,7 +92,9 @@ pub fn allowed_networks(raw: Option<&str>) -> Vec<Network> {
         }
         match Network::parse_loose(token) {
             Some(network) => networks.push(network),
-            None => tracing::warn!("METRICS_ALLOWED_CIDRS に読めない値があります（無視します）: {token}"),
+            None => tracing::warn!(
+                "METRICS_ALLOWED_CIDRS に読めない値があります（無視します）: {token}"
+            ),
         }
     }
     networks
@@ -216,7 +218,13 @@ fn format_labels(labels: &Labels) -> String {
 }
 
 /// `_block`（`# HELP`・`# TYPE` と、ラベルの順に並べた値の行。系列が無ければ何も足さない）。
-fn block(lines: &mut Vec<String>, name: &str, kind: &str, help: &str, mut series: Series) -> Result<(), Crash> {
+fn block(
+    lines: &mut Vec<String>,
+    name: &str,
+    kind: &str,
+    help: &str,
+    mut series: Series,
+) -> Result<(), Crash> {
     if series.is_empty() {
         return Ok(());
     }
@@ -249,12 +257,18 @@ pub fn render(scan: &Scan, now: f64, stale_after: f64, extra: &[Extra]) -> Resul
         };
         if let Some(app) = key.strip_prefix("hb:") {
             let seconds = py_max(0.0, now - value);
-            up.push((app_label(app), if seconds < stale_after { 1.0 } else { 0.0 }));
+            up.push((
+                app_label(app),
+                if seconds < stale_after { 1.0 } else { 0.0 },
+            ));
             age.push((app_label(app), seconds));
         } else if let Some(rest) = key.strip_prefix("g:") {
             let (app, name) = rest.split_once(':').unwrap_or((rest, ""));
             if !name.is_empty() {
-                gauges.entry(name.to_string()).or_default().push((app_label(app), value));
+                gauges
+                    .entry(name.to_string())
+                    .or_default()
+                    .push((app_label(app), value));
             }
         } else if let Some(rest) = key.strip_prefix("c:") {
             let (name, labels) = decode_counter_key(rest);
@@ -332,7 +346,9 @@ mod tests {
         for text in [UP_HELP, AGE_HELP, SHARED_CACHE_HELP] {
             assert!(registry.contains(&format!("\"{text}\"")), "{text}");
         }
-        assert!(view.contains(&format!("DEFAULT_ALLOWED_CIDRS = \"{DEFAULT_ALLOWED_CIDRS}\"")));
+        assert!(view.contains(&format!(
+            "DEFAULT_ALLOWED_CIDRS = \"{DEFAULT_ALLOWED_CIDRS}\""
+        )));
         assert!(view.contains(&format!("CONTENT_TYPE = \"{CONTENT_TYPE}\"")));
     }
 

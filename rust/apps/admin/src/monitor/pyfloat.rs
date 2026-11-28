@@ -316,7 +316,10 @@ pub fn py_min(a: f64, b: f64) -> f64 {
 /// 全体が 500 になる。同じにする（Valkey の値は Python と Rust の報告口が書くので、ふつうは出ない）。
 pub fn format_value(value: f64) -> Result<String, Crash> {
     if value.is_nan() {
-        return Err(Crash::new("ValueError", "cannot convert float NaN to integer"));
+        return Err(Crash::new(
+            "ValueError",
+            "cannot convert float NaN to integer",
+        ));
     }
     if value.is_infinite() {
         return Err(Crash::new(
@@ -390,6 +393,9 @@ mod tests {
         assert_eq!(format_value(1e15).unwrap(), "1000000000000000.0");
         assert_eq!(format_value(0.25).unwrap(), "0.25");
         assert_eq!(format_value(f64::NAN).unwrap_err().kind, "ValueError");
-        assert_eq!(format_value(f64::INFINITY).unwrap_err().kind, "OverflowError");
+        assert_eq!(
+            format_value(f64::INFINITY).unwrap_err().kind,
+            "OverflowError"
+        );
     }
 }

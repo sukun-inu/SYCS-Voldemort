@@ -181,7 +181,8 @@ fn incoming(request: &Value) -> Incoming {
     }
     for pair in request["headers"].as_array().unwrap() {
         let name = HeaderName::from_bytes(pair[0].as_str().unwrap().as_bytes()).unwrap();
-        let value = HeaderValue::from_bytes(&support::latin1_bytes(pair[1].as_str().unwrap())).unwrap();
+        let value =
+            HeaderValue::from_bytes(&support::latin1_bytes(pair[1].as_str().unwrap())).unwrap();
         headers.insert(name, value);
     }
     Incoming {
@@ -214,7 +215,12 @@ fn app(data: &Value, service: &Value, dir: &Path, site: &Arc<Site>) -> Arc<Admin
     let started = service.get("started").map_or(0.0, float);
     let monitor = Monitor::new(
         Settings::from_lookup(lookup(&service["env"])),
-        Arc::new(FakeHost(service.get("host").cloned().unwrap_or_else(|| Value::Object(Map::new())))),
+        Arc::new(FakeHost(
+            service
+                .get("host")
+                .cloned()
+                .unwrap_or_else(|| Value::Object(Map::new())),
+        )),
         Arc::new(Unconfigured),
         Arc::new(move || now),
     )
@@ -282,17 +288,32 @@ fn formatting_matches_python() {
     };
     let rows = |name: &str| functions[name].as_array().unwrap().clone();
     for row in rows("format_duration") {
-        check("format_duration", &row[0], row[1].as_str().unwrap(), dashboard::format_duration(float(&row[0])));
+        check(
+            "format_duration",
+            &row[0],
+            row[1].as_str().unwrap(),
+            dashboard::format_duration(float(&row[0])),
+        );
     }
     for row in rows("format_bytes") {
-        check("format_bytes", &row[0], row[1].as_str().unwrap(), dashboard::format_bytes(float(&row[0])));
+        check(
+            "format_bytes",
+            &row[0],
+            row[1].as_str().unwrap(),
+            dashboard::format_bytes(float(&row[0])),
+        );
     }
     for row in rows("load_tone") {
         let got = dashboard::load_tone(float(&row[0]), float(&row[1])).to_string();
         check("load_tone", &row, row[2].as_str().unwrap(), got);
     }
     for row in rows("sla_tone") {
-        check("sla_tone", &row[0], row[1].as_str().unwrap(), dashboard::sla_tone(float(&row[0])).to_string());
+        check(
+            "sla_tone",
+            &row[0],
+            row[1].as_str().unwrap(),
+            dashboard::sla_tone(float(&row[0])).to_string(),
+        );
     }
     for row in rows("clamp_percent") {
         let got = python::float_repr(dashboard::clamp_percent(float(&row[0])));
@@ -300,10 +321,20 @@ fn formatting_matches_python() {
     }
     for row in rows("fixed") {
         let places = usize::try_from(row[1].as_u64().unwrap()).unwrap();
-        check("fixed", &row, row[2].as_str().unwrap(), pyfloat::fixed(float(&row[0]), places));
+        check(
+            "fixed",
+            &row,
+            row[2].as_str().unwrap(),
+            pyfloat::fixed(float(&row[0]), places),
+        );
     }
     for row in rows("general") {
-        check("general", &row[0], row[1].as_str().unwrap(), pyfloat::general(float(&row[0])));
+        check(
+            "general",
+            &row[0],
+            row[1].as_str().unwrap(),
+            pyfloat::general(float(&row[0])),
+        );
     }
     for row in rows("round") {
         let places = usize::try_from(row[1].as_u64().unwrap()).unwrap();
@@ -312,7 +343,12 @@ fn formatting_matches_python() {
     }
     for row in rows("sum") {
         let values: Vec<f64> = row[0].as_array().unwrap().iter().map(float).collect();
-        check("sum", &row[0], row[1].as_str().unwrap(), python::float_repr(pyfloat::pysum(&values)));
+        check(
+            "sum",
+            &row[0],
+            row[1].as_str().unwrap(),
+            python::float_repr(pyfloat::pysum(&values)),
+        );
     }
     support::finish(&wrong);
 }
@@ -338,9 +374,15 @@ fn proc_files_are_read_like_psutil() {
     {
         let name = case["name"].as_str().unwrap();
         let stat = source["stat"].as_str().unwrap();
-        let after = source.get("stat_after").and_then(Value::as_str).unwrap_or(stat);
+        let after = source
+            .get("stat_after")
+            .and_then(Value::as_str)
+            .unwrap_or(stat);
         let memory = outcome(
-            host::virtual_memory(source["meminfo"].as_str().unwrap(), source["zoneinfo"].as_str()),
+            host::virtual_memory(
+                source["meminfo"].as_str().unwrap(),
+                source["zoneinfo"].as_str(),
+            ),
             |memory| {
                 serde_json::json!({
                     "total": memory.total,
@@ -349,16 +391,25 @@ fn proc_files_are_read_like_psutil() {
                 })
             },
         );
-        let boot = outcome(host::boot_time(stat), |boot| Value::String(python::float_repr(boot)));
+        let boot = outcome(host::boot_time(stat), |boot| {
+            Value::String(python::float_repr(boot))
+        });
         let cpu = outcome(
             host::parse_cpu_times(stat).and_then(|first| {
                 host::parse_cpu_times(after).map(|second| host::cpu_percent(&first, &second))
             }),
             |cpu| Value::String(python::float_repr(cpu)),
         );
-        for (what, got) in [("memory", memory), ("boot_time", boot), ("cpu_percent", cpu)] {
+        for (what, got) in [
+            ("memory", memory),
+            ("boot_time", boot),
+            ("cpu_percent", cpu),
+        ] {
             if got != case[what] {
-                wrong.push(format!("「{name}」の {what}: Python {} / Rust {got}", case[what]));
+                wrong.push(format!(
+                    "「{name}」の {what}: Python {} / Rust {got}",
+                    case[what]
+                ));
             }
         }
     }
@@ -392,7 +443,10 @@ fn startup_downtime_is_recorded_like_python() {
     {
         let name = case["name"].as_str().unwrap();
         let dir = tempfile::tempdir().unwrap();
-        write_input(&dir.path().join(watch::HEARTBEAT_FILE), &source["heartbeat"]);
+        write_input(
+            &dir.path().join(watch::HEARTBEAT_FILE),
+            &source["heartbeat"],
+        );
         let now = float(&source["now"]);
         let (incidents, clock) = writer(dir.path(), base);
         *clock.lock().unwrap() = now;
@@ -406,7 +460,10 @@ fn startup_downtime_is_recorded_like_python() {
         }
         let lines = read_lines(&dir.path().join(INCIDENTS_FILE));
         if lines != case["lines"] {
-            wrong.push(format!("「{name}」の行:\n    Python {}\n    Rust   {lines}", case["lines"]));
+            wrong.push(format!(
+                "「{name}」の行:\n    Python {}\n    Rust   {lines}",
+                case["lines"]
+            ));
         }
     }
     support::finish(&wrong);
@@ -427,10 +484,19 @@ fn the_heartbeat_is_written_like_python() {
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("nested").join("monitor");
         let pid = u32::try_from(source["pid"].as_u64().unwrap()).unwrap();
-        watch::write_heartbeat(&target, float(&source["now"]), float(&source["started"]), pid).unwrap();
+        watch::write_heartbeat(
+            &target,
+            float(&source["now"]),
+            float(&source["started"]),
+            pid,
+        )
+        .unwrap();
         let text = std::fs::read_to_string(target.join(watch::HEARTBEAT_FILE)).unwrap();
         if text != case["text"].as_str().unwrap() {
-            wrong.push(format!("「{name}」の中身:\n    Python {}\n    Rust   {text:?}", case["text"]));
+            wrong.push(format!(
+                "「{name}」の中身:\n    Python {}\n    Rust   {text:?}",
+                case["text"]
+            ));
         }
         let mut files: Vec<String> = std::fs::read_dir(&target)
             .unwrap()
@@ -438,7 +504,10 @@ fn the_heartbeat_is_written_like_python() {
             .collect();
         files.sort();
         if Value::from(files.clone()) != case["files"] {
-            wrong.push(format!("「{name}」のファイル: Python {} / Rust {files:?}", case["files"]));
+            wrong.push(format!(
+                "「{name}」のファイル: Python {} / Rust {files:?}",
+                case["files"]
+            ));
         }
     }
     support::finish(&wrong);
@@ -475,7 +544,11 @@ fn threshold_alerts_are_recorded_like_python() {
             let now = float(&tick["now"]);
             *clock.lock().unwrap() = now;
             let meters = &tick["meters"];
-            let (cpu, memory, tps) = (meter(&meters["cpu"]), meter(&meters["memory"]), meter(&meters["tps"]));
+            let (cpu, memory, tps) = (
+                meter(&meters["cpu"]),
+                meter(&meters["memory"]),
+                meter(&meters["tps"]),
+            );
             alerts.record(
                 &incidents,
                 [("cpu", &cpu), ("memory", &memory), ("tps", &tps)],
@@ -485,7 +558,10 @@ fn threshold_alerts_are_recorded_like_python() {
         }
         let lines = read_lines(&dir.path().join(INCIDENTS_FILE));
         if lines != case["lines"] {
-            wrong.push(format!("「{name}」の行:\n    Python {}\n    Rust   {lines}", case["lines"]));
+            wrong.push(format!(
+                "「{name}」の行:\n    Python {}\n    Rust   {lines}",
+                case["lines"]
+            ));
         }
     }
     support::finish(&wrong);

@@ -20,9 +20,9 @@ use serde_json::{Map, Value, json};
 use crate::app::AdminApp;
 use crate::errors::Crash;
 use crate::metrics::INCIDENTS_FILE;
+use crate::monitor::Settings;
 use crate::monitor::host::{HostSample, os_error};
 use crate::monitor::pyfloat::{fixed, general, py_max, py_min, round, trunc};
-use crate::monitor::Settings;
 use crate::python;
 
 /// 一覧に出す件数（`list_incidents(limit=30)`。表示欄の分量）。
@@ -182,7 +182,8 @@ pub fn month_start(now: f64) -> f64 {
 /// 日本時間の `%H:%M:%S`（`datetime.now().strftime(...)`。本番の地方時は日本時間）。
 pub fn local_clock(now: f64) -> String {
     let seconds = whole_seconds(now) + JST_SECONDS;
-    DateTime::from_timestamp(seconds, 0).map_or_else(String::new, |at| at.format("%H:%M:%S").to_string())
+    DateTime::from_timestamp(seconds, 0)
+        .map_or_else(String::new, |at| at.format("%H:%M:%S").to_string())
 }
 
 /// JSON の値を Python の `isinstance(x, (int, float))` として読む（真偽も数に入る）。
@@ -203,7 +204,12 @@ pub fn read_incidents(path: &Path) -> Result<Option<String>, Crash> {
                 format!("'utf-8' codec can't decode the file: {e}"),
             )
         }),
-        Err(e) if matches!(e.kind(), std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory) => {
+        Err(e)
+            if matches!(
+                e.kind(),
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+            ) =>
+        {
             Ok(None)
         }
         Err(e) => Err(os_error(&e, path)),
@@ -220,7 +226,10 @@ fn incident_of(line: &str) -> Option<Map<String, Value>> {
 
 /// `_iter_incidents`（全部の行を前から。整形しない）。
 pub fn all_incidents(text: &str) -> Vec<Map<String, Value>> {
-    python::splitlines(text).into_iter().filter_map(incident_of).collect()
+    python::splitlines(text)
+        .into_iter()
+        .filter_map(incident_of)
+        .collect()
 }
 
 /// `_public_incident`（画面へ返す 1 件の形。時刻の数そのものは出さない）。
@@ -317,7 +326,10 @@ pub fn build(
             label: "CPU".to_string(),
             percent: clamp_percent(cpu),
             display: format!("{}%", fixed(cpu, 1)),
-            detail: format!("論理コア {}", sample.cpu_count.filter(|n| *n > 0).unwrap_or(1)),
+            detail: format!(
+                "論理コア {}",
+                sample.cpu_count.filter(|n| *n > 0).unwrap_or(1)
+            ),
             tone: load_tone(cpu, settings.cpu_alert_percent).to_string(),
         },
         memory: Meter {

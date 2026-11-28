@@ -183,7 +183,12 @@ fn strip_fields(line: &str) -> &str {
 
 /// Python の `int(bytes)`（10 進。符号と、数字の間の `_` を 1 つずつ許す）。読めなければ `ValueError`。
 fn int_field(text: &str) -> Result<i64, Crash> {
-    let invalid = || Crash::new("ValueError", format!("invalid literal for int() with base 10: b'{text}'"));
+    let invalid = || {
+        Crash::new(
+            "ValueError",
+            format!("invalid literal for int() with base 10: b'{text}'"),
+        )
+    };
     let (negative, digits) = match text.as_bytes().first() {
         Some(b'-') => (true, &text[1..]),
         Some(b'+') => (false, &text[1..]),
@@ -203,8 +208,12 @@ fn int_field(text: &str) -> Result<i64, Crash> {
 
 /// Python の `float(bytes)`。
 fn float_field(text: &str) -> Result<f64, Crash> {
-    pyfloat::py_float(text)
-        .ok_or_else(|| Crash::new("ValueError", format!("could not convert string to float: b'{text}'")))
+    pyfloat::py_float(text).ok_or_else(|| {
+        Crash::new(
+            "ValueError",
+            format!("could not convert string to float: b'{text}'"),
+        )
+    })
 }
 
 /// 1 行ずつ（Python のバイナリのファイルを `for line in f` で回したときの行。`\n` を含む。最後の行は `\n` が無くてもよい）。
@@ -313,7 +322,11 @@ pub fn virtual_memory(meminfo: &str, zoneinfo: Option<&str>) -> Result<Memory, C
 
 /// `calculate_avail_vmem`（`MemAvailable` が無いか 0 のときの見積もり）。`Active(file)`・`Inactive(file)`・
 /// `SReclaimable` のどれかが無いか、`/proc/zoneinfo` が読めなければ `MemFree + Cached`。
-fn calculate_avail(mems: &HashMap<String, i64>, free: i64, zoneinfo: Option<&str>) -> Result<i64, Crash> {
+fn calculate_avail(
+    mems: &HashMap<String, i64>,
+    free: i64,
+    zoneinfo: Option<&str>,
+) -> Result<i64, Crash> {
     let fallback = free + mems.get("Cached:").copied().unwrap_or(0);
     let (Some(active), Some(inactive), Some(slab)) = (
         mems.get("Active(file):").copied(),
@@ -412,14 +425,23 @@ mod tests {
         assert_eq!(memory.percent, 75.0);
         let without = "MemTotal: 1000 kB\nMemFree: 100 kB\nCached: 50 kB\n";
         assert_eq!(virtual_memory(without, None).unwrap().used, 850 * 1024);
-        assert_eq!(virtual_memory("MemFree: 1 kB\n", None).unwrap_err().kind, "KeyError");
-        assert_eq!(virtual_memory("MemTotal: 1 kB\n\n", None).unwrap_err().kind, "IndexError");
+        assert_eq!(
+            virtual_memory("MemFree: 1 kB\n", None).unwrap_err().kind,
+            "KeyError"
+        );
+        assert_eq!(
+            virtual_memory("MemTotal: 1 kB\n\n", None).unwrap_err().kind,
+            "IndexError"
+        );
     }
 
     /// 起動の時刻と、CPU の一覧の数え方。
     #[test]
     fn boot_time_and_cpu_list() {
-        assert_eq!(boot_time("cpu 1\nbtime 1798000000\n").unwrap(), 1_798_000_000.0);
+        assert_eq!(
+            boot_time("cpu 1\nbtime 1798000000\n").unwrap(),
+            1_798_000_000.0
+        );
         assert_eq!(boot_time("cpu 1\n").unwrap_err().kind, "RuntimeError");
         assert_eq!(parse_cpu_list("0-7\n"), Some(8));
         assert_eq!(parse_cpu_list("0,2-5"), Some(5));

@@ -75,7 +75,12 @@ impl Settings {
             memory_alert_percent: env.float("ADMIN_MEMORY_ALERT_PERCENT", 90.0, None, None),
             tps_alert_percent: env.float("ADMIN_TPS_ALERT_PERCENT", 100.0, None, None),
             interval_seconds: env.float("ADMIN_MONITOR_INTERVAL_SECONDS", 30.0, Some(5.0), None),
-            downtime_grace_seconds: env.float("ADMIN_DOWNTIME_GRACE_SECONDS", 120.0, Some(1.0), None),
+            downtime_grace_seconds: env.float(
+                "ADMIN_DOWNTIME_GRACE_SECONDS",
+                120.0,
+                Some(1.0),
+                None,
+            ),
             alert_cooldown_seconds: env.float(
                 "ADMIN_MONITOR_ALERT_COOLDOWN_SECONDS",
                 300.0,
@@ -86,7 +91,8 @@ impl Settings {
             stale_after_seconds: env
                 .float("METRICS_STALE_AFTER_SECONDS", 90.0, Some(5.0), None)
                 .max(1.0),
-            backup_status_file: env.path("BACKUP_STATUS_FILE", prometheus::DEFAULT_BACKUP_STATUS_FILE),
+            backup_status_file: env
+                .path("BACKUP_STATUS_FILE", prometheus::DEFAULT_BACKUP_STATUS_FILE),
         }
     }
 
@@ -250,7 +256,10 @@ mod tests {
         assert_eq!(defaults.alert_cooldown_seconds, 300.0);
         assert_eq!(defaults.stale_after_seconds, 90.0);
         assert_eq!(defaults.allowed.len(), 3);
-        assert_eq!(defaults.backup_status_file, PathBuf::from("/backups/status.json"));
+        assert_eq!(
+            defaults.backup_status_file,
+            PathBuf::from("/backups/status.json")
+        );
         let low = Settings::from_lookup(|key: &str| match key {
             "ADMIN_TPS_TARGET" => Some("0".to_string()),
             "ADMIN_MONITOR_INTERVAL_SECONDS" => Some("1".to_string()),

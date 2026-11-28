@@ -101,10 +101,20 @@ impl ValkeyStore {
     /// 〔下限 1〕。Python の `shared_cache()` と同じ読み方）。
     pub fn from_env(env: &Env) -> Self {
         let timeout = env
-            .float("VALKEY_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS, Some(0.05), None)
+            .float(
+                "VALKEY_TIMEOUT_SECONDS",
+                DEFAULT_TIMEOUT_SECONDS,
+                Some(0.05),
+                None,
+            )
             .max(0.05);
         let cooldown = env
-            .float("VALKEY_BREAKER_COOLDOWN_SECONDS", DEFAULT_COOLDOWN_SECONDS, Some(1.0), None)
+            .float(
+                "VALKEY_BREAKER_COOLDOWN_SECONDS",
+                DEFAULT_COOLDOWN_SECONDS,
+                Some(1.0),
+                None,
+            )
             .max(1.0);
         Self::new(
             &env.raw("VALKEY_URL").unwrap_or_default(),
@@ -209,7 +219,9 @@ async fn scan_pages(
         let (next, raw_keys) = page;
         let keys = raw_keys
             .into_iter()
-            .map(|key| String::from_utf8(key).map_err(|e| format!("鍵が UTF-8 ではありません: {e}")))
+            .map(|key| {
+                String::from_utf8(key).map_err(|e| format!("鍵が UTF-8 ではありません: {e}"))
+            })
             .collect::<Result<Vec<String>, String>>()?;
         if !keys.is_empty() {
             let raw_values: Vec<Option<Vec<u8>>> = redis::cmd("MGET")
@@ -291,7 +303,11 @@ mod tests {
         assert!(scan.items.is_empty());
         assert!(!scan.available);
         assert!(!store.available());
-        let broken = ValkeyStore::new("not-a-url", Duration::from_millis(50), Duration::from_secs(30));
+        let broken = ValkeyStore::new(
+            "not-a-url",
+            Duration::from_millis(50),
+            Duration::from_secs(30),
+        );
         assert!(!broken.scan().await.available);
     }
 }

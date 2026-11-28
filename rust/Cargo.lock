@@ -4127,6 +4127,7 @@ dependencies = [
  "hmac 0.12.1",
  "minijinja",
  "percent-encoding",
+ "redis",
  "regex",
  "reqwest",
  "serde_json",

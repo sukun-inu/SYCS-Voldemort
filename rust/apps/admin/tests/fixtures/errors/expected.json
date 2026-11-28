@@ -16597,8 +16597,7 @@
      300
     ]
    ],
-   "incidents": [],
-   "rust_skip": "/metrics は A7 の経路（Python の docstring は既定の制限が掛からないと書いているが、実際に掛かるかを記録する）"
+   "incidents": []
   }
  ]
 }
