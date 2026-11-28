@@ -7,7 +7,11 @@
 //!   （メッセージに付いてくるロールを使う・低い順に並べる・サーバーに無いロールは捨てる）
 //! - 危険な投稿で、進み具合の Embed → メッセージの削除 → ロールを低い順に 1 つずつ剥がす（権限が足りない
 //!   ところで止まる）→ 結果の Embed → ログ（剥がせたロールと残ったロールも）、の順に送ること。剥がす理由が
-//!   監査ログに付くこと
+//!   監査ログに付くこと（Bot にタイムアウトの権限が無いサーバー）
+//! - Bot にタイムアウトの権限があれば、ロールの代わりに `PATCH /guilds/{g}/members/{u}` の
+//!   `communication_disabled_until`（24 時間あと）でタイムアウトすること。断られたらロールは剥がさないこと（S1）
+//! - スパムだけなら、スパムと数えた投稿を 1 件ずつ消し（既に消えていても止めない）、10 分のタイムアウト（S2）
+//! - VC の荒らしの数に入った全員に、最初に入った順で措置して 1 人ずつ報告すること（S4）
 //!
 //! 設定のキャッシュに Postgres が要る（`SYCS_TEST_DATABASE_URL`）。手元の `cargo test` では飛ばし、CI は
 //! `--include-ignored` で必ず回す（`crates/sycs-core/tests/postgres.rs` と同じ）。
@@ -17,14 +21,15 @@ mod support;
 use std::sync::Arc;
 use std::time::Duration;
 
+use chrono::{DateTime, TimeDelta, Utc};
 use serde_json::{Value, json};
-use serenity::all::{Cache, Message, RoleId};
-use sycs_bot::log_channel::{AvatarColours, LogSink};
+use serenity::all::{Cache, GuildId, Message, RoleId, UserId};
+use sycs_bot::log_channel::{Author, AvatarColours, LogSink};
 use sycs_bot::message_security::{
-    self, Assess, Context, DiscordEffects, Judges, Scan, post_from_message,
+    self, Assess, Context, DiscordEffects, Judges, Post, Scan, post_from_message,
 };
 use sycs_bot::moderation::Verdict;
-use sycs_bot::security::{RaidDetector, SpamDetector};
+use sycs_bot::security::{self, RaidDetector, RaidTarget, SecurityConfig, SpamDetector, SpamInput};
 use sycs_bot::virustotal::VtResult;
 use sycs_core::settings::SettingsCache;
 
@@ -33,6 +38,8 @@ use support::{Seen, user};
 const GUILD: &str = "1399617700363370556";
 const USER: &str = "80351110224678912";
 const CHANNEL: &str = "1505310388051251000";
+/// スパムの確かめで、前の投稿があった別のチャンネル（キャッシュには無くてよい。ID で消すだけ）。
+const OTHER_CHANNEL: &str = "1505310388051251999";
 const LOG_CHANNEL: &str = "1505310388051251261";
 const VOICE: &str = "777";
 const GUILD_AVATAR: &str = "aaaabbbbccccddddeeeeffff00001111";
@@ -175,9 +182,52 @@ fn the_post_is_built_like_discord_py() {
     );
 }
 
-/// VirusTotal が危険（12）と答える投稿を、この設定のサーバーで検査して、偽物の Discord が受けた要求を返す。
-async fn check_a_dangerous_post(guild_settings: Value) -> Vec<Seen> {
-    let (base, seen) = support::start_fake_discord(respond).await;
+/// 偽物の Discord が、メンバーの書き換え（タイムアウト）に返すメンバー。
+fn member_json(path: &str) -> String {
+    let id = path.rsplit('/').next().unwrap_or("1");
+    json!({
+        "user": user(id, false), "roles": [], "joined_at": "2026-01-01T00:00:00+00:00",
+        "deaf": false, "mute": false, "flags": 0,
+    })
+    .to_string()
+}
+
+/// [`respond`] に、タイムアウト（`PATCH /guilds/{g}/members/{u}`）を受け付けることを足したもの。
+fn respond_with_member(method: &str, path: &str) -> (u16, String) {
+    if method == "PATCH" && path.contains("/members/") {
+        return (200, member_json(path));
+    }
+    respond(method, path)
+}
+
+/// タイムアウトを権限不足（403）で断る偽物。
+fn refuse_timeouts(method: &str, path: &str) -> (u16, String) {
+    if method == "PATCH" && path.contains("/members/") {
+        let body = r#"{"message": "Missing Permissions", "code": 50013}"#;
+        return (403, body.into());
+    }
+    respond(method, path)
+}
+
+/// スパムの確かめ用。前の投稿 100 は既に消えている（404）。タイムアウトは受け付ける。
+fn respond_for_spam(method: &str, path: &str) -> (u16, String) {
+    if method == "DELETE" && path.ends_with("/messages/100") {
+        let body = r#"{"message": "Unknown Message", "code": 10008}"#;
+        return (404, body.into());
+    }
+    respond_with_member(method, path)
+}
+
+/// この設定のサーバーで `post` を検査して、偽物の Discord が受けた要求を返す。VirusTotal はどの URL も
+/// `malicious` と答え、Groq はいつも SAFE。`spam` は前の投稿を入れたスパムの記録。
+async fn check_on_fake(
+    guild_settings: Value,
+    responder: support::Responder,
+    post: &Post,
+    malicious: i64,
+    spam: &SpamDetector,
+) -> Vec<Seen> {
+    let (base, seen) = support::start_fake_discord(responder).await;
     let http = support::http_to(&base);
     let cache = cache();
     let pool = support::settings_pool(GUILD, &guild_settings).await;
@@ -185,19 +235,12 @@ async fn check_a_dangerous_post(guild_settings: Value) -> Vec<Seen> {
         .await
         .unwrap();
     let colours = AvatarColours::new();
-
-    let msg = message(
-        user(USER, false),
-        member_payload(),
-        "見て https://bad.example/x",
-    );
-    let post = post_from_message(&cache, &msg).unwrap();
-    let scan: Scan = Arc::new(|_| {
-        Box::pin(async {
+    let scan: Scan = Arc::new(move |_| {
+        Box::pin(async move {
             VtResult {
                 status: "ok".into(),
                 kind: "url".into(),
-                malicious: 12,
+                malicious,
                 suspicious: 0,
                 reason: None,
             }
@@ -209,11 +252,13 @@ async fn check_a_dangerous_post(guild_settings: Value) -> Vec<Seen> {
         assess,
         scan_concurrency: 4,
     };
-    let (spam, raid) = (SpamDetector::default(), RaidDetector::default());
+    let raid = RaidDetector::default();
+    let config = SecurityConfig::default();
     let snapshot = settings.snapshot();
     let cx = Context {
         settings: snapshot.guild(GUILD.parse().unwrap()),
-        spam: &spam,
+        config: &config,
+        spam,
         raid: &raid,
         judges: &judges,
         clock: message_security::system_clock,
@@ -225,10 +270,25 @@ async fn check_a_dangerous_post(guild_settings: Value) -> Vec<Seen> {
             settings: &settings,
             colours: &colours,
         },
-        post: &post,
+        post,
     };
-    message_security::check_message(&fx, &cx, &post).await;
+    message_security::check_message(&fx, &cx, post).await;
     seen.lock().unwrap().clone()
+}
+
+/// VirusTotal が危険（12）と答える投稿を、この設定のサーバーで検査して、偽物の Discord が受けた要求を返す。
+/// Bot のメンバーはキャッシュに無いので、タイムアウトの権限は無い扱い（ロールを剥がす）。
+async fn check_a_dangerous_post(guild_settings: Value) -> Vec<Seen> {
+    let cache = cache();
+    let msg = message(
+        user(USER, false),
+        member_payload(),
+        "見て https://bad.example/x",
+    );
+    let post = post_from_message(&cache, &msg).unwrap();
+    assert!(!post.bot_can_timeout, "権限があることにした");
+    let spam = SpamDetector::default();
+    check_on_fake(guild_settings, respond, &post, 12, &spam).await
 }
 
 fn methods_and_paths(seen: &[Seen]) -> Vec<String> {
@@ -241,13 +301,65 @@ fn strip(id: &str) -> String {
     format!("DELETE /api/v10/guilds/{GUILD}/members/{USER}/roles/{id}")
 }
 
-/// 危険な投稿で Discord へ送るものと、その順番。
+fn log_settings() -> Value {
+    let log_channel: u64 = LOG_CHANNEL.parse().unwrap();
+    json!({"log_channel_id": log_channel, "log_level": "INFO"})
+}
+
+/// [`log_settings`] に、タイムアウトの切り替えを有効にしたもの（設定の既定は無効）。
+fn timeout_settings() -> Value {
+    let mut settings = log_settings();
+    settings["security_timeout_enabled"] = json!(true);
+    settings
+}
+
+/// 前の投稿を 2 件（100 は 30 秒前にこのチャンネル、101 は 10 秒前に別のチャンネル）入れたスパムの記録。
+/// どちらも「限定セール」なので、同じ本文の投稿で 3 回目（スパム）になる。
+fn spam_with_two_prior_posts() -> SpamDetector {
+    let spam = SpamDetector::default();
+    let now = message_security::system_clock();
+    for (channel, message_id, ago) in [(CHANNEL, 100, 30.0), (OTHER_CHANNEL, 101, 10.0)] {
+        let input = SpamInput {
+            guild_id: GUILD.parse().unwrap(),
+            user_id: USER.parse().unwrap(),
+            channel_id: channel.parse().unwrap(),
+            message_id,
+            content: "限定セール",
+            attachments: &[],
+        };
+        spam.check(&input, now - ago);
+    }
+    spam
+}
+
+/// 監査ログの理由（URL の形に直した「セキュリティ違反」）。
+const REASON: &str = "%E3%82%BB%E3%82%AD%E3%83%A5%E3%83%AA%E3%83%86%E3%82%A3%E9%81%95%E5%8F%8D";
+
+fn reason_of(s: &Seen) -> Option<String> {
+    s.reason.as_deref().map(str::to_uppercase)
+}
+
+/// タイムアウトの期限が、送った前後の時刻から `seconds` 秒あとの間にあること（遅い環境でも落ちない）。
+fn assert_until(s: &Seen, seconds: i64, before: DateTime<Utc>, after: DateTime<Utc>) {
+    let until = s.body["communication_disabled_until"].as_str().unwrap();
+    let until = DateTime::parse_from_rfc3339(until).unwrap();
+    let span = TimeDelta::seconds(seconds);
+    let slack = TimeDelta::seconds(1);
+    assert!(
+        until >= before + span - slack,
+        "{until} < {before} + {seconds}"
+    );
+    assert!(
+        until <= after + span + slack,
+        "{until} > {after} + {seconds}"
+    );
+}
+
+/// 危険な投稿で Discord へ送るものと、その順番（Bot にタイムアウトの権限が無いサーバー）。
 #[tokio::test]
 #[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
 async fn a_dangerous_post_is_deleted_and_roles_are_stripped_lowest_first() {
-    let log_channel: u64 = LOG_CHANNEL.parse().unwrap();
-    let seen =
-        check_a_dangerous_post(json!({"log_channel_id": log_channel, "log_level": "INFO"})).await;
+    let seen = check_a_dangerous_post(log_settings()).await;
     let calls = methods_and_paths(&seen);
     let log = format!("/api/v10/channels/{LOG_CHANNEL}/messages");
     assert_eq!(
@@ -280,20 +392,16 @@ async fn a_dangerous_post_is_deleted_and_roles_are_stripped_lowest_first() {
     assert_eq!(title(0), "セキュリティ検査中");
     assert_eq!(description(0), "VirusTotal解析中…");
     assert_eq!(description(1), "VirusTotal解析中… [##########] 1/1");
-    // 剥がす理由が監査ログに付く（URL の形に直した「セキュリティ違反」）。
-    let reason = "%E3%82%BB%E3%82%AD%E3%83%A5%E3%83%AA%E3%83%86%E3%82%A3%E9%81%95%E5%8F%8D";
+    // 剥がす理由が監査ログに付く。
     for s in &seen[3..6] {
-        assert_eq!(
-            s.reason.as_deref().map(str::to_uppercase).as_deref(),
-            Some(reason),
-            "{s:?}"
-        );
+        assert_eq!(reason_of(s).as_deref(), Some(REASON), "{s:?}");
     }
     assert_eq!(
         seen[2].reason, None,
         "メッセージの削除には理由を付けない（Python と同じ）"
     );
-    assert_eq!(title(6), "危険な投稿を検出");
+    // 見出しは取った措置から（S8）。権限が無いのでロールを外した。外せないロールが残ったので一部失敗。
+    assert_eq!(title(6), "消してロールを外した（一部失敗）");
     assert_eq!(seen[6].body["embeds"][0]["color"], 0xE7_4C_3C);
     assert!(
         description(6).contains(
@@ -309,14 +417,246 @@ async fn a_dangerous_post_is_deleted_and_roles_are_stripped_lowest_first() {
     assert_eq!(last["author"]["name"], "nelly");
     assert_eq!(last["fields"][0]["value"], "VT_DANGEROUS, GPT:SAFE");
     assert_eq!(last["fields"][2]["value"], "1");
+    assert_eq!(last["fields"][4]["name"], "措置");
+    assert_eq!(last["fields"][5]["name"], "消した投稿");
+    assert_eq!(last["fields"][5]["value"], "1件");
     // 剥がした結果（剥がせた 12・11 と、権限が足りずに残った 13・14）も出す（rust-09 の (i)）。
-    assert_eq!(last["fields"][4]["name"], "剥がしたロール");
-    assert_eq!(last["fields"][4]["value"], "<@&12> <@&11>");
+    assert_eq!(last["fields"][6]["name"], "剥がしたロール");
+    assert_eq!(last["fields"][6]["value"], "<@&12> <@&11>");
     assert_eq!(
-        last["fields"][5]["name"],
+        last["fields"][7]["name"],
         "剥がせなかったロール（権限不足）"
     );
-    assert_eq!(last["fields"][5]["value"], "<@&13> <@&14>");
+    assert_eq!(last["fields"][7]["value"], "<@&13> <@&14>");
+}
+
+/// タイムアウトの切り替えが有効で、Bot に権限があれば、危険な投稿を消して 24 時間のタイムアウト（ロールは
+/// 剥がさない。S1）。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn a_dangerous_post_times_the_author_out_for_a_day() {
+    let cache = cache();
+    let msg = message(user(USER, false), member_payload(), "https://bad.example");
+    let mut post = post_from_message(&cache, &msg).unwrap();
+    post.bot_can_timeout = true;
+    let before = Utc::now();
+    let spam = SpamDetector::default();
+    let seen = check_on_fake(timeout_settings(), respond_with_member, &post, 12, &spam).await;
+    let after = Utc::now();
+    let log = format!("/api/v10/channels/{LOG_CHANNEL}/messages");
+    assert_eq!(
+        methods_and_paths(&seen),
+        [
+            format!("POST {log}"),
+            format!("PATCH {log}/900"),
+            format!("DELETE /api/v10/channels/{CHANNEL}/messages/5000"),
+            format!("PATCH /api/v10/guilds/{GUILD}/members/{USER}"),
+            format!("PATCH {log}/900"),
+            format!("POST {log}"),
+        ]
+    );
+    assert_until(&seen[3], 86_400, before, after);
+    assert_eq!(reason_of(&seen[3]).as_deref(), Some(REASON));
+    assert_eq!(
+        seen[4].body["embeds"][0]["title"],
+        "消して 24 時間のタイムアウト"
+    );
+    let fields = &seen[5].body["embeds"][0]["fields"];
+    assert_eq!(fields[4]["value"], "消して 24 時間のタイムアウト");
+    assert_eq!(fields[6]["name"], "タイムアウト");
+    assert_eq!(fields[6]["value"], "24 時間");
+}
+
+/// タイムアウトが断られても、ロールを剥がすことは試さない（同じ理由で失敗する）。失敗として報告する。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn a_refused_timeout_is_not_followed_by_stripping() {
+    let cache = cache();
+    let msg = message(user(USER, false), member_payload(), "https://bad.example");
+    let mut post = post_from_message(&cache, &msg).unwrap();
+    post.bot_can_timeout = true;
+    let spam = SpamDetector::default();
+    let seen = check_on_fake(timeout_settings(), refuse_timeouts, &post, 12, &spam).await;
+    let calls = methods_and_paths(&seen);
+    assert!(!calls.iter().any(|c| c.contains("/roles/")), "{calls:#?}");
+    assert_eq!(
+        calls[3],
+        format!("PATCH /api/v10/guilds/{GUILD}/members/{USER}")
+    );
+    let fields = &seen.last().unwrap().body["embeds"][0]["fields"];
+    assert_eq!(
+        fields[4]["value"],
+        "消して 24 時間のタイムアウト（一部失敗）"
+    );
+    assert_eq!(fields[6]["name"], "タイムアウトできなかった（権限不足）");
+}
+
+/// スパムだけなら、スパムと数えた投稿を 1 件ずつ消し（既に消えていても止めない）、10 分のタイムアウト（S2。
+/// タイムアウトの切り替えが有効なサーバー）。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn spam_posts_are_deleted_one_by_one_and_the_author_timed_out_for_ten_minutes() {
+    let cache = cache();
+    let msg = message(user(USER, false), member_payload(), "限定セール");
+    let mut post = post_from_message(&cache, &msg).unwrap();
+    post.bot_can_timeout = true;
+    let spam = spam_with_two_prior_posts();
+    let before = Utc::now();
+    let seen = check_on_fake(timeout_settings(), respond_for_spam, &post, 0, &spam).await;
+    let after = Utc::now();
+    let log = format!("/api/v10/channels/{LOG_CHANNEL}/messages");
+    assert_eq!(
+        methods_and_paths(&seen),
+        [
+            format!("DELETE /api/v10/channels/{CHANNEL}/messages/100"),
+            format!("DELETE /api/v10/channels/{OTHER_CHANNEL}/messages/101"),
+            format!("DELETE /api/v10/channels/{CHANNEL}/messages/5000"),
+            format!("PATCH /api/v10/guilds/{GUILD}/members/{USER}"),
+            format!("POST {log}"),
+            format!("POST {log}"),
+        ]
+    );
+    assert_until(&seen[3], 600, before, after);
+    let result = &seen[4].body["embeds"][0];
+    assert_eq!(result["title"], "消して 10 分のタイムアウト");
+    assert_eq!(result["color"], 0xE6_7E_22);
+    let fields = &seen[5].body["embeds"][0]["fields"];
+    assert_eq!(fields[3]["value"], "3", "スパム回数");
+    // 既に消えていた 1 件（100）も、消した数に入る。
+    assert_eq!(fields[5]["value"], "3件");
+    assert_eq!(fields[6]["value"], "10 分");
+}
+
+/// タイムアウトの切り替えが無効（既定）なら、Bot に権限があってもタイムアウトせず、いまどおりロールを低い順に
+/// 剥がす。報告にタイムアウトの項目は出さない（2026-11-28 の追加の決定）。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn without_the_switch_roles_are_stripped_even_with_the_permission() {
+    let cache = cache();
+    let msg = message(user(USER, false), member_payload(), "https://bad.example");
+    let mut post = post_from_message(&cache, &msg).unwrap();
+    post.bot_can_timeout = true;
+    let spam = SpamDetector::default();
+    let seen = check_on_fake(log_settings(), respond_with_member, &post, 12, &spam).await;
+    let calls = methods_and_paths(&seen);
+    let timeout = format!("PATCH /api/v10/guilds/{GUILD}/members/{USER}");
+    assert!(!calls.contains(&timeout), "{calls:#?}");
+    let delete = format!("DELETE /api/v10/channels/{CHANNEL}/messages/5000");
+    assert_eq!(calls[2], delete);
+    assert_eq!(
+        calls[3..6],
+        [strip("12"), strip("11"), strip("13")],
+        "{calls:#?}"
+    );
+    let fields = &seen.last().unwrap().body["embeds"][0]["fields"];
+    assert_eq!(fields[4]["value"], "消してロールを外した（一部失敗）");
+    assert_eq!(fields[6]["name"], "剥がしたロール");
+    let names: Vec<&str> = fields
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|f| f["name"].as_str())
+        .collect();
+    let timed = names.iter().any(|n| n.contains("タイムアウト"));
+    assert!(!timed, "{names:?}");
+}
+
+/// タイムアウトの切り替えが無効（既定）なら、スパムだけのときは、Bot に権限があっても消すだけ。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn without_the_switch_spam_is_only_deleted_even_with_the_permission() {
+    let cache = cache();
+    let msg = message(user(USER, false), member_payload(), "限定セール");
+    let mut post = post_from_message(&cache, &msg).unwrap();
+    post.bot_can_timeout = true;
+    let spam = spam_with_two_prior_posts();
+    let seen = check_on_fake(log_settings(), respond_for_spam, &post, 0, &spam).await;
+    let log = format!("/api/v10/channels/{LOG_CHANNEL}/messages");
+    assert_eq!(
+        methods_and_paths(&seen),
+        [
+            format!("DELETE /api/v10/channels/{CHANNEL}/messages/100"),
+            format!("DELETE /api/v10/channels/{OTHER_CHANNEL}/messages/101"),
+            format!("DELETE /api/v10/channels/{CHANNEL}/messages/5000"),
+            format!("POST {log}"),
+            format!("POST {log}"),
+        ]
+    );
+    let result = &seen[3].body["embeds"][0];
+    assert_eq!(result["title"], "消した");
+    assert_eq!(result["color"], 0xE6_7E_22);
+}
+
+/// VC の荒らしの数に入った全員に、最初に入った順で 24 時間のタイムアウトをし、1 人ずつ報告する（S1・S4）。
+/// 権限が無ければ、1 人ずつロールを剥がす。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn everyone_counted_in_a_vc_raid_is_acted_on_in_join_order() {
+    let (base, seen) = support::start_fake_discord(respond_with_member).await;
+    let http = support::http_to(&base);
+    let cache = cache();
+    let pool = support::settings_pool(GUILD, &log_settings()).await;
+    let settings = SettingsCache::start(pool, Duration::from_secs(60))
+        .await
+        .unwrap();
+    let colours = AvatarColours::new();
+    let sink = LogSink {
+        cache: &cache,
+        http: &http,
+        settings: &settings,
+        colours: &colours,
+    };
+    let raid = RaidDetector::default();
+    for (i, user_id) in (4000..4004).enumerate() {
+        assert!(raid.check(777, user_id, i as f64).is_empty());
+    }
+    let counted = raid.check(777, 4004, 4.0);
+    assert_eq!(counted, [4000, 4001, 4002, 4003, 4004]);
+    let targets: Vec<RaidTarget> = counted
+        .iter()
+        .map(|&id| RaidTarget {
+            user_id: UserId::new(id),
+            roles: vec![RoleId::new(11)],
+            author: Author {
+                id,
+                name: format!("raider{id}"),
+                avatar_url: String::new(),
+            },
+        })
+        .collect();
+    let guild = GuildId::new(GUILD.parse().unwrap());
+    let before = Utc::now();
+    security::act_on_vc_raid(&sink, guild, 777, &targets, true, 86_400).await;
+    let after = Utc::now();
+    let log = format!("POST /api/v10/channels/{LOG_CHANNEL}/messages");
+    let mut want = Vec::new();
+    for id in &counted {
+        want.push(format!("PATCH /api/v10/guilds/{GUILD}/members/{id}"));
+        want.push(log.clone());
+    }
+    let calls = methods_and_paths(&seen.lock().unwrap());
+    assert_eq!(calls, want);
+    let seen_now = seen.lock().unwrap().clone();
+    assert_until(&seen_now[0], 86_400, before, after);
+    let report = &seen_now[1].body["embeds"][0];
+    assert_eq!(report["description"], "VCレイド検出");
+    assert_eq!(report["fields"][0]["value"], "<#777>");
+    assert_eq!(report["fields"][1]["name"], "タイムアウト");
+    assert_eq!(report["fields"][1]["value"], "24 時間");
+
+    // 権限が無ければ、1 人ずつロールを剥がす。
+    seen.lock().unwrap().clear();
+    security::act_on_vc_raid(&sink, guild, 777, &targets[..2], false, 86_400).await;
+    let calls = methods_and_paths(&seen.lock().unwrap());
+    assert_eq!(
+        calls,
+        [
+            format!("DELETE /api/v10/guilds/{GUILD}/members/4000/roles/11"),
+            log.clone(),
+            format!("DELETE /api/v10/guilds/{GUILD}/members/4001/roles/11"),
+            log,
+        ]
+    );
 }
 
 /// ログチャンネルが無くても・ログを止めていても、消す・剥がすは行うこと（報告できないことを理由に見逃さない）。

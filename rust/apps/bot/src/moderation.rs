@@ -21,6 +21,7 @@ use sycs_core::ttl_cache::TtlCache;
 use tracing::warn;
 
 use crate::groq::{Groq, python_is_space};
+use crate::security::SpamCheck;
 use crate::virustotal::{MALICIOUS_THRESHOLD, VtResult};
 
 /// Groq の用途の名前（同時に送る数・間隔をこの用途で数える）。
@@ -66,12 +67,12 @@ pub struct AssessInput<'a> {
     pub text: &'a str,
     /// VirusTotal の結果（リンク・添付の順）。
     pub vt_results: &'a [VtResult],
-    /// 直近 15 秒の発言の回数（この発言を含む）。
-    pub spam_count: usize,
-    /// 発言のいちばん短い間隔（秒）。1 回だけなら無限大。
-    pub min_interval: f64,
+    /// スパムの判定の結果（当たった条件・回数・いちばん短い間隔）。
+    pub spam: &'a SpamCheck,
     /// 参加して 7 日未満か。
     pub is_new_member: bool,
+    /// 新しいアカウントなら、その日数のしきい値（「【新しいアカウント】…」の行に書く）。でなければ `None`。
+    pub new_account_days: Option<i64>,
 }
 
 /// VirusTotal の結果だけで決まる判定。決まらなければ `None`（Groq に尋ねる）。Python の `_vt_verdict`。
@@ -90,14 +91,29 @@ pub fn vt_verdict(results: &[VtResult]) -> Option<Verdict> {
     }
 }
 
-/// 状況の行（スパム・高頻度・新規）。無ければ空。あれば最後に空行を 1 つ足す。
-pub fn context_block(spam_count: usize, min_interval: f64, is_new_member: bool) -> String {
+/// 状況の行（スパム・高頻度・新規・新しいアカウント）。無ければ空。あれば最後に空行を 1 つ足す。Python の
+/// `_context_lines`。
+///
+/// スパムは、当たった条件ごとに 1 行（何の条件で・何回か。繰り返しは、またがったチャンネルの数も。S3）。
+pub fn context_block(
+    spam: &SpamCheck,
+    is_new_member: bool,
+    new_account_days: Option<i64>,
+) -> String {
     let mut lines: Vec<String> = Vec::new();
-    if spam_count >= 4 {
+    if spam.repeat {
         lines.push(format!(
-            "【スパム警告】このユーザーは直近15秒間に{spam_count}回メッセージを送信しています。"
+            "【スパム警告】直近{}秒間に同じ内容を{}回投稿しています（{}チャンネル）。",
+            spam.repeat_window, spam.repeat_count, spam.repeat_channels
         ));
     }
+    if spam.flood {
+        lines.push(format!(
+            "【スパム警告】直近{}秒間に{}回メッセージを送信しています。",
+            spam.flood_window, spam.flood_count
+        ));
+    }
+    let min_interval = spam.min_interval;
     if min_interval.is_finite() && min_interval < 2.0 {
         lines.push(format!(
             "【高頻度】メッセージ送信間隔が最短{min_interval:.1}秒と非常に短いです。"
@@ -105,6 +121,11 @@ pub fn context_block(spam_count: usize, min_interval: f64, is_new_member: bool) 
     }
     if is_new_member {
         lines.push("【新規】このユーザーはサーバー参加から7日未満の新規メンバーです。".into());
+    }
+    if let Some(days) = new_account_days {
+        lines.push(format!(
+            "【新しいアカウント】このユーザーのアカウントは作成から{days}日未満です。"
+        ));
     }
     if lines.is_empty() {
         String::new()
@@ -203,7 +224,7 @@ impl Moderation {
         if !self.groq.has_key() {
             return Verdict::Safe;
         }
-        let context = context_block(input.spam_count, input.min_interval, input.is_new_member);
+        let context = context_block(input.spam, input.is_new_member, input.new_account_days);
         // 判じるものが何も無いなら呼ばない（画像だけの投稿など）。
         if input.text.chars().all(python_is_space) && input.vt_results.is_empty() {
             return Verdict::Safe;
@@ -273,19 +294,42 @@ mod tests {
         assert_eq!(vt_verdict(&[]), None);
     }
 
-    /// 状況の行の書き方と条件（4 回以上・2 秒未満・新規）。
+    fn spam(min_interval: f64) -> SpamCheck {
+        SpamCheck {
+            min_interval,
+            ..SpamCheck::default()
+        }
+    }
+
+    /// 状況の行の書き方と条件（当たった条件ごとのスパム・2 秒未満・新規・新しいアカウント）。
     #[test]
     fn the_context_lines_match_python() {
-        assert_eq!(context_block(3, f64::INFINITY, false), "");
+        let quiet = SpamCheck {
+            repeat_count: 2,
+            flood_count: 7,
+            ..SpamCheck::default()
+        };
+        assert_eq!(context_block(&quiet, false, None), "");
+        let both = SpamCheck {
+            repeat: true,
+            repeat_count: 3,
+            repeat_channels: 2,
+            flood: true,
+            flood_count: 8,
+            min_interval: 1.25,
+            ..SpamCheck::default()
+        };
         assert_eq!(
-            context_block(4, 1.25, true),
-            "【スパム警告】このユーザーは直近15秒間に4回メッセージを送信しています。\n\
+            context_block(&both, true, Some(7)),
+            "【スパム警告】直近60秒間に同じ内容を3回投稿しています（2チャンネル）。\n\
+             【スパム警告】直近10秒間に8回メッセージを送信しています。\n\
              【高頻度】メッセージ送信間隔が最短1.2秒と非常に短いです。\n\
-             【新規】このユーザーはサーバー参加から7日未満の新規メンバーです。\n\n"
+             【新規】このユーザーはサーバー参加から7日未満の新規メンバーです。\n\
+             【新しいアカウント】このユーザーのアカウントは作成から7日未満です。\n\n"
         );
-        assert_eq!(context_block(1, 2.0, false), "");
+        assert_eq!(context_block(&spam(2.0), false, None), "");
         assert_eq!(
-            context_block(2, 1.95, false),
+            context_block(&spam(1.95), false, None),
             "【高頻度】メッセージ送信間隔が最短1.9秒と非常に短いです。\n\n"
         );
     }
@@ -384,13 +428,15 @@ mod tests {
         Moderation::new(Arc::new(groq), 300.0)
     }
 
+    static QUIET: LazyLock<SpamCheck> = LazyLock::new(SpamCheck::default);
+
     fn input<'a>(text: &'a str, vt_results: &'a [VtResult]) -> AssessInput<'a> {
         AssessInput {
             text,
             vt_results,
-            spam_count: 1,
-            min_interval: f64::INFINITY,
+            spam: &QUIET,
             is_new_member: false,
+            new_account_days: None,
         }
     }
 

@@ -1,0 +1,59 @@
+name: 整形
+
+# rustfmt（rust/）と black（Python）で整形し直し、管理画面の文書（docs/ADMIN.ja.md）を作り直した差分を作る。整形がずれていたら、差分を成果物 format に置いて落ちる。
+# 取ってきて当てる:
+#   gh run download <run の ID> -n format && git apply format.patch
+#
+# **手元の PC では整形の道具も動かさない**（本人の指示 2026-11-28。テスト・ビルドと同じく GitHub で回す）。
+# 「テスト」（tests.yml）の black と「Rust」（rust.yml）の cargo fmt は、ずれていると落ちるだけで直し方を
+# 返さない。こちらは直した形を返す。版は requirements-dev.txt（black）と rust/rust-toolchain.toml（rustfmt）。
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  format:
+    name: 整形の差分を作る（rustfmt・black）
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v7
+
+      - name: Python 3.13 と black を入れる
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: black と、管理画面の文書を作るのに要る依存を入れる（requirements-dev.txt と同じ版）
+        run: pip install -q -r requirements.txt "$(grep -E '^black==' requirements-dev.txt)"
+
+      - name: Rust（rustfmt）を入れる
+        working-directory: rust
+        run: rustup toolchain install
+
+      - name: 整形し直す（あわせて、設定の一覧から作る管理画面の文書も作り直す）
+        # docs/ADMIN.ja.md の設定の表は webapp_admin/schema/panels/ から作る（「テスト」の generate_admin_docs.py --check
+        # がずれを落とす）。設定を足したときの文書の直しも、ここで返す。
+        run: |
+          (cd rust && cargo fmt --all)
+          python -m black -q .
+          python tools/generate_admin_docs.py
+
+      - name: 差分を見る
+        id: diff
+        run: |
+          git diff --stat
+          if ! git diff --quiet; then
+            git diff > /tmp/format.patch
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "整形がずれている（上の一覧）。直した差分を成果物 format に置いた"
+            exit 1
+          fi
+          echo "整形は揃っている"
+
+      - name: 直した差分を置く（ずれていたとき）
+        if: failure() && steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: format
+          path: /tmp/format.patch

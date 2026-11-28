@@ -289,6 +289,10 @@ class VcRaidCountsOnlyJoinsTests(unittest.TestCase):
         self.addCleanup(
             lambda: (raid_detection._vc_join_history.clear(), raid_detection._vc_join_history.update(saved))
         )
+        # 措置した人の覚え（rust-09 の S4）も空にして戻す。
+        enforced = {k: dict(v) for k, v in raid_detection._vc_enforced.items()}
+        raid_detection._vc_enforced.clear()
+        self.addCleanup(lambda: (raid_detection._vc_enforced.clear(), raid_detection._vc_enforced.update(enforced)))
         self.now = {"t": 1000.0}
         p = patch.object(raid_detection, "time", SimpleNamespace(time=lambda: self.now["t"]))
         p.start()
@@ -299,7 +303,7 @@ class VcRaidCountsOnlyJoinsTests(unittest.TestCase):
         import services.security_service as sec
 
         with (
-            patch.object(sec, "check_spam", lambda g, u: (False, 1, float("inf"))),
+            patch.object(sec, "check_spam", lambda *args: sec.SpamCheck()),
             patch.object(sec, "gpt_assess", AsyncMock(return_value="SAFE")),
         ):
             return asyncio.run(sec._collect_findings(Mock(), 1, member, "VC から", [], [], []))
@@ -314,17 +318,21 @@ class VcRaidCountsOnlyJoinsTests(unittest.TestCase):
         self.assertEqual(self.raid._vc_join_history.get(777, []), [])
 
     def test_four_joins_and_a_post_are_not_a_raid(self):
-        """似た名前の参加が 4 回のところへ、5 人目に似た名前の人が発言しても荒らしにしない。"""
+        """入って間もない人の参加が 4 人のところへ、VC にいる人が発言しても荒らしにしない（発言は参加に数えない）。"""
         for i in range(4):
-            self.raid.check_vc_raid(SimpleNamespace(display_name=f"raid_bot_0{i}", id=i), 777)
+            self.raid.check_vc_raid(SimpleNamespace(id=i), 777)
         findings = self._findings(_member(voice_channel=777, name="raid_bot_05"))
         self.assertNotIn("VC_RAID", findings.reason_flags)
         self.assertEqual(len(self.raid._vc_join_history[777]), 4)
 
     def test_a_raid_made_of_joins_is_still_seen_from_a_post(self):
-        """参加の記録が荒らしの形（似た名前が 5 回）なら、VC にいる人の発言はこれまでどおり荒らしに数える。"""
-        for i in range(5):
-            self.raid.check_vc_raid(SimpleNamespace(display_name=f"raid_bot_0{i}", id=i), 777)
+        """参加の記録が荒らしの形（5 人）で、発言した人自身が数に入っていれば、発言からも荒らしに数える。
+
+        rust-09 の S4 で、数に入っている人（この人の ID 5 を参加に含める）に限った。数に入っていない人は
+        VcRaidSpareRegularsTests が見る。
+        """
+        for i in range(1, 6):
+            self.raid.check_vc_raid(SimpleNamespace(id=i), 777)
         findings = self._findings(_member(voice_channel=777, name="raid_bot_01"))
         self.assertIn("VC_RAID", findings.reason_flags)
         self.assertTrue(findings.danger)
@@ -333,11 +341,11 @@ class VcRaidCountsOnlyJoinsTests(unittest.TestCase):
     def test_old_joins_are_not_seen(self):
         """20 秒より前の参加は数えない（参加の側の数え方と同じ）。"""
         for i in range(5):
-            self.raid.check_vc_raid(SimpleNamespace(display_name=f"raid_bot_0{i}", id=i), 777)
+            self.raid.check_vc_raid(SimpleNamespace(id=i), 777)
         self.now["t"] = 1020.0
-        self.assertFalse(self.raid.is_vc_raid_ongoing(777))
+        self.assertFalse(self.raid.is_vc_raid_ongoing(777, 4))
         self.now["t"] = 1019.9
-        self.assertTrue(self.raid.is_vc_raid_ongoing(777))
+        self.assertTrue(self.raid.is_vc_raid_ongoing(777, 4))
 
 
 class HeaviestVirusTotalResultTests(unittest.TestCase):
@@ -621,6 +629,7 @@ class StripResultReportingTests(unittest.TestCase):
             logged.append((message, kwargs.get("fields")))
 
         message = SimpleNamespace(
+            id=88,
             author=member,
             guild=member.guild,
             channel=SimpleNamespace(id=77),
@@ -632,7 +641,7 @@ class StripResultReportingTests(unittest.TestCase):
             patch.object(self.sec, "get_trusted_user_ids", lambda g: []),
             patch.object(self.sec, "get_bypass_role_ids", lambda g: []),
             patch.object(self.sec, "get_response_channel_id", lambda g: None),
-            patch.object(self.sec, "check_spam", lambda g, u: (False, 1, float("inf"))),
+            patch.object(self.sec, "check_spam", lambda *args: self.sec.SpamCheck()),
             patch.object(self.sec, "gpt_assess", AsyncMock(return_value="DANGEROUS")),
             patch.object(self.sec, "log_action", log_action),
             patch.object(self.sec, "send_log_embed", AsyncMock(return_value=None)),
@@ -659,13 +668,13 @@ class StripResultReportingTests(unittest.TestCase):
                 logged.append(kwargs.get("fields"))
 
             message = SimpleNamespace(
-                author=member, guild=member.guild, channel=SimpleNamespace(id=77), content="x", attachments=[]
+                id=88, author=member, guild=member.guild, channel=SimpleNamespace(id=77), content="x", attachments=[]
             )
             with (
                 patch.object(self.sec, "get_trusted_user_ids", lambda g: []),
                 patch.object(self.sec, "get_bypass_role_ids", lambda g: []),
                 patch.object(self.sec, "get_response_channel_id", lambda g: None),
-                patch.object(self.sec, "check_spam", lambda g, u: (False, 1, float("inf"))),
+                patch.object(self.sec, "check_spam", lambda *args: self.sec.SpamCheck()),
                 patch.object(self.sec, "log_action", log_action),
             ):
                 asyncio.run(self.sec.handle_security_for_message(Mock(), message))
@@ -685,7 +694,8 @@ class StripResultReportingTests(unittest.TestCase):
         with (
             patch.object(self.sec, "get_trusted_user_ids", lambda g: []),
             patch.object(self.sec, "get_bypass_role_ids", lambda g: []),
-            patch.object(self.sec, "check_vc_raid", lambda m, c: True),
+            patch.object(self.sec, "is_fresh_joiner", lambda m: True),
+            patch.object(self.sec, "check_vc_raid", lambda m, c, failed=False: [(m, failed)]),
             patch.object(self.sec, "log_action", log_action),
         ):
             asyncio.run(self.sec.handle_security_for_voice_join(Mock(), member, SimpleNamespace(channel=None), after))

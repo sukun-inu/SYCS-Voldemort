@@ -14,6 +14,7 @@ use crate::groq::GroqConfig;
 use crate::message_security::DEFAULT_SCAN_CONCURRENCY;
 use crate::metal::MetalConfig;
 use crate::news::NewsConfig;
+use crate::security::SecurityConfig;
 use crate::user_state::UserStateConfig;
 use crate::user_state_sync::SyncConfig as UserStateSyncConfig;
 use crate::virustotal::VtConfig;
@@ -87,6 +88,9 @@ pub struct BotConfig {
     pub news: NewsConfig,
     /// 投稿の判定を覚えておく秒数（`MODERATION_CACHE_TTL_SECONDS`、既定 300・下限 10）。
     pub moderation_cache_ttl: f64,
+    /// メッセージと VC の検査の秒・回数・日数（タイムアウトの長さ・スパムと VC の荒らしの数え方・新しい
+    /// アカウントの日数。`SECURITY_TIMEOUT_DANGER_SECONDS` など。Python と同じ名前・既定・下限）。
+    pub security: SecurityConfig,
     /// 貴金属の値段の API（鍵・覚えておく秒数・場所）。
     pub metal: MetalConfig,
     /// 貴金属トラッカーの場所（`METALS_SITE_URL`。/metal のリンクのボタン。末尾の `/` は 1 つにそろえる）。
@@ -155,6 +159,7 @@ impl BotConfig {
             news: NewsConfig::from_env(env),
             moderation_cache_ttl: env.int("MODERATION_CACHE_TTL_SECONDS", 300, Some(10), None)
                 as f64,
+            security: SecurityConfig::from_env(env),
             metal: MetalConfig::from_env(env),
             metals_site_url: crate::commands::metal::normalize_site_url(
                 env.raw("METALS_SITE_URL").as_deref(),
@@ -254,6 +259,7 @@ mod tests {
         assert_eq!(moved.admin_site_url, "https://admin.example/login");
         assert_eq!(c.vt_scan_concurrency, 4);
         assert_eq!(c.moderation_cache_ttl, 300.0);
+        assert_eq!(c.security, crate::security::SecurityConfig::default());
         assert_eq!(c.vt.api_key, None);
         assert_eq!(c.groq.api_key, None);
         assert_eq!(c.metal.api_key, None);

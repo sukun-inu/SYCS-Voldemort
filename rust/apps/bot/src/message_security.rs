@@ -3,17 +3,22 @@
 //! 流れは Python と同じ:
 //!
 //! 1. AI の応答チャンネルへの、リンクも添付も無い発言は見ない（会話は数が多い）
-//! 2. 信頼ユーザー・バイパスロールなら、飛ばしたことをログに残して終わる
-//! 3. 判定を集める（[`collect_findings`]。ここでは何もしない）: スパム・リンク数過多・文字の向きの細工 →
-//!    VirusTotal（リンクと添付を 4 本ずつ並べて。進み具合をログチャンネルの Embed に出す）→ Groq の判定 →
-//!    新規メンバー → VC にいれば VC の荒らし（参加の記録を見るだけ。発言は数えない）
-//! 4. 危険なら、メッセージを消して @everyone 以外のロールを全部剥がす（**元に戻せない**）
-//! 5. 結果をログチャンネルへ送る（進み具合の Embed を結果に書き換える。リンクも添付も無く危険でもなければ
-//!    結果の Embed は出さない。Embed は Discord の上限に収める）。最後に「メッセージセキュリティ検査」の
-//!    ログを 1 件（途中の送信・書き換えが失敗しても出す。剥がしたら、剥がせたロールと残ったロールも出す）
+//! 2. 管理者（オーナーも）・信頼ユーザー・バイパスロールなら、飛ばしたことをログファイルにだけ書いて終わる
+//!    （ログチャンネルには出さない。S7）
+//! 3. 判定を集める（[`collect_findings`]。ここでは何もしない）: スパム（同じ内容の繰り返し・量の多さ）・
+//!    リンク数過多・文字の向きの細工 → VirusTotal（リンクと添付を 4 本ずつ並べて。進み具合をログチャンネルの
+//!    Embed に出す）→ Groq の判定 → 新規メンバー・新しいアカウント → VC にいれば VC の荒らし（参加の記録を
+//!    見るだけ。発言は数えない。その人自身が荒らしの数に入っているときだけ）
+//! 4. 措置する（[`enforce`]）: 危険なら、この投稿（とスパムと数えた投稿）を消して 24 時間のタイムアウト（使わない
+//!    なら @everyone 以外のロールを全部剥がす。**元に戻せない**）。スパムだけなら、スパムと数えた投稿を消して
+//!    10 分のタイムアウト（使わないなら消すだけ）。タイムアウトを使うのは、サーバーの設定で有効にしてあり、Bot に
+//!    権限があるときだけ（[`security::use_timeout`]。設定の既定は無効）
+//! 5. 結果をログチャンネルへ送る（進み具合の Embed を結果に書き換える。リンクも添付も無く措置もしなければ
+//!    結果の Embed は出さない。Embed は Discord の上限に収める。見出しと色は取った措置から決める）。最後に
+//!    「メッセージセキュリティ検査」のログを 1 件（途中の送信・書き換えが失敗しても出す。取った措置の項目も出す）
 //!
-//! 危険とみなすのは、スパム（15 秒で 4 回）・VirusTotal で 10 以上・Groq の DANGEROUS・VC の荒らし。
-//! この決め方は Python のまま写した（見直しは移行のあと。トラッカーの rust-09）。
+//! 危険とみなすのは、VirusTotal で 10 以上・Groq の DANGEROUS・VC の荒らし。スパムは危険とは別に数える
+//! （本人の決定 2026-11-28。rust-09 の S1〜S8。決め方は Python と同じ）。
 //!
 //! Python には「バイパスの判定に失敗したら措置を見送る」分岐がある。Rust の設定はメモリから引くので
 //! 判定が失敗することはなく、持ち込んでいない（[`crate::security`] の説明を参照）。
@@ -38,11 +43,11 @@ use tracing::{debug, error, info, warn};
 use crate::log_channel::{self, Author, Level, LogSink};
 use crate::moderation::{AssessInput, Moderation, Verdict};
 use crate::security::{
-    self, MAX_LINKS, RaidDetector, SPAM_TIME_WINDOW, ScanResult, SpamDetector, StripFailure,
-    Stripped,
+    self, Action, Enforcement, MAX_LINKS, RaidDetector, RaidStatus, ScanResult, SecurityConfig,
+    SpamCheck, SpamDetector, SpamInput, StripFailure, TimedOut,
 };
 use crate::virustotal::{MALICIOUS_THRESHOLD, VirusTotal, VtResult};
-use crate::{compat, members, vc_notify};
+use crate::{commands, compat, members, vc_notify};
 
 /// VirusTotal を同時に走らせる数の既定（`VT_SCAN_CONCURRENCY`、下限 1）。
 pub const DEFAULT_SCAN_CONCURRENCY: usize = 4;
@@ -68,6 +73,8 @@ pub struct Post {
     pub content: String,
     /// 添付ファイルの URL（並びのまま）。
     pub attachments: Vec<String>,
+    /// 添付ファイルの（ファイル名, 大きさ）（並びのまま。スパムの「同じ内容」に使う）。
+    pub attachment_files: Vec<(String, u64)>,
     /// 持っているロール（サーバーにあるものだけ、discord.py と同じ並び。@everyone は含めない）。
     pub roles: Vec<RoleId>,
     /// 参加日時。
@@ -76,6 +83,11 @@ pub struct Post {
     pub voice_channel: Option<u64>,
     /// 表示名（ニックネーム → 表示名 → ユーザー名）。
     pub display_name: String,
+    /// サーバーの管理者か（オーナーも。検査を飛ばす。S7）。
+    pub is_admin: bool,
+    /// Bot がそのサーバーで「メンバーをタイムアウト」の権限を持っているか（S1。タイムアウトを使うのは、これに
+    /// 加えてサーバーの設定で有効にしてあるときだけ）。
+    pub bot_can_timeout: bool,
     /// ログの作者。
     pub author: Author,
 }
@@ -90,9 +102,7 @@ impl Post {
 }
 
 fn to_utc(ts: Timestamp) -> Option<DateTime<Utc>> {
-    DateTime::parse_from_rfc3339(&ts.to_rfc3339()?)
-        .ok()
-        .map(|d| d.with_timezone(&Utc))
+    security::timestamp_utc(ts)
 }
 
 /// メッセージから検査の中身を作る。検査しないもの（DM・Bot の発言・作者がメンバーでない）は `None`。
@@ -136,6 +146,10 @@ pub fn post_from_message(cache: &Cache, msg: &Message) -> Option<Post> {
         Some(hash) => compat::guild_avatar_url(guild_id, msg.author.id, &hash),
         None => compat::user_avatar_url(&msg.author),
     };
+    let owner = guild.owner_id;
+    let is_admin =
+        commands::guards::is_administrator(owner, msg.author.id, &roles, &guild.roles, guild_id);
+    let bot_can_timeout = security::bot_can_timeout(&guild, cache.current_user().id, Utc::now());
     Some(Post {
         guild_id,
         channel_id: msg.channel_id,
@@ -143,6 +157,11 @@ pub fn post_from_message(cache: &Cache, msg: &Message) -> Option<Post> {
         user_id: msg.author.id,
         content: msg.content.clone(),
         attachments: msg.attachments.iter().map(|a| a.url.clone()).collect(),
+        attachment_files: msg
+            .attachments
+            .iter()
+            .map(|a| (a.filename.clone(), u64::from(a.size)))
+            .collect(),
         roles: members::sorted_roles(&roles, &guild.roles, guild_id),
         joined_at: joined_at.and_then(to_utc),
         voice_channel,
@@ -152,6 +171,8 @@ pub fn post_from_message(cache: &Cache, msg: &Message) -> Option<Post> {
             &msg.author.name,
         )
         .to_string(),
+        is_admin,
+        bot_can_timeout,
         author: Author {
             id: msg.author.id.get(),
             name: compat::user_tag(&msg.author),
@@ -177,8 +198,14 @@ pub trait Effects: Sync {
         message: LogMessage,
         embed: CreateEmbed,
     ) -> impl Future<Output = Result<(), String>> + Send;
-    /// 検査したメッセージを消す。
-    fn delete_message(&self) -> impl Future<Output = Result<(), String>> + Send;
+    /// 投稿を 1 件消す（検査したメッセージと、スパムと数えた前の投稿）。
+    fn delete_message(
+        &self,
+        channel: ChannelId,
+        message: MessageId,
+    ) -> impl Future<Output = Result<(), DeleteFailure>> + Send;
+    /// 発言した人を `seconds` 秒タイムアウトする（S1・S2）。
+    fn timeout(&self, seconds: i64) -> impl Future<Output = Result<(), StripFailure>> + Send;
     /// 発言した人のロールを 1 つ剥がす（剥がす順と、失敗で止めるのは [`security::strip_each`]）。
     fn remove_role(&self, role: RoleId) -> impl Future<Output = Result<(), StripFailure>> + Send;
     /// ログを 1 件送る（作者は発言した人）。Python の `log_action`（失敗はここで飲み込む）。
@@ -191,6 +218,15 @@ pub trait Effects: Sync {
     ) -> impl Future<Output = ()> + Send;
 }
 
+/// 投稿を消せなかった理由。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DeleteFailure {
+    /// 既に消えていた（404。消した数に入れ、止めない）。
+    Gone,
+    /// ほかの失敗（Discord の誤りの文）。
+    Failed(String),
+}
+
 /// URL を 1 つ調べる（VirusTotal）。
 pub type Scan = Arc<dyn Fn(String) -> Pin<Box<dyn Future<Output = VtResult> + Send>> + Send + Sync>;
 
@@ -201,12 +237,12 @@ pub struct AssessRequest {
     pub text: String,
     /// VirusTotal の結果。
     pub vt_results: Vec<VtResult>,
-    /// 直近 15 秒の発言の回数。
-    pub spam_count: usize,
-    /// 発言のいちばん短い間隔（秒）。
-    pub min_interval: f64,
+    /// スパムの判定の結果。
+    pub spam: SpamCheck,
     /// 新規メンバーか。
     pub is_new_member: bool,
+    /// 新しいアカウントなら、その日数のしきい値（AI に渡す文に書く）。でなければ `None`。
+    pub new_account_days: Option<i64>,
 }
 
 /// 投稿を判定する（Groq）。
@@ -237,9 +273,9 @@ impl Judges {
                 m.assess(&AssessInput {
                     text: &r.text,
                     vt_results: &r.vt_results,
-                    spam_count: r.spam_count,
-                    min_interval: r.min_interval,
+                    spam: &r.spam,
                     is_new_member: r.is_new_member,
+                    new_account_days: r.new_account_days,
                 })
                 .await
             })
@@ -279,6 +315,8 @@ fn jst_text(unix: f64) -> String {
 pub struct Context<'a> {
     /// そのサーバーの設定。
     pub settings: Option<&'a Value>,
+    /// 秒・回数・日数（環境変数）。
+    pub config: &'a SecurityConfig,
     /// 連投の記録。
     pub spam: &'a SpamDetector,
     /// VC の荒らしの記録。
@@ -292,7 +330,7 @@ pub struct Context<'a> {
 /// 集めた判定の材料。Python の `_Findings`（結論と、その根拠の印を一緒に持つ）。
 #[derive(Clone, Debug)]
 pub struct Findings {
-    /// 危険か（消して剥がす）。
+    /// 危険か（消して 24 時間のタイムアウト）。スパムは入れない。
     pub danger: bool,
     /// 根拠の印（`SPAM`・`VT_DANGEROUS`・`GPT:SAFE` など）。
     pub reason_flags: Vec<String>,
@@ -302,8 +340,14 @@ pub struct Findings {
     pub progress: Option<LogMessage>,
     /// Groq の判定。
     pub gpt: Verdict,
-    /// 直近 15 秒の発言の回数。
+    /// 報告の「スパム回数」（[`SpamCheck::display_count`]）。
     pub spam_count: usize,
+    /// スパムか（危険でなければ、消して 10 分のタイムアウト）。
+    pub spam: bool,
+    /// スパムと数えた投稿（チャンネル, メッセージ。消すもの）。
+    pub spam_posts: Vec<(u64, u64)>,
+    /// VC の荒らしの経路で、この人に措置済みか（人への措置を二重にしない）。
+    pub vc_done: bool,
 }
 
 /// AI の応答チャンネルへの、リンクも添付も無い発言か。Python の `_is_plain_chat_post`。
@@ -344,19 +388,16 @@ pub async fn check_message<E: Effects>(fx: &E, cx: &Context<'_>, post: &Post) {
     }
     let mut logs = vec![format!("[{}] スキャン開始", jst_text((cx.clock)()))];
     let roles = post.roles_with_everyone();
-    if let Some(reason) = security::bypass_reason(cx.settings, post.user_id, &roles) {
+    let bypass = security::bypass_reason(cx.settings, post.user_id, &roles, post.is_admin);
+    if let Some(reason) = bypass {
         logs.push(format!("バイパス適用: {reason}"));
-        fx.log_action(
-            Level::Info,
-            "セキュリティ検査スキップ",
-            &[("理由".into(), reason.into())],
-            None,
-        )
-        .await;
+        // 飛ばしたことは、ログチャンネルではなくログファイルにだけ書く（S7）。
+        let (guild, user) = (post.guild_id.get(), post.user_id.get());
+        security::log_bypass(guild, user, reason, "メッセージ");
         return;
     }
     let findings = collect_findings(fx, cx, post, &links, &mut logs).await;
-    let stripped = enforce(fx, post, &findings).await;
+    let enforcement = enforce(fx, cx, post, &findings).await;
     report(
         fx,
         cx,
@@ -364,13 +405,32 @@ pub async fn check_message<E: Effects>(fx: &E, cx: &Context<'_>, post: &Post) {
         &links,
         post.attachments.len(),
         &logs,
-        stripped.as_ref(),
+        &enforcement,
     )
     .await;
 }
 
-/// スパム・リンク・VirusTotal・Groq・新規・VC の荒らしを順に見て、材料をそろえる。Python の
-/// `_collect_findings`。**判定するだけで、何もしない**（消す・剥がすは [`enforce`]）。
+/// スパムのログの行（当たった条件ごとに 1 行。何の条件で・何回か。繰り返しはチャンネルの数も）。Python の
+/// `_spam_logs`。
+fn spam_logs(spam: &SpamCheck) -> Vec<String> {
+    let mut logs = Vec::new();
+    if spam.repeat {
+        logs.push(format!(
+            "スパム検出（同じ内容を{}回/{}秒、{}チャンネル）",
+            spam.repeat_count, spam.repeat_window, spam.repeat_channels
+        ));
+    }
+    if spam.flood {
+        logs.push(format!(
+            "スパム検出（{}回/{}秒、最短間隔{:.1}秒）",
+            spam.flood_count, spam.flood_window, spam.min_interval
+        ));
+    }
+    logs
+}
+
+/// スパム・リンク・VirusTotal・Groq・新規・新しいアカウント・VC の荒らしを順に見て、材料をそろえる。Python の
+/// `_collect_findings`。**判定するだけで、何もしない**（消す・タイムアウトするは [`enforce`]）。
 pub async fn collect_findings<E: Effects>(
     fx: &E,
     cx: &Context<'_>,
@@ -378,17 +438,23 @@ pub async fn collect_findings<E: Effects>(
     links: &[String],
     logs: &mut Vec<String>,
 ) -> Findings {
-    let is_new = security::is_new_member(post.joined_at, utc((cx.clock)()));
-    let spam = cx
-        .spam
-        .check(post.guild_id.get(), post.user_id.get(), (cx.clock)());
+    let now = utc((cx.clock)());
+    let is_new = security::is_new_member(post.joined_at, now);
+    let days = cx.config.new_account_days;
+    let new_account = security::is_new_account(post.user_id.get(), now, days);
+    let input = SpamInput {
+        guild_id: post.guild_id.get(),
+        user_id: post.user_id.get(),
+        channel_id: post.channel_id.get(),
+        message_id: post.message_id.get(),
+        content: &post.content,
+        attachments: &post.attachment_files,
+    };
+    let spam = cx.spam.check(&input, (cx.clock)());
     let mut flags: Vec<String> = Vec::new();
-    if spam.is_spam {
+    logs.extend(spam_logs(&spam));
+    if spam.is_spam() {
         flags.push("SPAM".into());
-        logs.push(format!(
-            "スパム検出（{}回/{}秒、最短間隔{:.1}秒）",
-            spam.count, SPAM_TIME_WINDOW as i64, spam.min_interval
-        ));
     }
     if links.len() >= MAX_LINKS {
         flags.push("TOO_MANY_LINKS".into());
@@ -398,19 +464,18 @@ pub async fn collect_findings<E: Effects>(
         flags.push("UNICODE_TRICK".into());
         logs.push("ユニコードトリック検出".into());
     }
-    // スパムだけでも危険（Python と同じ。見直しの候補）。
-    let mut danger = spam.is_spam;
-
+    // スパムは danger に入れない。スパムだけなら「消して 10 分のタイムアウト」（S2）、ここから下の危険な材料
+    // （VirusTotal・Groq・VC の荒らし）があれば、そちらの「24 時間のタイムアウト」が勝つ（S1。重いほう）。
     let scanned = run_vt_scans(fx, cx.judges, links, &post.attachments, logs).await;
     flags.extend(scanned.flags);
-    danger |= scanned.danger;
+    let mut danger = scanned.danger;
 
     let gpt = (cx.judges.assess)(AssessRequest {
         text: post.content.clone(),
         vt_results: scanned.results.clone(),
-        spam_count: spam.count,
-        min_interval: spam.min_interval,
+        spam: spam.clone(),
         is_new_member: is_new,
+        new_account_days: new_account.then_some(days),
     })
     .await;
     flags.push(format!("GPT:{}", gpt.as_str()));
@@ -423,15 +488,23 @@ pub async fn collect_findings<E: Effects>(
         flags.push("NEW_MEMBER".into());
         logs.push("新規メンバー".into());
     }
+    if new_account {
+        flags.push("NEW_ACCOUNT".into());
+        logs.push("新しいアカウント".into());
+    }
 
-    // VC にいる人の発言は、VC の荒らしの記録に入れない（数えるのは VC への参加だけ）。参加の記録がいま荒らしの
-    // 形になっているかだけを見る（Python の is_vc_raid_ongoing。rust-09 の (e)）。
-    if let Some(channel) = post.voice_channel
-        && cx.raid.peek(channel, (cx.clock)())
-    {
+    // VC にいる人の発言は、VC の荒らしの記録に入れない（数えるのは VC への参加だけ。rust-09 の (e)）。VC_RAID の
+    // 印を付けるのは、その人自身が荒らしの数に入っているときだけ（同じ VC にいるだけの常連は巻き込まない。S4）。
+    let status = match post.voice_channel {
+        Some(channel) => cx.raid.peek(channel, post.user_id.get(), (cx.clock)()),
+        None => RaidStatus::NotCounted,
+    };
+    let mut vc_done = false;
+    if let RaidStatus::Counted { enforced } = status {
         danger = true;
         flags.push("VC_RAID".into());
         logs.push("VCレイド検出".into());
+        vc_done = enforced;
     }
 
     Findings {
@@ -440,7 +513,10 @@ pub async fn collect_findings<E: Effects>(
         vt_results: scanned.results,
         progress: scanned.progress,
         gpt,
-        spam_count: spam.count,
+        spam_count: spam.display_count(),
+        spam: spam.is_spam(),
+        spam_posts: spam.posts,
+        vc_done,
     }
 }
 
@@ -557,27 +633,74 @@ async fn run_vt_scans<E: Effects>(
     }
 }
 
-/// 危険なら、メッセージを消してロールを剥がす。Python の `_enforce_or_withhold`。
+/// 危険・スパムなら措置する。Python の `_enforce_or_withhold`（取った措置を返す。報告に出す）。
 ///
-/// 消すのに失敗しても剥がす（Python と同じ）。剥がしたら、その結果を返す（報告に出す。rust-09 の (i)）。
-/// 剥がさなかったら `None`。
-pub async fn enforce<E: Effects>(fx: &E, post: &Post, findings: &Findings) -> Option<Stripped> {
-    if !findings.danger {
-        return None;
+/// 危険（S1）: この投稿（とスパムと数えた投稿）を 1 件ずつ消し、24 時間のタイムアウト（使わないなら全ロールを
+/// 外す）。タイムアウトが断られても、ロールを外すことは試さない（同じ理由で失敗する）。VC の荒らしの経路で
+/// 措置済みの人には、人への措置を二重にしない（消すだけ。S4）。
+/// スパムだけ（S2）: スパムと数えた投稿を消し、10 分のタイムアウト（使わないなら消すだけ）。
+/// タイムアウトを使うのは、サーバーの設定で有効にしてあり、Bot に権限があるときだけ（[`security::use_timeout`]）。
+/// 消すのに失敗しても先へ進む（既に消えていたものは消した数に入れる）。
+pub async fn enforce<E: Effects>(
+    fx: &E,
+    cx: &Context<'_>,
+    post: &Post,
+    findings: &Findings,
+) -> Enforcement {
+    let action = if findings.danger {
+        Action::Danger
+    } else if findings.spam {
+        Action::Spam
+    } else {
+        return Enforcement::default();
+    };
+    let mut out = Enforcement {
+        action,
+        ..Enforcement::default()
+    };
+    let mut posts = findings.spam_posts.clone();
+    let this = (post.channel_id.get(), post.message_id.get());
+    if !posts.contains(&this) {
+        posts.push(this);
     }
-    if let Err(e) = fx.delete_message().await {
-        warn!("[security] message delete failed: {e}");
+    for (channel, message) in posts {
+        let target = (ChannelId::new(channel), MessageId::new(message));
+        match fx.delete_message(target.0, target.1).await {
+            Ok(()) | Err(DeleteFailure::Gone) => out.deleted += 1,
+            Err(DeleteFailure::Failed(e)) => {
+                warn!("[security] message delete failed: {e}");
+                out.delete_failed += 1;
+            }
+        }
     }
-    let removable = security::removable_roles(&post.roles, post.guild_id);
-    let stripped = security::strip_each(&removable, |role| fx.remove_role(role)).await;
-    debug!(?stripped, "[security] ロールの剥奪");
-    Some(stripped)
+    let seconds = match action {
+        Action::Danger if findings.vc_done => {
+            out.vc_done = true;
+            return out;
+        }
+        Action::Danger => cx.config.timeout_danger_seconds,
+        _ => cx.config.timeout_spam_seconds,
+    };
+    if security::use_timeout(cx.settings, post.bot_can_timeout) {
+        let sent = fx.timeout(seconds).await;
+        out.timeout = Some(TimedOut {
+            seconds,
+            failure: sent.err(),
+        });
+    } else if action == Action::Danger {
+        let removable = security::removable_roles(&post.roles, post.guild_id);
+        let stripped = security::strip_each(&removable, |role| fx.remove_role(role)).await;
+        debug!(?stripped, "[security] ロールの剥奪");
+        out.stripped = Some(stripped);
+    }
+    out
 }
 
 /// 結果をログチャンネルへ送る。Python の `_report_result`（テキストチャンネルには送らない）。
 ///
-/// 最後の「メッセージセキュリティ検査」のログは、途中の送信・書き換えがどう失敗しても必ず出す。剥がしたときは、
-/// 剥がした結果の項目を足す（[`security::strip_fields`]）。
+/// 最後の「メッセージセキュリティ検査」のログは、途中の送信・書き換えがどう失敗しても必ず出す。見出し・色・水準は
+/// 取った措置から決め（措置したら ERROR。S8）、取った措置（見出し・消した投稿・タイムアウト・剥がしたロール）の
+/// 項目を足す（[`security::enforcement_fields`]）。
 pub async fn report<E: Effects>(
     fx: &E,
     cx: &Context<'_>,
@@ -585,7 +708,7 @@ pub async fn report<E: Effects>(
     links: &[String],
     attachments: usize,
     logs: &[String],
-    stripped: Option<&Stripped>,
+    enforcement: &Enforcement,
 ) {
     let scans: Vec<ScanResult> = findings
         .vt_results
@@ -602,13 +725,11 @@ pub async fn report<E: Effects>(
         findings.gpt.as_str(),
         &findings.reason_flags,
         logs,
+        enforcement,
         jst((cx.clock)()),
     );
-    let level = if findings.danger {
-        Level::Error
-    } else {
-        Level::Info
-    };
+    let acted = enforcement.action != Action::None;
+    let level = if acted { Level::Error } else { Level::Info };
     if !links.is_empty() || attachments > 0 {
         match findings.progress {
             Some(message) => {
@@ -620,9 +741,11 @@ pub async fn report<E: Effects>(
                 fx.send_log_embed(level, embed).await;
             }
         }
-    } else if findings.danger {
+    } else if acted {
         fx.send_log_embed(Level::Error, embed).await;
     }
+    let caution = security::has_caution(&findings.reason_flags, findings.gpt.as_str());
+    let (title, colour) = security::heading(enforcement, caution);
     let reasons = if findings.reason_flags.is_empty() {
         "なし".to_string()
     } else {
@@ -638,14 +761,12 @@ pub async fn report<E: Effects>(
         ("GPT判定".to_string(), findings.gpt.as_str().to_string()),
         ("リンク数".to_string(), links.len().to_string()),
         ("スパム回数".to_string(), spam),
+        ("措置".to_string(), title),
     ];
-    if let Some(stripped) = stripped {
-        fields.extend(security::strip_fields(stripped));
-    }
-    let colour = if findings.danger { RED } else { GREEN };
+    fields.extend(security::enforcement_fields(enforcement));
     fx.log_action(level, "メッセージセキュリティ検査", &fields, Some(colour))
         .await;
-    if findings.danger {
+    if acted {
         info!("[SECURITY] DANGER");
     } else {
         info!("[SECURITY] SAFE");
@@ -674,12 +795,23 @@ impl Effects for DiscordEffects<'_> {
             .map_err(|e| e.to_string())
     }
 
-    async fn delete_message(&self) -> Result<(), String> {
-        self.sink
-            .http
-            .delete_message(self.post.channel_id, self.post.message_id, None)
-            .await
-            .map_err(|e| e.to_string())
+    async fn delete_message(
+        &self,
+        channel: ChannelId,
+        message: MessageId,
+    ) -> Result<(), DeleteFailure> {
+        let Err(e) = self.sink.http.delete_message(channel, message, None).await else {
+            return Ok(());
+        };
+        if security::is_not_found(&e) {
+            return Err(DeleteFailure::Gone);
+        }
+        Err(DeleteFailure::Failed(e.to_string()))
+    }
+
+    async fn timeout(&self, seconds: i64) -> Result<(), StripFailure> {
+        let (guild, user) = (self.post.guild_id, self.post.user_id);
+        security::timeout_member(self.sink.http, guild, user, seconds).await
     }
 
     async fn remove_role(&self, role: RoleId) -> Result<(), StripFailure> {
@@ -753,10 +885,13 @@ mod tests {
             user_id: UserId::new(4),
             content: String::new(),
             attachments: Vec::new(),
+            attachment_files: Vec::new(),
             roles: vec![RoleId::new(10), RoleId::new(11)],
             joined_at: None,
             voice_channel: None,
             display_name: "x".into(),
+            is_admin: false,
+            bot_can_timeout: false,
             author: Author {
                 id: 4,
                 name: "x".into(),
@@ -775,5 +910,27 @@ mod tests {
     fn times_are_written_in_jst() {
         assert_eq!(jst_text(1_795_565_100.25), "2026-11-25 09:05:00");
         assert_eq!(utc(1_795_565_100.25).timestamp_subsec_millis(), 250);
+    }
+
+    /// スパムのログの行は、当たった条件ごとに 1 行（Python の _spam_logs と同じ文）。
+    #[test]
+    fn spam_log_lines_match_python() {
+        let spam = SpamCheck {
+            repeat: true,
+            repeat_count: 3,
+            repeat_channels: 2,
+            flood: true,
+            flood_count: 8,
+            min_interval: 0.5,
+            ..SpamCheck::default()
+        };
+        assert_eq!(
+            spam_logs(&spam),
+            [
+                "スパム検出（同じ内容を3回/60秒、2チャンネル）",
+                "スパム検出（8回/10秒、最短間隔0.5秒）"
+            ]
+        );
+        assert!(spam_logs(&SpamCheck::default()).is_empty());
     }
 }

@@ -59,8 +59,8 @@ MUTS = [
     (
         "発言も荒らしに数える",
         "services/security_service.py",
-        "if is_vc_raid_ongoing(member.voice.channel.id):",
-        "if check_vc_raid(member, member.voice.channel.id):",
+        "if is_vc_raid_ongoing(voice_id, member.id):",
+        "if check_vc_raid(member, voice_id):",
     ),
     (
         "畳んだ印を先頭の結果にする",

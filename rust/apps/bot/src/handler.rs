@@ -34,7 +34,7 @@ use crate::metal::MetalPrices;
 use crate::moderation::Moderation;
 use crate::news::{self, DiscordOutlet, News};
 use crate::reaction_roles::{self, Change, ReactionEvent};
-use crate::security::{self, RaidDetector, SpamDetector, StripFailure};
+use crate::security::{self, RaidDetector, RaidTarget, SpamDetector};
 use crate::sticky::{self, StickyCtx, StickyLocks};
 use crate::user_state::{self, GuildView};
 use crate::vc_notify::{self, Filter, Plan, VcTracker};
@@ -64,7 +64,7 @@ pub struct AppState {
     pub vc: VcTracker,
     /// 連投の記録（メッセージの検査で使う）。
     pub spam: SpamDetector,
-    /// VC に似た名前の人が続けて入った記録。
+    /// VC に入って間もない人が続けて入った記録（と、措置した人）。
     pub raid: RaidDetector,
     /// メッセージの検査に使う VirusTotal と Groq。
     pub judges: Judges,
@@ -118,6 +118,8 @@ impl AppState {
         let chats = Chats::new(Arc::clone(&groq));
         let news = News::new(config.news.clone(), groq);
         let judges = Judges::new(vt, moderation, config.vt_scan_concurrency);
+        let spam = SpamDetector::new(config.security.spam);
+        let raid = RaidDetector::new(config.security.raid);
         let user_state = user_state::Recorder::new(pool.clone(), config.user_state.clone());
         let metal = MetalPrices::new(config.metal.clone());
         let tts = crate::tts::TtsApi::new(&config.tts_base_url);
@@ -142,8 +144,8 @@ impl AppState {
             user_state,
             sticky_locks: StickyLocks::default(),
             vc: VcTracker::default(),
-            spam: SpamDetector::default(),
-            raid: RaidDetector::default(),
+            spam,
+            raid,
             judges,
             earthquake_urls: JmaDetailUrls::default(),
             earthquake_images: WithMap {
@@ -445,11 +447,13 @@ impl Handler {
             .await;
     }
 
-    /// メッセージ 1 件を検査する（危険なら消してロールを剥がす）。Python の `handle_security_for_message`。
+    /// メッセージ 1 件を検査する（危険なら消してタイムアウト、使わないならロールを剥がす）。Python の
+    /// `handle_security_for_message`。
     async fn check_security(&self, ctx: &Context, post: &Post) {
         let snapshot = self.state.settings.snapshot();
         let cx = message_security::Context {
             settings: snapshot.guild(post.guild_id.get()),
+            config: &self.state.config.security,
             spam: &self.state.spam,
             raid: &self.state.raid,
             judges: &self.state.judges,
@@ -727,61 +731,92 @@ impl Handler {
 impl Handler {
     /// VC に入った・移ったときの荒らし対策。Python の `handle_security_for_voice_join`。
     ///
-    /// 似た名前の人が続けて入ったら、その人のロールを全部剥がしてログに残す（剥がせたロールと残ったロールも）。信頼ユーザー・
-    /// バイパスロールの人は数えない（Python と同じく、記録にも入れない）。
+    /// 入って間もない人（入って 24 時間未満か、アカウントを作って 7 日未満）の参加だけを数え、同じ VC に 20 秒の
+    /// 間に 5 人入ったら、数に入った全員（まだ措置していない人。後から入った人も）に、最初に入った順で 24 時間の
+    /// タイムアウトをしてログに残す（設定が無効か、Bot に権限が無ければロールを全部剥がす。S1・S4）。管理者・
+    /// 信頼ユーザー・バイパスロールの人は数えない（記録にも入れない。飛ばしたことはログファイルにだけ書く。S7）。
     async fn vc_raid_check(
         &self,
         ctx: &Context,
-        guild_id: GuildId,
         member: &Member,
         roles: &HashMap<RoleId, Role>,
+        owner_id: UserId,
         channel: u64,
         now: f64,
     ) {
-        // discord.py の member.roles と同じく、サーバーにあるロールを低い順に（剥がす順もこれ。上の
-        // ロールで権限が足りずに止まっても、それより下は剥がし終えている）。バイパスは @everyone も見る。
-        let held = members::sorted_roles(&member.roles, roles, guild_id);
+        let guild_id = member.guild_id;
+        // discord.py の member.roles と同じく、サーバーにあるロールを低い順に。バイパスは @everyone も見る。
         let mut with_everyone = vec![RoleId::new(guild_id.get())];
-        with_everyone.extend(held.iter().copied());
+        with_everyone.extend(members::sorted_roles(&member.roles, roles, guild_id));
+        let user_id = member.user.id;
+        let is_admin =
+            commands::guards::is_administrator(owner_id, user_id, &member.roles, roles, guild_id);
         let snapshot = self.state.settings.snapshot();
-        if security::bypass_reason(
-            snapshot.guild(guild_id.get()),
-            member.user.id,
-            &with_everyone,
-        )
-        .is_some()
-        {
+        let settings = snapshot.guild(guild_id.get());
+        let bypass = security::bypass_reason(settings, user_id, &with_everyone, is_admin);
+        if let Some(reason) = bypass {
+            security::log_bypass(guild_id.get(), user_id.get(), reason, "VC");
             return;
         }
-        let name = vc_notify::display_name(
-            member.nick.as_deref(),
-            member.user.global_name.as_deref(),
-            &member.user.name,
-        );
-        if !self.state.raid.check(channel, name, now) {
+        let config = &self.state.config.security;
+        let joined = member.joined_at.and_then(security::timestamp_utc);
+        if !security::is_fresh_joiner(joined, user_id.get(), Utc::now(), config) {
             return;
         }
-        let stripped = security::strip_roles(&ctx.http, guild_id, member.user.id, &held).await;
-        warn!(%guild_id, user_id = %member.user.id, ?stripped, "[SECURITY] VCレイド検出");
-        if stripped.failure == Some(StripFailure::Forbidden) {
-            warn!(%guild_id, "VCレイドのロール剥奪に失敗しました（権限が足りません）");
+        let counted = self.state.raid.check(channel, user_id.get(), now);
+        if counted.is_empty() {
+            return;
         }
-        let entry = LogEntry {
-            level: log_channel::Level::Error,
-            message: "VCレイド検出".into(),
-            // 剥がした結果も出す（Python と同じ。rust-09 の (i)）。
-            fields: security::vc_raid_fields(channel, &stripped),
-            colour: Some(members::RED),
+        let (targets, can_timeout) = raid_targets(&ctx.cache, member, &counted);
+        // タイムアウトを使うのは、サーバーの設定で有効にしてあり、Bot に権限があるときだけ（既定は無効）。
+        let use_timeout = security::use_timeout(settings, can_timeout);
+        let sink = LogSink {
+            cache: &ctx.cache,
+            http: &ctx.http,
+            settings: &self.state.settings,
+            colours: &self.state.colours,
         };
-        self.log(
-            ctx,
-            guild_id,
-            entry,
-            Author::from_member(member),
-            "VCレイド",
-        )
-        .await;
+        let seconds = config.timeout_danger_seconds;
+        security::act_on_vc_raid(&sink, guild_id, channel, &targets, use_timeout, seconds).await;
     }
+}
+
+/// VC の荒らしで数えた人の中身（キャッシュから。いま入った人は渡されたメンバー）と、Bot にタイムアウトの権限が
+/// あるか。キャッシュに無い人は、ロールが分からない（剥がすロールは無し）が、ID でタイムアウトはできる。
+fn raid_targets(cache: &Cache, member: &Member, counted: &[u64]) -> (Vec<RaidTarget>, bool) {
+    let guild_id = member.guild_id;
+    let Some(guild) = cache.guild(guild_id) else {
+        return (Vec::new(), false);
+    };
+    let can_timeout = security::bot_can_timeout(&guild, cache.current_user().id, Utc::now());
+    let targets = counted
+        .iter()
+        .map(|&id| {
+            let user_id = UserId::new(id);
+            let found = if user_id == member.user.id {
+                Some(member)
+            } else {
+                guild.members.get(&user_id)
+            };
+            match found {
+                Some(m) => RaidTarget {
+                    user_id,
+                    roles: members::sorted_roles(&m.roles, &guild.roles, guild_id),
+                    author: Author::from_member(m),
+                },
+                None => RaidTarget {
+                    user_id,
+                    roles: Vec::new(),
+                    author: Author {
+                        id,
+                        name: id.to_string(),
+                        avatar_url: String::new(),
+                    },
+                },
+            }
+        })
+        .collect();
+    (targets, can_timeout)
 }
 
 /// いまの時刻（UNIX 秒、小数つき）。Python の `time.time()`。
@@ -1141,7 +1176,7 @@ impl EventHandler for Handler {
         let now = unix_now();
         // 荒らし対策は出入りのログより前（Python の _dispatch_voice_state と同じ順）。
         if let Some(channel) = after_id.filter(|a| Some(*a) != before_id) {
-            self.vc_raid_check(&ctx, guild_id, &member, &roles, channel, now)
+            self.vc_raid_check(&ctx, &member, &roles, owner_id, channel, now)
                 .await;
         }
         let Some(change) = vc_notify::change_of(before_id, after_id) else {

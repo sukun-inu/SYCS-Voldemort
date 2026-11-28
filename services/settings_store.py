@@ -777,6 +777,20 @@ def remove_bypass_roles(guild_id: int, role_ids: list[int]) -> list[int]:
     return _mutate_settings(_mutator)
 
 
+def get_security_timeout_enabled(guild_id: int) -> bool:
+    """セキュリティの措置にタイムアウトを使うか（管理画面のセキュリティ設定）。**既定は無効**。
+
+    無効なら、Bot に「メンバーをタイムアウト」の権限があっても使わない（危険なものは全ロールを外し、
+    スパムだけなら消すだけ。いままでどおり）。Rust は security::timeout_enabled が同じ鍵を読む。
+    """
+    return bool(get_guild_settings(guild_id).get("security_timeout_enabled", False))
+
+
+def set_security_timeout_enabled(guild_id: int, enabled: bool) -> None:
+    """セキュリティの措置にタイムアウトを使うかを切り替える（管理画面のセキュリティ設定から）。"""
+    update_guild_settings(guild_id, {"security_timeout_enabled": bool(enabled)})
+
+
 # ──────────────────────────────────────────────
 # ウェルカム / グッバイ
 # ──────────────────────────────────────────────

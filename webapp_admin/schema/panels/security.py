@@ -1,4 +1,4 @@
-"""セキュリティ設定パネル（スパム・レイド検出の対象外リスト）。"""
+"""セキュリティ設定パネル（措置にタイムアウトを使うかの切り替えと、スパム・レイド検出の対象外リスト）。"""
 
 from __future__ import annotations
 
@@ -8,9 +8,11 @@ from services.settings_store import (
     add_bypass_roles,
     add_trusted_users,
     get_bypass_role_ids,
+    get_security_timeout_enabled,
     get_trusted_user_ids,
     remove_bypass_roles,
     remove_trusted_users,
+    set_security_timeout_enabled,
 )
 from webapp_admin.schema.types_def import Collection, Field, Panel, Section, Widget
 
@@ -77,6 +79,25 @@ PANEL = Panel(
     window=(820, 620),
     badge=_count,
     sections=(
+        Section(
+            "措置",
+            fields=(
+                Field(
+                    "security_timeout_enabled",
+                    "危険な投稿・スパム・VC の荒らしにタイムアウトを使う",
+                    Widget.BOOL,
+                    get=get_security_timeout_enabled,
+                    set=set_security_timeout_enabled,
+                    default=False,
+                    nullable=False,
+                    help=(
+                        "有効にするには Bot に「メンバーをタイムアウト」の権限も要ります。"
+                        "有効なら危険なものは 24 時間、スパムだけなら 10 分のタイムアウトにします。"
+                        "無効なら（既定）、危険なものはロールを外し、スパムは消すだけです。"
+                    ),
+                ),
+            ),
+        ),
         Section(
             "信頼済みユーザー",
             collections=(
