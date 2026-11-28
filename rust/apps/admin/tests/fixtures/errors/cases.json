@@ -1,0 +1,526 @@
+{
+ "about": "管理画面の骨組み（エラーの答え・見出し・経路・旧 URL・確かめ・回数の制限・数とインシデント）の例。書き方は generate.py の先頭。基準は expected.json（generate.py が作る）",
+ "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+ "now": 1798761600,
+ "sessions": {
+  "guild": {
+   "user": {"id": "111111111111111111", "username": "tester", "global_name": "テスター😀", "avatar": "a_0123456789abcdef"},
+   "admin_guilds": [
+    {"id": "123456789012345678", "name": "テスト鯖", "icon": null, "permissions": "2147483647", "owner": true},
+    {"id": 222222222222222222, "name": null, "icon": 5},
+    {"id": "not-a-number", "name": "壊れた行"},
+    "not-a-dict"
+   ],
+   "admin_guilds_at": 1798761000.25,
+   "_csrf_token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "guild_id": 123456789012345678,
+   "guild_name": "テスト鯖",
+   "guild_icon": null
+  },
+  "minimal": {"user": {"id": "1"}, "guild_id": 999},
+  "no_guild": {"user": {"id": "1"}},
+  "csrf": {"user": {"id": "1"}, "guild_id": 999, "_csrf_token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+  "csrf_no_guild": {"user": {"id": "1"}, "_csrf_token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+  "csrf_empty": {"user": {"id": "1"}, "guild_id": 999, "_csrf_token": ""},
+  "csrf_number": {"user": {"id": "1"}, "guild_id": 999, "_csrf_token": 12345},
+  "flashes": {"_flashes": [["info", "保存しました。"]], "_csrf_token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+  "flashes_user": {"user": {"id": "1"}, "_flashes": [["danger", "失敗しました。"]]},
+  "empty_user": {"user": {}},
+  "user_null": {"user": null, "guild_id": 1},
+  "user_text": {"user": "x"},
+  "dev_int": {"user": {"id": 111111111111111111}},
+  "dev_float": {"user": {"id": 1.0}},
+  "dev_bool": {"user": {"id": true}},
+  "dev_no_id": {"user": {"username": "a"}},
+  "empty": {}
+ },
+ "cases": [
+  {
+   "name": "not_found_api_anonymous",
+   "requests": [{"method": "GET", "target": "/admin/api/nope", "expect_status": 404}]
+  },
+  {
+   "name": "not_found_api_with_guild_session",
+   "requests": [{"method": "GET", "target": "/admin/api/nope", "session": "guild", "expect_status": 404}]
+  },
+  {
+   "name": "not_found_page_anonymous",
+   "note": "HTML のページを描くと CSRF の印が入るので、未ログインでも Set-Cookie が出る",
+   "requests": [{"method": "GET", "target": "/nope", "expect_status": 404}]
+  },
+  {
+   "name": "not_found_page_accept_json",
+   "requests": [{"method": "GET", "target": "/nope", "headers": {"accept": "application/json"}, "expect_status": 404}]
+  },
+  {
+   "name": "not_found_page_accept_html_and_json",
+   "requests": [{"method": "GET", "target": "/nope", "headers": {"accept": "text/html, application/json"}}]
+  },
+  {
+   "name": "not_found_page_accept_json_uppercase",
+   "requests": [{"method": "GET", "target": "/nope", "headers": {"accept": "Application/JSON"}}]
+  },
+  {
+   "name": "not_found_page_takes_the_flashes",
+   "requests": [{"method": "GET", "target": "/nope", "session": "flashes"}]
+  },
+  {
+   "name": "not_found_page_flashes_and_new_token",
+   "requests": [{"method": "GET", "target": "/nope", "session": "flashes_user"}]
+  },
+  {
+   "name": "not_found_page_with_token_is_not_rewritten",
+   "requests": [{"method": "GET", "target": "/nope", "session": "csrf"}]
+  },
+  {
+   "name": "not_found_page_embedded",
+   "requests": [{"method": "GET", "target": "/nope", "headers": {"sec-fetch-dest": "IFrame"}}]
+  },
+  {
+   "name": "not_found_api_keeps_the_flashes",
+   "requests": [{"method": "GET", "target": "/admin/api/nope", "session": "flashes"}]
+  },
+  {
+   "name": "not_found_for_any_method",
+   "requests": [
+    {"method": "DELETE", "target": "/nope", "headers": {"accept": "application/json"}},
+    {"method": "PUT", "target": "/admin/api/nope"}
+   ]
+  },
+  {
+   "name": "method_not_allowed",
+   "requests": [
+    {"method": "POST", "target": "/admin/users/state", "headers": {"accept": "application/json"}, "expect_status": 405},
+    {"method": "POST", "target": "/admin/users/state", "expect_status": 405},
+    {"method": "HEAD", "target": "/admin/users/state", "expect_status": 405},
+    {"method": "OPTIONS", "target": "/admin/dev", "headers": {"accept": "application/json"}, "expect_status": 405},
+    {"method": "POST", "target": "/admin/api/__a1/login", "expect_status": 405},
+    {"method": "GET", "target": "/admin/api/__a1/csrf", "expect_status": 405}
+   ]
+  },
+  {
+   "name": "trailing_slash",
+   "requests": [
+    {"method": "GET", "target": "/admin/users/state/", "expect_status": 307},
+    {"method": "GET", "target": "/admin/users/state/?a=1&b=%E3%81%82", "expect_status": 307},
+    {"method": "GET", "target": "/admin/users/state///", "expect_status": 307},
+    {"method": "POST", "target": "/admin/users/state/", "expect_status": 307},
+    {"method": "GET", "target": "/admin/api/__a1/http/%E3%81%82/", "expect_status": 307},
+    {"method": "GET", "target": "/static", "expect_status": 307},
+    {"method": "GET", "target": "/admin/users/state/", "headers": {"host": "admin.example.com:5001"}, "expect_status": 307},
+    {"method": "GET", "target": "/admin/users/state/", "headers": {"x-forwarded-proto": "https"}, "expect_status": 307}
+   ]
+  },
+  {
+   "name": "trailing_slash_with_session",
+   "requests": [{"method": "GET", "target": "/admin/users/state/", "session": "guild", "expect_status": 307}]
+  },
+  {
+   "name": "decoded_paths",
+   "requests": [
+    {"method": "GET", "target": "/admin/users/state%0A", "expect_status": 303},
+    {"method": "GET", "target": "/admin/users/state%0A%0A", "headers": {"accept": "application/json"}, "expect_status": 404},
+    {"method": "GET", "target": "/admin/users%2Fstate", "expect_status": 303},
+    {"method": "GET", "target": "/admin/api%3Fx/y"},
+    {"method": "GET", "target": "/admin/api%0A/nope"},
+    {"method": "GET", "target": "/admin/api/x%3F"},
+    {"method": "GET", "target": "/admin/api/x%23y", "headers": {"accept": "text/html"}}
+   ]
+  },
+  {
+   "name": "static_fallbacks",
+   "note": "nginx が返せなかったものだけが来る（無いファイル・GET と HEAD 以外）。/static で始まるものは数えない",
+   "requests": [
+    {"method": "GET", "target": "/static/missing.css", "headers": {"accept": "text/css,*/*;q=0.1"}, "expect_status": 404},
+    {"method": "GET", "target": "/static/missing.js", "headers": {"accept": "application/json"}, "expect_status": 404},
+    {"method": "HEAD", "target": "/static/missing.png", "expect_status": 404},
+    {"method": "POST", "target": "/static/admin.css", "headers": {"accept": "application/json"}, "expect_status": 405},
+    {"method": "PUT", "target": "/static/x", "expect_status": 405},
+    {"method": "GET", "target": "/static/", "headers": {"accept": "application/json"}, "expect_status": 404},
+    {"method": "GET", "target": "/staticx", "headers": {"accept": "application/json"}, "expect_status": 404}
+   ]
+  },
+  {
+   "name": "legacy_paths",
+   "requests": [
+    {"method": "GET", "target": "/admin/users/state", "session": "minimal", "expect_status": 303},
+    {"method": "GET", "target": "/admin/settings/logging", "session": "minimal", "expect_status": 303},
+    {"method": "GET", "target": "/admin/settings/welcome", "session": "minimal", "expect_status": 303},
+    {"method": "GET", "target": "/admin/settings/vc-notify", "session": "minimal", "expect_status": 303},
+    {"method": "GET", "target": "/admin/settings/earthquake", "session": "minimal", "expect_status": 303},
+    {"method": "GET", "target": "/admin/settings/news-feeds", "session": "minimal", "expect_status": 303},
+    {"method": "GET", "target": "/admin/settings/sticky", "session": "minimal", "expect_status": 303},
+    {"method": "GET", "target": "/admin/settings/reaction-roles", "session": "minimal", "expect_status": 303},
+    {"method": "GET", "target": "/admin/settings/djaudio", "session": "minimal", "expect_status": 303},
+    {"method": "GET", "target": "/admin/settings/tts", "session": "minimal", "expect_status": 303},
+    {"method": "GET", "target": "/admin/settings/security", "session": "minimal", "expect_status": 303},
+    {"method": "GET", "target": "/admin/dev", "session": "minimal", "expect_status": 303}
+   ]
+  },
+  {
+   "name": "legacy_checks",
+   "requests": [
+    {"method": "GET", "target": "/admin/settings/tts", "expect_status": 303},
+    {"method": "GET", "target": "/admin/settings/tts", "session": "no_guild", "expect_status": 303},
+    {"method": "GET", "target": "/admin/settings/tts", "session": "guild", "expect_status": 303},
+    {"method": "GET", "target": "/admin/settings/tts", "session": "user_null", "expect_status": 303},
+    {"method": "GET", "target": "/admin/settings/tts", "session": "empty", "expect_status": 303}
+   ]
+  },
+  {
+   "name": "legacy_cookie_variants",
+   "requests": [
+    {"method": "GET", "target": "/admin/dev", "session": "minimal", "cookie": "tampered", "expect_status": 303},
+    {"method": "GET", "target": "/admin/dev", "session": "minimal", "cookie": "expired", "expect_status": 303},
+    {"method": "GET", "target": "/admin/dev", "session": "minimal", "cookie": "edge", "expect_status": 303},
+    {"method": "GET", "target": "/admin/dev", "session": "minimal", "cookie": "future", "expect_status": 303}
+   ]
+  },
+  {
+   "name": "legacy_secure",
+   "secure": true,
+   "requests": [
+    {"method": "GET", "target": "/admin/dev", "session": "guild", "expect_status": 303},
+    {"method": "GET", "target": "/admin/dev", "expect_status": 303},
+    {"method": "GET", "target": "/static/missing.css", "headers": {"accept": "application/json"}, "expect_status": 404}
+   ]
+  },
+  {
+   "name": "raw_cookies",
+   "requests": [
+    {"method": "GET", "target": "/admin/dev", "cookies": ["admin_session=\"{fresh:minimal}\""], "expect_status": 303},
+    {"method": "GET", "target": "/admin/dev", "cookies": ["a=1; admin_session={fresh:minimal}; b=2"], "expect_status": 303},
+    {"method": "GET", "target": "/admin/dev", "cookies": ["admin_session={fresh:minimal}", "admin_session=broken"], "expect_status": 303},
+    {"method": "GET", "target": "/admin/dev", "cookies": ["Admin_session={fresh:minimal}"], "expect_status": 303},
+    {"method": "GET", "target": "/admin/dev", "cookies": ["admin_session="], "expect_status": 303},
+    {"method": "GET", "target": "/admin/dev", "raw_cookie": {"session": "minimal", "secret": "another-secret-another-secret-0000"}, "expect_status": 303}
+   ]
+  },
+  {
+   "name": "signed_but_broken_cookies",
+   "note": "秘密鍵を知っている人しか作れない。Python ではセッションの層の外へ例外が抜けて素の 500",
+   "requests": [
+    {"method": "GET", "target": "/admin/dev", "raw_cookie": {"payload": "!!!"}, "expect_status": 500},
+    {"method": "GET", "target": "/admin/dev", "raw_cookie": {"payload": "e30"}, "expect_status": 500},
+    {"method": "GET", "target": "/admin/dev", "raw_cookie": {"payload": "WzFd"}, "expect_status": 500},
+    {"method": "GET", "target": "/admin/dev", "raw_cookie": {"session": "minimal", "signed_at": 1099511627776}, "expect_status": 500},
+    {"method": "GET", "target": "/admin/dev", "raw_cookie": {"payload": "e30="}, "expect_status": 303},
+    {"method": "GET", "target": "/admin/dev", "raw_cookie": {"payload": "W10="}, "expect_status": 303},
+    {"method": "GET", "target": "/admin/dev", "raw_cookie": {"payload": "77u/e30="}, "expect_status": 303}
+   ]
+  },
+  {
+   "name": "check_login",
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/login", "expect_status": 303},
+    {"method": "GET", "target": "/admin/api/__a1/login", "session": "empty_user", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/__a1/login", "session": "minimal", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/__a1/login", "session": "user_null", "expect_status": 200}
+   ]
+  },
+  {
+   "name": "check_guild",
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/guild", "expect_status": 303},
+    {"method": "GET", "target": "/admin/api/__a1/guild", "session": "no_guild", "expect_status": 303},
+    {"method": "GET", "target": "/admin/api/__a1/guild", "session": "minimal", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/__a1/guild", "session": "user_null", "expect_status": 200}
+   ]
+  },
+  {
+   "name": "check_dev_unconfigured",
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/dev", "expect_status": 404},
+    {"method": "GET", "target": "/admin/api/__a1/dev", "session": "minimal", "expect_status": 404}
+   ]
+  },
+  {
+   "name": "check_dev_blank",
+   "env": {"DEV_USER_ID": "   "},
+   "requests": [{"method": "GET", "target": "/admin/api/__a1/dev", "session": "minimal", "expect_status": 404}]
+  },
+  {
+   "name": "check_dev",
+   "env": {"DEV_USER_ID": "1"},
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/dev", "expect_status": 303},
+    {"method": "GET", "target": "/admin/api/__a1/dev", "session": "empty_user", "expect_status": 303},
+    {"method": "GET", "target": "/admin/api/__a1/dev", "session": "minimal", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/__a1/dev", "session": "no_guild", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/__a1/dev", "session": "dev_no_id", "expect_status": 403}
+   ]
+  },
+  {
+   "name": "check_dev_other_user",
+   "env": {"DEV_USER_ID": " 2 "},
+   "requests": [{"method": "GET", "target": "/admin/api/__a1/dev", "session": "minimal", "expect_status": 403}]
+  },
+  {
+   "name": "check_dev_number_ids",
+   "env": {"DEV_USER_ID": "111111111111111111"},
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/dev", "session": "dev_int", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/__a1/dev", "session": "dev_float", "expect_status": 403}
+   ]
+  },
+  {
+   "name": "check_dev_float_id",
+   "env": {"DEV_USER_ID": "1.0"},
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/dev", "session": "dev_float", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/__a1/dev", "session": "minimal", "expect_status": 403}
+   ]
+  },
+  {
+   "name": "check_dev_bool_id",
+   "env": {"DEV_USER_ID": "True"},
+   "requests": [{"method": "GET", "target": "/admin/api/__a1/dev", "session": "dev_bool", "expect_status": 200}]
+  },
+  {
+   "name": "check_dev_user_not_a_dict",
+   "env": {"DEV_USER_ID": "1"},
+   "requests": [{"method": "GET", "target": "/admin/api/__a1/dev", "session": "user_text", "expect_status": 500}]
+  },
+  {
+   "name": "csrf_basics",
+   "requests": [
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "expect_status": 200},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"x-csrftoken": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}, "expect_status": 200},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"x-csrftoken": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdee"}, "expect_status": 403},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"x-csrftoken": ""}, "expect_status": 403},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "expect_status": 403},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"x-csrftoken": "0123"}, "expect_status": 403}
+   ]
+  },
+  {
+   "name": "csrf_forms",
+   "requests": [
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "form": {"csrf_token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}, "expect_status": 200},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "form": {"csrf_token": "bad"}, "headers": {"x-csrftoken": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}, "expect_status": 403},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "form": {"csrf_token": ""}, "headers": {"x-csrftoken": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}, "expect_status": 200},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "application/x-www-form-urlencoded"}, "body": [["csrf_token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&csrf_token=bad", 1]], "expect_status": 403},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "application/x-www-form-urlencoded"}, "body": [["csrf_token=bad&csrf_token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 1]], "expect_status": 200},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "application/x-www-form-urlencoded"}, "body": [["csrf%5Ftoken=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 1]], "expect_status": 200},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "application/x-www-form-urlencoded"}, "body": [["csrf+token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 1]], "expect_status": 403},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "application/x-www-form-urlencoded; charset=utf-8"}, "body": [["csrf_token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 1]], "expect_status": 200},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "Application/X-WWW-Form-Urlencoded; charset=utf-8"}, "body": [["csrf_token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 1]], "expect_status": 403},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "APPLICATION/X-WWW-FORM-URLENCODED"}, "body": [["csrf_token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 1]], "expect_status": 200}
+   ]
+  },
+  {
+   "name": "csrf_json",
+   "requests": [
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "json": {"csrf_token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}, "expect_status": 403},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "json": {"a": 1}, "headers": {"x-csrftoken": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "csrf_multipart",
+   "rust_skip": "multipart は読まない（Python と違う。安全な側に外れる。security.rs の説明）",
+   "requests": [
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "multipart/form-data; boundary=XyZ"}, "body": [["--XyZ\r\nContent-Disposition: form-data; name=\"csrf_token\"\r\n\r\n0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\r\n--XyZ--\r\n", 1]]}
+   ]
+  },
+  {
+   "name": "csrf_session_tokens",
+   "requests": [
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "minimal", "headers": {"x-csrftoken": "anything"}, "expect_status": 403},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf_empty", "headers": {"x-csrftoken": "x"}, "expect_status": 403},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "empty_user", "headers": {"x-csrftoken": "x"}, "expect_status": 403}
+   ]
+  },
+  {
+   "name": "csrf_number_in_session",
+   "requests": [{"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf_number", "headers": {"x-csrftoken": "12345"}, "expect_status": 500}]
+  },
+  {
+   "name": "csrf_non_ascii_token",
+   "requests": [{"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "application/x-www-form-urlencoded"}, "body": [["csrf_token=%C3%A9", 1]], "expect_status": 500}]
+  },
+  {
+   "name": "csrf_form_limits",
+   "requests": [
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "application/x-www-form-urlencoded"}, "body": [["a=1&", 1001]], "expect_status": 400},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "application/x-www-form-urlencoded"}, "body": [["csrf_token=", 1], ["a", 1048577]], "expect_status": 400},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "headers": {"content-type": "application/x-www-form-urlencoded"}, "body": [["a=1&", 1001]], "expect_status": 200}
+   ]
+  },
+  {
+   "name": "csrf_methods",
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/csrf-any", "session": "csrf", "expect_status": 200},
+    {"method": "OPTIONS", "target": "/admin/api/__a1/csrf-any", "session": "csrf", "expect_status": 200},
+    {"method": "PUT", "target": "/admin/api/__a1/csrf-any", "session": "csrf", "expect_status": 403},
+    {"method": "PATCH", "target": "/admin/api/__a1/csrf-any", "session": "csrf", "expect_status": 403},
+    {"method": "DELETE", "target": "/admin/api/__a1/csrf-any", "session": "csrf", "expect_status": 403},
+    {"method": "DELETE", "target": "/admin/api/__a1/csrf-any", "session": "csrf", "headers": {"x-csrftoken": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "csrf_after_guild",
+   "requests": [
+    {"method": "POST", "target": "/admin/api/__a1/guild-csrf", "expect_status": 303},
+    {"method": "POST", "target": "/admin/api/__a1/guild-csrf", "session": "csrf_no_guild", "headers": {"x-csrftoken": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}, "expect_status": 303},
+    {"method": "POST", "target": "/admin/api/__a1/guild-csrf", "session": "csrf", "headers": {"x-csrftoken": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}, "expect_status": 200},
+    {"method": "POST", "target": "/admin/api/__a1/guild-csrf", "session": "csrf", "headers": {"x-csrftoken": "bad"}, "expect_status": 403}
+   ]
+  },
+  {
+   "name": "http_codes_api",
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/http/400", "expect_status": 400},
+    {"method": "GET", "target": "/admin/api/__a1/http/403", "expect_status": 403},
+    {"method": "GET", "target": "/admin/api/__a1/http/404", "expect_status": 404},
+    {"method": "GET", "target": "/admin/api/__a1/http/405", "expect_status": 405},
+    {"method": "GET", "target": "/admin/api/__a1/http/409", "expect_status": 409},
+    {"method": "GET", "target": "/admin/api/__a1/http/410", "expect_status": 410},
+    {"method": "GET", "target": "/admin/api/__a1/http/416", "expect_status": 416},
+    {"method": "GET", "target": "/admin/api/__a1/http/418", "expect_status": 418},
+    {"method": "GET", "target": "/admin/api/__a1/http/429", "expect_status": 429},
+    {"method": "GET", "target": "/admin/api/__a1/http/500", "expect_status": 500},
+    {"method": "GET", "target": "/admin/api/__a1/http/502", "expect_status": 502},
+    {"method": "GET", "target": "/admin/api/__a1/http/503", "expect_status": 503}
+   ]
+  },
+  {
+   "name": "http_details_api",
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/http/400?detail=%E5%90%8D%E5%89%8D%E3%81%8C%E9%95%B7%E3%81%99%E3%81%8E%E3%81%BE%E3%81%99", "expect_status": 400},
+    {"method": "GET", "target": "/admin/api/__a1/http/403?detail=%E3%82%A2%E3%82%AF%E3%82%BB%E3%82%B9%E6%A8%A9%E9%99%90%E3%81%8C%E3%81%82%E3%82%8A%E3%81%BE%E3%81%9B%E3%82%93%E3%80%82", "expect_status": 403},
+    {"method": "GET", "target": "/admin/api/__a1/http/404?detail=Not%20Found", "expect_status": 404},
+    {"method": "GET", "target": "/admin/api/__a1/http/400?detail=", "expect_status": 400},
+    {"method": "GET", "target": "/admin/api/__a1/http/400?dict=1", "expect_status": 400},
+    {"method": "GET", "target": "/admin/api/__a1/http/409?detail=%22%3C%3E%26%0A%5C", "expect_status": 409},
+    {"method": "GET", "target": "/admin/api/__a1/http/418?detail=I%27m%20a%20Teapot", "expect_status": 418},
+    {"method": "GET", "target": "/admin/api/__a1/http/500?detail=%E7%90%86%E7%94%B1", "expect_status": 500}
+   ]
+  },
+  {
+   "name": "http_phrases_api",
+   "note": "Python 3.13 の HTTPStatus の英語の文（RFC 9110 で名前が変わったもの）。どちらが落ちるかを見る",
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/http/413?detail=Content%20Too%20Large"},
+    {"method": "GET", "target": "/admin/api/__a1/http/413?detail=Request%20Entity%20Too%20Large"},
+    {"method": "GET", "target": "/admin/api/__a1/http/414?detail=URI%20Too%20Long"},
+    {"method": "GET", "target": "/admin/api/__a1/http/414?detail=Request-URI%20Too%20Long"},
+    {"method": "GET", "target": "/admin/api/__a1/http/416?detail=Range%20Not%20Satisfiable"},
+    {"method": "GET", "target": "/admin/api/__a1/http/416?detail=Requested%20Range%20Not%20Satisfiable"},
+    {"method": "GET", "target": "/admin/api/__a1/http/422?detail=Unprocessable%20Content"},
+    {"method": "GET", "target": "/admin/api/__a1/http/422?detail=Unprocessable%20Entity"}
+   ]
+  },
+  {
+   "name": "http_headers_api",
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/http/405?header=Allow:GET,%20POST", "expect_status": 405},
+    {"method": "GET", "target": "/admin/api/__a1/http/429?header=Retry-After:60", "expect_status": 429}
+   ]
+  },
+  {
+   "name": "http_codes_page",
+   "requests": [
+    {"method": "GET", "target": "/__a1/http/400?detail=%E7%90%86%E7%94%B1", "expect_status": 400},
+    {"method": "GET", "target": "/__a1/http/404", "expect_status": 404},
+    {"method": "GET", "target": "/__a1/http/405?header=Allow:GET", "expect_status": 405},
+    {"method": "GET", "target": "/__a1/http/418", "expect_status": 418},
+    {"method": "GET", "target": "/__a1/http/500", "expect_status": 500},
+    {"method": "GET", "target": "/__a1/http/400?detail=x", "headers": {"accept": "application/json"}, "expect_status": 400}
+   ]
+  },
+  {
+   "name": "crashes",
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/crash?type=RuntimeError&message=%E5%A3%8A%E3%82%8C%E3%81%9F", "headers": {"cf-connecting-ip": "203.0.113.7"}, "expect_status": 500},
+    {"method": "GET", "target": "/__a1/crash?type=ValueError&message=x", "expect_status": 500},
+    {"method": "GET", "target": "/admin/api/__a1/crash?type=RuntimeError&message=", "headers": {"cf-connecting-ip": ""}, "expect_status": 500},
+    {"method": "GET", "target": "/admin/api/__a1/crash?type=ZeroDivisionError&message=a%E2%80%A8b%C2%85c%0Ad%22", "expect_status": 500}
+   ]
+  },
+  {
+   "name": "crash_with_a_long_message",
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/crash?type=RuntimeError&message=%E3%81%82&repeat=600", "expect_status": 500},
+    {"method": "GET", "target": "/admin/api/__a1/crash?type=RuntimeError&message=a%F0%9F%98%80&repeat=300", "expect_status": 500}
+   ]
+  },
+  {
+   "name": "crash_with_a_session",
+   "requests": [{"method": "GET", "target": "/admin/api/__a1/crash?type=RuntimeError&message=x", "session": "guild", "expect_status": 500}]
+  },
+  {
+   "name": "crash_page_with_flashes",
+   "requests": [{"method": "GET", "target": "/__a1/crash?type=RuntimeError&message=x", "session": "flashes_user", "expect_status": 500}]
+  },
+  {
+   "name": "returned_statuses",
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/status/503", "expect_status": 503},
+    {"method": "GET", "target": "/admin/api/__a1/status/418", "expect_status": 418},
+    {"method": "GET", "target": "/admin/api/__a1/status/200", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/__a1/status/599", "expect_status": 599}
+   ]
+  },
+  {
+   "name": "limit_default_on_a_top_level_route",
+   "note": "app に直に足した旧 URL。予想は 301 回目で slowapi の 429（見出しの層より外）",
+   "requests": [
+    {"method": "GET", "target": "/admin/users/state", "repeat": 300, "expect_status": 303},
+    {"method": "GET", "target": "/admin/users/state"},
+    {"method": "GET", "target": "/admin/settings/logging", "expect_status": 303},
+    {"method": "GET", "target": "/admin/users/state", "headers": {"cf-connecting-ip": "198.51.100.1"}},
+    {"method": "GET", "target": "/admin/users/state", "headers": {"x-forwarded-for": "198.51.100.2"}},
+    {"method": "GET", "target": "/admin/users/state", "session": "guild"},
+    {"method": "POST", "target": "/admin/users/state", "expect_status": 405},
+    {"method": "GET", "target": "/admin/users/state/", "expect_status": 307}
+   ]
+  },
+  {
+   "name": "limit_default_not_on_router_routes",
+   "note": "include_router で入れた経路（予想は 301 回目も普通に答える）",
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/router-guild", "repeat": 300, "expect_status": 303},
+    {"method": "GET", "target": "/admin/api/__a1/router-guild"},
+    {"method": "GET", "target": "/admin/api/__a1/router-guild", "session": "minimal"}
+   ]
+  },
+  {
+   "name": "limit_default_not_on_the_real_router_routes",
+   "rust_skip": "A2（/admin/overview）と A4（/admin/api/users/state）の経路。Python の答えを記録するために回す",
+   "requests": [
+    {"method": "GET", "target": "/admin/api/users/state", "repeat": 301},
+    {"method": "GET", "target": "/admin/overview", "repeat": 301}
+   ]
+  },
+  {
+   "name": "limit_decorated_api",
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/limited", "repeat": 2, "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/__a1/limited", "expect_status": 429},
+    {"method": "GET", "target": "/admin/api/__a1/limited", "session": "guild", "expect_status": 429}
+   ]
+  },
+  {
+   "name": "limit_decorated_page",
+   "requests": [
+    {"method": "GET", "target": "/__a1/limited", "repeat": 2, "expect_status": 200},
+    {"method": "GET", "target": "/__a1/limited", "expect_status": 429}
+   ]
+  },
+  {
+   "name": "limit_decorated_after_checks",
+   "requests": [
+    {"method": "GET", "target": "/admin/api/__a1/limited-login", "repeat": 3, "expect_status": 303},
+    {"method": "GET", "target": "/admin/api/__a1/limited-login", "session": "minimal", "repeat": 2, "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/__a1/limited-login", "session": "minimal", "expect_status": 429}
+   ]
+  },
+  {
+   "name": "limit_default_on_metrics",
+   "rust_skip": "/metrics は A7 の経路（Python の docstring は既定の制限が掛からないと書いているが、実際に掛かるかを記録する）",
+   "requests": [
+    {"method": "GET", "target": "/metrics", "repeat": 300},
+    {"method": "GET", "target": "/metrics"}
+   ]
+  }
+ ]
+}

@@ -11,6 +11,7 @@ Python と Rust のプロセスが本番で共存します。進め方と順番�
 | `crates/sycs-text` | 地震の画像の文字を Python（Pillow 13.0.0）と画素まで同じに描く部品（並べる＝harfrust、輪郭とヒンティング＝skrifa、塗り＝FreeType の smooth ラスタライザの写し、置き方＝`_imagingft.c` の写し）と、それを使った最大震度の札。画素を回すので dev のビルドでも最適化を効かせてある（`Cargo.toml` の `[profile.dev.package.*]`）。フォントは apt の `fonts-noto-cjk`（Python の本番と同じファイル） |
 | `crates/sycs-imaging` | Pillow 13.0.0 と画素まで同じ結果を出す画像処理（多角形・線・四角・楕円・角丸の四角・重ね合わせ・貼り付け・LANCZOS の拡大縮小・ガウスぼかし）。C のコード（`libImaging`）を型と順のまま写したもの。震度の地図が使う。画素を回すので dev のビルドでも最適化を効かせてある |
 | `apps/cdn` | DJAudio-DL の配信（`/dlaudio/`）。Python の `services/djaudio_cdn.py`（管理画面に入っている `dlaudio_router`）を置き換える。リンクを確かめたら `X-Accel-Redirect` を返し、ファイルそのものは前に立つ nginx が置き場から送る（Range・大きいファイルは nginx）。イメージは `docker/cdn-rs.Dockerfile`、nginx は `docker/nginx/`。compose では profile `nginx` のときだけ起きる |
+| `apps/admin` | 管理画面（rust-06）。Python の `webapp_admin/`（`admin_main.py`）を置き換える途中。いまは骨組み（A1）: セッションの Cookie（starlette と itsdangerous と同じ形。Python と同じ Cookie を読み書きできる）・秘密鍵の決め方・4 つの確かめ・CSRF・エラーの答え（JSON と HTML の振り分け）・セキュリティの見出し・経路の 404/405/末尾の `/`・回数の制限（slowapi と同じ数え方）・要求の数と 5xx のインシデント（`incidents.jsonl`）・パネルの旧 URL。画面・API・テンプレートはあとの塊（A2〜A10）。計画は `apps/admin/PLAN.ja.md` |
 | `crates/sycs-web` | Rust の web のアプリ（配信、のちに管理画面・公開サイト）が共通で使う土台。axum の待ち受けと止め方・信頼するプロキシ（`TRUSTED_PROXY_CIDRS`。uvicorn と同じ読み方）・パスの戻し方・リクエストの数（Valkey へ）・`/health`・自分に 1 回尋ねる道具 |
 | `tools/voice-check` | serenity + songbird の Bot が、DAVE 必須の VC で音を届けられるかを人の耳で確かめる道具 |
 

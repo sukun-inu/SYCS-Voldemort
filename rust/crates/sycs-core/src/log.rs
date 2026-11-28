@@ -97,6 +97,9 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     // services.djaudio_cache（djaudio）と同じ棚。
     ("sycs_cdn", "cdn"),
     ("sycs_cdn::cache", "djaudio"),
+    // 管理画面は Python の webapp_admin（admin）と同じ棚。数とインシデントは webapp_admin.metrics（metrics）と同じ棚。
+    ("sycs_admin", "admin"),
+    ("sycs_admin::metrics", "metrics"),
     ("voice_check", "voice"),
     ("songbird", "voice"),
     ("davey", "voice"),
@@ -650,6 +653,10 @@ mod tests {
             ("sycs_cdn::cache", "djaudio"),
             ("sycs_web::serve", "http"),
             ("sycs_web::proxy", "http"),
+            // 管理画面（Rust の apps/admin）は admin、数とインシデントは metrics。
+            ("sycs_admin::app", "admin"),
+            ("sycs_admin::session", "admin"),
+            ("sycs_admin::metrics", "metrics"),
         ] {
             assert_eq!(category_for(target), category, "{target}");
         }
