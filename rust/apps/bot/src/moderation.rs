@@ -2,8 +2,9 @@
 //!
 //! 決め方は Python と同じ:
 //!
-//! 1. VirusTotal の結果を順に見て、危険（10 以上）なら DANGEROUS、少しでも引っかかれば SUSPICIOUS
-//!    （最初に当たった結果で決める。Groq には回さない）
+//! 1. VirusTotal の結果のうち、いちばん重いもので決める: 危険（10 以上）が 1 つでもあれば DANGEROUS、少しでも
+//!    引っかかったものがあれば SUSPICIOUS（Groq には回さない。以前は最初に当たった結果で決めていて、後ろに危険が
+//!    あっても SUSPICIOUS になっていた。rust-09 の (f)）
 //! 2. Groq の鍵が無ければ SAFE（判定の機能が無い、という扱い。「疑わしい」にはしない）
 //! 3. 本文が空白だけで、VirusTotal の結果も無ければ SAFE（尋ねる材料が無い）
 //! 4. 同じ材料（本文・状況・VirusTotal の数）の判定を 5 分覚えておき、覚えていればそれ
@@ -73,17 +74,20 @@ pub struct AssessInput<'a> {
     pub is_new_member: bool,
 }
 
-/// VirusTotal の結果だけで決まる判定。決まらなければ `None`（Groq に尋ねる）。
+/// VirusTotal の結果だけで決まる判定。決まらなければ `None`（Groq に尋ねる）。Python の `_vt_verdict`。
+///
+/// いちばん重い結果で決める。重さの決め方は検査の印（`VT_DANGEROUS`・`VT_SUSPICIOUS`）と同じ: 危険と判定した
+/// エンジンの最大が 10 以上なら危険、危険・疑わしいのどちらかが 1 つでもあれば疑わしい。
 pub fn vt_verdict(results: &[VtResult]) -> Option<Verdict> {
-    for r in results {
-        if r.malicious >= MALICIOUS_THRESHOLD {
-            return Some(Verdict::Dangerous);
-        }
-        if r.malicious > 0 || r.suspicious > 0 {
-            return Some(Verdict::Suspicious);
-        }
+    let max_malicious = results.iter().map(|r| r.malicious).max()?;
+    let max_suspicious = results.iter().map(|r| r.suspicious).max()?;
+    if max_malicious >= MALICIOUS_THRESHOLD {
+        Some(Verdict::Dangerous)
+    } else if max_malicious > 0 || max_suspicious > 0 {
+        Some(Verdict::Suspicious)
+    } else {
+        None
     }
-    None
 }
 
 /// 状況の行（スパム・高頻度・新規）。無ければ空。あれば最後に空行を 1 つ足す。
@@ -246,14 +250,22 @@ mod tests {
         }
     }
 
-    /// VirusTotal の結果は、最初に当たったもので決まること（後ろの危険は見ない、Python と同じ）。
+    /// VirusTotal の結果は、いちばん重いもので決まること（後ろの危険も見る、Python の `_vt_verdict`）。
     #[test]
-    fn virustotal_decides_first() {
+    fn virustotal_decides_by_the_heaviest() {
         assert_eq!(vt_verdict(&[vt(10, 0)]), Some(Verdict::Dangerous));
         assert_eq!(vt_verdict(&[vt(9, 0)]), Some(Verdict::Suspicious));
         assert_eq!(vt_verdict(&[vt(0, 1)]), Some(Verdict::Suspicious));
         assert_eq!(
             vt_verdict(&[vt(0, 0), vt(0, 1), vt(20, 0)]),
+            Some(Verdict::Dangerous)
+        );
+        assert_eq!(
+            vt_verdict(&[vt(3, 0), vt(0, 0), vt(10, 2)]),
+            Some(Verdict::Dangerous)
+        );
+        assert_eq!(
+            vt_verdict(&[vt(0, 0), vt(-1, -1), vt(9, 0)]),
             Some(Verdict::Suspicious)
         );
         // ダウンロードの失敗（-1）は引っかかっていない。
@@ -367,6 +379,7 @@ mod tests {
             max_retries: 0,
             retry_base_delay: 0.5,
             retry_max_delay: 0.5,
+            max_retry_after: 30.0,
         });
         Moderation::new(Arc::new(groq), 300.0)
     }

@@ -50,7 +50,7 @@
             }
           ]
         },
-        {"text": "まだか", "replies": [{"content": "誤りの文も履歴に残る。"}]}
+        {"text": "まだか", "replies": [{"content": "失敗の文は履歴に残らない。"}]}
       ]
     },
     {
@@ -298,7 +298,7 @@
       ]
     },
     {
-      "id": "api-error-is-sent-as-the-answer",
+      "id": "api-error-sends-the-fixed-reply",
       "settings": {"response_channel_id": 500},
       "messages": [
         {"channel": 500, "user": 7, "content": "やあ", "replies": [{"status": 401, "json": {"error": {"message": "Invalid API Key"}}}]}

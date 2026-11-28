@@ -6,10 +6,11 @@
 //! 2. 信頼ユーザー・バイパスロールなら、飛ばしたことをログに残して終わる
 //! 3. 判定を集める（[`collect_findings`]。ここでは何もしない）: スパム・リンク数過多・文字の向きの細工 →
 //!    VirusTotal（リンクと添付を 4 本ずつ並べて。進み具合をログチャンネルの Embed に出す）→ Groq の判定 →
-//!    新規メンバー → VC にいれば VC の荒らし
+//!    新規メンバー → VC にいれば VC の荒らし（参加の記録を見るだけ。発言は数えない）
 //! 4. 危険なら、メッセージを消して @everyone 以外のロールを全部剥がす（**元に戻せない**）
 //! 5. 結果をログチャンネルへ送る（進み具合の Embed を結果に書き換える。リンクも添付も無く危険でもなければ
-//!    結果の Embed は出さない）。最後に「メッセージセキュリティ検査」のログを 1 件
+//!    結果の Embed は出さない。Embed は Discord の上限に収める）。最後に「メッセージセキュリティ検査」の
+//!    ログを 1 件（途中の送信・書き換えが失敗しても出す。剥がしたら、剥がせたロールと残ったロールも出す）
 //!
 //! 危険とみなすのは、スパム（15 秒で 4 回）・VirusTotal で 10 以上・Groq の DANGEROUS・VC の荒らし。
 //! この決め方は Python のまま写した（見直しは移行のあと。トラッカーの rust-09）。
@@ -37,7 +38,8 @@ use tracing::{debug, error, info, warn};
 use crate::log_channel::{self, Author, Level, LogSink};
 use crate::moderation::{AssessInput, Moderation, Verdict};
 use crate::security::{
-    self, MAX_LINKS, RaidDetector, SPAM_TIME_WINDOW, ScanResult, SpamDetector, Stripped,
+    self, MAX_LINKS, RaidDetector, SPAM_TIME_WINDOW, ScanResult, SpamDetector, StripFailure,
+    Stripped,
 };
 use crate::virustotal::{MALICIOUS_THRESHOLD, VirusTotal, VtResult};
 use crate::{compat, members, vc_notify};
@@ -177,8 +179,8 @@ pub trait Effects: Sync {
     ) -> impl Future<Output = Result<(), String>> + Send;
     /// 検査したメッセージを消す。
     fn delete_message(&self) -> impl Future<Output = Result<(), String>> + Send;
-    /// 発言した人のロールを剥がす。
-    fn strip_roles(&self, roles: &[RoleId]) -> impl Future<Output = Stripped> + Send;
+    /// 発言した人のロールを 1 つ剥がす（剥がす順と、失敗で止めるのは [`security::strip_each`]）。
+    fn remove_role(&self, role: RoleId) -> impl Future<Output = Result<(), StripFailure>> + Send;
     /// ログを 1 件送る（作者は発言した人）。Python の `log_action`（失敗はここで飲み込む）。
     fn log_action(
         &self,
@@ -354,8 +356,17 @@ pub async fn check_message<E: Effects>(fx: &E, cx: &Context<'_>, post: &Post) {
         return;
     }
     let findings = collect_findings(fx, cx, post, &links, &mut logs).await;
-    enforce(fx, post, &findings).await;
-    report(fx, cx, &findings, &links, post.attachments.len(), &logs).await;
+    let stripped = enforce(fx, post, &findings).await;
+    report(
+        fx,
+        cx,
+        &findings,
+        &links,
+        post.attachments.len(),
+        &logs,
+        stripped.as_ref(),
+    )
+    .await;
 }
 
 /// スパム・リンク・VirusTotal・Groq・新規・VC の荒らしを順に見て、材料をそろえる。Python の
@@ -413,9 +424,10 @@ pub async fn collect_findings<E: Effects>(
         logs.push("新規メンバー".into());
     }
 
-    // VC にいる人の発言は、VC への参加と同じ記録で数える（Python と同じ）。
+    // VC にいる人の発言は、VC の荒らしの記録に入れない（数えるのは VC への参加だけ）。参加の記録がいま荒らしの
+    // 形になっているかだけを見る（Python の is_vc_raid_ongoing。rust-09 の (e)）。
     if let Some(channel) = post.voice_channel
-        && cx.raid.check(channel, &post.display_name, (cx.clock)())
+        && cx.raid.peek(channel, (cx.clock)())
     {
         danger = true;
         flags.push("VC_RAID".into());
@@ -547,19 +559,25 @@ async fn run_vt_scans<E: Effects>(
 
 /// 危険なら、メッセージを消してロールを剥がす。Python の `_enforce_or_withhold`。
 ///
-/// 消すのに失敗しても剥がす（Python と同じ）。剥がした結果は見ない（失敗は `strip_roles` がログに残す）。
-pub async fn enforce<E: Effects>(fx: &E, post: &Post, findings: &Findings) {
+/// 消すのに失敗しても剥がす（Python と同じ）。剥がしたら、その結果を返す（報告に出す。rust-09 の (i)）。
+/// 剥がさなかったら `None`。
+pub async fn enforce<E: Effects>(fx: &E, post: &Post, findings: &Findings) -> Option<Stripped> {
     if !findings.danger {
-        return;
+        return None;
     }
     if let Err(e) = fx.delete_message().await {
         warn!("[security] message delete failed: {e}");
     }
-    let stripped = fx.strip_roles(&post.roles).await;
+    let removable = security::removable_roles(&post.roles, post.guild_id);
+    let stripped = security::strip_each(&removable, |role| fx.remove_role(role)).await;
     debug!(?stripped, "[security] ロールの剥奪");
+    Some(stripped)
 }
 
 /// 結果をログチャンネルへ送る。Python の `_report_result`（テキストチャンネルには送らない）。
+///
+/// 最後の「メッセージセキュリティ検査」のログは、途中の送信・書き換えがどう失敗しても必ず出す。剥がしたときは、
+/// 剥がした結果の項目を足す（[`security::strip_fields`]）。
 pub async fn report<E: Effects>(
     fx: &E,
     cx: &Context<'_>,
@@ -567,6 +585,7 @@ pub async fn report<E: Effects>(
     links: &[String],
     attachments: usize,
     logs: &[String],
+    stripped: Option<&Stripped>,
 ) {
     let scans: Vec<ScanResult> = findings
         .vt_results
@@ -614,12 +633,15 @@ pub async fn report<E: Effects>(
     } else {
         "なし".into()
     };
-    let fields = [
+    let mut fields = vec![
         ("理由".to_string(), reasons),
         ("GPT判定".to_string(), findings.gpt.as_str().to_string()),
         ("リンク数".to_string(), links.len().to_string()),
         ("スパム回数".to_string(), spam),
     ];
+    if let Some(stripped) = stripped {
+        fields.extend(security::strip_fields(stripped));
+    }
     let colour = if findings.danger { RED } else { GREEN };
     fx.log_action(level, "メッセージセキュリティ検査", &fields, Some(colour))
         .await;
@@ -660,8 +682,8 @@ impl Effects for DiscordEffects<'_> {
             .map_err(|e| e.to_string())
     }
 
-    async fn strip_roles(&self, roles: &[RoleId]) -> Stripped {
-        security::strip_roles(self.sink.http, self.post.guild_id, self.post.user_id, roles).await
+    async fn remove_role(&self, role: RoleId) -> Result<(), StripFailure> {
+        security::remove_role(self.sink.http, self.post.guild_id, self.post.user_id, role).await
     }
 
     async fn log_action(

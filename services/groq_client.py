@@ -4,7 +4,7 @@ import random
 import time
 from typing import Any
 
-from groq import AsyncGroq, BadRequestError, RateLimitError
+from groq import APIConnectionError, APIStatusError, AsyncGroq, BadRequestError, RateLimitError
 
 from config import GROQ_API_KEY
 from envutil import env_float, env_int
@@ -26,6 +26,10 @@ GROQ_RETRY_MAX_DELAY_SECONDS = env_float(
     20.0,
     minimum=GROQ_RETRY_BASE_DELAY_SECONDS,
 )
+# サーバーの retry-after に従って待つ長さの上限（秒）。上限が無いと、極端な値
+# （日の枠を使い切ったときなど）が来たときに、その用途の同時実行の枠を持ったまま
+# 待ち続ける（rust-09 の (g)）。これより長い指示は、この秒数だけ待って再試行する。
+GROQ_MAX_RETRY_AFTER_SECONDS = env_float("GROQ_MAX_RETRY_AFTER_SECONDS", 30.0, minimum=0.0)
 
 _clients: dict[str, AsyncGroq] = {}
 _semaphores: dict[str, asyncio.Semaphore] = {}
@@ -34,12 +38,18 @@ _last_call_at: dict[str, float] = {}
 
 
 def get_groq_client(*, timeout: float, bucket: str = "default") -> AsyncGroq:
-    """用途(bucket)ごとにAsyncGroqクライアントを使い回す。"""
+    """用途(bucket)ごとにAsyncGroqクライアントを使い回す。
+
+    **SDK の再試行は切る（max_retries=0）。** 再試行は create_chat_completion が
+    まとめて受け持つ。SDK の既定（2 回）のままだと、回数制限（429）では SDK の
+    再試行とこちらの再試行が掛け算になり、1 回の呼び出しで最大
+    (2+1)×(GROQ_MAX_RETRIES+1)＝9 回送っていた（rust-09 の (g)）。
+    """
     if not GROQ_API_KEY:
         raise RuntimeError("GROQ_API_KEY が設定されていない。")
     client = _clients.get(bucket)
     if client is None:
-        client = AsyncGroq(api_key=GROQ_API_KEY, timeout=timeout)
+        client = AsyncGroq(api_key=GROQ_API_KEY, timeout=timeout, max_retries=0)
         _clients[bucket] = client
     return client
 
@@ -73,27 +83,60 @@ async def _respect_min_interval(bucket: str) -> None:
         _last_call_at[bucket] = time.monotonic()
 
 
-def _retry_after_seconds(exc: RateLimitError) -> float | None:
-    """429応答のRetry-Afterヘッダーから待機秒数を取り出す。
+def _retry_after_seconds(exc: Exception) -> float | None:
+    """失敗の応答のRetry-Afterヘッダーから待機秒数を取り出す。
     無い・壊れている場合は None を返し、呼び出し元に指数バックオフへ
     フォールバックさせる（サーバーが指定した待ち時間を無視しないため）。
+
+    GROQ_MAX_RETRY_AFTER_SECONDS を上限にする。上限が無いと、極端な値が来た
+    ときに、その用途の同時実行の枠を持ったまま待ち続ける（rust-09 の (g)）。
     """
     response = getattr(exc, "response", None)
     header = response.headers.get("retry-after") if response is not None else None
     if header is None:
         return None
     try:
-        return max(0.0, float(header))
+        # 0 未満は 0、上限を超える値は上限（NaN も 0 になる。max/min の順に注意）。
+        return min(GROQ_MAX_RETRY_AFTER_SECONDS, max(0.0, float(header)))
     except (TypeError, ValueError):
         return None
 
 
+def _is_retryable(exc: Exception) -> bool:
+    """こちらで再試行する失敗か。
+
+    回数制限（429）は、これまでどおり必ず再試行する。それ以外は、SDK の再試行を
+    切る前に SDK が再試行していたもの（groq SDK 1.7.0 の _should_retry と同じ決め方）:
+    接続の失敗・時間切れ、`x-should-retry` が true のもの、無ければ 408・409・5xx。
+    SDK の再試行を切っただけだと、これらの一時的な失敗が 1 回で諦められてしまう。
+    """
+    if isinstance(exc, RateLimitError):
+        return True
+    if isinstance(exc, APIConnectionError):
+        # 時間切れ（APITimeoutError）もここに入る。
+        return True
+    if isinstance(exc, APIStatusError):
+        should_retry = exc.response.headers.get("x-should-retry")
+        if should_retry == "true":
+            return True
+        if should_retry == "false":
+            return False
+        return exc.status_code in (408, 409) or exc.status_code >= 500
+    return False
+
+
 async def create_chat_completion(client: AsyncGroq, *, bucket: str, **create_kwargs: Any):
     """chat.completions.createを、プロセス内の同時実行数制限・最小呼び出し間隔・
-    429(RateLimitError)時のリトライ付きで呼び出す共通ラッパー。
+    再試行付きで呼び出す共通ラッパー。
 
     bucketは呼び出し元の用途("forecast"/"chat"/"news_summary"/"moderation"等)ごとに
     分離すること。あるbucketのバーストが他bucketの呼び出しを足止めしないようにするため。
+
+    再試行はここだけで行う（SDK の再試行は get_groq_client で切ってある）。
+    1 回の呼び出しで送るのは、最大 GROQ_MAX_RETRIES + 1 回。再試行するのは
+    _is_retryable が真の失敗で、待ちは retry-after（上限 GROQ_MAX_RETRY_AFTER_SECONDS）、
+    無ければ GROQ_RETRY_BASE_DELAY_SECONDS から倍々（上限 GROQ_RETRY_MAX_DELAY_SECONDS）に、
+    0〜0.5 秒の揺らぎを足したもの。
     """
     semaphore = _get_semaphore(bucket)
     async with semaphore:
@@ -102,8 +145,8 @@ async def create_chat_completion(client: AsyncGroq, *, bucket: str, **create_kwa
             await _respect_min_interval(bucket)
             try:
                 return await client.chat.completions.create(**create_kwargs)
-            except RateLimitError as exc:
-                if attempt >= GROQ_MAX_RETRIES:
+            except Exception as exc:
+                if attempt >= GROQ_MAX_RETRIES or not _is_retryable(exc):
                     raise
                 retry_after = _retry_after_seconds(exc)
                 if retry_after is not None:
@@ -114,13 +157,23 @@ async def create_chat_completion(client: AsyncGroq, *, bucket: str, **create_kwa
                         GROQ_RETRY_BASE_DELAY_SECONDS * (2**attempt),
                     )
                 delay += random.uniform(0, 0.5)
-                logger.warning(
-                    "Groq APIレート制限を検知。%.1f秒待機してリトライ bucket=%s attempt=%s/%s",
-                    delay,
-                    bucket,
-                    attempt + 1,
-                    GROQ_MAX_RETRIES,
-                )
+                if isinstance(exc, RateLimitError):
+                    logger.warning(
+                        "Groq APIレート制限を検知。%.1f秒待機してリトライ bucket=%s attempt=%s/%s",
+                        delay,
+                        bucket,
+                        attempt + 1,
+                        GROQ_MAX_RETRIES,
+                    )
+                else:
+                    logger.warning(
+                        "Groq APIの一時的な失敗を検知（%s）。%.1f秒待機してリトライ bucket=%s attempt=%s/%s",
+                        type(exc).__name__,
+                        delay,
+                        bucket,
+                        attempt + 1,
+                        GROQ_MAX_RETRIES,
+                    )
                 await asyncio.sleep(delay)
                 attempt += 1
 

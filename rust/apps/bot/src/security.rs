@@ -19,6 +19,7 @@ use regex::Regex;
 use serde_json::Value;
 use serenity::all::{CreateEmbed, CreateEmbedFooter, GuildId, Http, RoleId, UserId};
 
+use crate::commands::reply::cap_list_for_message;
 use crate::log_channel;
 
 /// スパムとみなす回数（この秒数の中で）。Python の `SPAM_REPEAT_THRESHOLD`。
@@ -89,16 +90,19 @@ impl SpamDetector {
     }
 }
 
-/// VC に似た名前の人が続けて入るのを数える。Python の `check_vc_raid`。
+/// VC に似た名前の人が続けて入るのを数える。Python の `check_vc_raid`・`is_vc_raid_ongoing`。
 ///
-/// メッセージの検査（VC にいる人の発言）と VC への参加の両方から呼ばれ、同じ記録を使う。
+/// **記録に入れるのは VC への参加だけ**（[`RaidDetector::check`]）。メッセージの検査（VC にいる人の発言）は、記録を
+/// 足さずに [`RaidDetector::peek`] で見る（以前は発言も参加と同じ記録に積んでいて、VC の中で 20 秒に 5 回
+/// 発言すると VC の荒らし扱いになり、消して剥がしていた。rust-09 の (e)）。
 #[derive(Default)]
 pub struct RaidDetector {
     inner: Mutex<(RaidHistory, u32)>,
 }
 
 impl RaidDetector {
-    /// 1 回数えて、似た名前（先頭 4 文字が同じ）が 20 秒以内に 5 回以上なら `true`。
+    /// VC への参加を 1 回数えて、似た名前（先頭 4 文字が同じ）が 20 秒以内に 5 回以上なら `true`。
+    /// Python の `check_vc_raid`（VC に入ったときだけ呼ぶ）。
     ///
     /// 数えるのは人数ではなく回数（Python と同じ。同じ人が出入りを繰り返しても数える）。
     pub fn check(&self, channel_id: u64, display_name: &str, now: f64) -> bool {
@@ -108,16 +112,7 @@ impl RaidDetector {
         let joins = history.entry(channel_id).or_default();
         joins.push((now, prefix));
         joins.retain(|(t, _)| now - t < VC_RAID_WINDOW_SEC);
-        let mut counts: HashMap<&str, usize> = HashMap::new();
-        let mut raid = false;
-        for (_, p) in joins.iter() {
-            let n = counts.entry(p.as_str()).or_default();
-            *n += 1;
-            if *n >= VC_RAID_THRESHOLD {
-                raid = true;
-                break;
-            }
-        }
+        let raid = has_raid(joins, now);
         *counter += 1;
         if *counter >= RAID_CLEANUP_INTERVAL {
             *counter = 0;
@@ -125,6 +120,32 @@ impl RaidDetector {
         }
         raid
     }
+
+    /// 記録を足さずに、そのチャンネルへの参加の記録が、いま荒らしの形（[`RaidDetector::check`] と同じ数え方）か。
+    /// Python の `is_vc_raid_ongoing`（メッセージの検査から呼ぶ。発言は数えない）。
+    pub fn peek(&self, channel_id: u64, now: f64) -> bool {
+        let guard = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        guard
+            .0
+            .get(&channel_id)
+            .is_some_and(|joins| has_raid(joins, now))
+    }
+}
+
+/// 20 秒以内の記録に、先頭が同じ名前が 5 回以上あるか。Python の `_has_raid`。
+fn has_raid(joins: &[(f64, String)], now: f64) -> bool {
+    let mut counts: HashMap<&str, usize> = HashMap::new();
+    for (t, p) in joins {
+        if now - t >= VC_RAID_WINDOW_SEC {
+            continue;
+        }
+        let n = counts.entry(p.as_str()).or_default();
+        *n += 1;
+        if *n >= VC_RAID_THRESHOLD {
+            return true;
+        }
+    }
+    false
 }
 
 /// Python の `URL_REGEX`（`https?://[^\s]+`、大文字・小文字を問わない）。
@@ -203,17 +224,46 @@ pub fn bypass_reason(
         .then_some("bypass_role")
 }
 
-/// 剥がした結果。Python の `strip_roles` の戻り値。
+/// 1 つのロールを剥がせなかった理由。
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Stripped {
-    /// 剥がした。
-    Removed,
-    /// 剥がすロールが無かった。
-    NoRoles,
-    /// 権限が足りなかった（途中まで剥がしていることがある）。
+pub enum StripFailure {
+    /// 権限が足りなかった。
     Forbidden,
-    /// ほかの失敗。
+    /// ほかの失敗（Discord の誤りの文。ログにだけ残す）。
     Failed(String),
+}
+
+/// 剥がした結果。Python の `strip_roles` の戻り値（`StripResult`）。
+///
+/// どのロールを剥がせて、どれが残ったか（失敗したロールと、そのあと試さなかったロール）を持つ。ログチャンネルの
+/// 報告に出す（rust-09 の (i)）。
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Stripped {
+    /// 剥がしたロール（剥がした順）。
+    pub removed: Vec<RoleId>,
+    /// 残ったロール（失敗したものと、その後ろ）。
+    pub kept: Vec<RoleId>,
+    /// 止まった理由（全部剥がせた・剥がすロールが無かったなら `None`）。
+    pub failure: Option<StripFailure>,
+}
+
+/// ロールを 1 つずつ剥がし、失敗したらそこで止める。Python の `strip_roles` の流れ（discord.py の
+/// `remove_roles`〔atomic〕と同じく 1 つずつ送り、失敗で止まる）。`remove` が 1 つを剥がす。
+pub async fn strip_each<F, Fut>(roles: &[RoleId], mut remove: F) -> Stripped
+where
+    F: FnMut(RoleId) -> Fut,
+    Fut: std::future::Future<Output = Result<(), StripFailure>>,
+{
+    let mut out = Stripped::default();
+    for (i, role) in roles.iter().enumerate() {
+        if let Err(failure) = remove(*role).await {
+            out.kept = roles[i..].to_vec();
+            out.failure = Some(failure);
+            return out;
+        }
+        out.removed.push(*role);
+    }
+    out
 }
 
 /// @everyone 以外のロールを全部剥がす。Python の `strip_roles`（discord.py の `remove_roles` と同じく、
@@ -225,27 +275,75 @@ pub async fn strip_roles(
     roles: &[RoleId],
 ) -> Stripped {
     let removable = removable_roles(roles, guild_id);
-    if removable.is_empty() {
-        return Stripped::NoRoles;
+    strip_each(&removable, |role| async move {
+        remove_role(http, guild_id, user_id, role).await
+    })
+    .await
+}
+
+/// ロールを 1 つ剥がす（理由は「セキュリティ違反」）。権限不足（403）は [`StripFailure::Forbidden`]。
+pub async fn remove_role(
+    http: &Http,
+    guild_id: GuildId,
+    user_id: UserId,
+    role: RoleId,
+) -> Result<(), StripFailure> {
+    let Err(e) = http
+        .remove_member_role(guild_id, user_id, role, Some("セキュリティ違反"))
+        .await
+    else {
+        return Ok(());
+    };
+    let forbidden = matches!(
+        &e,
+        serenity::Error::Http(serenity::http::HttpError::UnsuccessfulRequest(r))
+            if r.status_code == serenity::http::StatusCode::FORBIDDEN
+    );
+    if forbidden {
+        return Err(StripFailure::Forbidden);
     }
-    for role in removable {
-        if let Err(e) = http
-            .remove_member_role(guild_id, user_id, role, Some("セキュリティ違反"))
-            .await
-        {
-            let forbidden = matches!(
-                &e,
-                serenity::Error::Http(serenity::http::HttpError::UnsuccessfulRequest(r))
-                    if r.status_code == serenity::http::StatusCode::FORBIDDEN
-            );
-            if forbidden {
-                return Stripped::Forbidden;
-            }
-            tracing::error!("[SECURITY] strip roles failed: {e}");
-            return Stripped::Failed(e.to_string());
-        }
+    tracing::error!("[SECURITY] strip roles failed: {e}");
+    Err(StripFailure::Failed(e.to_string()))
+}
+
+/// VC の荒らしを見つけたときのログの項目。Python の `handle_security_for_voice_join` の
+/// `{"チャンネル": channel.mention, **strip_fields(stripped)}`。
+pub fn vc_raid_fields(channel_id: u64, stripped: &Stripped) -> Vec<(String, String)> {
+    let mut fields = vec![("チャンネル".to_string(), format!("<#{channel_id}>"))];
+    fields.extend(strip_fields(stripped));
+    fields
+}
+
+/// 1 つの項目に入れる文字数（Discord の上限）。
+const FIELD_VALUE_LIMIT: usize = 1024;
+
+/// 剥がした結果を、ログチャンネルの報告に足す項目にする。Python の `strip_fields`。
+///
+/// 「剥がしたロール」は必ず出す（無ければ「なし」）。残ったロールがあれば「剥がせなかったロール（権限不足）」か
+/// 「剥がせなかったロール（失敗）」を足す（失敗の文は項目に出さず、ログにだけ残す）。ロールはメンションで並べ、
+/// 1 つの項目の上限（1024 文字）に収める（はみ出す分は「…他N個」）。
+pub fn strip_fields(stripped: &Stripped) -> Vec<(String, String)> {
+    let mentions = |roles: &[RoleId]| {
+        let items: Vec<String> = roles.iter().map(|r| format!("<@&{}>", r.get())).collect();
+        cap_list_for_message(&items, FIELD_VALUE_LIMIT, "個", " ", None, "")
+    };
+    let removed = if stripped.removed.is_empty() {
+        "なし".to_string()
+    } else {
+        mentions(&stripped.removed)
+    };
+    let mut fields = vec![("剥がしたロール".to_string(), removed)];
+    if !stripped.kept.is_empty() {
+        let why = match stripped.failure {
+            Some(StripFailure::Forbidden) => "権限不足",
+            _ => "失敗",
+        };
+        fields.push((
+            format!("剥がせなかったロール（{why}）"),
+            mentions(&stripped.kept),
+        ));
     }
-    Stripped::Removed
+    fields
 }
 
 /// 剥がすロール（@everyone は剥がせないので除く）。
@@ -326,7 +424,64 @@ pub struct ScanResult {
     pub suspicious: i64,
 }
 
+/// Embed の説明の上限（Discord）。
+pub const EMBED_DESCRIPTION_LIMIT: usize = 4096;
+/// Embed の項目の数の上限。
+pub const EMBED_FIELD_COUNT_LIMIT: usize = 25;
+/// Embed 全体（題・説明・項目の名前と値・足元）の文字数の上限。
+pub const EMBED_TOTAL_LIMIT: usize = 6000;
+
+/// 印の重さ（危険 > 注意 > 安全）。畳んだ走査の結果の印に使う。
+fn icon_weight(icon: &str) -> u8 {
+    match icon {
+        ALERT_ICON => 2,
+        WARN_ICON => 1,
+        _ => 0,
+    }
+}
+
+/// 走査の結果を 1 件 1 項目にする。`room` 個を超えるなら、最後の 1 項目に残りを畳む。Python の `_target_fields`。
+///
+/// 畳んだ項目は「{印} ターゲット {最初}〜{最後}」と「…他N件」。印は隠れた結果の中でいちばん重いもの。
+fn target_fields(scans: &[ScanResult], room: usize) -> Vec<(String, String)> {
+    let icon = |r: &ScanResult| vt_icon(r.malicious, r.suspicious, Some(&r.status));
+    let mut fields: Vec<(String, String)> = scans
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            (
+                format!("{} ターゲット {} ({})", icon(r), i + 1, r.kind),
+                format!(
+                    "Status: `{}` | Malicious: `{}` | Suspicious: `{}`",
+                    r.status, r.malicious, r.suspicious
+                ),
+            )
+        })
+        .collect();
+    if fields.len() <= room {
+        return fields;
+    }
+    let shown = room.saturating_sub(1);
+    let hidden = &scans[shown..];
+    let worst = hidden
+        .iter()
+        .map(icon)
+        .max_by_key(|i| icon_weight(i))
+        .unwrap_or(SAFE_ICON);
+    fields.truncate(shown);
+    fields.push((
+        format!("{worst} ターゲット {}〜{}", shown + 1, scans.len()),
+        format!("…他{}件", hidden.len()),
+    ));
+    fields
+}
+
 /// 検査の結果の Embed。Python の `build_final_embed`（時刻は渡す）。
+///
+/// Discord の上限（項目 25 個・説明 4096 文字・全体 6000 文字）に収める（rust-09 の (c)）。走査の結果の項目は、
+/// GPT 判定と判定理由の項目を残して入るだけ並べ、残りを最後の 1 項目に「…他N件」で畳む。説明（ログの行）は、
+/// 題・項目・足元を引いた残り（4096 文字まで）に収め、はみ出す行を「…他N行」で畳む。文字はコードポイントで
+/// 数える（Python の `len`）。
 pub fn final_embed(
     scans: &[ScanResult],
     gpt_result: &str,
@@ -345,43 +500,42 @@ pub fn final_embed(
     } else {
         (0x2E_CC_71, "検査完了：問題なし")
     };
-    let mut embed = CreateEmbed::new().title(title).colour(colour);
-    // 空の説明は付けない（discord.py も空なら付けない）。
-    if !logs.is_empty() {
-        embed = embed.description(logs.join("\n"));
-    }
-    for (i, r) in scans.iter().enumerate() {
-        embed = embed.field(
-            format!(
-                "{} ターゲット {} ({})",
-                vt_icon(r.malicious, r.suspicious, Some(&r.status)),
-                i + 1,
-                r.kind
-            ),
-            format!(
-                "Status: `{}` | Malicious: `{}` | Suspicious: `{}`",
-                r.status, r.malicious, r.suspicious
-            ),
-            false,
-        );
-    }
-    embed = embed.field(
+    let mut tail = vec![(
         format!("{} GPT判定", gpt_icon(gpt_result)),
         format!("結果: `{gpt_result}`"),
-        false,
-    );
+    )];
     if !reasons.is_empty() {
         let joined = reasons
             .iter()
             .map(|r| format!("{}{r}", reason_icon(r)))
             .collect::<Vec<_>>()
             .join(" / ");
-        embed = embed.field("判定理由", joined, false);
+        tail.push(("判定理由".to_string(), joined));
     }
-    embed.footer(CreateEmbedFooter::new(format!(
-        "実行時間: {}",
-        now.format("%Y-%m-%d %H:%M:%S")
-    )))
+    let mut fields = target_fields(scans, EMBED_FIELD_COUNT_LIMIT - tail.len());
+    fields.extend(tail);
+    let footer = format!("実行時間: {}", now.format("%Y-%m-%d %H:%M:%S"));
+
+    // 説明に使えるのは、題・項目・足元を引いた残り（説明そのものの上限 4096 文字まで）。
+    let len = |s: &str| s.chars().count();
+    let used = len(title)
+        + len(&footer)
+        + fields
+            .iter()
+            .map(|(name, value)| len(name) + len(value))
+            .sum::<usize>();
+    let budget = EMBED_DESCRIPTION_LIMIT.min(EMBED_TOTAL_LIMIT.saturating_sub(used));
+    let description = cap_list_for_message(logs, budget, "行", "\n", None, "");
+
+    let mut embed = CreateEmbed::new().title(title).colour(colour);
+    // 空の説明は付けない（discord.py も空なら付けない）。
+    if !description.is_empty() {
+        embed = embed.description(description);
+    }
+    for (name, value) in fields {
+        embed = embed.field(name, value, false);
+    }
+    embed.footer(CreateEmbedFooter::new(footer))
 }
 
 #[cfg(test)]
@@ -623,5 +777,184 @@ b"
         assert_eq!(reason_icon("なにか"), "[INFO]");
         assert_eq!(progress_bar(3, 10, 10), "[###-------] 3/10");
         assert_eq!(progress_bar(2, 3, 10), "[######----] 2/3");
+    }
+
+    /// 参加の記録を足さずに見るだけ（発言は数えない）。数え方は参加の側と同じ（rust-09 の (e)）。
+    #[test]
+    fn peeking_does_not_count_as_a_join() {
+        let r = RaidDetector::default();
+        assert!(!r.peek(7, 0.0), "記録の無いチャンネル");
+        for i in 0..4 {
+            r.check(7, &format!("raid_bot_{i}"), f64::from(i));
+        }
+        // 何度見ても記録は増えない（増えたら 5 回目で荒らしになる）。
+        for _ in 0..10 {
+            assert!(!r.peek(7, 4.0));
+        }
+        assert!(r.check(7, "raid_bot_4", 4.0));
+        assert!(r.peek(7, 5.0));
+        assert!(!r.peek(8, 5.0), "別のチャンネル");
+        // 20 秒たった参加は見ない（0 秒の参加が外れて 4 回になる）。
+        assert!(r.peek(7, 19.9));
+        assert!(!r.peek(7, 20.0));
+    }
+
+    /// 1 つずつ剥がし、失敗したところで止める。剥がせたものと、残ったもの（失敗した 1 つとその後ろ）を返す。
+    #[tokio::test]
+    async fn stripping_stops_at_the_first_failure() {
+        let roles: Vec<RoleId> = [11, 12, 13].iter().map(|&i| RoleId::new(i)).collect();
+        let tried = Mutex::new(Vec::new());
+        let out = strip_each(&roles, |r| {
+            tried.lock().unwrap().push(r.get());
+            async move {
+                if r.get() == 12 {
+                    Err(StripFailure::Forbidden)
+                } else {
+                    Ok(())
+                }
+            }
+        })
+        .await;
+        assert_eq!(*tried.lock().unwrap(), [11, 12]);
+        assert_eq!(out.removed, [RoleId::new(11)]);
+        assert_eq!(out.kept, [RoleId::new(12), RoleId::new(13)]);
+        assert_eq!(out.failure, Some(StripFailure::Forbidden));
+        let all = strip_each(&roles, |_| async { Ok(()) }).await;
+        assert_eq!(
+            (all.removed.len(), all.kept.len(), all.failure),
+            (3, 0, None)
+        );
+        assert_eq!(
+            strip_each(&[], |_| async { Ok(()) }).await,
+            Stripped::default()
+        );
+    }
+
+    /// 報告の項目（Python の strip_fields と同じ）: 剥がしたロール（無ければ「なし」）と、残ったロール（理由つき）。
+    #[test]
+    fn strip_fields_match_python() {
+        let ids = |v: &[u64]| v.iter().map(|&i| RoleId::new(i)).collect::<Vec<_>>();
+        let pair = |k: &str, v: &str| (k.to_string(), v.to_string());
+        let forbidden = Stripped {
+            removed: ids(&[11]),
+            kept: ids(&[12, 13]),
+            failure: Some(StripFailure::Forbidden),
+        };
+        assert_eq!(
+            strip_fields(&forbidden),
+            [
+                pair("剥がしたロール", "<@&11>"),
+                pair("剥がせなかったロール（権限不足）", "<@&12> <@&13>")
+            ]
+        );
+        let failed = Stripped {
+            removed: Vec::new(),
+            kept: ids(&[11]),
+            failure: Some(StripFailure::Failed("boom".into())),
+        };
+        assert_eq!(
+            strip_fields(&failed),
+            [
+                pair("剥がしたロール", "なし"),
+                pair("剥がせなかったロール（失敗）", "<@&11>")
+            ]
+        );
+        assert_eq!(
+            strip_fields(&Stripped::default()),
+            [pair("剥がしたロール", "なし")]
+        );
+        // 多ければ 1 つの項目（1024 文字）に収め、はみ出す分は「…他N個」。
+        let many = Stripped {
+            removed: (0..60)
+                .map(|i| RoleId::new(1_100_000_000_000_000_000 + i))
+                .collect(),
+            ..Stripped::default()
+        };
+        let value = &strip_fields(&many)[0].1;
+        assert!(value.chars().count() <= 1024);
+        assert!(value.ends_with("個") && value.contains(" …他"), "{value}");
+    }
+
+    /// VC の荒らしのログの項目: チャンネルと剥がした結果（Python の test_the_vc_raid_report_shows_what_was_stripped と同じ）。
+    #[test]
+    fn vc_raid_fields_match_python() {
+        let stripped = Stripped {
+            removed: Vec::new(),
+            kept: vec![RoleId::new(11), RoleId::new(12)],
+            failure: Some(StripFailure::Forbidden),
+        };
+        let pair = |k: &str, v: &str| (k.to_string(), v.to_string());
+        assert_eq!(
+            vc_raid_fields(777, &stripped),
+            [
+                pair("チャンネル", "<#777>"),
+                pair("剥がしたロール", "なし"),
+                pair("剥がせなかったロール（権限不足）", "<@&11> <@&12>"),
+            ]
+        );
+    }
+
+    fn scan(malicious: i64, suspicious: i64) -> ScanResult {
+        ScanResult {
+            kind: "url".into(),
+            status: "ok".into(),
+            malicious,
+            suspicious,
+        }
+    }
+
+    /// 走査の結果が多ければ、GPT 判定と理由の項目を残して 25 個に収め、残りを「…他N件」に畳む（rust-09 の (c)）。
+    #[test]
+    fn many_targets_are_folded_into_the_last_field() {
+        let mut scans = vec![scan(0, 0); 30];
+        scans.push(scan(12, 0));
+        let v = embed(&scans, "SAFE", &["VT_DANGEROUS", "GPT:SAFE"], &["x"]);
+        let fields = v["fields"].as_array().unwrap();
+        assert_eq!(fields.len(), 25);
+        assert_eq!(fields[21]["name"], "[SAFE] ターゲット 22 (url)");
+        assert_eq!(fields[22]["name"], "[ALERT] ターゲット 23〜31");
+        assert_eq!(fields[22]["value"], "…他9件");
+        assert_eq!(fields[23]["name"], "[SAFE] GPT判定");
+        assert_eq!(fields[24]["name"], "判定理由");
+        // ちょうど 25 個に収まるなら畳まない。
+        let v = embed(&vec![scan(0, 0); 24], "SAFE", &[], &["x"]);
+        assert_eq!(v["fields"].as_array().unwrap().len(), 25);
+        assert_eq!(v["fields"][23]["name"], "[SAFE] ターゲット 24 (url)");
+    }
+
+    /// ログの行が長ければ、説明を 4096 文字・全体を 6000 文字に収め、はみ出す行を「…他N行」に畳む。
+    #[test]
+    fn long_logs_are_folded_to_fit() {
+        let mut logs = vec!["[2026-11-28 09:00:00] スキャン開始".to_string()];
+        logs.extend((0..40).map(|i| {
+            format!(
+                "[SAFE] https://example.com/{}/{i} をスキャン: status=ok Malicious=0 Suspicious=0",
+                "a".repeat(150)
+            )
+        }));
+        let logs: Vec<&str> = logs.iter().map(String::as_str).collect();
+        // 項目も長め（落とせなかったファイル）にして、説明の 4096 文字と項目を足すと 6000 文字を超える形にする。
+        let long = ScanResult {
+            kind: "image".into(),
+            status: "conflict_fallback".into(),
+            malicious: -1,
+            suspicious: -1,
+        };
+        let v = embed(&vec![long; 40], "SAFE", &["TOO_MANY_LINKS"], &logs);
+        let len = |v: &Value| v.as_str().unwrap_or("").chars().count();
+        let description = v["description"].as_str().unwrap();
+        assert!(len(&v["description"]) <= 4096);
+        let total = len(&v["title"])
+            + len(&v["description"])
+            + len(&v["footer"]["text"])
+            + v["fields"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|f| len(&f["name"]) + len(&f["value"]))
+                .sum::<usize>();
+        assert!(total <= 6000, "{total}");
+        assert!(description.starts_with("[2026-11-28 09:00:00] スキャン開始\n"));
+        assert!(description.ends_with("行") && description.contains("\n…他"));
     }
 }

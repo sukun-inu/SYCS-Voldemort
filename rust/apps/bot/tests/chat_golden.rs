@@ -4,7 +4,7 @@
 //! `handle_chatgpt_message`）を、台本どおりに答える偽物の Groq につないで動かしたもの（`generate.py`）。
 //! ここでも同じ台本の偽物を立て、Rust に同じことをさせて比べる:
 //!
-//! - talk: Groq に届く依頼の数（SDK の再試行まで含む）と最後の依頼の中身、返事、履歴
+//! - talk: Groq に届く依頼の数（再試行まで含む）と最後の依頼の中身、返事（失敗なら決まった文）、履歴
 //! - split: 長い文をどこで切って送るか
 //! - flow: 入力中の表示・送る文・ログに残すものと、その順
 //!
@@ -77,7 +77,7 @@ fn http_reply(reply: &Value) -> Vec<u8> {
     };
     let mut head = format!("HTTP/1.1 {status} X\r\nConnection: close\r\n");
     if status >= 400 {
-        // 再試行の待ちを短くする（SDK は retry-after-ms、その外側の再試行は retry-after を読む）。
+        // 再試行の待ちを短くする（再試行は retry-after を読む。retry-after-ms は generate.py の偽物と同じにするため）。
         head.push_str("retry-after-ms: 1\r\nretry-after: 0\r\n");
     }
     head.push_str(&format!(
@@ -158,6 +158,7 @@ fn chats_for(base: &str, with_key: bool) -> Chats {
         max_retries: 2,
         retry_base_delay: 0.5,
         retry_max_delay: 20.0,
+        max_retry_after: 30.0,
     })))
 }
 

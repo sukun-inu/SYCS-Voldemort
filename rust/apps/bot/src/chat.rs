@@ -4,8 +4,10 @@
 //! `/chat set` で決めたチャンネルに人が書くと、Groq に尋ねて返事を書く。会話の履歴は、サーバーと人の組ごとに
 //! Bot が覚える（プロセスが生きている間だけ。直近 20 件）。1 時間使われなかった会話は、20 通に 1 回の掃除で忘れる。
 //!
-//! Groq への問い合わせが失敗したときは、**誤りの文をそのまま返事にする**（Python と同じ。履歴にも残る）。
-//! 文は Groq の SDK が作るものと同じ形にしてある（`Error code: 429 - {'error': {…}}`）。
+//! Groq への問い合わせが失敗したときは、**決まった短い文（[`FAILED_REPLY`]）だけを返し、失敗の文は履歴に入れない**
+//! （Python の `FAILURE_REPLY`）。誤りの中身はログにだけ残す（以前は誤りの文をそのまま返事にしていて、回数制限の文に
+//! 入る Groq の組織の ID や利用枠の名前が応答チャンネルに書かれ、履歴に残って次の問い合わせで Groq に送り返されて
+//! いた。rust-09 の (j)）。ログの文は Groq の SDK が作るものと同じ形にしてある（`Error code: 429 - {'error': {…}}`）。
 //!
 //! Python と違うところ（どれも Groq が返さない形の応答）:
 //! - 200 なのに JSON として読めない応答: 種類が JSON でないもの（途中の機器が返す HTML など）は Python と同じ文に
@@ -45,8 +47,10 @@ pub const SWEEP_EVERY: u32 = 20;
 pub const MESSAGE_LIMIT: usize = 2000;
 /// 返事が空だったときの文。
 pub const NO_ANSWER: &str = "返答が得られなかった。";
-/// 失敗を返事にするときの前置き。
+/// 失敗をログに残すときの前置き。
 pub const FAILED_PREFIX: &str = "Groq API 呼び出し中にエラー発生";
+/// Groq への問い合わせが失敗したときに返す文（Python の `FAILURE_REPLY`。`chat_commands` の失敗の文と同じ）。
+pub const FAILED_REPLY: &str = "ヴォルデモートでも手こずるとはな… 少し待ってから試せ。";
 /// ログの題。
 pub const LOG_TITLE: &str = "ChatGPT出力";
 /// ログの項目 1 つに入れる文字数。
@@ -125,7 +129,7 @@ fn python_type(value: &Value) -> &'static str {
 
 /// Groq の応答から返事を取り出す。Python の `response.choices[0].message` と `reply.get("content") or …`。
 ///
-/// 形が崩れていたときは、Python が同じ形で出す例外の文を返す（その文が返事になる）。`content` が空・null・
+/// 形が崩れていたときは、Python が同じ形で出す例外の文を返す（その文はログにだけ残す）。`content` が空・null・
 /// 無いときは「返答が得られなかった。」。
 pub fn answer_text(response: &Value) -> Result<String, String> {
     let Value::Object(top) = response else {
@@ -274,8 +278,9 @@ impl Chats {
 
     /// 1 発言ぶん、Groq に尋ねて返事を返す。Python の `ChatGPT.input_message`。
     ///
-    /// 失敗しても文字列を返す（誤りの文が返事になり、履歴にも残る）。Groq を待つ間は錠を持たない（同じ人の
-    /// 発言が重なったときの履歴の並びは Python と同じ: 発言・発言・返事・返事）。
+    /// 失敗しても文字列を返す（決まった文 [`FAILED_REPLY`]。誤りの文はログにだけ残し、失敗の文は履歴に入れない。
+    /// 発言そのものは履歴に残る）。Groq を待つ間は錠を持たない（同じ人の発言が重なったときの履歴の並びは Python と
+    /// 同じ: 発言・発言・返事・返事）。
     pub async fn say(
         &self,
         guild_id: u64,
@@ -297,19 +302,28 @@ impl Chats {
             Ok(response) => answer_text(&response),
             Err(e) => Err(error_text(&e)),
         };
-        let reply = answer.unwrap_or_else(|reason| {
-            error!("{FAILED_PREFIX}: {reason}");
-            format!("{FAILED_PREFIX}: {reason}")
-        });
+        let reply = match answer {
+            Ok(reply) => Some(reply),
+            Err(reason) => {
+                // 中身はここにだけ残す（利用者には返さない）。
+                error!("{FAILED_PREFIX}: {reason}");
+                None
+            }
+        };
         if let Some(talk) = self.lock().talks.get_mut(&key) {
-            talk.history.push(Turn {
-                role: Role::Assistant,
-                content: reply.clone(),
-            });
+            if let Some(reply) = &reply {
+                talk.history.push(Turn {
+                    role: Role::Assistant,
+                    content: reply.clone(),
+                });
+            }
             // 積みっぱなしにすると、1 回の問い合わせが重く・遅くなり続ける。
             let extra = talk.history.len().saturating_sub(MAX_HISTORY_ENTRIES);
             talk.history.drain(..extra);
         }
+        let Some(reply) = reply else {
+            return FAILED_REPLY.to_string();
+        };
         debug!("最終返答: {reply}");
         reply
     }
@@ -478,7 +492,7 @@ mod tests {
     use crate::log_channel::jst;
 
     fn chats() -> Chats {
-        // 鍵が無いので、Groq へは送らない（誤りの文が返事になる）。
+        // 鍵が無いので、Groq へは送らない（失敗になり、決まった文が返事になる）。
         Chats::new(Arc::new(Groq::new(GroqConfig {
             api_key: None,
             base_url: "http://127.0.0.1:9".into(),
@@ -487,6 +501,7 @@ mod tests {
             max_retries: 0,
             retry_base_delay: 0.0,
             retry_max_delay: 0.0,
+            max_retry_after: 30.0,
         })))
     }
 
@@ -585,35 +600,40 @@ mod tests {
         );
     }
 
-    /// 鍵が無いときは Groq へ送らず、誤りの文を返事にして、履歴にも残すこと。
+    /// 鍵が無いときは Groq へ送らず、決まった文を返事にし、失敗の文は履歴に入れないこと（発言は残す）。
     #[tokio::test]
-    async fn a_failure_becomes_the_answer_and_stays_in_the_history() {
+    async fn a_failure_returns_the_fixed_reply_and_stays_out_of_the_history() {
         let chats = chats();
         let reply = chats.say(1, 7, "やあ", now()).await;
         assert_eq!(
             reply,
-            "Groq API 呼び出し中にエラー発生: GROQ_API_KEY が設定されていない。"
+            "ヴォルデモートでも手こずるとはな… 少し待ってから試せ。"
         );
+        assert_eq!(reply, FAILED_REPLY);
         let history = chats.history(1, 7);
-        assert_eq!(history.len(), 2);
-        assert_eq!(history[0].role, Role::User);
-        assert_eq!(history[1].content, reply);
+        assert_eq!(
+            history,
+            [Turn {
+                role: Role::User,
+                content: "やあ".into()
+            }]
+        );
         assert!(chats.history(1, 8).is_empty());
         assert!(chats.history(2, 7).is_empty());
     }
 
-    /// 履歴は直近 20 件。古い方から落とすこと。
+    /// 履歴は直近 20 件。古い方から落とすこと（失敗しても発言は積むので、失敗が続いても 20 件で止まる）。
     #[tokio::test]
     async fn the_history_keeps_the_last_twenty() {
         let chats = chats();
-        for i in 0..12 {
+        for i in 0..22 {
             chats.say(1, 7, &format!("q{i}"), now()).await;
         }
         let history = chats.history(1, 7);
         assert_eq!(history.len(), 20);
         assert_eq!(history[0].content, "q2");
-        assert_eq!(history[18].content, "q11");
-        assert_eq!(history[19].role, Role::Assistant);
+        assert_eq!(history[19].content, "q21");
+        assert!(history.iter().all(|t| t.role == Role::User));
     }
 
     /// 掃除は 20 通に 1 回。1 時間を超えて使われていない会話だけを忘れること（ちょうど 1 時間は残す）。
@@ -628,19 +648,19 @@ mod tests {
         for _ in 0..17 {
             chats.touch(1, 8, 100.0);
         }
-        assert_eq!(chats.history(1, 7).len(), 2, "20 通めの前に忘れた");
+        assert_eq!(chats.history(1, 7).len(), 1, "20 通めの前に忘れた");
         // 20 通め: 7 はちょうど 1 時間（残す）、9 は 3599.5 秒（残す）。
         chats.touch(1, 8, 3600.0);
-        assert_eq!(chats.history(1, 7).len(), 2, "ちょうど 1 時間で忘れた");
-        assert_eq!(chats.history(1, 9).len(), 2);
+        assert_eq!(chats.history(1, 7).len(), 1, "ちょうど 1 時間で忘れた");
+        assert_eq!(chats.history(1, 9).len(), 1);
         // 次の 20 通め: 7 は 3600.4 秒（忘れる）、9 は 3599.9 秒（残す）。
         for _ in 0..19 {
             chats.touch(1, 8, 3600.4);
         }
-        assert_eq!(chats.history(1, 7).len(), 2, "20 通めの前に忘れた");
+        assert_eq!(chats.history(1, 7).len(), 1, "20 通めの前に忘れた");
         chats.touch(1, 8, 3600.4);
         assert!(chats.history(1, 7).is_empty(), "1 時間を超えても覚えている");
-        assert_eq!(chats.history(1, 9).len(), 2);
+        assert_eq!(chats.history(1, 9).len(), 1);
     }
 
     /// 切り方の境目（改行が 1000 文字めより後ろにあるときだけ、そこで切る）。

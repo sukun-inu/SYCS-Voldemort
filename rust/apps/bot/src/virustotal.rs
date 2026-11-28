@@ -10,8 +10,10 @@
 //!    それ以外は URL として調べる
 //! 4. URL の結果は覚えておく（成功は 6 時間、失敗は短く。到達できない相手をメッセージのたびに叩き直さない）
 //!
-//! 解析は終わるまで間隔を空けて問い合わせ続ける（vt-py と同じく全体の上限は無い。見直しの候補として
-//! 控えてある）。失敗はどれも `status=error` の結果として返し、呼ぶ側の検査を止めない。
+//! 解析は終わるまで 20 秒おきに問い合わせる（vt-py と同じ）。全体の上限（`VT_ANALYSIS_TIMEOUT_SECONDS`、既定 300 秒）を
+//! 超えたら諦めて `analysis_timeout>300` の失敗にする（Python の `_wait_for_analysis`。上限が無いと、終わらない解析で
+//! そのメッセージの検査が返らなかった。rust-09 の (b)）。失敗はどれも `status=error` の結果として返し、呼ぶ側の検査を
+//! 止めない。
 //!
 //! 結果の `reason` の書き方（`('QuotaExceededError', 'quota')` など）も Python と同じ形にしてある。
 
@@ -37,6 +39,8 @@ const FAILURE_CACHE_MAX: usize = 1000;
 const WEB_TIMEOUT: Duration = Duration::from_secs(300);
 /// vt-py が解析の終わりを問い合わせる間隔。
 pub const POLL_INTERVAL: Duration = Duration::from_secs(20);
+/// 解析の終わりを待つ全体の上限の既定（秒）。
+pub const DEFAULT_ANALYSIS_TIMEOUT_SECONDS: i64 = 300;
 
 /// 設定。環境変数の名前・既定・下限は Python と同じ。
 #[derive(Clone)]
@@ -55,6 +59,8 @@ pub struct VtConfig {
     pub api_base: String,
     /// 解析の終わりを問い合わせる間隔（本番は 20 秒。テストで短くする）。
     pub poll_interval: Duration,
+    /// 解析の終わりを待つ全体の上限（`VT_ANALYSIS_TIMEOUT_SECONDS`、既定 300・下限は問い合わせの間隔の 20）。
+    pub analysis_timeout: Duration,
 }
 
 /// 鍵は表示しない（設定をログに出しても漏れないように）。
@@ -80,6 +86,11 @@ impl VtConfig {
             max_download_bytes: int("VT_MAX_DOWNLOAD_BYTES", 20 * 1024 * 1024, 1) as u64,
             api_base: "https://www.virustotal.com".into(),
             poll_interval: POLL_INTERVAL,
+            analysis_timeout: Duration::from_secs(int(
+                "VT_ANALYSIS_TIMEOUT_SECONDS",
+                DEFAULT_ANALYSIS_TIMEOUT_SECONDS,
+                POLL_INTERVAL.as_secs() as i64,
+            ) as u64),
         }
     }
 }
@@ -489,18 +500,30 @@ impl VirusTotal {
         Ok(Self::data(response).await?["attributes"].clone())
     }
 
-    /// 解析が終わるまで問い合わせ、`stats` を返す（vt-py の `_wait_for_analysis_completion`）。
+    /// 解析が終わるまで問い合わせ、`stats` を返す。Python の `_wait_for_analysis`。
+    ///
+    /// 問い合わせ方は vt-py の `_wait_for_analysis_completion` と同じ（すぐに 1 回、終わっていなければ間隔を空けて
+    /// 問い合わせ直す）。全体の上限（`analysis_timeout`）を超えたら `analysis_timeout>秒数` の失敗にする。待つのは
+    /// 残りの時間までにする。
     async fn wait_for_analysis(&self, api_key: &str, analysis: &Value) -> Result<Value, ApiError> {
         let id = analysis["id"]
             .as_str()
             .ok_or_else(|| ApiError::Other("analysis has no id".into()))?
             .to_string();
+        let deadline = tokio::time::Instant::now() + self.config.analysis_timeout;
         loop {
             let attrs = self.get_object(api_key, &format!("/analyses/{id}")).await?;
             if attrs["status"] == "completed" {
                 return Ok(attrs["stats"].clone());
             }
-            tokio::time::sleep(self.config.poll_interval).await;
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() {
+                return Err(ApiError::Other(format!(
+                    "analysis_timeout>{}",
+                    python_seconds(self.config.analysis_timeout)
+                )));
+            }
+            tokio::time::sleep(self.config.poll_interval.min(remaining)).await;
         }
     }
 
@@ -558,6 +581,15 @@ fn join(base: &str, location: &str) -> Option<String> {
         .map(|u| u.to_string())
 }
 
+/// 秒数を Python の `str()` と同じに書く（整数の秒なら `300`、そうでなければ `0.05` のように）。
+fn python_seconds(d: Duration) -> String {
+    if d.subsec_nanos() == 0 {
+        d.as_secs().to_string()
+    } else {
+        format!("{:?}", d.as_secs_f64())
+    }
+}
+
 fn python_str(value: &Value) -> String {
     match value {
         Value::String(s) => s.clone(),
@@ -606,14 +638,29 @@ mod tests {
         assert_eq!(c.max_download_bytes, 20 * 1024 * 1024);
         assert_eq!(c.api_base, "https://www.virustotal.com");
         assert_eq!(c.poll_interval, Duration::from_secs(20));
+        assert_eq!(c.analysis_timeout, Duration::from_secs(300));
         assert_eq!(MALICIOUS_THRESHOLD, 10);
-        // 下限（5 秒・10 秒）を下回る値は下限に丸める。
+        // 下限（5 秒・10 秒・問い合わせの間隔の 20 秒）を下回る値は下限に丸める。
         let low = VtConfig::from_env(&Env::from_fn(|k| match k {
             "VT_SCAN_TIMEOUT_SECONDS" => Some("1".into()),
             "VT_FAILURE_CACHE_TTL_SECONDS" => Some("1".into()),
+            "VT_ANALYSIS_TIMEOUT_SECONDS" => Some("19".into()),
             _ => None,
         }));
         assert_eq!(low.scan_timeout, Duration::from_secs(5));
         assert_eq!(low.failure_ttl_seconds, 10.0);
+        assert_eq!(low.analysis_timeout, Duration::from_secs(20));
+        let set = VtConfig::from_env(&Env::from_fn(|k| {
+            (k == "VT_ANALYSIS_TIMEOUT_SECONDS").then(|| "45".to_string())
+        }));
+        assert_eq!(set.analysis_timeout, Duration::from_secs(45));
+    }
+
+    /// 上限の秒数の書き方が Python の str() と同じであること（理由の `analysis_timeout>…` に入る）。
+    #[test]
+    fn timeout_seconds_read_like_python() {
+        assert_eq!(python_seconds(Duration::from_secs(300)), "300");
+        assert_eq!(python_seconds(Duration::from_millis(50)), "0.05");
+        assert_eq!(python_seconds(Duration::from_millis(1500)), "1.5");
     }
 }

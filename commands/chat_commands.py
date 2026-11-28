@@ -3,7 +3,7 @@ from typing import cast
 
 import discord
 
-from services.chatgpt_service import ChatGPT
+from services.chatgpt_service import FAILURE_REPLY, ChatGPT
 from services.discord_utils import send_large_message
 from services.logging_service import log_action
 from services.settings_store import get_response_channel_id
@@ -85,7 +85,7 @@ async def handle_chatgpt_message(bot: discord.Client, message: discord.Message):
             user=message.author,
             fields={"エラー": str(e)},
         )
-        await message.channel.send("ヴォルデモートでも手こずるとはな… 少し待ってから試せ。")
+        await message.channel.send(FAILURE_REPLY)
         return
 
     await send_large_message(channel, response)

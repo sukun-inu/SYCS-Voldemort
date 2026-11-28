@@ -230,8 +230,12 @@ services:
       - METALPRICE_API_KEY=${METALPRICE_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GROQ_API_KEY=${GROQ_API_KEY}
+      # Groq の回数制限の retry-after に従って待つ長さの上限（秒）。これより長い指示は、この秒数だけ待って再試行する。
+      - GROQ_MAX_RETRY_AFTER_SECONDS=${GROQ_MAX_RETRY_AFTER_SECONDS:-30}
       - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
       - VT_MAX_DOWNLOAD_BYTES=${VT_MAX_DOWNLOAD_BYTES:-20971520}
+      # VirusTotal の解析の終わりを待つ全体の上限（秒、下限 20）。超えたら「走査できなかった（注意）」にする。
+      - VT_ANALYSIS_TIMEOUT_SECONDS=${VT_ANALYSIS_TIMEOUT_SECONDS:-300}
       # Bot 設定ファイルの保存先（ボリュームマウント先に合わせる）
       - SETTINGS_DIR=/app/data
       # ギルドごとの設定の保存先。postgres は user_state_audit の表（Bot と管理画面で

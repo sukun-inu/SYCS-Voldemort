@@ -6,7 +6,8 @@
 //! - serenity のメッセージとキャッシュから、検査の中身（[`Post`]）を discord.py と同じに組み立てること
 //!   （メッセージに付いてくるロールを使う・低い順に並べる・サーバーに無いロールは捨てる）
 //! - 危険な投稿で、進み具合の Embed → メッセージの削除 → ロールを低い順に 1 つずつ剥がす（権限が足りない
-//!   ところで止まる）→ 結果の Embed → ログ、の順に送ること。剥がす理由が監査ログに付くこと
+//!   ところで止まる）→ 結果の Embed → ログ（剥がせたロールと残ったロールも）、の順に送ること。剥がす理由が
+//!   監査ログに付くこと
 //!
 //! 設定のキャッシュに Postgres が要る（`SYCS_TEST_DATABASE_URL`）。手元の `cargo test` では飛ばし、CI は
 //! `--include-ignored` で必ず回す（`crates/sycs-core/tests/postgres.rs` と同じ）。
@@ -308,6 +309,14 @@ async fn a_dangerous_post_is_deleted_and_roles_are_stripped_lowest_first() {
     assert_eq!(last["author"]["name"], "nelly");
     assert_eq!(last["fields"][0]["value"], "VT_DANGEROUS, GPT:SAFE");
     assert_eq!(last["fields"][2]["value"], "1");
+    // 剥がした結果（剥がせた 12・11 と、権限が足りずに残った 13・14）も出す（rust-09 の (i)）。
+    assert_eq!(last["fields"][4]["name"], "剥がしたロール");
+    assert_eq!(last["fields"][4]["value"], "<@&12> <@&11>");
+    assert_eq!(
+        last["fields"][5]["name"],
+        "剥がせなかったロール（権限不足）"
+    );
+    assert_eq!(last["fields"][5]["value"], "<@&13> <@&14>");
 }
 
 /// ログチャンネルが無くても・ログを止めていても、消す・剥がすは行うこと（報告できないことを理由に見逃さない）。
