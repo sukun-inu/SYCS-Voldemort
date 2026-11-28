@@ -48,6 +48,7 @@ pub fn default_routes(site: &Arc<Site>) -> Vec<Route> {
     // /admin/api/incidents は A7 が dashboard_routes の後ろに足す）。
     routes.extend(views::auth_routes(site));
     routes.extend(views::dashboard_routes(site));
+    routes.extend(crate::monitor::dashboard_routes()); // A7（/admin/api/metrics・incidents）
     // api/apps（A5 の読む側。A6 の書く側は crate::apps::routes の後ろに足す）。
     routes.extend(crate::apps::routes(site));
     routes.extend(crate::users::routes()); // A4（api/users）
@@ -55,7 +56,8 @@ pub fn default_routes(site: &Arc<Site>) -> Vec<Route> {
     routes.extend(legacy_redirects());
     // 公開ページ（A3。/・/guide・/privacy・/terms・旧 URL の 301 の 3 本）。
     routes.extend(views::public_routes(site));
-    // /metrics（A7）がこの位置に足す。
+    // /metrics（A7。METRICS_PATH。app に直に足した経路なので既定の回数の制限が掛かる）。
+    routes.extend(crate::monitor::metrics_routes());
     routes
 }
 
@@ -147,6 +149,8 @@ mod tests {
             "/admin/guilds",
             "/admin/guilds/select",
             "/admin/overview",
+            "/admin/api/metrics",
+            "/admin/api/incidents",
         ] {
             want.push((path.to_string(), false));
         }
@@ -161,6 +165,7 @@ mod tests {
             "/admin/guide",
             "/admin/privacy",
             "/admin/terms",
+            "/metrics",
         ] {
             want.push((path.to_string(), true));
         }

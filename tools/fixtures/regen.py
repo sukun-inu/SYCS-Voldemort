@@ -72,6 +72,10 @@ GENERATORS = [
     # 管理画面の設定パネルの読む側（偽物の Discord・TTS に当てる。A5）と、値を読む関数（設定の JSON → 答え）。
     ("admin_apps_read", ".", ["rust/apps/admin/tests/fixtures/apps_read/generate.py"], None, False),
     ("admin_getters", ".", ["rust/apps/admin/tests/fixtures/getters/generate.py"], None, False),
+    # 管理画面の監視（A7）: /admin/api/metrics・incidents と整形の関数・/proc の読み方・監視の巡回（monitor）、
+    # Netdata が読む /metrics の接続元の判定と本文（prometheus）。どちらも道具が自分の隣に書き出す。
+    ("admin_monitor", ".", ["rust/apps/admin/tests/fixtures/monitor/generate.py"], None, False),
+    ("admin_prometheus", ".", ["rust/apps/admin/tests/fixtures/prometheus/generate.py"], None, False),
 ]
 
 

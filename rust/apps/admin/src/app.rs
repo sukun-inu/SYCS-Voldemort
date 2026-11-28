@@ -39,6 +39,7 @@ use tracing::{error, warn};
 
 use crate::errors::{self, ErrorPage, Failure, HttpError, Pages};
 use crate::metrics::{AdminMetrics, Clock, Incidents, Snapshot};
+use crate::monitor::Monitor;
 use crate::python;
 use crate::ratelimit::{self, Limiter};
 use crate::routing::{self, Found, Route};
@@ -407,6 +408,7 @@ pub struct AdminApp {
     random: Arc<dyn Random>,
     pages: Arc<dyn Pages>,
     users: Arc<dyn UserStates>,
+    monitor: Arc<Monitor>,
 }
 
 impl std::fmt::Debug for AdminApp {
@@ -422,6 +424,7 @@ impl AdminApp {
     /// 作る。`routes` は [`crate::routes::default_routes`]（テストは後ろに足してよい）。
     pub fn new(config: Config, secret: &str, deps: Deps, routes: Vec<Route>) -> Self {
         let random = Arc::clone(&deps.random);
+        let monitor = Arc::new(Monitor::unconfigured(Arc::clone(&deps.clock)));
         let incidents = Incidents::new(
             config.monitor_dir.clone(),
             Arc::clone(&deps.clock),
@@ -436,8 +439,21 @@ impl AdminApp {
             random: deps.random,
             pages: deps.pages,
             users: Arc::new(users::Unconfigured),
+            monitor,
             config,
         }
+    }
+
+    /// 監視（A7。`/admin/api/metrics`・`/admin/api/incidents`・`/metrics`・監視の巡回）が使うものを差し込む（本番は
+    /// [`Monitor::from_env`]）。差し込まなければ [`Monitor::unconfigured`]（このホストの `/proc`・Valkey なし）。
+    pub fn with_monitor(mut self, monitor: Arc<Monitor>) -> Self {
+        self.monitor = monitor;
+        self
+    }
+
+    /// 監視が使うもの。
+    pub fn monitor(&self) -> &Arc<Monitor> {
+        &self.monitor
     }
 
     /// 利用者の状態の読み出し口を差し込む（本番は Postgres の [`users::store::PgUserStates`]。A4）。差し込まなければ、

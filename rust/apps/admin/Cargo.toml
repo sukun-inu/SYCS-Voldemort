@@ -22,6 +22,8 @@ hmac = { workspace = true }
 # テンプレート（webapp_admin/templates/ を Jinja2 と同じ書き方のまま読む。A2）。
 minijinja = { workspace = true, features = ["loader"] }
 percent-encoding = { workspace = true }
+# /metrics が Valkey の sycs:metrics: の下を読む（SCAN・MGET。A7）。sycs-core の報告口と同じ版・同じ features。
+redis = { workspace = true, features = ["tokio-comp", "connection-manager"] }
 # 経路の引き方を Starlette の正規表現と同じにする（`$` の扱いだけ書き換える）。
 regex = { workspace = true }
 # Discord の API（ログインの OAuth と、Bot のトークンで引くサーバーとメンバー。A3）。Bot と同じ版・同じ TLS（rustls）。
@@ -38,4 +40,5 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+# 偽物の Valkey（RESP を話す小さな受け口）を読み書きする（A7）。
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
