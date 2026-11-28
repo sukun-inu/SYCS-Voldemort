@@ -92,14 +92,47 @@ jobs:
           done
 
   image:
-    name: Bot のイメージ（本番の CPU で起動できるか）
+    name: Bot のイメージ（本番の CPU で起動できるか・main なら GHCR に置く）
     # runner の上で docker build する（上の rust ジョブはコンテナの中なので docker が無い）。
     # cpu-check の段が、動かす段と同じ中身を QEMU の Sandy Bridge のふりで起動する。
     # 段の中身と理由は docker/bot-rs.Dockerfile。
+    #
+    # main への push のときは、動かす段のイメージを GHCR（ghcr.io/<持ち主>/sycs-voldemort-bot-rs）に置く。
+    # 本番はこれを取ってくるだけで、本番のサーバーでは Rust をコンパイルしない（切り替えは docs/UPGRADE.ja.md の 5.）。
+    # **テスト（rust ジョブ）が通ってから置く**（needs）。落ちた版を本番が取ってこないように。
+    # 名札は :main（いちばん新しい main）と :sha-<コミット>（版を決め打ちにしたいとき・戻したいとき）。
+    needs: rust
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: リポジトリを取得
         uses: actions/checkout@v7
 
       - name: ビルドして、本番の CPU のふりで起動する
         run: docker build -f docker/bot-rs.Dockerfile --target cpu-check -t sycs-bot-rs:cpu-check .
+
+      - name: 動かす段のイメージを作る（上と同じ層を使うので、ほとんど作り直さない）
+        # source のラベルで、GHCR のパッケージがこのリポジトリにつながる（書く権限をリポジトリから引き継ぐ）。
+        run: >-
+          docker build -f docker/bot-rs.Dockerfile
+          --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}"
+          --label "org.opencontainers.image.revision=${{ github.sha }}"
+          -t sycs-bot-rs:final .
+
+      - name: GHCR に置く（main への push のときだけ）
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          SHA: ${{ github.sha }}
+        run: |
+          # GHCR の名前は小文字でなければならない（持ち主の名前に大文字が入っていても通るように）。
+          owner=$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          image="ghcr.io/$owner/sycs-voldemort-bot-rs"
+          printf '%s' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          for tag in main "sha-$SHA"; do
+            docker tag sycs-bot-rs:final "$image:$tag"
+            docker push "$image:$tag"
+          done
