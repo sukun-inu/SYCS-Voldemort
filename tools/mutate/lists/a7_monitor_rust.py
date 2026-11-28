@@ -86,7 +86,7 @@ MUTS = [
     (
         "NaN を例外にせず書く",
         F,
-        '        return Err(Crash::new("ValueError", "cannot convert float NaN to integer"));',
+        '        return Err(Crash::new(\n            "ValueError",\n            "cannot convert float NaN to integer",\n        ));',
         '        return Ok("NaN".to_string());',
     ),
     (
