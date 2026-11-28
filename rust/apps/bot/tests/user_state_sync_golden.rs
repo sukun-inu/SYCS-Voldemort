@@ -946,8 +946,19 @@ async fn the_lock_serialises_and_the_loop_purges() {
         3,
         "掃除の前に同期している"
     );
-    let quiet = count(&pool, "SELECT count(*) FROM user_state_event").await;
-    assert_eq!(quiet, 0, "定期の同期は、既定では履歴を書かない");
+    // 定期の同期も、既定で見つけた違いを履歴に書く（USER_STATE_AUTO_REPAIR_WRITE_EVENTS の既定は真。本人の決定
+    // 2026-11-28、決めごとの U6）。同じ例で起動の後の同期が書く 4 行と同じ数で、出どころは auto_repair。
+    let written = count(&pool, "SELECT count(*) FROM user_state_event").await;
+    let from_repair = count(
+        &pool,
+        "SELECT count(*) FROM user_state_event WHERE payload_json = '{\"source\": \"auto_repair\"}'",
+    )
+    .await;
+    assert_eq!(
+        (written, from_repair),
+        (4, 4),
+        "定期の同期は、既定で見つけた違いを履歴に書く"
+    );
     task.abort();
 }
 

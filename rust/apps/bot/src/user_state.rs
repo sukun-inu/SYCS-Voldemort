@@ -65,8 +65,9 @@ pub const AUDIT_WINDOW_SECONDS: i64 = 20;
 pub const AUDIT_RETRIES: u32 = 2;
 /// 監査ログを探し直すまでの待ち。Discord 側の反映が数百ミリ秒〜数秒遅れることがある。
 pub const AUDIT_RETRY_DELAY: Duration = Duration::from_millis(600);
-/// 監査ログを 1 回に読む件数。
-const AUDIT_LIMIT: u8 = 10;
+/// 監査ログを 1 回に読む件数。Python の `_AUDIT_LOG_LIMIT`（50）。以前は 10 件で、短い間にキックや BAN が 10 件を
+/// 超えると実行者が分からなくなっていた（本人の決定 2026-11-28、rust-10 の (c)・決めごとの U2）。時間の枠は変えない。
+pub const AUDIT_LIMIT: u8 = 50;
 
 /// 表と索引を作る文。Python（SQLAlchemy）が作るものと同じ形（突き合わせで確かめた）。
 pub const DDL: &[&str] = &[

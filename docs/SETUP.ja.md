@@ -98,7 +98,7 @@ docker compose up -d --build
 | `USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS` | 任意 | 定期修復の実行間隔秒（既定 `1800`） |
 | `USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS` | 任意 | 起動後、最初の定期修復までの待機秒（既定 `180`） |
 | `USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD` | 任意 | 1ギルドあたりの整合性修復対象上限（既定 `50000`） |
-| `USER_STATE_AUTO_REPAIR_WRITE_EVENTS` | 任意 | 定期修復時にも同期イベントを書き込む（既定 `false`） |
+| `USER_STATE_AUTO_REPAIR_WRITE_EVENTS` | 任意 | 定期の同期（30 分ごと）でも、見つけた違い（記録に無かった人・BAN・抜けていた人）を履歴に書く（既定 `true`。違いが無ければ書かない） |
 | `USER_STATE_RETENTION_DAYS` | 任意 | 状態監査履歴の保持日数（既定 `3650` ＝10年）。**10年は下限でもあり、これより短くはできない**（監査履歴のため）。短い値を設定しても `3650` に丸められ、警告がログに出る |
 | `USER_STATE_CLEANUP_INTERVAL_SECONDS` | 任意 | 古い履歴削除の実行間隔秒（既定 `21600`） |
 | `GUILD_SETTINGS_ABANDONED_AFTER_DAYS` | 任意 | 放棄されたギルド設定を掃除するまでの日数（既定 `3650` ＝10年）。**Bot がそのサーバーに居ないこと**と併せて両方を満たしたときだけ消す。居るサーバーの設定は何年経っても消えない |

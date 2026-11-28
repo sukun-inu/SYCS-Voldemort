@@ -159,6 +159,38 @@ class FindRecentAuditEntryTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
+class AuditLogLimitAndRepairEventsDefaultTests(unittest.TestCase):
+    """監査ログを読む件数（rust-10 の (c)・U2）と、定期の同期で履歴を書く既定（rust-10 の (j)・U6）。"""
+
+    def test_the_audit_log_is_read_fifty_entries_at_a_time(self):
+        """1 回に 50 件読む（以前は 10 件。直す前のコードでは limit=10 なので落ちる）。"""
+        seen = {}
+
+        async def audit_logs(*_args, **kwargs):
+            seen.update(kwargs)
+            for entry in ():
+                yield entry
+
+        me = SimpleNamespace(guild_permissions=SimpleNamespace(view_audit_log=True))
+        guild = SimpleNamespace(me=me, audit_logs=audit_logs)
+        result = asyncio.run(
+            uss._find_recent_audit_entry(
+                guild,
+                action=discord.AuditLogAction.kick,
+                target_user_id=1,
+                retries=0,
+            )
+        )
+        self.assertIsNone(result)
+        self.assertEqual(seen.get("limit"), 50)
+
+    def test_the_periodic_sync_writes_history_by_default(self):
+        """USER_STATE_AUTO_REPAIR_WRITE_EVENTS を設定しなければ真（直す前の既定は偽なので落ちる）。"""
+        if "USER_STATE_AUTO_REPAIR_WRITE_EVENTS" in os.environ:
+            self.skipTest("USER_STATE_AUTO_REPAIR_WRITE_EVENTS が設定されているので、既定は見られない")
+        self.assertIs(uss._USER_STATE_AUTO_REPAIR_WRITE_EVENTS, True)
+
+
 class FetchGuildMembersForSyncTests(unittest.TestCase):
     """_USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD による打ち切りまわりを固定する。"""
 

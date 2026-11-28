@@ -237,12 +237,16 @@ async def _on_member_join(bot: Bot, member: discord.Member) -> None:
 
 
 async def _on_member_remove(bot: Bot, member: discord.Member) -> None:
-    """退出が実は kick だったかを監査ログで見分け、event_type/status_after を
-    member_leave から member_kick へ差し替える。この監査ログ照会自体は
-    _safe ではなく try/except+logger.debug で囲む——ここで例外が出ても、
-    以降の log_action・record_user_state_event は member_leave 扱いのまま
-    必ず実行したいため（監査ログの照会失敗と、退出そのものの記録は独立の
-    事象）。ログ通知と永続化を別の _safe にくるむ理由は
+    """退出をログチャンネルに出し、お別れの文を送ってから、キックだったかを監査ログで見分けて記録する。
+
+    **ログとお別れを先に出す**（本人の決定 2026-11-28、トラッカーの rust-10 の (b)・決めごとの U1）。
+    監査ログは、反映の遅れに備えて見つからなければ 0.6 秒おきに 2 回まで読み直すので、ふつうの退出では
+    毎回 1.2 秒あまり待つ。ログとお別れの中身はキックかどうかで変わらないので、待たせない。記録
+    （event_type・status_after・実行者・理由）は、これまでどおり監査ログを見てから書く。
+
+    監査ログの照会は _safe ではなく try/except+logger.debug で囲む——ここで例外が出ても、
+    record_user_state_event は member_leave 扱いのまま必ず実行したいため（監査ログの照会失敗と、
+    退出そのものの記録は独立の事象）。ログ通知と永続化を別の _safe にくるむ理由は
     _handle_nickname_change と同じ。
     """
     roles = [r.mention for r in member.roles if not r.is_default()]
@@ -250,20 +254,6 @@ async def _on_member_remove(bot: Bot, member: discord.Member) -> None:
     status_after = "left"
     actor_user: discord.abc.User | None = None
     audit_reason: str | None = None
-
-    try:
-        kick_entry = await _find_recent_audit_entry(
-            member.guild,
-            action=discord.AuditLogAction.kick,
-            target_user_id=member.id,
-        )
-        if kick_entry is not None:
-            event_type = "member_kick"
-            status_after = "kicked"
-            actor_user = kick_entry.user
-            audit_reason = kick_entry.reason
-    except Exception as e:
-        logger.debug("[BOT_SETUP] on_member_remove kick lookup failed: %s", e)
 
     await _safe(
         log_action(
@@ -280,6 +270,22 @@ async def _on_member_remove(bot: Bot, member: discord.Member) -> None:
         ),
         "on_member_remove log_action",
     )
+
+    await _safe(send_goodbye(member), "on_member_remove goodbye")
+
+    try:
+        kick_entry = await _find_recent_audit_entry(
+            member.guild,
+            action=discord.AuditLogAction.kick,
+            target_user_id=member.id,
+        )
+        if kick_entry is not None:
+            event_type = "member_kick"
+            status_after = "kicked"
+            actor_user = kick_entry.user
+            audit_reason = kick_entry.reason
+    except Exception as e:
+        logger.debug("[BOT_SETUP] on_member_remove kick lookup failed: %s", e)
 
     await _safe(
         record_user_state_event(
@@ -304,8 +310,6 @@ async def _on_member_remove(bot: Bot, member: discord.Member) -> None:
         ),
         "on_member_remove user_state persist",
     )
-
-    await _safe(send_goodbye(member), "on_member_remove goodbye")
 
 
 # --------------------------

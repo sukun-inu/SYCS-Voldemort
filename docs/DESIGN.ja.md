@@ -762,8 +762,9 @@ class BypassResult(NamedTuple):
 - **同期**: 起動時に全ギルドのメンバーと BAN 一覧を取り、現在の状態を合わせる。
   `fetch_members` が権限で失敗したらキャッシュに落ちる
 - **整合性修復**: 30分ごとに `repair_user_state_integrity()` が、イベントの
-  履歴と現在の状態の食い違いを直す。既定では修復時にイベントを書かない
-  （`USER_STATE_AUTO_REPAIR_WRITE_EVENTS`）
+  履歴と現在の状態の食い違いを直す。同期で見つけた違い（記録に無かった人・BAN・
+  抜けていた人）は、既定で履歴にも書く（`USER_STATE_AUTO_REPAIR_WRITE_EVENTS`。
+  以前の既定は書かないで、取りこぼした退出が履歴に残らなかった）
 - **保持期間**: 既定3650日（10年）。`USER_STATE_RETENTION_DAYS` は
   **伸ばす方向にしか受け付けない**（`minimum=3650`）。誤って短い値を入れた
   だけで監査履歴が消える事故を防ぐため
