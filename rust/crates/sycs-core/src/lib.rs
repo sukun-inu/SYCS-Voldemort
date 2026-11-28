@@ -11,6 +11,7 @@
 //! - [`metrics`] Valkey への心拍と数値（Python の `services/metrics_registry.py`）
 //! - [`settings`] ギルドごとの設定の読み込み（Python の `services/settings_pg.py`）
 //! - [`signals`] 管理画面から Bot への依頼の取り出し（Python の `services/dev_signals.py`）
+//! - [`user_state`] 利用者の状態の表の形と、自己修復で直りうる失敗（Python の `webapp/models.py`）
 
 pub mod db;
 pub mod env;
@@ -20,3 +21,4 @@ pub mod settings;
 pub mod signals;
 pub mod ttl_cache;
 pub mod url_safety;
+pub mod user_state;

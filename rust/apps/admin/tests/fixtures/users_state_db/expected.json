@@ -1,0 +1,2578 @@
+{
+ "generated_by": "rust/apps/admin/tests/fixtures/users_state_db/generate.py",
+ "steps": [
+  {
+   "name": "list_all",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 666666666666666666,
+     "username": "Active_User",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-21T03:31:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 555555555555555555,
+     "username": "member",
+     "display_name": "メンバー",
+     "avatar_url": "https://cdn.discordapp.com/avatars/555555555555555555/abc.png",
+     "status": "banned",
+     "is_in_guild": false,
+     "is_banned": true,
+     "is_timed_out": true,
+     "timed_out_until": {
+      "$datetime": "2999-01-01T00:00:00+00:00"
+     },
+     "roles": [
+      {
+       "id": 1234567890123456789,
+       "name": "大きいID",
+       "color": 0
+      },
+      {
+       "id": 1,
+       "name": "常連"
+      },
+      "壊れた要素"
+     ],
+     "abilities": {
+      "administrator": false,
+      "trusted_user": true,
+      "ban_members": true
+     },
+     "last_event_type": "member_ban",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-02T03:04:05.678901+00:00"
+     },
+     "last_joined_at": {
+      "$datetime": "2026-08-01T00:00:00+00:00"
+     },
+     "last_left_at": {
+      "$datetime": "2026-08-21T03:29:59+00:00"
+     },
+     "updated_at": {
+      "$datetime": "2026-08-21T03:30:00.500000+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 123,
+     "username": "abc_def",
+     "display_name": "ABC Def",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "sync_member_on_ready",
+     "last_event_at": {
+      "$datetime": "2026-08-20T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 1234,
+     "username": null,
+     "display_name": "Ｚｅｎ",
+     "avatar_url": null,
+     "status": "left",
+     "is_in_guild": false,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": null,
+     "abilities": null,
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-19T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 7777,
+     "username": "dup",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [
+      {
+       "name": "b",
+       "id": 3
+      }
+     ],
+     "abilities": {
+      "kick_members": false,
+      "x": 1.5,
+      "nested": {
+       "y": [
+        null,
+        true
+       ]
+      }
+     },
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 9223372036854775807,
+     "username": "MAX",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": "text",
+     "abilities": [
+      1,
+      2
+     ],
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 51212,
+     "username": "percent%",
+     "display_name": "under_score",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": {
+      "$datetime": "2001-01-01T00:00:00+00:00"
+     },
+     "roles": [
+      {
+       "name": "あ😀"
+      },
+      {
+       "name": "tab\tnew\nline"
+      }
+     ],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-17T05:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": {
+      "$datetime": "2026-08-16T03:00:00.000001+00:00"
+     },
+     "last_left_at": {
+      "$datetime": "2026-08-16T04:00:00+00:00"
+     },
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 12,
+     "username": "ユーザー十二",
+     "display_name": "Twelve",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": null,
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-22T00:00:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "count_all",
+   "fn": "count_user_states",
+   "result": 8
+  },
+  {
+   "name": "list_empty_query",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 666666666666666666,
+     "username": "Active_User",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-21T03:31:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 555555555555555555,
+     "username": "member",
+     "display_name": "メンバー",
+     "avatar_url": "https://cdn.discordapp.com/avatars/555555555555555555/abc.png",
+     "status": "banned",
+     "is_in_guild": false,
+     "is_banned": true,
+     "is_timed_out": true,
+     "timed_out_until": {
+      "$datetime": "2999-01-01T00:00:00+00:00"
+     },
+     "roles": [
+      {
+       "id": 1234567890123456789,
+       "name": "大きいID",
+       "color": 0
+      },
+      {
+       "id": 1,
+       "name": "常連"
+      },
+      "壊れた要素"
+     ],
+     "abilities": {
+      "administrator": false,
+      "trusted_user": true,
+      "ban_members": true
+     },
+     "last_event_type": "member_ban",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-02T03:04:05.678901+00:00"
+     },
+     "last_joined_at": {
+      "$datetime": "2026-08-01T00:00:00+00:00"
+     },
+     "last_left_at": {
+      "$datetime": "2026-08-21T03:29:59+00:00"
+     },
+     "updated_at": {
+      "$datetime": "2026-08-21T03:30:00.500000+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 123,
+     "username": "abc_def",
+     "display_name": "ABC Def",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "sync_member_on_ready",
+     "last_event_at": {
+      "$datetime": "2026-08-20T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 1234,
+     "username": null,
+     "display_name": "Ｚｅｎ",
+     "avatar_url": null,
+     "status": "left",
+     "is_in_guild": false,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": null,
+     "abilities": null,
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-19T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 7777,
+     "username": "dup",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [
+      {
+       "name": "b",
+       "id": 3
+      }
+     ],
+     "abilities": {
+      "kick_members": false,
+      "x": 1.5,
+      "nested": {
+       "y": [
+        null,
+        true
+       ]
+      }
+     },
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 9223372036854775807,
+     "username": "MAX",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": "text",
+     "abilities": [
+      1,
+      2
+     ],
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 51212,
+     "username": "percent%",
+     "display_name": "under_score",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": {
+      "$datetime": "2001-01-01T00:00:00+00:00"
+     },
+     "roles": [
+      {
+       "name": "あ😀"
+      },
+      {
+       "name": "tab\tnew\nline"
+      }
+     ],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-17T05:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": {
+      "$datetime": "2026-08-16T03:00:00.000001+00:00"
+     },
+     "last_left_at": {
+      "$datetime": "2026-08-16T04:00:00+00:00"
+     },
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 12,
+     "username": "ユーザー十二",
+     "display_name": "Twelve",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": null,
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-22T00:00:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "count_blank_query",
+   "fn": "count_user_states",
+   "result": 8
+  },
+  {
+   "name": "list_first_page",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 666666666666666666,
+     "username": "Active_User",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-21T03:31:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 555555555555555555,
+     "username": "member",
+     "display_name": "メンバー",
+     "avatar_url": "https://cdn.discordapp.com/avatars/555555555555555555/abc.png",
+     "status": "banned",
+     "is_in_guild": false,
+     "is_banned": true,
+     "is_timed_out": true,
+     "timed_out_until": {
+      "$datetime": "2999-01-01T00:00:00+00:00"
+     },
+     "roles": [
+      {
+       "id": 1234567890123456789,
+       "name": "大きいID",
+       "color": 0
+      },
+      {
+       "id": 1,
+       "name": "常連"
+      },
+      "壊れた要素"
+     ],
+     "abilities": {
+      "administrator": false,
+      "trusted_user": true,
+      "ban_members": true
+     },
+     "last_event_type": "member_ban",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-02T03:04:05.678901+00:00"
+     },
+     "last_joined_at": {
+      "$datetime": "2026-08-01T00:00:00+00:00"
+     },
+     "last_left_at": {
+      "$datetime": "2026-08-21T03:29:59+00:00"
+     },
+     "updated_at": {
+      "$datetime": "2026-08-21T03:30:00.500000+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "list_second_page",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 123,
+     "username": "abc_def",
+     "display_name": "ABC Def",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "sync_member_on_ready",
+     "last_event_at": {
+      "$datetime": "2026-08-20T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 1234,
+     "username": null,
+     "display_name": "Ｚｅｎ",
+     "avatar_url": null,
+     "status": "left",
+     "is_in_guild": false,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": null,
+     "abilities": null,
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-19T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "list_past_the_end",
+   "fn": "list_recent_user_states",
+   "result": []
+  },
+  {
+   "name": "list_limit_0_is_1",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 666666666666666666,
+     "username": "Active_User",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-21T03:31:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "list_limit_500_is_200",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 666666666666666666,
+     "username": "Active_User",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-21T03:31:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 555555555555555555,
+     "username": "member",
+     "display_name": "メンバー",
+     "avatar_url": "https://cdn.discordapp.com/avatars/555555555555555555/abc.png",
+     "status": "banned",
+     "is_in_guild": false,
+     "is_banned": true,
+     "is_timed_out": true,
+     "timed_out_until": {
+      "$datetime": "2999-01-01T00:00:00+00:00"
+     },
+     "roles": [
+      {
+       "id": 1234567890123456789,
+       "name": "大きいID",
+       "color": 0
+      },
+      {
+       "id": 1,
+       "name": "常連"
+      },
+      "壊れた要素"
+     ],
+     "abilities": {
+      "administrator": false,
+      "trusted_user": true,
+      "ban_members": true
+     },
+     "last_event_type": "member_ban",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-02T03:04:05.678901+00:00"
+     },
+     "last_joined_at": {
+      "$datetime": "2026-08-01T00:00:00+00:00"
+     },
+     "last_left_at": {
+      "$datetime": "2026-08-21T03:29:59+00:00"
+     },
+     "updated_at": {
+      "$datetime": "2026-08-21T03:30:00.500000+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 123,
+     "username": "abc_def",
+     "display_name": "ABC Def",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "sync_member_on_ready",
+     "last_event_at": {
+      "$datetime": "2026-08-20T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 1234,
+     "username": null,
+     "display_name": "Ｚｅｎ",
+     "avatar_url": null,
+     "status": "left",
+     "is_in_guild": false,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": null,
+     "abilities": null,
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-19T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 7777,
+     "username": "dup",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [
+      {
+       "name": "b",
+       "id": 3
+      }
+     ],
+     "abilities": {
+      "kick_members": false,
+      "x": 1.5,
+      "nested": {
+       "y": [
+        null,
+        true
+       ]
+      }
+     },
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 9223372036854775807,
+     "username": "MAX",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": "text",
+     "abilities": [
+      1,
+      2
+     ],
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 51212,
+     "username": "percent%",
+     "display_name": "under_score",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": {
+      "$datetime": "2001-01-01T00:00:00+00:00"
+     },
+     "roles": [
+      {
+       "name": "あ😀"
+      },
+      {
+       "name": "tab\tnew\nline"
+      }
+     ],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-17T05:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": {
+      "$datetime": "2026-08-16T03:00:00.000001+00:00"
+     },
+     "last_left_at": {
+      "$datetime": "2026-08-16T04:00:00+00:00"
+     },
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 12,
+     "username": "ユーザー十二",
+     "display_name": "Twelve",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": null,
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-22T00:00:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "list_negative_offset_is_0",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 666666666666666666,
+     "username": "Active_User",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-21T03:31:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "list_offset_beyond_32_bits",
+   "fn": "list_recent_user_states",
+   "result": []
+  },
+  {
+   "name": "list_offset_beyond_64_bits",
+   "fn": "list_recent_user_states",
+   "result": []
+  },
+  {
+   "name": "list_other_guild",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 222222222222222222,
+     "user_id": 555555555555555555,
+     "username": "other guild",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-25T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "list_unknown_guild",
+   "fn": "list_recent_user_states",
+   "result": []
+  },
+  {
+   "name": "count_unknown_guild",
+   "fn": "count_user_states",
+   "result": 0
+  },
+  {
+   "name": "list_guild_beyond_64_bits",
+   "fn": "list_recent_user_states",
+   "result": []
+  },
+  {
+   "name": "count_guild_beyond_64_bits",
+   "fn": "count_user_states",
+   "result": 0
+  },
+  {
+   "name": "list_digits",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 123,
+     "username": "abc_def",
+     "display_name": "ABC Def",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "sync_member_on_ready",
+     "last_event_at": {
+      "$datetime": "2026-08-20T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 1234,
+     "username": null,
+     "display_name": "Ｚｅｎ",
+     "avatar_url": null,
+     "status": "left",
+     "is_in_guild": false,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": null,
+     "abilities": null,
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-19T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 12,
+     "username": "ユーザー十二",
+     "display_name": "Twelve",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": null,
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-22T00:00:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "count_digits",
+   "fn": "count_user_states",
+   "result": 3
+  },
+  {
+   "name": "list_digits_with_spaces",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 123,
+     "username": "abc_def",
+     "display_name": "ABC Def",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "sync_member_on_ready",
+     "last_event_at": {
+      "$datetime": "2026-08-20T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 1234,
+     "username": null,
+     "display_name": "Ｚｅｎ",
+     "avatar_url": null,
+     "status": "left",
+     "is_in_guild": false,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": null,
+     "abilities": null,
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-19T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 12,
+     "username": "ユーザー十二",
+     "display_name": "Twelve",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": null,
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-22T00:00:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "list_fullwidth_digits",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 12,
+     "username": "ユーザー十二",
+     "display_name": "Twelve",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": null,
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-22T00:00:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "count_fullwidth_digits",
+   "fn": "count_user_states",
+   "result": 1
+  },
+  {
+   "name": "list_leading_zeros",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 12,
+     "username": "ユーザー十二",
+     "display_name": "Twelve",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": null,
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-22T00:00:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "list_superscript_digit",
+   "fn": "list_recent_user_states",
+   "result": []
+  },
+  {
+   "name": "count_superscript_digit",
+   "fn": "count_user_states",
+   "result": 0
+  },
+  {
+   "name": "list_max_id",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 9223372036854775807,
+     "username": "MAX",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": "text",
+     "abilities": [
+      1,
+      2
+     ],
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "list_digits_beyond_64_bits",
+   "fn": "list_recent_user_states",
+   "result": []
+  },
+  {
+   "name": "count_digits_beyond_64_bits",
+   "fn": "count_user_states",
+   "result": 0
+  },
+  {
+   "name": "list_name_any_case",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 123,
+     "username": "abc_def",
+     "display_name": "ABC Def",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "sync_member_on_ready",
+     "last_event_at": {
+      "$datetime": "2026-08-20T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "count_name_any_case",
+   "fn": "count_user_states",
+   "result": 1
+  },
+  {
+   "name": "list_display_name_japanese",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 555555555555555555,
+     "username": "member",
+     "display_name": "メンバー",
+     "avatar_url": "https://cdn.discordapp.com/avatars/555555555555555555/abc.png",
+     "status": "banned",
+     "is_in_guild": false,
+     "is_banned": true,
+     "is_timed_out": true,
+     "timed_out_until": {
+      "$datetime": "2999-01-01T00:00:00+00:00"
+     },
+     "roles": [
+      {
+       "id": 1234567890123456789,
+       "name": "大きいID",
+       "color": 0
+      },
+      {
+       "id": 1,
+       "name": "常連"
+      },
+      "壊れた要素"
+     ],
+     "abilities": {
+      "administrator": false,
+      "trusted_user": true,
+      "ban_members": true
+     },
+     "last_event_type": "member_ban",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-02T03:04:05.678901+00:00"
+     },
+     "last_joined_at": {
+      "$datetime": "2026-08-01T00:00:00+00:00"
+     },
+     "last_left_at": {
+      "$datetime": "2026-08-21T03:29:59+00:00"
+     },
+     "updated_at": {
+      "$datetime": "2026-08-21T03:30:00.500000+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "list_display_name_lowered",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 12,
+     "username": "ユーザー十二",
+     "display_name": "Twelve",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": null,
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-22T00:00:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "list_fullwidth_letters",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 1234,
+     "username": null,
+     "display_name": "Ｚｅｎ",
+     "avatar_url": null,
+     "status": "left",
+     "is_in_guild": false,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": null,
+     "abilities": null,
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-19T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "list_percent_is_a_wildcard",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 666666666666666666,
+     "username": "Active_User",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-21T03:31:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 555555555555555555,
+     "username": "member",
+     "display_name": "メンバー",
+     "avatar_url": "https://cdn.discordapp.com/avatars/555555555555555555/abc.png",
+     "status": "banned",
+     "is_in_guild": false,
+     "is_banned": true,
+     "is_timed_out": true,
+     "timed_out_until": {
+      "$datetime": "2999-01-01T00:00:00+00:00"
+     },
+     "roles": [
+      {
+       "id": 1234567890123456789,
+       "name": "大きいID",
+       "color": 0
+      },
+      {
+       "id": 1,
+       "name": "常連"
+      },
+      "壊れた要素"
+     ],
+     "abilities": {
+      "administrator": false,
+      "trusted_user": true,
+      "ban_members": true
+     },
+     "last_event_type": "member_ban",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-02T03:04:05.678901+00:00"
+     },
+     "last_joined_at": {
+      "$datetime": "2026-08-01T00:00:00+00:00"
+     },
+     "last_left_at": {
+      "$datetime": "2026-08-21T03:29:59+00:00"
+     },
+     "updated_at": {
+      "$datetime": "2026-08-21T03:30:00.500000+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 123,
+     "username": "abc_def",
+     "display_name": "ABC Def",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "sync_member_on_ready",
+     "last_event_at": {
+      "$datetime": "2026-08-20T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 1234,
+     "username": null,
+     "display_name": "Ｚｅｎ",
+     "avatar_url": null,
+     "status": "left",
+     "is_in_guild": false,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": null,
+     "abilities": null,
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-19T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 7777,
+     "username": "dup",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [
+      {
+       "name": "b",
+       "id": 3
+      }
+     ],
+     "abilities": {
+      "kick_members": false,
+      "x": 1.5,
+      "nested": {
+       "y": [
+        null,
+        true
+       ]
+      }
+     },
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 9223372036854775807,
+     "username": "MAX",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": "text",
+     "abilities": [
+      1,
+      2
+     ],
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 51212,
+     "username": "percent%",
+     "display_name": "under_score",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": {
+      "$datetime": "2001-01-01T00:00:00+00:00"
+     },
+     "roles": [
+      {
+       "name": "あ😀"
+      },
+      {
+       "name": "tab\tnew\nline"
+      }
+     ],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-17T05:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": {
+      "$datetime": "2026-08-16T03:00:00.000001+00:00"
+     },
+     "last_left_at": {
+      "$datetime": "2026-08-16T04:00:00+00:00"
+     },
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 12,
+     "username": "ユーザー十二",
+     "display_name": "Twelve",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": null,
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-22T00:00:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "count_underscore_is_a_wildcard",
+   "fn": "count_user_states",
+   "result": 1
+  },
+  {
+   "name": "list_backslash_escapes",
+   "fn": "list_recent_user_states",
+   "result": [
+    {
+     "guild_id": 123456789012345678,
+     "user_id": 51212,
+     "username": "percent%",
+     "display_name": "under_score",
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": {
+      "$datetime": "2001-01-01T00:00:00+00:00"
+     },
+     "roles": [
+      {
+       "name": "あ😀"
+      },
+      {
+       "name": "tab\tnew\nline"
+      }
+     ],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-17T05:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": {
+      "$datetime": "2026-08-16T03:00:00.000001+00:00"
+     },
+     "last_left_at": {
+      "$datetime": "2026-08-16T04:00:00+00:00"
+     },
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    }
+   ]
+  },
+  {
+   "name": "list_minus_is_text",
+   "fn": "list_recent_user_states",
+   "result": []
+  },
+  {
+   "name": "list_nothing_matches",
+   "fn": "list_recent_user_states",
+   "result": []
+  },
+  {
+   "name": "count_nothing_matches",
+   "fn": "count_user_states",
+   "result": 0
+  },
+  {
+   "name": "detail_with_history",
+   "fn": "get_user_state_detail",
+   "result": {
+    "current": {
+     "guild_id": 123456789012345678,
+     "user_id": 555555555555555555,
+     "username": "member",
+     "display_name": "メンバー",
+     "avatar_url": "https://cdn.discordapp.com/avatars/555555555555555555/abc.png",
+     "status": "banned",
+     "is_in_guild": false,
+     "is_banned": true,
+     "is_timed_out": true,
+     "timed_out_until": {
+      "$datetime": "2999-01-01T00:00:00+00:00"
+     },
+     "roles": [
+      {
+       "id": 1234567890123456789,
+       "name": "大きいID",
+       "color": 0
+      },
+      {
+       "id": 1,
+       "name": "常連"
+      },
+      "壊れた要素"
+     ],
+     "abilities": {
+      "administrator": false,
+      "trusted_user": true,
+      "ban_members": true
+     },
+     "last_event_type": "member_ban",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-02T03:04:05.678901+00:00"
+     },
+     "last_joined_at": {
+      "$datetime": "2026-08-01T00:00:00+00:00"
+     },
+     "last_left_at": {
+      "$datetime": "2026-08-21T03:29:59+00:00"
+     },
+     "updated_at": {
+      "$datetime": "2026-08-21T03:30:00.500000+00:00"
+     }
+    },
+    "events": [
+     {
+      "id": 9,
+      "event_type": "member_leave",
+      "status_after": "left",
+      "actor_user_id": null,
+      "actor_name": null,
+      "reason": null,
+      "event_at": {
+       "$datetime": "2026-08-21T03:30:00+00:00"
+      },
+      "payload": {}
+     },
+     {
+      "id": 8,
+      "event_type": "member_ban",
+      "status_after": "banned",
+      "actor_user_id": 999999999999999999,
+      "actor_name": "mod",
+      "reason": null,
+      "event_at": {
+       "$datetime": "2026-08-21T03:30:00+00:00"
+      },
+      "payload": {
+       "channel_id": 1234567890123456789,
+       "nested": {
+        "ids": [
+         9007199254740991,
+         9007199254740992,
+         -9007199254740993
+        ]
+       },
+       "flag": true,
+       "ratio": 0.5
+      }
+     },
+     {
+      "id": 7,
+      "event_type": "sync_member_on_ready",
+      "status_after": "active",
+      "actor_user_id": null,
+      "actor_name": "管理者",
+      "reason": "定期同期",
+      "event_at": {
+       "$datetime": "2026-08-21T00:00:00+00:00"
+      },
+      "payload": {
+       "source": "on_ready"
+      }
+     },
+     {
+      "id": 10,
+      "event_type": "member_join",
+      "status_after": "active",
+      "actor_user_id": null,
+      "actor_name": null,
+      "reason": null,
+      "event_at": {
+       "$datetime": "2026-08-01T00:00:00+00:00"
+      },
+      "payload": {}
+     },
+     {
+      "id": 12,
+      "event_type": "voice_leave",
+      "status_after": "active",
+      "actor_user_id": null,
+      "actor_name": null,
+      "reason": null,
+      "event_at": {
+       "$datetime": "2026-06-30T23:59:59.999999+00:00"
+      },
+      "payload": {}
+     },
+     {
+      "id": 11,
+      "event_type": "voice_join",
+      "status_after": "active",
+      "actor_user_id": null,
+      "actor_name": null,
+      "reason": null,
+      "event_at": {
+       "$datetime": "2026-06-30T15:00:00+00:00"
+      },
+      "payload": {}
+     }
+    ]
+   }
+  },
+  {
+   "name": "detail_one_event",
+   "fn": "get_user_state_detail",
+   "result": {
+    "current": {
+     "guild_id": 123456789012345678,
+     "user_id": 555555555555555555,
+     "username": "member",
+     "display_name": "メンバー",
+     "avatar_url": "https://cdn.discordapp.com/avatars/555555555555555555/abc.png",
+     "status": "banned",
+     "is_in_guild": false,
+     "is_banned": true,
+     "is_timed_out": true,
+     "timed_out_until": {
+      "$datetime": "2999-01-01T00:00:00+00:00"
+     },
+     "roles": [
+      {
+       "id": 1234567890123456789,
+       "name": "大きいID",
+       "color": 0
+      },
+      {
+       "id": 1,
+       "name": "常連"
+      },
+      "壊れた要素"
+     ],
+     "abilities": {
+      "administrator": false,
+      "trusted_user": true,
+      "ban_members": true
+     },
+     "last_event_type": "member_ban",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-02T03:04:05.678901+00:00"
+     },
+     "last_joined_at": {
+      "$datetime": "2026-08-01T00:00:00+00:00"
+     },
+     "last_left_at": {
+      "$datetime": "2026-08-21T03:29:59+00:00"
+     },
+     "updated_at": {
+      "$datetime": "2026-08-21T03:30:00.500000+00:00"
+     }
+    },
+    "events": [
+     {
+      "id": 9,
+      "event_type": "member_leave",
+      "status_after": "left",
+      "actor_user_id": null,
+      "actor_name": null,
+      "reason": null,
+      "event_at": {
+       "$datetime": "2026-08-21T03:30:00+00:00"
+      },
+      "payload": {}
+     }
+    ]
+   }
+  },
+  {
+   "name": "detail_event_limit_0_is_1",
+   "fn": "get_user_state_detail",
+   "result": {
+    "current": {
+     "guild_id": 123456789012345678,
+     "user_id": 555555555555555555,
+     "username": "member",
+     "display_name": "メンバー",
+     "avatar_url": "https://cdn.discordapp.com/avatars/555555555555555555/abc.png",
+     "status": "banned",
+     "is_in_guild": false,
+     "is_banned": true,
+     "is_timed_out": true,
+     "timed_out_until": {
+      "$datetime": "2999-01-01T00:00:00+00:00"
+     },
+     "roles": [
+      {
+       "id": 1234567890123456789,
+       "name": "大きいID",
+       "color": 0
+      },
+      {
+       "id": 1,
+       "name": "常連"
+      },
+      "壊れた要素"
+     ],
+     "abilities": {
+      "administrator": false,
+      "trusted_user": true,
+      "ban_members": true
+     },
+     "last_event_type": "member_ban",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-02T03:04:05.678901+00:00"
+     },
+     "last_joined_at": {
+      "$datetime": "2026-08-01T00:00:00+00:00"
+     },
+     "last_left_at": {
+      "$datetime": "2026-08-21T03:29:59+00:00"
+     },
+     "updated_at": {
+      "$datetime": "2026-08-21T03:30:00.500000+00:00"
+     }
+    },
+    "events": [
+     {
+      "id": 9,
+      "event_type": "member_leave",
+      "status_after": "left",
+      "actor_user_id": null,
+      "actor_name": null,
+      "reason": null,
+      "event_at": {
+       "$datetime": "2026-08-21T03:30:00+00:00"
+      },
+      "payload": {}
+     }
+    ]
+   }
+  },
+  {
+   "name": "detail_event_limit_1000_is_500",
+   "fn": "get_user_state_detail",
+   "result": {
+    "current": {
+     "guild_id": 123456789012345678,
+     "user_id": 555555555555555555,
+     "username": "member",
+     "display_name": "メンバー",
+     "avatar_url": "https://cdn.discordapp.com/avatars/555555555555555555/abc.png",
+     "status": "banned",
+     "is_in_guild": false,
+     "is_banned": true,
+     "is_timed_out": true,
+     "timed_out_until": {
+      "$datetime": "2999-01-01T00:00:00+00:00"
+     },
+     "roles": [
+      {
+       "id": 1234567890123456789,
+       "name": "大きいID",
+       "color": 0
+      },
+      {
+       "id": 1,
+       "name": "常連"
+      },
+      "壊れた要素"
+     ],
+     "abilities": {
+      "administrator": false,
+      "trusted_user": true,
+      "ban_members": true
+     },
+     "last_event_type": "member_ban",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-02T03:04:05.678901+00:00"
+     },
+     "last_joined_at": {
+      "$datetime": "2026-08-01T00:00:00+00:00"
+     },
+     "last_left_at": {
+      "$datetime": "2026-08-21T03:29:59+00:00"
+     },
+     "updated_at": {
+      "$datetime": "2026-08-21T03:30:00.500000+00:00"
+     }
+    },
+    "events": [
+     {
+      "id": 9,
+      "event_type": "member_leave",
+      "status_after": "left",
+      "actor_user_id": null,
+      "actor_name": null,
+      "reason": null,
+      "event_at": {
+       "$datetime": "2026-08-21T03:30:00+00:00"
+      },
+      "payload": {}
+     },
+     {
+      "id": 8,
+      "event_type": "member_ban",
+      "status_after": "banned",
+      "actor_user_id": 999999999999999999,
+      "actor_name": "mod",
+      "reason": null,
+      "event_at": {
+       "$datetime": "2026-08-21T03:30:00+00:00"
+      },
+      "payload": {
+       "channel_id": 1234567890123456789,
+       "nested": {
+        "ids": [
+         9007199254740991,
+         9007199254740992,
+         -9007199254740993
+        ]
+       },
+       "flag": true,
+       "ratio": 0.5
+      }
+     },
+     {
+      "id": 7,
+      "event_type": "sync_member_on_ready",
+      "status_after": "active",
+      "actor_user_id": null,
+      "actor_name": "管理者",
+      "reason": "定期同期",
+      "event_at": {
+       "$datetime": "2026-08-21T00:00:00+00:00"
+      },
+      "payload": {
+       "source": "on_ready"
+      }
+     },
+     {
+      "id": 10,
+      "event_type": "member_join",
+      "status_after": "active",
+      "actor_user_id": null,
+      "actor_name": null,
+      "reason": null,
+      "event_at": {
+       "$datetime": "2026-08-01T00:00:00+00:00"
+      },
+      "payload": {}
+     },
+     {
+      "id": 12,
+      "event_type": "voice_leave",
+      "status_after": "active",
+      "actor_user_id": null,
+      "actor_name": null,
+      "reason": null,
+      "event_at": {
+       "$datetime": "2026-06-30T23:59:59.999999+00:00"
+      },
+      "payload": {}
+     },
+     {
+      "id": 11,
+      "event_type": "voice_join",
+      "status_after": "active",
+      "actor_user_id": null,
+      "actor_name": null,
+      "reason": null,
+      "event_at": {
+       "$datetime": "2026-06-30T15:00:00+00:00"
+      },
+      "payload": {}
+     }
+    ]
+   }
+  },
+  {
+   "name": "detail_other_guild",
+   "fn": "get_user_state_detail",
+   "result": {
+    "current": {
+     "guild_id": 222222222222222222,
+     "user_id": 555555555555555555,
+     "username": "other guild",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-25T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-01-01T00:00:00+00:00"
+     }
+    },
+    "events": [
+     {
+      "id": 13,
+      "event_type": "member_join",
+      "status_after": "active",
+      "actor_user_id": null,
+      "actor_name": null,
+      "reason": null,
+      "event_at": {
+       "$datetime": "2026-08-25T00:00:00+00:00"
+      },
+      "payload": {}
+     }
+    ]
+   }
+  },
+  {
+   "name": "detail_without_history",
+   "fn": "get_user_state_detail",
+   "result": {
+    "current": {
+     "guild_id": 123456789012345678,
+     "user_id": 666666666666666666,
+     "username": "Active_User",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [],
+     "abilities": {},
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-21T03:31:00+00:00"
+     }
+    },
+    "events": []
+   }
+  },
+  {
+   "name": "detail_history_only",
+   "fn": "get_user_state_detail",
+   "result": {
+    "current": null,
+    "events": [
+     {
+      "id": 20,
+      "event_type": "member_leave",
+      "status_after": "left",
+      "actor_user_id": null,
+      "actor_name": null,
+      "reason": null,
+      "event_at": {
+       "$datetime": "2026-08-10T00:00:00+00:00"
+      },
+      "payload": {
+       "a": "い"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "detail_odd_json_columns",
+   "fn": "get_user_state_detail",
+   "result": {
+    "current": {
+     "guild_id": 123456789012345678,
+     "user_id": 7777,
+     "username": "dup",
+     "display_name": null,
+     "avatar_url": null,
+     "status": "active",
+     "is_in_guild": true,
+     "is_banned": false,
+     "is_timed_out": false,
+     "timed_out_until": null,
+     "roles": [
+      {
+       "name": "b",
+       "id": 3
+      }
+     ],
+     "abilities": {
+      "kick_members": false,
+      "x": 1.5,
+      "nested": {
+       "y": [
+        null,
+        true
+       ]
+      }
+     },
+     "last_event_type": "member_join",
+     "last_event_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-01T00:00:00+00:00"
+     },
+     "last_joined_at": null,
+     "last_left_at": null,
+     "updated_at": {
+      "$datetime": "2026-08-18T00:00:00+00:00"
+     }
+    },
+    "events": []
+   }
+  },
+  {
+   "name": "detail_not_found",
+   "fn": "get_user_state_detail",
+   "result": null
+  },
+  {
+   "name": "detail_user_beyond_64_bits",
+   "fn": "get_user_state_detail",
+   "result": null
+  },
+  {
+   "name": "detail_guild_beyond_64_bits",
+   "fn": "get_user_state_detail",
+   "result": null
+  },
+  {
+   "name": "drop_the_event_table",
+   "sql": "DROP TABLE user_state_event"
+  },
+  {
+   "name": "detail_heals_the_event_table",
+   "fn": "get_user_state_detail",
+   "result": {
+    "current": {
+     "guild_id": 123456789012345678,
+     "user_id": 555555555555555555,
+     "username": "member",
+     "display_name": "メンバー",
+     "avatar_url": "https://cdn.discordapp.com/avatars/555555555555555555/abc.png",
+     "status": "banned",
+     "is_in_guild": false,
+     "is_banned": true,
+     "is_timed_out": true,
+     "timed_out_until": {
+      "$datetime": "2999-01-01T00:00:00+00:00"
+     },
+     "roles": [
+      {
+       "id": 1234567890123456789,
+       "name": "大きいID",
+       "color": 0
+      },
+      {
+       "id": 1,
+       "name": "常連"
+      },
+      "壊れた要素"
+     ],
+     "abilities": {
+      "administrator": false,
+      "trusted_user": true,
+      "ban_members": true
+     },
+     "last_event_type": "member_ban",
+     "last_event_at": {
+      "$datetime": "2026-08-21T03:30:00+00:00"
+     },
+     "first_seen_at": {
+      "$datetime": "2025-01-02T03:04:05.678901+00:00"
+     },
+     "last_joined_at": {
+      "$datetime": "2026-08-01T00:00:00+00:00"
+     },
+     "last_left_at": {
+      "$datetime": "2026-08-21T03:29:59+00:00"
+     },
+     "updated_at": {
+      "$datetime": "2026-08-21T03:30:00.500000+00:00"
+     }
+    },
+    "events": []
+   }
+  },
+  {
+   "name": "drop_the_current_table",
+   "sql": "DROP TABLE user_state_current"
+  },
+  {
+   "name": "list_heals_the_current_table",
+   "fn": "list_recent_user_states",
+   "result": []
+  },
+  {
+   "name": "count_after_healing",
+   "fn": "count_user_states",
+   "result": 0
+  },
+  {
+   "name": "detail_after_healing",
+   "fn": "get_user_state_detail",
+   "result": null
+  }
+ ],
+ "digit_only": [
+  [
+   178,
+   179
+  ],
+  [
+   185,
+   185
+  ],
+  [
+   4969,
+   4977
+  ],
+  [
+   6618,
+   6618
+  ],
+  [
+   8304,
+   8304
+  ],
+  [
+   8308,
+   8313
+  ],
+  [
+   8320,
+   8329
+  ],
+  [
+   9312,
+   9320
+  ],
+  [
+   9332,
+   9340
+  ],
+  [
+   9352,
+   9360
+  ],
+  [
+   9450,
+   9450
+  ],
+  [
+   9461,
+   9469
+  ],
+  [
+   9471,
+   9471
+  ],
+  [
+   10102,
+   10110
+  ],
+  [
+   10112,
+   10120
+  ],
+  [
+   10122,
+   10130
+  ],
+  [
+   68160,
+   68163
+  ],
+  [
+   69216,
+   69224
+  ],
+  [
+   69714,
+   69722
+  ],
+  [
+   127232,
+   127242
+  ]
+ ]
+}

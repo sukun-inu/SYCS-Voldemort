@@ -1,0 +1,257 @@
+{
+ "about": "利用者の状態の読み出し（services/user_state_service.py の list_recent_user_states・count_user_states・get_user_state_detail）の例。空の Postgres に表を作り、current・events の行を（列を全部書いて）入れてから、steps を順に回す。書き方は generate.py の先頭。基準は expected.json（generate.py が作る）",
+ "current_columns": [
+  "id", "guild_id", "user_id", "username", "display_name", "avatar_url", "status", "is_in_guild", "is_banned",
+  "is_timed_out", "timed_out_until", "roles_json", "abilities_json", "last_event_type", "last_event_at",
+  "first_seen_at", "last_joined_at", "last_left_at", "created_at", "updated_at"
+ ],
+ "event_columns": [
+  "id", "guild_id", "user_id", "event_type", "status_after", "actor_user_id", "actor_name", "reason",
+  "payload_json", "event_at", "created_at"
+ ],
+ "current_defaults": {
+  "guild_id": 123456789012345678,
+  "username": null,
+  "display_name": null,
+  "avatar_url": null,
+  "status": "active",
+  "is_in_guild": true,
+  "is_banned": false,
+  "is_timed_out": false,
+  "timed_out_until": null,
+  "roles_json": "[]",
+  "abilities_json": "{}",
+  "last_event_type": "member_join",
+  "last_event_at": null,
+  "first_seen_at": "2025-01-01T00:00:00+00:00",
+  "last_joined_at": null,
+  "last_left_at": null,
+  "created_at": "2025-01-01T00:00:00+00:00",
+  "updated_at": "2026-01-01T00:00:00+00:00"
+ },
+ "event_defaults": {
+  "guild_id": 123456789012345678,
+  "status_after": "active",
+  "actor_user_id": null,
+  "actor_name": null,
+  "reason": null,
+  "payload_json": "{}",
+  "created_at": "2025-01-01T00:00:00+00:00"
+ },
+ "current": [
+  {
+   "id": 1,
+   "user_id": 555555555555555555,
+   "username": "member",
+   "display_name": "メンバー",
+   "avatar_url": "https://cdn.discordapp.com/avatars/555555555555555555/abc.png",
+   "status": "banned",
+   "is_in_guild": false,
+   "is_banned": true,
+   "is_timed_out": true,
+   "timed_out_until": "2999-01-01T00:00:00+00:00",
+   "roles_json": "[{\"id\": 1234567890123456789, \"name\": \"大きいID\", \"color\": 0}, {\"id\": 1, \"name\": \"常連\"}, \"壊れた要素\"]",
+   "abilities_json": "{\"administrator\": false, \"trusted_user\": true, \"ban_members\": true}",
+   "last_event_type": "member_ban",
+   "last_event_at": "2026-08-21T03:30:00+00:00",
+   "first_seen_at": "2025-01-02T03:04:05.678901+00:00",
+   "last_joined_at": "2026-08-01T00:00:00+00:00",
+   "last_left_at": "2026-08-21T03:29:59+00:00",
+   "updated_at": "2026-08-21T03:30:00.5+00:00"
+  },
+  {
+   "id": 2,
+   "user_id": 666666666666666666,
+   "username": "Active_User",
+   "last_event_at": "2026-08-21T03:30:00+00:00",
+   "updated_at": "2026-08-21T03:31:00+00:00"
+  },
+  {
+   "id": 3,
+   "user_id": 12,
+   "username": "ユーザー十二",
+   "display_name": "Twelve",
+   "last_event_at": null,
+   "updated_at": "2026-08-22T00:00:00+00:00"
+  },
+  {
+   "id": 4,
+   "user_id": 123,
+   "username": "abc_def",
+   "display_name": "ABC Def",
+   "last_event_type": "sync_member_on_ready",
+   "last_event_at": "2026-08-20T00:00:00+00:00",
+   "roles_json": "not json",
+   "abilities_json": ""
+  },
+  {
+   "id": 5,
+   "user_id": 1234,
+   "display_name": "Ｚｅｎ",
+   "status": "left",
+   "is_in_guild": false,
+   "last_event_at": "2026-08-19T00:00:00+00:00",
+   "roles_json": "null",
+   "abilities_json": "null"
+  },
+  {
+   "id": 6,
+   "user_id": 9223372036854775807,
+   "username": "MAX",
+   "last_event_at": "2026-08-18T00:00:00+00:00",
+   "updated_at": "2026-08-18T00:00:00+00:00",
+   "roles_json": "\"text\"",
+   "abilities_json": "[1, 2]"
+  },
+  {
+   "id": 7,
+   "user_id": 7777,
+   "username": "dup",
+   "last_event_at": "2026-08-18T00:00:00+00:00",
+   "updated_at": "2026-08-18T00:00:00+00:00",
+   "roles_json": " [ {\"name\": \"a\", \"name\": \"b\", \"id\": 3} ] ",
+   "abilities_json": "{\"kick_members\": true, \"kick_members\": false, \"x\": 1.5, \"nested\": {\"y\": [null, true]}}"
+  },
+  {
+   "id": 8,
+   "guild_id": 222222222222222222,
+   "user_id": 555555555555555555,
+   "username": "other guild",
+   "last_event_at": "2026-08-25T00:00:00+00:00"
+  },
+  {
+   "id": 9,
+   "user_id": 51212,
+   "username": "percent%",
+   "display_name": "under_score",
+   "last_event_at": "2026-08-17T00:00:00-05:00",
+   "roles_json": "[{\"name\": \"\\u3042\\ud83d\\ude00\"}, {\"name\": \"tab\\tnew\\nline\"}]",
+   "timed_out_until": "2001-01-01T00:00:00+00:00",
+   "last_joined_at": "2026-08-16T12:00:00.000001+09:00",
+   "last_left_at": "2026-08-16T13:00:00+09:00"
+  }
+ ],
+ "events": [
+  {
+   "id": 7,
+   "user_id": 555555555555555555,
+   "event_type": "sync_member_on_ready",
+   "actor_name": "管理者",
+   "reason": "定期同期",
+   "payload_json": "{\"source\": \"on_ready\"}",
+   "event_at": "2026-08-21T00:00:00+00:00"
+  },
+  {
+   "id": 8,
+   "user_id": 555555555555555555,
+   "event_type": "member_ban",
+   "status_after": "banned",
+   "actor_user_id": 999999999999999999,
+   "actor_name": "mod",
+   "payload_json": "{\"channel_id\": 1234567890123456789, \"nested\": {\"ids\": [9007199254740991, 9007199254740992, -9007199254740993]}, \"flag\": true, \"ratio\": 0.5}",
+   "event_at": "2026-08-21T03:30:00+00:00"
+  },
+  {
+   "id": 9,
+   "user_id": 555555555555555555,
+   "event_type": "member_leave",
+   "status_after": "left",
+   "payload_json": "not json",
+   "event_at": "2026-08-21T03:30:00+00:00"
+  },
+  {
+   "id": 10,
+   "user_id": 555555555555555555,
+   "event_type": "member_join",
+   "payload_json": "[1, 2]",
+   "event_at": "2026-08-01T00:00:00+00:00"
+  },
+  {
+   "id": 11,
+   "user_id": 555555555555555555,
+   "event_type": "voice_join",
+   "payload_json": "",
+   "event_at": "2026-07-01T00:00:00+09:00"
+  },
+  {
+   "id": 12,
+   "user_id": 555555555555555555,
+   "event_type": "voice_leave",
+   "payload_json": "null",
+   "event_at": "2026-06-30T23:59:59.999999+00:00"
+  },
+  {
+   "id": 13,
+   "guild_id": 222222222222222222,
+   "user_id": 555555555555555555,
+   "event_type": "member_join",
+   "event_at": "2026-08-25T00:00:00+00:00"
+  },
+  {
+   "id": 20,
+   "user_id": 42,
+   "event_type": "member_leave",
+   "status_after": "left",
+   "payload_json": "{\"a\": \"あ\", \"a\": \"い\"}",
+   "event_at": "2026-08-10T00:00:00+00:00"
+  }
+ ],
+ "steps": [
+  {"name": "list_all", "fn": "list", "guild_id": 123456789012345678, "query": null, "limit": 50, "offset": 0},
+  {"name": "count_all", "fn": "count", "guild_id": 123456789012345678, "query": null},
+  {"name": "list_empty_query", "fn": "list", "guild_id": 123456789012345678, "query": "", "limit": 50, "offset": 0},
+  {"name": "count_blank_query", "fn": "count", "guild_id": 123456789012345678, "query": "  　 "},
+  {"name": "list_first_page", "fn": "list", "guild_id": 123456789012345678, "query": null, "limit": 2, "offset": 0},
+  {"name": "list_second_page", "fn": "list", "guild_id": 123456789012345678, "query": null, "limit": 2, "offset": 2},
+  {"name": "list_past_the_end", "fn": "list", "guild_id": 123456789012345678, "query": null, "limit": 2, "offset": 100},
+  {"name": "list_limit_0_is_1", "fn": "list", "guild_id": 123456789012345678, "query": null, "limit": 0, "offset": 0},
+  {"name": "list_limit_500_is_200", "fn": "list", "guild_id": 123456789012345678, "query": null, "limit": 500, "offset": 0},
+  {"name": "list_negative_offset_is_0", "fn": "list", "guild_id": 123456789012345678, "query": null, "limit": 1, "offset": -3},
+  {"name": "list_offset_beyond_32_bits", "fn": "list", "guild_id": 123456789012345678, "query": null, "limit": 5, "offset": 2147483648},
+  {"name": "list_offset_beyond_64_bits", "fn": "list", "guild_id": 123456789012345678, "query": null, "limit": 5, "offset": {"$int": "100000000000000000000"}},
+  {"name": "list_other_guild", "fn": "list", "guild_id": 222222222222222222, "query": null, "limit": 50, "offset": 0},
+  {"name": "list_unknown_guild", "fn": "list", "guild_id": 1, "query": null, "limit": 50, "offset": 0},
+  {"name": "count_unknown_guild", "fn": "count", "guild_id": 1, "query": null},
+  {"name": "list_guild_beyond_64_bits", "fn": "list", "guild_id": {"$int": "99999999999999999999"}, "query": null, "limit": 5, "offset": 0},
+  {"name": "count_guild_beyond_64_bits", "fn": "count", "guild_id": {"$int": "99999999999999999999"}, "query": null},
+  {"name": "list_digits", "fn": "list", "guild_id": 123456789012345678, "query": "12", "limit": 50, "offset": 0},
+  {"name": "count_digits", "fn": "count", "guild_id": 123456789012345678, "query": "12"},
+  {"name": "list_digits_with_spaces", "fn": "list", "guild_id": 123456789012345678, "query": " 12 ", "limit": 50, "offset": 0},
+  {"name": "list_fullwidth_digits", "fn": "list", "guild_id": 123456789012345678, "query": "１２", "limit": 50, "offset": 0},
+  {"name": "count_fullwidth_digits", "fn": "count", "guild_id": 123456789012345678, "query": "１２"},
+  {"name": "list_leading_zeros", "fn": "list", "guild_id": 123456789012345678, "query": "0012", "limit": 50, "offset": 0},
+  {"name": "list_superscript_digit", "fn": "list", "guild_id": 123456789012345678, "query": "²", "limit": 50, "offset": 0},
+  {"name": "count_superscript_digit", "fn": "count", "guild_id": 123456789012345678, "query": "1²"},
+  {"name": "list_max_id", "fn": "list", "guild_id": 123456789012345678, "query": "9223372036854775807", "limit": 50, "offset": 0},
+  {"name": "list_digits_beyond_64_bits", "fn": "list", "guild_id": 123456789012345678, "query": "99999999999999999999", "limit": 50, "offset": 0},
+  {"name": "count_digits_beyond_64_bits", "fn": "count", "guild_id": 123456789012345678, "query": "99999999999999999999"},
+  {"name": "list_name_any_case", "fn": "list", "guild_id": 123456789012345678, "query": "ABC", "limit": 50, "offset": 0},
+  {"name": "count_name_any_case", "fn": "count", "guild_id": 123456789012345678, "query": "ABC"},
+  {"name": "list_display_name_japanese", "fn": "list", "guild_id": 123456789012345678, "query": "メン", "limit": 50, "offset": 0},
+  {"name": "list_display_name_lowered", "fn": "list", "guild_id": 123456789012345678, "query": "twelve", "limit": 50, "offset": 0},
+  {"name": "list_fullwidth_letters", "fn": "list", "guild_id": 123456789012345678, "query": "Ｚｅｎ", "limit": 50, "offset": 0},
+  {"name": "list_percent_is_a_wildcard", "fn": "list", "guild_id": 123456789012345678, "query": "%", "limit": 50, "offset": 0},
+  {"name": "count_underscore_is_a_wildcard", "fn": "count", "guild_id": 123456789012345678, "query": "a_c"},
+  {"name": "list_backslash_escapes", "fn": "list", "guild_id": 123456789012345678, "query": "\\", "limit": 50, "offset": 0},
+  {"name": "list_minus_is_text", "fn": "list", "guild_id": 123456789012345678, "query": "-5", "limit": 50, "offset": 0},
+  {"name": "list_nothing_matches", "fn": "list", "guild_id": 123456789012345678, "query": "nothing-matches", "limit": 50, "offset": 0},
+  {"name": "count_nothing_matches", "fn": "count", "guild_id": 123456789012345678, "query": "nothing-matches"},
+  {"name": "detail_with_history", "fn": "detail", "guild_id": 123456789012345678, "user_id": 555555555555555555, "event_limit": 100},
+  {"name": "detail_one_event", "fn": "detail", "guild_id": 123456789012345678, "user_id": 555555555555555555, "event_limit": 1},
+  {"name": "detail_event_limit_0_is_1", "fn": "detail", "guild_id": 123456789012345678, "user_id": 555555555555555555, "event_limit": 0},
+  {"name": "detail_event_limit_1000_is_500", "fn": "detail", "guild_id": 123456789012345678, "user_id": 555555555555555555, "event_limit": 1000},
+  {"name": "detail_other_guild", "fn": "detail", "guild_id": 222222222222222222, "user_id": 555555555555555555, "event_limit": 100},
+  {"name": "detail_without_history", "fn": "detail", "guild_id": 123456789012345678, "user_id": 666666666666666666, "event_limit": 100},
+  {"name": "detail_history_only", "fn": "detail", "guild_id": 123456789012345678, "user_id": 42, "event_limit": 100},
+  {"name": "detail_odd_json_columns", "fn": "detail", "guild_id": 123456789012345678, "user_id": 7777, "event_limit": 100},
+  {"name": "detail_not_found", "fn": "detail", "guild_id": 123456789012345678, "user_id": 1, "event_limit": 100},
+  {"name": "detail_user_beyond_64_bits", "fn": "detail", "guild_id": 123456789012345678, "user_id": {"$int": "99999999999999999999"}, "event_limit": 100},
+  {"name": "detail_guild_beyond_64_bits", "fn": "detail", "guild_id": {"$int": "99999999999999999999"}, "user_id": 555555555555555555, "event_limit": 100},
+  {"name": "drop_the_event_table", "sql": "DROP TABLE user_state_event"},
+  {"name": "detail_heals_the_event_table", "fn": "detail", "guild_id": 123456789012345678, "user_id": 555555555555555555, "event_limit": 100},
+  {"name": "drop_the_current_table", "sql": "DROP TABLE user_state_current"},
+  {"name": "list_heals_the_current_table", "fn": "list", "guild_id": 123456789012345678, "query": null, "limit": 50, "offset": 0},
+  {"name": "count_after_healing", "fn": "count", "guild_id": 123456789012345678, "query": null},
+  {"name": "detail_after_healing", "fn": "detail", "guild_id": 123456789012345678, "user_id": 555555555555555555, "event_limit": 100}
+ ]
+}

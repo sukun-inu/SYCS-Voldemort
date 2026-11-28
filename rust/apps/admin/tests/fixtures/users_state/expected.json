@@ -1707,6 +1707,1744 @@
    }
   },
   {
+   "name": "list_limit_with_spaces",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?limit=%205%20",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "list_recent_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": null,
+      "limit": 5,
+      "offset": 0
+     }
+    },
+    {
+     "fn": "count_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": null
+     }
+    }
+   ],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "59"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"rows\":[],\"total\":0,\"limit\":5,\"offset\":0,\"has_more\":false}",
+    "json": {
+     "rows": [],
+     "total": 0,
+     "limit": 5,
+     "offset": 0,
+     "has_more": false
+    }
+   }
+  },
+  {
+   "name": "list_limit_with_plus",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?limit=%2B5",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "list_recent_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": null,
+      "limit": 5,
+      "offset": 0
+     }
+    },
+    {
+     "fn": "count_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": null
+     }
+    }
+   ],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "59"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"rows\":[],\"total\":0,\"limit\":5,\"offset\":0,\"has_more\":false}",
+    "json": {
+     "rows": [],
+     "total": 0,
+     "limit": 5,
+     "offset": 0,
+     "has_more": false
+    }
+   }
+  },
+  {
+   "name": "list_limit_with_decimal_zeros",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?limit=5.00",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "list_recent_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": null,
+      "limit": 5,
+      "offset": 0
+     }
+    },
+    {
+     "fn": "count_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": null
+     }
+    }
+   ],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "59"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"rows\":[],\"total\":0,\"limit\":5,\"offset\":0,\"has_more\":false}",
+    "json": {
+     "rows": [],
+     "total": 0,
+     "limit": 5,
+     "offset": 0,
+     "has_more": false
+    }
+   }
+  },
+  {
+   "name": "list_limit_with_fraction",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?limit=5.5",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 422,
+    "headers": [
+     [
+      "content-length",
+      "151"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":[{\"type\":\"int_parsing\",\"loc\":[\"query\",\"limit\"],\"msg\":\"Input should be a valid integer, unable to parse string as an integer\",\"input\":\"5.5\"}]}",
+    "json": {
+     "detail": [
+      {
+       "type": "int_parsing",
+       "loc": [
+        "query",
+        "limit"
+       ],
+       "msg": "Input should be a valid integer, unable to parse string as an integer",
+       "input": "5.5"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "list_limit_with_underscore",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?limit=1_0",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "list_recent_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": null,
+      "limit": 10,
+      "offset": 0
+     }
+    },
+    {
+     "fn": "count_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": null
+     }
+    }
+   ],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "60"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"rows\":[],\"total\":0,\"limit\":10,\"offset\":0,\"has_more\":false}",
+    "json": {
+     "rows": [],
+     "total": 0,
+     "limit": 10,
+     "offset": 0,
+     "has_more": false
+    }
+   }
+  },
+  {
+   "name": "list_limit_empty",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?limit=",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 422,
+    "headers": [
+     [
+      "content-length",
+      "148"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":[{\"type\":\"int_parsing\",\"loc\":[\"query\",\"limit\"],\"msg\":\"Input should be a valid integer, unable to parse string as an integer\",\"input\":\"\"}]}",
+    "json": {
+     "detail": [
+      {
+       "type": "int_parsing",
+       "loc": [
+        "query",
+        "limit"
+       ],
+       "msg": "Input should be a valid integer, unable to parse string as an integer",
+       "input": ""
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "list_limit_without_equals",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?limit",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 422,
+    "headers": [
+     [
+      "content-length",
+      "148"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":[{\"type\":\"int_parsing\",\"loc\":[\"query\",\"limit\"],\"msg\":\"Input should be a valid integer, unable to parse string as an integer\",\"input\":\"\"}]}",
+    "json": {
+     "detail": [
+      {
+       "type": "int_parsing",
+       "loc": [
+        "query",
+        "limit"
+       ],
+       "msg": "Input should be a valid integer, unable to parse string as an integer",
+       "input": ""
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "list_limit_fullwidth_digit",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?limit=%EF%BC%95",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 422,
+    "headers": [
+     [
+      "content-length",
+      "151"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":[{\"type\":\"int_parsing\",\"loc\":[\"query\",\"limit\"],\"msg\":\"Input should be a valid integer, unable to parse string as an integer\",\"input\":\"５\"}]}",
+    "json": {
+     "detail": [
+      {
+       "type": "int_parsing",
+       "loc": [
+        "query",
+        "limit"
+       ],
+       "msg": "Input should be a valid integer, unable to parse string as an integer",
+       "input": "５"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "list_limit_beyond_64_bits_negative",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?limit=-99999999999999999999",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 422,
+    "headers": [
+     [
+      "content-length",
+      "164"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":[{\"type\":\"greater_than_equal\",\"loc\":[\"query\",\"limit\"],\"msg\":\"Input should be greater than or equal to 1\",\"input\":\"-99999999999999999999\",\"ctx\":{\"ge\":1}}]}",
+    "json": {
+     "detail": [
+      {
+       "type": "greater_than_equal",
+       "loc": [
+        "query",
+        "limit"
+       ],
+       "msg": "Input should be greater than or equal to 1",
+       "input": "-99999999999999999999",
+       "ctx": {
+        "ge": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "list_limit_of_4301_digits",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?limit=11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 422,
+    "headers": [
+     [
+      "content-length",
+      "4450"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":[{\"type\":\"int_parsing_size\",\"loc\":[\"query\",\"limit\"],\"msg\":\"Unable to parse input string as an integer, exceeded maximum size\",\"input\":\"11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111\"}]}",
+    "json": {
+     "detail": [
+      {
+       "type": "int_parsing_size",
+       "loc": [
+        "query",
+        "limit"
+       ],
+       "msg": "Unable to parse input string as an integer, exceeded maximum size",
+       "input": "11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "list_offset_beyond_64_bits",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?offset=100000000000000000000",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "list_recent_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": null,
+      "limit": 25,
+      "offset": {
+       "$int": "100000000000000000000"
+      }
+     }
+    },
+    {
+     "fn": "count_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": null
+     }
+    }
+   ],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "82"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"rows\":[],\"total\":3,\"limit\":25,\"offset\":\"100000000000000000000\",\"has_more\":false}",
+    "json": {
+     "rows": [],
+     "total": 3,
+     "limit": 25,
+     "offset": "100000000000000000000",
+     "has_more": false
+    }
+   }
+  },
+  {
+   "name": "list_offset_beyond_js_numbers",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?offset=9007199254740993",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "list_recent_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": null,
+      "limit": 25,
+      "offset": 9007199254740993
+     }
+    },
+    {
+     "fn": "count_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": null
+     }
+    }
+   ],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "77"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"rows\":[],\"total\":3,\"limit\":25,\"offset\":\"9007199254740993\",\"has_more\":false}",
+    "json": {
+     "rows": [],
+     "total": 3,
+     "limit": 25,
+     "offset": "9007199254740993",
+     "has_more": false
+    }
+   }
+  },
+  {
+   "name": "list_offset_with_leading_zeros",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?offset=007",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "list_recent_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": null,
+      "limit": 25,
+      "offset": 7
+     }
+    },
+    {
+     "fn": "count_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": null
+     }
+    }
+   ],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "60"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"rows\":[],\"total\":0,\"limit\":25,\"offset\":7,\"has_more\":false}",
+    "json": {
+     "rows": [],
+     "total": 0,
+     "limit": 25,
+     "offset": 7,
+     "has_more": false
+    }
+   }
+  },
+  {
+   "name": "list_two_bad_params",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?offset=-1&limit=abc",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 422,
+    "headers": [
+     [
+      "content-length",
+      "285"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":[{\"type\":\"int_parsing\",\"loc\":[\"query\",\"limit\"],\"msg\":\"Input should be a valid integer, unable to parse string as an integer\",\"input\":\"abc\"},{\"type\":\"greater_than_equal\",\"loc\":[\"query\",\"offset\"],\"msg\":\"Input should be greater than or equal to 0\",\"input\":\"-1\",\"ctx\":{\"ge\":0}}]}",
+    "json": {
+     "detail": [
+      {
+       "type": "int_parsing",
+       "loc": [
+        "query",
+        "limit"
+       ],
+       "msg": "Input should be a valid integer, unable to parse string as an integer",
+       "input": "abc"
+      },
+      {
+       "type": "greater_than_equal",
+       "loc": [
+        "query",
+        "offset"
+       ],
+       "msg": "Input should be greater than or equal to 0",
+       "input": "-1",
+       "ctx": {
+        "ge": 0
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "list_search_plus_is_a_space",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?q=a+b",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "list_recent_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": "a b",
+      "limit": 25,
+      "offset": 0
+     }
+    },
+    {
+     "fn": "count_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": "a b"
+     }
+    }
+   ],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "60"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"rows\":[],\"total\":0,\"limit\":25,\"offset\":0,\"has_more\":false}",
+    "json": {
+     "rows": [],
+     "total": 0,
+     "limit": 25,
+     "offset": 0,
+     "has_more": false
+    }
+   }
+  },
+  {
+   "name": "list_search_broken_utf8",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?q=%FF",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "list_recent_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": "�",
+      "limit": 25,
+      "offset": 0
+     }
+    },
+    {
+     "fn": "count_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": "�"
+     }
+    }
+   ],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "60"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"rows\":[],\"total\":0,\"limit\":25,\"offset\":0,\"has_more\":false}",
+    "json": {
+     "rows": [],
+     "total": 0,
+     "limit": 25,
+     "offset": 0,
+     "has_more": false
+    }
+   }
+  },
+  {
+   "name": "list_search_repeated",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?q=a&q=%20b%20",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "list_recent_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": "b",
+      "limit": 25,
+      "offset": 0
+     }
+    },
+    {
+     "fn": "count_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": "b"
+     }
+    }
+   ],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "60"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"rows\":[],\"total\":0,\"limit\":25,\"offset\":0,\"has_more\":false}",
+    "json": {
+     "rows": [],
+     "total": 0,
+     "limit": 25,
+     "offset": 0,
+     "has_more": false
+    }
+   }
+  },
+  {
+   "name": "list_search_encoded_name",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?%71=abc",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "list_recent_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": "abc",
+      "limit": 25,
+      "offset": 0
+     }
+    },
+    {
+     "fn": "count_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": "abc"
+     }
+    }
+   ],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "60"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"rows\":[],\"total\":0,\"limit\":25,\"offset\":0,\"has_more\":false}",
+    "json": {
+     "rows": [],
+     "total": 0,
+     "limit": 25,
+     "offset": 0,
+     "has_more": false
+    }
+   }
+  },
+  {
+   "name": "list_search_of_129_spaces",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?q=%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 422,
+    "headers": [
+     [
+      "content-length",
+      "274"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":[{\"type\":\"string_too_long\",\"loc\":[\"query\",\"q\"],\"msg\":\"String should have at most 128 characters\",\"input\":\"                                                                                                                                 \",\"ctx\":{\"max_length\":128}}]}",
+    "json": {
+     "detail": [
+      {
+       "type": "string_too_long",
+       "loc": [
+        "query",
+        "q"
+       ],
+       "msg": "String should have at most 128 characters",
+       "input": "                                                                                                                                 ",
+       "ctx": {
+        "max_length": 128
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "list_guild_as_text",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6ICIgOTk5ICJ9.azbsgA.Ae8m2gtkR4xwSC1KDGcyR31TIgc"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "list_recent_user_states",
+     "args": [
+      999
+     ],
+     "kwargs": {
+      "query": null,
+      "limit": 25,
+      "offset": 0
+     }
+    },
+    {
+     "fn": "count_user_states",
+     "args": [
+      999
+     ],
+     "kwargs": {
+      "query": null
+     }
+    }
+   ],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "60"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"rows\":[],\"total\":0,\"limit\":25,\"offset\":0,\"has_more\":false}",
+    "json": {
+     "rows": [],
+     "total": 0,
+     "limit": 25,
+     "offset": 0,
+     "has_more": false
+    }
+   }
+  },
+  {
+   "name": "list_guild_as_float",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OS45fQ==.azbsgA.AHFhv_P2Gk_24aQtXSuijuvMUDA"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "list_recent_user_states",
+     "args": [
+      999
+     ],
+     "kwargs": {
+      "query": null,
+      "limit": 25,
+      "offset": 0
+     }
+    },
+    {
+     "fn": "count_user_states",
+     "args": [
+      999
+     ],
+     "kwargs": {
+      "query": null
+     }
+    }
+   ],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "60"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"rows\":[],\"total\":0,\"limit\":25,\"offset\":0,\"has_more\":false}",
+    "json": {
+     "rows": [],
+     "total": 0,
+     "limit": 25,
+     "offset": 0,
+     "has_more": false
+    }
+   }
+  },
+  {
+   "name": "list_guild_not_a_number",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6ICJhYmMifQ==.azbsgA.hsJVsdqr8QoVmLPuTNnp_oToRFc"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 500,
+    "headers": [
+     [
+      "content-length",
+      "58"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":\"サーバーエラーが発生しました。\"}",
+    "json": {
+     "detail": "サーバーエラーが発生しました。"
+    }
+   }
+  },
+  {
+   "name": "list_guild_null",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IG51bGx9.azbsgA.kw8_LC_aOR7NpG1I8AIjdYOTU7I"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 500,
+    "headers": [
+     [
+      "content-length",
+      "58"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":\"サーバーエラーが発生しました。\"}",
+    "json": {
+     "detail": "サーバーエラーが発生しました。"
+    }
+   }
+  },
+  {
+   "name": "list_guild_not_a_number_and_bad_limit",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state?limit=0",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6ICJhYmMifQ==.azbsgA.hsJVsdqr8QoVmLPuTNnp_oToRFc"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 422,
+    "headers": [
+     [
+      "content-length",
+      "144"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":[{\"type\":\"greater_than_equal\",\"loc\":[\"query\",\"limit\"],\"msg\":\"Input should be greater than or equal to 1\",\"input\":\"0\",\"ctx\":{\"ge\":1}}]}",
+    "json": {
+     "detail": [
+      {
+       "type": "greater_than_equal",
+       "loc": [
+        "query",
+        "limit"
+       ],
+       "msg": "Input should be greater than or equal to 1",
+       "input": "0",
+       "ctx": {
+        "ge": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
    "name": "list_row_variants",
    "request": {
     "method": "GET",
@@ -1745,7 +3483,7 @@
     "headers": [
      [
       "content-length",
-      "4119"
+      "3609"
      ],
      [
       "content-security-policy",
@@ -1776,7 +3514,282 @@
       "DENY"
      ]
     ],
-    "body": "{\"rows\":[{\"user_id\":\"9223372036854775807\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":null,\"status_label\":\"不明\",\"status_tone\":\"accent\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"-\",\"last_event_at\":\"-\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"7\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"weird\",\"status_label\":\"weird\",\"status_tone\":\"accent\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"メンバー状態を同期（起動時）\",\"last_event_at\":\"2026/08/21 03:30:00\",\"roles\":[\"A\",\"B\"],\"abilities\":[\"custom_ability\",\"メンバーをキック\",\"ロール管理\"]},{\"user_id\":\"8\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"left\",\"status_label\":\"退出\",\"status_tone\":\"warning\",\"is_in_guild\":false,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"BAN状態を同期（自動修復）\",\"last_event_at\":\"2026-08-21 broken\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"9\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"kicked\",\"status_label\":\"KICK\",\"status_tone\":\"danger\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"退出を同期反映（somewhere）\",\"last_event_at\":\"1700000000\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"10\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"unbanned\",\"status_label\":\"BAN解除\",\"status_tone\":\"warning\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"メンバー状態を同期（）\",\"last_event_at\":\"2027/01/01 08:59:59\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"11\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"active\",\"status_label\":\"在籍\",\"status_tone\":\"success\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"custom_event\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"12\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"active\",\"status_label\":\"在籍\",\"status_tone\":\"success\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":true,\"last_event_label\":\"タイムアウト設定\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"13\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"active\",\"status_label\":\"在籍\",\"status_tone\":\"success\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":true,\"last_event_label\":\"サーバー参加\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"14\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"active\",\"status_label\":\"在籍\",\"status_tone\":\"success\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"サーバー参加\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"15\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"active\",\"status_label\":\"在籍\",\"status_tone\":\"success\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":true,\"last_event_label\":\"サーバー参加\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"16\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"active\",\"status_label\":\"在籍\",\"status_tone\":\"success\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"サーバー参加\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"17\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"active\",\"status_label\":\"在籍\",\"status_tone\":\"success\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"サーバー参加\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"None\",\"username\":null,\"display_name\":null,\"avatar_url\":null,\"status\":null,\"status_label\":\"不明\",\"status_tone\":\"accent\",\"is_in_guild\":false,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"-\",\"last_event_at\":\"-\",\"roles\":[],\"abilities\":[]}],\"total\":13,\"limit\":25,\"offset\":0,\"has_more\":false}",
+    "body": "{\"rows\":[{\"user_id\":\"9223372036854775807\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":null,\"status_label\":\"不明\",\"status_tone\":\"accent\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"-\",\"last_event_at\":\"-\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"7\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"weird\",\"status_label\":\"weird\",\"status_tone\":\"accent\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"メンバー状態を同期（起動時）\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[\"A\",\"B\"],\"abilities\":[\"custom_ability\",\"メンバーをキック\",\"ロール管理\"]},{\"user_id\":\"8\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"left\",\"status_label\":\"退出\",\"status_tone\":\"warning\",\"is_in_guild\":false,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"BAN状態を同期（自動修復）\",\"last_event_at\":\"2026/08/21 03:30:00\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"9\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"kicked\",\"status_label\":\"KICK\",\"status_tone\":\"danger\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"退出を同期反映（somewhere）\",\"last_event_at\":\"2023/11/15 07:13:20\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"10\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"unbanned\",\"status_label\":\"BAN解除\",\"status_tone\":\"warning\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"メンバー状態を同期（）\",\"last_event_at\":\"2027/01/01 08:59:59\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"11\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"active\",\"status_label\":\"在籍\",\"status_tone\":\"success\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"custom_event\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"12\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"active\",\"status_label\":\"在籍\",\"status_tone\":\"success\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":true,\"last_event_label\":\"タイムアウト設定\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"17\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"active\",\"status_label\":\"在籍\",\"status_tone\":\"success\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"サーバー参加\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"19\",\"username\":\"\",\"display_name\":null,\"avatar_url\":\"\",\"status\":\"\",\"status_label\":\"不明\",\"status_tone\":\"accent\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"-\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"20\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"unknown\",\"status_label\":\"不明\",\"status_tone\":\"accent\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"定期同期で検出（メンバー）\",\"last_event_at\":\"1970/01/01 09:00:00\",\"roles\":[\"True\",\"1.5\",\"['x']\",\"{'a': 1}\",\"名\"],\"abilities\":[\"\",\"a\",\"z\",\"あ\"]},{\"user_id\":\"-5\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"banned\",\"status_label\":\"BAN中\",\"status_tone\":\"danger\",\"is_in_guild\":true,\"is_banned\":true,\"is_timed_out\":false,\"last_event_label\":\"定期同期で退出を反映\",\"last_event_at\":\"2026/08/21 00:00:00\",\"roles\":[],\"abilities\":[]}],\"total\":11,\"limit\":25,\"offset\":0,\"has_more\":false}",
+    "json": {
+     "rows": [
+      {
+       "user_id": "9223372036854775807",
+       "username": "Active_User",
+       "display_name": null,
+       "avatar_url": null,
+       "status": null,
+       "status_label": "不明",
+       "status_tone": "accent",
+       "is_in_guild": true,
+       "is_banned": false,
+       "is_timed_out": false,
+       "last_event_label": "-",
+       "last_event_at": "-",
+       "roles": [],
+       "abilities": []
+      },
+      {
+       "user_id": "7",
+       "username": "Active_User",
+       "display_name": null,
+       "avatar_url": null,
+       "status": "weird",
+       "status_label": "weird",
+       "status_tone": "accent",
+       "is_in_guild": true,
+       "is_banned": false,
+       "is_timed_out": false,
+       "last_event_label": "メンバー状態を同期（起動時）",
+       "last_event_at": "2026/08/21 12:30:00",
+       "roles": [
+        "A",
+        "B"
+       ],
+       "abilities": [
+        "custom_ability",
+        "メンバーをキック",
+        "ロール管理"
+       ]
+      },
+      {
+       "user_id": "8",
+       "username": "Active_User",
+       "display_name": null,
+       "avatar_url": null,
+       "status": "left",
+       "status_label": "退出",
+       "status_tone": "warning",
+       "is_in_guild": false,
+       "is_banned": false,
+       "is_timed_out": false,
+       "last_event_label": "BAN状態を同期（自動修復）",
+       "last_event_at": "2026/08/21 03:30:00",
+       "roles": [],
+       "abilities": []
+      },
+      {
+       "user_id": "9",
+       "username": "Active_User",
+       "display_name": null,
+       "avatar_url": null,
+       "status": "kicked",
+       "status_label": "KICK",
+       "status_tone": "danger",
+       "is_in_guild": true,
+       "is_banned": false,
+       "is_timed_out": false,
+       "last_event_label": "退出を同期反映（somewhere）",
+       "last_event_at": "2023/11/15 07:13:20",
+       "roles": [],
+       "abilities": []
+      },
+      {
+       "user_id": "10",
+       "username": "Active_User",
+       "display_name": null,
+       "avatar_url": null,
+       "status": "unbanned",
+       "status_label": "BAN解除",
+       "status_tone": "warning",
+       "is_in_guild": true,
+       "is_banned": false,
+       "is_timed_out": false,
+       "last_event_label": "メンバー状態を同期（）",
+       "last_event_at": "2027/01/01 08:59:59",
+       "roles": [],
+       "abilities": []
+      },
+      {
+       "user_id": "11",
+       "username": "Active_User",
+       "display_name": null,
+       "avatar_url": null,
+       "status": "active",
+       "status_label": "在籍",
+       "status_tone": "success",
+       "is_in_guild": true,
+       "is_banned": false,
+       "is_timed_out": false,
+       "last_event_label": "custom_event",
+       "last_event_at": "2026/08/21 12:30:00",
+       "roles": [],
+       "abilities": []
+      },
+      {
+       "user_id": "12",
+       "username": "Active_User",
+       "display_name": null,
+       "avatar_url": null,
+       "status": "active",
+       "status_label": "在籍",
+       "status_tone": "success",
+       "is_in_guild": true,
+       "is_banned": false,
+       "is_timed_out": true,
+       "last_event_label": "タイムアウト設定",
+       "last_event_at": "2026/08/21 12:30:00",
+       "roles": [],
+       "abilities": []
+      },
+      {
+       "user_id": "17",
+       "username": "Active_User",
+       "display_name": null,
+       "avatar_url": null,
+       "status": "active",
+       "status_label": "在籍",
+       "status_tone": "success",
+       "is_in_guild": true,
+       "is_banned": false,
+       "is_timed_out": false,
+       "last_event_label": "サーバー参加",
+       "last_event_at": "2026/08/21 12:30:00",
+       "roles": [],
+       "abilities": []
+      },
+      {
+       "user_id": "19",
+       "username": "",
+       "display_name": null,
+       "avatar_url": "",
+       "status": "",
+       "status_label": "不明",
+       "status_tone": "accent",
+       "is_in_guild": true,
+       "is_banned": false,
+       "is_timed_out": false,
+       "last_event_label": "-",
+       "last_event_at": "2026/08/21 12:30:00",
+       "roles": [],
+       "abilities": []
+      },
+      {
+       "user_id": "20",
+       "username": "Active_User",
+       "display_name": null,
+       "avatar_url": null,
+       "status": "unknown",
+       "status_label": "不明",
+       "status_tone": "accent",
+       "is_in_guild": true,
+       "is_banned": false,
+       "is_timed_out": false,
+       "last_event_label": "定期同期で検出（メンバー）",
+       "last_event_at": "1970/01/01 09:00:00",
+       "roles": [
+        "True",
+        "1.5",
+        "['x']",
+        "{'a': 1}",
+        "名"
+       ],
+       "abilities": [
+        "",
+        "a",
+        "z",
+        "あ"
+       ]
+      },
+      {
+       "user_id": "-5",
+       "username": "Active_User",
+       "display_name": null,
+       "avatar_url": null,
+       "status": "banned",
+       "status_label": "BAN中",
+       "status_tone": "danger",
+       "is_in_guild": true,
+       "is_banned": true,
+       "is_timed_out": false,
+       "last_event_label": "定期同期で退出を反映",
+       "last_event_at": "2026/08/21 00:00:00",
+       "roles": [],
+       "abilities": []
+      }
+     ],
+     "total": 11,
+     "limit": 25,
+     "offset": 0,
+     "has_more": false
+    }
+   }
+  },
+  {
+   "name": "list_row_variants_outside_postgres",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "list_recent_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": null,
+      "limit": 25,
+      "offset": 0
+     }
+    },
+    {
+     "fn": "count_user_states",
+     "args": [
+      123456789012345678
+     ],
+     "kwargs": {
+      "query": null
+     }
+    }
+   ],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "2867"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"rows\":[{\"user_id\":\"9223372036854775807\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":null,\"status_label\":\"不明\",\"status_tone\":\"accent\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"-\",\"last_event_at\":\"-\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"7\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"weird\",\"status_label\":\"weird\",\"status_tone\":\"accent\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"メンバー状態を同期（起動時）\",\"last_event_at\":\"2026/08/21 03:30:00\",\"roles\":[\"A\",\"B\"],\"abilities\":[\"custom_ability\",\"メンバーをキック\",\"ロール管理\"]},{\"user_id\":\"8\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"left\",\"status_label\":\"退出\",\"status_tone\":\"warning\",\"is_in_guild\":false,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"BAN状態を同期（自動修復）\",\"last_event_at\":\"2026-08-21 broken\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"9\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"kicked\",\"status_label\":\"KICK\",\"status_tone\":\"danger\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"退出を同期反映（somewhere）\",\"last_event_at\":\"1700000000\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"13\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"active\",\"status_label\":\"在籍\",\"status_tone\":\"success\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":true,\"last_event_label\":\"サーバー参加\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"14\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"active\",\"status_label\":\"在籍\",\"status_tone\":\"success\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"サーバー参加\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"15\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"active\",\"status_label\":\"在籍\",\"status_tone\":\"success\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":true,\"last_event_label\":\"サーバー参加\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"16\",\"username\":\"Active_User\",\"display_name\":null,\"avatar_url\":null,\"status\":\"active\",\"status_label\":\"在籍\",\"status_tone\":\"success\",\"is_in_guild\":true,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"サーバー参加\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[],\"abilities\":[]},{\"user_id\":\"None\",\"username\":null,\"display_name\":null,\"avatar_url\":null,\"status\":null,\"status_label\":\"不明\",\"status_tone\":\"accent\",\"is_in_guild\":false,\"is_banned\":false,\"is_timed_out\":false,\"last_event_label\":\"-\",\"last_event_at\":\"-\",\"roles\":[],\"abilities\":[]}],\"total\":9,\"limit\":25,\"offset\":0,\"has_more\":false}",
     "json": {
      "rows": [
       {
@@ -1851,54 +3864,6 @@
        "abilities": []
       },
       {
-       "user_id": "10",
-       "username": "Active_User",
-       "display_name": null,
-       "avatar_url": null,
-       "status": "unbanned",
-       "status_label": "BAN解除",
-       "status_tone": "warning",
-       "is_in_guild": true,
-       "is_banned": false,
-       "is_timed_out": false,
-       "last_event_label": "メンバー状態を同期（）",
-       "last_event_at": "2027/01/01 08:59:59",
-       "roles": [],
-       "abilities": []
-      },
-      {
-       "user_id": "11",
-       "username": "Active_User",
-       "display_name": null,
-       "avatar_url": null,
-       "status": "active",
-       "status_label": "在籍",
-       "status_tone": "success",
-       "is_in_guild": true,
-       "is_banned": false,
-       "is_timed_out": false,
-       "last_event_label": "custom_event",
-       "last_event_at": "2026/08/21 12:30:00",
-       "roles": [],
-       "abilities": []
-      },
-      {
-       "user_id": "12",
-       "username": "Active_User",
-       "display_name": null,
-       "avatar_url": null,
-       "status": "active",
-       "status_label": "在籍",
-       "status_tone": "success",
-       "is_in_guild": true,
-       "is_banned": false,
-       "is_timed_out": true,
-       "last_event_label": "タイムアウト設定",
-       "last_event_at": "2026/08/21 12:30:00",
-       "roles": [],
-       "abilities": []
-      },
-      {
        "user_id": "13",
        "username": "Active_User",
        "display_name": null,
@@ -1963,22 +3928,6 @@
        "abilities": []
       },
       {
-       "user_id": "17",
-       "username": "Active_User",
-       "display_name": null,
-       "avatar_url": null,
-       "status": "active",
-       "status_label": "在籍",
-       "status_tone": "success",
-       "is_in_guild": true,
-       "is_banned": false,
-       "is_timed_out": false,
-       "last_event_label": "サーバー参加",
-       "last_event_at": "2026/08/21 12:30:00",
-       "roles": [],
-       "abilities": []
-      },
-      {
        "user_id": "None",
        "username": null,
        "display_name": null,
@@ -1995,7 +3944,7 @@
        "abilities": []
       }
      ],
-     "total": 13,
+     "total": 9,
      "limit": 25,
      "offset": 0,
      "has_more": false
@@ -2256,6 +4205,148 @@
     "headers": [
      [
       "content-length",
+      "1401"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"found\":true,\"user_id\":\"555555555555555555\",\"current\":{\"user_id\":\"555555555555555555\",\"username\":\"member\",\"display_name\":\"メンバー\",\"avatar_url\":\"https://cdn.discordapp.com/avatars/555555555555555555/abc.png\",\"status\":\"banned\",\"status_label\":\"BAN中\",\"status_tone\":\"danger\",\"is_in_guild\":false,\"is_banned\":true,\"is_timed_out\":true,\"last_event_label\":\"BAN\",\"last_event_at\":\"2026/08/21 12:30:00\",\"roles\":[\"大きいID\",\"常連\"],\"abilities\":[\"メンバーをBAN\",\"信頼済みユーザー\"],\"timed_out_until\":\"2999/01/01 09:00:00\",\"first_seen_at\":\"2025/01/02 12:04:05\",\"last_joined_at\":\"2026/08/01 09:00:00\",\"last_left_at\":\"2026/08/21 12:29:59\",\"updated_at\":\"2026/08/21 12:30:00\",\"role_details\":[{\"id\":\"1234567890123456789\",\"name\":\"大きいID\",\"color\":0},{\"id\":1,\"name\":\"常連\"}]},\"events\":[{\"id\":7,\"event_label\":\"メンバー状態を同期（起動時）\",\"event_type\":\"sync_member_on_ready\",\"event_at\":\"2026/08/21 09:00:00\",\"status_after_label\":\"在籍\",\"status_after_tone\":\"success\",\"actor_name\":\"管理者\",\"reason\":\"定期同期\",\"payload\":{\"source\":\"on_ready\"}},{\"id\":8,\"event_label\":\"BAN\",\"event_type\":\"member_ban\",\"event_at\":\"2026/08/21 12:30:00\",\"status_after_label\":\"BAN中\",\"status_after_tone\":\"danger\",\"actor_name\":\"mod\",\"reason\":null,\"payload\":{\"channel_id\":\"1234567890123456789\",\"nested\":{\"ids\":[9007199254740991,\"9007199254740992\",\"-9007199254740993\"]},\"flag\":true,\"ratio\":0.5}}]}",
+    "json": {
+     "found": true,
+     "user_id": "555555555555555555",
+     "current": {
+      "user_id": "555555555555555555",
+      "username": "member",
+      "display_name": "メンバー",
+      "avatar_url": "https://cdn.discordapp.com/avatars/555555555555555555/abc.png",
+      "status": "banned",
+      "status_label": "BAN中",
+      "status_tone": "danger",
+      "is_in_guild": false,
+      "is_banned": true,
+      "is_timed_out": true,
+      "last_event_label": "BAN",
+      "last_event_at": "2026/08/21 12:30:00",
+      "roles": [
+       "大きいID",
+       "常連"
+      ],
+      "abilities": [
+       "メンバーをBAN",
+       "信頼済みユーザー"
+      ],
+      "timed_out_until": "2999/01/01 09:00:00",
+      "first_seen_at": "2025/01/02 12:04:05",
+      "last_joined_at": "2026/08/01 09:00:00",
+      "last_left_at": "2026/08/21 12:29:59",
+      "updated_at": "2026/08/21 12:30:00",
+      "role_details": [
+       {
+        "id": "1234567890123456789",
+        "name": "大きいID",
+        "color": 0
+       },
+       {
+        "id": 1,
+        "name": "常連"
+       }
+      ]
+     },
+     "events": [
+      {
+       "id": 7,
+       "event_label": "メンバー状態を同期（起動時）",
+       "event_type": "sync_member_on_ready",
+       "event_at": "2026/08/21 09:00:00",
+       "status_after_label": "在籍",
+       "status_after_tone": "success",
+       "actor_name": "管理者",
+       "reason": "定期同期",
+       "payload": {
+        "source": "on_ready"
+       }
+      },
+      {
+       "id": 8,
+       "event_label": "BAN",
+       "event_type": "member_ban",
+       "event_at": "2026/08/21 12:30:00",
+       "status_after_label": "BAN中",
+       "status_after_tone": "danger",
+       "actor_name": "mod",
+       "reason": null,
+       "payload": {
+        "channel_id": "1234567890123456789",
+        "nested": {
+         "ids": [
+          9007199254740991,
+          "9007199254740992",
+          "-9007199254740993"
+         ]
+        },
+        "flag": true,
+        "ratio": 0.5
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "detail_odd_events_outside_postgres",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state/555555555555555555",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "get_user_state_detail",
+     "args": [
+      123456789012345678,
+      555555555555555555
+     ],
+     "kwargs": {
+      "event_limit": 100
+     }
+    }
+   ],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
       "1579"
      ],
      [
@@ -2375,6 +4466,110 @@
        "actor_name": null,
        "reason": "x",
        "payload": {}
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "detail_event_variants",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state/42",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "get_user_state_detail",
+     "args": [
+      123456789012345678,
+      42
+     ],
+     "kwargs": {
+      "event_limit": 100
+     }
+    }
+   ],
+   "response": {
+    "status": 200,
+    "headers": [
+     [
+      "content-length",
+      "551"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"found\":true,\"user_id\":\"42\",\"current\":null,\"events\":[{\"id\":\"9007199254740993\",\"event_label\":\"退出を同期反映（手動実行）\",\"event_type\":\"sync_left_manual_signal\",\"event_at\":\"2000/01/01 00:00:00\",\"status_after_label\":\"不明\",\"status_after_tone\":\"accent\",\"actor_name\":\"\",\"reason\":\"\",\"payload\":{}},{\"id\":3,\"event_label\":\"-\",\"event_type\":\"\",\"event_at\":\"-\",\"status_after_label\":\"不明\",\"status_after_tone\":\"accent\",\"actor_name\":null,\"reason\":null,\"payload\":{\"text\":\"あ😀\",\"deep\":{\"list\":[1.5,null,false,{\"big\":\"-9223372036854775808\"}]}}}]}",
+    "json": {
+     "found": true,
+     "user_id": "42",
+     "current": null,
+     "events": [
+      {
+       "id": "9007199254740993",
+       "event_label": "退出を同期反映（手動実行）",
+       "event_type": "sync_left_manual_signal",
+       "event_at": "2000/01/01 00:00:00",
+       "status_after_label": "不明",
+       "status_after_tone": "accent",
+       "actor_name": "",
+       "reason": "",
+       "payload": {}
+      },
+      {
+       "id": 3,
+       "event_label": "-",
+       "event_type": "",
+       "event_at": "-",
+       "status_after_label": "不明",
+       "status_after_tone": "accent",
+       "actor_name": null,
+       "reason": null,
+       "payload": {
+        "text": "あ😀",
+        "deep": {
+         "list": [
+          1.5,
+          null,
+          false,
+          {
+           "big": "-9223372036854775808"
+          }
+         ]
+        }
+       }
       }
      ]
     }
@@ -3180,6 +5375,533 @@
     "json": {
      "found": false,
      "user_id": "99999999999999999999"
+    }
+   }
+  },
+  {
+   "name": "detail_id_with_spaces",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state/%2012%20",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "get_user_state_detail",
+     "args": [
+      123456789012345678,
+      12
+     ],
+     "kwargs": {
+      "event_limit": 100
+     }
+    }
+   ],
+   "response": {
+    "status": 404,
+    "headers": [
+     [
+      "content-length",
+      "30"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"found\":false,\"user_id\":\"12\"}",
+    "json": {
+     "found": false,
+     "user_id": "12"
+    }
+   }
+  },
+  {
+   "name": "detail_id_with_plus",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state/%2B12",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "get_user_state_detail",
+     "args": [
+      123456789012345678,
+      12
+     ],
+     "kwargs": {
+      "event_limit": 100
+     }
+    }
+   ],
+   "response": {
+    "status": 404,
+    "headers": [
+     [
+      "content-length",
+      "30"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"found\":false,\"user_id\":\"12\"}",
+    "json": {
+     "found": false,
+     "user_id": "12"
+    }
+   }
+  },
+  {
+   "name": "detail_id_with_trailing_newline",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state/12%0A",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "get_user_state_detail",
+     "args": [
+      123456789012345678,
+      12
+     ],
+     "kwargs": {
+      "event_limit": 100
+     }
+    }
+   ],
+   "response": {
+    "status": 404,
+    "headers": [
+     [
+      "content-length",
+      "30"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"found\":false,\"user_id\":\"12\"}",
+    "json": {
+     "found": false,
+     "user_id": "12"
+    }
+   }
+  },
+  {
+   "name": "detail_id_with_fraction",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state/12.0",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "get_user_state_detail",
+     "args": [
+      123456789012345678,
+      12
+     ],
+     "kwargs": {
+      "event_limit": 100
+     }
+    }
+   ],
+   "response": {
+    "status": 404,
+    "headers": [
+     [
+      "content-length",
+      "30"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"found\":false,\"user_id\":\"12\"}",
+    "json": {
+     "found": false,
+     "user_id": "12"
+    }
+   }
+  },
+  {
+   "name": "detail_two_bad_params",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state/abc?event_limit=0",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 422,
+    "headers": [
+     [
+      "content-length",
+      "290"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":[{\"type\":\"int_parsing\",\"loc\":[\"path\",\"user_id\"],\"msg\":\"Input should be a valid integer, unable to parse string as an integer\",\"input\":\"abc\"},{\"type\":\"greater_than_equal\",\"loc\":[\"query\",\"event_limit\"],\"msg\":\"Input should be greater than or equal to 1\",\"input\":\"0\",\"ctx\":{\"ge\":1}}]}",
+    "json": {
+     "detail": [
+      {
+       "type": "int_parsing",
+       "loc": [
+        "path",
+        "user_id"
+       ],
+       "msg": "Input should be a valid integer, unable to parse string as an integer",
+       "input": "abc"
+      },
+      {
+       "type": "greater_than_equal",
+       "loc": [
+        "query",
+        "event_limit"
+       ],
+       "msg": "Input should be greater than or equal to 1",
+       "input": "0",
+       "ctx": {
+        "ge": 1
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "detail_event_limit_beyond_64_bits",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state/12?event_limit=99999999999999999999",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGwsICJwZXJtaXNzaW9ucyI6ICIyMTQ3NDgzNjQ3IiwgIm93bmVyIjogdHJ1ZX0sIHsiaWQiOiAyMjIyMjIyMjIyMjIyMjIyMjIsICJuYW1lIjogbnVsbCwgImljb24iOiA1fSwgeyJpZCI6ICJub3QtYS1udW1iZXIiLCAibmFtZSI6ICJcdTU4Y2FcdTMwOGNcdTMwNWZcdTg4NGMifSwgIm5vdC1hLWRpY3QiXSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.nRd8klAbtezJsieD3AhSqpDk788"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 422,
+    "headers": [
+     [
+      "content-length",
+      "167"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "set-cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAidXNlcm5hbWUiOiAidGVzdGVyIiwgImdsb2JhbF9uYW1lIjogIlx1MzBjNlx1MzBiOVx1MzBiZlx1MzBmY1x1ZDgzZFx1ZGUwMCIsICJhdmF0YXIiOiAiYV8wMTIzNDU2Nzg5YWJjZGVmIn0sICJhZG1pbl9ndWlsZHMiOiBbeyJpZCI6ICIxMjM0NTY3ODkwMTIzNDU2NzgiLCAibmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiaWNvbiI6IG51bGx9LCB7ImlkIjogIjIyMjIyMjIyMjIyMjIyMjIyMiIsICJuYW1lIjogIlVua25vd24iLCAiaWNvbiI6IG51bGx9XSwgImFkbWluX2d1aWxkc19hdCI6IDE3OTg3NjEwMDAuMjUsICJfY3NyZl90b2tlbiI6ICIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmIiwgImd1aWxkX2lkIjogMTIzNDU2Nzg5MDEyMzQ1Njc4LCAiZ3VpbGRfbmFtZSI6ICJcdTMwYzZcdTMwYjlcdTMwYzhcdTliZDYiLCAiZ3VpbGRfaWNvbiI6IG51bGx9.azbsgA.S0_WeFPAy-n4BgqQtq8KZwGMINg; path=/; Max-Age=3600; httponly; samesite=lax"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":[{\"type\":\"less_than_equal\",\"loc\":[\"query\",\"event_limit\"],\"msg\":\"Input should be less than or equal to 500\",\"input\":\"99999999999999999999\",\"ctx\":{\"le\":500}}]}",
+    "json": {
+     "detail": [
+      {
+       "type": "less_than_equal",
+       "loc": [
+        "query",
+        "event_limit"
+       ],
+       "msg": "Input should be less than or equal to 500",
+       "input": "99999999999999999999",
+       "ctx": {
+        "le": 500
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "detail_guild_as_text",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state/12",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6ICIgOTk5ICJ9.azbsgA.Ae8m2gtkR4xwSC1KDGcyR31TIgc"
+     ]
+    ]
+   },
+   "calls": [
+    {
+     "fn": "get_user_state_detail",
+     "args": [
+      999,
+      12
+     ],
+     "kwargs": {
+      "event_limit": 100
+     }
+    }
+   ],
+   "response": {
+    "status": 404,
+    "headers": [
+     [
+      "content-length",
+      "30"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"found\":false,\"user_id\":\"12\"}",
+    "json": {
+     "found": false,
+     "user_id": "12"
+    }
+   }
+  },
+  {
+   "name": "detail_guild_not_a_number",
+   "request": {
+    "method": "GET",
+    "target": "/admin/api/users/state/12",
+    "headers": [
+     [
+      "cookie",
+      "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6ICJhYmMifQ==.azbsgA.hsJVsdqr8QoVmLPuTNnp_oToRFc"
+     ]
+    ]
+   },
+   "calls": [],
+   "response": {
+    "status": 500,
+    "headers": [
+     [
+      "content-length",
+      "58"
+     ],
+     [
+      "content-security-policy",
+      "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' https://cdn.discordapp.com data:; font-src 'self'; connect-src 'self' https://static.cloudflareinsights.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+     ],
+     [
+      "content-type",
+      "application/json"
+     ],
+     [
+      "referrer-policy",
+      "strict-origin-when-cross-origin"
+     ],
+     [
+      "vary",
+      "Cookie"
+     ],
+     [
+      "x-content-type-options",
+      "nosniff"
+     ],
+     [
+      "x-frame-options",
+      "DENY"
+     ]
+    ],
+    "body": "{\"detail\":\"サーバーエラーが発生しました。\"}",
+    "json": {
+     "detail": "サーバーエラーが発生しました。"
     }
    }
   },

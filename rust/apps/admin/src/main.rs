@@ -4,6 +4,8 @@
 //! - ログ: `<SETTINGS_DIR>/logs/admin.log` と `admin.jsonl`（Python と同じ名前）
 //! - セッションの秘密鍵: `ADMIN_FLASK_SECRET_KEY` か `<SETTINGS_DIR>/.admin_session_secret`（Python と同じ順・同じ
 //!   ファイル。`sycs_admin::secret`）
+//! - `user_state_audit` の Postgres: `USER_STATE_POSTGRES_*`・`POSTGRES_*`（Python と同じ順。つなぐのは最初に
+//!   使うとき）。束の大きさは `USER_STATE_DB_POOL_*`・`DB_POOL_*`（`sycs_admin::db`）。利用者の状態（A4）が読む
 //! - 死活と数: Valkey へ（`VALKEY_URL`。`hb:admin`・`c:*`）
 //! - 信頼するプロキシ: `TRUSTED_PROXY_CIDRS`（Python と同じ読み方）
 //! - `ADMIN_WORKERS` は読まない（1 プロセスで動く。Python も 1 固定で使っている）
@@ -31,9 +33,11 @@ use tracing::{error, info, warn};
 use sycs_admin::APP_NAME;
 use sycs_admin::app::{self, AdminApp, Config, Deps, OsRandom};
 use sycs_admin::auth::{DISCORD_API, Discord, DiscordConfig};
+use sycs_admin::db;
 use sycs_admin::routes;
 use sycs_admin::secret;
 use sycs_admin::templates::{Pages, PagesConfig};
+use sycs_admin::users::store::PgUserStates;
 use sycs_admin::views::{self, Site};
 
 /// 待ち受けのポートの既定（Python の `ADMIN_PORT` と同じ）。
@@ -89,6 +93,13 @@ async fn main() -> ExitCode {
         warn!("ADMIN_WORKERS は Rust の管理画面では使いません（1 プロセスで動きます）");
     }
     let listen = Listen::from_env(&env, "ADMIN_HOST", "ADMIN_PORT", DEFAULT_PORT);
+    let pool = match db::connect_lazy(&env) {
+        Ok(pool) => pool,
+        Err(e) => {
+            error!("データベースの接続先が読めません: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
     let config = Config::from_env(&env);
     info!(
         "管理画面を起動します: {}:{} 秘密鍵={:?} 監視の置き場={} 信頼するプロキシ={}（X-Forwarded-For をここからだけ受け取る）",
@@ -118,12 +129,13 @@ async fn main() -> ExitCode {
         pages,
         reporter,
     };
-    let state = Arc::new(AdminApp::new(
+    let admin = AdminApp::new(
         config,
         &resolved.secret,
         deps,
         routes::default_routes(&site),
-    ));
+    );
+    let state = Arc::new(admin.with_users(Arc::new(PgUserStates::new(pool))));
     let listener = match listen.bind().await {
         Ok(listener) => listener,
         Err(e) => {
