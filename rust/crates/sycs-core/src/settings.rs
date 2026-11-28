@@ -228,21 +228,8 @@ impl SettingsCache {
         &self,
         mutate: impl FnOnce(&mut Settings) -> T,
     ) -> Result<T, WriteError> {
-        self.write(|data| {
-            // 控えを取る前にも落とす。控えに null が残っていると、書き換え後に null を
-            // 落としただけで「変わった」と読まれ、触っていないギルドに時刻が押される。
-            drop_nulls_in_guilds(&mut data.guilds);
-            let before: BTreeMap<String, Map<String, Value>> = data
-                .guilds
-                .iter()
-                .filter_map(|(key, value)| Some((key.clone(), value.as_object()?.clone())))
-                .collect();
-            let result = mutate(data);
-            drop_nulls_in_guilds(&mut data.guilds);
-            stamp_touched(&mut data.guilds, &before, &now_iso());
-            result
-        })
-        .await
+        self.write(|data| apply_mutation(data, &now_iso(), mutate))
+            .await
     }
 
     /// 保存済みの null を取り除く。取り除いた数を返す。Python の `settings_store.drop_stored_nulls`。
@@ -434,11 +421,38 @@ impl SettingsCache {
     }
 }
 
+/// 書き換えを、Python の `settings_store._mutate_settings` の `apply` と同じ規則で当てる（保存はしない）。
+///
+/// [`SettingsCache::transact`] は、排他を取って表から読み直した全体にこれを当ててから保存する。管理画面の
+/// 設定パネル（A6）の、Postgres を使わない置き場（基準と突き合わせるテスト用）も同じものを通すので、書いたあとの
+/// 形（鍵の並びまで）がテストと本番で同じになる。
+///
+/// 1. null を落とす。控えに null が残っていると、書き換え後に null を落としただけで「変わった」と読まれ、
+///    触っていないギルドに時刻が押される
+/// 2. 控えを取り、`mutate` を当て、また null を落とす（[`drop_nulls`]）
+/// 3. 中身が変わったギルドにだけ `now` を [`TOUCHED_AT_KEY`] に押す（[`stamp_touched`]）
+pub fn apply_mutation<T>(
+    data: &mut Settings,
+    now: &str,
+    mutate: impl FnOnce(&mut Settings) -> T,
+) -> T {
+    drop_nulls_in_guilds(&mut data.guilds);
+    let before: BTreeMap<String, Map<String, Value>> = data
+        .guilds
+        .iter()
+        .filter_map(|(key, value)| Some((key.clone(), value.as_object()?.clone())))
+        .collect();
+    let result = mutate(data);
+    drop_nulls_in_guilds(&mut data.guilds);
+    stamp_touched(&mut data.guilds, &before, now);
+    result
+}
+
 /// いまの時刻（UTC、マイクロ秒まで）。Python の `datetime.now(timezone.utc).isoformat()` と同じ形。
 ///
 /// Python はマイクロ秒がちょうど 0 のとき小数部を省くが、こちらは常に付ける。読む側の
 /// `fromisoformat` はどちらも読める。
-fn now_iso() -> String {
+pub fn now_iso() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Micros, false)
 }
 
@@ -633,6 +647,30 @@ mod tests {
         let mut after = BTreeMap::from([("1".to_string(), json!({"a": 1}))]);
         stamp_touched(&mut after, &objects(&before), "NOW");
         assert_eq!(after["1"][TOUCHED_AT_KEY], "NOW");
+    }
+
+    /// 書き換えの規則（前後で null を落とし、中身が変わったギルドにだけ渡した時刻を押す）。新しく足した鍵は末尾に、
+    /// もとからある鍵は同じ位置に残ること（Python の dict と同じ並び）。
+    #[test]
+    fn apply_mutation_drops_nulls_and_stamps_only_what_changed() {
+        let mut data = Settings::default();
+        data.guilds
+            .insert("1".to_string(), json!({"a": 1, "gone": null, "b": 2}));
+        data.guilds.insert("2".to_string(), json!({"x": null}));
+        let result = apply_mutation(&mut data, "NOW", |data| {
+            let guild = data.guilds.get_mut("1").unwrap().as_object_mut().unwrap();
+            guild.insert("a".to_string(), json!(5));
+            guild.insert("c".to_string(), json!(3));
+            guild.insert("b".to_string(), Value::Null);
+            7
+        });
+        assert_eq!(result, 7);
+        let one = data.guilds["1"].as_object().unwrap();
+        let keys: Vec<&String> = one.keys().collect();
+        assert_eq!(keys, ["a", "c", TOUCHED_AT_KEY]);
+        assert_eq!(one[TOUCHED_AT_KEY], "NOW");
+        // null を落としただけのギルドには押さない。
+        assert_eq!(data.guilds["2"], json!({}));
     }
 
     /// 時刻の形が Python の isoformat と同じ（UTC・マイクロ秒・+00:00）であること。

@@ -375,8 +375,9 @@ pub fn parse(text: &str) -> Result<Schema, String> {
     Ok(Schema { panels })
 }
 
-/// `value in (None, 0, "0", "")`（Python の `==` で比べる。`False == 0`・`0.0 == 0` も当たる）。
-fn is_unset_id(value: &Value) -> bool {
+/// `value in (None, 0, "0", "")`（Python の `==` で比べる。`False == 0`・`0.0 == 0` も当たる）。検証（A6 の
+/// `validation`）と書く関数（`setters`）も同じ比べ方をする。
+pub(crate) fn is_unset_id(value: &Value) -> bool {
     match value {
         Value::Null => true,
         Value::Bool(b) => !*b,

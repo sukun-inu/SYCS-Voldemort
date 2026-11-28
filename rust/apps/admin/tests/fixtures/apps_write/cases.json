@@ -1,0 +1,551 @@
+{
+ "note": "設定パネルの書く側（A6）の基準の例。書き方は generate.py と ../admin_harness.py・../fake_discord.py の先頭。settings・discord・tts・sessions の中では $ref（library）が使える。要求の json では {\"$repeat\": 文字, \"times\": 回数} が使える",
+ "secret": "a6-apps-write-fixture-secret-not-for-production",
+ "now": 1780000000.25,
+ "stamp": "2026-12-01T03:04:05.678901+00:00",
+ "discord": {"client_id": "123456789012345678", "bot_token": "a6-bot-token"},
+ "dev_user_id": "",
+ "library": {
+  "user": {"id": "111111111111111111", "username": "voldemort", "global_name": "ヴォルデモート卿", "avatar": null},
+  "guilds": [{"id": "900000000000000001", "name": "ホグワーツ魔法魔術学校", "icon": null}],
+  "base": {"guilds": {
+   "900000000000000001": {
+    "welcome": {"message": "ようこそ", "channel_id": 800000000000000001},
+    "log_level": "INFO",
+    "tts": {
+     "enabled": false,
+     "watch_channel_ids": [800000000000000001, "800000000000000002", "x"],
+     "vc_channel_id": 800000000000000007,
+     "dictionary": {"ＳＹＣＳ": "しくす", "b": "び"},
+     "user_settings": {"333": {"voice": "Otoya", "rate": 150}, "444": {"voice": "Kyoko"}}
+    },
+    "djaudio_cache_ttl": 900,
+    "news_feeds": {"f1": {"channel_id": 800000000000000001, "query": "地震", "interval": 30, "last_run": 1779999000.5, "seen_hashes": ["a", "b"]}},
+    "sticky_messages": {"800000000000000001": {"content": "固定", "message_id": 1234567890123456789}},
+    "reaction_roles": {"1234567890123456789": {"😀": 700000000000000001, "<:custom:123>": 700000000000000002}},
+    "trusted_user_ids": ["444", 333, "bad", 444],
+    "bypass_role_ids": [700000000000000002],
+    "earthquake": {"notify_types": {"tsunami": false}, "min_scale": 30},
+    "_updated_at": "2026-11-25T09:44:26.553123+00:00"
+   },
+   "900000000000000002": {"log_level": "ERROR"}
+  }},
+  "ten_feeds": {"guilds": {"900000000000000001": {"news_feeds": {
+   "f0": {"channel_id": 1, "query": "q0", "interval": 60}, "f1": {"channel_id": 1, "query": "q1", "interval": 60},
+   "f2": {"channel_id": 1, "query": "q2", "interval": 60}, "f3": {"channel_id": 1, "query": "q3", "interval": 60},
+   "f4": {"channel_id": 1, "query": "q4", "interval": 60}, "f5": {"channel_id": 1, "query": "q5", "interval": 60},
+   "f6": {"channel_id": 1, "query": "q6", "interval": 60}, "f7": {"channel_id": 1, "query": "q7", "interval": 60},
+   "f8": {"channel_id": 1, "query": "q8", "interval": 60}, "f9": {"channel_id": 1, "query": "q9", "interval": 60}
+  }}}},
+  "not_loaded": {"$raise": "SettingsNotLoaded", "message": "設定を Postgres から 30 秒以内に読み込めませんでした。接続先と、ログの [settings] の警告を確かめてください。"},
+  "channels": [
+   {"id": "800000000000000001", "type": 0, "name": "general", "position": 0},
+   {"id": "800000000000000002", "type": 0, "name": "雑談", "position": 1},
+   {"id": "800000000000000007", "type": 2, "name": "ボイス", "position": 0}
+  ],
+  "roles": [
+   {"id": "900000000000000001", "name": "@everyone", "position": 0},
+   {"id": "700000000000000001", "name": "管理者", "position": 2},
+   {"id": "700000000000000002", "name": "メンバー", "position": 1}
+  ],
+  "ok_discord": {
+   "GET /guilds/900000000000000001/channels": {"json": {"$ref": "channels"}},
+   "GET /guilds/900000000000000001/roles": {"json": {"$ref": "roles"}}
+  },
+  "down_discord": {
+   "GET /guilds/900000000000000001/channels": {"status": 500},
+   "GET /guilds/900000000000000001/roles": {"status": 500}
+  },
+  "owner_check": {
+   "GET /guilds/900000000000000001": {"json": {"id": "900000000000000001", "owner_id": "111111111111111111", "roles": []}},
+   "GET /guilds/900000000000000001/members/111111111111111111": {"json": {"user": {"id": "111111111111111111"}, "roles": []}}
+  },
+  "not_member_check": {
+   "GET /guilds/900000000000000001": {"json": {"id": "900000000000000001", "owner_id": "999", "roles": []}},
+   "GET /guilds/900000000000000001/members/111111111111111111": {"status": 404}
+  },
+  "role_admin_check": {
+   "GET /guilds/900000000000000001": {"json": {"id": "900000000000000001", "owner_id": "999", "roles": [
+    {"id": "900000000000000001", "permissions": "0"}, {"id": "700000000000000001", "permissions": "8"}
+   ]}},
+   "GET /guilds/900000000000000001/members/111111111111111111": {"json": {"roles": ["700000000000000001"]}}
+  },
+  "user0_check": {
+   "GET /guilds/900000000000000001": {"json": {"id": "900000000000000001", "owner_id": "111111111111111111", "roles": []}},
+   "GET /guilds/900000000000000001/members/0": {"status": 404}
+  },
+  "voices": {"voices": [{"name": "Kyoko"}, {"name": "Otoya"}]},
+  "ok_tts": {"GET /api/v1/voices?locale=ja": {"json": {"$ref": "voices"}}},
+  "down_tts": {"GET /api/v1/voices?locale=ja": {"status": 500}}
+ },
+ "sessions": {
+  "guild": {"user": {"$ref": "user"}, "admin_guilds": {"$ref": "guilds"}, "admin_guilds_at": 1779999990.25, "guild_id": 900000000000000001, "guild_name": "ホグワーツ魔法魔術学校", "guild_icon": null, "_csrf_token": "a6-csrf-token"},
+  "no_guild": {"user": {"$ref": "user"}, "admin_guilds": {"$ref": "guilds"}, "_csrf_token": "a6-csrf-token"},
+  "bad_guild": {"user": {"$ref": "user"}, "admin_guilds": {"$ref": "guilds"}, "guild_id": "abc", "_csrf_token": "a6-csrf-token"},
+  "user_without_id": {"user": {"username": "名無し"}, "guild_id": 900000000000000001, "_csrf_token": "a6-csrf-token"},
+  "user_text": {"user": "x", "guild_id": 900000000000000001, "_csrf_token": "a6-csrf-token"}
+ },
+ "cases": [
+  {"name": "put_without_cookie", "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "json": {"values": {}}, "expect_status": 303}]},
+  {"name": "put_without_guild", "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "no_guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {}}, "expect_status": 303}]},
+  {"name": "put_without_csrf_header", "settings": {"$ref": "base"}, "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "json": {"values": {"log_level": "DEBUG"}}, "expect_status": 403}]},
+  {"name": "put_wrong_csrf", "settings": {"$ref": "base"}, "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "wrong"}, "json": {"values": {"log_level": "DEBUG"}}, "expect_status": 403}]},
+  {"name": "put_unknown_panel", "steps": [{"method": "PUT", "target": "/admin/api/apps/nothing", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {}}, "expect_status": 404}]},
+  {"name": "put_custom_panel", "steps": [{"method": "PUT", "target": "/admin/api/apps/guild-data", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {}}, "expect_status": 404}]},
+  {"name": "put_dev_panel_without_dev", "steps": [{"method": "PUT", "target": "/admin/api/apps/dev", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {}}, "expect_status": 404}]},
+  {"name": "put_bad_guild_id", "settings": {"$ref": "base"}, "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "bad_guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"log_level": "DEBUG"}}, "expect_status": 500}]},
+  {"name": "put_unknown_panel_with_bad_guild_id", "steps": [{"method": "PUT", "target": "/admin/api/apps/nothing", "session": "bad_guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {}}, "expect_status": 404}]},
+  {"name": "put_not_json", "settings": {"$ref": "base"}, "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token", "content-type": "application/json"}, "body": "not json", "expect_status": 400}]},
+  {"name": "put_json_array", "settings": {"$ref": "base"}, "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": [1], "expect_status": 400}]},
+  {"name": "put_without_values", "settings": {"$ref": "base"}, "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"x": 1}, "expect_status": 400}]},
+  {"name": "put_values_list", "settings": {"$ref": "base"}, "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": [1]}, "expect_status": 400}]},
+  {"name": "put_empty_values", "settings": {"$ref": "base"}, "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {}}, "expect_status": 200}]},
+  {
+   "name": "put_form_body",
+   "settings": {"$ref": "base"},
+   "steps": [
+    {"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token", "content-type": "application/x-www-form-urlencoded"}, "body": "{\"values\": {}}", "expect_status": 400},
+    {"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"content-type": "application/x-www-form-urlencoded"}, "body": "csrf_token=a6-csrf-token&values=1", "expect_status": 400}
+   ]
+  },
+  {"name": "put_with_bom", "settings": {"$ref": "base"}, "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token", "content-type": "application/json"}, "body": "﻿{\"values\": {}}", "expect_status": 200}]},
+  {"name": "put_patch_not_allowed", "steps": [{"method": "PATCH", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {}}, "expect_status": 405}]},
+  {"name": "collections_get_not_allowed", "steps": [{"method": "GET", "target": "/admin/api/apps/tts/collections/dictionary", "session": "guild", "expect_status": 405}]},
+  {"name": "guild_data_get_not_allowed", "steps": [{"method": "GET", "target": "/admin/api/guild-data", "session": "guild", "expect_status": 405}]},
+  {"name": "put_trailing_slash", "steps": [{"method": "PUT", "target": "/admin/api/apps/logging/", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {}}, "expect_status": 307}]},
+  {
+   "name": "logging_save_all",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [
+    {"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"log_channel_id": "800000000000000002", "log_level": "DEBUG", "chatgpt_channel_id": ""}}, "expect_status": 200},
+    {"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "at": 1, "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"log_channel_id": "800000000000000002", "log_level": "DEBUG", "chatgpt_channel_id": ""}}, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "logging_invalid",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"log_channel_id": "800000000000000099", "log_level": "info", "nothing": 1}}, "expect_status": 422}]
+  },
+  {
+   "name": "logging_mixed_saves_the_valid_ones",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"log_level": "ERROR", "log_channel_id": "abc", "chatgpt_channel_id": 800000000000000001}}, "expect_status": 422}]
+  },
+  {
+   "name": "logging_discord_down",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "down_discord"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"log_channel_id": "800000000000000099"}}, "expect_status": 200}]
+  },
+  {
+   "name": "logging_superscript_crashes",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"log_channel_id": "²"}}, "expect_status": 500}]
+  },
+  {
+   "name": "logging_settings_not_loaded",
+   "settings": {"$ref": "not_loaded"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"log_level": "DEBUG"}}, "expect_status": 422}]
+  },
+  {
+   "name": "logging_stored_nulls_are_rewritten_without_a_stamp",
+   "settings": {"guilds": {"900000000000000001": {"log_level": "INFO", "log_channel_id": null, "x": {"y": null}, "z": {}}}},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"log_level": "INFO"}}, "expect_status": 200}]
+  },
+  {
+   "name": "logging_broken_guild_settings",
+   "settings": {"guilds": {"900000000000000001": "abc"}},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/logging", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"log_level": "NONE"}}, "expect_status": 200}]
+  },
+  {
+   "name": "welcome_save",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/welcome", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"welcome_message": "  こんにちは\r\n{user}  ", "goodbye_channel_id": "800000000000000001", "goodbye_message": "a\u0000b"}}, "expect_status": 200}]
+  },
+  {
+   "name": "welcome_clear",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/welcome", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"welcome_channel_id": null, "welcome_message": ""}}, "expect_status": 200}]
+  },
+  {
+   "name": "welcome_too_long",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/welcome", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"welcome_message": {"$repeat": "あ", "times": 1001}}}, "expect_status": 422}]
+  },
+  {
+   "name": "vc_notify_save",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/vc-notify", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"vc_notify_channel_id": "800000000000000001", "vc_notify_role_id": "700000000000000001", "vc_notify_filter_role_id": "0"}}, "expect_status": 200}]
+  },
+  {
+   "name": "vc_notify_everyone_is_not_listed",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/vc-notify", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"vc_notify_role_id": "900000000000000001"}}, "expect_status": 422}]
+  },
+  {
+   "name": "earthquake_save",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/earthquake", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"channel_id": 800000000000000002, "min_scale": 45, "notify_types": ["tsunami", "quake_info"]}}, "expect_status": 200}]
+  },
+  {
+   "name": "earthquake_invalid",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/earthquake", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"min_scale": "65", "notify_types": "x"}}, "expect_status": 422}]
+  },
+  {
+   "name": "earthquake_no_types",
+   "settings": {"guilds": {}},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/earthquake", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"notify_types": null, "min_scale": " 70 "}}, "expect_status": 200}]
+  },
+  {
+   "name": "security_toggle",
+   "settings": {"$ref": "base"},
+   "steps": [
+    {"method": "PUT", "target": "/admin/api/apps/security", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"security_timeout_enabled": " ON "}}, "expect_status": 200},
+    {"method": "PUT", "target": "/admin/api/apps/security", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"security_timeout_enabled": "nope"}}, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "djaudio_limits",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/djaudio", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"cooldown": 3600, "max_urls": "", "cache_ttl": 120}}, "expect_status": 200}]
+  },
+  {
+   "name": "djaudio_cooldown_drops_the_legacy_ttl",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/djaudio", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"cooldown": 10}}, "expect_status": 200}]
+  },
+  {
+   "name": "djaudio_out_of_range",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/djaudio", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"cache_ttl": 59, "cooldown": -1, "max_urls": 11}}, "expect_status": 422}]
+  },
+  {
+   "name": "djaudio_duration_upper_bound",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/djaudio", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"cache_ttl": 2592001}}, "expect_status": 422}]
+  },
+  {
+   "name": "djaudio_channels",
+   "settings": {"guilds": {"900000000000000001": {"djaudio": "broken", "djaudio_watch_channel": 5}}},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/djaudio", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"channel_id": "800000000000000001", "output_channel_id": null, "max_urls": 4}}, "expect_status": 200}]
+  },
+  {
+   "name": "tts_save_with_voices",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "tts": {"$ref": "ok_tts"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/tts", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"enabled": "yes", "vc_notify": 1, "default_voice": "Otoya", "vc_channel_id": "800000000000000007", "max_length": 50, "speak_max_length": 60, "read_name": false, "default_rate": 400}}, "expect_status": 200}]
+  },
+  {
+   "name": "tts_voice_not_available",
+   "settings": {"$ref": "base"},
+   "tts": {"$ref": "ok_tts"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/tts", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"default_voice": "Nobody"}}, "expect_status": 422}]
+  },
+  {
+   "name": "tts_voices_down_accepts_free_text",
+   "settings": {"$ref": "base"},
+   "tts": {"$ref": "down_tts"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/tts", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"default_voice": " Nobody "}}, "expect_status": 200}]
+  },
+  {
+   "name": "tts_voice_blank",
+   "settings": {"$ref": "base"},
+   "tts": {"$ref": "ok_tts"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/tts", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"default_voice": "   "}}, "expect_status": 422}]
+  },
+  {
+   "name": "tts_broken_block",
+   "settings": {"guilds": {"900000000000000001": {"tts": "abc"}}},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/tts", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"vc_channel_id": null, "enabled": true}}, "expect_status": 422}]
+  },
+  {
+   "name": "tts_lengths_out_of_range",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/tts", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"default_rate": 99, "max_length": "1.5", "speak_max_length": 501}}, "expect_status": 422}]
+  },
+  {
+   "name": "tts_watch_add",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "POST", "target": "/admin/api/apps/tts/collections/watch_channels", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"channel_id": "800000000000000002"}}, "expect_status": 200}]
+  },
+  {
+   "name": "tts_watch_add_without_tts",
+   "settings": {"guilds": {}},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "POST", "target": "/admin/api/apps/tts/collections/watch_channels", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"channel_id": "800000000000000001"}}, "expect_status": 200}]
+  },
+  {
+   "name": "tts_watch_remove",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "DELETE", "target": "/admin/api/apps/tts/collections/watch_channels/800000000000000001", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}]
+  },
+  {
+   "name": "tts_watch_remove_bad_id",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "DELETE", "target": "/admin/api/apps/tts/collections/watch_channels/abc", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 422}]
+  },
+  {
+   "name": "tts_dictionary_add",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "POST", "target": "/admin/api/apps/tts/collections/dictionary", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"word": " ＳＹＣＳ ", "reading": " しすてむ "}}, "expect_status": 200}]
+  },
+  {
+   "name": "tts_dictionary_remove",
+   "settings": {"$ref": "base"},
+   "steps": [
+    {"method": "DELETE", "target": "/admin/api/apps/tts/collections/dictionary/b", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200},
+    {"method": "DELETE", "target": "/admin/api/apps/tts/collections/dictionary/zzz", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}
+   ]
+  },
+  {"name": "tts_dictionary_update_not_allowed", "settings": {"$ref": "base"}, "steps": [{"method": "PUT", "target": "/admin/api/apps/tts/collections/dictionary/b", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {}}, "expect_status": 405}]},
+  {"name": "tts_user_settings_add_not_allowed", "settings": {"$ref": "base"}, "steps": [{"method": "POST", "target": "/admin/api/apps/tts/collections/user_settings", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {}}, "expect_status": 405}]},
+  {"name": "tts_user_reset", "settings": {"$ref": "base"}, "steps": [{"method": "DELETE", "target": "/admin/api/apps/tts/collections/user_settings/333", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}]},
+  {"name": "tts_user_reset_without_tts", "settings": {"guilds": {}}, "steps": [{"method": "DELETE", "target": "/admin/api/apps/tts/collections/user_settings/007", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}]},
+  {
+   "name": "tts_add_invalid",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "POST", "target": "/admin/api/apps/tts/collections/watch_channels", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"channel_id": "800000000000000099", "extra": 1}}, "expect_status": 422}]
+  },
+  {"name": "tts_add_bad_body", "settings": {"$ref": "base"}, "steps": [{"method": "POST", "target": "/admin/api/apps/tts/collections/watch_channels", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token", "content-type": "application/json"}, "body": "[", "expect_status": 400}]},
+  {
+   "name": "news_add",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "POST", "target": "/admin/api/apps/news-feeds/collections/feeds", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"channel_id": "800000000000000001", "query": " 地震 速報 "}}, "expect_status": 200}]
+  },
+  {
+   "name": "news_add_at_the_limit",
+   "settings": {"$ref": "ten_feeds"},
+   "steps": [{"method": "POST", "target": "/admin/api/apps/news-feeds/collections/feeds", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"channel_id": "800000000000000001", "query": "x"}}, "expect_status": 422}]
+  },
+  {
+   "name": "news_add_invalid",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "POST", "target": "/admin/api/apps/news-feeds/collections/feeds", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"channel_id": "1", "query": "", "interval": 4}}, "expect_status": 422}]
+  },
+  {
+   "name": "news_update",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/news-feeds/collections/feeds/f1", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"channel_id": "800000000000000002", "query": "台風", "interval": 120}}, "expect_status": 200}]
+  },
+  {
+   "name": "news_update_missing",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/news-feeds/collections/feeds/zz", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"channel_id": "800000000000000002", "query": "台風"}}, "expect_status": 200}]
+  },
+  {
+   "name": "news_remove",
+   "settings": {"$ref": "base"},
+   "steps": [
+    {"method": "DELETE", "target": "/admin/api/apps/news-feeds/collections/feeds/f1", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200},
+    {"method": "DELETE", "target": "/admin/api/apps/news-feeds/collections/feeds/f1", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "news_settings_not_loaded",
+   "settings": {"$ref": "not_loaded"},
+   "steps": [{"method": "POST", "target": "/admin/api/apps/news-feeds/collections/feeds", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"channel_id": "800000000000000001", "query": "x"}}, "expect_status": 500}]
+  },
+  {
+   "name": "sticky_add_new",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "POST", "target": "/admin/api/apps/sticky/collections/stickies", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"channel_id": "800000000000000002", "content": "  お知らせ\r\n  "}}, "expect_status": 200}]
+  },
+  {
+   "name": "sticky_add_existing_keeps_the_message",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "POST", "target": "/admin/api/apps/sticky/collections/stickies", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"channel_id": "800000000000000001", "content": "差し替え"}}, "expect_status": 200}]
+  },
+  {
+   "name": "sticky_update",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/sticky/collections/stickies/800000000000000001", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"channel_id": "800000000000000001", "content": "新しい"}}, "expect_status": 200}]
+  },
+  {
+   "name": "sticky_update_bad_item",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "PUT", "target": "/admin/api/apps/sticky/collections/stickies/abc", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"channel_id": "800000000000000001", "content": "新しい"}}, "expect_status": 422}]
+  },
+  {
+   "name": "sticky_remove",
+   "settings": {"$ref": "base"},
+   "steps": [
+    {"method": "DELETE", "target": "/admin/api/apps/sticky/collections/stickies/800000000000000001", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200},
+    {"method": "DELETE", "target": "/admin/api/apps/sticky/collections/stickies/5", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "sticky_settings_not_loaded",
+   "settings": {"$ref": "not_loaded"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "POST", "target": "/admin/api/apps/sticky/collections/stickies", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"channel_id": "800000000000000001", "content": "x"}}, "expect_status": 500}]
+  },
+  {
+   "name": "reaction_add",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "POST", "target": "/admin/api/apps/reaction-roles/collections/reaction_roles", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"message_id": "1234567890123456789", "emoji": " 🎉 ", "role_id": "700000000000000002"}}, "expect_status": 200}]
+  },
+  {
+   "name": "reaction_add_new_message",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "POST", "target": "/admin/api/apps/reaction-roles/collections/reaction_roles", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"message_id": "0042", "emoji": "<:a:1>", "role_id": "700000000000000001"}}, "expect_status": 200}]
+  },
+  {
+   "name": "reaction_remove_custom_emoji",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "DELETE", "target": "/admin/api/apps/reaction-roles/collections/reaction_roles/1234567890123456789:%3C:custom:123%3E", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}]
+  },
+  {
+   "name": "reaction_remove_last_emoji_removes_the_message",
+   "settings": {"guilds": {"900000000000000001": {"reaction_roles": {"1": {"x": 2}, "3": {"y": 4}}}}},
+   "steps": [{"method": "DELETE", "target": "/admin/api/apps/reaction-roles/collections/reaction_roles/1:x", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}]
+  },
+  {
+   "name": "reaction_remove_bad",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "DELETE", "target": "/admin/api/apps/reaction-roles/collections/reaction_roles/abc:x", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 422}]
+  },
+  {
+   "name": "reaction_remove_missing",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "DELETE", "target": "/admin/api/apps/reaction-roles/collections/reaction_roles/99:x", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}]
+  },
+  {
+   "name": "trusted_add",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "POST", "target": "/admin/api/apps/security/collections/trusted_users", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"user_id": " 0555 "}}, "expect_status": 200}]
+  },
+  {
+   "name": "trusted_add_unset",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "POST", "target": "/admin/api/apps/security/collections/trusted_users", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"user_id": "0"}}, "expect_status": 422}]
+  },
+  {
+   "name": "trusted_remove",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "DELETE", "target": "/admin/api/apps/security/collections/trusted_users/444", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}]
+  },
+  {
+   "name": "bypass_add",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "POST", "target": "/admin/api/apps/security/collections/bypass_roles", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"role_id": "700000000000000001"}}, "expect_status": 200}]
+  },
+  {
+   "name": "bypass_remove",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "DELETE", "target": "/admin/api/apps/security/collections/bypass_roles/700000000000000002", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}]
+  },
+  {
+   "name": "bypass_remove_bad",
+   "settings": {"$ref": "base"},
+   "steps": [{"method": "DELETE", "target": "/admin/api/apps/security/collections/bypass_roles/x", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 422}]
+  },
+  {"name": "collection_unknown", "settings": {"$ref": "base"}, "steps": [{"method": "POST", "target": "/admin/api/apps/tts/collections/nothing", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {}}, "expect_status": 404}]},
+  {"name": "collection_on_custom_panel", "steps": [{"method": "POST", "target": "/admin/api/apps/monitoring/collections/x", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {}}, "expect_status": 404}]},
+  {"name": "collection_add_without_values", "settings": {"$ref": "base"}, "steps": [{"method": "POST", "target": "/admin/api/apps/tts/collections/watch_channels", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"x": 1}, "expect_status": 400}]},
+  {"name": "collection_remove_without_csrf", "settings": {"$ref": "base"}, "steps": [{"method": "DELETE", "target": "/admin/api/apps/tts/collections/dictionary/b", "session": "guild", "expect_status": 403}]},
+  {"name": "delete_without_confirm", "settings": {"$ref": "base"}, "steps": [{"method": "DELETE", "target": "/admin/api/guild-data", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 400}]},
+  {"name": "delete_wrong_confirm", "settings": {"$ref": "base"}, "steps": [{"method": "DELETE", "target": "/admin/api/guild-data?confirm=900000000000000002", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 400}]},
+  {
+   "name": "delete_as_owner",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "owner_check"},
+   "user_states": {"events": 3, "states": 2},
+   "steps": [{"method": "DELETE", "target": "/admin/api/guild-data?confirm=%20900000000000000001%20", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}]
+  },
+  {
+   "name": "delete_not_a_member",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "not_member_check"},
+   "steps": [{"method": "DELETE", "target": "/admin/api/guild-data?confirm=900000000000000001", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 403}]
+  },
+  {
+   "name": "delete_guild_gone",
+   "settings": {"$ref": "base"},
+   "discord": {"GET /guilds/900000000000000001": {"status": 404}},
+   "steps": [{"method": "DELETE", "target": "/admin/api/guild-data?confirm=900000000000000001", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 403}]
+  },
+  {
+   "name": "delete_when_discord_is_down",
+   "settings": {"$ref": "base"},
+   "discord": {"GET /guilds/900000000000000001": {"status": 500}},
+   "user_states": {"events": 0, "states": 1},
+   "steps": [{"method": "DELETE", "target": "/admin/api/guild-data?confirm=900000000000000001", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}]
+  },
+  {
+   "name": "delete_admin_by_role",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "role_admin_check"},
+   "steps": [{"method": "DELETE", "target": "/admin/api/guild-data?confirm=900000000000000001", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}]
+  },
+  {
+   "name": "delete_without_bot_token",
+   "settings": {"$ref": "base"},
+   "bot_token": "",
+   "steps": [{"method": "DELETE", "target": "/admin/api/guild-data?confirm=900000000000000001", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}]
+  },
+  {
+   "name": "delete_user_states_fail",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "owner_check"},
+   "user_states": {"$raise": "RuntimeError", "message": "利用者の状態の表につながらない"},
+   "steps": [{"method": "DELETE", "target": "/admin/api/guild-data?confirm=900000000000000001", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}]
+  },
+  {
+   "name": "delete_without_settings",
+   "settings": {"guilds": {"900000000000000002": {"log_level": "ERROR"}}},
+   "discord": {"$ref": "owner_check"},
+   "steps": [{"method": "DELETE", "target": "/admin/api/guild-data?confirm=900000000000000001", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200}]
+  },
+  {
+   "name": "delete_settings_not_loaded",
+   "settings": {"$ref": "not_loaded"},
+   "discord": {"$ref": "owner_check"},
+   "user_states": {"events": 1, "states": 1},
+   "steps": [{"method": "DELETE", "target": "/admin/api/guild-data?confirm=900000000000000001", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 500}]
+  },
+  {
+   "name": "delete_user_without_id",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "user0_check"},
+   "steps": [{"method": "DELETE", "target": "/admin/api/guild-data?confirm=900000000000000001", "session": "user_without_id", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 403}]
+  },
+  {"name": "delete_user_not_a_dict", "settings": {"$ref": "base"}, "steps": [{"method": "DELETE", "target": "/admin/api/guild-data?confirm=900000000000000001", "session": "user_text", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 500}]},
+  {"name": "delete_bad_guild_id", "settings": {"$ref": "base"}, "steps": [{"method": "DELETE", "target": "/admin/api/guild-data?confirm=abc", "session": "bad_guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 500}]},
+  {"name": "delete_without_csrf", "settings": {"$ref": "base"}, "steps": [{"method": "DELETE", "target": "/admin/api/guild-data?confirm=900000000000000001", "session": "guild", "expect_status": 403}]},
+  {
+   "name": "delete_then_write_again",
+   "settings": {"$ref": "base"},
+   "discord": {"$ref": "owner_check"},
+   "steps": [
+    {"method": "DELETE", "target": "/admin/api/guild-data?confirm=900000000000000001", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "expect_status": 200},
+    {"method": "PUT", "target": "/admin/api/apps/security", "session": "guild", "headers": {"x-csrftoken": "a6-csrf-token"}, "json": {"values": {"security_timeout_enabled": true}}, "expect_status": 200}
+   ]
+  }
+ ]
+}

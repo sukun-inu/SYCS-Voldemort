@@ -589,8 +589,8 @@ fn djaudio_max_urls(ctx: &Ctx<'_>) -> Result<Value, Crash> {
 
 // ── 読み上げ（tts.py・tts_store） ───────────────────────────────
 
-/// `get_tts_settings`（`_get_dict_setting(guild_id, "tts")`）。
-fn tts_settings(ctx: &Ctx<'_>) -> Result<Map<String, Value>, Crash> {
+/// `get_tts_settings`（`_get_dict_setting(guild_id, "tts")`）。書く側（A6 の `setters`）も読む。
+pub(crate) fn tts_settings(ctx: &Ctx<'_>) -> Result<Map<String, Value>, Crash> {
     dict_setting(&guild_settings(ctx)?, "tts")
 }
 
@@ -669,8 +669,8 @@ fn tts_speak_max_length(ctx: &Ctx<'_>) -> Result<Value, Crash> {
 }
 
 /// `_watch_ids`（`for cid in settings.get("watch_channel_ids", []) or []` の `int()` できるもの）。並べられない値は
-/// Python と同じ例外（try の外）。
-fn watch_ids(tts: &Map<String, Value>) -> Result<Vec<String>, Crash> {
+/// Python と同じ例外（try の外）。書く側（A6 の `setters`）も読む。
+pub(crate) fn watch_ids(tts: &Map<String, Value>) -> Result<Vec<String>, Crash> {
     let Some(raw) = tts
         .get("watch_channel_ids")
         .filter(|raw| python::truthy(raw))
@@ -750,8 +750,8 @@ fn security_timeout_enabled(ctx: &Ctx<'_>) -> Result<Value, Crash> {
     )))
 }
 
-/// `_parse_id_list`（並びでなければ空、`int()` できない要素は捨てる）。
-fn parse_id_list(value: &Value) -> Vec<String> {
+/// `_parse_id_list`（並びでなければ空、`int()` できない要素は捨てる）。書く側（A6 の `setters`）も読む。
+pub(crate) fn parse_id_list(value: &Value) -> Vec<String> {
     match value {
         Value::Array(items) => items.iter().filter_map(python::int_text).collect(),
         _ => Vec::new(),

@@ -1,0 +1,108 @@
+{
+ "note": "設定パネルの入力の検証（A6）の基準の例。書き方は generate.py の先頭。raws の {\"$repeat\": 文字, \"times\": 回数} は文字をくり返したもの",
+ "raws": [
+  null, true, false, 0, 1, -1, 0.0, -0.0, 1.5, 12.0, 1e16,
+  4, 5, 9, 10, 30, 45, 59, 60, 99, 100, 200, 400, 401, 500, 501, 1440, 1441, 3600, 3601, 2592000, 2592001,
+  800000000000000001, 9223372036854775808, 18446744073709551615,
+  "", " ", "0", "00", " 0 ", "-0", "1", "12", " 12 ", "１２", "٣", "²", "1²", "1_000", "+5", "-5", "1.5", "abc",
+  "800000000000000001", " 800000000000000001 ", "0800000000000000001", "800000000000000099",
+  "700000000000000001", "800000000000000007", "18446744073709551616",
+  "INFO", "info", " DEBUG ", "NONE", "30", " 30 ", "30.0", "45", "65", "10",
+  "Kyoko", " Kyoko ", "Otoya", "7", "Unknown",
+  "true", "TRUE", " on ", "yes", "Yes", "no", "off",
+  "ようこそ", "  空白  ", "a\u0000b", "a\r\nb\rc", "\r\n", "\t",
+  {"$repeat": "x", "times": 20}, {"$repeat": "x", "times": 21},
+  {"$repeat": "x", "times": 50}, {"$repeat": "x", "times": 51},
+  {"$repeat": "x", "times": 100}, {"$repeat": "x", "times": 101},
+  {"$repeat": "x", "times": 200}, {"$repeat": "x", "times": 201},
+  {"$repeat": "x", "times": 1000}, {"$repeat": "x", "times": 1001},
+  {"$repeat": "\u0000x", "times": 500},
+  {"$repeat": "\r\n", "times": 501},
+  {"$repeat": " ", "times": 51},
+  [], ["eew_forecast"], ["tsunami", "bot_news"], ["x"], [1], ["eew_forecast", "eew_forecast"], [null], ["10"],
+  {}, {"a": 1}
+ ],
+ "choices": {
+  "none": {},
+  "empty": {"channels": [], "voice_channels": [], "roles": [], "tts_voices": []},
+  "full": {
+   "channels": [
+    {"value": "800000000000000001", "label": "# general"},
+    {"value": "800000000000000003", "label": "# 雑談"},
+    {"value": "12", "label": "# 短い ID"}
+   ],
+   "voice_channels": [{"value": "800000000000000007", "label": "ボイス"}],
+   "roles": [{"value": "700000000000000001", "label": "管理者"}, {"value": "1", "label": "小さい ID"}],
+   "tts_voices": [{"value": "Kyoko", "label": "Kyoko"}, {"value": "Otoya", "label": "Otoya"}, {"value": 7, "label": 7}]
+  }
+ },
+ "values_cases": [
+  {
+   "name": "logging_mixed",
+   "panel": "logging",
+   "choices": "full",
+   "incoming": {"log_channel_id": "800000000000000001", "log_level": "info", "nothing": 1, "chatgpt_channel_id": ""}
+  },
+  {"name": "logging_empty", "panel": "logging", "choices": "none", "incoming": {}},
+  {"name": "logging_superscript_crashes", "panel": "logging", "choices": "none", "incoming": {"log_level": "INFO", "log_channel_id": "²"}},
+  {
+   "name": "earthquake_all",
+   "panel": "earthquake",
+   "choices": "full",
+   "incoming": {"notify_types": ["tsunami"], "min_scale": 45, "channel_id": 800000000000000003}
+  },
+  {"name": "earthquake_bad", "panel": "earthquake", "choices": "none", "incoming": {"notify_types": "x", "min_scale": "65"}},
+  {
+   "name": "tts_without_voices",
+   "panel": "tts",
+   "choices": "none",
+   "incoming": {"default_voice": " Nobody ", "enabled": "on", "default_rate": "", "max_length": 9, "vc_channel_id": "0"}
+  },
+  {"name": "tts_with_voices", "panel": "tts", "choices": "full", "incoming": {"default_voice": "Nobody", "vc_channel_id": "800000000000000007"}},
+  {"name": "djaudio_limits", "panel": "djaudio", "choices": "none", "incoming": {"cache_ttl": 59, "cooldown": "", "max_urls": "11"}},
+  {"name": "welcome_texts", "panel": "welcome", "choices": "none", "incoming": {"welcome_message": {"$repeat": "あ", "times": 1001}, "goodbye_message": "  "}}
+ ],
+ "item_cases": [
+  {
+   "name": "feed_ok",
+   "panel": "news-feeds",
+   "collection": "feeds",
+   "choices": "full",
+   "incoming": {"channel_id": "800000000000000001", "query": " 地震 "}
+  },
+  {"name": "feed_missing_required", "panel": "news-feeds", "collection": "feeds", "choices": "full", "incoming": {"interval": 5}},
+  {
+   "name": "feed_unknown_key",
+   "panel": "news-feeds",
+   "collection": "feeds",
+   "choices": "none",
+   "incoming": {"channel_id": "1", "query": "a", "interval": 4, "extra": 1}
+  },
+  {
+   "name": "feed_superscript_crashes",
+   "panel": "news-feeds",
+   "collection": "feeds",
+   "choices": "none",
+   "incoming": {"channel_id": "²", "query": "a"}
+  },
+  {
+   "name": "reaction_ok",
+   "panel": "reaction-roles",
+   "collection": "reaction_roles",
+   "choices": "full",
+   "incoming": {"message_id": "00123", "emoji": " 😀 ", "role_id": "700000000000000001"}
+  },
+  {"name": "trusted_ok", "panel": "security", "collection": "trusted_users", "choices": "none", "incoming": {"user_id": " 0042 "}},
+  {"name": "trusted_too_long", "panel": "security", "collection": "trusted_users", "choices": "none", "incoming": {"user_id": "123456789012345678901"}},
+  {
+   "name": "dictionary_bad",
+   "panel": "tts",
+   "collection": "dictionary",
+   "choices": "none",
+   "incoming": {"word": {"$repeat": "x", "times": 51}, "reading": ""}
+  },
+  {"name": "user_settings_empty", "panel": "tts", "collection": "user_settings", "choices": "none", "incoming": {}},
+  {"name": "sticky_unset_and_blank", "panel": "sticky", "collection": "stickies", "choices": "full", "incoming": {"channel_id": 0, "content": "   "}}
+ ],
+ "humanize": [-5, 0, 1, 59, 60, 61, 90, 120, 3600, 3601, 7200, 86400, 86401, 172800, 2592000, 2592001]
+}
