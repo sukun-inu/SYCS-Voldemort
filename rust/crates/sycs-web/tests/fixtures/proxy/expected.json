@@ -223,6 +223,192 @@
    "headers": [
     [
      "x-forwarded-for",
+     "198.51.100.53:"
+    ]
+   ],
+   "client": "198.51.100.53:",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
+     "198.51.100.54:000000000000000008080"
+    ]
+   ],
+   "client": "198.51.100.54",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
+     "198.51.100.55:8_080"
+    ]
+   ],
+   "client": "198.51.100.55",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
+     "198.51.100.56:+80"
+    ]
+   ],
+   "client": "198.51.100.56",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
+     "198.51.100.57:-1"
+    ]
+   ],
+   "client": "198.51.100.57",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
+     "198.51.100.58: 80"
+    ]
+   ],
+   "client": "198.51.100.58",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
+     "198.51.100.61: 80"
+    ]
+   ],
+   "client": "198.51.100.61",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
+     "198.51.100.59:1_"
+    ]
+   ],
+   "client": "198.51.100.59:1_",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
+     "198.51.100.62:8__0"
+    ]
+   ],
+   "client": "198.51.100.62:8__0",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
+     "[2001:db8::9]:abc"
+    ]
+   ],
+   "client": "2001:db8::9",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
+     "[2001:db8::a]x"
+    ]
+   ],
+   "client": "[2001:db8::a]x",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
+     "[2001:db8::b"
+    ]
+   ],
+   "client": "[2001:db8::b",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
+     "[]:80"
+    ]
+   ],
+   "client": "172.18.0.2",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
+     "198.51.100.60"
+    ],
+    [
+     "x-forwarded-for",
+     "172.18.0.1"
+    ]
+   ],
+   "client": "198.51.100.60",
+   "scheme": "http"
+  },
+  {
+   "env": null,
+   "setting": "127.0.0.1/32,::1/128,172.16.0.0/12",
+   "peer": "172.18.0.2",
+   "headers": [
+    [
+     "x-forwarded-for",
      "unknown"
     ]
    ],
