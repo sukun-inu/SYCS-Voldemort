@@ -1,0 +1,186 @@
+{
+ "note": "設定パネルの値を読む関数（A5）の基準の例。書き方は generate.py の先頭。settings はサーバーごとの設定の全体（{\"guilds\": {鍵: 設定}}）",
+ "guild_id": 900000000000000001,
+ "cases": [
+  {"name": "empty", "settings": {"guilds": {}}},
+  {"name": "other_guild_only", "settings": {"guilds": {"1": {"log_level": "DEBUG", "welcome": {"channel_id": 5}}}}},
+  {
+   "name": "not_loaded",
+   "settings": {"$raise": "SettingsNotLoaded", "message": "設定を Postgres から 30 秒以内に読み込めませんでした。接続先と、ログの [settings] の警告を確かめてください。"}
+  },
+  {
+   "name": "full",
+   "settings": {"guilds": {"900000000000000001": {
+    "log_channel_id": 800000000000000001,
+    "log_level": "debug",
+    "response_channel_id": "800000000000000002",
+    "welcome": {"channel_id": 800000000000000003, "message": "ようこそ {user} さん"},
+    "goodbye": {"channel_id": 0, "message": "<b>またね</b> & \"bye\" 'x'"},
+    "vc_notify_channel_id": 800000000000000004,
+    "vc_notify_role_id": "700000000000000001",
+    "vc_notify_filter_role_id": 0,
+    "earthquake": {"channel_id": "800000000000000005", "min_scale": "45", "notify_types": {"eew_forecast": false, "tsunami": 0, "extra": true}},
+    "djaudio": {"watch_channel_id": "0", "channel_id": 800000000000000006, "output_channel_id": -5, "cache_ttl": 30, "max_urls": "12"},
+    "djaudio_cooldown": 15,
+    "tts": {
+     "enabled": 1, "vc_notify": "", "vc_channel_id": 800000000000000007,
+     "watch_channel_ids": [800000000000000001, "800000000000000008", "x", null, 12.9],
+     "default_voice": "", "default_rate": "250", "max_length": null, "speak_max_length": 300, "read_name": false,
+     "dictionary": {"ＳＹＣＳ": "しくす", "x": 5},
+     "user_settings": {"333": {"voice": "Otoya", "rate": 150}, "444": {}, "555": "x"}
+    },
+    "security_timeout_enabled": "yes",
+    "trusted_user_ids": [333, "444", "bad", 9007199254740993],
+    "bypass_role_ids": "700",
+    "news_feeds": {
+     "f1": {"channel_id": 800000000000000001, "query": "地震", "interval": 30, "last_run": 1779999000.5, "seen_hashes": ["a"]},
+     "f2": {"channel_id": null, "interval": "0"},
+     "broken": "x"
+    },
+    "sticky_messages": {"800000000000000001": {"content": "固定 <b>", "message_id": 1234567890123456789, "pending": "post"}, "800000000000000002": [1]},
+    "reaction_roles": {"1234567890123456789": {"😀": 700000000000000001, "<:custom:123>": "700000000000000002"}, "99": "x"},
+    "_updated_at": "2026-11-25T09:44:26.553123+00:00"
+   }}}
+  },
+  {"name": "guild_null", "settings": {"guilds": {"900000000000000001": null}}},
+  {"name": "guild_text", "settings": {"guilds": {"900000000000000001": "abc"}}},
+  {"name": "guild_empty_text", "settings": {"guilds": {"900000000000000001": ""}}},
+  {"name": "guild_number", "settings": {"guilds": {"900000000000000001": 5}}},
+  {"name": "guild_true", "settings": {"guilds": {"900000000000000001": true}}},
+  {
+   "name": "guild_pairs",
+   "settings": {"guilds": {"900000000000000001": [["log_level", "error"], "ab", {"welcome": 1, "x": 2}, ["tts", [["enabled", true]]]]}}
+  },
+  {"name": "guild_pairs_bad_element", "settings": {"guilds": {"900000000000000001": [["log_level", "error"], 1]}}},
+  {"name": "guild_pairs_bad_length", "settings": {"guilds": {"900000000000000001": [["log_level"]]}}},
+  {"name": "guild_pairs_unhashable", "settings": {"guilds": {"900000000000000001": [[["a"], 1]]}}},
+  {
+   "name": "blocks_wrong_types",
+   "settings": {"guilds": {"900000000000000001": {
+    "welcome": "", "goodbye": [], "earthquake": 5, "tts": [["enabled", true], ["read_name", 0]],
+    "news_feeds": "", "sticky_messages": [], "reaction_roles": null, "djaudio": "x"
+   }}}
+  },
+  {
+   "name": "blocks_texts",
+   "settings": {"guilds": {"900000000000000001": {"welcome": "abc", "tts": "xy", "earthquake": "ab", "news_feeds": "n", "reaction_roles": 1.5}}}
+  },
+  {
+   "name": "ints_variants",
+   "settings": {"guilds": {"900000000000000001": {
+    "response_channel_id": " 0012 ", "vc_notify_channel_id": 1.9, "vc_notify_role_id": true,
+    "vc_notify_filter_role_id": "abc", "log_channel_id": 0, "log_level": null
+   }}}
+  },
+  {
+   "name": "ints_more",
+   "settings": {"guilds": {"900000000000000001": {
+    "response_channel_id": "１２３", "vc_notify_channel_id": "1_2", "vc_notify_role_id": -5,
+    "vc_notify_filter_role_id": [1], "log_channel_id": "abc", "log_level": ""
+   }}}
+  },
+  {
+   "name": "log_level_odd",
+   "settings": {"guilds": {"900000000000000001": {"log_level": ["a"], "log_channel_id": [1], "response_channel_id": 1e3}}}
+  },
+  {
+   "name": "earthquake_variants",
+   "settings": {"guilds": {"900000000000000001": {"earthquake": {"min_scale": 45.7, "notify_types": [], "channel_id": 0}}}}
+  },
+  {
+   "name": "earthquake_more",
+   "settings": {"guilds": {"900000000000000001": {"earthquake": {
+    "min_scale": "abc", "notify_types": {"eew_forecast": "", "eew_warning": null, "bot_news": [0], "quake_info": "0"}
+   }}}}
+  },
+  {
+   "name": "earthquake_null_scale",
+   "settings": {"guilds": {"900000000000000001": {"earthquake": {"min_scale": null, "notify_types": null}}}}
+  },
+  {
+   "name": "djaudio_legacy",
+   "settings": {"guilds": {"900000000000000001": {
+    "djaudio_watch_channel_id": "-1", "djaudio_watch_channel": "abc",
+    "djaudio": {"watch_channel_id": 0, "channel_id": " 77 ", "output_channel_id": "88", "cache_ttl": null},
+    "cache_ttl": 5000, "djaudio_cache_ttl": 6000, "cooldown": "abc", "djaudio_max_urls": 0
+   }}}
+  },
+  {
+   "name": "djaudio_ranges",
+   "settings": {"guilds": {"900000000000000001": {"djaudio": {"cache_ttl": "59", "cooldown": -3, "max_urls": 99, "output_channel_id": 0}}}}
+  },
+  {
+   "name": "djaudio_more",
+   "settings": {"guilds": {"900000000000000001": {
+    "djaudio": {"cache_ttl": 3000000, "max_urls": 5.9, "cooldown": true, "output_channel_id": "x"},
+    "djaudio_watch_channel": 12, "djaudio_cooldown": 9
+   }}}
+  },
+  {
+   "name": "djaudio_flat_only",
+   "settings": {"guilds": {"900000000000000001": {"djaudio": [], "djaudio_cache_ttl": "120", "cooldown": null, "djaudio_cooldown": 8, "max_urls": "3"}}}
+  },
+  {
+   "name": "tts_variants",
+   "settings": {"guilds": {"900000000000000001": {"tts": {
+    "enabled": "0", "vc_notify": [], "vc_channel_id": "0", "default_voice": 0, "default_rate": "abc",
+    "max_length": 12.5, "speak_max_length": true, "read_name": null, "watch_channel_ids": "1x2",
+    "dictionary": [], "user_settings": []
+   }}}}
+  },
+  {
+   "name": "tts_more",
+   "settings": {"guilds": {"900000000000000001": {"tts": {
+    "watch_channel_ids": 5, "user_settings": "x", "dictionary": {"a": null, "b": [1], "c": 1.5},
+    "default_voice": "Otoya", "vc_channel_id": "abc"
+   }}}}
+  },
+  {
+   "name": "tts_dicts",
+   "settings": {"guilds": {"900000000000000001": {"tts": {
+    "watch_channel_ids": {"123": 1, "x": 2, "４５": 3}, "user_settings": {"1": {"voice": "A"}, "2": [], "3": {"rate": 1.5}, "4": {}},
+    "dictionary": "x", "default_rate": " 300 ", "speak_max_length": "1_0"
+   }}}}
+  },
+  {
+   "name": "tts_watch_true",
+   "settings": {"guilds": {"900000000000000001": {"tts": {"watch_channel_ids": true, "user_settings": 0}}}}
+  },
+  {
+   "name": "news_variants",
+   "settings": {"guilds": {"900000000000000001": {"news_feeds": {
+    "a": {"interval": 0, "channel_id": 0},
+    "b": {"interval": 5.5, "query": null, "channel_id": "c", "last_run": "x"},
+    "c": [1],
+    "d": {"interval": " 15 ", "channel_id": true, "query": 7}
+   }}}}
+  },
+  {"name": "news_bad_interval", "settings": {"guilds": {"900000000000000001": {"news_feeds": {"a": {"interval": 10}, "b": {"interval": "1.5"}}}}}},
+  {"name": "news_bad_interval_type", "settings": {"guilds": {"900000000000000001": {"news_feeds": {"a": {"interval": [1]}}}}}},
+  {
+   "name": "sticky_and_reaction_variants",
+   "settings": {"guilds": {"900000000000000001": {
+    "sticky_messages": {"1": {"message_id": null}, "2": "x", "3": {}, "4": {"content": 5, "message_id": "m"}},
+    "reaction_roles": {"10": {}, "11": {"a": null, "b": 1.5, "c": [1]}, "12": [], "13": {"d": true}}
+   }}}
+  },
+  {
+   "name": "security_variants",
+   "settings": {"guilds": {"900000000000000001": {
+    "trusted_user_ids": ["1", 2.7, true, null, "x", [1], " 3 "], "bypass_role_ids": {"1": 1}, "security_timeout_enabled": 0
+   }}}
+  },
+  {
+   "name": "security_lists",
+   "settings": {"guilds": {"900000000000000001": {"trusted_user_ids": [], "bypass_role_ids": [5, "6", "６"], "security_timeout_enabled": [0]}}}
+  }
+ ],
+ "to_json": {
+  "widgets": ["text", "textarea", "int", "duration", "bool", "select", "channel", "voice_channel", "role", "checklist", "snowflake"],
+  "defaults": {"int": 60, "duration": 600, "select": "INFO", "text": "既定"},
+  "values": [
+   null, true, false, 0, 1, -5, 0.0, -0.0, 1.5, 12.9, 1e16, "", "0", "12", " 34 ", "abc", "１２", "1_000", "True",
+   [], [1, "a", null], {}, {"a": true, "b": false, "c": 1, "d": ""}, 9007199254740993, 800000000000000001, "<b>&'\""
+  ]
+ }
+}

@@ -48,8 +48,10 @@ pub fn default_routes(site: &Arc<Site>) -> Vec<Route> {
     // /admin/api/incidents は A7 が dashboard_routes の後ろに足す）。
     routes.extend(views::auth_routes(site));
     routes.extend(views::dashboard_routes(site));
+    // api/apps（A5 の読む側。A6 の書く側は crate::apps::routes の後ろに足す）。
+    routes.extend(crate::apps::routes(site));
     routes.extend(crate::users::routes()); // A4（api/users）
-    // A5・A6（api/apps）、A8・A9（api/dev）、A10（api/sql）がこの位置に足す。
+    // A8・A9（api/dev）、A10（api/sql）がこの位置に足す。
     routes.extend(legacy_redirects());
     // 公開ページ（A3。/・/guide・/privacy・/terms・旧 URL の 301 の 3 本）。
     routes.extend(views::public_routes(site));

@@ -13,10 +13,12 @@
 //!   `webapp_admin/static`）。読めなければ起動で止まる（`sycs_admin::templates`）
 //! - Discord のログイン: `DISCORD_CLIENT_ID`・`DISCORD_CLIENT_SECRET`・`DISCORD_REDIRECT_URI`・`DISCORD_BOT_TOKEN`・
 //!   `DISCORD_OAUTH_PROMPT`・`ADMIN_GUILDS_MAX_AGE_SECONDS`（Python と同じ読み方。`sycs_admin::auth`）
+//! - 設定の置き場: Bot と同じ Postgres（`USER_STATE_POSTGRES_*`・`POSTGRES_*`。`SETTINGS_PG_POLL_SECONDS`・
+//!   `SETTINGS_LOAD_TIMEOUT_SECONDS`・`SETTINGS_LOCK_TIMEOUT_SECONDS`）。起動では待たず、裏で読めるまで繰り返す
+//!   （`sycs_admin::apps::store`）。設定パネルの声は `TTS_BASE_URL`、DJAudio の既定は `DJAUDIO_*`
 //!
-//! 監視の巡回（心拍・停止・しきい値）と `/metrics`・設定の読み込みは、あとの塊（A7・A5）が足す。公開トップの
-//! Bot のサーバー数は、Discord が 0 か失敗のとき設定のあるサーバーの数を出すが、設定の置き場は A5 でつなぐ
-//! （それまでは警告を残して 0）。
+//! 監視の巡回（心拍・停止・しきい値）と `/metrics` は、あとの塊（A7）が足す。公開トップの Bot のサーバー数は、
+//! Discord が 0 か失敗のとき設定のあるサーバーの数を出す（設定の置き場から数える。A5）。
 //!
 //! `--self-check` を付けると、127.0.0.1 の空いた口で待ち受けて、自分の旧 URL（`/admin/users/state`）に Cookie 無しで
 //! 1 回尋ね、ログイン画面への 303 を読めたら 0 で終わる（イメージの `cpu-check` の段が、本番の CPU のふりでこれを通す）。
@@ -32,7 +34,8 @@ use tracing::{error, info, warn};
 
 use sycs_admin::APP_NAME;
 use sycs_admin::app::{self, AdminApp, Config, Deps, OsRandom};
-use sycs_admin::auth::{DISCORD_API, Discord, DiscordConfig};
+use sycs_admin::apps::{self, Panels};
+use sycs_admin::auth::{DISCORD_API, Discord, DiscordConfig, StoredGuildCount};
 use sycs_admin::db;
 use sycs_admin::routes;
 use sycs_admin::secret;
@@ -44,7 +47,12 @@ use sycs_admin::views::{self, Site};
 const DEFAULT_PORT: u16 = 5001;
 
 /// テンプレートを読み、Discord の口を作って、画面の係が使うもの（[`Site`]）にする。読めなければ理由の文。
-fn load_site(discord: DiscordConfig) -> Result<(Arc<Pages>, Arc<Site>), String> {
+/// `stored` は公開トップのサーバー数のフォールバック、`panels` は設定パネルが使うもの。
+fn load_site(
+    discord: DiscordConfig,
+    stored: StoredGuildCount,
+    panels: Arc<Panels>,
+) -> Result<(Arc<Pages>, Arc<Site>), String> {
     let pages = Pages::load(&PagesConfig::from_env()).map_err(|e| e.to_string())?;
     let pages = Arc::new(pages);
     let discord =
@@ -52,9 +60,10 @@ fn load_site(discord: DiscordConfig) -> Result<(Arc<Pages>, Arc<Site>), String> 
     let site = Site::new(
         Arc::clone(&pages),
         Arc::new(discord),
-        views::stored_guilds_not_connected(),
+        stored,
         views::os_state_token(),
-    );
+    )
+    .with_panels(panels);
     Ok((pages, Arc::new(site)))
 }
 
@@ -111,7 +120,16 @@ async fn main() -> ExitCode {
     );
     let discord = DiscordConfig::from_process();
     info!("Discord のログインの設定: {discord:?}");
-    let (pages, site) = match load_site(discord) {
+    let settings = Arc::new(apps::store::from_env(&env));
+    let stored = apps::stored_guild_count(&settings);
+    let panels = match Panels::from_env(&env, settings) {
+        Ok(panels) => Arc::new(panels),
+        Err(e) => {
+            error!("読み上げの API の口を作れません: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let (pages, site) = match load_site(discord, stored, panels) {
         Ok(loaded) => loaded,
         Err(e) => {
             error!("{e}");
@@ -156,7 +174,7 @@ async fn main() -> ExitCode {
 }
 
 /// 待ち受けて、自分に 1 回尋ねて、答えを読む（ログは書かない。監視の置き場は一時ディレクトリ。テンプレートは
-/// 本番と同じく読み、Discord の設定は空にする）。
+/// 本番と同じく読み、Discord の設定は空にする。設定の置き場にはつながない）。
 async fn self_check() -> ExitCode {
     let config = Config {
         secure_cookies: false,
@@ -164,7 +182,12 @@ async fn self_check() -> ExitCode {
         dev_user_id: String::new(),
         monitor_dir: std::env::temp_dir().join("sycs-admin-self-check"),
     };
-    let (pages, site) = match load_site(DiscordConfig::from_lookup(|_| None)) {
+    let loaded = load_site(
+        DiscordConfig::from_lookup(|_| None),
+        views::stored_guilds_not_connected(),
+        Arc::new(Panels::unconfigured()),
+    );
+    let (pages, site) = match loaded {
         Ok(loaded) => loaded,
         Err(e) => {
             eprintln!("管理画面の確かめ: {e}");

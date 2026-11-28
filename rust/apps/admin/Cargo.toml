@@ -33,9 +33,9 @@ sha1 = { workspace = true }
 sqlx = { workspace = true, features = ["runtime-tokio", "postgres"] }
 sycs-core = { workspace = true }
 sycs-web = { workspace = true }
-tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync"] }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync"] }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync", "time"] }

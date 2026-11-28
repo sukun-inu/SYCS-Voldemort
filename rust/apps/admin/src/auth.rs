@@ -210,6 +210,27 @@ fn read_json(answer: &Answer) -> Result<Value, String> {
     serde_json::from_str(text).map_err(|e| format!("JSON として読めない: {e}"))
 }
 
+/// aiohttp の `resp.raise_for_status()` のあとの `await resp.json()`（状態・`Content-Type`・本文から。失敗は理由の文）。
+/// 設定パネルの読み上げの声（A5）も同じ読み方をする。
+pub fn aiohttp_json(status: u16, content_type: Option<&str>, body: &[u8]) -> Result<Value, String> {
+    read_json(&Answer {
+        status,
+        content_type: content_type.map(str::to_string),
+        body: body.to_vec(),
+    })
+}
+
+/// Bot のトークンで GET した答え（設定パネルのチャンネルとロール。A5）。
+#[derive(Clone, Debug, PartialEq)]
+pub struct BotGet {
+    /// 状態。
+    pub status: u16,
+    /// `Retry-After`（無ければ `None`。429 のときに読む）。
+    pub retry_after: Option<String>,
+    /// `resp.raise_for_status()` のあとの `await resp.json()`（失敗は理由の文）。
+    pub json: Result<Value, String>,
+}
+
 /// Python で `for x in value` としたときの並び（辞書は鍵、文字は 1 文字ずつ）。並べられない値は `TypeError`。
 pub fn py_iter(value: &Value) -> Result<Vec<Value>, Crash> {
     match value {
@@ -468,6 +489,31 @@ impl Discord {
             status,
             content_type,
             body,
+        })
+    }
+
+    /// Bot のトークンで GET する（`Authorization: Bot …`。トークンが空でも送る。Python の `_fetch_guild_channels`・
+    /// `get_guild_roles` と同じ）。つながらない・本文を読めないときは理由の文。
+    pub async fn bot_get(&self, path: &str) -> Result<BotGet, String> {
+        let request = self
+            .http
+            .get(self.url(path))
+            .header(reqwest::header::AUTHORIZATION, self.bot_header());
+        let response = request.send().await.map_err(|e| e.to_string())?;
+        let status = response.status().as_u16();
+        let header = |name: reqwest::header::HeaderName| {
+            response
+                .headers()
+                .get(name)
+                .map(|value| String::from_utf8_lossy(value.as_bytes()).into_owned())
+        };
+        let retry_after = header(reqwest::header::RETRY_AFTER);
+        let content_type = header(reqwest::header::CONTENT_TYPE);
+        let body = response.bytes().await.map_err(|e| e.to_string())?;
+        Ok(BotGet {
+            status,
+            retry_after,
+            json: aiohttp_json(status, content_type.as_deref(), &body),
         })
     }
 

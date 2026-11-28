@@ -47,6 +47,8 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     ("sycs_core::log", "system"),
     // Python の services.settings_pg・dev_signals・metrics_reporter と同じ棚。
     ("sycs_core::settings", "settings"),
+    // 管理画面が設定を読み込むところ（Python の services.settings_pg の「読み込めませんでした」と同じ棚）。
+    ("sycs_admin::apps::store", "settings"),
     ("sycs_core::signals", "dev"),
     ("sycs_core::metrics", "metrics"),
     // Python の services.url_safety（security）・ttl_cache（system）と同じ棚。
@@ -88,6 +90,8 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     // （sycs_bot::tts は前方一致で tts_voice も入る）。
     ("sycs_bot::tts", "tts"),
     ("sycs_bot::commands::tts", "tts"),
+    // 管理画面の設定パネルが声の一覧を取るところ（Python の services.tts_service.fetch_voices と同じ棚）。
+    ("sycs_admin::apps::voices", "tts"),
     ("sycs_bot::voice_session", "voice"),
     // Python の services.djaudio_*・commands.djaudio_commands（djaudio）と同じ棚。
     ("sycs_bot::djaudio", "djaudio"),
@@ -646,6 +650,10 @@ mod tests {
             ("sycs_bot::tts", "tts"),
             ("sycs_bot::tts_voice", "tts"),
             ("sycs_bot::commands::tts", "tts"),
+            // 管理画面の設定パネル（A5）: 声の一覧は tts、設定の読み込みは settings、ほかは admin。
+            ("sycs_admin::apps::voices", "tts"),
+            ("sycs_admin::apps::store", "settings"),
+            ("sycs_admin::apps::choices", "admin"),
             ("sycs_bot::voice_session", "voice"),
             ("sycs_bot::djaudio::flow", "djaudio"),
             ("sycs_bot::commands::djaudio", "djaudio"),

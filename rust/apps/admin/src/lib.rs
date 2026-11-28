@@ -22,12 +22,14 @@
 //! - [`python`] Python の値と文字の扱いの写し（`json.dumps`・`base64`・Cookie の読み方など）
 //! - [`auth`] Discord のログイン（OAuth）と、Bot のトークンで引く管理者の確かめ（`webapp_admin/auth.py`。A3）
 //! - [`views`] ログイン・サーバー選択・シェルの画面と公開ページの経路（`views/`・`_register_public_pages`。A3）
+//! - [`apps`] 設定パネルの読む側（`api/apps.py` の `list_apps`・`get_app` と `schema/`。A5）
 //! - [`params`] FastAPI の引数（`Query`・`Path`）の読み方と pydantic の検証の誤り（422）
 //! - [`jsonsafe`] JavaScript が壊さずに読める JSON の答え（`SafeJSONResponse`）
 //! - [`db`] `user_state_audit` の Postgres への接続の束（`services/user_state_db.py` の engine）
 //! - [`users`] 利用者の状態の API と読み出し（A4。`api/users.py`・`services/user_state_service.py`）
 
 pub mod app;
+pub mod apps;
 pub mod auth;
 pub mod db;
 pub mod errors;

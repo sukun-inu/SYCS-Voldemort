@@ -13,11 +13,14 @@ FakeDiscord）も同じ決まりで答える偽物を立て、同じ要求が届
     {"status": 404}                       本文は空
 
 content_type を書けば（null なら付けない）それにする。status の既定は 200。例に無い要求には 500 を返し、
-控えに unexpected を付ける（作り直しを止める合図）。
+控えに unexpected を付ける（作り直しを止める合図）。headers（名前 → 値）を書けば、その見出しも付ける（429 の
+Retry-After。A5）。delay（秒）を書けば、控えを残してからそれだけ待って答える（読み上げの声を見切る例。A5）。
+同じ偽物を、読み上げの API（/api/v1/voices）の偽物にも使う。
 """
 
 import json
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
@@ -106,13 +109,22 @@ class FakeDiscord:
             if spec is None:
                 record["unexpected"] = True
             self._seen.append(record)
+        if spec is not None and spec.get("delay"):
+            time.sleep(float(spec["delay"]))
         status, content_type, payload = response_of(spec)
-        handler.send_response(status)
-        if content_type is not None:
-            handler.send_header("Content-Type", content_type)
-        handler.send_header("Content-Length", str(len(payload)))
-        handler.end_headers()
-        handler.wfile.write(payload)
+        extra = (spec or {}).get("headers") or {}
+        try:
+            handler.send_response(status)
+            if content_type is not None:
+                handler.send_header("Content-Type", content_type)
+            for name, value in extra.items():
+                handler.send_header(str(name), str(value))
+            handler.send_header("Content-Length", str(len(payload)))
+            handler.end_headers()
+            handler.wfile.write(payload)
+        except OSError:
+            # 待たせた答えは、相手が見切って切ったあとに書くことになる（書けなくてよい）。
+            return
 
     def _handler_class(self) -> type[BaseHTTPRequestHandler]:
         """http.server に渡す係の型（どのメソッドも _serve へ回す）。"""
