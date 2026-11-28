@@ -1,0 +1,519 @@
+{
+ "about": "管理画面の監視（A7）の例。書き方は generate.py の先頭と ../admin_harness.py。基準は expected.json（generate.py が作る）。小数は repr の文字で書く（Python は float()、Rust は str::parse で同じ値に読む）。cases の service: now・started・requests は時刻、host は偽物の psutil が返すもの、incidents はインシデントのファイル（null は置かない・文字・{\"lines\": [...]}・{\"hex\": …}）、env は環境変数",
+ "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+ "now": 1798761600,
+ "sessions": {
+  "guild": {
+   "user": {"id": "111111111111111111", "username": "tester", "global_name": null, "avatar": null},
+   "admin_guilds": [{"id": "123456789012345678", "name": "テスト鯖", "icon": null}],
+   "admin_guilds_at": 1798761000.25,
+   "_csrf_token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "guild_id": 123456789012345678,
+   "guild_name": "テスト鯖",
+   "guild_icon": null
+  },
+  "no_guild": {
+   "user": {"id": "111111111111111111", "username": "tester", "global_name": null, "avatar": null},
+   "_csrf_token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+ },
+ "cases": [
+  {
+   "name": "metrics_without_cookie",
+   "method": "GET",
+   "target": "/admin/api/metrics",
+   "service": {"now": "1800061323.25"},
+   "expect_status": 303
+  },
+  {
+   "name": "metrics_without_guild",
+   "method": "GET",
+   "target": "/admin/api/metrics",
+   "session": "no_guild",
+   "service": {"now": "1800061323.25"},
+   "expect_status": 303
+  },
+  {
+   "name": "metrics_post_is_not_allowed",
+   "method": "POST",
+   "target": "/admin/api/metrics",
+   "service": {"now": "1800061323.25"},
+   "expect_status": 405
+  },
+  {
+   "name": "metrics_basic",
+   "method": "GET",
+   "target": "/admin/api/metrics",
+   "session": "guild",
+   "service": {
+    "now": "1800061323.25",
+    "started": "1800057600.0",
+    "requests": ["1800061303.25", "1800061308.35", "1800061313.25", "1800061318.25", "1800061322.75"],
+    "host": {
+     "cpu_percent": "12.3",
+     "memory": {"percent": "45.6", "used": 3758096384, "total": 8241242112},
+     "cpu_count": 8,
+     "boot_time": "1799000000.0"
+    }
+   },
+   "expect_status": 200
+  },
+  {
+   "name": "metrics_tones",
+   "method": "GET",
+   "target": "/admin/api/metrics",
+   "session": "guild",
+   "service": {
+    "now": "1800061323.25",
+    "started": "1800061323.75",
+    "requests": ["1800061310.0", "1800061311.0", "1800061312.0", "1800061313.0", "1800061314.0", "1800061315.0", "1800061316.0", "1800061317.0", "1800061318.0", "1800061319.0"],
+    "env": {"ADMIN_TPS_TARGET": "0.5"},
+    "host": {
+     "cpu_percent": "95.0",
+     "memory": {"percent": "72.0", "used": 1023, "total": 1048575},
+     "cpu_count": null,
+     "boot_time": "0.0"
+    }
+   },
+   "expect_status": 200
+  },
+  {
+   "name": "metrics_custom_thresholds",
+   "method": "GET",
+   "target": "/admin/api/metrics",
+   "session": "guild",
+   "service": {
+    "now": "1800061323.25",
+    "started": "1700000000.5",
+    "env": {
+     "ADMIN_CPU_ALERT_PERCENT": "50",
+     "ADMIN_MEMORY_ALERT_PERCENT": "40.5",
+     "ADMIN_TPS_ALERT_PERCENT": "1e3",
+     "ADMIN_TPS_TARGET": "1234567"
+    },
+    "host": {
+     "cpu_percent": "45.0",
+     "memory": {"percent": "40.5", "used": 3298534883328, "total": 2251799813685248},
+     "cpu_count": 0,
+     "boot_time": "1800061323.25"
+    }
+   },
+   "expect_status": 200
+  },
+  {
+   "name": "metrics_tps_target_floor",
+   "method": "GET",
+   "target": "/admin/api/metrics",
+   "session": "guild",
+   "service": {
+    "now": "1800061323.25",
+    "started": "1800061000.0",
+    "requests": ["1800061320.0"],
+    "env": {"ADMIN_TPS_TARGET": "0"},
+    "host": {"cpu_percent": "0.0", "memory": {"percent": "0.0", "used": 0, "total": 0}, "cpu_count": 2, "boot_time": "1800000000.0"}
+   },
+   "expect_status": 200
+  },
+  {
+   "name": "metrics_rounding",
+   "method": "GET",
+   "target": "/admin/api/metrics",
+   "session": "guild",
+   "service": {
+    "now": "1800061323.25",
+    "started": "1800061323.25",
+    "requests": ["1800061300.0", "1800061320.0"],
+    "env": {"ADMIN_TPS_TARGET": "3"},
+    "host": {
+     "cpu_percent": "12.25",
+     "memory": {"percent": "99.995", "used": 1572864, "total": 1073741824},
+     "cpu_count": 64,
+     "boot_time": "1800061263.25"
+    }
+   },
+   "expect_status": 200
+  },
+  {
+   "name": "metrics_sla_with_downtime",
+   "method": "GET",
+   "target": "/admin/api/metrics",
+   "session": "guild",
+   "service": {
+    "now": "1800061323.25",
+    "started": "1800057600.0",
+    "host": {"cpu_percent": "1.0", "memory": {"percent": "10.0", "used": 1024, "total": 10240}, "cpu_count": 4, "boot_time": "1799000000.0"},
+    "incidents": {"lines": [
+     "{\"id\":\"d1\",\"kind\":\"downtime\",\"start_epoch\":1798762600.0,\"end_epoch\":1798766200.0,\"duration_seconds\":3600.0}",
+     "{\"kind\":\"downtime\",\"start_epoch\":1798761100.0,\"end_epoch\":1798761700.5}",
+     "{\"kind\":\"downtime\",\"start_epoch\":1800061333.25,\"end_epoch\":1800061343.25}",
+     "{\"kind\":\"exception\",\"start_epoch\":1798762600.0,\"end_epoch\":1798766200.0}",
+     "{\"kind\":\"downtime\",\"start_epoch\":true,\"end_epoch\":1798761650}",
+     "{\"kind\":\"downtime\",\"start_epoch\":\"1798762600\",\"end_epoch\":1798766200.0}",
+     "not json",
+     "[1, 2]",
+     "{\"kind\":\"downtime\",\"start_epoch\":1798770000.0,\"end_epoch\":1798760000.0}",
+     "{\"kind\":\"downtime\",\"start_epoch\":1800061000.25}",
+     "{\"kind\":\"Downtime\",\"start_epoch\":1798762600.0,\"end_epoch\":1798766200.0}"
+    ]}
+   },
+   "expect_status": 200
+  },
+  {
+   "name": "metrics_sla_month_just_started",
+   "method": "GET",
+   "target": "/admin/api/metrics",
+   "session": "guild",
+   "service": {
+    "now": "1798761600.25",
+    "started": "1798761599.0",
+    "host": {"cpu_percent": "3.4", "memory": {"percent": "20.0", "used": 2048, "total": 10240}, "cpu_count": 4, "boot_time": "1798000000.0"},
+    "incidents": {"lines": ["{\"kind\":\"downtime\",\"start_epoch\":1798761599.0,\"end_epoch\":1798761600.125}"]}
+   },
+   "expect_status": 200
+  },
+  {
+   "name": "metrics_sla_rounds_into_the_next_month",
+   "method": "GET",
+   "target": "/admin/api/metrics",
+   "session": "guild",
+   "service": {
+    "now": "1798761599.9999996",
+    "started": "1798761000.0",
+    "host": {"cpu_percent": "3.4", "memory": {"percent": "20.0", "used": 2048, "total": 10240}, "cpu_count": 4, "boot_time": "1798000000.0"},
+    "incidents": {"lines": ["{\"kind\":\"downtime\",\"start_epoch\":1798761000.0,\"end_epoch\":1798761599.0}"]}
+   },
+   "expect_status": 200
+  },
+  {
+   "name": "metrics_host_fails",
+   "method": "GET",
+   "target": "/admin/api/metrics",
+   "session": "guild",
+   "service": {
+    "now": "1800061323.25",
+    "host": {"cpu_percent": {"$raise": "FileNotFoundError", "message": "[Errno 2] No such file or directory: '/proc/stat'"}}
+   },
+   "expect_status": 500
+  },
+  {
+   "name": "metrics_incidents_not_utf8",
+   "method": "GET",
+   "target": "/admin/api/metrics",
+   "session": "guild",
+   "service": {
+    "now": "1800061323.25",
+    "host": {"cpu_percent": "1.0", "memory": {"percent": "10.0", "used": 1024, "total": 10240}, "cpu_count": 4, "boot_time": "1799000000.0"},
+    "incidents": {"hex": "7b7d0aff0a"}
+   },
+   "expect_status": 500
+  },
+  {
+   "name": "incidents_without_cookie",
+   "method": "GET",
+   "target": "/admin/api/incidents",
+   "service": {"now": "1800061323.25"},
+   "expect_status": 303
+  },
+  {
+   "name": "incidents_without_guild",
+   "method": "GET",
+   "target": "/admin/api/incidents",
+   "session": "no_guild",
+   "service": {"now": "1800061323.25"},
+   "expect_status": 303
+  },
+  {
+   "name": "incidents_without_a_file",
+   "method": "GET",
+   "target": "/admin/api/incidents",
+   "session": "guild",
+   "service": {"now": "1800061323.25"},
+   "expect_status": 200
+  },
+  {
+   "name": "incidents_listing",
+   "method": "GET",
+   "target": "/admin/api/incidents",
+   "session": "guild",
+   "service": {
+    "now": "1800061323.25",
+    "incidents": "{\"id\":\"0001\",\"kind\":\"http_error\",\"severity\":\"critical\",\"title\":\"HTTP 500\",\"message\":\"管理UIで 5xx レスポンスが発生しました。\",\"created_epoch\":1798000000.5,\"created_at\":\"2026-12-23T07:46:40.500000+00:00\",\"start_epoch\":null,\"start_at\":null,\"end_epoch\":null,\"end_at\":null,\"duration_seconds\":null,\"metadata\":{\"status_code\":500,\"method\":\"GET\",\"path\":\"/x\",\"endpoint\":null,\"remote_addr\":\"203.0.113.5\"}}\n{\"id\":\"0002\",\"kind\":\"downtime\",\"severity\":\"critical\",\"title\":\"管理UIダウンタイム\",\"message\":\"前回 heartbeat から復帰までの空白をダウンタイムとして記録しました。\",\"duration_seconds\":3725.5,\"metadata\":{\"grace_seconds\":120.0,\"source\":\"startup_heartbeat_gap\"}}\n\n   \t \nnot json\n[1, 2]\n\"just a string\"\n42\n{}\n{\"id\": 7, \"kind\": null, \"duration_seconds\": true, \"metadata\": [1, \"a\"]}\n{\"duration_seconds\": \"60\", \"title\": \"😀 é \\u00e9 \\\"quoted\\\" \\\\ back\"}\n{\"duration_seconds\": -5.5}\n{\"duration_seconds\": 86399.999}\n{\"duration_seconds\": 1e15}\n{\"metadata\": {\"b\": 1, \"a\": {\"nested\": [true, false, null, 1.5e-7, 9007199254740993, -3]}, \"b\": 2}}\n{\"message\": \"line break\"}\n{\"id\":\"crlf\"}\r\n{\"id\": \"vt\"}\u000b{\"id\": \"after-vt\"}\n{\"id\": \"fs\"}\u001c{\"id\": \"after-fs\"}\n{\"id\": \"nel\"}\u0085{\"id\": \"after-nel\"}\n﻿{\"id\": \"bom\"}\n{\"id\":\"cr-only\"}\r{\"id\":\"last\"}"
+   },
+   "expect_status": 200
+  },
+  {
+   "name": "incidents_limit_is_thirty",
+   "method": "GET",
+   "target": "/admin/api/incidents",
+   "session": "guild",
+   "service": {
+    "now": "1800061323.25",
+    "incidents": {"lines": [
+     "{\"id\":\"n01\"}", "{\"id\":\"n02\"}", "{\"id\":\"n03\"}", "{\"id\":\"n04\"}", "{\"id\":\"n05\"}",
+     "{\"id\":\"n06\"}", "{\"id\":\"n07\"}", "{\"id\":\"n08\"}", "{\"id\":\"n09\"}", "{\"id\":\"n10\"}",
+     "{\"id\":\"n11\"}", "{\"id\":\"n12\"}", "{\"id\":\"n13\"}", "{\"id\":\"n14\"}", "{\"id\":\"n15\"}",
+     "{\"id\":\"n16\"}", "{\"id\":\"n17\"}", "{\"id\":\"n18\"}", "{\"id\":\"n19\"}", "{\"id\":\"n20\"}",
+     "{\"id\":\"n21\"}", "{\"id\":\"n22\"}", "{\"id\":\"n23\"}", "{\"id\":\"n24\"}", "{\"id\":\"n25\"}",
+     "{\"id\":\"n26\"}", "{\"id\":\"n27\"}", "not json", "{\"id\":\"n28\"}", "{\"id\":\"n29\"}", "{\"id\":\"n30\"}",
+     "{\"id\":\"n31\"}", "", "{\"id\":\"n32\"}", "{\"id\":\"n33\"}", "{\"id\":\"n34\"}", "{\"id\":\"n35\"}"
+    ]}
+   },
+   "expect_status": 200
+  },
+  {
+   "name": "incidents_not_utf8",
+   "method": "GET",
+   "target": "/admin/api/incidents",
+   "session": "guild",
+   "service": {"now": "1800061323.25", "incidents": {"hex": "7b7d0aff0a"}},
+   "expect_status": 500
+  },
+  {
+   "name": "incidents_trailing_slash",
+   "method": "GET",
+   "target": "/admin/api/incidents/",
+   "session": "guild",
+   "service": {"now": "1800061323.25"},
+   "expect_status": 307
+  }
+ ],
+ "functions": {
+  "format_duration": ["0", "0.9", "59.9", "60", "61.5", "3599.999", "3600", "3661", "86399", "86400", "90061.5", "-5", "-0.5", "1e10", "123456789.9", "1e15"],
+  "format_bytes": ["0", "1", "1023", "1023.96", "1023.95", "1024", "1536", "1048575", "1048576", "1572864", "1073741824", "8241242112", "1099511627776", "1125899906842624", "1e18", "-1"],
+  "load_tone": [["90", "90"], ["89.99", "90"], ["72", "90"], ["71.99", "90"], ["0", "0.01"], ["0.008", "0.01"], ["100", "100"], ["80", "100"], ["79.999", "100"], ["50", "0"], ["-1", "0"]],
+  "sla_tone": ["100", "99.9", "99.89", "99.0", "98.99", "0", "-1"],
+  "clamp_percent": ["-1", "-0.0", "0", "0.004", "0.005", "0.015", "55.555", "12.3449999", "99.995", "100", "100.004", "100.005", "250", "1e-9", "33.333333333333336"],
+  "fixed": [["0.125", 2], ["0.375", 2], ["2.5", 0], ["3.5", 0], ["0.5", 0], ["1.5", 0], ["2.675", 2], ["1.45", 1], ["1.55", 1], ["0.05", 1], ["0.25", 1], ["0.35", 1], ["-0.04", 1], ["-0.0", 1], ["0", 2], ["123", 1], ["1e22", 0], ["1e-7", 2], ["99.995", 2], ["12.3449999", 2], ["1234.5", 0], ["0.26666666666666666", 2], ["5e-324", 1], ["1.7976931348623157e308", 0], ["-2.5", 0], ["-1.25", 1], ["0.6666666666666666", 2], ["133.33333333333331", 0], ["1023.95", 1]],
+  "general": ["50", "0.01", "0.5", "90", "99.9", "100", "1e6", "999999", "999999.5", "999999.4", "123456.5", "123457.5", "1234567", "0.0001", "0.00001", "0.000123456789", "1e-300", "5e-324", "1.7976931348623157e308", "-2.5", "-0.0", "0", "1234567.5", "12345678901234567890", "0.1", "1e16", "100000", "1e5", "12.5"],
+  "round": [["2.675", 2], ["0.125", 2], ["0.135", 2], ["1.005", 2], ["99.995", 2], ["-0.004", 2], ["12.345", 1], ["12.35", 1], ["1e16", 2], ["5e-324", 2], ["0.5", 0], ["1.5", 0], ["2.5", 0], ["45.65", 1], ["33.33333333", 1], ["66.66666666", 1], ["46.30989", 1]],
+  "sum": [
+   ["0.3", "0", "0", "0.7", "0", "0", "0", "0", "0.1", "0"],
+   ["0.1", "0.2", "0.3"],
+   ["1e16", "1", "-1e16"],
+   ["0.01", "0.02", "0.03", "0.04", "0.05", "0.06", "0.07"],
+   ["123.45", "0.0", "67.89", "1000.01", "0.03", "0.0", "0.0", "0.0", "0.0", "0.0"],
+   ["1e308", "1e308"],
+   ["0", "0"],
+   ["1.0000000000145519", "0.0", "0.5", "1.0", "0.5", "0.0", "0.0", "0.0", "0.5", "0.0"]
+  ]
+ },
+ "procfs": [
+  {
+   "name": "modern_kernel",
+   "stat": "cpu  10132153 290696 3084719 46828483 16683 0 25195 0 175628 0\ncpu0 1393280 32966 572056 13343292 6130 0 17875 0 23931 0\nintr 1462898 0 0\nctxt 2405893\nbtime 1798700000\nprocesses 26442\n",
+   "stat_after": "cpu  10132253 290696 3084769 46828583 16733 0 25195 0 175678 0\ncpu0 1393380 32966 572106 13343392 6180 0 17875 0 23981 0\nintr 1462999 0 0\nctxt 2405999\nbtime 1798700000\nprocesses 26450\n",
+   "meminfo": "MemTotal:        8048060 kB\nMemFree:          512340 kB\nMemAvailable:    4321000 kB\nBuffers:          123456 kB\nCached:          2345678 kB\nSwapCached:            0 kB\nActive:          3456789 kB\nInactive:        2345678 kB\nActive(file):    1234567 kB\nInactive(file):  2222222 kB\nSReclaimable:     345678 kB\nShmem:             56789 kB\n"
+  },
+  {
+   "name": "busy_and_idle_in_odd_amounts",
+   "stat": "cpu  7 3 11 13 17 19 23 29 31 37\nbtime 1798700000\n",
+   "stat_after": "cpu  1000008 3 1000012 3000013 1000018 19 23 29 31 37\nbtime 1798700000\n",
+   "meminfo": "MemTotal:        1000 kB\nMemFree:          100 kB\nMemAvailable:     333 kB\n"
+  },
+  {
+   "name": "counters_that_went_backwards",
+   "stat": "cpu  500 0 500 500 100 0 0 0 0 0\nbtime 1798700000\n",
+   "stat_after": "cpu  400 0 700 600 100 0 0 0 0 0\nbtime 1798700000\n",
+   "meminfo": "MemTotal:\t2048 kB\nMemFree:\t1024 kB\nMemAvailable:\t1500 kB\n"
+  },
+  {
+   "name": "nothing_changed",
+   "stat": "cpu  1 2 3 4 5 6 7 8 9 10\nbtime 1798700000\n",
+   "meminfo": "MemTotal: 3 kB\nMemFree: 1 kB\nMemAvailable: 1 kB\n"
+  },
+  {
+   "name": "eleven_fields_and_guest_time",
+   "stat": "cpu  100 50 100 1000 0 0 0 0 40 10 999\nbtime 1798700000.75\n",
+   "stat_after": "cpu  300 150 200 1200 50 0 0 0 140 60 1999\nbtime 1798700000.75\n",
+   "meminfo": "MemTotal:        8048060 kB\nMemFree:          512340 kB\nMemAvailable:    9999999 kB\n"
+  },
+  {
+   "name": "estimate_from_zoneinfo",
+   "stat": "cpu  1 1 1 1 1 1 1 1 1 1\nbtime 1798700000\n",
+   "meminfo": "MemTotal:        8048060 kB\nMemFree:          512340 kB\nBuffers:          123456 kB\nCached:          2345678 kB\nActive(file):    1234567 kB\nInactive(file):  2222222 kB\nSReclaimable:     345678 kB\n",
+   "zoneinfo": "Node 0, zone      DMA\n  per-node stats\n  pages free     3968\n        min      33\n        low      41\n        high     49\n        spanned  4095\nNode 0, zone    DMA32\n  pages free     212345\n        min      5000\n        low      6250\n        high     7500\n"
+  },
+  {
+   "name": "estimate_with_a_large_watermark",
+   "stat": "cpu  1 1 1 1 1 1 1 1 1 1\nbtime 1798700000\n",
+   "meminfo": "MemTotal:        8048060 kB\nMemFree:          512340 kB\nMemAvailable:          0 kB\nCached:          2345678 kB\nActive(file):      10000 kB\nInactive(file):     2001 kB\nSReclaimable:       3001 kB\n",
+   "zoneinfo": "        low      1000000\n"
+  },
+  {
+   "name": "available_zero_without_zoneinfo",
+   "stat": "cpu  1 1 1 1 1 1 1 1 1 1\nbtime 1798700000\n",
+   "meminfo": "MemTotal:        8048060 kB\nMemFree:          512340 kB\nMemAvailable:          0 kB\nCached:          2345678 kB\nActive(file):    1234567 kB\nInactive(file):  2222222 kB\nSReclaimable:     345678 kB\n"
+  },
+  {
+   "name": "fallback_without_file_lru",
+   "stat": "cpu  1 1 1 1 1 1 1 1 1 1\nbtime 1798700000\n",
+   "meminfo": "MemTotal:        8048060 kB\nMemFree:          512340 kB\nCached:          2345678 kB\n",
+   "zoneinfo": "        low      41\n"
+  },
+  {
+   "name": "available_over_total",
+   "stat": "cpu  1 1 1 1 1 1 1 1 1 1\nbtime 1798700000\n",
+   "meminfo": "MemTotal:        1000 kB\nMemFree:          250 kB\nMemAvailable:     1001 kB\n"
+  },
+  {
+   "name": "total_zero",
+   "stat": "cpu  1 1 1 1 1 1 1 1 1 1\nbtime 1798700000\n",
+   "meminfo": "MemTotal:           0 kB\nMemFree:            7 kB\nMemAvailable:       5 kB\n"
+  },
+  {
+   "name": "duplicate_names_use_the_last",
+   "stat": "cpu  1 1 1 1 1 1 1 1 1 1\nbtime 1798700000\nbtime 1\n",
+   "meminfo": "MemTotal: 1000 kB\nMemTotal: 2000 kB\nMemFree: 10 kB\nMemAvailable: 1000 kB\nMemAvailable: 500 kB"
+  },
+  {
+   "name": "missing_memtotal",
+   "stat": "cpu  1 1 1 1 1 1 1 1 1 1\nbtime 1798700000\n",
+   "meminfo": "MemFree:          512340 kB\nMemAvailable:    4321000 kB\n"
+  },
+  {
+   "name": "blank_line_in_meminfo",
+   "stat": "cpu  1 1 1 1 1 1 1 1 1 1\nbtime 1798700000\n",
+   "meminfo": "MemTotal:        8048060 kB\n\nMemFree:          512340 kB\n"
+  },
+  {
+   "name": "meminfo_value_not_a_number",
+   "stat": "cpu  1 1 1 1 1 1 1 1 1 1\nbtime 1798700000\n",
+   "meminfo": "MemTotal:        abc kB\nMemFree:          512340 kB\n"
+  },
+  {
+   "name": "zoneinfo_low_without_a_value",
+   "stat": "cpu  1 1 1 1 1 1 1 1 1 1\nbtime 1798700000\n",
+   "meminfo": "MemTotal:        8048060 kB\nMemFree:          512340 kB\nActive(file):    1234567 kB\nInactive(file):  2222222 kB\nSReclaimable:     345678 kB\n",
+   "zoneinfo": "        low\n"
+  },
+  {
+   "name": "no_btime",
+   "stat": "cpu  1 1 1 1 1 1 1 1 1 1\nctxt 1\n",
+   "meminfo": "MemTotal: 10 kB\nMemFree: 1 kB\nMemAvailable: 5 kB\n"
+  },
+  {
+   "name": "btime_without_a_value",
+   "stat": "cpu  1 1 1 1 1 1 1 1 1 1\nbtime\n",
+   "meminfo": "MemTotal: 10 kB\nMemFree: 1 kB\nMemAvailable: 5 kB\n"
+  }
+ ],
+ "downtime": [
+  {"name": "no_heartbeat", "heartbeat": null, "now": "1800000000.5"},
+  {"name": "within_grace", "heartbeat": "{\n  \"last_seen_epoch\": 1799999900.5,\n  \"pid\": 7\n}", "now": "1800000000.5"},
+  {"name": "exactly_the_grace", "heartbeat": "{\"last_seen_epoch\": 1799999880.5}", "now": "1800000000.5"},
+  {"name": "beyond_the_grace", "heartbeat": "{\n  \"last_seen_epoch\": 1799999000.25,\n  \"last_seen_at\": \"2027-01-15T07:43:20.250000+00:00\",\n  \"pid\": 7,\n  \"app_started_epoch\": 1799990000.0,\n  \"app_started_at\": \"2027-01-15T05:13:20+00:00\"\n}", "now": "1800000000.5"},
+  {"name": "custom_grace_is_longer", "heartbeat": "{\"last_seen_epoch\": 1799999000.25}", "now": "1800000000.5", "env": {"ADMIN_DOWNTIME_GRACE_SECONDS": "2000"}},
+  {"name": "custom_grace_has_a_floor", "heartbeat": "{\"last_seen_epoch\": 1799999999.0}", "now": "1800000000.5", "env": {"ADMIN_DOWNTIME_GRACE_SECONDS": "0.5"}},
+  {"name": "integer_epoch", "heartbeat": "{\"last_seen_epoch\": 1799990000}", "now": "1800000000.5"},
+  {"name": "boolean_epoch", "heartbeat": "{\"last_seen_epoch\": true}", "now": "1800000000.5"},
+  {"name": "zero_epoch", "heartbeat": "{\"last_seen_epoch\": 0}", "now": "1800000000.5"},
+  {"name": "sixteen_digit_epoch", "heartbeat": "{\"last_seen_epoch\": 1799999000.123456}", "now": "1800000000.5"},
+  {"name": "duration_rounds_to_three_places", "heartbeat": "{\"last_seen_epoch\": 1799999000.0}", "now": "1800000000.0005"},
+  {"name": "text_epoch", "heartbeat": "{\"last_seen_epoch\": \"1799999000\"}", "now": "1800000000.5"},
+  {"name": "missing_epoch", "heartbeat": "{\"pid\": 7}", "now": "1800000000.5"},
+  {"name": "not_an_object", "heartbeat": "[1799999000]", "now": "1800000000.5"},
+  {"name": "broken_json", "heartbeat": "{\"last_seen_epoch\": 17999", "now": "1800000000.5"},
+  {"name": "empty_file", "heartbeat": "", "now": "1800000000.5"},
+  {"name": "heartbeat_in_the_future", "heartbeat": "{\"last_seen_epoch\": 1800000100.0}", "now": "1800000000.5"},
+  {"name": "not_utf8", "heartbeat": {"hex": "7bff7d"}, "now": "1800000000.5"}
+ ],
+ "heartbeat": [
+  {"name": "basic", "now": "1800000000.25", "started": "1799990000.0", "pid": 7},
+  {"name": "whole_seconds", "now": "1800000000", "started": "1800000000", "pid": 4242},
+  {"name": "micro_seconds", "now": "1800000000.000001", "started": "0.5", "pid": 1}
+ ],
+ "alerts": [
+  {
+   "name": "below_every_threshold",
+   "ticks": [
+    {"now": "1800000000.0", "meters": {
+     "cpu": {"label": "CPU", "percent": "89.99", "detail": "論理コア 8"},
+     "memory": {"label": "Memory", "percent": "50.0", "detail": "3.5 GB / 7.7 GB"},
+     "tps": {"label": "TPS", "percent": "99.99", "detail": "目標 50 req/s の 100%"}
+    }}
+   ]
+  },
+  {
+   "name": "over_and_cooldown",
+   "ticks": [
+    {"now": "1800000000.0", "meters": {
+     "cpu": {"label": "CPU", "percent": "95.5", "detail": "論理コア 8"},
+     "memory": {"label": "Memory", "percent": "90.0", "detail": "7.0 GB / 7.7 GB"},
+     "tps": {"label": "TPS", "percent": "100.0", "detail": "目標 50 req/s の 100%"}
+    }},
+    {"now": "1800000100.0", "meters": {
+     "cpu": {"label": "CPU", "percent": "96.0", "detail": "論理コア 8"},
+     "memory": {"label": "Memory", "percent": "10.0", "detail": "0.7 GB / 7.7 GB"},
+     "tps": {"label": "TPS", "percent": "100.0", "detail": "目標 50 req/s の 100%"}
+    }},
+    {"now": "1800000299.999", "meters": {
+     "cpu": {"label": "CPU", "percent": "97.0", "detail": "論理コア 8"},
+     "memory": {"label": "Memory", "percent": "10.0", "detail": "0.7 GB / 7.7 GB"},
+     "tps": {"label": "TPS", "percent": "0.0", "detail": "目標 50 req/s の 0%"}
+    }},
+    {"now": "1800000300.0", "meters": {
+     "cpu": {"label": "CPU", "percent": "98.0", "detail": "論理コア 8"},
+     "memory": {"label": "Memory", "percent": "91.0", "detail": "7.1 GB / 7.7 GB"},
+     "tps": {"label": "TPS", "percent": "0.0", "detail": "目標 50 req/s の 0%"}
+    }}
+   ]
+  },
+  {
+   "name": "custom_thresholds_and_no_cooldown",
+   "env": {
+    "ADMIN_CPU_ALERT_PERCENT": "50",
+    "ADMIN_MEMORY_ALERT_PERCENT": "1e6",
+    "ADMIN_TPS_ALERT_PERCENT": "12.5",
+    "ADMIN_MONITOR_ALERT_COOLDOWN_SECONDS": "0"
+   },
+   "ticks": [
+    {"now": "1800000000.0", "meters": {
+     "cpu": {"label": "CPU", "percent": "50.0", "detail": "論理コア 2"},
+     "memory": {"label": "Memory", "percent": "100.0", "detail": "8.0 GB / 8.0 GB"},
+     "tps": {"label": "TPS", "percent": "12.5", "detail": "目標 50 req/s の 12%"}
+    }},
+    {"now": "1800000000.0", "meters": {
+     "cpu": {"label": "CPU", "percent": "95.25", "detail": "論理コア 2"},
+     "memory": {"label": "Memory", "percent": "100.0", "detail": "8.0 GB / 8.0 GB"},
+     "tps": {"label": "TPS", "percent": "12.49", "detail": "目標 50 req/s の 12%"}
+    }},
+    {"now": "1800000001.0", "meters": {
+     "cpu": {"label": "CPU", "percent": "95.35", "detail": "論理コア 2"},
+     "memory": {"label": "Memory", "percent": "0.0", "detail": "0.0 B / 8.0 GB"},
+     "tps": {"label": "TPS", "percent": "33.33", "detail": "目標 50 req/s の 33%"}
+    }}
+   ]
+  },
+  {
+   "name": "negative_cooldown_has_a_floor",
+   "env": {"ADMIN_MONITOR_ALERT_COOLDOWN_SECONDS": "-5", "ADMIN_CPU_ALERT_PERCENT": "0"},
+   "ticks": [
+    {"now": "1800000000.0", "meters": {
+     "cpu": {"label": "CPU", "percent": "0.0", "detail": "論理コア 1"},
+     "memory": {"label": "Memory", "percent": "0.0", "detail": "0.0 B / 0.0 B"},
+     "tps": {"label": "TPS", "percent": "0.0", "detail": "目標 50 req/s の 0%"}
+    }},
+    {"now": "1800000000.0", "meters": {
+     "cpu": {"label": "CPU", "percent": "0.0", "detail": "論理コア 1"},
+     "memory": {"label": "Memory", "percent": "0.0", "detail": "0.0 B / 0.0 B"},
+     "tps": {"label": "TPS", "percent": "0.0", "detail": "目標 50 req/s の 0%"}
+    }}
+   ]
+  },
+  {
+   "name": "time_goes_backwards",
+   "ticks": [
+    {"now": "1800000000.0", "meters": {
+     "cpu": {"label": "CPU", "percent": "99.0", "detail": "論理コア 8"},
+     "memory": {"label": "Memory", "percent": "1.0", "detail": "0.1 GB / 7.7 GB"},
+     "tps": {"label": "TPS", "percent": "1.0", "detail": "目標 50 req/s の 1%"}
+    }},
+    {"now": "1799999000.0", "meters": {
+     "cpu": {"label": "CPU", "percent": "99.0", "detail": "論理コア 8"},
+     "memory": {"label": "Memory", "percent": "1.0", "detail": "0.1 GB / 7.7 GB"},
+     "tps": {"label": "TPS", "percent": "1.0", "detail": "目標 50 req/s の 1%"}
+    }}
+   ]
+  }
+ ]
+}

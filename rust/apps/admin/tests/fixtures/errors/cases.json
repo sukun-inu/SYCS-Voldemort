@@ -517,7 +517,6 @@
   },
   {
    "name": "limit_default_on_metrics",
-   "rust_skip": "/metrics は A7 の経路（Python の docstring は既定の制限が掛からないと書いているが、実際に掛かるかを記録する）",
    "requests": [
     {"method": "GET", "target": "/metrics", "repeat": 300},
     {"method": "GET", "target": "/metrics"}

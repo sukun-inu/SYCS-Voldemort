@@ -17,7 +17,13 @@
 //!   `SETTINGS_LOAD_TIMEOUT_SECONDS`・`SETTINGS_LOCK_TIMEOUT_SECONDS`）。起動では待たず、裏で読めるまで繰り返す
 //!   （`sycs_admin::apps::store`）。設定パネルの声は `TTS_BASE_URL`、DJAudio の既定は `DJAUDIO_*`
 //!
-//! 監視の巡回（心拍・停止・しきい値）と `/metrics` は、あとの塊（A7）が足す。公開トップの Bot のサーバー数は、
+//! - 監視（A7）: `/admin/api/metrics`・`/admin/api/incidents`・`/metrics`（`METRICS_PATH`・`METRICS_ALLOWED_CIDRS`・
+//!   `METRICS_STALE_AFTER_SECONDS`・`BACKUP_STATUS_FILE`。Valkey は `VALKEY_URL`・`VALKEY_TIMEOUT_SECONDS`・
+//!   `VALKEY_BREAKER_COOLDOWN_SECONDS`）と、監視の巡回（`ADMIN_MONITOR_INTERVAL_SECONDS`・`ADMIN_DOWNTIME_GRACE_SECONDS`・
+//!   `ADMIN_*_ALERT_PERCENT`・`ADMIN_MONITOR_ALERT_COOLDOWN_SECONDS`・`ADMIN_TPS_TARGET`）。どれも Python と同じ読み方
+//!   （`sycs_admin::monitor`）。`METRICS_PATH` が `/` で始まらなければ起動しない（Python も起動しない）
+//!
+//! 公開トップの Bot のサーバー数は、
 //! Discord が 0 か失敗のとき設定のあるサーバーの数を出す（設定の置き場から数える。A5）。
 //!
 //! `--self-check` を付けると、127.0.0.1 の空いた口で待ち受けて、自分の旧 URL（`/admin/users/state`）に Cookie 無しで
@@ -37,6 +43,7 @@ use sycs_admin::app::{self, AdminApp, Config, Deps, OsRandom};
 use sycs_admin::apps::{self, Panels};
 use sycs_admin::auth::{DISCORD_API, Discord, DiscordConfig, StoredGuildCount};
 use sycs_admin::db;
+use sycs_admin::monitor::{self, Monitor};
 use sycs_admin::routes;
 use sycs_admin::secret;
 use sycs_admin::templates::{Pages, PagesConfig};
@@ -98,6 +105,12 @@ async fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    let metrics_path =
+        monitor::prometheus::metrics_path(std::env::var("METRICS_PATH").ok().as_deref());
+    if !metrics_path.starts_with('/') {
+        error!("METRICS_PATH は / で始めてください（いまは {metrics_path:?}）");
+        return ExitCode::FAILURE;
+    }
     if env.int("ADMIN_WORKERS", 1, Some(1), None) > 1 {
         warn!("ADMIN_WORKERS は Rust の管理画面では使いません（1 プロセスで動きます）");
     }
@@ -153,7 +166,10 @@ async fn main() -> ExitCode {
         deps,
         routes::default_routes(&site),
     );
+    let admin = admin.with_monitor(Arc::new(Monitor::from_env(&env, app::system_clock())));
     let state = Arc::new(admin.with_users(Arc::new(PgUserStates::new(pool))));
+    // 監視の巡回（起動のときの停止の記録と心拍、そのあと間隔ごと）。Python は app を作るときにスレッドで始める。
+    let _watch = monitor::watch::spawn(Arc::clone(&state));
     let listener = match listen.bind().await {
         Ok(listener) => listener,
         Err(e) => {

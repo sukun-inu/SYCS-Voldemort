@@ -23,6 +23,8 @@
 //! - [`auth`] Discord のログイン（OAuth）と、Bot のトークンで引く管理者の確かめ（`webapp_admin/auth.py`。A3）
 //! - [`views`] ログイン・サーバー選択・シェルの画面と公開ページの経路（`views/`・`_register_public_pages`。A3）
 //! - [`apps`] 設定パネルの読む側（`api/apps.py` の `list_apps`・`get_app` と `schema/`。A5）
+//! - [`monitor`] 監視（A7。`/admin/api/metrics`・`/admin/api/incidents`・Netdata が読む `/metrics`・監視の巡回。
+//!   `webapp_admin/metrics.py`・`prometheus_view.py`・`services/metrics_registry.py` の `render`）
 //! - [`params`] FastAPI の引数（`Query`・`Path`）の読み方と pydantic の検証の誤り（422）
 //! - [`jsonsafe`] JavaScript が壊さずに読める JSON の答え（`SafeJSONResponse`）
 //! - [`db`] `user_state_audit` の Postgres への接続の束（`services/user_state_db.py` の engine）
@@ -35,6 +37,7 @@ pub mod db;
 pub mod errors;
 pub mod jsonsafe;
 pub mod metrics;
+pub mod monitor;
 pub mod params;
 pub mod python;
 pub mod ratelimit;

@@ -3,7 +3,8 @@
 //!
 //! - 数は `sycs_web::metrics::HttpMetrics`（`requests_total{app="admin"}`・`http_responses_total{app,code}`・
 //!   `exceptions_total{app,type}`。Valkey へは背景のループが送る）
-//! - 秒あたりの要求の数（TPS）のために、直近 60 秒の要求の時刻を持つ（`/admin/api/metrics` と `/metrics` は A7）
+//! - 秒あたりの要求の数（TPS）のために、直近 60 秒の要求の時刻を持つ（`/admin/api/metrics` と `/metrics` は A7 の
+//!   [`crate::monitor`]）
 //! - インシデントは `incidents.jsonl`（`ADMIN_MONITOR_DIR`、無ければ `SETTINGS_DIR/admin_monitor`）。**Python と
 //!   同じファイルを同じ形で書く**（切り替えても SLA の履歴が続くように）。1 行は
 //!   `json.dumps(ensure_ascii=False, separators=(",", ":"))` で、鍵の順も Python と同じ
@@ -180,12 +181,14 @@ impl Incidents {
         map.insert("start_at".to_string(), at(incident.start_epoch));
         map.insert("end_epoch".to_string(), epoch_value(incident.end_epoch));
         map.insert("end_at".to_string(), at(incident.end_epoch));
+        // Python の `round(duration_seconds, 3)`（2 進の値を正確に 10 進へ直して丸める。1000 倍してから丸めると、
+        // 掛け算の誤差で 1 つ隣になることがある。停止の長さ〔A7〕が通る）。
         map.insert(
             "duration_seconds".to_string(),
             epoch_value(
                 incident
                     .duration_seconds
-                    .map(|d| (d * 1000.0).round_ties_even() / 1000.0),
+                    .map(|d| crate::monitor::pyfloat::round(d, 3)),
             ),
         );
         map.insert("metadata".to_string(), Value::Object(incident.metadata));

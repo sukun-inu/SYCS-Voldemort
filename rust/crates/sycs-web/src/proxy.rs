@@ -11,6 +11,10 @@
 //!
 //! Python と違うところ: IPv6 の `%` 付きのスコープ（`fe80::1%eth0`）は、アドレスとして読まずに文字列として比べる
 //! （Python はアドレスとして読む）。compose の設定にも、プロキシが付ける値にも出てこない。
+//!
+//! 管理画面の `/metrics` の接続元の判定（`METRICS_ALLOWED_CIDRS`。`webapp_admin/prometheus_view.py`）も、ここの
+//! アドレスと帯域の読み方を使う（[`ip_address`]・[`Network::parse_loose`]。Python の `ipaddress.ip_address` と
+//! `ip_network(…, strict=False)`）。
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
@@ -56,16 +60,25 @@ pub struct TrustedHosts {
     networks: Vec<Network>,
 }
 
-/// 帯域（ネットワークの頭のアドレスと、長さ）。
-#[derive(Clone, Copy, Debug)]
-struct Network {
+/// 帯域（ネットワークの頭のアドレスと、長さ）。Python の `IPv4Network`・`IPv6Network`。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Network {
     address: IpAddr,
     prefix: u8,
 }
 
 impl Network {
+    /// Python の `ipaddress.ip_network(文字列, strict=False)`。読めなければ `None`（Python の `ValueError`）。
+    ///
+    /// 読み方は信頼するプロキシの帯域と同じ（長さ・ネットマスク・ホストマスク。IPv6 は長さだけ）で、違うのは 2 つ:
+    /// `/` が無ければ 1 つのアドレスだけの帯域（`/32`・`/128`）、頭のアドレスに余りのビットがあれば落とす
+    /// （`10.0.0.1/8` は `10.0.0.0/8`）。前後の空白は落とさない（呼ぶ側が落とす。Python も `strip()` してから渡す）。
+    pub fn parse_loose(text: &str) -> Option<Self> {
+        network_from(text, false)
+    }
+
     /// Python の `ip in network`（版の違うものは入らない）。
-    fn contains(&self, ip: IpAddr) -> bool {
+    pub fn contains(&self, ip: IpAddr) -> bool {
         match (self.address, ip) {
             (IpAddr::V4(net), IpAddr::V4(ip)) => {
                 mask_v4(u32::from(ip), self.prefix) == u32::from(net)
@@ -268,6 +281,12 @@ fn is_python_space(c: char) -> bool {
     c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
 }
 
+/// Python の `ipaddress.ip_address(文字列)`（読めなければ `None`）。信頼するプロキシの判定と同じ読み方
+/// （[`TrustedHosts::contains`]）。管理画面の `/metrics` が接続元を読むのに使う。
+pub fn ip_address(text: &str) -> Option<IpAddr> {
+    parse_ip(text)
+}
+
 /// Python の `ipaddress.ip_address(文字列)`。IPv4 は 10 進 4 つ（先頭の 0 は許さない）、ほかは IPv6。
 fn parse_ip(text: &str) -> Option<IpAddr> {
     if let Some(v4) = parse_ipv4(text) {
@@ -300,29 +319,47 @@ fn parse_ipv4(text: &str) -> Option<Ipv4Addr> {
 /// IPv4 は長さ（`/24`）のほか、点で区切ったネットマスク（`/255.255.255.0`）とホストマスク（`/0.0.0.255`）も読む。
 /// IPv6 は長さだけ。
 fn parse_network(text: &str) -> Option<Network> {
-    let (address, mask) = text.split_once('/')?;
-    if mask.contains('/') {
+    network_from(text, true)
+}
+
+/// `ip_network(文字列, strict)` の中身。Python の `_split_addr_prefix`（`/` は 1 つまで。無ければいちばん長い長さ）→
+/// アドレス → 長さ（`_make_netmask`）→ 余りのビット（strict なら読めない、でなければ落とす）。IPv4 として読めない
+/// アドレスだけを IPv6 として読む（IPv4 のアドレスで長さが読めなければ、IPv6 でも読めないので読めない）。
+fn network_from(text: &str, strict: bool) -> Option<Network> {
+    let (address, mask) = match text.split_once('/') {
+        Some((address, mask)) => (address, Some(mask)),
+        None => (text, None),
+    };
+    if mask.is_some_and(|mask| mask.contains('/')) {
         return None;
     }
     if let Some(v4) = parse_ipv4(address) {
-        let prefix = v4_prefix(mask)?;
+        let prefix = match mask {
+            Some(mask) => v4_prefix(mask)?,
+            None => 32,
+        };
         let value = u32::from(v4);
-        if mask_v4(value, prefix) != value {
+        let masked = mask_v4(value, prefix);
+        if strict && masked != value {
             return None;
         }
         return Some(Network {
-            address: IpAddr::V4(v4),
+            address: IpAddr::V4(Ipv4Addr::from(masked)),
             prefix,
         });
     }
     let v6 = address.parse::<Ipv6Addr>().ok()?;
-    let prefix = prefix_number(mask, 128)?;
+    let prefix = match mask {
+        Some(mask) => prefix_number(mask, 128)?,
+        None => 128,
+    };
     let value = u128::from(v6);
-    if mask_v6(value, prefix) != value {
+    let masked = mask_v6(value, prefix);
+    if strict && masked != value {
         return None;
     }
     Some(Network {
-        address: IpAddr::V6(v6),
+        address: IpAddr::V6(Ipv6Addr::from(masked)),
         prefix,
     })
 }
@@ -455,6 +492,40 @@ mod tests {
             trusted.client_host("198.51.100.51, 172.18.0.1:9999"),
             "198.51.100.51"
         );
+    }
+
+    /// `/metrics` の許す帯域の読み方（`ip_network(…, strict=False)`）: 余りのビットは落とし、`/` が無ければ 1 つの
+    /// アドレス、読めない書き方は読まない。strict の読み方（信頼するプロキシ）は余りのビットを読まないまま。
+    #[test]
+    fn loose_networks_drop_host_bits() {
+        let ip = |text: &str| ip_address(text).unwrap();
+        let loose = Network::parse_loose("10.0.0.1/8").unwrap();
+        assert!(loose.contains(ip("10.9.9.9")));
+        assert!(!loose.contains(ip("11.0.0.1")));
+        assert!(parse_network("10.0.0.1/8").is_none());
+        let single = Network::parse_loose("127.0.0.1").unwrap();
+        assert!(single.contains(ip("127.0.0.1")));
+        assert!(!single.contains(ip("127.0.0.2")));
+        let v6 = Network::parse_loose("2001:db8::1/32").unwrap();
+        assert!(v6.contains(ip("2001:db8:ffff::1")));
+        assert!(!v6.contains(ip("10.0.0.1")));
+        assert!(Network::parse_loose("::1").unwrap().contains(ip("::1")));
+        let hostmask = Network::parse_loose("10.0.0.0/0.255.255.255").unwrap();
+        assert!(hostmask.contains(ip("10.1.2.3")));
+        for broken in [
+            "10.0.0.0/33",
+            "1.2.3.0/24/8",
+            "01.2.3.4/32",
+            "1.2.3.0/ 24",
+            "",
+            "/8",
+            "nonsense",
+            "10.0.0.0/",
+        ] {
+            assert!(Network::parse_loose(broken).is_none(), "{broken}");
+        }
+        assert_eq!(ip_address("010.1.2.3"), None);
+        assert_eq!(ip_address("unknown"), None);
     }
 
     /// `X-Forwarded-For` が 2 つ以上あれば、つないで 1 つとして読むこと（最後の 1 つだけを読むと、信頼する nginx が
