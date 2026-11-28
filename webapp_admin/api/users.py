@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -158,6 +158,27 @@ def _enabled_abilities(raw: Any) -> list[str]:
     return sorted(ability_label(str(key)) for key, enabled in raw.items() if enabled)
 
 
+def _timed_out_now(state: dict[str, Any], now: datetime | None = None) -> bool:
+    """いまタイムアウト中か。記録の旗ではなく、期限と今の時刻を比べて決める。
+
+    記録の is_timed_out は、期限が過ぎても、その人の次のイベントか 30 分ごとの修復まで
+    立ったまま残る（本人の決定 2026-11-28、トラッカーの rust-10 の (e)・決めごとの U4）。
+    期限は同じ行に入っているので、表示のときに比べればずれない。期限が無ければ
+    タイムアウト中ではない（修復の _is_timed_out_until と同じ判定）。
+    """
+    until = state.get("timed_out_until")
+    if until is None:
+        return False
+    if not isinstance(until, datetime):
+        # 保存経路によって str のまま入っていることがある（format_jst の docstring）。
+        # 比べられないので、直す前と同じく記録の旗に従う。
+        return bool(state.get("is_timed_out"))
+    if until.tzinfo is None:
+        # SQLite などは時差を落として返す。書くときは UTC なので、UTC として読む。
+        until = until.replace(tzinfo=timezone.utc)
+    return until > (now or datetime.now(timezone.utc))
+
+
 def _row(state: dict[str, Any]) -> dict[str, Any]:
     """一覧・詳細の両方で使う、1ユーザー分の表示用行に変換する共通処理。"""
     roles = _roles(state.get("roles"))
@@ -173,7 +194,7 @@ def _row(state: dict[str, Any]) -> dict[str, Any]:
         "status_tone": status_tone(state.get("status")),
         "is_in_guild": bool(state.get("is_in_guild")),
         "is_banned": bool(state.get("is_banned")),
-        "is_timed_out": bool(state.get("is_timed_out")),
+        "is_timed_out": _timed_out_now(state),
         "last_event_label": event_label(state.get("last_event_type")),
         "last_event_at": format_jst(state.get("last_event_at")),
         "roles": role_names,

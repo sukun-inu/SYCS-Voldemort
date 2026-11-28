@@ -16,7 +16,7 @@ import sys
 import tempfile
 import time
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -526,6 +526,64 @@ class UserStateApiTests(unittest.TestCase):
         client = make_client(with_guild=False)
         response = client.get("/admin/api/users/state", follow_redirects=False)
         self.assertEqual(response.status_code, 303)
+
+
+class UserStateTimeoutDisplayTests(unittest.TestCase):
+    """タイムアウト中かどうかは、記録の旗ではなく期限と今の時刻で決める（rust-10 の (e)・U4）。
+
+    記録の旗は、期限が過ぎても次のイベントか 30 分ごとの修復まで立ったまま残る。
+    """
+
+    def setUp(self):
+        self.client = make_client()
+
+    def _detail(self, **overrides):
+        state = {**SAMPLE_STATE, **overrides}
+
+        async def fake_detail(guild_id, user_id, *, event_limit=200):
+            return {"current": state, "events": []}
+
+        with patch("webapp_admin.api.users.get_user_state_detail", fake_detail):
+            return self.client.get("/admin/api/users/state/555").json()["current"]
+
+    def _list_row(self, **overrides):
+        state = {**SAMPLE_STATE, **overrides}
+
+        async def fake_list(guild_id, *, query=None, limit=50, offset=0):
+            return [state]
+
+        async def fake_count(guild_id, *, query=None):
+            return 1
+
+        with (
+            patch("webapp_admin.api.users.list_recent_user_states", fake_list),
+            patch("webapp_admin.api.users.count_user_states", fake_count),
+        ):
+            return self.client.get("/admin/api/users/state").json()["rows"][0]
+
+    def test_expired_timeout_is_not_shown_even_if_the_flag_is_still_up(self):
+        past = datetime.now(timezone.utc) - timedelta(minutes=5)
+        self.assertFalse(self._detail(is_timed_out=True, timed_out_until=past)["is_timed_out"])
+        self.assertFalse(self._list_row(is_timed_out=True, timed_out_until=past)["is_timed_out"])
+
+    def test_timeout_until_the_future_is_shown_even_if_the_flag_is_down(self):
+        future = datetime.now(timezone.utc) + timedelta(hours=1)
+        self.assertTrue(self._detail(is_timed_out=False, timed_out_until=future)["is_timed_out"])
+        self.assertTrue(self._list_row(is_timed_out=False, timed_out_until=future)["is_timed_out"])
+
+    def test_no_deadline_means_not_timed_out(self):
+        self.assertFalse(self._detail(is_timed_out=True, timed_out_until=None)["is_timed_out"])
+
+    def test_naive_deadline_is_read_as_utc(self):
+        # UTC で 1 時間先。JST（+9）として読むと 8 時間前になり、外れる。
+        future_naive = (datetime.now(timezone.utc) + timedelta(hours=1)).replace(tzinfo=None)
+        self.assertTrue(self._detail(is_timed_out=False, timed_out_until=future_naive)["is_timed_out"])
+        past_naive = (datetime.now(timezone.utc) - timedelta(hours=1)).replace(tzinfo=None)
+        self.assertFalse(self._detail(is_timed_out=True, timed_out_until=past_naive)["is_timed_out"])
+
+    def test_unparseable_deadline_falls_back_to_the_flag(self):
+        self.assertTrue(self._detail(is_timed_out=True, timed_out_until="2026-01-01 broken")["is_timed_out"])
+        self.assertFalse(self._detail(is_timed_out=False, timed_out_until="2026-01-01 broken")["is_timed_out"])
 
 
 def _latest_signal(name: str):
