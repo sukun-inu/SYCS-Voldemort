@@ -14,6 +14,7 @@ workspace = true
 [dependencies]
 chrono = { workspace = true, features = ["clock", "std"] }
 futures-util = { workspace = true, features = ["std", "sink"] }
+getrandom = { workspace = true }
 hex = { workspace = true }
 image = { workspace = true, features = ["png", "gif"] }
 md-5 = { workspace = true }
@@ -41,7 +42,9 @@ sycs-imaging = { workspace = true }
 sycs-text = { workspace = true }
 # 合成した wav を songbird に読ませる（symphonia の wav / pcm の復号器）。
 symphonia = { workspace = true, features = ["wav", "pcm"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
+# DJAudio の一時ディレクトリ（Python の tempfile.TemporaryDirectory）。
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time", "process", "sync"] }
 tokio-tungstenite = { workspace = true, features = ["connect", "handshake", "rustls-tls-webpki-roots"] }
 tracing = { workspace = true }
 

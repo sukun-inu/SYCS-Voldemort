@@ -16,6 +16,7 @@
 //! 返事を送ったあとの仕事（/sticky の貼る・剥がす。[`After`]）と、引数の補完（[`autocomplete`]）もそこにある。
 
 pub mod activity;
+pub mod djaudio;
 pub mod guards;
 pub mod info;
 pub mod metal;
@@ -137,6 +138,12 @@ pub enum Route {
     MetalAll,
     /// 読み上げの設定のコマンド（/tts・/voice・/dict）。
     Tts(tts::TtsRoute),
+    /// `/djaudio channel`
+    DjaudioChannel,
+    /// `/djaudio output`
+    DjaudioOutput,
+    /// `/djaudio status`
+    DjaudioStatus,
 }
 
 /// 移したコマンドの道すじ。
@@ -220,11 +227,14 @@ pub const PORTED: &[(&str, Route)] = &[
     ("dict list", Route::Tts(tts::TtsRoute::DictList)),
     ("tts join", Route::Tts(tts::TtsRoute::Join)),
     ("tts leave", Route::Tts(tts::TtsRoute::Leave)),
+    ("djaudio channel", Route::DjaudioChannel),
+    ("djaudio output", Route::DjaudioOutput),
+    ("djaudio status", Route::DjaudioStatus),
 ];
 
 /// 定義にはあるが、中身をまだ移していないコマンド。移したら [`PORTED`] へ動かす
 /// （テストが、定義・[`PORTED`]・ここの 3 つが食い違っていないことを確かめる）。
-pub const NOT_PORTED_YET: &[&str] = &["djaudio channel", "djaudio output", "djaudio status"];
+pub const NOT_PORTED_YET: &[&str] = &[];
 
 /// 道すじから、移した中身を引く。
 pub fn route(path: &str) -> Option<Route> {
@@ -447,7 +457,10 @@ pub fn plan(route: Route, input: &PlanInput<'_>) -> Result<Planned, CommandError
         | Route::MetalSilver
         | Route::MetalPlatinum
         | Route::MetalAll
-        | Route::Tts(_) => Err(CommandError::NotPlanned),
+        | Route::Tts(_)
+        | Route::DjaudioChannel
+        | Route::DjaudioOutput
+        | Route::DjaudioStatus => Err(CommandError::NotPlanned),
     }
 }
 
@@ -477,6 +490,8 @@ pub struct Deps<'a> {
     pub tts: &'a crate::tts::TtsApi,
     /// 読み上げの係（/tts join・leave）。
     pub speaker: &'a crate::tts_voice::Speaker,
+    /// DJAudio の設定（/djaudio の返事に出す配信のリンクの頭・既定の値）。
+    pub djaudio: &'a crate::djaudio::Config,
 }
 
 /// 移した中身を実行して、返事を作る。
@@ -574,6 +589,16 @@ pub async fn dispatch(deps: &Deps<'_>, command: &CommandInteraction) {
     }
     if let Some(kind) = route(&path).and_then(metal::kind_of) {
         let outcome = metal::run(deps, command, options, kind).await;
+        let ms = started.elapsed().as_millis();
+        match outcome {
+            Ok(()) => info!("{}", activity::completed_line(&path, &who, ms)),
+            Err(e) => error!("{}", activity::failed_line(&path, &who, ms, &e)),
+        }
+        return;
+    }
+    // /djaudio は、断り方と失敗の知らせ方が違う（2 通になる）ので、応答まで任せる。
+    if let Some(which) = route(&path).and_then(djaudio::command_of) {
+        let outcome = djaudio::run(deps, command, options, which).await;
         let ms = started.elapsed().as_millis();
         match outcome {
             Ok(()) => info!("{}", activity::completed_line(&path, &who, ms)),
@@ -776,7 +801,7 @@ mod tests {
         for (path, r) in PORTED {
             assert_eq!(route(path), Some(*r));
         }
-        assert_eq!(route("djaudio status"), None);
+        assert_eq!(route("djaudio nope"), None);
     }
 
     fn options(value: Value) -> Vec<CommandDataOption> {

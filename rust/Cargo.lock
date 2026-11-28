@@ -4040,6 +4040,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "futures-util",
+ "getrandom 0.3.4",
  "hex",
  "image",
  "md-5",
@@ -4057,6 +4058,7 @@ dependencies = [
  "sycs-imaging",
  "sycs-text",
  "symphonia",
+ "tempfile",
  "tokio",
  "tokio-tungstenite 0.26.2",
  "tracing",

@@ -8,6 +8,7 @@ pub mod colorthief;
 pub mod commands;
 pub mod compat;
 pub mod config;
+pub mod djaudio;
 pub mod earthquake;
 pub mod earthquake_badges;
 pub mod earthquake_feed;

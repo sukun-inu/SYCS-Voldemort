@@ -92,6 +92,10 @@ pub struct AppState {
     pub voice_out: Arc<crate::voice_session::SongbirdOut>,
     /// 読み上げの係（サーバーごとの順番待ちと一時参加）。
     pub speaker: crate::tts_voice::Speaker,
+    /// DJAudio の落とし口（yt-dlp・置き場）。
+    pub djaudio: crate::djaudio::Service,
+    /// DJAudio の流れが覚えているもの（続けて頼んだ人・処理中の URL・同時に落とす数）。
+    pub djaudio_flow: crate::djaudio::flow::State,
     shard_manager: OnceLock<Arc<ShardManager>>,
 }
 
@@ -122,6 +126,12 @@ impl AppState {
             &songbird,
         )));
         let speaker = crate::tts_voice::Speaker::new(voice_out.clone());
+        let djaudio = crate::djaudio::Service::new(&config.djaudio);
+        let djaudio_flow = crate::djaudio::flow::State::new(
+            config.djaudio.concurrency,
+            config.djaudio.timeout,
+            &config.djaudio.base_url,
+        );
         Self {
             config,
             pool,
@@ -150,6 +160,8 @@ impl AppState {
             songbird,
             voice_out,
             speaker,
+            djaudio,
+            djaudio_flow,
             shard_manager: OnceLock::new(),
         }
     }
@@ -177,6 +189,14 @@ impl AppState {
             signals::Task::NewsFeeds => self.run_news(ctx).await,
             signals::Task::EarthquakeReconnect => self.restart_earthquake_feed(ctx),
             signals::Task::EqReplay => self.replay_earthquake(ctx, &payload).await,
+            signals::Task::DjaudioCache => {
+                crate::djaudio::cleanup_expired(
+                    &self.djaudio.cache,
+                    Some((&ctx.http, &ctx.cache)),
+                    |g| self.config.handles(g),
+                )
+                .await;
+            }
         }
     }
 
@@ -301,9 +321,21 @@ async fn start_after_cache_ready(
         tokio::spawn(sticky_forever(ctx.clone(), Arc::clone(&state)));
         tokio::spawn(news_forever(ctx.clone(), Arc::clone(&state)));
         state.restart_earthquake_feed(&ctx);
+        let (cache, http, serenity_cache) = (
+            state.djaudio.cache.clone(),
+            Arc::clone(&ctx.http),
+            Arc::clone(&ctx.cache),
+        );
+        let fence = Arc::clone(&state);
+        tokio::spawn(crate::djaudio::cleanup_forever(
+            cache,
+            http,
+            serenity_cache,
+            move |g| fence.config.handles(g),
+        ));
     } else {
         info!(
-            "BOT_BACKGROUND_WORKER=false: スティッキーの巡回・ニュース・地震の受け取りは動かしません"
+            "BOT_BACKGROUND_WORKER=false: スティッキーの巡回・ニュース・地震の受け取り・DJAudio の掃除は動かしません"
         );
     }
     // 利用者の状態の同期と定期の修復・掃除。Python の on_ready と同じく、BOT_BACKGROUND_WORKER ではなく
@@ -567,6 +599,51 @@ impl Handler {
         }
     }
 
+    /// 見張るチャンネルに貼られた URL を MP3 にする。Python の `handle_djaudio_message`（失敗はログに残す。
+    /// Python の `_safe`）。
+    async fn djaudio(&self, ctx: &Context, guild_id: GuildId, message: &Message) {
+        let snapshot = self.state.settings.snapshot();
+        let runtime = crate::djaudio::settings::runtime(
+            snapshot.guild(guild_id.get()),
+            self.state.config.djaudio.defaults,
+        );
+        drop(snapshot);
+        let post = crate::djaudio::flow::Post {
+            guild_id: guild_id.get(),
+            channel_id: message.channel_id.get(),
+            message_id: message.id.get(),
+            author_id: message.author.id.get(),
+            author_name: crate::vc_notify::display_name(
+                message.member.as_ref().and_then(|m| m.nick.as_deref()),
+                message.author.global_name.as_deref(),
+                &message.author.name,
+            )
+            .to_string(),
+            author_tag: crate::compat::user_tag(&message.author),
+            content: message.content.clone(),
+        };
+        let outlet = crate::djaudio::DiscordOutlet {
+            http: &ctx.http,
+            cache: &ctx.cache,
+            guild_id: post.guild_id,
+            channel_id: post.channel_id,
+            message_id: post.message_id,
+        };
+        let flow = &self.state.djaudio_flow;
+        let outcome = crate::djaudio::flow::handle_message(
+            flow,
+            &outlet,
+            &self.state.djaudio,
+            &post,
+            &runtime,
+            || flow.now(),
+        )
+        .await;
+        if let Err(e) = outcome {
+            tracing::error!("[djaudio] 処理中に例外が起きました: {e}");
+        }
+    }
+
     /// 応答チャンネルへの投稿に、AI の返事を書く。Python の `handle_chatgpt_message`。
     async fn chat(
         &self,
@@ -825,6 +902,7 @@ impl EventHandler for Handler {
             metals_site_url: &self.state.config.metals_site_url,
             tts: &self.state.tts,
             speaker: &self.state.speaker,
+            djaudio: &self.state.config.djaudio,
         };
         match &interaction {
             Interaction::Command(command) => commands::dispatch(&deps, command).await,
@@ -879,7 +957,8 @@ impl EventHandler for Handler {
             post.as_ref().map(|p| &p.author),
         );
         let speak = self.tts_message(guild_id, &new_message);
-        tokio::join!(security, sticky, chat, speak);
+        let djaudio = self.djaudio(&ctx, guild_id, &new_message);
+        tokio::join!(security, sticky, chat, speak, djaudio);
     }
 
     async fn message_delete(

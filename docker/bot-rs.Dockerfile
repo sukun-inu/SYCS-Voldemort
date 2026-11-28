@@ -28,9 +28,18 @@ FROM debian:bookworm-slim AS runtime
 # libopus0 は読み上げの音声（songbird が Opus に符号化する。ビルドの段の libopus-dev と対）。
 # fonts-noto-cjk は地震の震度の札の文字（NotoSansCJK-Bold.ttc）。Python の本番のイメージの apt と
 # 同じファイル（bookworm と trixie で同じハッシュ。crates/sycs-text の tests/golden.rs が確かめる）。
+# ffmpeg は DJAudio（yt-dlp が MP3 に変換し、カバー画像とメタデータを埋め込む）。Python のイメージと同じく apt のもの。
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates tzdata fonts-noto-cjk libopus0 \
+    && apt-get install -y --no-install-recommends ca-certificates tzdata fonts-noto-cjk libopus0 ffmpeg \
     && rm -rf /var/lib/apt/lists/*
+# yt-dlp は DJAudio が URL を落とすのに使う。Python のイメージと同じく、イメージを作るときの最新の GitHub の
+# リリース（動画サイトの変更に追いつくため、版は固定しない）。Python のイメージは Python で動く zipapp
+# （`yt-dlp`）を入れているが、ここには Python が無いので、Python ごと固めた実行ファイル（`yt-dlp_linux`）にする。
+ADD --chmod=0755 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux /usr/local/bin/yt-dlp
+# deno は、yt-dlp が YouTube の問題（署名・n パラメータ）を解くのに使う JavaScript の実行環境。無いと yt-dlp は
+# YouTube を非推奨の取り方で取り、形式が欠けることがある（その警告は --no-warnings で出ない）。yt-dlp は PATH の
+# deno を自分で見つける（解く部品の yt_dlp_ejs は yt-dlp_linux に入っている）。yt-dlp と同じく最新にする。
+COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
 COPY --from=build /src/target/release/sycs-bot /usr/local/bin/sycs-bot
 ENV TZ=Asia/Tokyo
 # いまは root で動かす。Python のコンテナ（root）と同じ app_data ボリュームへログを書くので、
@@ -46,6 +55,12 @@ FROM runtime AS cpu-check
 RUN apt-get update \
     && apt-get install -y --no-install-recommends qemu-user \
     && rm -rf /var/lib/apt/lists/*
+# DJAudio の yt-dlp・ffmpeg・deno も、本番の CPU で動くこと（版を出せれば動いている。deno は JavaScript を
+# 実際に走らせる）。yt-dlp が deno を見つけられることも確かめる（JS runtimes に deno が出る）。
+RUN qemu-x86_64 -cpu SandyBridge /usr/local/bin/yt-dlp --version \
+    && qemu-x86_64 -cpu SandyBridge /usr/bin/ffmpeg -hide_banner -version | head -1 \
+    && qemu-x86_64 -cpu SandyBridge /usr/local/bin/deno eval 'console.log("deno", 1 + 1)' \
+    && /usr/local/bin/yt-dlp -v 2>&1 | grep "JS runtimes: deno"
 RUN qemu-x86_64 -cpu SandyBridge /usr/local/bin/sycs-bot > /tmp/out 2>&1; \
     status=$?; cat /tmp/out; echo "終了コード $status"; \
     [ "$status" = "1" ] && grep -q "DISCORD_BOT_TOKEN が設定されていません" /tmp/out

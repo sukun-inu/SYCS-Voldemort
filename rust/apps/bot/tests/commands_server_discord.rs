@@ -101,6 +101,7 @@ struct Stage {
     colours: AvatarColours,
     tts: TtsApi,
     speaker: Speaker,
+    djaudio: sycs_bot::djaudio::Config,
     seen: Arc<Mutex<Vec<Seen>>>,
 }
 
@@ -126,6 +127,7 @@ impl Stage {
             colours: AvatarColours::new(),
             tts: TtsApi::new("http://127.0.0.1:9"),
             speaker: Speaker::new(Arc::new(NoVoice)),
+            djaudio: sycs_bot::djaudio::Config::from_env(&Env::from_fn(|_| None)),
             seen,
         }
     }
@@ -144,6 +146,7 @@ impl Stage {
             metals_site_url: "https://metals.example/",
             tts: &self.tts,
             speaker: &self.speaker,
+            djaudio: &self.djaudio,
         }
     }
 
