@@ -56,8 +56,7 @@ pub const AUTH_FAILED: &str = "Discord 認証に失敗しました。";
 /// 本人の情報を取れなかったとき。
 pub const USER_INFO_FAILED: &str = "ユーザー情報の取得に失敗しました。";
 /// 管理できるサーバーが無いとき（warning）。
-pub const NO_ADMIN_GUILDS: &str =
-    "管理者権限を持つサーバーが見つかりませんでした。Bot が参加しているサーバーで管理者権限が必要です。";
+pub const NO_ADMIN_GUILDS: &str = "管理者権限を持つサーバーが見つかりませんでした。Bot が参加しているサーバーで管理者権限が必要です。";
 /// ログアウトしたとき（info）。
 pub const LOGGED_OUT: &str = "ログアウトしました。";
 /// 選んだサーバーの ID が整数でないとき。
@@ -147,9 +146,7 @@ where
     Fut: Future<Output = Result<Reply, Failure>> + Send + 'static,
 {
     let site = Arc::clone(site);
-    handler(move |app: Arc<AdminApp>, req: Req| {
-        f(app, req, Arc::clone(&site))
-    })
+    handler(move |app: Arc<AdminApp>, req: Req| f(app, req, Arc::clone(&site)))
 }
 
 /// `views/auth_views.py` の経路（`/admin` の下。Python の登録の順。`/admin/logout` は POST が先なので、ほかの
@@ -193,9 +190,10 @@ pub fn public_routes(site: &Arc<Site>) -> Vec<Route> {
         routes.push(Route::top_level(
             path,
             &get,
-            with_site(site, move |app: Arc<AdminApp>, req: Req, site: Arc<Site>| {
-                document(app, req, site, page)
-            }),
+            with_site(
+                site,
+                move |app: Arc<AdminApp>, req: Req, site: Arc<Site>| document(app, req, site, page),
+            ),
         ));
     }
     for (old, new) in templates::LEGACY_PUBLIC_REDIRECTS {
@@ -213,7 +211,11 @@ pub fn public_routes(site: &Arc<Site>) -> Vec<Route> {
 /// starlette の `request.query_params.get(name)`（`parse_qsl(…, keep_blank_values=True)`。同じ名前は最後の値）。
 pub fn query_param(query: Option<&str>, name: &str) -> Option<String> {
     let mut found = None;
-    for pair in query.unwrap_or_default().split('&').filter(|p| !p.is_empty()) {
+    for pair in query
+        .unwrap_or_default()
+        .split('&')
+        .filter(|p| !p.is_empty())
+    {
         let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
         if python::form_unquote(key.as_bytes()) == name {
             found = Some(python::form_unquote(value.as_bytes()));
@@ -239,7 +241,8 @@ fn flash(session: &mut Session, message: &str, category: &str) -> Result<(), Fai
 
 /// 知らせを積んで 303 で送る。
 fn flash_redirect(req: &Req, message: &str, category: &str, to: &str) -> Result<Reply, Failure> {
-    req.session.with(|session| flash(session, message, category))?;
+    req.session
+        .with(|session| flash(session, message, category))?;
     Ok(Reply::redirect(303, to))
 }
 
@@ -286,7 +289,9 @@ async fn login(app: Arc<AdminApp>, req: Req, site: Arc<Site>) -> Result<Reply, F
         return Ok(Reply::redirect(303, target));
     }
     let invite = site.invite_url();
-    render(&app, &req, |visit| site.pages.login(visit, invite.as_deref()))
+    render(&app, &req, |visit| {
+        site.pages.login(visit, invite.as_deref())
+    })
 }
 
 /// GET /admin/auth（`oauth_start`）。`state` をセッションに入れて、Discord の認可画面へ。
@@ -670,11 +675,15 @@ pub(crate) mod tests {
         );
         assert_eq!(access_token_of(&json!(["a"])), Ok(None));
         assert_eq!(
-            access_token_of(&json!(["access_token"])).unwrap_err().message,
+            access_token_of(&json!(["access_token"]))
+                .unwrap_err()
+                .message,
             "list indices must be integers or slices, not str"
         );
         assert_eq!(
-            access_token_of(&json!("my access_token")).unwrap_err().message,
+            access_token_of(&json!("my access_token"))
+                .unwrap_err()
+                .message,
             "string indices must be integers, not 'str'"
         );
         assert_eq!(
@@ -704,11 +713,20 @@ pub(crate) mod tests {
         assert_eq!(checked_at(Some(&json!(true))), Ok(1.0));
         assert_eq!(checked_at(Some(&json!(" 12.5 "))), Ok(12.5));
         assert_eq!(checked_at(Some(&json!([1]))).unwrap_err().kind, "TypeError");
-        assert_eq!(checked_at(Some(&json!("x"))).unwrap_err().kind, "ValueError");
+        assert_eq!(
+            checked_at(Some(&json!("x"))).unwrap_err().kind,
+            "ValueError"
+        );
         assert_eq!(session_user_id(None), Ok("0".to_string()));
         assert_eq!(session_user_id(Some(&json!({}))), Ok("0".to_string()));
-        assert_eq!(session_user_id(Some(&json!({"name": "a"}))), Ok("0".to_string()));
-        assert_eq!(session_user_id(Some(&json!({"id": " 7 "}))), Ok("7".to_string()));
+        assert_eq!(
+            session_user_id(Some(&json!({"name": "a"}))),
+            Ok("0".to_string())
+        );
+        assert_eq!(
+            session_user_id(Some(&json!({"id": " 7 "}))),
+            Ok("7".to_string())
+        );
         assert_eq!(
             session_user_id(Some(&json!("x"))).unwrap_err().kind,
             "AttributeError"
@@ -749,7 +767,11 @@ pub(crate) mod tests {
         );
         let public = public_routes(&site);
         assert!(public.iter().all(Route::default_limit));
-        assert!(auth_routes(&site).iter().all(|route| !route.default_limit()));
+        assert!(
+            auth_routes(&site)
+                .iter()
+                .all(|route| !route.default_limit())
+        );
         assert_eq!(
             paths(public),
             [

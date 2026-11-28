@@ -105,7 +105,11 @@ fn response_of(spec: Option<&Value>) -> Response {
     if let Some(value) = spec.get("content_type") {
         content_type = value.as_str().map(str::to_string);
     }
-    reply(u16::try_from(status).unwrap(), content_type.as_deref(), body)
+    reply(
+        u16::try_from(status).unwrap(),
+        content_type.as_deref(),
+        body,
+    )
 }
 
 fn reply(status: u16, content_type: Option<&str>, body: Vec<u8>) -> Response {

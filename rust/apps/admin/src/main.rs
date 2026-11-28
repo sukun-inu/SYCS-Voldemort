@@ -43,8 +43,8 @@ const DEFAULT_PORT: u16 = 5001;
 fn load_site(discord: DiscordConfig) -> Result<(Arc<Pages>, Arc<Site>), String> {
     let pages = Pages::load(&PagesConfig::from_env()).map_err(|e| e.to_string())?;
     let pages = Arc::new(pages);
-    let discord = Discord::new(discord, DISCORD_API)
-        .map_err(|e| format!("Discord の口を作れません: {e}"))?;
+    let discord =
+        Discord::new(discord, DISCORD_API).map_err(|e| format!("Discord の口を作れません: {e}"))?;
     let site = Site::new(
         Arc::clone(&pages),
         Arc::new(discord),

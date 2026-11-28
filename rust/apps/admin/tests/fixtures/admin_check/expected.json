@@ -1,0 +1,1777 @@
+{
+ "generated_by": "rust/apps/admin/tests/fixtures/admin_check/generate.py",
+ "cases": [
+  {
+   "name": "no_bot_token",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "",
+   "discord_responses": {},
+   "discord": [],
+   "result": {
+    "value": null
+   }
+  },
+  {
+   "name": "guild_404",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "status": 404,
+     "json": {
+      "message": "Unknown Guild",
+      "code": 10004
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": false
+   }
+  },
+  {
+   "name": "guild_403",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "status": 403,
+     "json": {
+      "message": "Missing Access"
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": null
+   }
+  },
+  {
+   "name": "guild_429",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "status": 429,
+     "json": {
+      "retry_after": 1.5
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": null
+   }
+  },
+  {
+   "name": "guild_500",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "status": 500,
+     "body": "oops"
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": null
+   }
+  },
+  {
+   "name": "guild_not_json",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "body": "<html></html>",
+     "content_type": "text/html"
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": null
+   }
+  },
+  {
+   "name": "guild_broken_json",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "body": "{\"id\":",
+     "content_type": "application/json"
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": null
+   }
+  },
+  {
+   "name": "guild_without_content_type",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "body": "{}"
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": null
+   }
+  },
+  {
+   "name": "member_404",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": []
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "status": 404,
+     "json": {
+      "message": "Unknown Member"
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": false
+   }
+  },
+  {
+   "name": "member_500",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": []
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "status": 500,
+     "json": {
+      "message": "x"
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": null
+   }
+  },
+  {
+   "name": "owner_string",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "111111111111111111",
+      "roles": []
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": []
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": true
+   }
+  },
+  {
+   "name": "owner_int",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": 111111111111111111
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": []
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": true
+   }
+  },
+  {
+   "name": "owner_before_member_shape",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "111111111111111111"
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": []
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": true
+   }
+  },
+  {
+   "name": "owner_other_no_roles",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": null
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": false
+   }
+  },
+  {
+   "name": "everyone_admin",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "900000000000000001",
+        "permissions": "8"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": []
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": true
+   }
+  },
+  {
+   "name": "everyone_int_id",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": 900000000000000001,
+        "permissions": "2147483647"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": []
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": true
+   }
+  },
+  {
+   "name": "held_role_admin",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "900000000000000001",
+        "permissions": "104324673"
+       },
+       {
+        "id": "700",
+        "permissions": "2147483647"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": true
+   }
+  },
+  {
+   "name": "held_role_int_in_member",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "700",
+        "permissions": "8"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "roles": [
+       700
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": true
+   }
+  },
+  {
+   "name": "held_role_not_admin",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "900000000000000001",
+        "permissions": "0"
+       },
+       {
+        "id": "700",
+        "permissions": "104324673"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": false
+   }
+  },
+  {
+   "name": "admin_role_not_held",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "701",
+        "permissions": "8"
+       },
+       {
+        "id": "700",
+        "permissions": "4"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": false
+   }
+  },
+  {
+   "name": "permission_forms_skipped",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "1",
+        "permissions": "0x8"
+       },
+       {
+        "id": "2",
+        "permissions": "8.0"
+       },
+       {
+        "id": "3",
+        "permissions": null
+       },
+       {
+        "id": "4",
+        "permissions": [
+         8
+        ]
+       },
+       {
+        "id": "5",
+        "permissions": true
+       },
+       {
+        "id": "6"
+       },
+       {
+        "id": "7",
+        "permissions": ""
+       },
+       {
+        "id": "8",
+        "permissions": {
+         "value": 8
+        }
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "roles": [
+       "1",
+       "2",
+       "3",
+       "4",
+       "5",
+       "6",
+       "7",
+       "8"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": false
+   }
+  },
+  {
+   "name": "permission_float",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "700",
+        "permissions": 8.9
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": true
+   }
+  },
+  {
+   "name": "permission_padded",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "700",
+        "permissions": " +8 \n"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": true
+   }
+  },
+  {
+   "name": "permission_underscore",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "700",
+        "permissions": "8_0"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": false
+   }
+  },
+  {
+   "name": "permission_negative",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "700",
+        "permissions": "-8"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": true
+   }
+  },
+  {
+   "name": "permission_negative_without_bit",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "700",
+        "permissions": "-9"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": false
+   }
+  },
+  {
+   "name": "permission_fullwidth",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "700",
+        "permissions": "２４"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": true
+   }
+  },
+  {
+   "name": "permission_huge",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "700",
+        "permissions": "340282366920938463463374607431768211464"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": true
+   }
+  },
+  {
+   "name": "permission_or_without_admin",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "900000000000000001",
+        "permissions": "1"
+       },
+       {
+        "id": "700",
+        "permissions": "2"
+       },
+       {
+        "id": "701",
+        "permissions": "4"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "roles": [
+       "700",
+       "701"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": false
+   }
+  },
+  {
+   "name": "permission_or_with_admin",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "700",
+        "permissions": "3"
+       },
+       {
+        "id": "701",
+        "permissions": "9"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "roles": [
+       "700",
+       "701"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": true
+   }
+  },
+  {
+   "name": "member_roles_string",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "7",
+        "permissions": "8"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "roles": "700"
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": true
+   }
+  },
+  {
+   "name": "member_roles_dict",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "700",
+        "permissions": "8"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "roles": {
+       "700": false
+      }
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": true
+   }
+  },
+  {
+   "name": "member_without_roles",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "900000000000000001",
+        "permissions": "104324673"
+       },
+       {
+        "id": "700",
+        "permissions": "8"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {}
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": false
+   }
+  },
+  {
+   "name": "role_float_id",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": 700.0,
+        "permissions": "8"
+       }
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": false
+   }
+  },
+  {
+   "name": "guild_null_body",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "body": "",
+     "content_type": "application/json"
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "raises": {
+     "type": "AttributeError",
+     "message": "'NoneType' object has no attribute 'get'"
+    }
+   }
+  },
+  {
+   "name": "guild_list",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": []
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "raises": {
+     "type": "AttributeError",
+     "message": "'list' object has no attribute 'get'"
+    }
+   }
+  },
+  {
+   "name": "member_list",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": []
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": [
+      "700"
+     ]
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "raises": {
+     "type": "AttributeError",
+     "message": "'list' object has no attribute 'get'"
+    }
+   }
+  },
+  {
+   "name": "member_roles_null",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": []
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "roles": null
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "raises": {
+     "type": "TypeError",
+     "message": "'NoneType' object is not iterable"
+    }
+   }
+  },
+  {
+   "name": "guild_roles_with_text",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": [
+       {
+        "id": "700",
+        "permissions": "4"
+       },
+       "admin"
+      ]
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "raises": {
+     "type": "AttributeError",
+     "message": "'str' object has no attribute 'get'"
+    }
+   }
+  },
+  {
+   "name": "guild_roles_number",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": 5
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "raises": {
+     "type": "TypeError",
+     "message": "'int' object is not iterable"
+    }
+   }
+  },
+  {
+   "name": "guild_roles_dict",
+   "guild_id": 900000000000000001,
+   "user_id": 111111111111111111,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/900000000000000001 Bot": {
+     "json": {
+      "owner_id": "2",
+      "roles": {
+       "700": {
+        "permissions": "8"
+       }
+      }
+     }
+    },
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {
+     "json": {
+      "user": {
+       "id": "111111111111111111"
+      },
+      "roles": [
+       "700"
+      ]
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/900000000000000001/members/111111111111111111",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "raises": {
+     "type": "AttributeError",
+     "message": "'str' object has no attribute 'get'"
+    }
+   }
+  },
+  {
+   "name": "other_ids",
+   "guild_id": 42,
+   "user_id": 7,
+   "bot_token": "a3-bot-token",
+   "discord_responses": {
+    "GET /guilds/42 Bot": {
+     "json": {
+      "owner_id": "7"
+     }
+    },
+    "GET /guilds/42/members/7 Bot": {
+     "json": {
+      "roles": []
+     }
+    }
+   },
+   "discord": [
+    {
+     "method": "GET",
+     "path": "/guilds/42",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    },
+    {
+     "method": "GET",
+     "path": "/guilds/42/members/7",
+     "authorization": "Bot a3-bot-token",
+     "content_type": null,
+     "body": ""
+    }
+   ],
+   "result": {
+    "value": true
+   }
+  }
+ ]
+}

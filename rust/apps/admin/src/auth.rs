@@ -75,9 +75,23 @@ impl fmt::Debug for DiscordConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DiscordConfig")
             .field("client_id", &self.client_id)
-            .field("client_secret", &if self.client_secret.is_empty() { "無し" } else { "…" })
+            .field(
+                "client_secret",
+                &if self.client_secret.is_empty() {
+                    "無し"
+                } else {
+                    "…"
+                },
+            )
             .field("redirect_uri", &self.redirect_uri)
-            .field("bot_token", &if self.bot_token.is_empty() { "無し" } else { "…" })
+            .field(
+                "bot_token",
+                &if self.bot_token.is_empty() {
+                    "無し"
+                } else {
+                    "…"
+                },
+            )
             .field("prompt", &self.prompt)
             .field("guilds_max_age", &self.guilds_max_age)
             .finish()
@@ -172,7 +186,10 @@ pub fn is_json_mimetype(mimetype: &str) -> bool {
 fn strip_ascii(bytes: &[u8]) -> &[u8] {
     let space = |b: &u8| matches!(b, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c);
     let start = bytes.iter().position(|b| !space(b)).unwrap_or(bytes.len());
-    let end = bytes.iter().rposition(|b| !space(b)).map_or(start, |i| i + 1);
+    let end = bytes
+        .iter()
+        .rposition(|b| !space(b))
+        .map_or(start, |i| i + 1);
     &bytes[start..end.max(start)]
 }
 
@@ -198,10 +215,7 @@ pub fn py_iter(value: &Value) -> Result<Vec<Value>, Crash> {
     match value {
         Value::Array(items) => Ok(items.clone()),
         Value::Object(map) => Ok(map.keys().map(|key| Value::String(key.clone())).collect()),
-        Value::String(text) => Ok(text
-            .chars()
-            .map(|c| Value::String(c.to_string()))
-            .collect()),
+        Value::String(text) => Ok(text.chars().map(|c| Value::String(c.to_string())).collect()),
         other => Err(Crash::new(
             "TypeError",
             format!("'{}' object is not iterable", python::type_name(other)),
@@ -226,9 +240,10 @@ pub fn py_dict(value: &Value) -> Result<&Map<String, Value>, Crash> {
 /// Python の `value[key]`（`key` は文字）。辞書に無ければ `KeyError`、辞書でなければ `TypeError`。
 pub fn py_subscript(value: &Value, key: &str) -> Result<Value, Crash> {
     match value {
-        Value::Object(map) => map.get(key).cloned().ok_or_else(|| {
-            Crash::new("KeyError", python::repr(&Value::String(key.to_string())))
-        }),
+        Value::Object(map) => map
+            .get(key)
+            .cloned()
+            .ok_or_else(|| Crash::new("KeyError", python::repr(&Value::String(key.to_string())))),
         Value::Array(_) => Err(Crash::new(
             "TypeError",
             "list indices must be integers or slices, not str",
@@ -823,7 +838,11 @@ mod tests {
             admin_guilds_from(&Value::Null, &bot).unwrap_err(),
             Crash::new("TypeError", "'NoneType' object is not iterable")
         );
-        assert!(admin_guilds_from(&json!({"a": 1}), &bot).unwrap().is_empty());
+        assert!(
+            admin_guilds_from(&json!({"a": 1}), &bot)
+                .unwrap()
+                .is_empty()
+        );
     }
 
     /// 権限の組み立て（持ち主・@everyone・持っているロール・読めない permissions・形の崩れた答え）。
@@ -834,9 +853,18 @@ mod tests {
             {"id": "200", "permissions": "x"},
             {"id": 300, "permissions": "8"}
         ]});
-        assert_eq!(admin_from(&guild, &json!({"roles": []}), "100", "7"), Ok(true));
-        assert_eq!(admin_from(&guild, &json!({"roles": [200]}), "1", "7"), Ok(false));
-        assert_eq!(admin_from(&guild, &json!({"roles": [300]}), "1", "7"), Ok(true));
+        assert_eq!(
+            admin_from(&guild, &json!({"roles": []}), "100", "7"),
+            Ok(true)
+        );
+        assert_eq!(
+            admin_from(&guild, &json!({"roles": [200]}), "1", "7"),
+            Ok(false)
+        );
+        assert_eq!(
+            admin_from(&guild, &json!({"roles": [300]}), "1", "7"),
+            Ok(true)
+        );
         assert_eq!(admin_from(&guild, &json!([]), "1", "9"), Ok(true));
         assert_eq!(
             admin_from(&guild, &json!([]), "1", "7"),

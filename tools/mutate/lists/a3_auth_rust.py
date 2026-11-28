@@ -84,7 +84,7 @@ MUTS = [
     (
         "空白を + でなく %20 にする（quote_plus でなく quote）",
         A,
-        "python::quote(text, \" \").replace(' ', \"+\")",
+        'python::quote(text, " ").replace(\' \', "+")',
         'python::quote(text, "")',
     ),
     ("400 番台の答えも JSON として読む", A, "if answer.status >= 400 {", "if answer.status >= 500 {"),
