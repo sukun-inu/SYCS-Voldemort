@@ -2,8 +2,9 @@
 #
 #   docker build -f docker/bot-rs.Dockerfile -t sycs-bot-rs .
 #
-# 移行中は本番の compose に入れていない（入れるのは切り替えの塊）。CI がビルドし、
-# 下の cpu-check の段で、本番の CPU（Sandy Bridge）のふりで起動できることを確かめる。
+# 本番の compose では、Bot のサービス（sycs-voldemort）が BOT_DOCKERFILE でこのファイルを選んだときだけ使う
+# （既定は Python の Dockerfile。切り替えと戻し方は docs/UPGRADE.ja.md の 5.）。CI がビルドし、下の cpu-check の
+# 段で、本番の CPU（Sandy Bridge）のふりで起動できることを確かめる。
 #
 # ■ 版
 #
@@ -64,3 +65,8 @@ RUN qemu-x86_64 -cpu SandyBridge /usr/local/bin/yt-dlp --version \
 RUN qemu-x86_64 -cpu SandyBridge /usr/local/bin/sycs-bot > /tmp/out 2>&1; \
     status=$?; cat /tmp/out; echo "終了コード $status"; \
     [ "$status" = "1" ] && grep -q "DISCORD_BOT_TOKEN が設定されていません" /tmp/out
+
+# 何も指定せずにビルドしたとき（本番の compose が BOT_DOCKERFILE でこのファイルを選んだとき）は、この段になる。
+# 中身は動かす段（runtime）そのもの。最後の段がビルドの既定なので、CI だけの段（cpu-check。qemu-user 入り）が
+# 本番のイメージにならないよう、最後に置き直す。
+FROM runtime AS final

@@ -82,6 +82,14 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     ("sycs_bot::news", "news"),
     ("sycs_bot::email_date", "news"),
     ("sycs_bot::html_unescape", "news"),
+    // Python の services.tts_*・commands.tts_commands（tts）と services.voice_session（voice）と同じ棚
+    // （sycs_bot::tts は前方一致で tts_voice も入る）。
+    ("sycs_bot::tts", "tts"),
+    ("sycs_bot::commands::tts", "tts"),
+    ("sycs_bot::voice_session", "voice"),
+    // Python の services.djaudio_*・commands.djaudio_commands（djaudio）と同じ棚。
+    ("sycs_bot::djaudio", "djaudio"),
+    ("sycs_bot::commands::djaudio", "djaudio"),
     ("voice_check", "voice"),
     ("songbird", "voice"),
     ("davey", "voice"),
@@ -621,6 +629,12 @@ mod tests {
             ("sycs_bot::earthquake", "earthquake"),
             ("sycs_bot::earthquake_feed", "earthquake"),
             ("sycs_bot::news", "news"),
+            ("sycs_bot::tts", "tts"),
+            ("sycs_bot::tts_voice", "tts"),
+            ("sycs_bot::commands::tts", "tts"),
+            ("sycs_bot::voice_session", "voice"),
+            ("sycs_bot::djaudio::flow", "djaudio"),
+            ("sycs_bot::commands::djaudio", "djaudio"),
             ("sycs_bot::members", "bot"),
         ] {
             assert_eq!(category_for(target), category, "{target}");

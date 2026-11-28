@@ -192,6 +192,10 @@ services:
   sycs-voldemort:
     build:
       context: .
+      # Bot の実装を選ぶ。既定は Python（Dockerfile）。Rust の Bot に切り替えるときだけ
+      # BOT_DOCKERFILE=docker/bot-rs.Dockerfile にする（環境変数の名前と意味は同じなので、
+      # ほかは変えなくてよい）。切り替え・確かめ方・戻し方は docs/UPGRADE.ja.md の 5.。
+      dockerfile: ${BOT_DOCKERFILE:-Dockerfile}
     container_name: sycs-voldemort
     restart: unless-stopped
     depends_on:
@@ -257,6 +261,9 @@ services:
       - DJAUDIO_BASE_URL=${DJAUDIO_BASE_URL:-http://localhost:5001}
       # TTS: macOS TTS API サーバーの URL
       - TTS_BASE_URL=${TTS_BASE_URL:-http://localhost:8080}
+      # 起動のたびにスラッシュコマンドの定義を Discord に登録し直す（Python の Bot はいつもする。Rust の Bot は
+      # この値で決め、手元の確かめでは偽にする）。Python の Bot はこの変数を読まない。
+      - BOT_SYNC_COMMANDS=${BOT_SYNC_COMMANDS:-true}
     volumes:
       - app_data:/app/data
       - shared_secrets:/shared:ro
