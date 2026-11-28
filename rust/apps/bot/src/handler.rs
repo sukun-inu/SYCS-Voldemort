@@ -447,7 +447,7 @@ impl Handler {
             .await;
     }
 
-    /// メッセージ 1 件を検査する（危険なら消してタイムアウト、権限が無ければロールを剥がす）。Python の
+    /// メッセージ 1 件を検査する（危険なら消してタイムアウト、使わないならロールを剥がす）。Python の
     /// `handle_security_for_message`。
     async fn check_security(&self, ctx: &Context, post: &Post) {
         let snapshot = self.state.settings.snapshot();
@@ -733,8 +733,8 @@ impl Handler {
     ///
     /// 入って間もない人（入って 24 時間未満か、アカウントを作って 7 日未満）の参加だけを数え、同じ VC に 20 秒の
     /// 間に 5 人入ったら、数に入った全員（まだ措置していない人。後から入った人も）に、最初に入った順で 24 時間の
-    /// タイムアウトをしてログに残す（Bot に権限が無ければロールを全部剥がす。S1・S4）。管理者・信頼ユーザー・
-    /// バイパスロールの人は数えない（記録にも入れない。飛ばしたことはログファイルにだけ書く。S7）。
+    /// タイムアウトをしてログに残す（設定が無効か、Bot に権限が無ければロールを全部剥がす。S1・S4）。管理者・
+    /// 信頼ユーザー・バイパスロールの人は数えない（記録にも入れない。飛ばしたことはログファイルにだけ書く。S7）。
     async fn vc_raid_check(
         &self,
         ctx: &Context,
@@ -768,6 +768,8 @@ impl Handler {
             return;
         }
         let (targets, can_timeout) = raid_targets(&ctx.cache, member, &counted);
+        // タイムアウトを使うのは、サーバーの設定で有効にしてあり、Bot に権限があるときだけ（既定は無効）。
+        let use_timeout = security::use_timeout(settings, can_timeout);
         let sink = LogSink {
             cache: &ctx.cache,
             http: &ctx.http,
@@ -775,7 +777,7 @@ impl Handler {
             colours: &self.state.colours,
         };
         let seconds = config.timeout_danger_seconds;
-        security::act_on_vc_raid(&sink, guild_id, channel, &targets, can_timeout, seconds).await;
+        security::act_on_vc_raid(&sink, guild_id, channel, &targets, use_timeout, seconds).await;
     }
 }
 

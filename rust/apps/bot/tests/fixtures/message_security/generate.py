@@ -16,6 +16,8 @@
 - attachments: URL（ファイル名は URL の最後、大きさは 0）か [URL, ファイル名, 大きさ]
 - account_days_ago: アカウントを作ってからの日数（発言した人の ID を、その日時の snowflake にする）
 - can_timeout: Bot にタイムアウトの権限があるか（既定は真）。admin: 発言した人が管理者か
+- settings: サーバーの設定。タイムアウトを使うのは {"security_timeout_enabled": true} の例だけ（設定の既定は
+  無効。無効なら権限があっても、危険なものはロールを外し、スパムは消すだけ）
 - timeout_fail: "forbidden"（権限不足）か "error"（ほかの失敗）でタイムアウトを断る
 - delete_fails・delete_gone: この投稿の削除を失敗させる（ほかの失敗・既に消えていた）。
   delete_fail_ids・delete_gone_ids: 前の投稿のうち、その ID の削除を同じく失敗させる

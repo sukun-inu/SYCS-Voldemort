@@ -35,8 +35,26 @@ MUTS = [
     (
         "S1 権限があってもロールを外す",
         "rust/apps/bot/src/message_security.rs",
-        "    if post.bot_can_timeout {",
+        "    if security::use_timeout(cx.settings, post.bot_can_timeout) {",
         "    if false {",
+    ),
+    (
+        "切り替え 既定を有効にする（未設定のサーバーでもタイムアウトする）",
+        "rust/apps/bot/src/security.rs",
+        "    python_truthy(guild_settings.and_then(|g| g.get(TIMEOUT_ENABLED_KEY)))\n",
+        "    !matches!(guild_settings.and_then(|g| g.get(TIMEOUT_ENABLED_KEY)), Some(v) if !python_truthy(Some(v)))\n",
+    ),
+    (
+        "切り替え 権限だけで決める（無効にしてあってもタイムアウトする）",
+        "rust/apps/bot/src/security.rs",
+        "    bot_can_timeout && timeout_enabled(guild_settings)\n",
+        "    bot_can_timeout && (timeout_enabled(guild_settings) || true)\n",
+    ),
+    (
+        "切り替え 設定だけで決める（権限が無くてもタイムアウトを試す）",
+        "rust/apps/bot/src/security.rs",
+        "    bot_can_timeout && timeout_enabled(guild_settings)\n",
+        "    (bot_can_timeout || true) && timeout_enabled(guild_settings)\n",
     ),
     (
         "S1 断られたタイムアウトを成功と書く",

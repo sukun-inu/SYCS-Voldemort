@@ -12,7 +12,12 @@ from services.content_moderation import gpt_assess
 from services.http_client import get_session
 from services.logging_service import log_action, send_log_embed
 from services.raid_detection import check_vc_raid, is_vc_raid_ongoing, was_enforced
-from services.settings_store import get_bypass_role_ids, get_response_channel_id, get_trusted_user_ids
+from services.settings_store import (
+    get_bypass_role_ids,
+    get_response_channel_id,
+    get_security_timeout_enabled,
+    get_trusted_user_ids,
+)
 from services.spam_detection import SpamCheck, check_spam
 from services.virustotal_service import MALICIOUS_THRESHOLD, vt_scan_target
 
@@ -21,6 +26,8 @@ MAX_LINKS = 5
 
 # 措置のタイムアウトの長さ（秒。rust-09 の S1・S2）。危険なもの（VirusTotal の危険・AI の DANGEROUS・VC の荒らし）は
 # 24 時間、スパムだけなら 10 分。上限は Discord が受け付ける 28 日。
+# タイムアウトを使うのは、サーバーの設定（管理画面のセキュリティ設定。既定は無効）で有効にしてあり、Bot に権限が
+# あるときだけ（use_timeout）。
 TIMEOUT_MAX_SECONDS = 28 * 24 * 3600
 SECURITY_TIMEOUT_DANGER_SECONDS = env_int(
     "SECURITY_TIMEOUT_DANGER_SECONDS", 86400, minimum=60, maximum=TIMEOUT_MAX_SECONDS
@@ -304,6 +311,31 @@ def can_timeout(guild: Any) -> bool:
     return getattr(permissions, "moderate_members", False) is True
 
 
+def timeout_enabled(guild_id: int) -> bool:
+    """このサーバーで、措置にタイムアウトを使う設定か（管理画面のセキュリティ設定。既定は無効）。
+
+    読めないときは無効として扱う（いままでどおり、危険なものはロールを外し、スパムだけなら消すだけ）。
+    """
+    try:
+        return get_security_timeout_enabled(guild_id)
+    except Exception:
+        logger.warning(
+            "[SECURITY] タイムアウトの設定を読めませんでした guild=%s（無効として扱います）",
+            guild_id,
+            exc_info=True,
+        )
+        return False
+
+
+def use_timeout(guild: Any) -> bool:
+    """措置にタイムアウトを使うか。Bot に権限があり、サーバーの設定で有効にしてあるときだけ。
+
+    無効なら、権限があっても「権限が無いとき」と同じ動き（危険なものは全ロールを外し、スパムだけなら消すだけ）。
+    権限が無ければ設定は読まない。
+    """
+    return can_timeout(guild) and timeout_enabled(guild.id)
+
+
 class TimeoutResult(NamedTuple):
     """タイムアウトの結果（rust-09 の S1）。reason は "timed_out"・"forbidden"・ほかの失敗の文。"""
 
@@ -404,8 +436,8 @@ class Enforcement(NamedTuple):
     - action: "danger"（危険で措置した）・"spam"（スパムだけで措置した）・"withheld"（バイパスの判定に失敗して
       見送った）・"none"（措置なし）
     - deleted・delete_failed: 消した投稿（既に消えていたものも含む）と、消せなかった投稿の数
-    - timeout: タイムアウトを試した結果（タイムアウトの権限が無ければ None）
-    - stripped: ロールを外した結果（危険で、タイムアウトの権限が無いサーバー）
+    - timeout: タイムアウトを試した結果（タイムアウトを使わないとき〔設定が無効か、権限が無い〕は None）
+    - stripped: ロールを外した結果（危険で、タイムアウトを使わないサーバー）
     - vc_done: 危険だが、VC の荒らしの経路で措置済みなので、人への措置はしなかった（二重に措置しない。S4）
     """
 
@@ -559,7 +591,7 @@ def outcome_heading(enforcement: Enforcement, caution: bool) -> Tuple[str, disco
     """報告の見出しと色を、実際に取った措置から決める（rust-09 の S8）。
 
     危険で措置した → 赤「消して 24 時間のタイムアウト」（ロールを外したときは「消してロールを外した」）。
-    スパムだけで措置した → 橙「消して 10 分のタイムアウト」（権限が無いときは「消した」）。見送った → 橙
+    スパムだけで措置した → 橙「消して 10 分のタイムアウト」（タイムアウトを使わないときは「消した」）。見送った → 橙
     「措置を見送った（要確認）」。措置なしで注意の材料あり → 黄「記録だけ（注意の材料あり）」。何も無ければ緑。
     措置の一部が失敗したら、見出しに「（一部失敗）」を足す（中身は報告の項目に出す）。
     """
@@ -981,11 +1013,12 @@ async def _delete_posts(
 
 
 async def _punish(member: discord.Member, seconds: int) -> Tuple[Optional[TimeoutResult], Optional[StripResult]]:
-    """危険なときの、人への措置（S1）。タイムアウトの権限があれば seconds 秒のタイムアウト、無ければ全ロールを外す。
+    """危険なときの、人への措置（S1）。タイムアウトを使うなら seconds 秒のタイムアウト、使わないなら全ロールを外す。
 
+    タイムアウトを使うのは、サーバーの設定で有効にしてあり、Bot に権限があるときだけ（use_timeout。既定は無効）。
     タイムアウトが断られても、ロールを外すことは試さない（同じ理由で失敗する。失敗として報告する）。
     """
-    if can_timeout(member.guild):
+    if use_timeout(member.guild):
         return await timeout_member(member, seconds), None
     return None, await strip_roles(member)
 
@@ -1005,9 +1038,10 @@ async def _enforce_or_withhold(
     設定を読めなかっただけでロールが消える。元に戻せない操作なので、
     ここは「分からないなら触らない」に倒す。
 
-    危険（S1）: この投稿（とスパムと数えた投稿）を消し、24 時間のタイムアウト（権限が無ければ全ロールを外す）。
+    危険（S1）: この投稿（とスパムと数えた投稿）を消し、24 時間のタイムアウト（使わないなら全ロールを外す）。
     VC の荒らしの経路で措置済みの人には、人への措置を二重にしない（消すだけ。S4）。
-    スパムだけ（S2）: スパムと数えた投稿を消し、10 分のタイムアウト（権限が無ければ消すだけ）。
+    スパムだけ（S2）: スパムと数えた投稿を消し、10 分のタイムアウト（使わないなら消すだけ）。
+    タイムアウトを使うのは、サーバーの設定で有効にしてあり、Bot に権限があるときだけ（use_timeout。既定は無効）。
     """
     if not (findings.danger or findings.spam):
         return Enforcement()
@@ -1020,7 +1054,7 @@ async def _enforce_or_withhold(
         posts.append(current)
     deleted, failed = await _delete_posts(bot, message, posts)
     if not findings.danger:
-        timeout = await timeout_member(member, SECURITY_TIMEOUT_SPAM_SECONDS) if can_timeout(member.guild) else None
+        timeout = await timeout_member(member, SECURITY_TIMEOUT_SPAM_SECONDS) if use_timeout(member.guild) else None
         return Enforcement("spam", deleted, failed, timeout)
     if findings.vc_enforced:
         return Enforcement("danger", deleted, failed, vc_done=True)
@@ -1094,8 +1128,9 @@ async def handle_security_for_message(bot: discord.Client, message: discord.Mess
 
     スパム・リンク過多・ユニコードトリック・VirusTotal・GPT判定・新規・
     新しいアカウント・VCレイドを順に確認し、危険と判定したら投稿を消して
-    24 時間のタイムアウト（権限が無ければロール剥奪）、スパムだけなら消して
-    10 分のタイムアウトを行う（rust-09 の S1・S2）。
+    24 時間のタイムアウト、スパムだけなら消して 10 分のタイムアウトを行う
+    （rust-09 の S1・S2）。タイムアウトを使うのはサーバーの設定で有効にしてあり、
+    Bot に権限があるときだけ。使わないなら、危険なものはロール剥奪、スパムは消すだけ。
     バイパス判定に失敗した場合は、危険と判定していても強制措置を
     見送り、人が確認できるようログに大きく残す（信頼済みかどうか
     分からないまま取り返しのつかない操作をしないため）。
@@ -1169,7 +1204,7 @@ async def _withhold_vc_raid(bot: discord.Client, member: discord.Member, channel
 
 
 async def _enforce_vc_raid(bot: discord.Client, member: discord.Member, channel: Any) -> None:
-    """VC の荒らしの数に入った 1 人に、24 時間のタイムアウト（権限が無ければ全ロールを外す）をして報告する（S1）。"""
+    """VC の荒らしの数に入った 1 人に、24 時間のタイムアウト（使わないなら全ロールを外す）をして報告する（S1）。"""
     timeout, stripped = await _punish(member, SECURITY_TIMEOUT_DANGER_SECONDS)
     # タイムアウトの結果・剥がした結果も出す（rust-09 の (i)・S1）。
     measure = enforcement_fields(Enforcement("danger", timeout=timeout, stripped=stripped))
@@ -1196,7 +1231,7 @@ async def handle_security_for_voice_join(
     """VC参加時にレイド検出だけを行う入口（メッセージ検査とは別経路）。
 
     入って間もない人（is_fresh_joiner）の参加だけを数える（S4）。荒らしなら、数に入った全員（まだ措置して
-    いない人。後から入った人も）に、最初に入った順で 24 時間のタイムアウト（権限が無ければロール剥奪）。
+    いない人。後から入った人も）に、最初に入った順で 24 時間のタイムアウト（使わないならロール剥奪）。
     バイパスの人は数えない（飛ばしたことはログファイルにだけ書く。S7）。
     バイパス判定に失敗した人は措置を見送り、人が確認できるよう大きくログに残す
     （handle_security_for_message と同じ方針。ほかの人への措置は止めない）。

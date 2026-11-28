@@ -29,8 +29,32 @@ MUTS = [
     (
         "S1 権限があってもロールを外す",
         "services/security_service.py",
-        "    if can_timeout(member.guild):\n        return await timeout_member(member, seconds), None",
+        "    if use_timeout(member.guild):\n        return await timeout_member(member, seconds), None",
         "    if False:\n        return await timeout_member(member, seconds), None",
+    ),
+    (
+        "切り替え 既定を有効にする（未設定のサーバーでもタイムアウトする）",
+        "services/settings_store.py",
+        'return bool(get_guild_settings(guild_id).get("security_timeout_enabled", False))',
+        'return bool(get_guild_settings(guild_id).get("security_timeout_enabled", True))',
+    ),
+    (
+        "切り替え 権限だけで決める（無効にしてあってもタイムアウトする）",
+        "services/security_service.py",
+        "return can_timeout(guild) and timeout_enabled(guild.id)",
+        "return can_timeout(guild)",
+    ),
+    (
+        "切り替え 設定だけで決める（権限が無くてもタイムアウトを試す）",
+        "services/security_service.py",
+        "return can_timeout(guild) and timeout_enabled(guild.id)",
+        "return timeout_enabled(guild.id)",
+    ),
+    (
+        "切り替え 読めない設定を有効とみなす",
+        "services/security_service.py",
+        "            exc_info=True,\n        )\n        return False\n\n\ndef use_timeout",
+        "            exc_info=True,\n        )\n        return True\n\n\ndef use_timeout",
     ),
     (
         "S1 タイムアウトが断られてもロールを外す",

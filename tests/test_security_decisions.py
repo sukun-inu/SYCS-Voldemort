@@ -11,6 +11,10 @@ S8 結果の表示 → 見出しと色を、実際に取った措置から決め
 
 数え方そのものの境界（窓・回数・掃除）は tests/test_services_moderation.py の SpamDetectionTests・
 RaidDetectionTests が見る。どれも、直す前のコードでは落ちる理由を HANDBACK に書いてある。
+
+追加の決定（2026-11-28）: タイムアウトはサーバーごとの切り替え（管理画面のセキュリティ設定）で、既定は無効。
+無効なら、権限があっても「権限が無いとき」と同じ動き。これは TimeoutSwitchTests が見る。ほかのテストは、
+切り替えを有効にしたサーバーで回す（_switch_on。権限の有無は _member の can_timeout で決める）。
 """
 
 import asyncio
@@ -34,6 +38,7 @@ import discord  # noqa: E402
 import services.content_moderation as content_moderation  # noqa: E402
 import services.raid_detection as raid_detection  # noqa: E402
 import services.security_service as sec  # noqa: E402
+import services.settings_store as settings_store  # noqa: E402
 import services.spam_detection as spam_detection  # noqa: E402
 
 RED = discord.Color.red()
@@ -61,6 +66,16 @@ class _NotFound(discord.NotFound):
 def _snowflake(days_ago: float) -> int:
     """days_ago 日前に作ったアカウントの ID（snowflake）。"""
     return discord.utils.time_snowflake(discord.utils.utcnow() - datetime.timedelta(days=days_ago))
+
+
+def _switch_on(guild_id):
+    """タイムアウトを使う設定のサーバー（S1・S2 のテストの既定。切り替えの既定そのものは TimeoutSwitchTests）。"""
+    return True
+
+
+def _switch_off(guild_id):
+    """タイムアウトを使わない設定のサーバー（設定の既定）。"""
+    return False
 
 
 def _member(
@@ -164,11 +179,21 @@ class _SecurityCase(unittest.TestCase):
         """ID での削除の代わり。消した場所を控える。"""
         self.deleted_by_id.append((channel_id, message_id))
 
-    def _check(self, message, *, gpt="SAFE", trusted=None, delete=None):
-        """本物の handle_security_for_message を、外のもの（設定・Groq・ログ・削除）だけ差し替えて回す。"""
+    def _spam_twice(self, member):
+        """同じ内容の前の投稿を 2 件記録する（ID 100・101、チャンネル 70・71）。"""
+        for message_id, channel_id in ((100, 70), (101, 71)):
+            spam_detection.check_spam(1, member.id, channel_id, message_id, "限定セール", [])
+            self.clock.now += 5
+
+    def _check(self, message, *, gpt="SAFE", trusted=None, delete=None, switch=_switch_on):
+        """本物の handle_security_for_message を、外のもの（設定・Groq・ログ・削除）だけ差し替えて回す。
+
+        switch はタイムアウトの切り替えの設定（既定は有効にしたサーバー）。
+        """
         with (
             patch.object(sec, "get_trusted_user_ids", trusted or (lambda g: [])),
             patch.object(sec, "get_bypass_role_ids", lambda g: []),
+            patch.object(sec, "get_security_timeout_enabled", switch),
             patch.object(sec, "get_response_channel_id", lambda g: None),
             patch.object(sec, "gpt_assess", AsyncMock(return_value=gpt)),
             patch.object(sec, "log_action", self._log_action),
@@ -185,13 +210,14 @@ class _SecurityCase(unittest.TestCase):
         self.assertEqual(len(finals), 1, self.logged)
         return finals[0]
 
-    def _join_vc(self, member, *, bypass=None):
+    def _join_vc(self, member, *, bypass=None, switch=_switch_on):
         """本物の handle_security_for_voice_join に VC 777 への参加を 1 回渡す（bypass で判定を替えられる）。"""
         before = SimpleNamespace(channel=None)
         after = SimpleNamespace(channel=SimpleNamespace(id=777, mention="<#777>"))
         with (
             patch.object(sec, "get_trusted_user_ids", lambda g: []),
             patch.object(sec, "get_bypass_role_ids", lambda g: []),
+            patch.object(sec, "get_security_timeout_enabled", switch),
             patch.object(sec, "is_security_bypassed", bypass or sec.is_security_bypassed),
             patch.object(sec, "log_action", self._log_action),
             patch.object(sec.logger, "error"),
@@ -276,12 +302,6 @@ class DangerTimeoutTests(_SecurityCase):
 class SpamOnlyTests(_SecurityCase):
     """S2: スパムだけなら、スパムと数えた投稿を消して 10 分のタイムアウト（権限が無ければ消すだけ）。"""
 
-    def _spam_twice(self, member):
-        """同じ内容の前の投稿を 2 件記録する（ID 100・101、チャンネル 70・71）。"""
-        for message_id, channel_id in ((100, 70), (101, 71)):
-            spam_detection.check_spam(1, member.id, channel_id, message_id, "限定セール", [])
-            self.clock.now += 5
-
     def test_the_counted_posts_are_deleted_and_the_author_timed_out_for_ten_minutes(self):
         """3 回目で、前の 2 件（ID で）とこの投稿を 1 件ずつ消し、10 分のタイムアウト。ロールは外さない。"""
         member = _member(roles=[11])
@@ -362,6 +382,107 @@ class SpamOnlyTests(_SecurityCase):
         bot.get_partial_messageable.assert_called_once_with(70)
         bot.get_partial_messageable.return_value.get_partial_message.assert_called_once_with(100)
         partial.delete.assert_awaited_once()
+
+
+class TimeoutSwitchTests(_SecurityCase):
+    """追加の決定（2026-11-28）: タイムアウトはサーバーごとの切り替え（管理画面）で、既定は無効。
+
+    無効なら、Bot に権限があっても「権限が無いとき」と同じ（危険なものは全ロールを外し、スパムだけなら消すだけ）。
+    有効で権限があるときだけタイムアウト。有効でも権限が無ければ、いまの「権限が無いとき」。
+    """
+
+    GUILD = 424242
+
+    def test_the_switch_is_off_until_turned_on(self):
+        """設定の既定は無効。管理画面が使う setter で有効・無効を切り替えられる。"""
+        self.assertIs(settings_store.get_security_timeout_enabled(self.GUILD), False)
+        settings_store.set_security_timeout_enabled(self.GUILD, True)
+        self.assertIs(settings_store.get_security_timeout_enabled(self.GUILD), True)
+        settings_store.set_security_timeout_enabled(self.GUILD, False)
+        self.assertIs(settings_store.get_security_timeout_enabled(self.GUILD), False)
+        self.assertIs(settings_store.get_guild_settings(self.GUILD)["security_timeout_enabled"], False)
+
+    def test_an_unset_switch_strips_roles_even_with_the_permission(self):
+        """設定していないサーバー（本物の設定を読む）では、権限があってもタイムアウトせず、全ロールを外す。"""
+        member = _member(roles=[11, 12])
+        self._check(_message(member), gpt="DANGEROUS", switch=settings_store.get_security_timeout_enabled)
+        member.timeout.assert_not_awaited()
+        self.assertEqual([c.args[0].id for c in member.remove_roles.await_args_list], [11, 12])
+        self.assertEqual(self._final().fields["措置"], "消してロールを外した")
+
+    def test_switched_off_a_dangerous_post_strips_roles_and_says_nothing_of_timeouts(self):
+        """無効にしてあれば、権限があっても全ロールを外す。報告にタイムアウトの項目は出さない。"""
+        member = _member(roles=[11])
+        message = _message(member)
+        self._check(message, gpt="DANGEROUS", switch=_switch_off)
+        message.delete.assert_awaited_once()
+        member.timeout.assert_not_awaited()
+        member.remove_roles.assert_awaited_once()
+        final = self._final()
+        self.assertEqual(final.fields["措置"], "消してロールを外した")
+        self.assertEqual(final.fields["剥がしたロール"], "<@&11>")
+        self.assertFalse(any("タイムアウト" in key for key in final.fields), final.fields)
+        self.assertEqual((final.level, final.color), ("ERROR", RED))
+
+    def test_switched_off_spam_is_only_deleted_even_with_the_permission(self):
+        """無効なら、スパムだけのときは消すだけ（権限があってもタイムアウトせず、ロールも外さない）。"""
+        member = _member(roles=[11])
+        self._spam_twice(member)
+        message = _message(member, "限定セール")
+        self._check(message, switch=_switch_off)
+        self.assertEqual(self.deleted_by_id, [(70, 100), (71, 101)])
+        message.delete.assert_awaited_once()
+        member.timeout.assert_not_awaited()
+        member.remove_roles.assert_not_awaited()
+        final = self._final()
+        self.assertEqual((final.fields["措置"], final.fields["消した投稿"]), ("消した", "3件"))
+        self.assertFalse(any("タイムアウト" in key for key in final.fields), final.fields)
+
+    def test_switched_off_a_vc_raid_strips_roles_even_with_the_permission(self):
+        """無効なら、VC の荒らしの数に入った人も、いまどおり 1 人ずつ全ロールを外す。"""
+        members = [_member(uid=10 + i, roles=[11], joined_days_ago=0.01) for i in range(5)]
+        for member in members:
+            self._join_vc(member, switch=_switch_off)
+        for member in members:
+            member.timeout.assert_not_awaited()
+            member.remove_roles.assert_awaited_once()
+        reports = [entry for entry in self.logged if entry.message == "VCレイド検出"]
+        self.assertEqual([entry.user.id for entry in reports], [10, 11, 12, 13, 14])
+        self.assertEqual(reports[0].fields, {"チャンネル": "<#777>", "剥がしたロール": "<@&11>"})
+
+    def test_use_timeout_needs_both_the_switch_and_the_permission(self):
+        """タイムアウトを使うのは、設定が有効で、Bot に権限があるときだけ。権限が無ければ設定は読まない。"""
+        read = Mock(return_value=True)
+        with patch.object(sec, "get_security_timeout_enabled", read):
+            self.assertTrue(sec.use_timeout(_member().guild))
+            self.assertFalse(sec.use_timeout(_member(can_timeout=False).guild))
+        read.assert_called_once_with(1)
+        with patch.object(sec, "get_security_timeout_enabled", _switch_off):
+            self.assertFalse(sec.use_timeout(_member().guild))
+
+    def test_an_unreadable_switch_is_off(self):
+        """設定が読めなければ無効として扱う（いままでどおり、ロールを外す側）。"""
+
+        def boom(_):
+            """設定が読めない。"""
+            raise RuntimeError("設定が読めない")
+
+        with (
+            patch.object(sec, "get_security_timeout_enabled", boom),
+            patch.object(sec.logger, "warning") as warning,
+        ):
+            self.assertFalse(sec.use_timeout(_member().guild))
+        warning.assert_called_once()
+
+    def test_the_admin_panel_has_the_switch(self):
+        """管理画面のセキュリティ設定に切り替えが 1 つある（既定は無効。Bot の権限が要ることも書いてある）。"""
+        from webapp_admin.schema.panels.security import PANEL
+
+        field = next(f for f in PANEL.fields if f.key == "security_timeout_enabled")
+        self.assertEqual((field.widget.value, field.default, field.nullable), ("bool", False, False))
+        self.assertIs(field.get, settings_store.get_security_timeout_enabled)
+        self.assertIs(field.set, settings_store.set_security_timeout_enabled)
+        self.assertIn("メンバーをタイムアウト", field.help or "")
 
 
 class SpamCountingTests(_SecurityCase):

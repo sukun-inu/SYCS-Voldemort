@@ -306,6 +306,32 @@ fn log_settings() -> Value {
     json!({"log_channel_id": log_channel, "log_level": "INFO"})
 }
 
+/// [`log_settings`] に、タイムアウトの切り替えを有効にしたもの（設定の既定は無効）。
+fn timeout_settings() -> Value {
+    let mut settings = log_settings();
+    settings["security_timeout_enabled"] = json!(true);
+    settings
+}
+
+/// 前の投稿を 2 件（100 は 30 秒前にこのチャンネル、101 は 10 秒前に別のチャンネル）入れたスパムの記録。
+/// どちらも「限定セール」なので、同じ本文の投稿で 3 回目（スパム）になる。
+fn spam_with_two_prior_posts() -> SpamDetector {
+    let spam = SpamDetector::default();
+    let now = message_security::system_clock();
+    for (channel, message_id, ago) in [(CHANNEL, 100, 30.0), (OTHER_CHANNEL, 101, 10.0)] {
+        let input = SpamInput {
+            guild_id: GUILD.parse().unwrap(),
+            user_id: USER.parse().unwrap(),
+            channel_id: channel.parse().unwrap(),
+            message_id,
+            content: "限定セール",
+            attachments: &[],
+        };
+        spam.check(&input, now - ago);
+    }
+    spam
+}
+
 /// 監査ログの理由（URL の形に直した「セキュリティ違反」）。
 const REASON: &str = "%E3%82%BB%E3%82%AD%E3%83%A5%E3%83%AA%E3%83%86%E3%82%A3%E9%81%95%E5%8F%8D";
 
@@ -404,7 +430,8 @@ async fn a_dangerous_post_is_deleted_and_roles_are_stripped_lowest_first() {
     assert_eq!(last["fields"][7]["value"], "<@&13> <@&14>");
 }
 
-/// Bot にタイムアウトの権限があれば、危険な投稿を消して 24 時間のタイムアウト（ロールは剥がさない。S1）。
+/// タイムアウトの切り替えが有効で、Bot に権限があれば、危険な投稿を消して 24 時間のタイムアウト（ロールは
+/// 剥がさない。S1）。
 #[tokio::test]
 #[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
 async fn a_dangerous_post_times_the_author_out_for_a_day() {
@@ -414,7 +441,7 @@ async fn a_dangerous_post_times_the_author_out_for_a_day() {
     post.bot_can_timeout = true;
     let before = Utc::now();
     let spam = SpamDetector::default();
-    let seen = check_on_fake(log_settings(), respond_with_member, &post, 12, &spam).await;
+    let seen = check_on_fake(timeout_settings(), respond_with_member, &post, 12, &spam).await;
     let after = Utc::now();
     let log = format!("/api/v10/channels/{LOG_CHANNEL}/messages");
     assert_eq!(
@@ -449,7 +476,7 @@ async fn a_refused_timeout_is_not_followed_by_stripping() {
     let mut post = post_from_message(&cache, &msg).unwrap();
     post.bot_can_timeout = true;
     let spam = SpamDetector::default();
-    let seen = check_on_fake(log_settings(), refuse_timeouts, &post, 12, &spam).await;
+    let seen = check_on_fake(timeout_settings(), refuse_timeouts, &post, 12, &spam).await;
     let calls = methods_and_paths(&seen);
     assert!(!calls.iter().any(|c| c.contains("/roles/")), "{calls:#?}");
     assert_eq!(
@@ -464,7 +491,8 @@ async fn a_refused_timeout_is_not_followed_by_stripping() {
     assert_eq!(fields[6]["name"], "タイムアウトできなかった（権限不足）");
 }
 
-/// スパムだけなら、スパムと数えた投稿を 1 件ずつ消し（既に消えていても止めない）、10 分のタイムアウト（S2）。
+/// スパムだけなら、スパムと数えた投稿を 1 件ずつ消し（既に消えていても止めない）、10 分のタイムアウト（S2。
+/// タイムアウトの切り替えが有効なサーバー）。
 #[tokio::test]
 #[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
 async fn spam_posts_are_deleted_one_by_one_and_the_author_timed_out_for_ten_minutes() {
@@ -472,21 +500,9 @@ async fn spam_posts_are_deleted_one_by_one_and_the_author_timed_out_for_ten_minu
     let msg = message(user(USER, false), member_payload(), "限定セール");
     let mut post = post_from_message(&cache, &msg).unwrap();
     post.bot_can_timeout = true;
-    let spam = SpamDetector::default();
-    let now = message_security::system_clock();
-    for (channel, message_id, ago) in [(CHANNEL, 100, 30.0), (OTHER_CHANNEL, 101, 10.0)] {
-        let input = SpamInput {
-            guild_id: GUILD.parse().unwrap(),
-            user_id: USER.parse().unwrap(),
-            channel_id: channel.parse().unwrap(),
-            message_id,
-            content: "限定セール",
-            attachments: &[],
-        };
-        spam.check(&input, now - ago);
-    }
+    let spam = spam_with_two_prior_posts();
     let before = Utc::now();
-    let seen = check_on_fake(log_settings(), respond_for_spam, &post, 0, &spam).await;
+    let seen = check_on_fake(timeout_settings(), respond_for_spam, &post, 0, &spam).await;
     let after = Utc::now();
     let log = format!("/api/v10/channels/{LOG_CHANNEL}/messages");
     assert_eq!(
@@ -509,6 +525,66 @@ async fn spam_posts_are_deleted_one_by_one_and_the_author_timed_out_for_ten_minu
     // 既に消えていた 1 件（100）も、消した数に入る。
     assert_eq!(fields[5]["value"], "3件");
     assert_eq!(fields[6]["value"], "10 分");
+}
+
+/// タイムアウトの切り替えが無効（既定）なら、Bot に権限があってもタイムアウトせず、いまどおりロールを低い順に
+/// 剥がす。報告にタイムアウトの項目は出さない（2026-11-28 の追加の決定）。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn without_the_switch_roles_are_stripped_even_with_the_permission() {
+    let cache = cache();
+    let msg = message(user(USER, false), member_payload(), "https://bad.example");
+    let mut post = post_from_message(&cache, &msg).unwrap();
+    post.bot_can_timeout = true;
+    let spam = SpamDetector::default();
+    let seen = check_on_fake(log_settings(), respond_with_member, &post, 12, &spam).await;
+    let calls = methods_and_paths(&seen);
+    let timeout = format!("PATCH /api/v10/guilds/{GUILD}/members/{USER}");
+    assert!(!calls.contains(&timeout), "{calls:#?}");
+    let delete = format!("DELETE /api/v10/channels/{CHANNEL}/messages/5000");
+    assert_eq!(calls[2], delete);
+    assert_eq!(
+        calls[3..6],
+        [strip("12"), strip("11"), strip("13")],
+        "{calls:#?}"
+    );
+    let fields = &seen.last().unwrap().body["embeds"][0]["fields"];
+    assert_eq!(fields[4]["value"], "消してロールを外した（一部失敗）");
+    assert_eq!(fields[6]["name"], "剥がしたロール");
+    let names: Vec<&str> = fields
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|f| f["name"].as_str())
+        .collect();
+    let timed = names.iter().any(|n| n.contains("タイムアウト"));
+    assert!(!timed, "{names:?}");
+}
+
+/// タイムアウトの切り替えが無効（既定）なら、スパムだけのときは、Bot に権限があっても消すだけ。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn without_the_switch_spam_is_only_deleted_even_with_the_permission() {
+    let cache = cache();
+    let msg = message(user(USER, false), member_payload(), "限定セール");
+    let mut post = post_from_message(&cache, &msg).unwrap();
+    post.bot_can_timeout = true;
+    let spam = spam_with_two_prior_posts();
+    let seen = check_on_fake(log_settings(), respond_for_spam, &post, 0, &spam).await;
+    let log = format!("/api/v10/channels/{LOG_CHANNEL}/messages");
+    assert_eq!(
+        methods_and_paths(&seen),
+        [
+            format!("DELETE /api/v10/channels/{CHANNEL}/messages/100"),
+            format!("DELETE /api/v10/channels/{OTHER_CHANNEL}/messages/101"),
+            format!("DELETE /api/v10/channels/{CHANNEL}/messages/5000"),
+            format!("POST {log}"),
+            format!("POST {log}"),
+        ]
+    );
+    let result = &seen[3].body["embeds"][0];
+    assert_eq!(result["title"], "消した");
+    assert_eq!(result["color"], 0xE6_7E_22);
 }
 
 /// VC の荒らしの数に入った全員に、最初に入った順で 24 時間のタイムアウトをし、1 人ずつ報告する（S1・S4）。

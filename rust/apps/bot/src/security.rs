@@ -6,8 +6,10 @@
 //!
 //! 判定と措置は、本人が 2026-11-28 に決めた形（rust-09 の S1〜S8）を Python と同じに写した:
 //!
-//! - 措置はタイムアウト（危険は 24 時間、スパムだけなら 10 分）。Bot に「メンバーをタイムアウト」の権限が無い
-//!   サーバーでは、危険ならいまどおり全ロールを外し、スパムなら消すだけ（S1・S2）
+//! - 措置はタイムアウト（危険は 24 時間、スパムだけなら 10 分）。ただし使うのは、サーバーの設定
+//!   （`security_timeout_enabled`。管理画面のセキュリティ設定。既定は無効）で有効にしてあり、Bot に
+//!   「メンバーをタイムアウト」の権限があるときだけ（[`use_timeout`]）。使わないサーバーでは、危険なら
+//!   いまどおり全ロールを外し、スパムなら消すだけ（S1・S2）
 //! - スパムは「同じ内容の繰り返し」と「量の多さ」の 2 つの条件（S3）
 //! - VC の荒らしは「入って間もない人」（入って 24 時間未満か、アカウントを作って 7 日未満）で数える（S4・S5）
 //! - URL は Discord の書き方（隠しリンク・括弧・飾りの記号・招待）を読み解いて抜き出す（S6）
@@ -35,6 +37,7 @@ use tracing::{info, warn};
 use unicode_normalization::UnicodeNormalization;
 
 use crate::commands::reply::cap_list_for_message;
+use crate::commands::settings::python_truthy;
 use crate::groq::python_is_space;
 use crate::log_channel::{self, Author, Level, LogSink};
 use crate::python_chars;
@@ -759,6 +762,22 @@ pub fn log_bypass(guild_id: u64, user_id: u64, reason: &str, route: &str) {
     );
 }
 
+/// サーバーの設定の鍵: 措置にタイムアウトを使うか（管理画面のセキュリティ設定。既定は無効）。
+pub const TIMEOUT_ENABLED_KEY: &str = "security_timeout_enabled";
+
+/// このサーバーで、措置にタイムアウトを使う設定か。Python の `get_security_timeout_enabled`（`bool(...)` と
+/// 同じ読み方。未設定なら無効）。
+pub fn timeout_enabled(guild_settings: Option<&Value>) -> bool {
+    python_truthy(guild_settings.and_then(|g| g.get(TIMEOUT_ENABLED_KEY)))
+}
+
+/// 措置にタイムアウトを使うか。Bot に権限があり、サーバーの設定で有効にしてあるときだけ。Python の
+/// `use_timeout`。使わないなら、権限があっても「権限が無いとき」と同じ動き（危険なものは全ロールを外し、
+/// スパムだけなら消すだけ）。
+pub fn use_timeout(guild_settings: Option<&Value>, bot_can_timeout: bool) -> bool {
+    bot_can_timeout && timeout_enabled(guild_settings)
+}
+
 /// Bot がそのサーバーで「メンバーをタイムアウト」の権限を持っているか（discord.py の
 /// `guild.me.guild_permissions.moderate_members`）。Bot のメンバーがキャッシュに無ければ持っていない扱い
 /// （いまどおり全ロールを外す側に倒す）。
@@ -936,9 +955,9 @@ pub enum Action {
     /// 措置なし。
     #[default]
     None,
-    /// 危険で措置した（24 時間のタイムアウト。権限が無ければロールを外す）。
+    /// 危険で措置した（24 時間のタイムアウト。タイムアウトを使わないならロールを外す）。
     Danger,
-    /// スパムだけで措置した（10 分のタイムアウト。権限が無ければ消すだけ）。
+    /// スパムだけで措置した（10 分のタイムアウト。タイムアウトを使わないなら消すだけ）。
     Spam,
 }
 
@@ -951,29 +970,30 @@ pub struct Enforcement {
     pub deleted: usize,
     /// 消せなかった投稿。
     pub delete_failed: usize,
-    /// タイムアウトを試した結果（タイムアウトの権限が無ければ `None`）。
+    /// タイムアウトを試した結果（タイムアウトを使わないとき〔設定が無効か、権限が無い〕は `None`）。
     pub timeout: Option<TimedOut>,
-    /// ロールを外した結果（危険で、タイムアウトの権限が無いサーバー）。
+    /// ロールを外した結果（危険で、タイムアウトを使わないサーバー）。
     pub stripped: Option<Stripped>,
     /// 危険だが、VC の荒らしの経路で措置済みなので、人への措置はしなかった（二重に措置しない。S4）。
     pub vc_done: bool,
 }
 
-/// 危険なときの、人への措置（S1）。タイムアウトの権限があれば `seconds` 秒のタイムアウト、無ければ全ロールを外す。
-/// Python の `_punish`（タイムアウトが断られても、ロールを外すことは試さない）。
+/// 危険なときの、人への措置（S1）。タイムアウトを使うなら（引数 `use_timeout` に [`use_timeout`] の答えを渡す）
+/// `seconds` 秒のタイムアウト、使わないなら全ロールを外す。Python の `_punish`（タイムアウトが断られても、ロールを
+/// 外すことは試さない）。
 pub async fn punish(
     http: &Http,
     guild_id: GuildId,
     user_id: UserId,
     roles: &[RoleId],
-    can_timeout: bool,
+    use_timeout: bool,
     seconds: i64,
 ) -> Enforcement {
     let mut out = Enforcement {
         action: Action::Danger,
         ..Enforcement::default()
     };
-    if can_timeout {
+    if use_timeout {
         let sent = timeout_member(http, guild_id, user_id, seconds).await;
         out.timeout = Some(TimedOut {
             seconds,
@@ -999,20 +1019,20 @@ pub struct RaidTarget {
 /// VC の荒らしの数に入った人に、最初に入った順に 1 人ずつ措置して報告する。Python の
 /// `handle_security_for_voice_join` の後半（`_enforce_vc_raid`）。
 ///
-/// 措置は 24 時間のタイムアウト（Bot に権限が無ければ全ロールを外す）。報告は 1 人ずつ「VCレイド検出」（チャンネルと、
-/// タイムアウト・剥がした結果）。
+/// 措置は 24 時間のタイムアウト（`use_timeout` が偽〔設定が無効か、Bot に権限が無い〕なら全ロールを外す）。報告は
+/// 1 人ずつ「VCレイド検出」（チャンネルと、タイムアウト・剥がした結果）。
 pub async fn act_on_vc_raid(
     sink: &LogSink<'_>,
     guild_id: GuildId,
     channel_id: u64,
     targets: &[RaidTarget],
-    can_timeout: bool,
+    use_timeout: bool,
     seconds: i64,
 ) {
     for target in targets {
         let user_id = target.user_id;
         let roles = &target.roles;
-        let done = punish(sink.http, guild_id, user_id, roles, can_timeout, seconds).await;
+        let done = punish(sink.http, guild_id, user_id, roles, use_timeout, seconds).await;
         warn!(%guild_id, %user_id, ?done, "[SECURITY] VCレイド検出");
         let fields = vc_raid_fields(channel_id, &done);
         let sent = log_channel::log_action(
@@ -1799,6 +1819,32 @@ mod tests {
         assert!(!can_moderate(false, &held(&[99]), &roles, guild, false));
         let everyone: HashMap<RoleId, Role> = [role(1, Permissions::MODERATE_MEMBERS)].into();
         assert!(can_moderate(false, &[], &everyone, guild, false));
+    }
+
+    /// タイムアウトの切り替え（サーバーの設定 `security_timeout_enabled`）は既定で無効。Python の `bool(...)` と
+    /// 同じに読む。タイムアウトを使うのは、有効で、Bot に権限があるときだけ（2026-11-28 の追加の決定）。
+    #[test]
+    fn timeouts_need_the_switch_and_the_permission() {
+        assert!(!timeout_enabled(None));
+        assert!(!timeout_enabled(Some(&json!({}))));
+        for (value, on) in [
+            (json!(true), true),
+            (json!(false), false),
+            (json!(1), true),
+            (json!(0), false),
+            (json!("yes"), true),
+            (json!(""), false),
+            (Value::Null, false),
+        ] {
+            let settings = json!({"security_timeout_enabled": value});
+            assert_eq!(timeout_enabled(Some(&settings)), on, "{settings}");
+        }
+        let on = json!({"security_timeout_enabled": true});
+        let off = json!({"security_timeout_enabled": false});
+        assert!(use_timeout(Some(&on), true));
+        assert!(!use_timeout(Some(&on), false), "権限が無ければ使わない");
+        assert!(!use_timeout(Some(&off), true), "無効なら権限があっても使わない");
+        assert!(!use_timeout(None, true), "未設定は無効");
     }
 
     /// @everyone は剥がすロールに入れないこと。
