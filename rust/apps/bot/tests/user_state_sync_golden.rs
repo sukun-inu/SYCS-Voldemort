@@ -954,7 +954,11 @@ async fn the_lock_serialises_and_the_loop_purges() {
         "SELECT count(*) FROM user_state_event WHERE payload_json = '{\"source\": \"auto_repair\"}'",
     )
     .await;
-    assert_eq!((written, from_repair), (4, 4), "定期の同期は、既定で見つけた違いを履歴に書く");
+    assert_eq!(
+        (written, from_repair),
+        (4, 4),
+        "定期の同期は、既定で見つけた違いを履歴に書く"
+    );
     task.abort();
 }
 
