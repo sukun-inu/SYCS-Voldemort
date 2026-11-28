@@ -1,0 +1,367 @@
+{
+ "now": "2026-11-28T10:00:00+09:00",
+ "library": {
+  "gold_row": {"$row": {"snapshot_date": {"$date": "2026-11-27"}, "price_per_gram": {"$decimal": "21345.6789"}, "delta_from_previous": {"$decimal": "-123.4500"}}},
+  "silver_row": {"$row": {"snapshot_date": {"$date": "2026-11-27"}, "price_per_gram": {"$decimal": "265.4321"}, "delta_from_previous": {"$decimal": "1.2300"}}},
+  "platinum_row": {"$row": {"snapshot_date": {"$date": "2026-11-26"}, "price_per_gram": {"$decimal": "7123.0000"}, "delta_from_previous": null}},
+  "rows": {"gold": {"$ref": "gold_row"}, "silver": {"$ref": "silver_row"}, "platinum": {"$ref": "platinum_row"}}
+ },
+ "cases": [
+  {
+   "name": "gold_10_grams",
+   "note": "ふつうの計算。値段（4 桁の Decimal）×グラム（float を str にした Decimal）×純度（同じく）を Decimal で掛け、int で切り捨てる",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=10", "expect_status": 200}]
+  },
+  {
+   "name": "silver_fractional_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=silver&grams=2.5", "expect_status": 200}]
+  },
+  {
+   "name": "platinum_older_snapshot",
+   "note": "最新の行の日付は金属ごとに違ってよい（snapshot_date はその金属の行の日付）",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=platinum&grams=1", "expect_status": 200}]
+  },
+  {
+   "name": "upper_bound_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=100000", "expect_status": 200}]
+  },
+  {
+   "name": "exponent_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1e3", "expect_status": 200}]
+  },
+  {
+   "name": "tiny_grams_written_with_exponent",
+   "note": "Python の float の書き方（repr）では 1e-05 と書く（Rust の serde_json は 1e-5 と書く）。計算のキャッシュの鍵は 0.0000",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=0.00001", "expect_status": 200}]
+  },
+  {
+   "name": "four_decimal_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=0.0001", "expect_status": 200}]
+  },
+  {
+   "name": "float_repr_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=0.30000000000000004", "expect_status": 200}]
+  },
+  {
+   "name": "seventeen_digit_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=silver&grams=12.345678901234567", "expect_status": 200}]
+  },
+  {
+   "name": "truncates_instead_of_rounding",
+   "note": "33.3333×3＝99.9999 は 99 にする（四捨五入しない）",
+   "service": {"load_latest_rows": {"$ref": "rows", "with": {"gold": {"$row": {"snapshot_date": {"$date": "2026-11-27"}, "price_per_gram": {"$decimal": "33.3333"}, "delta_from_previous": null}}}}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=3", "expect_status": 200}]
+  },
+  {
+   "name": "decimal_context_rounds_at_28_digits",
+   "note": "Python の Decimal は掛け算のたびに 28 桁へ丸める（偶数への丸め）。99999999999.9999×1.000000000000001 の正確な値は 99999999999.9999999999999999999 だが、28 桁に丸めると 100000000000 になる（見立て）。正確に掛けて切り捨てると 99999999999 で食い違う",
+   "service": {"load_latest_rows": {"$ref": "rows", "with": {"gold": {"$row": {"snapshot_date": {"$date": "2026-11-27"}, "price_per_gram": {"$decimal": "99999999999.9999"}, "delta_from_previous": {"$decimal": "0.0001"}}}}}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1.000000000000001", "expect_status": 200}]
+  },
+  {
+   "name": "extra_query_parameter_is_ignored",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=10&unit=kg", "expect_status": 200}]
+  },
+  {
+   "name": "metal_is_trimmed_and_lowercased",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=%20GoLd%20&grams=10", "expect_status": 200}]
+  },
+  {
+   "name": "plus_in_query_is_a_space",
+   "note": "クエリの + は空白として読む（urllib.parse.parse_qsl）。そのあと strip で落ちる",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=+gold+&grams=10", "expect_status": 200}]
+  },
+  {
+   "name": "metal_ideographic_space_is_trimmed",
+   "note": "str.strip は全角の空白（U+3000）も落とす",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=%E3%80%80gold&grams=10", "expect_status": 200}]
+  },
+  {
+   "name": "metal_unit_separator_is_trimmed",
+   "note": "Python の str.strip は U+001F（区切りの制御文字）も空白として落とす。Rust の str::trim は落とさない",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=%1Fgold&grams=10", "expect_status": 200}]
+  },
+  {
+   "name": "fullwidth_metal_is_unknown",
+   "note": "全角の ＧＯＬＤ は lower しても全角のまま（NFKC にはしない）",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=%EF%BC%A7%EF%BC%AF%EF%BC%AC%EF%BC%A4&grams=10", "expect_status": 400}]
+  },
+  {
+   "name": "unknown_metal",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=copper&grams=10", "expect_status": 400}]
+  },
+  {
+   "name": "whitespace_only_metal",
+   "note": "min_length は空白も 1 文字に数えるので 422 ではなく、strip したあとの 400",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=%20%20&grams=10", "expect_status": 400}]
+  },
+  {
+   "name": "empty_metal",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=&grams=10", "expect_status": 422}]
+  },
+  {
+   "name": "missing_metal",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?grams=10", "expect_status": 422}]
+  },
+  {
+   "name": "repeated_metal",
+   "note": "同じ名前が 2 つあるときにどちらを使うか（FastAPI は starlette の QueryParams.get で引く）",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=copper&metal=gold&grams=1"}]
+  },
+  {
+   "name": "missing_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold", "expect_status": 422}]
+  },
+  {
+   "name": "no_parameters",
+   "note": "422 の本文は最初の誤り 1 つだけ（metal が先）",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate", "expect_status": 422}]
+  },
+  {
+   "name": "zero_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=0", "expect_status": 422}]
+  },
+  {
+   "name": "negative_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=-1", "expect_status": 422}]
+  },
+  {
+   "name": "grams_over_the_limit",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=100000.0001", "expect_status": 422}]
+  },
+  {
+   "name": "grams_not_a_number",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=abc", "expect_status": 422}]
+  },
+  {
+   "name": "empty_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=", "expect_status": 422}]
+  },
+  {
+   "name": "nan_grams",
+   "note": "pydantic の float の読み方（nan を数として読むか、gt=0 で落ちるか）",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=nan"}]
+  },
+  {
+   "name": "infinite_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=inf"}]
+  },
+  {
+   "name": "underscore_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1_000"}]
+  },
+  {
+   "name": "padded_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=%2010%20"}]
+  },
+  {
+   "name": "plus_sign_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=%2B10"}]
+  },
+  {
+   "name": "hex_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=0x10"}]
+  },
+  {
+   "name": "trailing_dot_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=10."}]
+  },
+  {
+   "name": "leading_dot_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=.5"}]
+  },
+  {
+   "name": "repeated_grams",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1&grams=2", "expect_status": 200}]
+  },
+  {
+   "name": "no_price_data",
+   "service": {"load_latest_rows": {}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=10", "expect_status": 503}]
+  },
+  {
+   "name": "metal_without_a_row",
+   "service": {"load_latest_rows": {"gold": {"$ref": "gold_row"}}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=silver&grams=10", "expect_status": 503}]
+  },
+  {
+   "name": "reading_the_prices_fails",
+   "note": "DB の失敗は素の 500（starlette の ServerErrorMiddleware。見出しのミドルウェアより外なので CSP などは付かない）",
+   "service": {"load_latest_rows": {"$raise": "RuntimeError", "message": "DB に届かない"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=10", "expect_status": 500}]
+  },
+  {
+   "name": "caches_within_a_case",
+   "note": "最新の値段（latest:日付）と計算（calculate:日付:金属:グラムの小数 4 桁）は 20 秒覚える。2 回目からは DB を読まない。10.00004 と 10.00005 は鍵が 10.0000（Decimal の偶数への丸め）になり、1 回目の答え（grams は 10.0）がそのまま返る。10.00015 は 10.0002 で計算し直す",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=10", "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=silver&grams=5", "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=10.00004", "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=10.00005", "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=10.00015", "expect_status": 200}
+   ]
+  },
+  {
+   "name": "calculate_limit",
+   "note": "calculate の枠は 5 回／60 秒（基準の env）。6 回目は 429 と Retry-After: 60",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "repeat": 5, "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "expect_status": 429}
+   ]
+  },
+  {
+   "name": "limit_is_per_client",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "repeat": 5, "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "expect_status": 429},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "client": "203.0.113.20", "expect_status": 200}
+   ]
+  },
+  {
+   "name": "buckets_are_separate",
+   "note": "calculate の枠を使い切っても、ほかの /api/ は既定の枠で数える",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "repeat": 5, "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "expect_status": 429},
+    {"method": "GET", "target": "/api/nope", "expect_status": 404}
+   ]
+  },
+  {
+   "name": "default_bucket_counts_unknown_api_paths",
+   "note": "既定の枠は 8 回／60 秒（基準の env）。無い /api/ の経路（404）も数える",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [
+    {"method": "GET", "target": "/api/nope", "repeat": 8, "expect_status": 404},
+    {"method": "GET", "target": "/api/nope", "expect_status": 429},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "expect_status": 200}
+   ]
+  },
+  {
+   "name": "trusted_proxy_forwarded_for",
+   "note": "接続元が信頼するプロキシの帯域（172.16.0.0/12）のときだけ、X-Real-IP → X-Forwarded-For の先頭の順で数える相手を決める。CF-Connecting-IP は TRUST_CF_HEADERS が false なので見ない",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "client": "172.18.0.2", "headers": {"x-forwarded-for": "203.0.113.50"}, "repeat": 5, "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "client": "172.18.0.2", "headers": {"x-forwarded-for": "203.0.113.50"}, "expect_status": 429},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "client": "172.18.0.2", "headers": {"x-forwarded-for": "203.0.113.51"}, "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "client": "172.18.0.2", "headers": {"x-real-ip": "203.0.113.50", "x-forwarded-for": "203.0.113.52"}, "expect_status": 429},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "client": "172.18.0.2", "headers": {"cf-connecting-ip": "203.0.113.99", "x-forwarded-for": "203.0.113.50"}, "expect_status": 429},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "client": "172.18.0.2", "headers": {"x-forwarded-for": "203.0.113.50, 172.18.0.2"}, "expect_status": 429}
+   ]
+  },
+  {
+   "name": "forwarded_token_forms",
+   "note": "IP の読み方（RateLimitMiddleware._parse_ip_token）: ポートと角括弧を外し、ipaddress の書き方（IPv6 は小文字・短縮）に揃える。読めなければ接続元そのものを使う",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "client": "172.18.0.2", "headers": {"x-forwarded-for": "203.0.113.70:443"}, "repeat": 5, "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "client": "172.18.0.2", "headers": {"x-forwarded-for": "203.0.113.70"}, "expect_status": 429},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "client": "172.18.0.2", "headers": {"x-forwarded-for": "[2001:db8::7]:8443"}, "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "client": "172.18.0.2", "headers": {"x-forwarded-for": "2001:DB8::7"}, "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "client": "172.18.0.2", "headers": {"x-forwarded-for": "not-an-ip"}, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "untrusted_client_forwarded_for_is_ignored",
+   "note": "信頼するプロキシの帯域の外からの X-Forwarded-For は見ない（接続元で数える）",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "headers": {"x-forwarded-for": "203.0.113.80"}, "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "headers": {"x-forwarded-for": "203.0.113.81"}, "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "headers": {"x-forwarded-for": "203.0.113.82"}, "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "headers": {"x-forwarded-for": "203.0.113.83"}, "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "headers": {"x-forwarded-for": "203.0.113.84"}, "expect_status": 200},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "headers": {"x-forwarded-for": "203.0.113.85"}, "expect_status": 429}
+   ]
+  },
+  {
+   "name": "bad_host_is_refused",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=10", "headers": {"host": "evil.example"}, "expect_status": 400}]
+  },
+  {
+   "name": "host_with_port_is_accepted",
+   "note": "許すホストは Host の : より前で比べる",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=10", "headers": {"host": "testserver:8000"}, "expect_status": 200}]
+  },
+  {
+   "name": "bad_host_still_counts_toward_the_limit",
+   "note": "レート制限のミドルウェアは許すホストの確かめより外にあるので、断った Host の要求も数える",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "headers": {"host": "evil.example"}, "repeat": 5, "expect_status": 400},
+    {"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=1", "expect_status": 429}
+   ]
+  },
+  {
+   "name": "post_is_not_allowed",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "POST", "target": "/api/prices/calculate?metal=gold&grams=10", "expect_status": 405}]
+  },
+  {
+   "name": "head_request",
+   "note": "FastAPI の GET の経路は HEAD を足さない（starlette の Route と違う）ので 405 になる見立て。axum の get は HEAD も受けるので、合わせるなら明示する",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "HEAD", "target": "/api/prices/calculate?metal=gold&grams=10"}]
+  },
+  {
+   "name": "trailing_slash_is_not_found",
+   "note": "SPA の受け皿（/{page_path:path}）に当たり、先頭が api なので 404（/ を外す転送はしない）",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate/?metal=gold&grams=10", "expect_status": 404}]
+  },
+  {
+   "name": "percent_encoded_path",
+   "note": "経路は % を戻してから選ぶ見立て（計算の経路に当たり、レート制限も calculate の枠で数える）。axum は戻さずに選ぶ",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/%63alculate?metal=gold&grams=10"}]
+  },
+  {
+   "name": "accept_gzip_small_body_is_not_compressed",
+   "note": "GZipMiddleware は 500 バイトより小さい本文を gzip にしない（Vary も付けない見立て）",
+   "service": {"load_latest_rows": {"$ref": "rows"}},
+   "requests": [{"method": "GET", "target": "/api/prices/calculate?metal=gold&grams=10", "headers": {"accept-encoding": "gzip"}, "expect_status": 200}]
+  }
+ ]
+}
