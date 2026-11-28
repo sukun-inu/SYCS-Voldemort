@@ -82,7 +82,9 @@ jobs:
         env:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: qemu-x86_64 -cpu SandyBridge
           SYCS_TEST_DATABASE_URL: postgres://postgres:ci-only@postgres:5432/postgres
-        run: cargo test --locked -- --include-ignored
+        # --no-fail-fast: 落ちたテストの組があっても、残りの組も回して全部の結果を出す（手元では回さないので、
+        # 1 回の CI で落ちたものを全部知りたい）。
+        run: cargo test --locked --no-fail-fast -- --include-ignored
 
       - name: シェルスクリプトの構文検査
         run: |

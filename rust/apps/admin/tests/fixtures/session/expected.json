@@ -1,0 +1,6487 @@
+{
+ "generated_by": "rust/apps/admin/tests/fixtures/session/generate.py",
+ "base_url": "http://testserver",
+ "cookie_name": "admin_session",
+ "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+ "now": 1798761600,
+ "max_age": 3600,
+ "signing": [
+  {
+   "name": "minimal",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "session": {
+    "user": {
+     "id": "1"
+    },
+    "guild_id": 999
+   },
+   "json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "cookie": "eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+  },
+  {
+   "name": "edge",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798758000,
+   "session": {
+    "user": {
+     "id": "1"
+    },
+    "guild_id": 999
+   },
+   "json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "cookie": "eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbecA.yyeePFlKpw3lRtl1ydVoUf6Hr4c"
+  },
+  {
+   "name": "expired",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798757999,
+   "session": {
+    "user": {
+     "id": "1"
+    },
+    "guild_id": 999
+   },
+   "json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "cookie": "eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbebw.ZelHLzULNWNa62iaOQc4-6ieQ30"
+  },
+  {
+   "name": "future",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761601,
+   "session": {
+    "user": {
+     "id": "1"
+    },
+    "guild_id": 999
+   },
+   "json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "cookie": "eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgQ.JF5GIFEpCv7BQnv4biWqm6qe5s8"
+  },
+  {
+   "name": "unicode",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "session": {
+    "user": {
+     "id": "111111111111111111",
+     "global_name": "テスター😀"
+    },
+    "x": "\"\\\n\t \u0001/<&>'"
+   },
+   "json": "{\"user\": {\"id\": \"111111111111111111\", \"global_name\": \"\\u30c6\\u30b9\\u30bf\\u30fc\\ud83d\\ude00\"}, \"x\": \"\\\"\\\\\\n\\t\\u007f\\u2028\\u0001/<&>'\"}",
+   "cookie": "eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAiZ2xvYmFsX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGJmXHUzMGZjXHVkODNkXHVkZTAwIn0sICJ4IjogIlwiXFxcblx0XHUwMDdmXHUyMDI4XHUwMDAxLzwmPicifQ==.azbsgA.zpXv18F_UIU_9Ye9GqnAUvpgT0Y"
+  },
+  {
+   "name": "floats",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "session": {
+    "admin_guilds_at": 1798761000.25,
+    "a": 0.1,
+    "b": 1e+16,
+    "c": 1e-05,
+    "d": -0.0,
+    "e": 123.0,
+    "f": 5e-324,
+    "g": 1e+22,
+    "h": 1.7976931348623157e+308,
+    "i": 0.0001,
+    "j": 1000000000000000.0
+   },
+   "json": "{\"admin_guilds_at\": 1798761000.25, \"a\": 0.1, \"b\": 1e+16, \"c\": 1e-05, \"d\": -0.0, \"e\": 123.0, \"f\": 5e-324, \"g\": 1e+22, \"h\": 1.7976931348623157e+308, \"i\": 0.0001, \"j\": 1000000000000000.0}",
+   "cookie": "eyJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiYSI6IDAuMSwgImIiOiAxZSsxNiwgImMiOiAxZS0wNSwgImQiOiAtMC4wLCAiZSI6IDEyMy4wLCAiZiI6IDVlLTMyNCwgImciOiAxZSsyMiwgImgiOiAxLjc5NzY5MzEzNDg2MjMxNTdlKzMwOCwgImkiOiAwLjAwMDEsICJqIjogMTAwMDAwMDAwMDAwMDAwMC4wfQ==.azbsgA.NH8oh6Tbf7pQSRV76ha7TVqI2n0"
+  },
+  {
+   "name": "ints",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "session": {
+    "big": 18446744073709551615,
+    "neg": -9223372036854775808,
+    "zero": 0
+   },
+   "json": "{\"big\": 18446744073709551615, \"neg\": -9223372036854775808, \"zero\": 0}",
+   "cookie": "eyJiaWciOiAxODQ0Njc0NDA3MzcwOTU1MTYxNSwgIm5lZyI6IC05MjIzMzcyMDM2ODU0Nzc1ODA4LCAiemVybyI6IDB9.azbsgA.iNNr6FpRF16uVtHG47yZZdtN-SA"
+  },
+  {
+   "name": "nested",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "session": {
+    "_flashes": [
+     [
+      "info",
+      "保存しました。"
+     ],
+     [
+      "danger",
+      "x"
+     ]
+    ],
+    "empty_object": {},
+    "empty_list": [],
+    "t": true,
+    "f": false,
+    "n": null
+   },
+   "json": "{\"_flashes\": [[\"info\", \"\\u4fdd\\u5b58\\u3057\\u307e\\u3057\\u305f\\u3002\"], [\"danger\", \"x\"]], \"empty_object\": {}, \"empty_list\": [], \"t\": true, \"f\": false, \"n\": null}",
+   "cookie": "eyJfZmxhc2hlcyI6IFtbImluZm8iLCAiXHU0ZmRkXHU1YjU4XHUzMDU3XHUzMDdlXHUzMDU3XHUzMDVmXHUzMDAyIl0sIFsiZGFuZ2VyIiwgIngiXV0sICJlbXB0eV9vYmplY3QiOiB7fSwgImVtcHR5X2xpc3QiOiBbXSwgInQiOiB0cnVlLCAiZiI6IGZhbHNlLCAibiI6IG51bGx9.azbsgA.PiM8dGySb9tEgsKwq86a0O6LAF0"
+  },
+  {
+   "name": "empty",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "session": {},
+   "json": "{}",
+   "cookie": "e30=.azbsgA.bVbfKBls8BlLvBxHF1fyzIJLL8M"
+  },
+  {
+   "name": "key_order",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "session": {
+    "z": 1,
+    "a": 2,
+    "m": {
+     "y": 1,
+     "b": 2
+    }
+   },
+   "json": "{\"z\": 1, \"a\": 2, \"m\": {\"y\": 1, \"b\": 2}}",
+   "cookie": "eyJ6IjogMSwgImEiOiAyLCAibSI6IHsieSI6IDEsICJiIjogMn19.azbsgA.mD642U9bFIuW6l-k1MJbHktHBfc"
+  },
+  {
+   "name": "timestamp_zero",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 0,
+   "session": {
+    "a": 1
+   },
+   "json": "{\"a\": 1}",
+   "cookie": "eyJhIjogMX0=..-DqpceNyYdq_mXM2uRB51JhYXmQ"
+  },
+  {
+   "name": "timestamp_255",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 255,
+   "session": {
+    "a": 1
+   },
+   "json": "{\"a\": 1}",
+   "cookie": "eyJhIjogMX0=._w.Cpmn5B6v3lVGrxkGoTbQY_L7ZGo"
+  },
+  {
+   "name": "timestamp_256",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 256,
+   "session": {
+    "a": 1
+   },
+   "json": "{\"a\": 1}",
+   "cookie": "eyJhIjogMX0=.AQA.IUlK6Qq5wfdgtL_A5fg9DbpE-4U"
+  },
+  {
+   "name": "timestamp_2_32",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 4294967296,
+   "session": {
+    "a": 1
+   },
+   "json": "{\"a\": 1}",
+   "cookie": "eyJhIjogMX0=.AQAAAAA.cOTzMCfvCg-ivRYxrUoH1LNor3k"
+  },
+  {
+   "name": "other_secret",
+   "secret": "another-secret-another-secret-0000",
+   "signed_at": 1798761600,
+   "session": {
+    "user": {
+     "id": "1"
+    },
+    "guild_id": 999
+   },
+   "json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "cookie": "eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.1KcnK2V7_yL22DkhDtsCjDg_-Ww"
+  }
+ ],
+ "raw": [
+  {
+   "name": "garbage",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "!!!",
+   "cookie": "!!!.azbsgA.0LJt_P8PVk45W1jYbDoGX0jiwO8"
+  },
+  {
+   "name": "bad_padding",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "e30",
+   "cookie": "e30.azbsgA.UGO-uvOG2Ebp-qy-5IyFrm-DvYU"
+  },
+  {
+   "name": "empty_object",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "e30=",
+   "cookie": "e30=.azbsgA.bVbfKBls8BlLvBxHF1fyzIJLL8M"
+  },
+  {
+   "name": "empty_list",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "W10=",
+   "cookie": "W10=.azbsgA.WdDfO3BbZ5hWd_zbLEx-tNNI5Wc"
+  },
+  {
+   "name": "empty_string",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "IiI=",
+   "cookie": "IiI=.azbsgA.s-OrDvr1F7qYadwyZUMXKTNPoeQ"
+  },
+  {
+   "name": "list_of_number",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "WzFd",
+   "cookie": "WzFd.azbsgA.Io8dcfPaMBRGU8Fu2m6fBwW8Vgs"
+  },
+  {
+   "name": "number",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "NQ==",
+   "cookie": "NQ==.azbsgA.xFB6A5J8j3CTvggjLkhfuFHvBXo"
+  },
+  {
+   "name": "two_chars",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "ImFiIg==",
+   "cookie": "ImFiIg==.azbsgA.WdAG0ESPTz1qdB8Pui-49XlR_4g"
+  },
+  {
+   "name": "pairs",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "W1siayIsIDFdLCAiYWIiLCBbImsiLCAyXV0=",
+   "cookie": "W1siayIsIDFdLCAiYWIiLCBbImsiLCAyXV0=.azbsgA.NVZ6U6A4F222N2X5uHhhEt9IxGA"
+  },
+  {
+   "name": "pair_with_number_key",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "W1sxLCAiYSJdXQ==",
+   "cookie": "W1sxLCAiYSJdXQ==.azbsgA.EyDmgL2C2XhZ9UG_ul9idF9WJ30"
+  },
+  {
+   "name": "utf8_bom",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "77u/e30=",
+   "cookie": "77u/e30=.azbsgA.KWQ2xmmX8QlzOnTHNSbzU1e4TrY"
+  },
+  {
+   "name": "utf16_le_bom",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "//57ACIAYQAiADoAMQB9AA==",
+   "cookie": "//57ACIAYQAiADoAMQB9AA==.azbsgA.ZYzCvlSJTvUjvkXjmTDqnX6GerY"
+  },
+  {
+   "name": "utf16_be_no_bom",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "AHsAfQ==",
+   "cookie": "AHsAfQ==.azbsgA.GFKaRZwhT7mEL1UF-r7CI5W5iTw"
+  },
+  {
+   "name": "not_json",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "eyJhIjogMQ==",
+   "cookie": "eyJhIjogMQ==.azbsgA.iafzIO-vpZkr8VGB_zLzC1JQXGQ"
+  },
+  {
+   "name": "nan",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "eyJhIjogTmFOfQ==",
+   "cookie": "eyJhIjogTmFOfQ==.azbsgA.FnVyT13x_VzhdaVu9jUmJJJPlBo"
+  },
+  {
+   "name": "big_int",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "eyJhIjogOTk5OTk5OTk5OTk5OTk5OTk5OTl9",
+   "cookie": "eyJhIjogOTk5OTk5OTk5OTk5OTk5OTk5OTl9.azbsgA.BFxOi_GgwzjNS_K7InLcgbIXhGw"
+  },
+  {
+   "name": "lone_surrogate",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "eyJhIjogIlx1ZDgwMCJ9",
+   "cookie": "eyJhIjogIlx1ZDgwMCJ9.azbsgA.-Opqt4Svs86dwNSjRX4soqHMKIw"
+  },
+  {
+   "name": "duplicate_keys",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1798761600,
+   "payload": "eyJhIjogMSwgImIiOiAyLCAiYSI6IDN9",
+   "cookie": "eyJhIjogMSwgImIiOiAyLCAiYSI6IDN9.azbsgA.ItpCgLhrpFk2y5-RgabC_J03o84"
+  },
+  {
+   "name": "far_future",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 1099511627776,
+   "payload": "eyJhIjogMX0=",
+   "cookie": "eyJhIjogMX0=.AQAAAAAA.LDRYE1v-J18OC8jd1PBTpSzxxcQ"
+  },
+  {
+   "name": "year_9999",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 253402300799,
+   "payload": "eyJhIjogMX0=",
+   "cookie": "eyJhIjogMX0=.Ov_0QX8.vqUZcXhiEeiiCCy1Vz8avopjw4k"
+  },
+  {
+   "name": "year_10000",
+   "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+   "signed_at": 253402300800,
+   "payload": "eyJhIjogMX0=",
+   "cookie": "eyJhIjogMX0=.Ov_0QYA.ZXnqxgGyLPjtlDoRuqMXiQMRa1w"
+  },
+  {
+   "name": "other_secret",
+   "secret": "another-secret-another-secret-0000",
+   "signed_at": 1798761600,
+   "payload": "eyJhIjogMX0=",
+   "cookie": "eyJhIjogMX0=.azbsgA.1WM2rZWk_6BKbcrI3QApioUqzFg"
+  }
+ ],
+ "reading": [
+  {
+   "name": "no_cookie",
+   "cookies": [],
+   "ops": [],
+   "secure": false,
+   "session_json": "{}",
+   "headers": []
+  },
+  {
+   "name": "fresh_untouched",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": []
+  },
+  {
+   "name": "fresh_accessed",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+   ],
+   "ops": [
+    [
+     "access"
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ]
+   ]
+  },
+  {
+   "name": "fresh_set",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+   ],
+   "ops": [
+    [
+     "set",
+     "x",
+     1
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OSwgIngiOiAxfQ==.azbsgA.g1tVS3aW9M5T074HRVV_NFSHcO0; path=/; Max-Age=3600; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "fresh_set_secure",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+   ],
+   "ops": [
+    [
+     "set",
+     "x",
+     1
+    ]
+   ],
+   "secure": true,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OSwgIngiOiAxfQ==.azbsgA.g1tVS3aW9M5T074HRVV_NFSHcO0; path=/; Max-Age=3600; httponly; samesite=lax; secure"
+    ]
+   ]
+  },
+  {
+   "name": "pop_missing",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+   ],
+   "ops": [
+    [
+     "pop",
+     "nope"
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": []
+  },
+  {
+   "name": "pop_existing",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+   ],
+   "ops": [
+    [
+     "pop",
+     "guild_id"
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn19.azbsgA.s0DkAWHr8mSHYmpJ7V0NrybCmmw; path=/; Max-Age=3600; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "pop_everything",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+   ],
+   "ops": [
+    [
+     "pop",
+     "guild_id"
+    ],
+    [
+     "pop",
+     "user"
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=null; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "delete_missing",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+   ],
+   "ops": [
+    [
+     "delete",
+     "nope"
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc; path=/; Max-Age=3600; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "clear_loaded",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+   ],
+   "ops": [
+    [
+     "clear"
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=null; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "clear_loaded_secure",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+   ],
+   "ops": [
+    [
+     "clear"
+    ]
+   ],
+   "secure": true,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=null; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; httponly; samesite=lax; secure"
+    ]
+   ]
+  },
+  {
+   "name": "clear_without_cookie",
+   "cookies": [],
+   "ops": [
+    [
+     "clear"
+    ]
+   ],
+   "secure": false,
+   "session_json": "{}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ]
+   ]
+  },
+  {
+   "name": "set_without_cookie",
+   "cookies": [],
+   "ops": [
+    [
+     "set",
+     "_csrf_token",
+     "abc"
+    ]
+   ],
+   "secure": false,
+   "session_json": "{}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=eyJfY3NyZl90b2tlbiI6ICJhYmMifQ==.azbsgA.cskNr0FqcfGtomXVMHBZ_Hdes-I; path=/; Max-Age=3600; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "clear_loaded_empty",
+   "cookies": [
+    "admin_session=e30=.azbsgA.bVbfKBls8BlLvBxHF1fyzIJLL8M"
+   ],
+   "ops": [
+    [
+     "clear"
+    ]
+   ],
+   "secure": false,
+   "session_json": "{}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=null; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "setdefault_existing",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+   ],
+   "ops": [
+    [
+     "setdefault",
+     "guild_id",
+     1
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": []
+  },
+  {
+   "name": "setdefault_new",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+   ],
+   "ops": [
+    [
+     "setdefault",
+     "_flashes",
+     []
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OSwgIl9mbGFzaGVzIjogW119.azbsgA.txotrK6H5YZwWz1H9A66-s1LRZE; path=/; Max-Age=3600; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "update_empty",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+   ],
+   "ops": [
+    [
+     "update",
+     {}
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc; path=/; Max-Age=3600; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "rewrite_unicode",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAiZ2xvYmFsX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGJmXHUzMGZjXHVkODNkXHVkZTAwIn0sICJ4IjogIlwiXFxcblx0XHUwMDdmXHUyMDI4XHUwMDAxLzwmPicifQ==.azbsgA.zpXv18F_UIU_9Ye9GqnAUvpgT0Y"
+   ],
+   "ops": [
+    [
+     "set",
+     "y",
+     "あ"
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"111111111111111111\", \"global_name\": \"\\u30c6\\u30b9\\u30bf\\u30fc\\ud83d\\ude00\"}, \"x\": \"\\\"\\\\\\n\\t\\u007f\\u2028\\u0001/<&>'\"}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxMTExMTExMTExMTExMTExMTEiLCAiZ2xvYmFsX25hbWUiOiAiXHUzMGM2XHUzMGI5XHUzMGJmXHUzMGZjXHVkODNkXHVkZTAwIn0sICJ4IjogIlwiXFxcblx0XHUwMDdmXHUyMDI4XHUwMDAxLzwmPiciLCAieSI6ICJcdTMwNDIifQ==.azbsgA.lE5d0jl_CxQZfmZ10QbRnug1JyA; path=/; Max-Age=3600; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "rewrite_floats",
+   "cookies": [
+    "admin_session=eyJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiYSI6IDAuMSwgImIiOiAxZSsxNiwgImMiOiAxZS0wNSwgImQiOiAtMC4wLCAiZSI6IDEyMy4wLCAiZiI6IDVlLTMyNCwgImciOiAxZSsyMiwgImgiOiAxLjc5NzY5MzEzNDg2MjMxNTdlKzMwOCwgImkiOiAwLjAwMDEsICJqIjogMTAwMDAwMDAwMDAwMDAwMC4wfQ==.azbsgA.NH8oh6Tbf7pQSRV76ha7TVqI2n0"
+   ],
+   "ops": [
+    [
+     "access"
+    ],
+    [
+     "set",
+     "z",
+     2.5
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"admin_guilds_at\": 1798761000.25, \"a\": 0.1, \"b\": 1e+16, \"c\": 1e-05, \"d\": -0.0, \"e\": 123.0, \"f\": 5e-324, \"g\": 1e+22, \"h\": 1.7976931348623157e+308, \"i\": 0.0001, \"j\": 1000000000000000.0}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=eyJhZG1pbl9ndWlsZHNfYXQiOiAxNzk4NzYxMDAwLjI1LCAiYSI6IDAuMSwgImIiOiAxZSsxNiwgImMiOiAxZS0wNSwgImQiOiAtMC4wLCAiZSI6IDEyMy4wLCAiZiI6IDVlLTMyNCwgImciOiAxZSsyMiwgImgiOiAxLjc5NzY5MzEzNDg2MjMxNTdlKzMwOCwgImkiOiAwLjAwMDEsICJqIjogMTAwMDAwMDAwMDAwMDAwMC4wLCAieiI6IDIuNX0=.azbsgA.Mukgz3Z1Xf8V0Qc5vEOfMlg0DPU; path=/; Max-Age=3600; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "rewrite_ints",
+   "cookies": [
+    "admin_session=eyJiaWciOiAxODQ0Njc0NDA3MzcwOTU1MTYxNSwgIm5lZyI6IC05MjIzMzcyMDM2ODU0Nzc1ODA4LCAiemVybyI6IDB9.azbsgA.iNNr6FpRF16uVtHG47yZZdtN-SA"
+   ],
+   "ops": [
+    [
+     "set",
+     "z",
+     -1
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"big\": 18446744073709551615, \"neg\": -9223372036854775808, \"zero\": 0}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=eyJiaWciOiAxODQ0Njc0NDA3MzcwOTU1MTYxNSwgIm5lZyI6IC05MjIzMzcyMDM2ODU0Nzc1ODA4LCAiemVybyI6IDAsICJ6IjogLTF9.azbsgA.699PlWoKEHfibsBpn_k5p5f_mf0; path=/; Max-Age=3600; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "rewrite_nested",
+   "cookies": [
+    "admin_session=eyJfZmxhc2hlcyI6IFtbImluZm8iLCAiXHU0ZmRkXHU1YjU4XHUzMDU3XHUzMDdlXHUzMDU3XHUzMDVmXHUzMDAyIl0sIFsiZGFuZ2VyIiwgIngiXV0sICJlbXB0eV9vYmplY3QiOiB7fSwgImVtcHR5X2xpc3QiOiBbXSwgInQiOiB0cnVlLCAiZiI6IGZhbHNlLCAibiI6IG51bGx9.azbsgA.PiM8dGySb9tEgsKwq86a0O6LAF0"
+   ],
+   "ops": [
+    [
+     "set",
+     "z",
+     null
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"_flashes\": [[\"info\", \"\\u4fdd\\u5b58\\u3057\\u307e\\u3057\\u305f\\u3002\"], [\"danger\", \"x\"]], \"empty_object\": {}, \"empty_list\": [], \"t\": true, \"f\": false, \"n\": null}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=eyJfZmxhc2hlcyI6IFtbImluZm8iLCAiXHU0ZmRkXHU1YjU4XHUzMDU3XHUzMDdlXHUzMDU3XHUzMDVmXHUzMDAyIl0sIFsiZGFuZ2VyIiwgIngiXV0sICJlbXB0eV9vYmplY3QiOiB7fSwgImVtcHR5X2xpc3QiOiBbXSwgInQiOiB0cnVlLCAiZiI6IGZhbHNlLCAibiI6IG51bGwsICJ6IjogbnVsbH0=.azbsgA.0A9IVoCihzD-NzJCc0oTrXCG5DI; path=/; Max-Age=3600; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "rewrite_key_order",
+   "cookies": [
+    "admin_session=eyJ6IjogMSwgImEiOiAyLCAibSI6IHsieSI6IDEsICJiIjogMn19.azbsgA.mD642U9bFIuW6l-k1MJbHktHBfc"
+   ],
+   "ops": [
+    [
+     "set",
+     "a",
+     9
+    ],
+    [
+     "set",
+     "b",
+     1
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"z\": 1, \"a\": 2, \"m\": {\"y\": 1, \"b\": 2}}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=eyJ6IjogMSwgImEiOiA5LCAibSI6IHsieSI6IDEsICJiIjogMn0sICJiIjogMX0=.azbsgA.Hdssdyw9Lq13C4aGWS3Js_eR6CU; path=/; Max-Age=3600; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "edge_of_max_age",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbecA.yyeePFlKpw3lRtl1ydVoUf6Hr4c"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": []
+  },
+  {
+   "name": "expired",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbebw.ZelHLzULNWNa62iaOQc4-6ieQ30"
+   ],
+   "ops": [
+    [
+     "access"
+    ]
+   ],
+   "secure": false,
+   "session_json": "{}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ]
+   ]
+  },
+  {
+   "name": "from_the_future",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgQ.JF5GIFEpCv7BQnv4biWqm6qe5s8"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{}",
+   "headers": []
+  },
+  {
+   "name": "tampered",
+   "cookies": [
+    "admin_session=fyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{}",
+   "headers": []
+  },
+  {
+   "name": "other_secret",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.1KcnK2V7_yL22DkhDtsCjDg_-Ww"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{}",
+   "headers": []
+  },
+  {
+   "name": "timestamp_zero",
+   "cookies": [
+    "admin_session=eyJhIjogMX0=..-DqpceNyYdq_mXM2uRB51JhYXmQ"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{}",
+   "headers": []
+  },
+  {
+   "name": "quoted",
+   "cookies": [
+    "admin_session=\"eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc\""
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": []
+  },
+  {
+   "name": "among_others",
+   "cookies": [
+    "a=1; admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc; b=2"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": []
+  },
+  {
+   "name": "spaces_around",
+   "cookies": [
+    "  admin_session = eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc ;"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": []
+  },
+  {
+   "name": "two_headers_last_wins",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc",
+    "admin_session=broken"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{}",
+   "headers": []
+  },
+  {
+   "name": "two_in_one_header_last_wins",
+   "cookies": [
+    "admin_session=broken; admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": []
+  },
+  {
+   "name": "name_is_case_sensitive",
+   "cookies": [
+    "Admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{}",
+   "headers": []
+  },
+  {
+   "name": "empty_value",
+   "cookies": [
+    "admin_session="
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{}",
+   "headers": []
+  },
+  {
+   "name": "no_dot",
+   "cookies": [
+    "admin_session=abc"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{}",
+   "headers": []
+  },
+  {
+   "name": "one_dot",
+   "cookies": [
+    "admin_session=abc.def"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{}",
+   "headers": []
+  },
+  {
+   "name": "junk_after_signature",
+   "cookies": [
+    "admin_session=eyJ1c2VyIjogeyJpZCI6ICIxIn0sICJndWlsZF9pZCI6IDk5OX0=.azbsgA.Zh87TcwXM4f3iqQ-4KMqu3kvyUc!!"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{\"user\": {\"id\": \"1\"}, \"guild_id\": 999}",
+   "headers": []
+  },
+  {
+   "name": "loaded_empty_accessed",
+   "cookies": [
+    "admin_session=e30=.azbsgA.bVbfKBls8BlLvBxHF1fyzIJLL8M"
+   ],
+   "ops": [
+    [
+     "access"
+    ]
+   ],
+   "secure": false,
+   "session_json": "{}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ]
+   ]
+  },
+  {
+   "name": "garbage",
+   "cookies": [
+    "admin_session=!!!.azbsgA.0LJt_P8PVk45W1jYbDoGX0jiwO8"
+   ],
+   "ops": [],
+   "secure": false,
+   "raised": "JSONDecodeError"
+  },
+  {
+   "name": "bad_padding",
+   "cookies": [
+    "admin_session=e30.azbsgA.UGO-uvOG2Ebp-qy-5IyFrm-DvYU"
+   ],
+   "ops": [],
+   "secure": false,
+   "raised": "Error"
+  },
+  {
+   "name": "empty_list",
+   "cookies": [
+    "admin_session=W10=.azbsgA.WdDfO3BbZ5hWd_zbLEx-tNNI5Wc"
+   ],
+   "ops": [
+    [
+     "clear"
+    ]
+   ],
+   "secure": false,
+   "session_json": "{}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=null; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "empty_string",
+   "cookies": [
+    "admin_session=IiI=.azbsgA.s-OrDvr1F7qYadwyZUMXKTNPoeQ"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{}",
+   "headers": []
+  },
+  {
+   "name": "list_of_number",
+   "cookies": [
+    "admin_session=WzFd.azbsgA.Io8dcfPaMBRGU8Fu2m6fBwW8Vgs"
+   ],
+   "ops": [],
+   "secure": false,
+   "raised": "TypeError"
+  },
+  {
+   "name": "number",
+   "cookies": [
+    "admin_session=NQ==.azbsgA.xFB6A5J8j3CTvggjLkhfuFHvBXo"
+   ],
+   "ops": [],
+   "secure": false,
+   "raised": "TypeError"
+  },
+  {
+   "name": "two_chars",
+   "cookies": [
+    "admin_session=ImFiIg==.azbsgA.WdAG0ESPTz1qdB8Pui-49XlR_4g"
+   ],
+   "ops": [],
+   "secure": false,
+   "raised": "ValueError"
+  },
+  {
+   "name": "pairs",
+   "cookies": [
+    "admin_session=W1siayIsIDFdLCAiYWIiLCBbImsiLCAyXV0=.azbsgA.NVZ6U6A4F222N2X5uHhhEt9IxGA"
+   ],
+   "ops": [
+    [
+     "set",
+     "z",
+     0
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"k\": 2, \"a\": \"b\"}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=eyJrIjogMiwgImEiOiAiYiIsICJ6IjogMH0=.azbsgA.dGvmWZqvlhbAgK0Fiv1oCWA_Vf4; path=/; Max-Age=3600; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "utf8_bom",
+   "cookies": [
+    "admin_session=77u/e30=.azbsgA.KWQ2xmmX8QlzOnTHNSbzU1e4TrY"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{}",
+   "headers": []
+  },
+  {
+   "name": "utf16_le_bom",
+   "cookies": [
+    "admin_session=//57ACIAYQAiADoAMQB9AA==.azbsgA.ZYzCvlSJTvUjvkXjmTDqnX6GerY"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{\"a\": 1}",
+   "headers": []
+  },
+  {
+   "name": "utf16_be_no_bom",
+   "cookies": [
+    "admin_session=AHsAfQ==.azbsgA.GFKaRZwhT7mEL1UF-r7CI5W5iTw"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{}",
+   "headers": []
+  },
+  {
+   "name": "not_json",
+   "cookies": [
+    "admin_session=eyJhIjogMQ==.azbsgA.iafzIO-vpZkr8VGB_zLzC1JQXGQ"
+   ],
+   "ops": [],
+   "secure": false,
+   "raised": "JSONDecodeError"
+  },
+  {
+   "name": "nan",
+   "cookies": [
+    "admin_session=eyJhIjogTmFOfQ==.azbsgA.FnVyT13x_VzhdaVu9jUmJJJPlBo"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{\"a\": NaN}",
+   "headers": [],
+   "rust_skip": "NaN は Rust の JSON で読めない"
+  },
+  {
+   "name": "big_int",
+   "cookies": [
+    "admin_session=eyJhIjogOTk5OTk5OTk5OTk5OTk5OTk5OTl9.azbsgA.BFxOi_GgwzjNS_K7InLcgbIXhGw"
+   ],
+   "ops": [
+    [
+     "set",
+     "b",
+     1
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"a\": 99999999999999999999}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=eyJhIjogOTk5OTk5OTk5OTk5OTk5OTk5OTksICJiIjogMX0=.azbsgA.d0n7qAYQIVwoC507eGnaH4XspuA; path=/; Max-Age=3600; httponly; samesite=lax"
+    ]
+   ],
+   "rust_skip": "64 ビットを超える整数は Rust では小数になる（秘密鍵を知っている人しか作れない。session.rs の説明）"
+  },
+  {
+   "name": "lone_surrogate",
+   "cookies": [
+    "admin_session=eyJhIjogIlx1ZDgwMCJ9.azbsgA.-Opqt4Svs86dwNSjRX4soqHMKIw"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{\"a\": \"\\ud800\"}",
+   "headers": [],
+   "rust_skip": "単独のサロゲートは Rust の文字列にできない（秘密鍵を知っている人しか作れない）"
+  },
+  {
+   "name": "pair_with_number_key",
+   "cookies": [
+    "admin_session=W1sxLCAiYSJdXQ==.azbsgA.EyDmgL2C2XhZ9UG_ul9idF9WJ30"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{\"1\": \"a\"}",
+   "headers": [],
+   "rust_skip": "鍵が文字でない組（秘密鍵を知っている人しか作れない）"
+  },
+  {
+   "name": "duplicate_keys",
+   "cookies": [
+    "admin_session=eyJhIjogMSwgImIiOiAyLCAiYSI6IDN9.azbsgA.ItpCgLhrpFk2y5-RgabC_J03o84"
+   ],
+   "ops": [
+    [
+     "set",
+     "c",
+     4
+    ]
+   ],
+   "secure": false,
+   "session_json": "{\"a\": 3, \"b\": 2}",
+   "headers": [
+    [
+     "vary",
+     "Cookie"
+    ],
+    [
+     "set-cookie",
+     "admin_session=eyJhIjogMywgImIiOiAyLCAiYyI6IDR9.azbsgA.s6XOyLERLIfoJjH2NG01kmDrOyQ; path=/; Max-Age=3600; httponly; samesite=lax"
+    ]
+   ]
+  },
+  {
+   "name": "far_future",
+   "cookies": [
+    "admin_session=eyJhIjogMX0=.AQAAAAAA.LDRYE1v-J18OC8jd1PBTpSzxxcQ"
+   ],
+   "ops": [],
+   "secure": false,
+   "raised": "ValueError"
+  },
+  {
+   "name": "year_9999",
+   "cookies": [
+    "admin_session=eyJhIjogMX0=.Ov_0QX8.vqUZcXhiEeiiCCy1Vz8avopjw4k"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{}",
+   "headers": []
+  },
+  {
+   "name": "year_10000",
+   "cookies": [
+    "admin_session=eyJhIjogMX0=.Ov_0QYA.ZXnqxgGyLPjtlDoRuqMXiQMRa1w"
+   ],
+   "ops": [],
+   "secure": false,
+   "raised": "ValueError"
+  },
+  {
+   "name": "raw_other_secret",
+   "cookies": [
+    "admin_session=eyJhIjogMX0=.azbsgA.1WM2rZWk_6BKbcrI3QApioUqzFg"
+   ],
+   "ops": [],
+   "secure": false,
+   "session_json": "{}",
+   "headers": []
+  }
+ ],
+ "secrets": [
+  {
+   "name": "env_wins",
+   "source": "env",
+   "secret": "env-secret-value",
+   "length": 16,
+   "is_hex": false,
+   "file_after_hex": "66666666666666666666666666666666666666666666666666666666666666666666666666666666",
+   "file_is_the_secret": false,
+   "mode": null,
+   "case": {
+    "name": "env_wins",
+    "env": "  env-secret-value  ",
+    "setup": "dir",
+    "file_text": "ffffffffffffffffffffffffffffffffffffffff"
+   }
+  },
+  {
+   "name": "env_blank_reads_the_file",
+   "source": "file",
+   "secret": "0123456789abcdef0123456789abcdef0123456789",
+   "length": 42,
+   "is_hex": true,
+   "file_after_hex": "0a202030313233343536373839616263646566303132333435363738396162636465663031323334353637383920200a",
+   "file_is_the_secret": false,
+   "mode": null,
+   "case": {
+    "name": "env_blank_reads_the_file",
+    "env": "   ",
+    "setup": "dir",
+    "file_text": "\n  0123456789abcdef0123456789abcdef0123456789  \n"
+   }
+  },
+  {
+   "name": "file_with_crlf_inside",
+   "source": "file",
+   "secret": "aaaaaaaaaaaaaaaaaaaa\nbbbbbbbbbbbbbbbbbbbb",
+   "length": 41,
+   "is_hex": false,
+   "file_after_hex": "61616161616161616161616161616161616161610d0a62626262626262626262626262626262626262620d0a",
+   "file_is_the_secret": false,
+   "mode": null,
+   "case": {
+    "name": "file_with_crlf_inside",
+    "setup": "dir",
+    "file_text": "aaaaaaaaaaaaaaaaaaaa\r\nbbbbbbbbbbbbbbbbbbbb\r\n"
+   }
+  },
+  {
+   "name": "file_with_cr_inside",
+   "source": "file",
+   "secret": "aaaaaaaaaaaaaaaaaaaa\nbbbbbbbbbbbbbbbbbbbb",
+   "length": 41,
+   "is_hex": false,
+   "file_after_hex": "61616161616161616161616161616161616161610d6262626262626262626262626262626262626262",
+   "file_is_the_secret": false,
+   "mode": null,
+   "case": {
+    "name": "file_with_cr_inside",
+    "setup": "dir",
+    "file_text": "aaaaaaaaaaaaaaaaaaaa\rbbbbbbbbbbbbbbbbbbbb"
+   }
+  },
+  {
+   "name": "file_too_short",
+   "source": "temporary",
+   "secret": null,
+   "length": 64,
+   "is_hex": true,
+   "file_after_hex": "73686f7274",
+   "file_is_the_secret": false,
+   "mode": null,
+   "case": {
+    "name": "file_too_short",
+    "setup": "dir",
+    "file_text": "short"
+   }
+  },
+  {
+   "name": "file_32_multibyte_chars",
+   "source": "file",
+   "secret": "ああああああああああああああああああああああああああああああああ",
+   "length": 32,
+   "is_hex": false,
+   "file_after_hex": "e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182",
+   "file_is_the_secret": false,
+   "mode": null,
+   "case": {
+    "name": "file_32_multibyte_chars",
+    "setup": "dir",
+    "file_text": "ああああああああああああああああああああああああああああああああ"
+   }
+  },
+  {
+   "name": "file_31_multibyte_chars",
+   "source": "temporary",
+   "secret": null,
+   "length": 64,
+   "is_hex": true,
+   "file_after_hex": "e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182e38182",
+   "file_is_the_secret": false,
+   "mode": null,
+   "case": {
+    "name": "file_31_multibyte_chars",
+    "setup": "dir",
+    "file_text": "あああああああああああああああああああああああああああああああ"
+   }
+  },
+  {
+   "name": "file_with_bom",
+   "source": "file",
+   "secret": "﻿0123456789abcdef0123456789abcdef",
+   "length": 33,
+   "is_hex": false,
+   "file_after_hex": "efbbbf3031323334353637383961626364656630313233343536373839616263646566",
+   "file_is_the_secret": false,
+   "mode": null,
+   "case": {
+    "name": "file_with_bom",
+    "setup": "dir",
+    "file_text": "﻿0123456789abcdef0123456789abcdef"
+   }
+  },
+  {
+   "name": "file_not_utf8",
+   "raised": "UnicodeDecodeError",
+   "case": {
+    "name": "file_not_utf8",
+    "setup": "dir",
+    "file_hex": "fffe41424344"
+   }
+  },
+  {
+   "name": "generated_in_existing_dir",
+   "source": "generated",
+   "secret": null,
+   "length": 64,
+   "is_hex": true,
+   "file_after_hex": null,
+   "file_is_the_secret": true,
+   "mode": "0o600",
+   "case": {
+    "name": "generated_in_existing_dir",
+    "setup": "dir"
+   }
+  },
+  {
+   "name": "generated_in_missing_dir",
+   "source": "generated",
+   "secret": null,
+   "length": 64,
+   "is_hex": true,
+   "file_after_hex": null,
+   "file_is_the_secret": true,
+   "mode": "0o600",
+   "case": {
+    "name": "generated_in_missing_dir",
+    "setup": "missing"
+   }
+  },
+  {
+   "name": "settings_dir_is_a_file",
+   "source": "temporary",
+   "secret": null,
+   "length": 64,
+   "is_hex": true,
+   "file_after_hex": null,
+   "file_is_the_secret": false,
+   "mode": null,
+   "case": {
+    "name": "settings_dir_is_a_file",
+    "setup": "file_as_settings"
+   }
+  },
+  {
+   "name": "secret_path_is_a_directory",
+   "source": "temporary",
+   "secret": null,
+   "length": 64,
+   "is_hex": true,
+   "file_after_hex": null,
+   "file_is_the_secret": false,
+   "mode": null,
+   "case": {
+    "name": "secret_path_is_a_directory",
+    "setup": "secret_dir"
+   }
+  }
+ ],
+ "forms": [
+  {
+   "name": "simple",
+   "content_type": "application/x-www-form-urlencoded",
+   "body": [
+    [
+     "&&a=1&b&c=x+y%21&a=2&=v",
+     1
+    ]
+   ],
+   "items": [
+    [
+     "a",
+     "1"
+    ],
+    [
+     "b",
+     ""
+    ],
+    [
+     "c",
+     "x y!"
+    ],
+    [
+     "a",
+     "2"
+    ],
+    [
+     "",
+     "v"
+    ]
+   ]
+  },
+  {
+   "name": "latin1_and_utf8",
+   "content_type": "application/x-www-form-urlencoded",
+   "body": [
+    [
+     "a=",
+     1
+    ],
+    {
+     "hex": "e9"
+    },
+    [
+     "%E3%81%82%E3%81&b=%ZZ%4",
+     1
+    ]
+   ],
+   "items": [
+    [
+     "a",
+     "éあ�"
+    ],
+    [
+     "b",
+     "%ZZ%4"
+    ]
+   ]
+  },
+  {
+   "name": "with_params",
+   "content_type": "application/x-www-form-urlencoded; charset=utf-8",
+   "body": [
+    [
+     "csrf_token=abc",
+     1
+    ]
+   ],
+   "items": [
+    [
+     "csrf_token",
+     "abc"
+    ]
+   ]
+  },
+  {
+   "name": "upper_with_params",
+   "content_type": "Application/X-WWW-Form-Urlencoded; charset=utf-8",
+   "body": [
+    [
+     "csrf_token=abc",
+     1
+    ]
+   ],
+   "items": [
+    [
+     "csrf_token",
+     "abc"
+    ]
+   ]
+  },
+  {
+   "name": "upper_without_params",
+   "content_type": "APPLICATION/X-WWW-FORM-URLENCODED",
+   "body": [
+    [
+     "csrf_token=abc",
+     1
+    ]
+   ],
+   "items": [
+    [
+     "csrf_token",
+     "abc"
+    ]
+   ]
+  },
+  {
+   "name": "spaces_without_params",
+   "content_type": "  application/x-www-form-urlencoded  ",
+   "body": [
+    [
+     "csrf_token=abc",
+     1
+    ]
+   ],
+   "items": [
+    [
+     "csrf_token",
+     "abc"
+    ]
+   ]
+  },
+  {
+   "name": "spaces_with_params",
+   "content_type": " application/x-www-form-urlencoded ; charset=utf-8",
+   "body": [
+    [
+     "csrf_token=abc",
+     1
+    ]
+   ],
+   "items": [
+    [
+     "csrf_token",
+     "abc"
+    ]
+   ]
+  },
+  {
+   "name": "quoted_semicolon",
+   "content_type": "a\";b\"; c=d",
+   "body": [
+    [
+     "csrf_token=abc",
+     1
+    ]
+   ],
+   "items": []
+  },
+  {
+   "name": "json",
+   "content_type": "application/json",
+   "body": [
+    [
+     "csrf_token=abc",
+     1
+    ]
+   ],
+   "items": []
+  },
+  {
+   "name": "no_content_type",
+   "content_type": null,
+   "body": [
+    [
+     "csrf_token=abc",
+     1
+    ]
+   ],
+   "items": []
+  },
+  {
+   "name": "empty_content_type",
+   "content_type": "",
+   "body": [
+    [
+     "csrf_token=abc",
+     1
+    ]
+   ],
+   "items": []
+  },
+  {
+   "name": "name_only_at_the_end",
+   "content_type": "application/x-www-form-urlencoded",
+   "body": [
+    [
+     "a=1&b",
+     1
+    ]
+   ],
+   "items": [
+    [
+     "a",
+     "1"
+    ],
+    [
+     "b",
+     ""
+    ]
+   ]
+  },
+  {
+   "name": "encoded_name",
+   "content_type": "application/x-www-form-urlencoded",
+   "body": [
+    [
+     "a+b%3D=1&csrf%5Ftoken=t",
+     1
+    ]
+   ],
+   "items": [
+    [
+     "a b=",
+     "1"
+    ],
+    [
+     "csrf_token",
+     "t"
+    ]
+   ]
+  },
+  {
+   "name": "equals_in_value",
+   "content_type": "application/x-www-form-urlencoded",
+   "body": [
+    [
+     "a==1=2",
+     1
+    ]
+   ],
+   "items": [
+    [
+     "a",
+     "=1=2"
+    ]
+   ]
+  },
+  {
+   "name": "exactly_1000_fields",
+   "content_type": "application/x-www-form-urlencoded",
+   "body": [
+    [
+     "a=1&",
+     1000
+    ]
+   ],
+   "items": [
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ],
+    [
+     "a",
+     "1"
+    ]
+   ]
+  },
+  {
+   "name": "too_many_fields",
+   "content_type": "application/x-www-form-urlencoded",
+   "body": [
+    [
+     "a=1&",
+     1001
+    ]
+   ],
+   "status": 400,
+   "detail": "Too many fields. Maximum number of fields is 1000."
+  },
+  {
+   "name": "field_of_1mb",
+   "content_type": "application/x-www-form-urlencoded",
+   "body": [
+    [
+     "a=",
+     1
+    ],
+    [
+     "x",
+     1048575
+    ]
+   ],
+   "items": [
+    [
+     "a",
+     {
+      "length": 1048575,
+      "head": "xxxxxxxxxxxxxxxxxxxx"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "field_over_1mb",
+   "content_type": "application/x-www-form-urlencoded",
+   "body": [
+    [
+     "a=",
+     1
+    ],
+    [
+     "x",
+     1048576
+    ]
+   ],
+   "status": 400,
+   "detail": "Field exceeded maximum size of 1024KB."
+  },
+  {
+   "name": "name_over_1mb",
+   "content_type": "application/x-www-form-urlencoded",
+   "body": [
+    [
+     "y",
+     1048577
+    ]
+   ],
+   "status": 400,
+   "detail": "Field exceeded maximum size of 1024KB."
+  },
+  {
+   "name": "multipart",
+   "content_type": "multipart/form-data; boundary=XyZ",
+   "body": [
+    [
+     "--XyZ\r\nContent-Disposition: form-data; name=\"csrf_token\"\r\n\r\nabc\r\n--XyZ--\r\n",
+     1
+    ]
+   ],
+   "items": [
+    [
+     "csrf_token",
+     "abc"
+    ]
+   ],
+   "rust_skip": "multipart は読まない（Python と違う。security.rs の説明）"
+  }
+ ],
+ "dumps": [
+  {
+   "value": {
+    "a": [
+     1,
+     -2,
+     1.0,
+     true,
+     null
+    ],
+    "テ😀": "x\"\\\n\u0001"
+   },
+   "default": "{\"a\": [1, -2, 1.0, true, null], \"\\u30c6\\ud83d\\ude00\": \"x\\\"\\\\\\n\\u007f\\u0001\"}",
+   "compact": "{\"a\":[1,-2,1.0,true,null],\"テ😀\":\"x\\\"\\\\\\n\\u0001\"}"
+  },
+  {
+   "value": "\b\f\n\r\t\u0000\u001f ~é 😀",
+   "default": "\"\\b\\f\\n\\r\\t\\u0000\\u001f ~\\u007f\\u0080\\u00e9\\u2028\\ud83d\\ude00\"",
+   "compact": "\"\\b\\f\\n\\r\\t\\u0000\\u001f ~é 😀\""
+  },
+  {
+   "value": [],
+   "default": "[]",
+   "compact": "[]"
+  },
+  {
+   "value": {},
+   "default": "{}",
+   "compact": "{}"
+  },
+  {
+   "value": [
+    [],
+    {},
+    [
+     {}
+    ]
+   ],
+   "default": "[[], {}, [{}]]",
+   "compact": "[[],{},[{}]]"
+  },
+  {
+   "value": 0.1,
+   "default": "0.1",
+   "compact": "0.1"
+  },
+  {
+   "value": -0.0,
+   "default": "-0.0",
+   "compact": "-0.0"
+  },
+  {
+   "value": 1e+16,
+   "default": "1e+16",
+   "compact": "1e+16"
+  },
+  {
+   "value": 12345678901234567890,
+   "default": "12345678901234567890",
+   "compact": "12345678901234567890"
+  },
+  {
+   "value": -9223372036854775808,
+   "default": "-9223372036854775808",
+   "compact": "-9223372036854775808"
+  },
+  {
+   "value": {
+    "nested": {
+     "k": [
+      1.5,
+      "v"
+     ]
+    }
+   },
+   "default": "{\"nested\": {\"k\": [1.5, \"v\"]}}",
+   "compact": "{\"nested\":{\"k\":[1.5,\"v\"]}}"
+  }
+ ],
+ "floats": [
+  {
+   "value": 1e+16,
+   "repr": "1e+16"
+  },
+  {
+   "value": 1000000000000000.0,
+   "repr": "1000000000000000.0"
+  },
+  {
+   "value": 0.0001,
+   "repr": "0.0001"
+  },
+  {
+   "value": 1e-05,
+   "repr": "1e-05"
+  },
+  {
+   "value": 123.0,
+   "repr": "123.0"
+  },
+  {
+   "value": 1798761600.25,
+   "repr": "1798761600.25"
+  },
+  {
+   "value": -0.0,
+   "repr": "-0.0"
+  },
+  {
+   "value": 0.0,
+   "repr": "0.0"
+  },
+  {
+   "value": 0.1,
+   "repr": "0.1"
+  },
+  {
+   "value": 1.5e-07,
+   "repr": "1.5e-07"
+  },
+  {
+   "value": 5e-324,
+   "repr": "5e-324"
+  },
+  {
+   "value": -2.5e+300,
+   "repr": "-2.5e+300"
+  },
+  {
+   "value": 1.7976931348623157e+308,
+   "repr": "1.7976931348623157e+308"
+  },
+  {
+   "value": 2.2250738585072014e-308,
+   "repr": "2.2250738585072014e-308"
+  },
+  {
+   "value": 9007199254740993,
+   "repr": "9007199254740992.0"
+  },
+  {
+   "value": 0.30000000000000004,
+   "repr": "0.30000000000000004"
+  },
+  {
+   "value": 1e+22,
+   "repr": "1e+22"
+  },
+  {
+   "value": 1e+21,
+   "repr": "1e+21"
+  },
+  {
+   "value": 123456789.125,
+   "repr": "123456789.125"
+  }
+ ],
+ "b64decode": [
+  {
+   "input": "e30=",
+   "standard": "7b7d",
+   "itsdangerous": "7b7d"
+  },
+  {
+   "input": "e30",
+   "standard": null,
+   "itsdangerous": "7b7d"
+  },
+  {
+   "input": "e3!0=",
+   "standard": "7b7d",
+   "itsdangerous": "7b7d"
+  },
+  {
+   "input": "e30=junk",
+   "standard": null,
+   "itsdangerous": null
+  },
+  {
+   "input": "",
+   "standard": "",
+   "itsdangerous": ""
+  },
+  {
+   "input": "=",
+   "standard": "",
+   "itsdangerous": ""
+  },
+  {
+   "input": "e===",
+   "standard": null,
+   "itsdangerous": null
+  },
+  {
+   "input": "ab=c",
+   "standard": null,
+   "itsdangerous": null
+  },
+  {
+   "input": "abc=d",
+   "standard": "69b71d",
+   "itsdangerous": "69b71d"
+  },
+  {
+   "input": "-_8",
+   "standard": null,
+   "itsdangerous": "fbff"
+  },
+  {
+   "input": "+/8",
+   "standard": null,
+   "itsdangerous": "fbff"
+  },
+  {
+   "input": "-_8=",
+   "standard": null,
+   "itsdangerous": "fbff"
+  },
+  {
+   "input": "YQ",
+   "standard": null,
+   "itsdangerous": "61"
+  },
+  {
+   "input": "YQ=",
+   "standard": null,
+   "itsdangerous": "61"
+  },
+  {
+   "input": "YQ==",
+   "standard": "61",
+   "itsdangerous": "61"
+  },
+  {
+   "input": "YQ===",
+   "standard": "61",
+   "itsdangerous": "61"
+  },
+  {
+   "input": "Y",
+   "standard": null,
+   "itsdangerous": null
+  },
+  {
+   "input": "Zm9v\nYmFy",
+   "standard": "666f6f626172",
+   "itsdangerous": "666f6f626172"
+  },
+  {
+   "input": " Zm9v ",
+   "standard": "666f6f",
+   "itsdangerous": "666f6f"
+  },
+  {
+   "input": "Zm9vYg",
+   "standard": null,
+   "itsdangerous": "666f6f62"
+  },
+  {
+   "input": "Zm9vYmE",
+   "standard": null,
+   "itsdangerous": "666f6f6261"
+  },
+  {
+   "input": "azbsgA",
+   "standard": null,
+   "itsdangerous": "6b36ec80"
+  },
+  {
+   "input": "a=b=",
+   "standard": null,
+   "itsdangerous": null
+  },
+  {
+   "input": "ab==cd",
+   "standard": "69b71d",
+   "itsdangerous": "69b71d"
+  }
+ ],
+ "cookie_headers": [
+  {
+   "headers": [
+    " a = 1 ; justvalue; b=\"x\\073y\\\"\"; ;",
+    "a=2"
+   ],
+   "cookies": [
+    [
+     "a",
+     "2"
+    ],
+    [
+     "",
+     "justvalue"
+    ],
+    [
+     "b",
+     "x;y\""
+    ]
+   ]
+  },
+  {
+   "headers": [
+    "admin_session=\"\\\"\""
+   ],
+   "cookies": [
+    [
+     "admin_session",
+     "\""
+    ]
+   ]
+  },
+  {
+   "headers": [
+    "=v; k="
+   ],
+   "cookies": [
+    [
+     "",
+     "v"
+    ],
+    [
+     "k",
+     ""
+    ]
+   ]
+  },
+  {
+   "headers": [
+    "k=v=w"
+   ],
+   "cookies": [
+    [
+     "k",
+     "v=w"
+    ]
+   ]
+  },
+  {
+   "headers": [
+    "a=\"unterminated"
+   ],
+   "cookies": [
+    [
+     "a",
+     "\"unterminated"
+    ]
+   ]
+  },
+  {
+   "headers": [
+    "x=\"\\012\"",
+    "y=\"\\400\"",
+    "z=\"a\\\\b\""
+   ],
+   "cookies": [
+    [
+     "x",
+     "\n"
+    ],
+    [
+     "y",
+     "400"
+    ],
+    [
+     "z",
+     "a\\b"
+    ]
+   ]
+  },
+  {
+   "headers": [
+    "\""
+   ],
+   "cookies": [
+    [
+     "",
+     "\""
+    ]
+   ]
+  },
+  {
+   "headers": [
+    "a=\"\"",
+    "b=\"x\""
+   ],
+   "cookies": [
+    [
+     "a",
+     ""
+    ],
+    [
+     "b",
+     "x"
+    ]
+   ]
+  },
+  {
+   "headers": [
+    "né=é"
+   ],
+   "cookies": [
+    [
+     "né",
+     "é"
+    ]
+   ]
+  },
+  {
+   "headers": [
+    "dup=1; dup=2; other=3; dup=4"
+   ],
+   "cookies": [
+    [
+     "dup",
+     "4"
+    ],
+    [
+     "other",
+     "3"
+    ]
+   ]
+  }
+ ],
+ "ints": [
+  {
+   "value": " 0012 ",
+   "text": "12"
+  },
+  {
+   "value": "-0",
+   "text": "0"
+  },
+  {
+   "value": "+1_000",
+   "text": "1000"
+  },
+  {
+   "value": "１２",
+   "text": "12"
+  },
+  {
+   "value": "٣",
+   "text": "3"
+  },
+  {
+   "value": "٠١٢",
+   "text": "12"
+  },
+  {
+   "value": 1.9,
+   "text": "1"
+  },
+  {
+   "value": -0.5,
+   "text": "0"
+  },
+  {
+   "value": 1e+20,
+   "text": "100000000000000000000"
+  },
+  {
+   "value": 1e+300,
+   "text": "1000000000000000052504760255204420248704468581108159154915854115511802457988908195786371375080447864043704443832883878176942523235360430575644792184786706982848387200926575803737830233794788090059368953234970799945081119038967640880074652742780142494579258788820056842838115669472196386865459400540160"
+  },
+  {
+   "value": true,
+   "text": "1"
+  },
+  {
+   "value": false,
+   "text": "0"
+  },
+  {
+   "value": "1__0",
+   "raised": "ValueError"
+  },
+  {
+   "value": "_1",
+   "raised": "ValueError"
+  },
+  {
+   "value": "1_",
+   "raised": "ValueError"
+  },
+  {
+   "value": "0x10",
+   "raised": "ValueError"
+  },
+  {
+   "value": "",
+   "raised": "ValueError"
+  },
+  {
+   "value": " ",
+   "raised": "ValueError"
+  },
+  {
+   "value": "-",
+   "raised": "ValueError"
+  },
+  {
+   "value": null,
+   "raised": "TypeError"
+  },
+  {
+   "value": [
+    1
+   ],
+   "raised": "TypeError"
+  },
+  {
+   "value": {},
+   "raised": "TypeError"
+  },
+  {
+   "value": 123456789012345678,
+   "text": "123456789012345678"
+  },
+  {
+   "value": "  -007  ",
+   "text": "-7"
+  },
+  {
+   "value": "1e3",
+   "raised": "ValueError"
+  },
+  {
+   "value": "　 42　",
+   "text": "42"
+  },
+  {
+   "value": "+-1",
+   "raised": "ValueError"
+  },
+  {
+   "value": 0,
+   "text": "0"
+  }
+ ],
+ "compact": [
+  {
+   "value": [
+    {
+     "id": "123456789012345678",
+     "name": "テスト鯖",
+     "icon": null,
+     "permissions": "2147483647",
+     "owner": true
+    },
+    {
+     "id": 222222222222222222,
+     "name": null,
+     "icon": 5
+    },
+    {
+     "id": "not-a-number",
+     "name": "壊れた行"
+    },
+    "not-a-dict"
+   ],
+   "compact": [
+    {
+     "id": "123456789012345678",
+     "name": "テスト鯖",
+     "icon": null
+    },
+    {
+     "id": "222222222222222222",
+     "name": "Unknown",
+     "icon": null
+    }
+   ]
+  },
+  {
+   "value": [
+    {
+     "id": " 0042 ",
+     "name": 0,
+     "icon": "abc"
+    },
+    {
+     "id": 1.9,
+     "name": 1.0,
+     "icon": ""
+    },
+    {
+     "id": true,
+     "name": true
+    },
+    {
+     "id": "-1",
+     "name": [
+      "a",
+      1
+     ]
+    },
+    {
+     "id": "7",
+     "name": {
+      "k": "it's"
+     }
+    },
+    {
+     "name": "ID 無し"
+    },
+    {
+     "id": null
+    },
+    {
+     "id": [
+      1
+     ]
+    }
+   ],
+   "compact": [
+    {
+     "id": "42",
+     "name": "Unknown",
+     "icon": "abc"
+    },
+    {
+     "id": "1",
+     "name": "1.0",
+     "icon": ""
+    },
+    {
+     "id": "1",
+     "name": "True",
+     "icon": null
+    },
+    {
+     "id": "-1",
+     "name": "['a', 1]",
+     "icon": null
+    },
+    {
+     "id": "7",
+     "name": "{'k': \"it's\"}",
+     "icon": null
+    }
+   ]
+  },
+  {
+   "value": null,
+   "compact": []
+  },
+  {
+   "value": {
+    "id": "1"
+   },
+   "compact": []
+  },
+  {
+   "value": "abc",
+   "compact": []
+  },
+  {
+   "value": [],
+   "compact": []
+  }
+ ]
+}

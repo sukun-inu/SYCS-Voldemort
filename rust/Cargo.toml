@@ -14,6 +14,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "apps/admin",
     "apps/bot",
     "apps/cdn",
     "crates/sycs-core",
@@ -41,12 +42,18 @@ harfrust = { version = "=0.16.2", default-features = false }
 getrandom = { version = "=0.3.4" }
 # ハッシュの 16 進表記（既にロックにある版）。
 hex = { version = "=0.4.3" }
+# 管理画面のセッションの Cookie の署名（itsdangerous と同じ HMAC-SHA1）。sqlx が既に使っている版（sha1 も）。
+hmac = { version = "=0.12.1" }
 # URL の安全確認で、ASCII 以外のホスト名を reqwest と同じ変換（UTS46）にする。
 idna = { version = "=1.1.0" }
 # アバターの代表色（ログの Embed の色）のために png と gif を読む。
 image = { version = "=0.25.10", default-features = false }
 # 期限つきキャッシュの「最後に使われた順」。serde_json（preserve_order）が既に使っている版。
 indexmap = { version = "=2.14.2" }
+# 管理画面のテンプレート（webapp_admin/templates/ を Jinja2 と同じ書き方のまま読む。書き出しは markupsafe に
+# 合わせる。rust/apps/admin の src/templates/）。新しく入る crate（依存は serde と、loader の機能の memo-map・
+# self_cell）。features は管理画面の crate が足す。
+minijinja = { version = "=2.12.0" }
 # ニュースの「送った記事」の印（リンクの md5。Python の hashlib.md5 と同じ値にする）。sqlx が既に使っている版。
 md-5 = { version = "=0.11.0", default-features = false }
 percent-encoding = { version = "=2.3.2" }
@@ -61,6 +68,7 @@ reqwest = { version = "=0.12.28", default-features = false }
 # ニュースの RSS を読む（読むだけの小さな XML の木。依存は既にロックにある memchr だけ）。
 roxmltree = { version = "=0.21.2" }
 serde_json = { version = "=1.0.154" }
+sha1 = { version = "=0.10.7" }
 # VirusTotal の URL の鍵とファイルのハッシュ（sqlx が既に使っている版）。
 sha2 = { version = "=0.10.9" }
 serenity = { version = "=0.12.5", default-features = false }

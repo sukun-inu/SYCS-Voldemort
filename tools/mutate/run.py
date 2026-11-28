@@ -57,6 +57,8 @@ def test_command(kind: str, path: str) -> tuple[list[str], Path]:
         packages = ["-p", "sycs-web", "-p", "sycs-cdn"]
     elif path.startswith("rust/apps/cdn/"):
         packages = ["-p", "sycs-cdn"]
+    elif path.startswith("rust/apps/admin/"):
+        packages = ["-p", "sycs-admin"]
     return ["cargo", "test", "--locked", "-q", *packages, "--", "--include-ignored"], ROOT / "rust"
 
 
