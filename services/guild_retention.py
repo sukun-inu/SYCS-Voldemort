@@ -113,7 +113,17 @@ async def purge_abandoned_guilds(present_guild_ids: set[int]) -> list[int]:
     present_guild_ids は Bot がいま居るギルド。**居るものは1つも消さない。**
     掃除は設定だけを対象にする——監査履歴には別の保管期間があり
     （USER_STATE_RETENTION_DAYS）、そちらの掃除が持っている。
+
+    **居るギルドが1つも無いときは掃除しない**（警告を出して飛ばす）。ギルドの一覧が
+    まだ届いていないなどで空の集合が渡ると、現役のサーバーまで「居ない」ことになり、
+    時刻の古い設定が消えうる。Bot が本当にどこにも居ないのなら、消すのを待っても
+    失うものは無い（消さない側へ倒す）。
     """
+    if not present_guild_ids:
+        logger.warning(
+            "[retention] 居るギルドが 0 件なので、放棄ギルドの設定の掃除を飛ばします（ギルドの一覧がまだ無い等）"
+        )
+        return []
     now = datetime.now(timezone.utc)
     removed: list[int] = []
     for guild_id in known_guild_ids():

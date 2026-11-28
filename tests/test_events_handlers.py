@@ -581,6 +581,44 @@ class OnReadyTests(unittest.TestCase):
         self.assertIsNone(self.state.ws_task)
         self.assertIsNone(self.state.djaudio_cleanup_task)
 
+    def test_background_worker_disabled_leaves_the_user_state_sync_and_repair_to_the_worker(self):
+        """BOT_BACKGROUND_WORKER=false のプロセスは、ユーザー状態の同期と定期修復を始めないこと。
+
+        Bot を複数並べると、全部のプロセスが同じ表へ同期を書き、起動のたびに同期の
+        履歴が台数ぶん積まれる。旗（USER_STATE_SYNC_ON_READY など）が真のままでも止める。
+        """
+        with (
+            patch.object(ready, "_BOT_BACKGROUND_WORKER", False),
+            patch.object(ready, "_USER_STATE_SYNC_ON_READY", True),
+            patch.object(ready, "_USER_STATE_AUTO_REPAIR_ENABLED", True),
+            patch.object(ready, "run_earthquake_ws", AsyncMock()),
+            patch.object(ready, "djaudio_cache_cleanup", AsyncMock()),
+            patch.object(ready, "_sync_user_state_on_ready", AsyncMock()) as sync_fn,
+            patch.object(ready, "_user_state_auto_repair_loop", AsyncMock()) as repair_fn,
+        ):
+            _run(self._invoke_and_settle())
+        sync_fn.assert_not_called()
+        repair_fn.assert_not_called()
+        self.assertFalse(self.state.user_state_sync_started)
+        self.assertFalse(self.state.user_state_repair_started)
+
+    def test_the_background_worker_starts_the_user_state_sync_and_repair(self):
+        """BOT_BACKGROUND_WORKER=true（本番の1プロセス）では、今までどおり両方を始めること。"""
+        with (
+            patch.object(ready, "_BOT_BACKGROUND_WORKER", True),
+            patch.object(ready, "_USER_STATE_SYNC_ON_READY", True),
+            patch.object(ready, "_USER_STATE_AUTO_REPAIR_ENABLED", True),
+            patch.object(ready, "run_earthquake_ws", AsyncMock()),
+            patch.object(ready, "djaudio_cache_cleanup", AsyncMock()),
+            patch.object(ready, "_sync_user_state_on_ready", AsyncMock()) as sync_fn,
+            patch.object(ready, "_user_state_auto_repair_loop", AsyncMock()) as repair_fn,
+        ):
+            _run(self._invoke_and_settle())
+        sync_fn.assert_called_once()
+        repair_fn.assert_called_once()
+        self.assertTrue(self.state.user_state_sync_started)
+        self.assertTrue(self.state.user_state_repair_started)
+
     def test_user_state_sync_on_ready_disabled_does_not_start_the_sync_task(self):
         with (
             patch.object(ready, "_USER_STATE_SYNC_ON_READY", False),

@@ -406,6 +406,21 @@ class GuildRetentionTests(unittest.TestCase):
         self.assertNotEqual(self.store.get_guild_settings(10), {})
         self.assertEqual(self.store.get_guild_settings(11), {})
 
+    def test_purging_with_no_present_guild_removes_nothing(self):
+        """居るギルドが 0 件で渡されたら、何も消さずに警告を出すこと。
+
+        ギルドの一覧がまだ届いていないなどで空の集合が来ると、現役のサーバーまで
+        「居ない」ことになり、時刻の古い設定が消えてしまう。
+        """
+        self._aged(12, days_ago=365 * 20)
+
+        with self.assertLogs("services.guild_retention", level="WARNING") as logs:
+            removed = asyncio.run(self.retention.purge_abandoned_guilds(set()))
+
+        self.assertEqual(removed, [])
+        self.assertNotEqual(self.store.get_guild_settings(12), {})
+        self.assertIn("0 件", "\n".join(logs.output))
+
     def test_the_user_delete_takes_the_audit_history_with_it(self):
         """利用者の削除では、設定と監査履歴をまとめて消すこと。
 

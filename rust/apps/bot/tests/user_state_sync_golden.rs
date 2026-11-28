@@ -166,7 +166,8 @@ fn sync_json(s: &SyncStats) -> Value {
     })
 }
 
-/// 修復の 1 行が Python の _repair_row と同じ値・同じ数になること（320 例）。
+/// 修復の 1 行が Python の _repair_row と同じ値・同じ数になること（328 例。対になっていないサロゲートの
+/// 入った控えは、U+FFFD にした文字まで同じ）。
 #[test]
 fn repaired_rows_match_python() {
     let now = at(cases()["repair_now"].as_str().unwrap());
@@ -185,8 +186,8 @@ fn repaired_rows_match_python() {
         row.roles_json = case["roles_json"].as_str().unwrap().into();
         row.abilities_json = case["abilities_json"].as_str().unwrap().into();
         let mut stats = RepairStats::default();
-        let writable = user_state_repair::repair_row(&mut row, now, &mut stats);
-        let mut got_row = json!([
+        user_state_repair::repair_row(&mut row, now, &mut stats);
+        let got_row = json!([
             row.status,
             row.is_in_guild,
             row.is_banned,
@@ -195,13 +196,9 @@ fn repaired_rows_match_python() {
             row.abilities_json,
             row.updated_at.is_some()
         ]);
-        // 送れない文字になった列は、Python の側で null にしてある。
-        for col in [4, 5] {
-            if want["row"][col].is_null() {
-                got_row[col] = Value::Null;
-            }
-        }
-        let got = json!({"row": got_row, "unwritable": !writable, "stats": stats_json(&stats)});
+        // Python は、直したあとに送れない文字（対になっていないサロゲート）が残ると "unwritable" を立て、その列を
+        // null にする。直したあとの Python では残らない（Rust の文字列には、そもそも入らない）。
+        let got = json!({"row": got_row, "unwritable": false, "stats": stats_json(&stats)});
         if &got != want {
             wrong.push(format!("{case}\n  py {want}\n  rs {got}"));
         }
@@ -211,6 +208,11 @@ fn repaired_rows_match_python() {
         "{} 例が違う:\n{}",
         wrong.len(),
         wrong.join("\n")
+    );
+    assert_eq!(
+        cases()["repair_rows"].as_array().unwrap().len(),
+        328,
+        "例が減っている"
     );
 }
 
@@ -468,11 +470,17 @@ fn by_user(events: &[Value]) -> Vec<Value> {
 }
 
 /// 同期・記録・修復を同じ順に流すと、手順ごとの数・足された履歴・最新状態の行・履歴の数が Python と同じこと
-/// （16 手順。BAN の直後の退出を同期が直すこと、送れない文字の行があるサーバーの修復が丸ごと失敗すること、
-/// 保管期間を過ぎた履歴を 6 時間おきに消すことも入っている）。
+/// （25 手順。BAN の直後の退出・キックが BAN を残し、そのあとの同期が BAN の履歴を足さないこと、BAN を解除した
+/// あとの退出はふつうの退出になること、メンバー一覧に期限の無い人のタイムアウトを下ろすこと、対になっていない
+/// サロゲートの行があるサーバーも全部の行を直すこと、保管期間を過ぎた履歴を 6 時間おきに消すことも入っている）。
 #[tokio::test]
 #[ignore = "本物の Postgres が要る（SYCS_TEST_DATABASE_URL）"]
 async fn sync_and_repair_rows_match_python() {
+    assert_eq!(
+        cases()["steps"].as_array().unwrap().len(),
+        25,
+        "例が減っている"
+    );
     let pool = isolated_pool("steps").await;
     let recorder = Recorder::new(pool.clone(), UserStateConfig::default());
     recorder.ensure_tables(false).await.unwrap();
@@ -637,12 +645,24 @@ async fn stored_guilds(pool: &PgPool) -> Value {
 }
 
 /// Bot が抜けたサーバーの設定の掃除が、Python と同じものを消し、同じものを残すこと（居るもの・新しいもの・
-/// 時刻の無いもの・読めないもの・正規でない鍵は残す。残したものの中身と時刻は変えない）。
+/// 時刻の無いもの・読めないもの・正規でない鍵は残す。残したものの中身と時刻は変えない）。先に「居るサーバーが
+/// 0 件」で呼び、何も消さないことも Python と比べる（サーバーの一覧がまだ無いときに当たる）。
 #[tokio::test]
 #[ignore = "本物の Postgres が要る（SYCS_TEST_DATABASE_URL）"]
 async fn purge_matches_python() {
     let p = &cases()["purge"];
     let (pool, cache) = settings_with(p["guilds"].as_object().unwrap()).await;
+    let want = &expected()["purge"];
+    let nobody = guild_retention::purge_abandoned_guilds(
+        &cache,
+        &HashSet::new(),
+        p["days"].as_i64().unwrap(),
+        at(p["now"].as_str().unwrap()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(json!(nobody), want["removed_when_none_present"]);
+    assert_eq!(stored_guilds(&pool).await, want["guilds_when_none_present"]);
     let present: HashSet<u64> = p["present"].as_array().unwrap().iter().map(id).collect();
     let removed = guild_retention::purge_abandoned_guilds(
         &cache,
@@ -652,7 +672,6 @@ async fn purge_matches_python() {
     )
     .await
     .unwrap();
-    let want = &expected()["purge"];
     assert_eq!(json!(removed), want["removed"]);
     assert_eq!(stored_guilds(&pool).await, want["guilds"]);
     // 何も残っていなければ、もう一度回しても何も消さない。
@@ -665,6 +684,32 @@ async fn purge_matches_python() {
     .await
     .unwrap();
     assert!(again.is_empty());
+}
+
+/// 居るサーバーが 1 つだけでも掃除はすること（飛ばすのは 0 件のときだけ）。Rust の中だけで確かめる（Python の
+/// `GuildRetentionTests.test_purging_skips_every_guild_the_bot_is_in` と同じ形）。
+#[tokio::test]
+#[ignore = "本物の Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn purge_runs_with_a_single_present_guild() {
+    let old = json!({"_updated_at": "2000-01-01T00:00:00+00:00", "log_channel_id": 1});
+    let mut guilds = Map::new();
+    guilds.insert("1430000000000000010".into(), old.clone());
+    guilds.insert("1430000000000000011".into(), old);
+    let (pool, cache) = settings_with(&guilds).await;
+    let removed = guild_retention::purge_abandoned_guilds(
+        &cache,
+        &HashSet::from([1_430_000_000_000_000_010]),
+        3650,
+        at("2036-11-25T00:00:00+00:00"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(removed, vec!["1430000000000000011".to_string()]);
+    let left = stored_guilds(&pool).await;
+    assert_eq!(
+        left.as_object().unwrap().keys().collect::<Vec<_>>(),
+        vec!["1430000000000000010"]
+    );
 }
 
 // ── 巡回（Rust の中だけで確かめるもの） ──

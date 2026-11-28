@@ -1013,6 +1013,113 @@
     "global_name": null
    },
    "audit": null
+  },
+  {
+   "at": "2026-11-25T02:30:00+00:00",
+   "kind": "ban",
+   "user": {
+    "id": "80351110224678916",
+    "username": "helperbot",
+    "discriminator": "0",
+    "avatar": null,
+    "global_name": null,
+    "bot": true
+   },
+   "cached": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678916",
+     "username": "helperbot",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": null,
+     "bot": true
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [
+     "1500000000000000010"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "audit": null
+  },
+  {
+   "at": "2026-11-25T02:30:00.400000+00:00",
+   "kind": "remove",
+   "member": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678916",
+     "username": "helperbot",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": null,
+     "bot": true
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [
+     "1500000000000000010"
+    ],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "count": 42,
+   "audit": {
+    "member": {
+     "guild_id": "1399617700363370556",
+     "user": {
+      "id": "80351110224678920",
+      "username": "themod",
+      "discriminator": "0",
+      "avatar": null,
+      "global_name": "Mod さん"
+     },
+     "nick": "実行した人",
+     "avatar": null,
+     "roles": [
+      "1500000000000000070"
+     ],
+     "joined_at": "2026-11-25T00:05:00.123000+00:00",
+     "deaf": false,
+     "mute": false,
+     "flags": 0,
+     "communication_disabled_until": null
+    },
+    "reason": "荒らし行為のため"
+   }
+  },
+  {
+   "at": "2026-11-25T04:10:00+00:00",
+   "kind": "remove",
+   "member": {
+    "guild_id": "1399617700363370556",
+    "user": {
+     "id": "80351110224678921",
+     "username": "newcomer",
+     "discriminator": "0",
+     "avatar": null,
+     "global_name": "初めての退出"
+    },
+    "nick": null,
+    "avatar": null,
+    "roles": [],
+    "joined_at": "2026-11-25T00:05:00.123000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+   },
+   "count": 41,
+   "audit": null
   }
  ],
  "audit": [

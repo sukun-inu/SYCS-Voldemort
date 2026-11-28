@@ -86,15 +86,15 @@ docker compose up -d --build
 | `SETTINGS_PG_POLL_SECONDS` | 任意 | `postgres` のとき、版番号を確かめる間隔（既定 `30`）。通常は変更の通知が数十ミリ秒で届き、これは通知を取りこぼしたときの保険 |
 | `SETTINGS_LOCK_TIMEOUT_SECONDS` | 任意 | 設定の書き込みの排他を待つ秒数（既定 `10`） |
 | `SETTINGS_LOCK_STALE_SECONDS` | 任意 | 古いロックファイルを破棄する閾値秒数（既定 `30`） |
-| `BOT_BACKGROUND_WORKER` | 任意 | `true/false`。定期ジョブ実行ノードかどうか（既定 `true`） |
+| `BOT_BACKGROUND_WORKER` | 任意 | `true/false`。定期ジョブ（ニュース・スティッキー・地震監視・ユーザー状態の同期と定期修復など）の実行ノードかどうか（既定 `true`） |
 | `USER_STATE_POSTGRES_DSN` | 任意 | ユーザー状態監査DB接続先をDSNで直指定 |
 | `USER_STATE_POSTGRES_HOST`/`USER_STATE_POSTGRES_PORT`/`USER_STATE_POSTGRES_DB`/`USER_STATE_POSTGRES_USER` | 任意 | ユーザー状態監査DB接続先（既定DB名: `user_state_audit`） |
 | `USER_STATE_POSTGRES_PASSWORD` or `USER_STATE_POSTGRES_PASSWORD_FILE` | 任意 | ユーザー状態監査DBパスワード |
-| `USER_STATE_SYNC_ON_READY` | 任意 | 起動時にDiscord状態をDBへ同期（既定 `true`） |
+| `USER_STATE_SYNC_ON_READY` | 任意 | 起動時にDiscord状態をDBへ同期（既定 `true`。`BOT_BACKGROUND_WORKER=true` のノードだけが行う） |
 | `USER_STATE_SYNC_DELAY_SECONDS` | 任意 | 起動時同期の遅延秒（既定 `20`） |
 | `USER_STATE_SYNC_GUILD_PAUSE_SECONDS` | 任意 | ギルド間同期の待機秒（既定 `1.0`） |
 | `USER_STATE_SYNC_MAX_MEMBERS_PER_GUILD` | 任意 | 同期時の取得メンバー上限（`0`で無制限） |
-| `USER_STATE_AUTO_REPAIR_ENABLED` | 任意 | 定期自動修復ループを有効化（既定 `true`） |
+| `USER_STATE_AUTO_REPAIR_ENABLED` | 任意 | 定期自動修復ループを有効化（既定 `true`。`BOT_BACKGROUND_WORKER=true` のノードだけが行う） |
 | `USER_STATE_AUTO_REPAIR_INTERVAL_SECONDS` | 任意 | 定期修復の実行間隔秒（既定 `1800`） |
 | `USER_STATE_AUTO_REPAIR_START_DELAY_SECONDS` | 任意 | 起動後、最初の定期修復までの待機秒（既定 `180`） |
 | `USER_STATE_AUTO_REPAIR_MAX_ROWS_PER_GUILD` | 任意 | 1ギルドあたりの整合性修復対象上限（既定 `50000`） |

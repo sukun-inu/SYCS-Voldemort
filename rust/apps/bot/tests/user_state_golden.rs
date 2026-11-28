@@ -175,18 +175,27 @@ fn at_of(step: &Value) -> DateTime<Utc> {
 }
 
 /// 履歴の行（種類・状態・実行者・理由・中身の JSON の文字・時刻）が Python と同じこと。DB は要らない。
+///
+/// 退出の履歴の状態は「いま BAN 中か」で変わる（[`user_state::Write::keep_ban`]）。DB の代わりに、その人の
+/// 前の手順のあとの最新状態（Python の基準の BAN の旗）を渡す。
 #[test]
 fn event_rows_match_python() {
     let world = load();
     let mut wrong = Vec::new();
     let mut total = 0;
+    let mut banned_now: HashMap<u64, bool> = HashMap::new();
     for (i, step) in world.steps.iter().enumerate() {
         let now = at_of(step);
-        let (events, _) = events_of(&world, step, now);
+        let (events, user_id) = events_of(&world, step, now);
+        let banned = banned_now.get(&user_id).copied().unwrap_or(false);
+        if let Some(b) = world.expected["steps"][i]["current"][5].as_bool() {
+            banned_now.insert(user_id, b);
+        }
         let got: Vec<Value> = events
             .iter()
             .map(|e| {
-                let w = user_state::plan(e, Some(&world.settings), now);
+                let mut w = user_state::plan(e, Some(&world.settings), now);
+                w.keep_ban(banned);
                 json!([
                     w.event_type,
                     w.status_after,
@@ -215,7 +224,7 @@ fn event_rows_match_python() {
         wrong.join("\n")
     );
     assert_eq!(json!(total), world.expected["totals"]["events"]);
-    assert_eq!(world.steps.len(), 26, "例が減っている");
+    assert_eq!(world.steps.len(), 29, "例が減っている");
 }
 
 /// 監査ログの選び方と読み直す回数が Python と同じこと。
@@ -573,6 +582,105 @@ async fn simultaneous_first_events_are_all_kept() {
         count(&pool, "SELECT count(*) FROM user_state_current").await,
         5
     );
+}
+
+/// BAN を書きかけのまま（`ban_sql` を流して確定しないまま）退出を記録し、退出が錠を待ち始めてから BAN を確定
+/// させる。退出が BAN を残して書いたこと（最新状態と履歴の状態）を確かめる。
+async fn leave_while_a_ban_is_being_written(pool: &PgPool, ban_sql: &'static str) {
+    let r = Arc::new(recorder(pool));
+    r.ensure_tables(false).await.unwrap();
+    let app: String = sqlx::query_scalar("SELECT current_setting('application_name')")
+        .fetch_one(pool)
+        .await
+        .unwrap();
+    let mut ban = pool.begin().await.unwrap();
+    sqlx::query(ban_sql).execute(&mut *ban).await.unwrap();
+    let leave = {
+        let r = Arc::clone(&r);
+        tokio::spawn(async move {
+            r.record_at(
+                &simple_event(9, "member_leave", "left"),
+                None,
+                at("2026-11-25T00:00:01Z"),
+            )
+            .await;
+        })
+    };
+    // 退出が BAN の行を待ち始めるまで待つ（錠を待つ接続が現れるまで。時間では決めない）。
+    let deadline = std::time::Instant::now() + Duration::from_secs(60);
+    loop {
+        let waiting: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM pg_stat_activity WHERE application_name = $1 AND wait_event_type = 'Lock'",
+        )
+        .bind(&app)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        if waiting > 0 {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "退出が BAN の行を待たなかった"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    ban.commit().await.unwrap();
+    leave.await.unwrap();
+    assert_eq!(
+        count(
+            pool,
+            "SELECT count(*) FROM user_state_current WHERE user_id = 9 AND status = 'banned' AND is_banned \
+             AND NOT is_in_guild AND last_event_type = 'member_leave'"
+        )
+        .await,
+        1,
+        "退出が BAN を下ろした"
+    );
+    assert_eq!(
+        count(
+            pool,
+            "SELECT count(*) FROM user_state_event WHERE user_id = 9 AND event_type = 'member_leave' \
+             AND status_after = 'banned'"
+        )
+        .await,
+        1
+    );
+}
+
+/// 行が無い人の BAN をまだ書いている途中に退出が来ても、退出は BAN を待ってから、BAN を残して書くこと（行を
+/// 作っている最中の BAN を見落とさない。Python は読んでから書くので、ここは見落としうる）。
+#[tokio::test]
+#[ignore = "本物の Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn a_leave_waits_for_a_ban_still_creating_the_row() {
+    let pool = isolated_pool("banwait").await;
+    leave_while_a_ban_is_being_written(
+        &pool,
+        "INSERT INTO user_state_current (guild_id, user_id, status, is_in_guild, is_banned, is_timed_out, \
+         roles_json, abilities_json) VALUES (1, 9, 'banned', FALSE, TRUE, FALSE, '[]', '{}')",
+    )
+    .await;
+}
+
+/// 行がある人でも、BAN を書いている途中に退出が来たら、BAN の確定を待ってから BAN を残して書くこと（BAN の旗を
+/// 読むときに行の錠を取る。取らずに読むと、確定する前の「BAN でない」を見て下ろしてしまう）。
+#[tokio::test]
+#[ignore = "本物の Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn a_leave_waits_for_a_ban_being_written_over_the_row() {
+    let pool = isolated_pool("banwait2").await;
+    recorder(&pool)
+        .record_at(
+            &simple_event(9, "member_join", "active"),
+            None,
+            at("2026-11-25T00:00:00Z"),
+        )
+        .await;
+    leave_while_a_ban_is_being_written(
+        &pool,
+        "UPDATE user_state_current SET status = 'banned', is_banned = TRUE, is_in_guild = FALSE \
+         WHERE guild_id = 1 AND user_id = 9",
+    )
+    .await;
 }
 
 /// 保管期間を過ぎた履歴だけを消し、間隔が経つまでは次の掃除をしないこと。

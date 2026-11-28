@@ -50,8 +50,8 @@ pub struct BotConfig {
     /// 入っているので、絞らないと、確かめている間に他のサーバーの出入りへ反応して、本番の
     /// 利用者がいるチャンネルへ書いてしまう。本番では設定しない。
     pub only_guild_id: Option<u64>,
-    /// 常駐の仕事（スティッキーの巡回・ニュース・地震の電文の受け取り）をこのプロセスが持つか
-    /// （`BOT_BACKGROUND_WORKER`、既定は真）。
+    /// 常駐の仕事（スティッキーの巡回・ニュース・地震の電文の受け取り・利用者の状態の同期と定期の修復）を
+    /// このプロセスが持つか（`BOT_BACKGROUND_WORKER`、既定は真）。
     ///
     /// Python の Bot と同じ変数。Bot を複数並べるときは 1 つだけ真にする（全部が受け取ると、同じ地震を
     /// 台数ぶん通知する）。**本番の Python の Bot と並べて動かすときも偽にすること**（二重に通知する）。
@@ -60,9 +60,10 @@ pub struct BotConfig {
     pub user_state: UserStateConfig,
     /// 利用者の状態の同期・定期の修復・Bot が抜けたサーバーの設定の掃除（`USER_STATE_SYNC_ON_READY` など）。
     ///
-    /// Python と同じく `BOT_BACKGROUND_WORKER` では止まらない。**本番の Python の Bot と並べて動かすときは
-    /// `USER_STATE_SYNC_ON_READY` と `USER_STATE_AUTO_REPAIR_ENABLED` を偽にすること**（同じ表へ両方が同期を
-    /// 書き、起動のたびに同期の履歴が二重に積まれる）。
+    /// Python と同じく、`BOT_BACKGROUND_WORKER` が真のプロセスだけが動かし、その中でそれぞれの旗で決める
+    /// （[`crate::user_state_sync::tasks_to_start`]）。**本番の Python の Bot と並べて動かすときは、
+    /// `BOT_BACKGROUND_WORKER` を偽にするか、`USER_STATE_SYNC_ON_READY` と `USER_STATE_AUTO_REPAIR_ENABLED` を
+    /// 偽にすること**（同じ表へ両方が同期を書き、起動のたびに同期の履歴が二重に積まれる）。
     pub user_state_sync: UserStateSyncConfig,
     /// スラッシュコマンドに応えるか（`BOT_COMMANDS_ENABLED`、既定は応える）。
     ///

@@ -6,7 +6,8 @@
 - Discord からの取り方: 本物の _fetch_guild_members_for_sync・_fetch_guild_bans_for_sync（discord.py の
   Guild.fetch_members・Guild.bans）に偽物の HTTP を読ませ、要求（件数と after）と並びを出す
 - 修復の 1 行・JSON の読み書き・時刻の読み方・鍵の読み方・放棄の判断: 本物の関数をそのまま呼ぶ
-- 掃除: 本物の purge_abandoned_guilds に、ファイルの設定（settings.json）を読ませる
+- 掃除: 本物の purge_abandoned_guilds に、ファイルの設定（settings.json）を読ませる（居るギルドが 0 件のときと、
+  決めた居るギルドのとき）
 
 使い方（本番と同じ依存で、リポジトリの直下を /app に置き、空の Postgres を渡す）:
 
@@ -331,7 +332,10 @@ def run_abandoned():
 
 
 async def run_purge():
-    """掃除（本物の purge_abandoned_guilds に、ファイルの設定を読ませる）。"""
+    """掃除（本物の purge_abandoned_guilds に、ファイルの設定を読ませる）。
+
+    先に「居るギルドが 0 件」で 1 回呼び（ギルドの一覧がまだ無いときに当たる）、そのあと決めた居るギルドで呼ぶ。
+    """
     p = data["purge"]
     path = Path(os.environ["SETTINGS_DIR"]) / "settings.json"
     path.write_text(json.dumps({"guilds": p["guilds"]}, ensure_ascii=False), encoding="utf-8")
@@ -345,10 +349,21 @@ async def run_purge():
             """決めた時刻を返す。"""
             return fixed
 
-    with patch.object(gr, "datetime", Clock), patch.object(gr, "ABANDONED_AFTER_DAYS", p["days"]):
+    with (
+        patch.object(gr, "datetime", Clock),
+        patch.object(gr, "ABANDONED_AFTER_DAYS", p["days"]),
+        patch.object(gr.logger, "warning"),
+    ):
+        nobody = await gr.purge_abandoned_guilds(set())
+        kept = json.loads(path.read_text(encoding="utf-8"))["guilds"]
         removed = await gr.purge_abandoned_guilds({int(g) for g in p["present"]})
     left = json.loads(path.read_text(encoding="utf-8"))["guilds"]
-    return {"removed": [str(g) for g in removed], "guilds": left}
+    return {
+        "removed": [str(g) for g in removed],
+        "guilds": left,
+        "removed_when_none_present": [str(g) for g in nobody],
+        "guilds_when_none_present": kept,
+    }
 
 
 async def main():

@@ -10,7 +10,8 @@
 //!
 //! 片方だけでは足りない（Bot が居ないだけなら「一時的に外して戻す」で設定が消え、日数だけなら「設定して
 //! 放置しているが現役」のサーバーが初期化される）。**触られた時刻が無い・読めない設定は消さない**（無いもの
-//! を「ずっと前」と読むと、既存の設定が一斉に消える）。自動の掃除は設定だけを消す（利用者の状態の履歴には
+//! を「ずっと前」と読むと、既存の設定が一斉に消える）。**居るサーバーが 0 件で呼ばれたら掃除しない**（一覧が
+//! まだ無いときに、現役のサーバーまで消さないため）。自動の掃除は設定だけを消す（利用者の状態の履歴には
 //! 別の保管期間があり、そちらの掃除が持っている）。
 //!
 //! 時刻の読み方は Python の `datetime.fromisoformat`（3.13 の C の実装）をそのまま写した
@@ -182,12 +183,21 @@ fn python_list(ids: &[String]) -> String {
 ///
 /// `present` は Bot がいま居るサーバー。**居るものは 1 つも消さない。** 1 つずつ別に消す（途中で失敗したら
 /// そこでやめて誤りを返す。それまでに消したものは消えたまま）。
+///
+/// **居るサーバーが 0 件なら掃除しない**（警告を出して飛ばす）。サーバーの一覧がまだ届いていないなどで空が
+/// 渡ると、現役のサーバーまで「居ない」ことになり、時刻の古い設定が消えうる（消さない側へ倒す）。
 pub async fn purge_abandoned_guilds(
     settings: &SettingsCache,
     present: &HashSet<u64>,
     abandoned_after_days: i64,
     now: DateTime<Utc>,
 ) -> Result<Vec<String>, PurgeError> {
+    if present.is_empty() {
+        warn!(
+            "[retention] 居るギルドが 0 件なので、放棄ギルドの設定の掃除を飛ばします（ギルドの一覧がまだ無い等）"
+        );
+        return Ok(Vec::new());
+    }
     let now_micros = now.timestamp_micros();
     let snapshot = settings.snapshot();
     let known: Vec<String> = snapshot

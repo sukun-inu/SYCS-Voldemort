@@ -335,11 +335,12 @@ async fn start_after_cache_ready(
         ));
     } else {
         info!(
-            "BOT_BACKGROUND_WORKER=false: スティッキーの巡回・ニュース・地震の受け取り・DJAudio の掃除は動かしません"
+            "BOT_BACKGROUND_WORKER=false: スティッキーの巡回・ニュース・地震の受け取り・DJAudio の掃除・利用者の状態の同期と定期の修復は動かしません"
         );
     }
-    // 利用者の状態の同期と定期の修復・掃除。Python の on_ready と同じく、BOT_BACKGROUND_WORKER ではなく
-    // それぞれの旗（USER_STATE_SYNC_ON_READY・USER_STATE_AUTO_REPAIR_ENABLED）で決める。
+    // 利用者の状態の同期と定期の修復・掃除。Python の on_ready と同じく、BOT_BACKGROUND_WORKER が真のプロセス
+    // だけが受け持ち、その中でそれぞれの旗（USER_STATE_SYNC_ON_READY・USER_STATE_AUTO_REPAIR_ENABLED）で決める
+    // （user_state_sync::tasks_to_start）。
     user_state_sync::start(&ctx, &state);
     if state.config.dev_signals_enabled {
         let pool = state.pool.clone();
