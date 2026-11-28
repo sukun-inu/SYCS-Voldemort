@@ -417,12 +417,17 @@ fn app(data: &Value, fake: Arc<Fake>, dir: &std::path::Path) -> Arc<AdminApp> {
 /// テンプレート（static は無い場所）と、どこにもつながない Discord で足りる（errors_golden の shared_site と同じ）。
 fn site() -> Arc<Site> {
     let config = PagesConfig {
-        templates_dir: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../webapp_admin/templates"),
+        templates_dir: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../webapp_admin/templates"),
         static_dir: PathBuf::from("/nonexistent-admin-fixture-static"),
         asset_version: "admin".to_string(),
     };
     let pages = Arc::new(Pages::load(&config).unwrap());
-    let discord = Discord::new(DiscordConfig::from_lookup(|_| None), "http://127.0.0.1:9/api/v10").unwrap();
+    let discord = Discord::new(
+        DiscordConfig::from_lookup(|_| None),
+        "http://127.0.0.1:9/api/v10",
+    )
+    .unwrap();
     Arc::new(Site::new(
         pages,
         Arc::new(discord),
