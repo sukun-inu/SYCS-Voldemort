@@ -140,9 +140,8 @@ impl SecurityConfig {
             usize::try_from(n).unwrap_or(2)
         };
         let positive = |key: &str, default: i64| env.int(key, default, Some(1), None);
-        let timeout = |key: &str, default: i64| {
-            env.int(key, default, Some(60), Some(TIMEOUT_MAX_SECONDS))
-        };
+        let timeout =
+            |key: &str, default: i64| env.int(key, default, Some(60), Some(TIMEOUT_MAX_SECONDS));
         Self {
             timeout_danger_seconds: timeout("SECURITY_TIMEOUT_DANGER_SECONDS", 86_400),
             timeout_spam_seconds: timeout("SECURITY_TIMEOUT_SPAM_SECONDS", 600),
@@ -754,7 +753,10 @@ pub fn bypass_reason(
 /// 検査を飛ばしたことを、ログファイル（security のカテゴリ）に 1 行書く。Python の `_log_bypass`（S7。ログ
 /// チャンネルには出さない）。`route` は経路（メッセージか VC か）。
 pub fn log_bypass(guild_id: u64, user_id: u64, reason: &str, route: &str) {
-    info!(guild_id, user_id, "[SECURITY] 検査を飛ばしました（{reason}） 経路={route}");
+    info!(
+        guild_id,
+        user_id, "[SECURITY] 検査を飛ばしました（{reason}） 経路={route}"
+    );
 }
 
 /// Bot がそのサーバーで「メンバーをタイムアウト」の権限を持っているか（discord.py の
@@ -1366,7 +1368,10 @@ mod tests {
         let defaults = SecurityConfig::from_env(&env(&[]));
         assert_eq!(defaults, SecurityConfig::default());
         assert_eq!(
-            (defaults.timeout_danger_seconds, defaults.timeout_spam_seconds),
+            (
+                defaults.timeout_danger_seconds,
+                defaults.timeout_spam_seconds
+            ),
             (86_400, 600)
         );
         assert_eq!(defaults.spam, SpamRules::default());
@@ -1578,10 +1583,25 @@ mod tests {
         let config = SecurityConfig::default();
         let at = |s: &str| Some(s.parse::<DateTime<Utc>>().unwrap());
         let old_user = 80_351_110_224_678_912;
-        assert!(is_fresh_joiner(at("2026-11-26T00:00:01Z"), old_user, now, &config));
-        assert!(!is_fresh_joiner(at("2026-11-26T00:00:00Z"), old_user, now, &config));
+        assert!(is_fresh_joiner(
+            at("2026-11-26T00:00:01Z"),
+            old_user,
+            now,
+            &config
+        ));
+        assert!(!is_fresh_joiner(
+            at("2026-11-26T00:00:00Z"),
+            old_user,
+            now,
+            &config
+        ));
         let fresh_account = snowflake("2026-11-24T00:00:00Z");
-        assert!(is_fresh_joiner(at("2026-01-01T00:00:00Z"), fresh_account, now, &config));
+        assert!(is_fresh_joiner(
+            at("2026-01-01T00:00:00Z"),
+            fresh_account,
+            now,
+            &config
+        ));
         assert!(!is_fresh_joiner(None, fresh_account, now, &config));
     }
 

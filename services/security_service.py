@@ -603,7 +603,7 @@ def build_final_embed(
     """
     title, color = outcome_heading(enforcement or Enforcement(), has_caution(reasons, gpt_result))
 
-    tail =[(f"{gpt_icon(gpt_result)} GPT判定", f"結果: `{gpt_result}`")]
+    tail = [(f"{gpt_icon(gpt_result)} GPT判定", f"結果: `{gpt_result}`")]
     if reasons:
         tail.append(("判定理由", " / ".join([reason_icon(r) + r for r in reasons])))
     fields = _target_fields(vt_results, EMBED_FIELD_COUNT_LIMIT - len(tail)) + tail
