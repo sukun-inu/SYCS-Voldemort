@@ -1121,6 +1121,17 @@ def update_news_feed(guild_id: int, feed_id: str, channel_id: int, query: str, i
     return _mutate_settings(_mutator)
 
 
+# ニュースのフィードごとに覚えておく「送った記事」の印の数。
+#
+# **フィードが一度に返す記事の数より多くなければならない。** 少ないと、古い記事の印から
+# 押し出されて「まだ送っていない」に戻り、巡回のたびに同じ記事を送り直し続ける
+# （送るたびに別の古い記事の印が押し出されるので、終わらない）。Google News の RSS は
+# 1 回に 100〜106 件ほど返すので、以前の 100 件では実際にこれが起きうる。Google News が
+# 返す数が増えても足りるよう、余裕を持たせて 300 件にする（印は 32 文字なので、1 フィード
+# 10KB ほど）。
+NEWS_SEEN_HASHES_KEEP = 300
+
+
 def _news_feed_state_mutator(
     guild_id: int,
     feed_id: str,
@@ -1130,8 +1141,9 @@ def _news_feed_state_mutator(
     """同期版・非同期版の両方から使う mutator。"""
 
     def _mutator(data: dict[str, Any]) -> None:
-        """seen_hashes は直近100件だけ保持する。無制限に増やすと settings.json が
-        肥大化し続けるため、重複判定に足りる範囲で打ち切っている。
+        """seen_hashes は直近 NEWS_SEEN_HASHES_KEEP 件だけ保持する。無制限に増やすと
+        設定が肥大化し続けるため、重複判定に足りる範囲で打ち切っている（理由と件数は
+        NEWS_SEEN_HASHES_KEEP の説明を参照）。
         """
         current = _get_or_create_guild(data, guild_id)
         feeds = current.get("news_feeds", {})
@@ -1141,7 +1153,7 @@ def _news_feed_state_mutator(
         if not isinstance(row, dict):
             row = {}
         row["last_run"] = last_run
-        row["seen_hashes"] = seen_hashes[-100:]
+        row["seen_hashes"] = seen_hashes[-NEWS_SEEN_HASHES_KEEP:]
         feeds[feed_id] = row
         current["news_feeds"] = feeds
 
