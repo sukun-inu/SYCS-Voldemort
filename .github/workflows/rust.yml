@@ -136,3 +136,64 @@ jobs:
             docker tag sycs-bot-rs:final "$image:$tag"
             docker push "$image:$tag"
           done
+
+  web-images:
+    name: 配信（Rust）と nginx のイメージ（本番の CPU で起動できるか・つないで確かめる・main なら GHCR に置く）
+    # image ジョブと同じ作り。配信（rust/apps/cdn）は docker/cdn-rs.Dockerfile、nginx は docker/nginx/Dockerfile。
+    # それぞれの cpu-check の段が、動かす段と同じ中身を QEMU の Sandy Bridge のふりで起動する（配信は自分に 1 回
+    # 尋ねるところまで、nginx は設定を読ませるところまで）。そのあと、2 つを本当につないで、配信のリンク・内側の場所・
+    # 静的ファイルの見出しを確かめる（docker/nginx/smoke.sh）。
+    #
+    # main への push のときは GHCR（ghcr.io/<持ち主>/sycs-voldemort-cdn-rs・sycs-voldemort-nginx）に置く。名札は
+    # :main と :sha-<コミット>。本番は compose の profile nginx で取ってくる（既定では起動しない。docs/UPGRADE.ja.md の 6.）。
+    # **テスト（rust ジョブ）が通ってから置く**（needs）。
+    needs: rust
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v7
+
+      - name: 配信をビルドして、本番の CPU のふりで起動する
+        run: docker build -f docker/cdn-rs.Dockerfile --target cpu-check -t sycs-cdn-rs:cpu-check .
+
+      - name: 配信の動かす段のイメージを作る（上と同じ層を使うので、ほとんど作り直さない）
+        run: >-
+          docker build -f docker/cdn-rs.Dockerfile
+          --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}"
+          --label "org.opencontainers.image.revision=${{ github.sha }}"
+          -t sycs-cdn-rs:final .
+
+      - name: nginx をビルドして、本番の CPU のふりで設定を読ませる
+        run: docker build -f docker/nginx/Dockerfile --target cpu-check -t sycs-nginx:cpu-check .
+
+      - name: nginx の動かす段のイメージを作る
+        run: >-
+          docker build -f docker/nginx/Dockerfile
+          --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}"
+          --label "org.opencontainers.image.revision=${{ github.sha }}"
+          -t sycs-nginx:final .
+
+      - name: nginx と配信をつないで確かめる
+        run: sh docker/nginx/smoke.sh sycs-nginx:final sycs-cdn-rs:final
+
+      - name: GHCR に置く（main への push のときだけ）
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          SHA: ${{ github.sha }}
+        run: |
+          # GHCR の名前は小文字でなければならない（持ち主の名前に大文字が入っていても通るように）。
+          owner=$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          printf '%s' "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          for pair in "sycs-cdn-rs:final sycs-voldemort-cdn-rs" "sycs-nginx:final sycs-voldemort-nginx"; do
+            local_image=${pair% *}
+            image="ghcr.io/$owner/${pair#* }"
+            for tag in main "sha-$SHA"; do
+              docker tag "$local_image" "$image:$tag"
+              docker push "$image:$tag"
+            done
+          done

@@ -87,8 +87,9 @@ jobs:
         # バックアップのスクリプトを compose の YAML の中ではなくファイルに
         # 置いたのは、ここで検査に掛けられるようにするためでもある（YAML の中の
         # シェルは構文検査に掛けられない）。検査できる形にしたなら、必ず検査する。
+        # docker/nginx/ の下（nginx の入口の追加と、nginx と配信をつないで確かめるもの）も見る。
         run: |
-          for f in docker/*.sh; do
+          for f in docker/*.sh docker/*/*.sh; do
             echo "--- $f"
             sh -n "$f"
           done

@@ -1,0 +1,536 @@
+{
+ "now": 1800000000.25,
+ "cases": [
+  {
+   "name": "生きているか",
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/health"},
+    {"method": "GET", "path": "/dlaudio/health", "headers": {"accept": "application/json"}},
+    {"method": "HEAD", "path": "/dlaudio/health"},
+    {"method": "POST", "path": "/dlaudio/health"},
+    {"method": "GET", "path": "/dlaudio/health/"},
+    {"method": "GET", "path": "/dlaudio/health//?a=b"},
+    {"method": "GET", "path": "/dlaudio/health%0A"},
+    {"method": "POST", "path": "/dlaudio/health/"}
+   ]
+  },
+  {
+   "name": "ほかの経路",
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/"},
+    {"method": "GET", "path": "/dlaudio/nothing", "headers": {"accept": "application/json"}},
+    {"method": "GET", "path": "/dlaudio/files/999"},
+    {"method": "GET", "path": "/dlaudio/files/999/"},
+    {"method": "GET", "path": "/dlaudio/files//0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef/extra"},
+    {"method": "DELETE", "path": "/dlaudio/nothing"},
+    {"method": "GET", "path": "/dlaudio/info"}
+   ]
+  },
+  {
+   "name": "ふつうの MP3",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"token": "0123456789abcdef0123456789abcdef", "guild_id": "999", "title": "曲の題 / Title", "source_url": "https://youtu.be/x", "filename": "Song Title.mp3", "extension": ".mp3", "kind": "djaudio", "size_bytes": 12, "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3fake-0123"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef?download=1"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef", "headers": {"accept": "application/json"}},
+    {"method": "HEAD", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "PUT", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef", "headers": {"accept": "application/json"}},
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef/"},
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef%0A"}
+   ]
+  },
+  {
+   "name": "空白の無い名前",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"token": "0123456789abcdef0123456789abcdef", "guild_id": "999", "title": "song", "filename": "song.mp3", "extension": ".mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-song"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "日本語の名前",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "title": "曲名【公式】 (MV)", "filename": "曲名【公式】 (MV).mp3", "extension": ".mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-ja"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "拡張子の無い名前",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": "abc", "extension": ".mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-abc"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "記号だけの名前",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": "???", "extension": ".mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-q"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "名前が無い",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "extension": ".mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-none"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "名前が null",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "title": null, "filename": null, "extension": ".mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-null"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef", "headers": {"accept": "application/json"}},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "名前が数",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "title": 5, "filename": 5, "extension": ".mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-5"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "名前が並び",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": ["ab", " ", "c?", ".mp3"], "extension": ".mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-list"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "名前が辞書",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": {"x y": 1, "zz": 2}, "extension": ".mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-dict"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "名前の並びに文字でないもの",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": ["ab", 1], "extension": ".mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-mixed"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "zip",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "title": "録音", "filename": "rec.zip", "extension": ".zip", "kind": "recording", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.zip", "hex": "504b0304"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "ogg と wav",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": "a.ogg", "extension": ".ogg", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.ogg", "text": "OggS"},
+    {"name": "fedcba9876543210fedcba9876543210.json", "json": {"guild_id": "999", "filename": "b.wav", "extension": ".wav", "expires_at": 1800000600.5}},
+    {"name": "fedcba9876543210fedcba9876543210.wav", "text": "RIFF"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/files/999/fedcba9876543210fedcba9876543210"}
+   ]
+  },
+  {
+   "name": "拡張子が大文字",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": "x.mp3", "extension": ".MP3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.MP3", "text": "ID3-upper"},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-lower"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "拡張子が無い",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": "x.mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-noext"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "拡張子が数",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": "x.mp3", "extension": 5, "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-num"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "拡張子が空",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": "x", "extension": "", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-empty"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "別のサーバー",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "111", "filename": "x.mp3", "extension": ".mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-other"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef", "headers": {"accept": "application/json"}},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/files/111/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "guild_id が数",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": 999, "filename": "x.mp3", "extension": ".mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-int"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "guild_id が無い",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"filename": "x.mp3", "extension": ".mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-noguild"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "印の形が違う",
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123"},
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef-123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef0"},
+    {"method": "GET", "path": "/dlaudio/files/abc/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/files/-999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/short", "headers": {"accept": "application/json"}},
+    {"method": "GET", "path": "/dlaudio/info/9%209/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "Unicode の数字の guild_id",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": "x.mp3", "extension": ".mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-digits"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/%C2%B2/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/files/%D9%A1%D9%A2/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/files/%E2%91%A0/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/files/%E2%85%A0/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/files/%EF%BC%99%EF%BC%99%EF%BC%99/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/%C2%B2/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "Unicode の英数字の印",
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82"},
+    {"method": "GET", "path": "/dlaudio/files/999/%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0%E2%85%A0"},
+    {"method": "GET", "path": "/dlaudio/files/999/%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2%C2%B2"},
+    {"method": "GET", "path": "/dlaudio/files/999/________________________________"},
+    {"method": "GET", "path": "/dlaudio/files/999/%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF%FF"}
+   ]
+  },
+  {
+   "name": "情報が無い",
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "本体が無い",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": "x.mp3", "extension": ".mp3", "expires_at": 1800000600.5}}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "期限切れ",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": "x.mp3", "extension": ".mp3", "expires_at": 1799999999.25}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-expired"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "期限切れ（情報から）",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": "x.mp3", "extension": ".mp3", "expires_at": 1799999999.25}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-expired"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "期限ちょうど",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "title": "ちょうど", "filename": "x.mp3", "extension": ".mp3", "expires_at": 1800000000.25}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-edge"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "残り 59.9 秒",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "title": "あと少し", "filename": "x.mp3", "extension": ".mp3", "expires_at": 1800000060.15}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-soon"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "期限が整数",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "title": "1 時間", "filename": "x.mp3", "extension": ".mp3", "expires_at": 1800003600}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-int"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "期限が無い",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": "x.mp3", "extension": ".mp3"}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-noexp"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "期限が文字",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": "x.mp3", "extension": ".mp3", "expires_at": "x"}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-str"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef", "headers": {"accept": "application/json"}}
+   ]
+  },
+  {
+   "name": "期限が真",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": "x.mp3", "extension": ".mp3", "expires_at": true}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-true"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "期限が null",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": "x.mp3", "extension": ".mp3", "expires_at": null}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-null"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "壊れた JSON",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "text": "{\"guild_id\": \"999\", "},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-broken"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "空の情報",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "text": ""},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-empty"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "BOM 付きの情報",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "text": "﻿{\"guild_id\": \"999\", \"filename\": \"x.mp3\", \"extension\": \".mp3\", \"expires_at\": 1800000600.5}"},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-bom"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "UTF-8 でない情報",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "hex": "7b22ff227d"},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-latin"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef", "headers": {"accept": "application/json"}}
+   ]
+  },
+  {
+   "name": "情報がディレクトリ",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "dir": true},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-dir"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "情報が辞書でない",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "text": "[1]"},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-list"},
+    {"name": "fedcba9876543210fedcba9876543210.json", "text": "[]"},
+    {"name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json", "text": "[]"},
+    {"name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.mp3", "text": "ID3-empty-list"},
+    {"name": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.json", "text": "0"},
+    {"name": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.mp3", "text": "ID3-zero"},
+    {"name": "cccccccccccccccccccccccccccccccc.json", "text": "\"x\""},
+    {"name": "cccccccccccccccccccccccccccccccc.mp3", "text": "ID3-str"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/files/999/fedcba9876543210fedcba9876543210"},
+    {"method": "GET", "path": "/dlaudio/files/999/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+    {"method": "GET", "path": "/dlaudio/files/999/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+    {"method": "GET", "path": "/dlaudio/info/999/cccccccccccccccccccccccccccccccc"}
+   ]
+  },
+  {
+   "name": "本体がディレクトリ",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "title": "ディレクトリ", "filename": "x.mp3", "extension": ".mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "dir": true}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"}
+   ]
+  },
+  {
+   "name": "置き場の外",
+   "files": [
+    {"name": "0123456789abcdef0123456789abcdef.json", "json": {"guild_id": "999", "filename": "x.mp3", "extension": ".mp3", "expires_at": 1800000600.5}},
+    {"name": "0123456789abcdef0123456789abcdef.mp3", "text": "ID3-outside"}
+   ],
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/..%2F..%2Fetc%2Fpasswd"},
+    {"method": "GET", "path": "/dlaudio/files/999/%2E%2E"},
+    {"method": "GET", "path": "/dlaudio/files/999/%2Fetc%2Fpasswd"},
+    {"method": "GET", "path": "/dlaudio/info/999/..%2F0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef.json"}
+   ]
+  },
+  {
+   "name": "JSON を求める相手",
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef", "headers": {"accept": "application/json"}},
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef", "headers": {"accept": "text/html, application/json"}},
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef", "headers": {"accept": "Application/JSON"}},
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef", "headers": {"accept": ""}},
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef", "headers": {"accept": "application/json;q=0.9, */*"}}
+   ]
+  },
+  {
+   "name": "HSTS",
+   "secure_cookies": true,
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/health"},
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/health/"}
+   ]
+  },
+  {
+   "name": "回数の制限",
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef", "repeat": 300},
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/info/999/0123456789abcdef0123456789abcdef"},
+    {"method": "HEAD", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef"},
+    {"method": "GET", "path": "/dlaudio/health"}
+   ]
+  },
+  {
+   "name": "付け替え先に日本語と問い合わせ",
+   "requests": [
+    {"method": "GET", "path": "/dlaudio/files/999/%E3%81%82/"},
+    {"method": "GET", "path": "/dlaudio/files/999/0123456789abcdef0123456789abcdef/?a=1&b=%E3%81%82"},
+    {"method": "GET", "path": "/dlaudio/info/999/x%20y/"}
+   ]
+  }
+ ]
+}

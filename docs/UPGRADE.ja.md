@@ -26,6 +26,8 @@
 | **結果の Embed と「メッセージセキュリティ検査」の見出し・色・水準が、判定の材料ではなく実際に取った措置で決まる**ようになった（S8） | 赤「消して 24 時間のタイムアウト」（ロールを外したときは「消してロールを外した」）・橙「消して 10 分のタイムアウト」（タイムアウトを使わないときは「消した」）・橙「措置を見送った（要確認）」・黄「記録だけ（注意の材料あり）」・緑「記録だけ（問題なし）」。措置の一部が失敗したら見出しに「（一部失敗）」。措置したら ERROR、しなければ INFO。「メッセージセキュリティ検査」に「措置」「消した投稿」「タイムアウト」（か「タイムアウトできなかった（権限不足／失敗）」）の項目が足される | なし（ログの水準を ERROR にしているサーバーでは、スパムだけの措置も届くようになる） |
 | compose の Bot のサービスに、上の環境変数 10 個を足した | 既定は Python と Rust で同じで、何も設定しなければ上の既定で動く | なし |
 | 管理画面の「セキュリティ設定」に「措置」の節を足し、「危険な投稿・スパム・VC の荒らしにタイムアウトを使う」の切り替えを 1 つ置いた（サーバーごと。2026-11-28 の追加の決定）。Python の Bot も Rust の Bot も同じ鍵（`security_timeout_enabled`）を読む | 既定は無効で、何もしなければ今までどおり（危険なものは全ロールを外し、スパムは消すだけ）。スラッシュコマンドは足していない | なし |
+| **nginx（管理画面・Web・配信の前に立つもの）と、Rust の配信（`/dlaudio/`）のイメージができた**。CI が `main` への push のたびに作って GHCR に置く（`ghcr.io/sukun-inu/sycs-voldemort-nginx`・`ghcr.io/sukun-inu/sycs-voldemort-cdn-rs`。テストが通った版だけ） | **既定では起動しない**（compose の profile `nginx`）。何もしなければいまのまま（Python の管理画面がホストの 5001、Web が 8001 で受け、配信 `/dlaudio/` も Python の管理画面が返す） | なし（切り替えるなら 6.） |
+| compose の管理画面と Web のホストの口を、アドレスも決められる形にした（`ADMIN_HOST_BIND`・`WEB_HOST_BIND`。空ならいまと同じく全部の口）。nginx を起こすときに、Python の管理画面と Web をホストの 5001・8001 から逃がすため | 既定はいまと同じ。**`ADMIN_HOST_PORT`・`WEB_HOST_PORT` には番号だけを書くこと**（`127.0.0.1:5001` のように IP つきで書いていると、上げたあと起動しない。IP は `*_HOST_BIND` に分ける） | Portainer の環境変数に `ADMIN_HOST_PORT`・`WEB_HOST_PORT` があれば、番号だけかを見る |
 
 ## 2. 手順
 
@@ -53,6 +55,7 @@
 | スパムだけの措置が軽くなっている | 試験用のアカウントで、同じ文を 60 秒の間に 3 回（チャンネルを分けてもよい）投稿する | 3 回とも消え、ロールは外れない。タイムアウトを使うサーバー（有効にしてあり、権限がある）なら 10 分のタイムアウトと橙「消して 10 分のタイムアウト」、そうでなければ橙「消した」。ロールが外れたら古い Bot のまま |
 | 管理者の投稿で「セキュリティ検査スキップ」が出ない | 管理者のアカウントでリンクを含む投稿をする | ログチャンネルに何も出ず、Bot のログ（security）に「検査を飛ばしました（administrator）」が 1 行出る |
 | VC の荒らしの見方 | 試験はしない（入って間もないアカウントを 5 つ用意する必要がある）。Bot のログに「VCレイド検出」が出たときに、数に入った人が入って間もない人だけであることを見る | 常連が措置されていたら、入って間もない人の見方（`VC_RAID_NEW_JOIN_HOURS`・`NEW_ACCOUNT_THRESHOLD_DAYS`）を見直す |
+| 管理画面と Web のホストの口がいままでと同じ | 再デプロイが通り、`docker ps` の `sycs-voldemort-admin` の PORTS が `0.0.0.0:5001->5001/tcp, [::]:5001->5001/tcp`、`sycs-voldemort-web` が `…:8001->8000/tcp`（いままでと同じ） | `ADMIN_HOST_PORT`・`WEB_HOST_PORT` に IP を書いていると起動しない（1. の 2 行目）。nginx と配信のコンテナ（`sycs-voldemort-nginx`・`sycs-voldemort-cdn`）は、6. をするまで出てこないのが正しい |
 
 ## 4. 戻し方
 
@@ -111,6 +114,74 @@ Rust のコンパイルはしません。
   書いた分も Python の Bot が読めます）。
 - DJAudio の置き場も同じ形です（切り替える前後に出した配信のリンクは、どちらでも開けます）。
 - スラッシュコマンドの定義は同じ中身なので、戻して登録し直しても変わりません。
+
+## 6. nginx と Rust の配信に切り替える（まだ。本人がする）
+
+管理画面・Web の前に nginx を置き、配信（`/dlaudio/`）を Rust に入れ替えます。nginx は**ホストの同じ口（5001・8001）で受ける**ので、
+Cloudflare のトンネルの設定は変えません。管理画面と Web は Python のまま（nginx の後ろに回るだけ）です。
+
+nginx がすること:
+
+- 管理画面（5001）: `/static/` は焼き込んだファイルを Python と同じ見出しで返す（CSS と JS は Python のイメージと同じく最小化済み）。
+  `/dlaudio/` は Rust の配信へ。それ以外は Python の管理画面へ（`/metrics` も。Netdata の設定は変えない）
+- Web（8001）: `/static/` は焼き込んだファイルを Python と同じ見出し・同じキャッシュの扱い（`?v=` つきは 1 年、無しは 5 分）・
+  同じ圧縮で返す。それ以外は Python の Web へ
+- 配信のファイル: Rust の配信がリンクを確かめて `X-Accel-Redirect` を返し、ファイルそのものは nginx が置き場から送る
+  （Range・大きいファイルは nginx）。答え（期限切れ・別のサーバー・壊れた情報・ファイル名の書き方・案内のページと JSON）は
+  Python と同じ（基準で確かめてある）
+
+**切り替える前に満たしていること。**
+
+- 本番が今の `main` の Python（管理画面・Web）で動いていて、上の 1.〜3. が済んでいる（ほかの変更と同時に入れない）
+- GHCR の 2 つのイメージがログインなしで取れる。本番のサーバーで
+  `docker pull ghcr.io/sukun-inu/sycs-voldemort-nginx:main` と `docker pull ghcr.io/sukun-inu/sycs-voldemort-cdn-rs:main` が通ること
+  （**初めて置かれたパッケージは非公開のことがある**。通らなければ GitHub のパッケージの設定で公開にする。Bot のイメージと同じ）
+- `TRUSTED_PROXY_CIDRS` を既定から変えているなら、nginx のコンテナ（compose のネットワーク。Docker のブリッジの 172.16.0.0/12 の中）が
+  入っていること。入っていないと、管理画面・Web・配信が全員を nginx の IP として数える（レート制限とログ）
+
+**手順。**
+
+1. Portainer のスタックの環境変数に足す。ほかは変えない。
+   - `COMPOSE_PROFILES=nginx`（nginx と配信のコンテナを起こす）
+   - `ADMIN_HOST_BIND=127.0.0.1`・`ADMIN_HOST_PORT=15001`（Python の管理画面をホストの 5001 から外す。サーバーの中から直に見たいとき用に、
+     127.0.0.1 の 15001 に残す）
+   - `WEB_HOST_BIND=127.0.0.1`・`WEB_HOST_PORT=18001`（Web も同じ）
+2. スタックを再デプロイする（イメージを取り直す設定で）。nginx がホストの 5001・8001 を受ける
+3. 下の表を確かめる
+
+`COMPOSE_PROFILES` が Portainer で効かない（nginx と配信のコンテナが出てこない）ときは、サーバーで
+`docker compose --profile nginx up -d` を打つ（スタックの置き場で）。
+
+| 確かめること | どう確かめるか | 何がまずいと失敗するか |
+|---|---|---|
+| 起きている | `docker ps` に `sycs-voldemort-nginx`（PORTS が 5001・8001）と `sycs-voldemort-cdn` があり、管理画面が `127.0.0.1:15001`、Web が `127.0.0.1:18001` | nginx が「address already in use」で起きないなら、手順 1. の `*_HOST_BIND`・`*_HOST_PORT` が効いていない |
+| 管理画面 | いつもの URL でログインし、設定パネルを 1 つ開いて保存する。`docker logs sycs-voldemort-nginx` にその行が出る | 502 なら nginx から管理画面へ届いていない（`NGINX_ADMIN_UPSTREAM`。既定は `sycs-voldemort-admin:5001`） |
+| 管理画面に記録される接続元が、いままでどおり自分の IP | 開発者パネルのログ（`admin` のカテゴリ）やインシデントの接続元が、自分の IP か Cloudflare の向こうの IP（`172.` で始まる nginx の IP ではない） | `172.` が並ぶなら、`TRUSTED_PROXY_CIDRS` に nginx の帯域が入っていない |
+| 管理画面の見た目 | 画面が崩れていない（CSS・JS・アイコンが読めている）。開発者ツールで `/static/css/base.css` の見出しが `Cache-Control: no-cache, max-age=0, must-revalidate` | 崩れたら `docker logs sycs-voldemort-nginx` の `/static/` の行の状態 |
+| Web | 公開サイトを開き、相場とグラフが出る。開発者ツールで `/static/styles.css?v=…` の見出しが `Cache-Control: public, max-age=31536000, immutable` | |
+| 配信 | 監視チャンネルに YouTube の URL を貼り、返ったリンクを開いて MP3 を落とせる（題のファイル名で保存される）。`/app/data/logs/cdn.log` に `配信: guild=… token=… → …` が出る | 落とせないなら `cdn.log` と nginx のログ。nginx の素の 404 ページなら、置き場の場所（`SYCS_DJAUDIO_CACHE_DIR`）が Bot と違う |
+| 期限切れのリンク | 10 分（`DJAUDIO_CACHE_TTL_SECONDS`）より前のリンクを開くと「410 リンクの有効期限切れ」の案内のページ | |
+| `/metrics` | `sycs_up{app="cdn"}` が 1。Netdata のグラフ（管理画面の `sycs_up` など）が途切れていない | `sycs_up{app="cdn"}` が無い・0 なら、配信のコンテナの `VALKEY_URL` |
+
+**切り替えると変わること**（Python のときとの違い。どれも答えそのものは変わらない）:
+
+- 配信の数（`sycs_requests_total`・`sycs_http_responses_total`）が `app="admin"` から `app="cdn"` に移る。管理画面の TPS
+  （`sycs_admin_request_tps`）とインシデント一覧には、配信のリクエストが入らなくなる（5xx は数と `cdn.log` に残る）
+- 配信のログが `admin.log` から `cdn.log`・`cdn.jsonl`（カテゴリはいままでと同じ `cdn`。置き場を読むところは `djaudio`）
+- 配信のファイルの `ETag` の値が nginx の形になる（中身・`Last-Modified`・Range は同じに働く）
+- 1 分 300 回の制限（配信の経路ごと・接続元ごと）は、Valkey ではなく配信のプロセスの中で数える（配信を再起動すると 0 に戻る）
+- nginx が返す静的ファイル（`/static/`）は、管理画面のセッションの期限を延ばさない（Python は静的ファイルを返すたびにも
+  Cookie を書き直していた）。Web の `/static/` は `ALLOWED_HOSTS` の確かめを通らない（Cloudflare から来るものは同じ）
+
+**戻し方。**
+
+- **全部戻す:** 手順 1. で足した環境変数（`COMPOSE_PROFILES`・`ADMIN_HOST_BIND`・`ADMIN_HOST_PORT`・`WEB_HOST_BIND`・`WEB_HOST_PORT`）を
+  消して再デプロイし、残った nginx と配信のコンテナを消す（`docker rm -f sycs-voldemort-nginx sycs-voldemort-cdn`）。Python の管理画面と
+  Web がホストの 5001・8001 に戻る
+- **配信だけ Python に戻す**（nginx は使い続ける）: `NGINX_CDN_UPSTREAM=sycs-voldemort-admin:5001` を足して再デプロイする
+  （Python の管理画面がファイルを自分で送る。Rust の配信のコンテナは止めてよい）
+- 版を 1 つ前に戻すだけなら、`NGINX_IMAGE`・`CDN_IMAGE` を `:sha-<ひとつ前のコミット>` にして再デプロイする
+- 配信のリンクは、どちらで出したものも、どちらでも開ける（置き場は Bot と同じボリュームで、形も同じ）
 
 ---
 
