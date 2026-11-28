@@ -83,6 +83,8 @@ pub struct BotConfig {
     pub metal: MetalConfig,
     /// 貴金属トラッカーの場所（`METALS_SITE_URL`。/metal のリンクのボタン。末尾の `/` は 1 つにそろえる）。
     pub metals_site_url: String,
+    /// 合成の API の場所（`TTS_BASE_URL`。既定 `http://localhost:8080`。末尾の `/` は落とす）。
+    pub tts_base_url: String,
 }
 
 impl BotConfig {
@@ -146,6 +148,12 @@ impl BotConfig {
             metals_site_url: crate::commands::metal::normalize_site_url(
                 env.raw("METALS_SITE_URL").as_deref(),
             ),
+            tts_base_url: env
+                .raw("TTS_BASE_URL")
+                .filter(|v| !v.is_empty())
+                .unwrap_or_else(|| crate::tts::DEFAULT_BASE_URL.to_string())
+                .trim_end_matches('/')
+                .to_string(),
         })
     }
 
@@ -238,6 +246,13 @@ mod tests {
         assert_eq!(c.metal.api_key, None);
         assert_eq!(c.metal.cache_ttl_seconds, 1800.0);
         assert_eq!(c.metals_site_url, "https://metals.kawasaki-n3t.f5.si/");
+        assert_eq!(c.tts_base_url, "http://localhost:8080");
+        let tts = BotConfig::from_env(&env(&[
+            ("DISCORD_BOT_TOKEN", "t"),
+            ("TTS_BASE_URL", "http://tts.example:9000//"),
+        ]))
+        .unwrap();
+        assert_eq!(tts.tts_base_url, "http://tts.example:9000");
         let short = BotConfig::from_env(&env(&[
             ("DISCORD_BOT_TOKEN", "t"),
             ("SETTINGS_LOCK_TIMEOUT_SECONDS", "0.01"),

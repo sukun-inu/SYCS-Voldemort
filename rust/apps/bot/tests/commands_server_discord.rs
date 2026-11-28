@@ -26,6 +26,7 @@ use sycs_bot::commands::quake::Screens;
 use sycs_bot::log_channel::AvatarColours;
 use sycs_bot::metal::{MetalConfig, MetalPrices};
 use sycs_bot::sticky::StickyLocks;
+use sycs_bot::tts::TtsApi;
 use sycs_core::env::Env;
 use sycs_core::settings::SettingsCache;
 
@@ -97,6 +98,7 @@ struct Stage {
     quake_screens: Screens,
     metal: MetalPrices,
     colours: AvatarColours,
+    tts: TtsApi,
     seen: Arc<Mutex<Vec<Seen>>>,
 }
 
@@ -120,6 +122,7 @@ impl Stage {
             quake_screens: Screens::default(),
             metal: MetalPrices::new(MetalConfig::from_env(&Env::from_fn(|_| None))),
             colours: AvatarColours::new(),
+            tts: TtsApi::new("http://127.0.0.1:9"),
             seen,
         }
     }
@@ -136,6 +139,7 @@ impl Stage {
             metal: &self.metal,
             colours: &self.colours,
             metals_site_url: "https://metals.example/",
+            tts: &self.tts,
         }
     }
 
