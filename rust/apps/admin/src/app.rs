@@ -44,6 +44,7 @@ use crate::ratelimit::{self, Limiter};
 use crate::routing::{self, Found, Route};
 use crate::security;
 use crate::session::{self, Cookies, Session, SessionHandle};
+use crate::users::{self, UserStates};
 
 /// 管理画面の CSP（`_apply_security_headers`。ここが唯一の定義と同じ文字）。
 pub const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; \
@@ -405,6 +406,7 @@ pub struct AdminApp {
     clock: Clock,
     random: Arc<dyn Random>,
     pages: Arc<dyn Pages>,
+    users: Arc<dyn UserStates>,
 }
 
 impl std::fmt::Debug for AdminApp {
@@ -433,8 +435,21 @@ impl AdminApp {
             clock: deps.clock,
             random: deps.random,
             pages: deps.pages,
+            users: Arc::new(users::Unconfigured),
             config,
         }
+    }
+
+    /// 利用者の状態の読み出し口を差し込む（本番は Postgres の [`users::store::PgUserStates`]。A4）。差し込まなければ、
+    /// 利用者の状態の API は読むたびに 500（[`users::Unconfigured`]）。
+    pub fn with_users(mut self, users: Arc<dyn UserStates>) -> Self {
+        self.users = users;
+        self
+    }
+
+    /// 利用者の状態の読み出し口。
+    pub fn users(&self) -> &dyn UserStates {
+        self.users.as_ref()
     }
 
     /// 設定。

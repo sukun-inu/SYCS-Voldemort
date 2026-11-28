@@ -64,6 +64,8 @@ GENERATORS = [
     ("web_prices_calculate", ".", ["rust/apps/web/tests/fixtures/prices_calculate/generate.py"], None, False),
     # 管理画面のテンプレート（minijinja が Jinja2・markupsafe と同じ HTML を書くか。A2）。道具が自分の隣に書き出す。
     ("admin_templates", ".", ["rust/apps/admin/tests/fixtures/templates/generate.py"], None, False),
+    # 管理画面の利用者の状態の読み出し（A4）。空の Postgres に行を入れて作る。道具が自分の隣に書き出す。
+    ("admin_users_state_db", ".", ["rust/apps/admin/tests/fixtures/users_state_db/generate.py"], None, True),
     # 管理画面のログインとサーバー選択（偽物の Discord に当てる。A3）と、user_still_admin の権限の組み立て。
     ("admin_auth", ".", ["rust/apps/admin/tests/fixtures/auth/generate.py"], None, False),
     ("admin_check", ".", ["rust/apps/admin/tests/fixtures/admin_check/generate.py"], None, False),

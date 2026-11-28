@@ -1,5 +1,5 @@
 {
- "about": "利用者の状態の一覧と詳細の API の例。書き方は ../admin_harness.py と generate.py の先頭。基準は expected.json（generate.py が作る）",
+ "about": "利用者の状態の一覧と詳細の API の例。書き方は ../admin_harness.py と generate.py の先頭。基準は expected.json（generate.py が作る）。rust_skip は Rust のテスト（rust/apps/admin/tests/users_state_golden.rs）が飛ばす理由（Postgres の services からは来ない値の例）",
  "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
  "now": 1798761600,
  "sessions": {
@@ -23,7 +23,11 @@
    "admin_guilds_at": 1798761000.25,
    "_csrf_token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
   },
-  "minimal": {"user": {"id": "1"}, "guild_id": 999}
+  "minimal": {"user": {"id": "1"}, "guild_id": 999},
+  "guild_as_text": {"user": {"id": "1"}, "guild_id": " 999 "},
+  "guild_as_float": {"user": {"id": "1"}, "guild_id": 999.9},
+  "guild_not_a_number": {"user": {"id": "1"}, "guild_id": "abc"},
+  "guild_null": {"user": {"id": "1"}, "guild_id": null}
  },
  "library": {
   "row_banned": {
@@ -268,7 +272,288 @@
    "service": {"list": [], "count": 0}
   },
   {
+   "name": "list_limit_with_spaces",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=%205%20",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_limit_with_plus",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=%2B5",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_limit_with_decimal_zeros",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=5.00",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_limit_with_fraction",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=5.5",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_limit_with_underscore",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=1_0",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_limit_empty",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_limit_without_equals",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_limit_fullwidth_digit",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=%EF%BC%95",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_limit_beyond_64_bits_negative",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=-99999999999999999999",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_limit_of_4301_digits",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_offset_beyond_64_bits",
+   "method": "GET",
+   "target": "/admin/api/users/state?offset=100000000000000000000",
+   "session": "guild",
+   "service": {"list": [], "count": 3}
+  },
+  {
+   "name": "list_offset_beyond_js_numbers",
+   "method": "GET",
+   "target": "/admin/api/users/state?offset=9007199254740993",
+   "session": "guild",
+   "service": {"list": [], "count": 3}
+  },
+  {
+   "name": "list_offset_with_leading_zeros",
+   "method": "GET",
+   "target": "/admin/api/users/state?offset=007",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_two_bad_params",
+   "method": "GET",
+   "target": "/admin/api/users/state?offset=-1&limit=abc",
+   "session": "guild"
+  },
+  {
+   "name": "list_search_plus_is_a_space",
+   "method": "GET",
+   "target": "/admin/api/users/state?q=a+b",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_search_broken_utf8",
+   "method": "GET",
+   "target": "/admin/api/users/state?q=%FF",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_search_repeated",
+   "method": "GET",
+   "target": "/admin/api/users/state?q=a&q=%20b%20",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_search_encoded_name",
+   "method": "GET",
+   "target": "/admin/api/users/state?%71=abc",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_search_of_129_spaces",
+   "method": "GET",
+   "target": "/admin/api/users/state?q=%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20",
+   "session": "guild"
+  },
+  {
+   "name": "list_guild_as_text",
+   "method": "GET",
+   "target": "/admin/api/users/state",
+   "session": "guild_as_text",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_guild_as_float",
+   "method": "GET",
+   "target": "/admin/api/users/state",
+   "session": "guild_as_float",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_guild_not_a_number",
+   "method": "GET",
+   "target": "/admin/api/users/state",
+   "session": "guild_not_a_number",
+   "expect_status": 500
+  },
+  {
+   "name": "list_guild_null",
+   "method": "GET",
+   "target": "/admin/api/users/state",
+   "session": "guild_null",
+   "expect_status": 500
+  },
+  {
+   "name": "list_guild_not_a_number_and_bad_limit",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=0",
+   "session": "guild_not_a_number",
+   "expect_status": 422
+  },
+  {
    "name": "list_row_variants",
+   "method": "GET",
+   "target": "/admin/api/users/state",
+   "session": "guild",
+   "service": {
+    "list": [
+     {
+      "$ref": "row_active",
+      "with": {
+       "user_id": 9223372036854775807,
+       "status": null,
+       "last_event_type": null,
+       "last_event_at": null,
+       "roles": "not-a-list",
+       "abilities": "not-a-dict"
+      }
+     },
+     {
+      "$ref": "row_active",
+      "with": {
+       "user_id": 7,
+       "status": "weird",
+       "last_event_type": "sync_member_on_ready",
+       "last_event_at": {"$datetime": "2026-08-21T03:30:00+00:00"},
+       "roles": [{"id": 1, "name": "A"}, "x", {"id": 2}, {"id": 3, "name": ""}, {"name": "B"}],
+       "abilities": {"kick_members": true, "manage_roles": 1, "is_bot": 0, "custom_ability": true, "moderate_members": null}
+      }
+     },
+     {
+      "$ref": "row_active",
+      "with": {
+       "user_id": 8,
+       "status": "left",
+       "is_in_guild": false,
+       "last_event_type": "sync_ban_auto_repair",
+       "last_event_at": {"$datetime": "2026-08-21T03:30:00+09:00"}
+      }
+     },
+     {
+      "$ref": "row_active",
+      "with": {
+       "user_id": 9,
+       "status": "kicked",
+       "last_event_type": "sync_left_somewhere",
+       "last_event_at": {"$datetime": "2023-11-14T22:13:20+00:00"}
+      }
+     },
+     {
+      "$ref": "row_active",
+      "with": {
+       "user_id": 10,
+       "status": "unbanned",
+       "last_event_type": "sync_member_",
+       "last_event_at": {"$datetime": "2026-12-31T23:59:59.999999+00:00"}
+      }
+     },
+     {
+      "$ref": "row_active",
+      "with": {
+       "user_id": 11,
+       "last_event_type": "custom_event",
+       "is_timed_out": true,
+       "timed_out_until": {"$datetime": "2001-01-01T00:00:00+00:00"}
+      }
+     },
+     {
+      "$ref": "row_active",
+      "with": {
+       "user_id": 12,
+       "last_event_type": "member_timeout_set",
+       "is_timed_out": false,
+       "timed_out_until": {"$datetime": "2999-01-01T00:00:00+00:00"}
+      }
+     },
+     {"$ref": "row_active", "with": {"user_id": 17, "is_timed_out": true, "timed_out_until": null}},
+     {
+      "$ref": "row_active",
+      "with": {"user_id": 19, "status": "", "last_event_type": "", "username": "", "avatar_url": ""}
+     },
+     {
+      "$ref": "row_active",
+      "with": {
+       "user_id": 20,
+       "status": "unknown",
+       "last_event_type": "sync_discovered_member",
+       "last_event_at": {"$datetime": "1970-01-01T00:00:00+00:00"},
+       "roles": [
+        {"name": 0},
+        {"name": true},
+        {"name": 1.5},
+        {"name": ["x"]},
+        {"name": {"a": 1}},
+        {"name": "名"},
+        {"name": null},
+        {"name": false}
+       ],
+       "abilities": {"z": true, "a": "yes", "あ": [0], "": true, "b": [], "c": {}, "d": 0.0}
+      }
+     },
+     {
+      "$ref": "row_active",
+      "with": {
+       "user_id": -5,
+       "status": "banned",
+       "is_banned": true,
+       "last_event_type": "sync_mark_left",
+       "last_event_at": {"$datetime": "2026-08-20T15:00:00.000001+00:00"}
+      }
+     }
+    ],
+    "count": 11
+   }
+  },
+  {
+   "name": "list_row_variants_outside_postgres",
+   "rust_skip": "時刻の欄に時差の無い datetime・文字・数、旗に数、user_id の無い行（Postgres の services からは来ない。Rust の型は timestamptz と真偽と bigint だけを持つ）",
    "method": "GET",
    "target": "/admin/api/users/state",
    "session": "guild",
@@ -313,33 +598,6 @@
      },
      {
       "$ref": "row_active",
-      "with": {
-       "user_id": 10,
-       "status": "unbanned",
-       "last_event_type": "sync_member_",
-       "last_event_at": {"$datetime": "2026-12-31T23:59:59.999999+00:00"}
-      }
-     },
-     {
-      "$ref": "row_active",
-      "with": {
-       "user_id": 11,
-       "last_event_type": "custom_event",
-       "is_timed_out": true,
-       "timed_out_until": {"$datetime": "2001-01-01T00:00:00+00:00"}
-      }
-     },
-     {
-      "$ref": "row_active",
-      "with": {
-       "user_id": 12,
-       "last_event_type": "member_timeout_set",
-       "is_timed_out": false,
-       "timed_out_until": {"$datetime": "2999-01-01T00:00:00+00:00"}
-      }
-     },
-     {
-      "$ref": "row_active",
       "with": {"user_id": 13, "is_timed_out": false, "timed_out_until": {"$datetime": "2999-01-01T00:00:00"}}
      },
      {
@@ -348,10 +606,9 @@
      },
      {"$ref": "row_active", "with": {"user_id": 15, "is_timed_out": true, "timed_out_until": "2026-01-01 broken"}},
      {"$ref": "row_active", "with": {"user_id": 16, "is_timed_out": false, "timed_out_until": "2026-01-01 broken"}},
-     {"$ref": "row_active", "with": {"user_id": 17, "is_timed_out": true, "timed_out_until": null}},
      {"guild_id": 123456789012345678, "username": null}
     ],
-    "count": 13
+    "count": 9
    }
   },
   {
@@ -386,10 +643,57 @@
    "service": {
     "detail": {
      "current": {"$ref": "detail_current"},
+     "events": [{"$ref": "event_sync"}, {"$ref": "event_ban"}]
+    }
+   },
+   "expect_status": 200
+  },
+  {
+   "name": "detail_odd_events_outside_postgres",
+   "rust_skip": "辞書でない履歴・ID の無い履歴・時刻が文字の履歴・中身が並びの履歴（Postgres の services からは来ない）",
+   "method": "GET",
+   "target": "/admin/api/users/state/555555555555555555",
+   "session": "guild",
+   "service": {
+    "detail": {
+     "current": {"$ref": "detail_current"},
      "events": [{"$ref": "event_sync"}, {"$ref": "event_ban"}, "junk", {"$ref": "event_odd"}]
     }
    },
    "expect_status": 200
+  },
+  {
+   "name": "detail_event_variants",
+   "method": "GET",
+   "target": "/admin/api/users/state/42",
+   "session": "guild",
+   "service": {
+    "detail": {
+     "current": null,
+     "events": [
+      {
+       "id": 9007199254740993,
+       "event_type": "sync_left_manual_signal",
+       "status_after": "",
+       "actor_user_id": null,
+       "actor_name": "",
+       "reason": "",
+       "event_at": {"$datetime": "1999-12-31T15:00:00+00:00"},
+       "payload": {}
+      },
+      {
+       "id": 3,
+       "event_type": "",
+       "status_after": "unknown",
+       "actor_user_id": 1,
+       "actor_name": null,
+       "reason": null,
+       "event_at": null,
+       "payload": {"text": "あ😀", "deep": {"list": [1.5, null, false, {"big": -9223372036854775808}]}}
+      }
+     ]
+    }
+   }
   },
   {
    "name": "detail_event_limit",
@@ -426,6 +730,7 @@
   },
   {
    "name": "detail_current_not_an_object",
+   "rust_skip": "current が辞書でも None でもない（Postgres の services からは来ない）",
    "method": "GET",
    "target": "/admin/api/users/state/2",
    "session": "guild",
@@ -464,6 +769,61 @@
    "target": "/admin/api/users/state/99999999999999999999",
    "session": "guild",
    "service": {"detail": null}
+  },
+  {
+   "name": "detail_id_with_spaces",
+   "method": "GET",
+   "target": "/admin/api/users/state/%2012%20",
+   "session": "guild",
+   "service": {"detail": null}
+  },
+  {
+   "name": "detail_id_with_plus",
+   "method": "GET",
+   "target": "/admin/api/users/state/%2B12",
+   "session": "guild",
+   "service": {"detail": null}
+  },
+  {
+   "name": "detail_id_with_trailing_newline",
+   "method": "GET",
+   "target": "/admin/api/users/state/12%0A",
+   "session": "guild",
+   "service": {"detail": null}
+  },
+  {
+   "name": "detail_id_with_fraction",
+   "method": "GET",
+   "target": "/admin/api/users/state/12.0",
+   "session": "guild",
+   "service": {"detail": null}
+  },
+  {
+   "name": "detail_two_bad_params",
+   "method": "GET",
+   "target": "/admin/api/users/state/abc?event_limit=0",
+   "session": "guild"
+  },
+  {
+   "name": "detail_event_limit_beyond_64_bits",
+   "method": "GET",
+   "target": "/admin/api/users/state/12?event_limit=99999999999999999999",
+   "session": "guild",
+   "service": {"detail": null}
+  },
+  {
+   "name": "detail_guild_as_text",
+   "method": "GET",
+   "target": "/admin/api/users/state/12",
+   "session": "guild_as_text",
+   "service": {"detail": null}
+  },
+  {
+   "name": "detail_guild_not_a_number",
+   "method": "GET",
+   "target": "/admin/api/users/state/12",
+   "session": "guild_not_a_number",
+   "expect_status": 500
   },
   {
    "name": "detail_without_cookie",

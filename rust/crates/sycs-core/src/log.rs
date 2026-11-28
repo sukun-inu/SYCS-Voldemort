@@ -52,6 +52,8 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     // Python の services.url_safety（security）・ttl_cache（system）と同じ棚。
     ("sycs_core::url_safety", "security"),
     ("sycs_core::ttl_cache", "system"),
+    // 利用者の状態の表の形（Python の services.user_state と同じ棚）。
+    ("sycs_core::user_state", "userstate"),
     ("sycs_bot", "bot"),
     // Bot の部品は、Python の対応するモジュールと同じ棚（services.welcome_service → welcome など）。
     ("sycs_bot::welcome", "welcome"),
@@ -100,6 +102,8 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     // 管理画面は Python の webapp_admin（admin）と同じ棚。数とインシデントは webapp_admin.metrics（metrics）と同じ棚。
     ("sycs_admin", "admin"),
     ("sycs_admin::metrics", "metrics"),
+    // 利用者の状態の読み出しは、Python の services.user_state_service（userstate）と同じ棚。
+    ("sycs_admin::users::store", "userstate"),
     ("voice_check", "voice"),
     ("songbird", "voice"),
     ("davey", "voice"),
@@ -657,6 +661,10 @@ mod tests {
             ("sycs_admin::app", "admin"),
             ("sycs_admin::session", "admin"),
             ("sycs_admin::metrics", "metrics"),
+            // 利用者の状態の API は admin、読み出し（Python の services.user_state_service）は userstate。
+            ("sycs_admin::users", "admin"),
+            ("sycs_admin::users::store", "userstate"),
+            ("sycs_core::user_state", "userstate"),
         ] {
             assert_eq!(category_for(target), category, "{target}");
         }
