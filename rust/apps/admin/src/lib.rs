@@ -20,8 +20,11 @@
 //! - [`ratelimit`] 回数の制限（slowapi と limits の固定窓）
 //! - [`metrics`] 数とインシデント（`webapp_admin/metrics.py` の `record_*`）
 //! - [`python`] Python の値と文字の扱いの写し（`json.dumps`・`base64`・Cookie の読み方など）
+//! - [`auth`] Discord のログイン（OAuth）と、Bot のトークンで引く管理者の確かめ（`webapp_admin/auth.py`。A3）
+//! - [`views`] ログイン・サーバー選択・シェルの画面と公開ページの経路（`views/`・`_register_public_pages`。A3）
 
 pub mod app;
+pub mod auth;
 pub mod errors;
 pub mod metrics;
 pub mod python;
@@ -32,6 +35,7 @@ pub mod secret;
 pub mod security;
 pub mod session;
 pub mod templates;
+pub mod views;
 
 /// 数のラベル（`app="admin"`）・心拍の名前（`hb:admin`）・ログの名前（`admin.log`・`admin.jsonl`）。Python と同じ。
 pub const APP_NAME: &str = "admin";

@@ -1,0 +1,500 @@
+{
+ "note": "管理画面のログインとサーバー選択（A3）の基準の例。書き方は generate.py と ../admin_harness.py・../fake_discord.py の先頭。sessions と discord の中では $ref（library）が使える",
+ "secret": "a3-auth-fixture-secret-not-for-production",
+ "now": 1780000000.25,
+ "discord": {
+  "client_id": "123456789012345678",
+  "client_secret": "a3-client-secret",
+  "redirect_uri": "https://admin.example.com/admin/callback",
+  "bot_token": "a3-bot-token",
+  "prompt": "",
+  "guilds_max_age": 300
+ },
+ "library": {
+  "token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5",
+  "state": "pending-state-0123456789abcdefghijklmnopqrs",
+  "user": {
+   "id": "111111111111111111",
+   "username": "voldemort",
+   "global_name": "ヴォルデモート卿",
+   "avatar": "0123456789abcdef0123456789abcdef"
+  },
+  "guilds": [
+   {"id": "900000000000000001", "name": "ホグワーツ魔法魔術学校", "icon": "abcdef0123456789abcdef0123456789"},
+   {"id": "900000000000000002", "name": "<b>\"Slytherin\" & 'Co'</b>", "icon": null},
+   {"id": "900000000000000003", "name": "😀 絵文字の部屋", "icon": null}
+  ],
+  "token_answer": {"access_token": "user-access-token", "token_type": "Bearer", "expires_in": 604800, "refresh_token": "refresh", "scope": "identify guilds"},
+  "me": {"id": "111111111111111111", "username": "voldemort", "global_name": "ヴォルデモート卿", "avatar": "0123456789abcdef0123456789abcdef", "discriminator": "0"},
+  "user_guilds": [
+   {"id": "900000000000000001", "name": "ホグワーツ魔法魔術学校", "icon": "abcdef0123456789abcdef0123456789", "owner": true, "permissions": "2251799813685247", "features": []},
+   {"id": "900000000000000002", "name": "<b>\"Slytherin\" & 'Co'</b>", "icon": null, "owner": false, "permissions": "8"},
+   {"id": "900000000000000004", "name": "管理者ではないサーバー", "icon": null, "owner": false, "permissions": "104324673"},
+   {"id": "900000000000000005", "name": "Bot のいないサーバー", "icon": "ffff", "owner": false, "permissions": "8"},
+   {"id": "900000000000000003", "name": "😀 絵文字の部屋", "icon": null, "owner": false, "permissions": "-8"}
+  ],
+  "bot_guilds": [{"id": "900000000000000001", "name": "a"}, {"id": "900000000000000002"}, {"id": "900000000000000003"}, {"id": "900000000000000004"}],
+  "ok_discord": {
+   "POST /oauth2/token": {"json": {"$ref": "token_answer"}},
+   "GET /users/@me Bearer": {"json": {"$ref": "me"}},
+   "GET /users/@me/guilds Bearer": {"json": {"$ref": "user_guilds"}},
+   "GET /users/@me/guilds Bot": {"json": {"$ref": "bot_guilds"}}
+  },
+  "guild_owned": {"id": "900000000000000001", "owner_id": "111111111111111111", "roles": [{"id": "900000000000000001", "permissions": "104324673"}]},
+  "guild_plain": {"id": "900000000000000001", "owner_id": "222222222222222222", "roles": [{"id": "900000000000000001", "permissions": "104324673"}, {"id": "701", "permissions": "8"}]},
+  "member_plain": {"user": {"id": "111111111111111111"}, "roles": ["700"]}
+ },
+ "sessions": {
+  "token_only": {"_csrf_token": {"$ref": "token"}},
+  "logged_in": {"user": {"$ref": "user"}, "admin_guilds": {"$ref": "guilds"}, "admin_guilds_at": 1779999990.25, "_csrf_token": {"$ref": "token"}},
+  "logged_in_edge": {"user": {"$ref": "user"}, "admin_guilds": {"$ref": "guilds"}, "admin_guilds_at": 1779999700.25, "_csrf_token": {"$ref": "token"}},
+  "logged_in_stale": {"user": {"$ref": "user"}, "admin_guilds": {"$ref": "guilds"}, "admin_guilds_at": 1779999000.0, "_csrf_token": {"$ref": "token"}},
+  "logged_in_no_at": {"user": {"$ref": "user"}, "admin_guilds": {"$ref": "guilds"}, "_csrf_token": {"$ref": "token"}},
+  "in_guild": {
+   "user": {"$ref": "user"},
+   "admin_guilds": {"$ref": "guilds"},
+   "admin_guilds_at": 1779999990.25,
+   "_csrf_token": {"$ref": "token"},
+   "guild_id": 900000000000000001,
+   "guild_name": "ホグワーツ魔法魔術学校",
+   "guild_icon": "abcdef0123456789abcdef0123456789"
+  },
+  "in_guild_stale": {
+   "user": {"$ref": "user"},
+   "admin_guilds": {"$ref": "guilds"},
+   "admin_guilds_at": 1779999000.0,
+   "_csrf_token": {"$ref": "token"},
+   "guild_id": 900000000000000001,
+   "guild_name": "ホグワーツ魔法魔術学校",
+   "guild_icon": "abcdef0123456789abcdef0123456789"
+  },
+  "user_null": {"user": null, "_csrf_token": {"$ref": "token"}},
+  "user_without_id_stale": {"user": {"username": "名無し"}, "admin_guilds": {"$ref": "guilds"}, "admin_guilds_at": 1779999000.0, "_csrf_token": {"$ref": "token"}},
+  "pending": {"_csrf_token": {"$ref": "token"}, "oauth_state": {"$ref": "state"}, "_flashes": [["info", "前のページの知らせ"]]},
+  "pending_in_guild": {
+   "user": {"$ref": "user"},
+   "admin_guilds": {"$ref": "guilds"},
+   "admin_guilds_at": 1779999990.25,
+   "_csrf_token": {"$ref": "token"},
+   "guild_id": 900000000000000001,
+   "guild_name": "ホグワーツ魔法魔術学校",
+   "guild_icon": "abcdef0123456789abcdef0123456789",
+   "oauth_state": {"$ref": "state"}
+  },
+  "pending_empty": {"oauth_state": "", "_csrf_token": {"$ref": "token"}},
+  "pending_number": {"oauth_state": 12345, "_csrf_token": {"$ref": "token"}}
+ },
+ "cases": [
+  {"name": "login_anonymous", "steps": [{"method": "GET", "target": "/admin/login", "expect_status": 200}]},
+  {"name": "login_logged_in", "steps": [{"method": "GET", "target": "/admin/login", "session": "logged_in", "expect_status": 303}]},
+  {"name": "login_in_guild", "steps": [{"method": "GET", "target": "/admin/login", "session": "in_guild", "expect_status": 303}]},
+  {"name": "login_user_null", "note": "user の鍵があれば中身が null でもログイン中として扱う", "steps": [{"method": "GET", "target": "/admin/login", "session": "user_null", "expect_status": 303}]},
+  {"name": "login_without_client_id", "config": {"client_id": ""}, "steps": [{"method": "GET", "target": "/admin/login", "session": "token_only", "expect_status": 200}]},
+  {
+   "name": "login_rate_limited",
+   "steps": [
+    {"method": "GET", "target": "/admin/login", "repeat": 30, "expect_status": 200},
+    {"method": "GET", "target": "/admin/login", "expect_status": 429}
+   ]
+  },
+  {
+   "name": "login_rate_limited_json",
+   "steps": [
+    {"method": "GET", "target": "/admin/login", "repeat": 30, "expect_status": 200},
+    {"method": "GET", "target": "/admin/login", "headers": {"Accept": "application/json"}, "expect_status": 429}
+   ]
+  },
+  {"name": "login_head", "steps": [{"method": "HEAD", "target": "/admin/login", "expect_status": 405}]},
+  {"name": "login_trailing_slash", "steps": [{"method": "GET", "target": "/admin/login/?next=1", "expect_status": 307}]},
+
+  {"name": "auth_start_anonymous", "steps": [{"method": "GET", "target": "/admin/auth", "expect_status": 303}]},
+  {"name": "auth_start_keeps_session", "steps": [{"method": "GET", "target": "/admin/auth", "session": "logged_in", "expect_status": 303}]},
+  {"name": "auth_start_prompt_consent", "config": {"prompt": "consent"}, "steps": [{"method": "GET", "target": "/admin/auth", "expect_status": 303}]},
+  {"name": "auth_start_prompt_none", "config": {"prompt": "none"}, "steps": [{"method": "GET", "target": "/admin/auth", "expect_status": 303}]},
+  {
+   "name": "auth_start_odd_config",
+   "config": {"client_id": "a&b c/é", "redirect_uri": "https://admin.example.com/admin/callback?x=1&y=日本 語~*"},
+   "steps": [{"method": "GET", "target": "/admin/auth", "expect_status": 303}]
+  },
+  {
+   "name": "auth_start_twice",
+   "steps": [
+    {"method": "GET", "target": "/admin/auth", "session": "pending", "expect_status": 303},
+    {"method": "GET", "target": "/admin/auth", "cookie": "carry", "at": 1, "expect_status": 303}
+   ]
+  },
+  {
+   "name": "auth_start_rate_limited",
+   "steps": [
+    {"method": "GET", "target": "/admin/auth", "repeat": 10, "expect_status": 303},
+    {"method": "GET", "target": "/admin/auth", "expect_status": 429}
+   ]
+  },
+
+  {
+   "name": "callback_cancelled",
+   "note": "error のときは oauth_state を消さない。前の知らせがある一覧に足すだけなので、starlette は書き換えに気づかず Cookie を書かない",
+   "steps": [{"method": "GET", "target": "/admin/callback?error=access_denied&error_description=The+resource+owner+denied&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {"name": "callback_cancelled_anonymous", "steps": [{"method": "GET", "target": "/admin/callback?error=access_denied", "expect_status": 303}]},
+  {"name": "callback_empty_error", "steps": [{"method": "GET", "target": "/admin/callback?error=&state=wrong&code=x", "session": "pending", "expect_status": 303}]},
+  {"name": "callback_without_session", "steps": [{"method": "GET", "target": "/admin/callback?code=x&state=y", "expect_status": 303}]},
+  {"name": "callback_state_mismatch", "steps": [{"method": "GET", "target": "/admin/callback?code=x&state=pending-state-0123456789abcdefghijklmnopqrX", "session": "pending", "expect_status": 303}]},
+  {"name": "callback_empty_state_in_session", "steps": [{"method": "GET", "target": "/admin/callback?code=x&state=", "session": "pending_empty", "expect_status": 303}]},
+  {"name": "callback_state_non_ascii", "note": "compare_digest は ASCII でない文字で TypeError（500 とインシデント）", "steps": [{"method": "GET", "target": "/admin/callback?code=x&state=%C3%A9", "session": "pending", "expect_status": 500}]},
+  {"name": "callback_state_number", "steps": [{"method": "GET", "target": "/admin/callback?code=x&state=12345", "session": "pending_number", "expect_status": 500}]},
+  {"name": "callback_without_code", "steps": [{"method": "GET", "target": "/admin/callback?state=pending-state-0123456789abcdefghijklmnopqrs&code=", "session": "pending", "expect_status": 303}]},
+  {
+   "name": "callback_token_rejected",
+   "note": "400 以上は本文に access_token があっても失敗",
+   "discord": {"POST /oauth2/token": {"status": 401, "json": {"access_token": "must-not-be-used", "error": "invalid_client"}}},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_token_not_json",
+   "discord": {"POST /oauth2/token": {"body": "{\"access_token\": \"x\"}", "content_type": "text/plain; charset=utf-8"}},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_token_blank",
+   "discord": {"POST /oauth2/token": {"body": " \n\t", "content_type": "application/json"}},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_token_broken",
+   "discord": {"POST /oauth2/token": {"body": "{\"access_token\": ", "content_type": "application/json"}},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_token_without_access_token",
+   "discord": {"POST /oauth2/token": {"status": 200, "json": {"error": "invalid_grant"}}},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_token_is_list",
+   "note": "\"access_token\" in [...] が真でも、並びに文字の添字で TypeError（500）",
+   "discord": {"POST /oauth2/token": {"json": ["access_token"]}},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 500}]
+  },
+  {
+   "name": "callback_user_info_rejected",
+   "discord": {"$ref": "ok_discord", "with": {"GET /users/@me Bearer": {"status": 401, "json": {"message": "401: Unauthorized", "code": 0}}}},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_user_info_empty",
+   "discord": {"$ref": "ok_discord", "with": {"GET /users/@me Bearer": {"json": {}}}},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_no_admin_guilds",
+   "discord": {"$ref": "ok_discord", "with": {"GET /users/@me/guilds Bearer": {"json": [{"id": "900000000000000001", "name": "x", "permissions": "0"}, {"id": "900000000000000002", "name": "y", "permissions": "-9"}]}}},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_user_guilds_fail",
+   "discord": {"$ref": "ok_discord", "with": {"GET /users/@me/guilds Bearer": {"status": 500, "body": "oops", "content_type": "text/plain"}}},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_bot_guilds_fail",
+   "discord": {"$ref": "ok_discord", "with": {"GET /users/@me/guilds Bot": {"status": 503, "json": {"message": "down"}}}},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_bot_guilds_dict",
+   "discord": {"$ref": "ok_discord", "with": {"GET /users/@me/guilds Bot": {"json": {"900000000000000001": {"id": "900000000000000001"}}}}},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_bot_guilds_without_id",
+   "note": "Bot の一覧の 1 つでも id が無ければ、一覧の全部を捨てる（例外を拾って空の集合）",
+   "discord": {"$ref": "ok_discord", "with": {"GET /users/@me/guilds Bot": {"json": [{"id": "900000000000000001"}, {"name": "id が無い"}]}}},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_no_bot_token",
+   "config": {"bot_token": ""},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_success",
+   "note": "前のセッション（サーバーの選択・CSRF の印・oauth_state）を空にしてから作り直す",
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending_in_guild", "expect_status": 303}]
+  },
+  {
+   "name": "callback_success_from_pending",
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "GET", "target": "/admin/callback?state=pending-state-0123456789abcdefghijklmnopqrs&code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_success_odd_guilds",
+   "discord": {
+    "$ref": "ok_discord",
+    "with": {
+     "GET /users/@me Bearer": {"json": {"$ref": "me"}, "content_type": "application/vnd.discord+json; charset=UTF-8"},
+     "GET /users/@me/guilds Bearer": {"json": [
+      "not a guild",
+      null,
+      7,
+      ["900000000000000001"],
+      {"id": null, "permissions": "8"},
+      {"id": " 900000000000000001 ", "permissions": 8, "name": "", "icon": 7},
+      {"id": "9_0", "permissions": "8", "name": "下線の ID"},
+      {"id": "900000000000000002", "permissions": "8.0"},
+      {"id": "900000000000000002", "permissions": null},
+      {"id": "900000000000000002", "permissions": true},
+      {"id": "900000000000000002", "name": null},
+      {"id": 900000000000000003, "permissions": 8.9, "name": 123},
+      {"id": "900000000000000001", "name": "重複", "permissions": "2147483656"}
+     ]},
+     "GET /users/@me/guilds Bot": {"json": [{"id": "900000000000000001"}, {"id": " 900000000000000002"}, {"id": 900000000000000003}, {"id": "90"}]}
+    }
+   },
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_success_numeric_token",
+   "discord": {
+    "$ref": "ok_discord",
+    "with": {
+     "POST /oauth2/token": {"json": {"access_token": 12345}},
+     "GET /users/@me Bearer": {"json": {"id": 111111111111111111, "locale": "ja"}}
+    }
+   },
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_user_guild_without_id",
+   "note": "本人の一覧の辞書に id が無いと KeyError（get_admin_guilds は TypeError と ValueError だけ拾う。500）",
+   "discord": {"$ref": "ok_discord", "with": {"GET /users/@me/guilds Bearer": {"json": [{"name": "ID の無いサーバー", "permissions": "8"}]}}},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 500}]
+  },
+  {
+   "name": "callback_user_guilds_null",
+   "discord": {"$ref": "ok_discord", "with": {"GET /users/@me/guilds Bearer": {"body": "", "content_type": "application/json"}}},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 500}]
+  },
+  {
+   "name": "callback_user_info_without_id",
+   "note": "セッションを空にしたあとで KeyError（500。エラーのページが新しい CSRF の印を入れる）",
+   "discord": {"$ref": "ok_discord", "with": {"GET /users/@me Bearer": {"json": {"username": "id の無い利用者"}}}},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=good-code&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 500}]
+  },
+  {
+   "name": "callback_code_encoded",
+   "discord": {"POST /oauth2/token": {"status": 400, "json": {"error": "invalid_grant"}}},
+   "config": {"redirect_uri": "https://admin.example.com/admin/callback?a=b c"},
+   "steps": [{"method": "GET", "target": "/admin/callback?code=a+b%2Bc%26d%3D%E6%97%A5~*&state=pending-state-0123456789abcdefghijklmnopqrs", "session": "pending", "expect_status": 303}]
+  },
+  {
+   "name": "callback_rate_limited",
+   "steps": [
+    {"method": "GET", "target": "/admin/callback?code=x&state=y", "repeat": 10, "expect_status": 303},
+    {"method": "GET", "target": "/admin/callback?code=x&state=y", "expect_status": 429}
+   ]
+  },
+
+  {"name": "logout_post_anonymous", "steps": [{"method": "POST", "target": "/admin/logout", "expect_status": 303}]},
+  {"name": "logout_post_token_only", "steps": [{"method": "POST", "target": "/admin/logout", "session": "token_only", "expect_status": 303}]},
+  {"name": "logout_post_form_token", "steps": [{"method": "POST", "target": "/admin/logout", "session": "in_guild", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5"}, "expect_status": 303}]},
+  {"name": "logout_post_header_token", "steps": [{"method": "POST", "target": "/admin/logout", "session": "logged_in", "headers": {"X-CSRFToken": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5"}, "expect_status": 303}]},
+  {"name": "logout_post_missing_token", "steps": [{"method": "POST", "target": "/admin/logout", "session": "logged_in", "expect_status": 403}]},
+  {"name": "logout_get_anonymous", "steps": [{"method": "GET", "target": "/admin/logout", "expect_status": 303}]},
+  {"name": "logout_get_user_null", "steps": [{"method": "GET", "target": "/admin/logout", "session": "user_null", "expect_status": 200}]},
+  {"name": "logout_put_json", "note": "POST の経路が先にあるので 405 の Allow は POST", "steps": [{"method": "PUT", "target": "/admin/logout", "headers": {"Accept": "application/json"}, "expect_status": 405}]},
+
+  {"name": "admin_root_anonymous", "steps": [{"method": "GET", "target": "/admin/", "expect_status": 303}]},
+  {"name": "admin_root_logged_in", "steps": [{"method": "GET", "target": "/admin/", "session": "logged_in", "expect_status": 303}]},
+  {"name": "admin_root_in_guild", "steps": [{"method": "GET", "target": "/admin/", "session": "in_guild", "expect_status": 303}]},
+  {"name": "admin_root_user_null", "steps": [{"method": "GET", "target": "/admin/", "session": "user_null", "expect_status": 303}]},
+  {"name": "admin_without_slash", "steps": [{"method": "GET", "target": "/admin?x=1", "expect_status": 307}]},
+  {"name": "admin_root_has_no_default_limit", "note": "ルーターの中の経路には既定の 1 分 300 回が掛からない", "steps": [{"method": "GET", "target": "/admin/", "repeat": 301, "expect_status": 303}]},
+  {"name": "guilds_anonymous", "steps": [{"method": "GET", "target": "/admin/guilds", "expect_status": 303}]},
+  {"name": "guilds_post_not_allowed", "steps": [{"method": "POST", "target": "/admin/guilds", "headers": {"Accept": "application/json"}, "session": "logged_in", "expect_status": 405}]},
+  {"name": "overview_anonymous", "steps": [{"method": "GET", "target": "/admin/overview", "expect_status": 303}]},
+  {"name": "overview_without_guild", "steps": [{"method": "GET", "target": "/admin/overview", "session": "logged_in", "expect_status": 303}]},
+
+  {"name": "select_anonymous", "steps": [{"method": "POST", "target": "/admin/guilds/select", "form": {"guild_id": "900000000000000001"}, "expect_status": 303}]},
+  {"name": "select_bad_csrf", "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in", "form": {"csrf_token": "bad", "guild_id": "900000000000000001"}, "expect_status": 403}]},
+  {"name": "select_invalid_id", "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "abc"}, "expect_status": 303}]},
+  {"name": "select_missing_id", "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5"}, "expect_status": 303}]},
+  {"name": "select_not_in_list", "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000009"}, "expect_status": 303}]},
+  {"name": "select_fresh", "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000002"}, "expect_status": 303}]},
+  {"name": "select_padded_id", "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": " +900_000_000_000_000_001 "}, "expect_status": 303}]},
+  {"name": "select_switch_guild", "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "in_guild", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000003"}, "expect_status": 303}]},
+  {"name": "select_edge_age", "note": "取った時刻からちょうど 300 秒は古くない（> で比べる）", "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in_edge", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000001"}, "expect_status": 303}]},
+  {
+   "name": "select_stale_owner",
+   "discord": {"GET /guilds/900000000000000001 Bot": {"json": {"$ref": "guild_owned"}}, "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member_plain"}}},
+   "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in_stale", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000001"}, "expect_status": 303}]
+  },
+  {
+   "name": "select_stale_role_admin",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"id": "900000000000000001", "owner_id": "222222222222222222", "roles": [{"id": "900000000000000001", "permissions": "104324673"}, {"id": "700", "permissions": "8"}, {"id": "701", "permissions": "2147483647"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member_plain"}}
+   },
+   "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in_stale", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000001"}, "expect_status": 303}]
+  },
+  {
+   "name": "select_stale_everyone_admin",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"id": "900000000000000001", "owner_id": "222222222222222222", "roles": [{"id": "900000000000000001", "permissions": "8"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"roles": []}}
+   },
+   "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in_stale", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000001"}, "expect_status": 303}]
+  },
+  {
+   "name": "select_stale_not_admin",
+   "discord": {"GET /guilds/900000000000000001 Bot": {"json": {"$ref": "guild_plain"}}, "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member_plain"}}},
+   "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in_stale", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000001"}, "expect_status": 303}]
+  },
+  {
+   "name": "select_stale_not_admin_in_guild",
+   "note": "選んでいたサーバーの ID もセッションから外す",
+   "discord": {
+    "GET /guilds/900000000000000002 Bot": {"json": {"id": "900000000000000002", "owner_id": "222222222222222222", "roles": []}},
+    "GET /guilds/900000000000000002/members/111111111111111111 Bot": {"json": {"roles": ["1", "2"]}}
+   },
+   "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "in_guild_stale", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000002"}, "expect_status": 303}]
+  },
+  {
+   "name": "select_stale_guild_gone",
+   "discord": {"GET /guilds/900000000000000001 Bot": {"status": 404, "json": {"message": "Unknown Guild", "code": 10004}}},
+   "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in_stale", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000001"}, "expect_status": 303}]
+  },
+  {
+   "name": "select_stale_member_gone",
+   "discord": {"GET /guilds/900000000000000001 Bot": {"json": {"$ref": "guild_plain"}}, "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"status": 404, "json": {"message": "Unknown Member", "code": 10007}}},
+   "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in_stale", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000001"}, "expect_status": 303}]
+  },
+  {
+   "name": "select_stale_discord_down",
+   "note": "確かめられないときは締め出さない（取った時刻も変えない）",
+   "discord": {"GET /guilds/900000000000000001 Bot": {"status": 502, "body": "Bad Gateway", "content_type": "text/plain"}},
+   "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in_stale", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000001"}, "expect_status": 303}]
+  },
+  {
+   "name": "select_stale_not_json",
+   "discord": {"GET /guilds/900000000000000001 Bot": {"body": "<html>", "content_type": "text/html"}},
+   "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in_stale", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000001"}, "expect_status": 303}]
+  },
+  {
+   "name": "select_stale_no_bot_token",
+   "config": {"bot_token": ""},
+   "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in_stale", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000001"}, "expect_status": 303}]
+  },
+  {
+   "name": "select_no_checked_at",
+   "discord": {"GET /guilds/900000000000000001 Bot": {"json": {"$ref": "guild_owned"}}, "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member_plain"}}},
+   "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in_no_at", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000001"}, "expect_status": 303}]
+  },
+  {
+   "name": "select_short_max_age",
+   "note": "ADMIN_GUILDS_MAX_AGE_SECONDS を 60 にすると、10 秒前は古くないが 70 秒後は古い",
+   "config": {"guilds_max_age": 60},
+   "discord": {"GET /guilds/900000000000000001 Bot": {"json": {"$ref": "guild_owned"}}, "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member_plain"}}},
+   "steps": [
+    {"method": "POST", "target": "/admin/guilds/select", "session": "logged_in", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000001"}, "expect_status": 303},
+    {"method": "POST", "target": "/admin/guilds/select", "session": "logged_in", "at": 70, "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000001"}, "expect_status": 303}
+   ]
+  },
+  {
+   "name": "select_user_without_id",
+   "note": "user に id が無ければ 0 として Discord に聞く",
+   "discord": {"GET /guilds/900000000000000001 Bot": {"json": {"$ref": "guild_plain"}}, "GET /guilds/900000000000000001/members/0 Bot": {"status": 404, "json": {"message": "Unknown Member"}}},
+   "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "user_without_id_stale", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000001"}, "expect_status": 303}]
+  },
+  {
+   "name": "select_json_with_header_token",
+   "note": "JSON の本文はフォームとして読まない（guild_id が無いので無効な ID）",
+   "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in", "headers": {"X-CSRFToken": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5"}, "json": {"guild_id": "900000000000000001"}, "expect_status": 303}]
+  },
+  {
+   "name": "select_guild_not_a_dict",
+   "note": "サーバーの答えが辞書でないと、確かめの後半で AttributeError（500）",
+   "discord": {"GET /guilds/900000000000000001 Bot": {"json": []}, "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member_plain"}}},
+   "steps": [{"method": "POST", "target": "/admin/guilds/select", "session": "logged_in_stale", "form": {"csrf_token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5", "guild_id": "900000000000000001"}, "expect_status": 500}]
+  },
+  {"name": "select_get_not_allowed", "steps": [{"method": "GET", "target": "/admin/guilds/select", "session": "logged_in", "expect_status": 405}]},
+
+  {
+   "name": "landing_count_cached",
+   "note": "5 分（300 秒）のあいだは Discord に聞かない。ちょうど 300 秒で聞き直す",
+   "discord": {"GET /users/@me/guilds?limit=200 Bot": {"json": [{"id": "1"}, {"id": "2"}, {"id": "3"}]}},
+   "steps": [
+    {"method": "GET", "target": "/", "expect_status": 200},
+    {"method": "GET", "target": "/", "at": 299.5, "discord": {"GET /users/@me/guilds?limit=200 Bot": {"json": [1, 2, 3, 4, 5]}}, "expect_status": 200},
+    {"method": "GET", "target": "/", "at": 300, "discord": {"GET /users/@me/guilds?limit=200 Bot": {"json": [1, 2, 3, 4, 5]}}, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "landing_count_fallback",
+   "note": "Discord が 0 なら設定のあるサーバーの数。0 も使い回す",
+   "stored_guilds": 2,
+   "discord": {"GET /users/@me/guilds?limit=200 Bot": {"json": []}},
+   "steps": [
+    {"method": "GET", "target": "/", "expect_status": 200},
+    {"method": "GET", "target": "/", "at": 10, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "landing_count_discord_fails",
+   "stored_guilds": {"$raise": "RuntimeError", "message": "設定が読めない"},
+   "discord": {"GET /users/@me/guilds?limit=200 Bot": {"status": 500, "json": {"message": "down"}}},
+   "steps": [{"method": "GET", "target": "/", "session": "logged_in", "expect_status": 200}]
+  },
+  {
+   "name": "landing_count_no_bot_token",
+   "config": {"bot_token": ""},
+   "stored_guilds": 4,
+   "steps": [{"method": "GET", "target": "/", "expect_status": 200}]
+  },
+  {
+   "name": "landing_count_zero_cached",
+   "note": "数が 0 になっても使い回す（5 分のあいだ聞き直さない）",
+   "discord": {"GET /users/@me/guilds?limit=200 Bot": {"json": []}},
+   "steps": [
+    {"method": "GET", "target": "/", "expect_status": 200},
+    {"method": "GET", "target": "/", "at": 120, "discord": {"GET /users/@me/guilds?limit=200 Bot": {"json": [1]}}, "expect_status": 200}
+   ]
+  },
+  {"name": "landing_count_dict", "discord": {"GET /users/@me/guilds?limit=200 Bot": {"json": {"a": 1, "b": 2}}}, "steps": [{"method": "GET", "target": "/", "expect_status": 200}]},
+  {"name": "landing_count_text", "discord": {"GET /users/@me/guilds?limit=200 Bot": {"json": "日本語"}}, "steps": [{"method": "GET", "target": "/", "expect_status": 200}]},
+  {"name": "landing_count_number", "discord": {"GET /users/@me/guilds?limit=200 Bot": {"json": 5}}, "stored_guilds": 1, "steps": [{"method": "GET", "target": "/", "expect_status": 200}]},
+  {"name": "landing_count_null_body", "discord": {"GET /users/@me/guilds?limit=200 Bot": {"body": "", "content_type": "application/json"}}, "steps": [{"method": "GET", "target": "/", "expect_status": 200}]},
+  {
+   "name": "public_default_limit",
+   "note": "公開ページは app に直に足した経路なので、既定の 1 分 300 回が掛かる（slowapi の 429）",
+   "steps": [
+    {"method": "GET", "target": "/terms", "repeat": 300, "expect_status": 200},
+    {"method": "GET", "target": "/terms", "expect_status": 429}
+   ]
+  },
+
+  {
+   "name": "full_login_flow",
+   "note": "ログイン画面 → 認可 → 戻り → サーバー選択 → シェル → 公開トップ → ログアウトの確認 → ログアウト → ログイン画面（知らせ）→ 期限切れ",
+   "discord": {
+    "$ref": "ok_discord",
+    "with": {"GET /users/@me/guilds?limit=200 Bot": {"json": [{"id": "900000000000000001"}, {"id": "900000000000000002"}]}}
+   },
+   "steps": [
+    {"method": "GET", "target": "/admin/login", "expect_status": 200},
+    {"method": "GET", "target": "/admin/auth", "cookie": "carry", "at": 1, "expect_status": 303},
+    {"method": "GET", "target": "/admin/callback?code=flow-code&state={state:1}", "cookie": "carry", "at": 2, "expect_status": 303},
+    {"method": "GET", "target": "/admin/guilds", "cookie": "carry", "at": 3, "expect_status": 200},
+    {"method": "POST", "target": "/admin/guilds/select", "cookie": "carry", "at": 4, "form": {"csrf_token": "{csrf:2}", "guild_id": "900000000000000003"}, "expect_status": 303},
+    {"method": "GET", "target": "/admin/overview", "cookie": "carry", "at": 5, "expect_status": 200},
+    {"method": "GET", "target": "/", "cookie": "carry", "at": 6, "expect_status": 200},
+    {"method": "GET", "target": "/admin/logout", "cookie": "carry", "at": 7, "expect_status": 200},
+    {"method": "POST", "target": "/admin/logout", "cookie": "carry", "at": 8, "form": {"csrf_token": "{csrf:2}"}, "expect_status": 303},
+    {"method": "GET", "target": "/admin/login", "cookie": "carry", "at": 9, "expect_status": 200},
+    {"method": "GET", "target": "/admin/", "cookie": "carry", "at": 3700, "expect_status": 303}
+   ]
+  }
+ ]
+}

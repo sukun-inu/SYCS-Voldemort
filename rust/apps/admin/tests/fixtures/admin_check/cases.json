@@ -1,0 +1,315 @@
+{
+ "note": "user_still_admin の基準の例。書き方は generate.py と ../fake_discord.py の先頭。G はサーバー（900000000000000001）、M はそのメンバー（111111111111111111）の答え方",
+ "guild_id": 900000000000000001,
+ "user_id": 111111111111111111,
+ "bot_token": "a3-bot-token",
+ "library": {
+  "member": {"user": {"id": "111111111111111111"}, "roles": ["700"]},
+  "member_none": {"user": {"id": "111111111111111111"}, "roles": []}
+ },
+ "cases": [
+  {"name": "no_bot_token", "bot_token": "", "expect": null},
+  {"name": "guild_404", "discord": {"GET /guilds/900000000000000001 Bot": {"status": 404, "json": {"message": "Unknown Guild", "code": 10004}}}, "expect": false},
+  {"name": "guild_403", "discord": {"GET /guilds/900000000000000001 Bot": {"status": 403, "json": {"message": "Missing Access"}}}, "expect": null},
+  {"name": "guild_429", "discord": {"GET /guilds/900000000000000001 Bot": {"status": 429, "json": {"retry_after": 1.5}}}, "expect": null},
+  {"name": "guild_500", "discord": {"GET /guilds/900000000000000001 Bot": {"status": 500, "body": "oops"}}, "expect": null},
+  {"name": "guild_not_json", "discord": {"GET /guilds/900000000000000001 Bot": {"body": "<html></html>", "content_type": "text/html"}}, "expect": null},
+  {"name": "guild_broken_json", "discord": {"GET /guilds/900000000000000001 Bot": {"body": "{\"id\":", "content_type": "application/json"}}, "expect": null},
+  {"name": "guild_without_content_type", "discord": {"GET /guilds/900000000000000001 Bot": {"body": "{}"}}, "expect": null},
+  {
+   "name": "member_404",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": []}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"status": 404, "json": {"message": "Unknown Member"}}
+   },
+   "expect": false
+  },
+  {
+   "name": "member_500",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": []}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"status": 500, "json": {"message": "x"}}
+   },
+   "expect": null
+  },
+  {
+   "name": "owner_string",
+   "note": "持ち主でも、メンバーの問い合わせまで済ませてから決める",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "111111111111111111", "roles": []}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member_none"}}
+   },
+   "expect": true
+  },
+  {
+   "name": "owner_int",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": 111111111111111111}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member_none"}}
+   },
+   "expect": true
+  },
+  {
+   "name": "owner_before_member_shape",
+   "note": "持ち主なら、メンバーの答えの形は見ない",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "111111111111111111"}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": []}
+   },
+   "expect": true
+  },
+  {
+   "name": "owner_other_no_roles",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": null}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": false
+  },
+  {
+   "name": "everyone_admin",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "900000000000000001", "permissions": "8"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member_none"}}
+   },
+   "expect": true
+  },
+  {
+   "name": "everyone_int_id",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": 900000000000000001, "permissions": "2147483647"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member_none"}}
+   },
+   "expect": true
+  },
+  {
+   "name": "held_role_admin",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "900000000000000001", "permissions": "104324673"}, {"id": "700", "permissions": "2147483647"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": true
+  },
+  {
+   "name": "held_role_int_in_member",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "700", "permissions": "8"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"roles": [700]}}
+   },
+   "expect": true
+  },
+  {
+   "name": "held_role_not_admin",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "900000000000000001", "permissions": "0"}, {"id": "700", "permissions": "104324673"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": false
+  },
+  {
+   "name": "admin_role_not_held",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "701", "permissions": "8"}, {"id": "700", "permissions": "4"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": false
+  },
+  {
+   "name": "permission_forms_skipped",
+   "note": "int() で読めない permissions は飛ばす。真偽は 1、無ければ 0",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [
+     {"id": "1", "permissions": "0x8"},
+     {"id": "2", "permissions": "8.0"},
+     {"id": "3", "permissions": null},
+     {"id": "4", "permissions": [8]},
+     {"id": "5", "permissions": true},
+     {"id": "6"},
+     {"id": "7", "permissions": ""},
+     {"id": "8", "permissions": {"value": 8}}
+    ]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"roles": ["1", "2", "3", "4", "5", "6", "7", "8"]}}
+   },
+   "expect": false
+  },
+  {
+   "name": "permission_float",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "700", "permissions": 8.9}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": true
+  },
+  {
+   "name": "permission_padded",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "700", "permissions": " +8 \n"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": true
+  },
+  {
+   "name": "permission_underscore",
+   "note": "8_0 は 80（0b1010000）。0x8 の印は立っていない",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "700", "permissions": "8_0"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": false
+  },
+  {
+   "name": "permission_negative",
+   "note": "Python の負の数の &（2 の補数を無限に伸ばした形）。-8 は 0x8 の印が立っている",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "700", "permissions": "-8"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": true
+  },
+  {
+   "name": "permission_negative_without_bit",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "700", "permissions": "-9"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": false
+  },
+  {
+   "name": "permission_fullwidth",
+   "note": "int() は全角の数字も読む（２４ は 24）",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "700", "permissions": "２４"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": true
+  },
+  {
+   "name": "permission_huge",
+   "note": "2**128 + 8（64 ビットを超えても、下の桁だけで決まる）",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "700", "permissions": "340282366920938463463374607431768211464"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": true
+  },
+  {
+   "name": "permission_or_without_admin",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "900000000000000001", "permissions": "1"}, {"id": "700", "permissions": "2"}, {"id": "701", "permissions": "4"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"roles": ["700", "701"]}}
+   },
+   "expect": false
+  },
+  {
+   "name": "permission_or_with_admin",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "700", "permissions": "3"}, {"id": "701", "permissions": "9"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"roles": ["700", "701"]}}
+   },
+   "expect": true
+  },
+  {
+   "name": "member_roles_string",
+   "note": "文字の roles は 1 文字ずつ（\"700\" は 7 と 0）",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "7", "permissions": "8"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"roles": "700"}}
+   },
+   "expect": true
+  },
+  {
+   "name": "member_roles_dict",
+   "note": "辞書の roles は鍵",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "700", "permissions": "8"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"roles": {"700": false}}}
+   },
+   "expect": true
+  },
+  {
+   "name": "member_without_roles",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "900000000000000001", "permissions": "104324673"}, {"id": "700", "permissions": "8"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {}}
+   },
+   "expect": false
+  },
+  {
+   "name": "role_float_id",
+   "note": "str(700.0) は 700.0 なので、持っている 700 とは違う",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": 700.0, "permissions": "8"}]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": false
+  },
+  {
+   "name": "guild_null_body",
+   "note": "本文が空の JSON は None。None.get で AttributeError（user_still_admin は拾わない）",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"body": "", "content_type": "application/json"},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": "raise"
+  },
+  {
+   "name": "guild_list",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": []},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": "raise"
+  },
+  {
+   "name": "member_list",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": []}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": ["700"]}
+   },
+   "expect": "raise"
+  },
+  {
+   "name": "member_roles_null",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": []}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"roles": null}}
+   },
+   "expect": "raise"
+  },
+  {
+   "name": "guild_roles_with_text",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": [{"id": "700", "permissions": "4"}, "admin"]}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": "raise"
+  },
+  {
+   "name": "guild_roles_number",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": 5}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": "raise"
+  },
+  {
+   "name": "guild_roles_dict",
+   "note": "辞書の roles は鍵（文字）を回すので、.get で AttributeError",
+   "discord": {
+    "GET /guilds/900000000000000001 Bot": {"json": {"owner_id": "2", "roles": {"700": {"permissions": "8"}}}},
+    "GET /guilds/900000000000000001/members/111111111111111111 Bot": {"json": {"$ref": "member"}}
+   },
+   "expect": "raise"
+  },
+  {
+   "name": "other_ids",
+   "guild_id": 42,
+   "user_id": 7,
+   "discord": {
+    "GET /guilds/42 Bot": {"json": {"owner_id": "7"}},
+    "GET /guilds/42/members/7 Bot": {"json": {"roles": []}}
+   },
+   "expect": true
+  }
+ ]
+}

@@ -12,14 +12,18 @@
 //! **塊ごとに、決まった場所へ 1 行ずつ足す**（下の [`default_routes`] のコメントの位置）。ルーターの中の経路は
 //! [`Route::new`]（既定の回数の制限が掛からない）、app に直に足したデコレータの無い経路は [`Route::top_level`]。
 //! デコレータの付いた経路は [`Route::new`] にして、係の中で [`crate::app::AdminApp::check_route_limit`] を呼ぶ。
+//! 係が使うもの（テンプレート・Discord など）は [`Site`] に入れて渡す（係の closure が持つ）。
 //!
 //! `/dlaudio/` は nginx が `apps/cdn` へ渡すので、ここには無い（Python は同じアプリに入っていた）。
+
+use std::sync::Arc;
 
 use axum::http::Method;
 
 use crate::app::{Reply, Req, handler};
 use crate::errors::{Failure, HttpError};
 use crate::routing::Route;
+use crate::views::{self, Site};
 
 /// パネルの旧 URL と、パネルの ID（`webapp_admin/schema/registry.py` の `PANELS` の並びのうち `path` のあるもの）。
 pub const LEGACY_PANELS: [(&str, &str); 12] = [
@@ -38,12 +42,17 @@ pub const LEGACY_PANELS: [(&str, &str); 12] = [
 ];
 
 /// 管理画面の経路を、Python の登録の順に並べる。
-pub fn default_routes() -> Vec<Route> {
+pub fn default_routes(site: &Arc<Site>) -> Vec<Route> {
     let mut routes = vec![static_mount()];
-    // ルーターの中（/admin・/admin/api）: A3（auth_views）、A2・A3（dashboard_views）、A5・A6（api/apps）、
-    // A4（api/users）、A8・A9（api/dev）、A10（api/sql）がこの位置に足す。
+    // ルーターの中（/admin・/admin/api）: auth_views（A3）、dashboard_views（A3。/admin/api/metrics・
+    // /admin/api/incidents は A7 が dashboard_routes の後ろに足す）。
+    routes.extend(views::auth_routes(site));
+    routes.extend(views::dashboard_routes(site));
+    // A5・A6（api/apps）、A4（api/users）、A8・A9（api/dev）、A10（api/sql）がこの位置に足す。
     routes.extend(legacy_redirects());
-    // 公開ページ（A2）と /metrics（A7）がこの位置に足す。
+    // 公開ページ（A3。/・/guide・/privacy・/terms・旧 URL の 301 の 3 本）。
+    routes.extend(views::public_routes(site));
+    // /metrics（A7）がこの位置に足す。
     routes
 }
 
@@ -118,5 +127,46 @@ mod tests {
             .map(|(path, id)| ((*path).to_string(), (*id).to_string()))
             .collect();
         assert_eq!(ours, from_schema);
+    }
+
+    /// 経路の表が Python の登録の順（/static → ルーターの中 → 旧 URL → 公開ページ）で、既定の回数の制限は app に
+    /// 直に足した経路（旧 URL と公開ページ）にだけ掛かること（ほかの塊が足す API の経路は数えない）。
+    #[test]
+    fn the_table_follows_the_python_order() {
+        let mut want = vec![("/static".to_string(), false)];
+        for path in [
+            "/admin/login",
+            "/admin/auth",
+            "/admin/callback",
+            "/admin/logout",
+            "/admin/logout",
+            "/admin/",
+            "/admin/guilds",
+            "/admin/guilds/select",
+            "/admin/overview",
+        ] {
+            want.push((path.to_string(), false));
+        }
+        for (path, _) in LEGACY_PANELS {
+            want.push((path.to_string(), true));
+        }
+        for path in [
+            "/",
+            "/guide",
+            "/privacy",
+            "/terms",
+            "/admin/guide",
+            "/admin/privacy",
+            "/admin/terms",
+        ] {
+            want.push((path.to_string(), true));
+        }
+        let known: Vec<&str> = want.iter().map(|(path, _)| path.as_str()).collect();
+        let listed: Vec<(String, bool)> = default_routes(&crate::views::tests::test_site())
+            .iter()
+            .filter(|route| known.contains(&route.template()))
+            .map(|route| (route.template().to_string(), route.default_limit()))
+            .collect();
+        assert_eq!(listed, want);
     }
 }
