@@ -11,6 +11,7 @@
 //! 辞書でない行など）は飛ばす。飛ばす例は「Rust の型にできない例」とちょうど同じであることも確かめる。
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use axum::body::Bytes;
@@ -18,9 +19,12 @@ use axum::http::{HeaderMap, HeaderName, HeaderValue, Method};
 use chrono::{DateTime, Utc};
 use serde_json::{Map, Value, json};
 use sycs_admin::app::{AdminApp, Config, Deps, Incoming, OsRandom, Reply};
+use sycs_admin::auth::{Discord, DiscordConfig};
 use sycs_admin::errors::{Crash, PlainPages};
 use sycs_admin::routes;
+use sycs_admin::templates::{Pages, PagesConfig};
 use sycs_admin::users::{Detail, EventRow, StateRow, StoreFuture, UserStates};
+use sycs_admin::views::Site;
 use sycs_core::metrics::Reporter;
 use sycs_web::proxy::{DEFAULT_TRUSTED_PROXIES, TrustedHosts};
 
@@ -405,8 +409,26 @@ fn app(data: &Value, fake: Arc<Fake>, dir: &std::path::Path) -> Arc<AdminApp> {
         reporter: Arc::new(Reporter::new("test", None)),
     };
     let secret = data["secret"].as_str().unwrap();
-    let admin = AdminApp::new(config, secret, deps, routes::default_routes());
+    let admin = AdminApp::new(config, secret, deps, routes::default_routes(&site()));
     Arc::new(admin.with_users(fake))
+}
+
+/// 経路の表を組むための、経路の係が使うもの（A3）。この基準の例は利用者の状態の経路だけを踏むので、本物の
+/// テンプレート（static は無い場所）と、どこにもつながない Discord で足りる（errors_golden の shared_site と同じ）。
+fn site() -> Arc<Site> {
+    let config = PagesConfig {
+        templates_dir: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../webapp_admin/templates"),
+        static_dir: PathBuf::from("/nonexistent-admin-fixture-static"),
+        asset_version: "admin".to_string(),
+    };
+    let pages = Arc::new(Pages::load(&config).unwrap());
+    let discord = Discord::new(DiscordConfig::from_lookup(|_| None), "http://127.0.0.1:9/api/v10").unwrap();
+    Arc::new(Site::new(
+        pages,
+        Arc::new(discord),
+        Arc::new(|| Ok(0)),
+        Arc::new(|| "unused-state".to_string()),
+    ))
 }
 
 fn names(document: &Value) -> Vec<String> {
