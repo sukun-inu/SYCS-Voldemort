@@ -183,22 +183,30 @@ impl Form {
     }
 }
 
-/// `Content-Type` の種類。python-multipart の `parse_options_header` の答え（`;` が無ければ小文字にして前後の空白を
-/// 落とす。あれば最初の `;` までを前後の空白だけ落とす。**小文字にしない**）。見出しが無ければ空。
+/// `Content-Type` の種類。python-multipart 0.0.34（requirements.txt の版）の `parse_options_header` の答え。
+///
+/// `;` が無ければ小文字にして前後の空白とタブを落とす。あれば最初の `;` まで（`_parseparam` の最初の区切り）の前後の
+/// 空白とタブを落として小文字にする。**どちらも小文字にする**（種類は大文字小文字を区別しない。0.0.32 までは `;` の
+/// あるときに小文字にしなかった）。落とすのは空白とタブだけ（ほかの空白の文字は残る）。見出しが無ければ空。
 pub fn content_type(headers: &HeaderMap) -> String {
+    const BLANK: [char; 2] = [' ', '\t'];
     let Some(value) = first_header(headers, "content-type").filter(|v| !v.is_empty()) else {
         return String::new();
     };
     if !value.contains(';') {
-        return python::strip(&value.to_lowercase()).to_string();
+        return value.to_lowercase().trim_matches(BLANK).to_string();
     }
     let first = first_segment(&value);
-    if let Some((key, rest)) = first.split_once('=') {
-        // `=` を含む最初の区切り（種類の形ではない）。鍵の側だけ小文字。
-        let joined = format!("{}={}", key.trim_end().to_lowercase(), rest.trim_start());
-        return python::strip(&joined).to_string();
-    }
-    python::strip(&first).to_string()
+    let first = match first.split_once('=') {
+        // `=` を含む最初の区切り（種類の形ではない）。
+        Some((key, rest)) => format!(
+            "{}={}",
+            key.trim_end_matches(BLANK).to_lowercase(),
+            rest.trim_start_matches(BLANK)
+        ),
+        None => first,
+    };
+    first.trim_matches(BLANK).to_lowercase()
 }
 
 /// python-multipart の `_parseparam` の最初の区切り（`"` の中の `;` は区切りにしない。Python の書き方のまま写した）。
@@ -364,7 +372,8 @@ mod tests {
         ));
     }
 
-    /// Content-Type は ; があると小文字にしないこと（大文字の種類に引数が付くと、フォームとして読まない）。
+    /// Content-Type は ; の有無に関係なく小文字にし（大文字の種類に引数が付いてもフォームとして読む）、前後の空白と
+    /// タブだけを落とすこと（python-multipart 0.0.34）。
     #[test]
     fn the_content_type_is_read_like_python_multipart() {
         assert_eq!(
@@ -375,9 +384,19 @@ mod tests {
             content_type(&form_headers(
                 "Application/X-WWW-Form-Urlencoded; charset=utf-8"
             )),
-            "Application/X-WWW-Form-Urlencoded"
+            "application/x-www-form-urlencoded"
         );
-        assert_eq!(content_type(&form_headers("a\";b\"; c=d")), "a\";b\"");
+        assert_eq!(
+            content_type(&form_headers(" \tapplication/x-www-form-urlencoded\t ; a=b")),
+            "application/x-www-form-urlencoded"
+        );
+        let mut nbsp = HeaderMap::new();
+        nbsp.insert(
+            "content-type",
+            HeaderValue::from_bytes(b"\xa0application/x-www-form-urlencoded").unwrap(),
+        );
+        assert_eq!(content_type(&nbsp), "\u{a0}application/x-www-form-urlencoded");
+        assert_eq!(content_type(&form_headers("A\";B\"; c=d")), "a\";b\"");
         assert_eq!(content_type(&HeaderMap::new()), "");
     }
 

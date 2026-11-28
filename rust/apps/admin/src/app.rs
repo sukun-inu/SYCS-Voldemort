@@ -347,14 +347,30 @@ pub fn default_limit_reply() -> Reply {
     )
 }
 
-/// starlette の `_HOST_RE`（Host が URL を組み直しても安全な形か）。
+/// starlette 1.10 の `parse_host_header`（`starlette/_utils.py` の `_HOST_RE` と、IPv6 とポートの確かめ）。Host が
+/// URL を組み直しても安全な形なら真。
 fn host_is_safe(host: &str) -> bool {
     static HOST: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
-    HOST.get_or_init(|| {
-        Regex::new(r"(?i)^(?:[a-z0-9.-]+|\[[a-f0-9]*:[a-f0-9.:]+\])(?::[0-9]+)?\z")
-            .unwrap_or_else(|e| panic!("Host の形を正規表現にできない: {e}"))
+    let pattern = HOST.get_or_init(|| {
+        Regex::new(concat!(
+            r"(?i)^(?:[a-z0-9._~%!$&'()*+,;=-]+|\[(?:(?P<ipv6>[a-f0-9]*:[a-f0-9.:]+)|",
+            r"(?-i:v)[a-f0-9]+\.[a-z0-9._~!$&'()*+,;=:-]+)\])(?::(?P<port>[0-9]+))?\z",
+        ))
+        .unwrap_or_else(|e| panic!("Host の形を正規表現にできない: {e}"))
+    });
+    let Some(captures) = pattern.captures(host) else {
+        return false;
+    };
+    if let Some(ipv6) = captures.name("ipv6")
+        && ipv6.as_str().parse::<std::net::Ipv6Addr>().is_err()
+    {
+        return false;
+    }
+    // `is_valid_port`（前の 0 を落として 5 桁まで、65535 まで）。
+    captures.name("port").is_none_or(|port| {
+        let digits = port.as_str().trim_start_matches('0');
+        digits.len() <= 5 && digits.parse::<u32>().unwrap_or(0) <= 65535
     })
-    .is_match(host)
 }
 
 /// エラーの答えを決めるのに要る、要求の側のもの。
@@ -590,9 +606,12 @@ impl AdminApp {
     /// Rust はパスだけにする（nginx の後ろでは Host はいつもある）。
     fn slash_redirect(&self, req: &Req, candidate: &str) -> Reply {
         let host = req.header("host").filter(|host| host_is_safe(host));
+        // starlette 1.10 はパスの `?`・`#`・`\` を戻してから URL を組む。Host が無く `//` で始まるパスは `/%2F` にする。
+        let path = python::url_path_escaped(candidate);
         let mut url = match host {
-            Some(host) => format!("{}://{host}{candidate}", req.scheme),
-            None => candidate.to_string(),
+            Some(host) => format!("{}://{host}{path}", req.scheme),
+            None if path.starts_with("//") => format!("/%2F{}", &path[2..]),
+            None => path,
         };
         if let Some(query) = req.query.as_deref().filter(|q| !q.is_empty()) {
             url.push('?');
@@ -839,5 +858,31 @@ mod tests {
         assert_eq!(reply.header("vary"), Some("Accept, Cookie"));
         assert_eq!(reply.headers.iter().filter(|(n, _)| n == "x").count(), 1);
         assert_eq!(reply.header("x"), Some("3"));
+    }
+
+    /// Host の確かめが starlette 1.10 の parse_host_header と同じこと（記号・IPv6・ポートの範囲）。
+    #[test]
+    fn hosts_are_checked_like_starlette() {
+        for host in [
+            "testserver",
+            "admin.example.com:5001",
+            "[::1]:5001",
+            "[v1.x]",
+            "a~b!c",
+            "example.com:00080",
+        ] {
+            assert!(host_is_safe(host), "{host}");
+        }
+        for host in [
+            "a/b",
+            "a?b",
+            "a@b",
+            "[1::2::3]",
+            "example.com:99999",
+            "example.com:123456",
+            "",
+        ] {
+            assert!(!host_is_safe(host), "{host}");
+        }
     }
 }

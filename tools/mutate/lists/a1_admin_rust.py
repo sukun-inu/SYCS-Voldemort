@@ -72,10 +72,10 @@ MUTS = [
         "            ('0'..='7').contains(&digits[0])",
     ),
     (
-        "; のある Content-Type も小文字にする（python-multipart はしない）",
+        "; のある Content-Type を小文字にしない（python-multipart 0.0.34 はする）",
         SEC,
-        "    python::strip(&first).to_string()",
-        "    python::strip(&first.to_lowercase()).to_string()",
+        "    first.trim_matches(BLANK).to_lowercase()",
+        "    first.trim_matches(BLANK).to_string()",
     ),
     (
         "フォームの csrf_token が空でも見出しへ回らない",

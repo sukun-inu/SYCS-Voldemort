@@ -210,10 +210,13 @@ impl Session {
         self.data.insert(key.to_string(), value);
     }
 
-    /// `session.pop(key, None)`（あった鍵を取り出したときだけ書き換えた印）。
+    /// `session.pop(key, None)`（あった鍵を取り出したときだけ書き換えた印。starlette 1.10 は触った印も立てる。1.6 は
+    /// 書き換えた印だけだった）。
     pub fn pop(&mut self, key: &str) -> Option<Value> {
         let value = self.data.shift_remove(key);
-        self.modified |= value.is_some();
+        if value.is_some() {
+            self.mark_modified();
+        }
         value
     }
 

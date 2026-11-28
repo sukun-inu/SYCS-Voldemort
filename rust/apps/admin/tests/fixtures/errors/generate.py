@@ -35,9 +35,11 @@ cookies の生の見出し）、見出し、本文（json・form・body）、rep
 作り直すとき（本番と同じ依存 requirements.txt で。CI の「基準」が tools/fixtures/regen.py から回す）:
 
     python rust/apps/admin/tests/fixtures/errors/generate.py
-"""
 
-from __future__ import annotations
+**`from __future__ import annotations` を書かないこと。** 基準のためだけの経路は make_probes の中で定義し、`Request`
+もその中で import している。注釈が文字のままだと、FastAPI は関数のモジュールの globals から `Request` を引けず、
+`request` を問い合わせのパラメータだと思って 422 を返す（1 回目の CI で、例外を投げる経路が 422 になった）。
+"""
 
 import builtins
 import json

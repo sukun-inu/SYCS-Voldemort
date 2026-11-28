@@ -303,7 +303,8 @@
     {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "application/x-www-form-urlencoded"}, "body": [["csrf%5Ftoken=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 1]], "expect_status": 200},
     {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "application/x-www-form-urlencoded"}, "body": [["csrf+token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 1]], "expect_status": 403},
     {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "application/x-www-form-urlencoded; charset=utf-8"}, "body": [["csrf_token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 1]], "expect_status": 200},
-    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "Application/X-WWW-Form-Urlencoded; charset=utf-8"}, "body": [["csrf_token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 1]], "expect_status": 403},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "Application/X-WWW-Form-Urlencoded; charset=utf-8"}, "body": [["csrf_token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 1]], "expect_status": 200},
+    {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "Application/X-WWW-Form-Urlencoded; charset=utf-8", "x-csrftoken": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}, "body": [["csrf_token=bad", 1]], "expect_status": 403},
     {"method": "POST", "target": "/admin/api/__a1/csrf", "session": "csrf", "headers": {"content-type": "APPLICATION/X-WWW-FORM-URLENCODED"}, "body": [["csrf_token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 1]], "expect_status": 200}
    ]
   },

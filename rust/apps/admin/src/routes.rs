@@ -50,14 +50,15 @@ pub fn default_routes() -> Vec<Route> {
 /// `/static`（`app.mount("/static", StaticFiles(...))`）。
 ///
 /// nginx がファイルを返し、無いファイルと GET・HEAD 以外だけをここへ回す（`docker/nginx/sycs.conf.template`）。
-/// なので、ここで返すのは StaticFiles の断り方だけ: GET・HEAD 以外は 405（`Allow` は付かない）、ほかは 404。
+/// なので、ここで返すのは StaticFiles の断り方だけ: GET・HEAD 以外は 405（starlette 1.10 は `Allow: GET, HEAD` を
+/// 付ける。JSON の答えにだけ出る）、ほかは 404。
 /// Python と違うところ: nginx を通さずにファイルを取りに来ても、Rust は 404 にする（中身を返さない）。
 pub fn static_mount() -> Route {
     Route::mount(
         "/static",
         handler(|_app, req: Req| async move {
             let error = if req.method != Method::GET && req.method != Method::HEAD {
-                HttpError::new(405)
+                HttpError::new(405).header("allow", "GET, HEAD")
             } else {
                 HttpError::new(404)
             };

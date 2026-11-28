@@ -604,15 +604,22 @@ pub fn splitlines(text: &str) -> Vec<&str> {
     lines
 }
 
-/// `request.url.path`。starlette は戻したパスから URL を組み直して `urlsplit` するので、タブと改行（`\t`・`\r`・`\n`）は
-/// 消え、`?` か `#` から後ろは問い合わせ・断片として落ちる（Host は starlette が確かめるので、パスには響かない）。
+/// `request.url.path`。starlette 1.10 は戻したパスの `?`・`#`・`\` を `%3F`・`%23`・`%5C` に戻してから URL を組み直し
+/// （[`url_path_escaped`]）、`urlsplit` する。なのでタブと改行（`\t`・`\r`・`\n`）だけが消え、ほかは残る（Host は
+/// starlette が確かめるので、パスには響かない）。
 pub fn url_path(decoded: &str) -> String {
-    let cleaned: String = decoded
+    url_path_escaped(decoded)
         .chars()
         .filter(|c| !matches!(c, '\t' | '\r' | '\n'))
-        .collect();
-    let end = cleaned.find(['?', '#']).unwrap_or(cleaned.len());
-    cleaned[..end].to_string()
+        .collect()
+}
+
+/// starlette 1.10 の `URL(scope=…)` がパスに当てる置き換え（`?`→`%3F`、`#`→`%23`、`\`→`%5C`）。
+pub fn url_path_escaped(decoded: &str) -> String {
+    decoded
+        .replace('?', "%3F")
+        .replace('#', "%23")
+        .replace('\\', "%5C")
 }
 
 /// `urllib.parse.quote(text, safe=safe)`。UTF-8 のバイトごとに、英数字・`_.-~`・`safe` の文字はそのまま、ほかは
@@ -780,7 +787,7 @@ mod tests {
     #[test]
     fn url_paths_and_form_values_match_starlette() {
         assert_eq!(url_path("/admin/api\n/x"), "/admin/api/x");
-        assert_eq!(url_path("/admin/api?x/y#z"), "/admin/api");
+        assert_eq!(url_path("/admin/api?x/y#z\\"), "/admin/api%3Fx/y%23z%5C");
         assert_eq!(form_unquote(b"a+b%20c%E3%81%82"), "a b cあ");
         assert_eq!(form_unquote(b"%E3%81\xe9%82"), "\u{fffd}\u{e9}\u{fffd}");
         assert_eq!(
