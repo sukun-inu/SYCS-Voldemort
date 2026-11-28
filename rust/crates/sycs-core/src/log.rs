@@ -63,6 +63,8 @@ pub const CATEGORY_RULES: &[(&str, &str)] = &[
     ("sycs_bot::virustotal", "security"),
     // Python の services.user_state（userstate）と同じ棚。
     ("sycs_bot::user_state", "userstate"),
+    // Python の services.guild_retention（userstate）と同じ棚。user_state_sync・user_state_repair は上の行に当たる。
+    ("sycs_bot::guild_retention", "userstate"),
     // Python の commands（スラッシュコマンドの入口と、打たれた記録）と同じ棚。
     ("sycs_bot::commands", "command"),
     // Python の services.metal_service・commands.metal_commands（metal）と同じ棚。
@@ -588,6 +590,9 @@ mod tests {
             ("sycs_bot::security", "security"),
             ("sycs_bot::virustotal", "security"),
             ("sycs_bot::user_state", "userstate"),
+            ("sycs_bot::user_state_sync", "userstate"),
+            ("sycs_bot::user_state_repair", "userstate"),
+            ("sycs_bot::guild_retention", "userstate"),
             ("sycs_bot::commands", "command"),
             ("sycs_bot::commands::settings", "command"),
             ("sycs_bot::commands::quake", "command"),

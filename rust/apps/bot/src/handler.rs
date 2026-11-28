@@ -39,7 +39,7 @@ use crate::user_state::{self, GuildView};
 use crate::vc_notify::{self, Filter, Plan, VcTracker};
 use crate::virustotal::VirusTotal;
 use crate::welcome::{self, Kind};
-use crate::{commands, compat, message_logs, signals};
+use crate::{commands, compat, message_logs, signals, user_state_sync};
 
 /// Bot が動いている間ずっと持っているもの。
 pub struct AppState {
@@ -258,7 +258,7 @@ impl AppState {
 }
 
 /// 全サーバーを読み終えたら（来なければ [`CACHE_READY_TIMEOUT`] で見切って）、スティッキー・ニュース・
-/// 地震の電文の受け取り・管理画面からの依頼の巡回を始める。
+/// 地震の電文の受け取り・管理画面からの依頼の巡回と、利用者の状態の同期・定期の修復を始める。
 async fn start_after_cache_ready(
     ctx: Context,
     state: Arc<AppState>,
@@ -284,6 +284,9 @@ async fn start_after_cache_ready(
             "BOT_BACKGROUND_WORKER=false: スティッキーの巡回・ニュース・地震の受け取りは動かしません"
         );
     }
+    // 利用者の状態の同期と定期の修復・掃除。Python の on_ready と同じく、BOT_BACKGROUND_WORKER ではなく
+    // それぞれの旗（USER_STATE_SYNC_ON_READY・USER_STATE_AUTO_REPAIR_ENABLED）で決める。
+    user_state_sync::start(&ctx, &state);
     if state.config.dev_signals_enabled {
         let pool = state.pool.clone();
         tokio::spawn(signals::run_forever(pool, move |task, payload| {
