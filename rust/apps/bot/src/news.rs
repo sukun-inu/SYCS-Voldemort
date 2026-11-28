@@ -5,7 +5,7 @@
 //! `interval` が経ったフィードだけ Google News の RSS を取りに行く。まだ送っていない記事（リンクの md5 で
 //! 覚える）を新しい方から 5 件まで選び、**古い順に** Embed で送る（RSS は新しい順なので、そのまま送ると
 //! チャンネルの中で時系列が逆になる）。Groq の鍵があれば要約（400 文字まで）を付ける。巡回のあと、
-//! 取得に失敗していても `last_run` を書き、`seen_hashes` は直近 100 件だけ残す。
+//! 取得に失敗していても `last_run` を書き、`seen_hashes` は直近 300 件だけ残す（[`SEEN_KEEP`]）。
 //!
 //! 送れなかった記事は「送った」に入れないので、次の巡回でまた送ろうとする（Python と同じ）。
 //!
@@ -53,8 +53,12 @@ use crate::{email_date, html_unescape, log_channel};
 pub const INTERVAL: Duration = Duration::from_secs(300);
 /// 1 回の巡回で 1 フィードから送る記事の上限。
 pub const MAX_PER_RUN: usize = 5;
-/// 覚えておく「送った記事」の数。
-pub const SEEN_KEEP: usize = 100;
+/// 覚えておく「送った記事」の数（Python の `NEWS_SEEN_HASHES_KEEP`）。
+///
+/// **フィードが一度に返す記事の数より多くなければならない。** 少ないと、古い記事の印から押し出されて
+/// 「まだ送っていない」に戻り、巡回のたびに同じ記事を送り直し続ける。Google News の RSS は 1 回に
+/// 100〜106 件ほど返すので、以前の 100 件では実際にこれが起きうる。余裕を持たせて 300 件。
+pub const SEEN_KEEP: usize = 300;
 /// `interval` が無いときの分数。
 pub const DEFAULT_INTERVAL_MINUTES: i64 = 60;
 /// 説明の上限（文字）。
@@ -1061,20 +1065,20 @@ mod tests {
         }
     }
 
-    /// 書き戻し: 時刻と、直近 100 件の印。ほかの値は触らない。無いフィードは作らない。
+    /// 書き戻し: 時刻と、直近 300 件の印。ほかの値は触らない。無いフィードは作らない。
     #[test]
-    fn the_state_keeps_the_last_hundred_hashes() {
+    fn the_state_keeps_the_last_hashes() {
         let mut s = settings(json!({"1": {"news_feeds": {
             "a": {"channel_id": 5, "query": "q", "interval": 30, "last_run": 0.0, "seen_hashes": []},
             "broken": "x",
         }}}));
-        let seen: Vec<Value> = (0..130).map(|i| json!(format!("h{i}"))).collect();
+        let seen: Vec<Value> = (0..330).map(|i| json!(format!("h{i}"))).collect();
         apply_feed_state(&mut s, 1, "a", 123.5, &seen);
         let row = &s.guilds["1"]["news_feeds"]["a"];
         assert_eq!(row["last_run"], 123.5);
         assert_eq!(row["seen_hashes"].as_array().unwrap().len(), SEEN_KEEP);
         assert_eq!(row["seen_hashes"][0], "h30");
-        assert_eq!(row["seen_hashes"][99], "h129");
+        assert_eq!(row["seen_hashes"][299], "h329");
         assert_eq!(
             (&row["channel_id"], &row["query"], &row["interval"]),
             (&json!(5), &json!("q"), &json!(30))
@@ -1268,7 +1272,14 @@ mod tests {
         assert_eq!(c.summary_model, "other/model");
         assert_eq!(
             (INTERVAL, MAX_PER_RUN, SEEN_KEEP),
-            (Duration::from_secs(300), 5, 100)
+            (Duration::from_secs(300), 5, 300)
+        );
+        // 覚える印の数は、Python の settings_store の値そのものと比べる（片方だけ変えると、送り直しの直しが
+        // 片方にしか効かない）。
+        let python = include_str!("../../../../services/settings_store.py");
+        assert!(
+            python.contains(&format!("\nNEWS_SEEN_HASHES_KEEP = {SEEN_KEEP}\n")),
+            "Python の NEWS_SEEN_HASHES_KEEP と SEEN_KEEP が違う"
         );
         assert_eq!(
             (DESC_MAX_CHARS, SUMMARY_MAX_CHARS, BLUE),

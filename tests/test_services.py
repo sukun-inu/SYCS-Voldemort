@@ -2245,10 +2245,19 @@ class SettingsStoreTests(unittest.TestCase):
 
     def test_news_feed_state_keeps_only_recent_hashes(self):
         store.add_news_feed(self.guild_id, "feed1", 100, "クエリ", 60)
-        store.update_news_feed_state(self.guild_id, "feed1", 1.0, [str(i) for i in range(150)])
+        store.update_news_feed_state(self.guild_id, "feed1", 1.0, [str(i) for i in range(450)])
         seen = store.get_news_feeds(self.guild_id)["feed1"]["seen_hashes"]
-        self.assertEqual(len(seen), 100)
-        self.assertEqual(seen[-1], "149")
+        self.assertEqual(len(seen), store.NEWS_SEEN_HASHES_KEEP)
+        self.assertEqual(seen[0], "150")
+        self.assertEqual(seen[-1], "449")
+
+    def test_news_feed_keeps_more_hashes_than_a_feed_returns(self):
+        """覚える印の数が、Google News が一度に返す記事の数（100〜106 件ほど）より多いこと。
+
+        少ないと、古い記事の印が押し出されて、同じ記事を巡回のたびに送り直し続ける
+        （NewsFeedResendTests が実際の巡回で確かめる）。
+        """
+        self.assertGreaterEqual(store.NEWS_SEEN_HASHES_KEEP, 200)
 
     def test_async_write_matches_the_sync_one(self):
         store.add_news_feed(self.guild_id, "feed2", 100, "クエリ", 60)
@@ -2806,6 +2815,62 @@ class _FakeRssSession:
     def get(self, *_args, **_kwargs):
         """async with に渡せるものを返す。"""
         return self._response
+
+
+class NewsFeedResendTests(unittest.TestCase):
+    """記事の多いフィードでも、同じ記事を送り直し続けないこと（本物の run_news_feeds で回す）。
+
+    Google News の RSS は 1 回に 100〜106 件ほど返す。送った記事の印を 100 件しか覚えないと、
+    古い記事の印が押し出されて「まだ送っていない」に戻り、巡回のたびに同じ記事を送り直し続けた
+    （送るたびに別の古い記事の印が押し出されるので、終わらない）。
+    """
+
+    GUILD = 4343
+    ARTICLES = 106
+
+    def setUp(self):
+        import services.news_service as news
+
+        self.news = news
+        # 間隔 0 分: 呼ぶたびに巡回する（時計を差し替えずに何回も回すため）。
+        store.add_news_feed(self.GUILD, "busy", 100, "クエリ", 0)
+        self.articles = [
+            {
+                "title": f"t{i}",
+                "link": f"https://news.example/{i}",
+                "desc": "",
+                "source": "",
+                "sourceUrl": "",
+                "pubDate": "",
+            }
+            for i in range(self.ARTICLES)
+        ]
+
+    def _run_once(self, sent):
+        """1 回巡回する。"""
+        channel = Mock(spec=discord.TextChannel)
+
+        async def send(embed):
+            """送った記事のリンクを残す。"""
+            sent.append(embed.url)
+
+        channel.send = send
+        guild = SimpleNamespace(get_channel=lambda channel_id: channel)
+        bot = SimpleNamespace(get_guild=lambda guild_id: guild)
+        with (
+            patch.object(self.news, "get_all_guild_ids", lambda: [self.GUILD]),
+            patch.object(self.news, "_fetch_articles", AsyncMock(return_value=self.articles)),
+            patch.object(self.news, "_summarize_article", AsyncMock(return_value="")),
+        ):
+            asyncio.run(self.news.run_news_feeds(bot))
+
+    def test_every_article_is_sent_once_and_then_nothing(self):
+        """106 件を 5 件ずつ全部送り終えたら、それ以降は 1 件も送らないこと。"""
+        sent: list[str] = []
+        for _ in range(60):
+            self._run_once(sent)
+        self.assertEqual(len(sent), self.ARTICLES, "同じ記事を送り直している")
+        self.assertEqual(len(set(sent)), self.ARTICLES)
 
 
 class NewsFeedParseOffloadTests(unittest.TestCase):
