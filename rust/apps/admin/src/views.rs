@@ -30,6 +30,7 @@ use serde_json::Value;
 use tracing::warn;
 
 use crate::app::{AdminApp, Handler, Reply, Req, handler};
+use crate::apps::Panels;
 use crate::auth::{self, Discord, GuildCount, StoredGuildCount};
 use crate::errors::{Crash, Failure};
 use crate::python;
@@ -84,18 +85,20 @@ pub fn os_state_token() -> StateToken {
     })
 }
 
-/// 設定のあるサーバーの数を、まだ読めないとき（設定の置き場は A5 でつなぐ）。Bot のサーバー数が 0 か失敗のときに
-/// 警告を残して 0 になる（Python は設定のあるサーバーの数を出す）。
+/// 設定の置き場につないでいないときの、設定のあるサーバーの数（`--self-check` のときだけ使う。本番は
+/// [`crate::apps::stored_guild_count`]）。Bot のサーバー数が 0 か失敗のときに警告を残して 0 になる。
 pub fn stored_guilds_not_connected() -> StoredGuildCount {
-    Arc::new(|| Err("設定の置き場にまだつないでいない（A5 でつなぐ）".to_string()))
+    Arc::new(|| Err("設定の置き場につないでいない".to_string()))
 }
 
-/// この画面たちが使うもの（テンプレート・Discord・サーバー数の使い回し・`state` の作り方）。経路の係が持ち回る。
+/// この画面たちが使うもの（テンプレート・Discord・サーバー数の使い回し・`state` の作り方・設定パネル）。経路の係が
+/// 持ち回る。
 pub struct Site {
     pages: Arc<Pages>,
     discord: Arc<Discord>,
     guild_count: GuildCount,
     state_token: StateToken,
+    panels: Arc<Panels>,
 }
 
 impl std::fmt::Debug for Site {
@@ -108,7 +111,8 @@ impl std::fmt::Debug for Site {
 }
 
 impl Site {
-    /// 作る。`stored` は設定のあるサーバーの数（[`GuildCount`]）。
+    /// 作る。`stored` は設定のあるサーバーの数（[`GuildCount`]）。設定パネルはつないでいないもの
+    /// （[`Panels::unconfigured`]。つなぐのは [`Site::with_panels`]）。
     pub fn new(
         pages: Arc<Pages>,
         discord: Arc<Discord>,
@@ -120,7 +124,19 @@ impl Site {
             discord,
             guild_count: GuildCount::new(stored),
             state_token,
+            panels: Arc::new(Panels::unconfigured()),
         }
+    }
+
+    /// 設定パネル（A5）が使うもの（設定の置き場・選択肢）を入れる。
+    pub fn with_panels(mut self, panels: Arc<Panels>) -> Self {
+        self.panels = panels;
+        self
+    }
+
+    /// 設定パネルが使うもの。
+    pub fn panels(&self) -> &Arc<Panels> {
+        &self.panels
     }
 
     /// テンプレート。

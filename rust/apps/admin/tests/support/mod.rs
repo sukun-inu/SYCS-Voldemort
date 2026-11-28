@@ -3,6 +3,9 @@
 //! 偽物の Discord は、基準を作った Python の偽物（`fixtures/fake_discord.py`）と同じ決まりで答える: 例に書いた
 //! 「メソッド パス 認証の種類」（無ければ「メソッド パス」）の答えを返し、届いた要求（メソッド・パス・
 //! Authorization・Content-Type・本文）を控える。例に無い要求には 500 を返し、控えに `unexpected` を付ける。
+//! 答え方に `headers`（名前 → 値）があればその見出しも付け（429 の `Retry-After`）、`delay`（秒）があればそれだけ
+//! 待ってから答える（読み上げの声を見切る例。どちらも A5）。同じ偽物を、読み上げの API（`/api/v1/voices`）の偽物にも
+//! 使う。
 //!
 //! 使わない道具があるテストもあるので、未使用の警告は止めてある。
 #![allow(dead_code)]
@@ -105,11 +108,19 @@ fn response_of(spec: Option<&Value>) -> Response {
     if let Some(value) = spec.get("content_type") {
         content_type = value.as_str().map(str::to_string);
     }
-    reply(
+    let mut response = reply(
         u16::try_from(status).unwrap(),
         content_type.as_deref(),
         body,
-    )
+    );
+    // 答え方の headers（名前 → 値。429 の Retry-After）。
+    for (name, value) in spec["headers"].as_object().into_iter().flatten() {
+        response.headers_mut().append(
+            HeaderName::from_bytes(name.as_bytes()).unwrap(),
+            HeaderValue::from_str(value.as_str().unwrap_or_default()).unwrap(),
+        );
+    }
+    response
 }
 
 fn reply(status: u16, content_type: Option<&str>, body: Vec<u8>) -> Response {
@@ -163,6 +174,10 @@ async fn answer(State(script): State<Shared>, request: Request) -> Response {
         script.seen.push(record);
         spec
     };
+    // 答え方の delay（秒）だけ待ってから答える（控えは届いたときに残す。Python の偽物と同じ）。
+    if let Some(delay) = spec.as_ref().and_then(|spec| spec["delay"].as_f64()) {
+        tokio::time::sleep(std::time::Duration::from_secs_f64(delay)).await;
+    }
     response_of(spec.as_ref())
 }
 

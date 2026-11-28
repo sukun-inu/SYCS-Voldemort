@@ -1,0 +1,511 @@
+{
+ "note": "設定パネルの読む側（A5）の基準の例。書き方は generate.py と ../admin_harness.py・../fake_discord.py の先頭。settings・discord・tts・sessions の中では $ref（library）が使える",
+ "secret": "a5-apps-fixture-secret-not-for-production",
+ "now": 1780000000.25,
+ "discord": {"client_id": "123456789012345678", "bot_token": "a5-bot-token"},
+ "dev_user_id": "",
+ "library": {
+  "token": "5c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee55c0ffee5",
+  "user": {"id": "111111111111111111", "username": "voldemort", "global_name": "ヴォルデモート卿", "avatar": null},
+  "other": {"id": "222222222222222222", "username": "harry", "global_name": null, "avatar": null},
+  "guilds": [{"id": "900000000000000001", "name": "ホグワーツ魔法魔術学校", "icon": null}],
+  "full": {"guilds": {
+   "900000000000000002": {"log_level": "ERROR"},
+   "900000000000000001": {
+    "log_channel_id": 800000000000000001,
+    "log_level": "debug",
+    "response_channel_id": "800000000000000002",
+    "welcome": {"channel_id": 800000000000000003, "message": "ようこそ {user} さん"},
+    "goodbye": {"channel_id": 0, "message": "<b>またね</b> & \"bye\" 'x'"},
+    "vc_notify_channel_id": 800000000000000004,
+    "vc_notify_role_id": "700000000000000001",
+    "vc_notify_filter_role_id": 0,
+    "earthquake": {"channel_id": "800000000000000005", "min_scale": "45", "notify_types": {"eew_forecast": false, "tsunami": 0, "extra": true}},
+    "djaudio": {"watch_channel_id": "0", "channel_id": 800000000000000006, "output_channel_id": -5, "cache_ttl": 30, "max_urls": "12"},
+    "djaudio_cooldown": 15,
+    "tts": {
+     "enabled": 1, "vc_notify": "", "vc_channel_id": 800000000000000007,
+     "watch_channel_ids": [800000000000000001, "800000000000000008", "x", null, 12.9],
+     "default_voice": "", "default_rate": "250", "max_length": null, "speak_max_length": 300, "read_name": false,
+     "dictionary": {"ＳＹＣＳ": "しくす", "x": 5},
+     "user_settings": {"333": {"voice": "Otoya", "rate": 150}, "444": {}, "555": "x"}
+    },
+    "security_timeout_enabled": "yes",
+    "trusted_user_ids": [333, "444", "bad", 9007199254740993],
+    "bypass_role_ids": [700000000000000003, "700000000000000004"],
+    "news_feeds": {
+     "f1": {"channel_id": 800000000000000001, "query": "地震", "interval": 30, "last_run": 1779999000.5, "seen_hashes": ["a"]},
+     "f2": {"channel_id": null, "interval": "0"},
+     "broken": "x"
+    },
+    "sticky_messages": {"800000000000000001": {"content": "固定 <b>", "message_id": 1234567890123456789, "pending": "post"}, "800000000000000002": [1]},
+    "reaction_roles": {"1234567890123456789": {"😀": 700000000000000001, "<:custom:123>": "700000000000000002"}, "99": "x"},
+    "_updated_at": "2026-11-25T09:44:26.553123+00:00"
+   }
+  }},
+  "channels": [
+   {"id": "800000000000000003", "type": 0, "name": "雑談", "position": 2},
+   {"id": "800000000000000001", "type": 0, "name": "general", "position": 0},
+   {"id": "800000000000000007", "type": 2, "name": "ボイス", "position": 1},
+   {"id": "800000000000000009", "type": 4, "name": "カテゴリ", "position": 0},
+   {"id": "800000000000000002", "type": 0, "name": "<b>\"お知らせ\" & 'news'</b>", "position": 2},
+   {"id": 800000000000000005, "type": 0, "name": "数の ID", "position": 1},
+   {"id": "800000000000000008", "type": 2, "name": "ステージ前", "position": 0},
+   {"id": "800000000000000006", "type": 5, "name": "アナウンス", "position": 3}
+  ],
+  "roles": [
+   {"id": "900000000000000001", "name": "@everyone", "position": 0},
+   {"id": "700000000000000001", "name": "管理者", "position": 3},
+   {"id": "700000000000000002", "name": "メンバー", "position": 1},
+   {"id": "700000000000000003", "name": "Bot", "position": 2, "managed": true},
+   {"id": "700000000000000004", "name": "同じ位置", "position": 1},
+   {"id": 700000000000000005, "name": 12345}
+  ],
+  "voices": {"voices": [{"name": "Kyoko"}, {"name": "Otoya", "locale": "ja_JP"}, {"name": ""}, "x", {"id": 1}, {"name": 7}]},
+  "ok_discord": {
+   "GET /guilds/900000000000000001/channels": {"json": {"$ref": "channels"}},
+   "GET /guilds/900000000000000001/roles": {"json": {"$ref": "roles"}}
+  },
+  "ok_tts": {"GET /api/v1/voices?locale=ja": {"json": {"$ref": "voices"}}}
+ },
+ "sessions": {
+  "guild": {"user": {"$ref": "user"}, "admin_guilds": {"$ref": "guilds"}, "admin_guilds_at": 1779999990.25, "guild_id": 900000000000000001, "guild_name": "ホグワーツ魔法魔術学校", "guild_icon": null, "_csrf_token": {"$ref": "token"}},
+  "guild_text_id": {"user": {"$ref": "user"}, "admin_guilds": {"$ref": "guilds"}, "guild_id": " 900000000000000001 ", "_csrf_token": {"$ref": "token"}},
+  "guild_bad_id": {"user": {"$ref": "user"}, "admin_guilds": {"$ref": "guilds"}, "guild_id": "abc", "_csrf_token": {"$ref": "token"}},
+  "guild_null_id": {"user": {"$ref": "user"}, "admin_guilds": {"$ref": "guilds"}, "guild_id": null, "_csrf_token": {"$ref": "token"}},
+  "other_user": {"user": {"$ref": "other"}, "admin_guilds": {"$ref": "guilds"}, "guild_id": 900000000000000001, "_csrf_token": {"$ref": "token"}},
+  "no_guild": {"user": {"$ref": "user"}, "admin_guilds": {"$ref": "guilds"}, "_csrf_token": {"$ref": "token"}},
+  "user_list": {"user": ["x"], "guild_id": 900000000000000001, "_csrf_token": {"$ref": "token"}}
+ },
+ "cases": [
+  {"name": "list_without_cookie", "steps": [{"method": "GET", "target": "/admin/api/apps", "expect_status": 303}]},
+  {"name": "list_without_guild", "steps": [{"method": "GET", "target": "/admin/api/apps", "session": "no_guild", "expect_status": 303}]},
+  {"name": "list_full", "settings": {"$ref": "full"}, "steps": [{"method": "GET", "target": "/admin/api/apps", "session": "guild", "expect_status": 200}]},
+  {
+   "name": "list_as_dev",
+   "settings": {"$ref": "full"},
+   "dev_user_id": "111111111111111111",
+   "steps": [{"method": "GET", "target": "/admin/api/apps", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "list_other_user_while_dev_is_set",
+   "settings": {"$ref": "full"},
+   "dev_user_id": "111111111111111111",
+   "steps": [{"method": "GET", "target": "/admin/api/apps", "session": "other_user", "expect_status": 200}]
+  },
+  {"name": "list_empty_settings", "settings": {"guilds": {}}, "steps": [{"method": "GET", "target": "/admin/api/apps", "session": "guild", "expect_status": 200}]},
+  {
+   "name": "list_settings_not_loaded",
+   "settings": {"$raise": "SettingsNotLoaded", "message": "設定を Postgres から 30 秒以内に読み込めませんでした。接続先と、ログの [settings] の警告を確かめてください。"},
+   "steps": [{"method": "GET", "target": "/admin/api/apps", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "list_broken_guild_settings",
+   "settings": {"guilds": {"900000000000000001": "abc"}},
+   "steps": [{"method": "GET", "target": "/admin/api/apps", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "list_badges_count_odd_entries",
+   "settings": {"guilds": {"900000000000000001": {
+    "news_feeds": {"a": 1, "b": {}}, "sticky_messages": [], "reaction_roles": {"1": {"a": 1, "b": 2}, "2": "x", "3": {}},
+    "trusted_user_ids": ["1", "x"], "bypass_role_ids": "2"
+   }}},
+   "steps": [{"method": "GET", "target": "/admin/api/apps", "session": "guild", "expect_status": 200}]
+  },
+  {"name": "list_guild_id_text", "settings": {"$ref": "full"}, "steps": [{"method": "GET", "target": "/admin/api/apps", "session": "guild_text_id", "expect_status": 200}]},
+  {"name": "list_bad_guild_id", "settings": {"$ref": "full"}, "steps": [{"method": "GET", "target": "/admin/api/apps", "session": "guild_bad_id", "expect_status": 500}]},
+  {"name": "list_null_guild_id", "settings": {"$ref": "full"}, "steps": [{"method": "GET", "target": "/admin/api/apps", "session": "guild_null_id", "expect_status": 500}]},
+  {
+   "name": "list_user_not_a_dict_with_dev",
+   "settings": {"$ref": "full"},
+   "dev_user_id": "111111111111111111",
+   "steps": [{"method": "GET", "target": "/admin/api/apps", "session": "user_list", "expect_status": 500}]
+  },
+  {
+   "name": "list_user_not_a_dict_without_dev",
+   "settings": {"$ref": "full"},
+   "steps": [{"method": "GET", "target": "/admin/api/apps", "session": "user_list", "expect_status": 200}]
+  },
+  {"name": "list_post_not_allowed", "steps": [{"method": "POST", "target": "/admin/api/apps", "session": "guild", "expect_status": 405}]},
+  {"name": "list_head_not_allowed", "steps": [{"method": "HEAD", "target": "/admin/api/apps", "session": "guild", "expect_status": 405}]},
+  {"name": "list_trailing_slash", "steps": [{"method": "GET", "target": "/admin/api/apps/?x=1", "session": "guild", "expect_status": 307}]},
+  {"name": "get_unknown_panel", "steps": [{"method": "GET", "target": "/admin/api/apps/nothing", "session": "guild", "expect_status": 404}]},
+  {"name": "get_unknown_panel_without_cookie", "steps": [{"method": "GET", "target": "/admin/api/apps/nothing", "expect_status": 303}]},
+  {"name": "get_unknown_panel_without_guild", "steps": [{"method": "GET", "target": "/admin/api/apps/logging", "session": "no_guild", "expect_status": 303}]},
+  {"name": "get_non_ascii_panel", "steps": [{"method": "GET", "target": "/admin/api/apps/%E3%81%82", "session": "guild", "expect_status": 404}]},
+  {
+   "name": "get_dev_as_other_user",
+   "dev_user_id": "111111111111111111",
+   "steps": [{"method": "GET", "target": "/admin/api/apps/dev", "session": "other_user", "expect_status": 404}]
+  },
+  {"name": "get_sql_without_dev_configured", "steps": [{"method": "GET", "target": "/admin/api/apps/sql", "session": "guild", "expect_status": 404}]},
+  {
+   "name": "get_dev_as_dev",
+   "dev_user_id": "111111111111111111",
+   "steps": [{"method": "GET", "target": "/admin/api/apps/dev", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "get_sql_as_dev",
+   "dev_user_id": "111111111111111111",
+   "steps": [{"method": "GET", "target": "/admin/api/apps/sql", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "get_dev_user_not_a_dict",
+   "dev_user_id": "111111111111111111",
+   "steps": [{"method": "GET", "target": "/admin/api/apps/dev", "session": "user_list", "expect_status": 500}]
+  },
+  {
+   "name": "get_logging_user_not_a_dict_with_dev",
+   "settings": {"$ref": "full"},
+   "dev_user_id": "111111111111111111",
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/logging", "session": "user_list", "expect_status": 200}]
+  },
+  {"name": "get_monitoring_with_bad_guild_id", "steps": [{"method": "GET", "target": "/admin/api/apps/monitoring", "session": "guild_bad_id", "expect_status": 200}]},
+  {"name": "get_user_state", "steps": [{"method": "GET", "target": "/admin/api/apps/user-state", "session": "guild", "expect_status": 200}]},
+  {"name": "get_guild_data", "steps": [{"method": "GET", "target": "/admin/api/apps/guild-data", "session": "guild", "expect_status": 200}]},
+  {"name": "get_logging_full", "settings": {"$ref": "full"}, "discord": {"$ref": "ok_discord"}, "steps": [{"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "expect_status": 200}]},
+  {"name": "get_welcome_full", "settings": {"$ref": "full"}, "discord": {"$ref": "ok_discord"}, "steps": [{"method": "GET", "target": "/admin/api/apps/welcome", "session": "guild", "expect_status": 200}]},
+  {"name": "get_vc_notify_full", "settings": {"$ref": "full"}, "discord": {"$ref": "ok_discord"}, "steps": [{"method": "GET", "target": "/admin/api/apps/vc-notify", "session": "guild", "expect_status": 200}]},
+  {"name": "get_earthquake_full", "settings": {"$ref": "full"}, "discord": {"$ref": "ok_discord"}, "steps": [{"method": "GET", "target": "/admin/api/apps/earthquake", "session": "guild", "expect_status": 200}]},
+  {"name": "get_news_feeds_full", "settings": {"$ref": "full"}, "discord": {"$ref": "ok_discord"}, "steps": [{"method": "GET", "target": "/admin/api/apps/news-feeds", "session": "guild", "expect_status": 200}]},
+  {"name": "get_sticky_full", "settings": {"$ref": "full"}, "discord": {"$ref": "ok_discord"}, "steps": [{"method": "GET", "target": "/admin/api/apps/sticky", "session": "guild", "expect_status": 200}]},
+  {"name": "get_reaction_roles_full", "settings": {"$ref": "full"}, "discord": {"$ref": "ok_discord"}, "steps": [{"method": "GET", "target": "/admin/api/apps/reaction-roles", "session": "guild", "expect_status": 200}]},
+  {"name": "get_djaudio_full", "settings": {"$ref": "full"}, "discord": {"$ref": "ok_discord"}, "steps": [{"method": "GET", "target": "/admin/api/apps/djaudio", "session": "guild", "expect_status": 200}]},
+  {
+   "name": "get_tts_full",
+   "settings": {"$ref": "full"},
+   "discord": {"$ref": "ok_discord"},
+   "tts": {"$ref": "ok_tts"},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "expect_status": 200}]
+  },
+  {"name": "get_security_full", "settings": {"$ref": "full"}, "discord": {"$ref": "ok_discord"}, "steps": [{"method": "GET", "target": "/admin/api/apps/security", "session": "guild", "expect_status": 200}]},
+  {"name": "get_security_guild_id_text", "settings": {"$ref": "full"}, "discord": {"$ref": "ok_discord"}, "steps": [{"method": "GET", "target": "/admin/api/apps/security", "session": "guild_text_id", "expect_status": 200}]},
+  {
+   "name": "get_logging_settings_not_loaded",
+   "settings": {"$raise": "SettingsNotLoaded", "message": "設定を Postgres から 30 秒以内に読み込めませんでした。接続先と、ログの [settings] の警告を確かめてください。"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "get_news_feeds_settings_not_loaded",
+   "settings": {"$raise": "SettingsNotLoaded", "message": "設定を Postgres から 30 秒以内に読み込めませんでした。接続先と、ログの [settings] の警告を確かめてください。"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/news-feeds", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "get_tts_broken_block",
+   "settings": {"guilds": {"900000000000000001": {"tts": "x"}}},
+   "discord": {"$ref": "ok_discord"},
+   "tts": {"$ref": "ok_tts"},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "get_tts_empty_settings",
+   "settings": {"guilds": {}},
+   "discord": {"$ref": "ok_discord"},
+   "tts": {"$ref": "ok_tts"},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "get_earthquake_broken_guild",
+   "settings": {"guilds": {"900000000000000001": [["earthquake", 5]]}},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/earthquake", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "get_news_feeds_bad_interval",
+   "settings": {"guilds": {"900000000000000001": {"news_feeds": {"a": {"interval": "abc", "channel_id": 1}}}}},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/news-feeds", "session": "guild", "expect_status": 200}]
+  },
+  {"name": "get_logging_bad_guild_id", "settings": {"$ref": "full"}, "discord": {"$ref": "ok_discord"}, "steps": [{"method": "GET", "target": "/admin/api/apps/logging", "session": "guild_bad_id", "expect_status": 500}]},
+  {"name": "get_logging_trailing_slash", "steps": [{"method": "GET", "target": "/admin/api/apps/logging/", "session": "guild", "expect_status": 307}]},
+  {"name": "get_logging_post_not_allowed", "steps": [{"method": "POST", "target": "/admin/api/apps/logging", "session": "guild", "expect_status": 405}]},
+  {
+   "name": "channels_cached_for_sixty_seconds",
+   "settings": {"$ref": "full"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/apps/welcome", "session": "guild", "at": 59, "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "at": 60, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "channels_shared_between_text_and_voice",
+   "settings": {"$ref": "full"},
+   "discord": {"$ref": "ok_discord"},
+   "tts": {"$ref": "ok_tts"},
+   "steps": [
+    {"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "at": 30, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "channels_failure_is_fetched_twice_in_tts",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /guilds/900000000000000001/channels": {"status": 500, "json": {"message": "down"}}},
+   "tts": {"$ref": "ok_tts"},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "channels_failure_keeps_the_stale_list",
+   "settings": {"$ref": "full"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "expect_status": 200},
+    {
+     "method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "at": 61, "expect_status": 200,
+     "discord": {"GET /guilds/900000000000000001/channels": {"status": 502, "body": "bad gateway"}}
+    },
+    {
+     "method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "at": 62, "expect_status": 200,
+     "discord": {"GET /guilds/900000000000000001/channels": {"status": 200, "body": "[", "content_type": "application/json"}}
+    }
+   ]
+  },
+  {
+   "name": "channels_429_waits_for_retry_after",
+   "settings": {"$ref": "full"},
+   "steps": [
+    {
+     "method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "expect_status": 200,
+     "discord": {"GET /guilds/900000000000000001/channels": {"status": 429, "json": {"retry_after": 5}, "headers": {"Retry-After": " 5 "}}}
+    },
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "at": 4.5, "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "at": 5, "discord": {"$ref": "ok_discord"}, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "channels_429_unreadable_retry_after_waits_thirty_seconds",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /guilds/900000000000000001/channels": {"status": 429, "json": {}, "headers": {"Retry-After": "soon"}}},
+   "steps": [
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "at": 29.5, "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "at": 30, "discord": {"$ref": "ok_discord"}, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "channels_429_long_retry_after_is_capped",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /guilds/900000000000000001/channels": {"status": 429, "json": {}, "headers": {"Retry-After": "1e9"}}},
+   "steps": [
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "at": 299, "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "at": 300, "discord": {"$ref": "ok_discord"}, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "channels_429_negative_retry_after_does_not_wait",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /guilds/900000000000000001/channels": {"status": 429, "json": {}, "headers": {"Retry-After": "-3"}}},
+   "tts": {"$ref": "ok_tts"},
+   "steps": [
+    {"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "discord": {"$ref": "ok_discord"}, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "channels_429_in_tts_is_fetched_once",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /guilds/900000000000000001/channels": {"status": 429, "json": {"message": "You are being rate limited."}}},
+   "tts": {"$ref": "ok_tts"},
+   "steps": [
+    {"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "at": 29, "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "at": 30, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "channels_429_with_the_stale_list",
+   "settings": {"$ref": "full"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "expect_status": 200},
+    {
+     "method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "at": 61, "expect_status": 200,
+     "discord": {"GET /guilds/900000000000000001/channels": {"status": 429, "json": {}}}
+    },
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "at": 62, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "channels_not_json_is_not_cached",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /guilds/900000000000000001/channels": {"status": 200, "body": "[]", "content_type": "text/plain"}},
+   "steps": [
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "at": 1, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "channels_empty_body_is_cached_as_empty",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /guilds/900000000000000001/channels": {"status": 200, "body": " ", "content_type": "application/json; charset=utf-8"}},
+   "steps": [
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "at": 10, "discord": {"$ref": "ok_discord"}, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "channels_not_a_list_is_cached_as_empty",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /guilds/900000000000000001/channels": {"json": {"a": 1}}},
+   "steps": [
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/apps/logging", "session": "guild", "at": 10, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "channels_element_not_a_dict",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /guilds/900000000000000001/channels": {"json": ["x", {"id": "1", "type": 0, "name": "a"}]}},
+   "tts": {"$ref": "ok_tts"},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "channels_without_a_name",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /guilds/900000000000000001/channels": {"json": [{"id": "1", "type": 0}, {"id": "2", "type": 2, "name": "v"}]}},
+   "tts": {"$ref": "ok_tts"},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "channels_with_mixed_positions",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /guilds/900000000000000001/channels": {"json": [
+    {"id": "1", "type": 0, "name": "a", "position": "1"},
+    {"id": "2", "type": 0, "name": "b", "position": 2},
+    {"id": "3", "type": 2, "name": "v", "position": null}
+   ]}},
+   "tts": {"$ref": "ok_tts"},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "channels_with_text_positions_and_odd_types",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /guilds/900000000000000001/channels": {"json": [
+    {"id": "1", "type": 0, "name": "b", "position": "b"},
+    {"id": "2", "type": false, "name": "a", "position": "a"},
+    {"id": "3", "type": "0", "name": "x", "position": "c"},
+    {"id": "4", "type": 0.0, "name": 7, "position": "aa"},
+    {"id": 5, "type": 2.0, "name": null},
+    {"id": "6", "type": true, "name": "t"}
+   ]}},
+   "tts": {"$ref": "ok_tts"},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "roles_failure",
+   "settings": {"$ref": "full"},
+   "discord": {"$ref": "ok_discord", "with": {"GET /guilds/900000000000000001/roles": {"status": 403, "json": {"message": "Missing Access"}}}},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/vc-notify", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "roles_not_a_list",
+   "settings": {"$ref": "full"},
+   "discord": {"$ref": "ok_discord", "with": {"GET /guilds/900000000000000001/roles": {"json": {"a": 1}}}},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/vc-notify", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "roles_with_a_text_position",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /guilds/900000000000000001/roles": {"json": [{"id": "1", "name": "a", "position": "1"}]}},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/security", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "roles_without_an_id",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /guilds/900000000000000001/roles": {"json": [{"name": "a", "position": 1}]}},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/security", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "roles_odd_values",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /guilds/900000000000000001/roles": {"json": [
+    {"id": "1", "name": "a", "position": true},
+    {"id": "2", "name": null, "position": 1.5},
+    {"id": "3", "name": "@everyone", "position": 9},
+    {"id": "4", "name": "@Everyone", "position": -1}
+   ]}},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/reaction-roles", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "roles_are_fetched_every_time",
+   "settings": {"$ref": "full"},
+   "discord": {"$ref": "ok_discord"},
+   "steps": [
+    {"method": "GET", "target": "/admin/api/apps/security", "session": "guild", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/apps/security", "session": "guild", "at": 1, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "voices_as_a_list",
+   "settings": {"guilds": {}},
+   "discord": {"$ref": "ok_discord"},
+   "tts": {"GET /api/v1/voices?locale=ja": {"json": [{"name": "A"}, {"name": 5}, {"name": null}, {"name": "B", "x": 1}]}},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "voices_not_ok",
+   "settings": {"guilds": {}},
+   "discord": {"$ref": "ok_discord"},
+   "tts": {"GET /api/v1/voices?locale=ja": {"status": 503, "json": {"voices": [{"name": "A"}]}}},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "voices_not_json",
+   "settings": {"guilds": {}},
+   "discord": {"$ref": "ok_discord"},
+   "tts": {"GET /api/v1/voices?locale=ja": {"body": "{\"voices\": []}", "content_type": "text/html"}},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "voices_null_and_text",
+   "settings": {"guilds": {}},
+   "discord": {"$ref": "ok_discord"},
+   "tts": {"GET /api/v1/voices?locale=ja": {"json": null}},
+   "steps": [
+    {"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "expect_status": 200},
+    {"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "at": 1, "tts": {"GET /api/v1/voices?locale=ja": {"json": {"voices": "Kyoko"}}}, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "voices_time_out",
+   "settings": {"guilds": {}},
+   "voices_timeout": 0.3,
+   "discord": {"$ref": "ok_discord"},
+   "tts": {"GET /api/v1/voices?locale=ja": {"json": [{"name": "Late"}], "delay": 1.5}},
+   "steps": [{"method": "GET", "target": "/admin/api/apps/tts", "session": "guild", "expect_status": 200}]
+  },
+  {
+   "name": "landing_counts_stored_guilds_when_discord_fails",
+   "settings": {"guilds": {"1": {}, " 2": {}, "３": {}, "x": {}, "900000000000000001": {"log_level": "INFO"}}},
+   "discord": {"GET /users/@me/guilds?limit=200 Bot": {"status": 500, "json": {"message": "down"}}},
+   "steps": [
+    {"method": "GET", "target": "/", "expect_status": 200},
+    {"method": "GET", "target": "/", "at": 10, "expect_status": 200}
+   ]
+  },
+  {
+   "name": "landing_counts_stored_guilds_when_discord_gives_zero",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /users/@me/guilds?limit=200 Bot": {"json": []}},
+   "steps": [{"method": "GET", "target": "/", "expect_status": 200}]
+  },
+  {
+   "name": "landing_without_loaded_settings",
+   "settings": {"$raise": "SettingsNotLoaded", "message": "設定を Postgres から 30 秒以内に読み込めませんでした。接続先と、ログの [settings] の警告を確かめてください。"},
+   "discord": {"GET /users/@me/guilds?limit=200 Bot": {"json": []}},
+   "steps": [{"method": "GET", "target": "/", "expect_status": 200}]
+  },
+  {
+   "name": "landing_prefers_discord",
+   "settings": {"$ref": "full"},
+   "discord": {"GET /users/@me/guilds?limit=200 Bot": {"json": [{"id": "1"}, {"id": "2"}, {"id": "3"}]}},
+   "steps": [{"method": "GET", "target": "/", "expect_status": 200}]
+  }
+ ]
+}

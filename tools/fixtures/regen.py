@@ -69,6 +69,9 @@ GENERATORS = [
     # 管理画面のログインとサーバー選択（偽物の Discord に当てる。A3）と、user_still_admin の権限の組み立て。
     ("admin_auth", ".", ["rust/apps/admin/tests/fixtures/auth/generate.py"], None, False),
     ("admin_check", ".", ["rust/apps/admin/tests/fixtures/admin_check/generate.py"], None, False),
+    # 管理画面の設定パネルの読む側（偽物の Discord・TTS に当てる。A5）と、値を読む関数（設定の JSON → 答え）。
+    ("admin_apps_read", ".", ["rust/apps/admin/tests/fixtures/apps_read/generate.py"], None, False),
+    ("admin_getters", ".", ["rust/apps/admin/tests/fixtures/getters/generate.py"], None, False),
 ]
 
 
