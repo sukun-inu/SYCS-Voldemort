@@ -13,8 +13,13 @@
 //! - 最後の改行 1 つを落とす（`keep_trailing_newline=False`）。`trim_blocks`・`lstrip_blocks` は使わない
 //! - 改行は読むときに `\n` に揃える（Jinja2 の字句解析は `\r\n`・`\r` を `\n` にする）
 //!
-//! 経路（axum）へのつなぎは、骨組み（A1）のあとで足す。ここにあるのは、セッションと経路ごとの値を受けて本文を返す
-//! 関数だけ（[`Pages`] のメソッド。状態のコードと見出しはつなぐ側が決める）。
+//! セッションは骨組み（A1）の [`Session`]（starlette 1.x の `Session` の写し）をそのまま受ける。描くときに知らせを
+//! 取り出す・CSRF の印を入れると、Python と同じ操作で「書き換えた」の印が立ち、Cookie を書くかが Python と同じに
+//! 決まる（starlette 1.x は、書き換えたときだけ `Set-Cookie` を出す。知らせが無いときの取り出しや、印がもうある
+//! ときは書き換えない）。エラーのページは、骨組みの差し込み口（[`crate::errors::Pages`]）として描く。
+//!
+//! ほかの経路（`/`・文書・ログイン画面など）へのつなぎは、ここにある関数（[`Pages`] のメソッド）を経路の係から
+//! 呼ぶ（状態のコードと見出しはつなぐ側が決める）。
 
 pub mod globals;
 pub mod markup;
@@ -26,6 +31,9 @@ use std::sync::Arc;
 use minijinja::{AutoEscape, Environment, Error, UndefinedBehavior};
 use serde_json::{Map, Value as JsonValue};
 
+use crate::errors::ErrorPage;
+use crate::security;
+use crate::session::Session;
 use globals::{Assets, DEFAULT_ASSET_VERSION};
 
 /// テンプレートの置き場にあるはずのファイル（Python の `webapp_admin/templates/` の全部）。
@@ -148,24 +156,6 @@ pub fn is_embedded(sec_fetch_dest: Option<&str>) -> bool {
     sec_fetch_dest.is_some_and(|value| value.to_lowercase() == "iframe")
 }
 
-/// セッションの CSRF の印。Python の `security.issue_csrf_token`（無いか偽なら作って入れる）。
-///
-/// 偽（空の文字など）の印が入っていたときは、その鍵の位置のまま置き換わる（Python の dict と同じ）。
-pub fn issue_csrf_token(
-    session: &mut Map<String, JsonValue>,
-    new_token: &mut dyn FnMut() -> String,
-) -> JsonValue {
-    if let Some(token) = session
-        .get("_csrf_token")
-        .filter(|token| markup::json_truthy(token))
-    {
-        return token.clone();
-    }
-    let token = JsonValue::String(new_token());
-    session.insert("_csrf_token".to_string(), token.clone());
-    token
-}
-
 /// セッションの `_flashes` が一覧でなかった（Python では `append` が AttributeError になり 500）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FlashesNotAList;
@@ -181,15 +171,11 @@ impl std::error::Error for FlashesNotAList {}
 /// 次に描くページで 1 回だけ出す知らせを積む。Python の `templating.flash`（`[種類, 文]` を `_flashes` に足す）。
 ///
 /// 取り出すのは [`Pages::render`]（ここで取り出すと、リダイレクトを挟んで次のページで出す使い方が壊れる）。
-pub fn flash(
-    session: &mut Map<String, JsonValue>,
-    message: &str,
-    category: &str,
-) -> Result<(), FlashesNotAList> {
-    match session
-        .entry("_flashes")
-        .or_insert_with(|| JsonValue::Array(Vec::new()))
-    {
+///
+/// Python は `session.setdefault("_flashes", []).append(…)` なので、書き換えた印が立つのは `_flashes` が無かった
+/// ときだけ（あった一覧に足すだけなら、starlette 1.x の `Session` は気づかない）。それも写す。
+pub fn flash(session: &mut Session, message: &str, category: &str) -> Result<(), FlashesNotAList> {
+    match session.set_default("_flashes", JsonValue::Array(Vec::new())) {
         JsonValue::Array(items) => {
             items.push(JsonValue::Array(vec![category.into(), message.into()]));
             Ok(())
@@ -200,8 +186,8 @@ pub fn flash(
 
 /// 描くときに要る、要求ごとのもの（Python の `render()` が `request` から読むもの）。
 pub struct Visit<'a> {
-    /// 読んだセッション。描くと `_flashes` を取り出し、CSRF の印が無ければ入れる（書き戻すのはつなぐ側）。
-    pub session: &'a mut Map<String, JsonValue>,
+    /// 読んだセッション。描くと `_flashes` を取り出し、CSRF の印が無ければ入れる（Cookie を書くのはセッションの層）。
+    pub session: &'a mut Session,
     /// `Sec-Fetch-Dest: iframe` で来たか（[`is_embedded`]。どのテンプレートも使っていない）。
     pub is_embedded: bool,
     /// CSRF の印を新しく作る（Python の `secrets.token_hex(32)`）。セッションに無いときだけ呼ぶ。
@@ -324,27 +310,50 @@ impl Pages {
 
     /// ページを描く。Python の `templating.render(request, name, **ctx)`。
     ///
-    /// 順番も Python と同じ: 知らせ（`_flashes`）を取り出す → CSRF の印が無ければ入れる → 経路の値（`ctx`）に
-    /// `is_embedded` が無ければ足す → `session`（ここまでで変えたあとのもの）・`messages`・`csrf_token` で上書きする。
+    /// 順番も Python と同じ: 知らせ（`_flashes`）を取り出す → CSRF の印が無ければ入れる（骨組みの
+    /// [`security::issue_csrf_token`]）→ 描く（経路の値に `is_embedded`・`session`・`messages`・`csrf_token` を足す）。
+    ///
+    /// 取り出しは `session.pop`（知らせがあったときだけ書き換えた印が立つ）、印は偽のときだけ入れる（入れたら印が
+    /// 立つ）。どちらも起きなければセッションは書き換わらず、Python と同じく Cookie を書き直さない。
     pub fn render(
         &self,
         page: Page,
         visit: &mut Visit<'_>,
-        mut ctx: Map<String, JsonValue>,
+        ctx: Map<String, JsonValue>,
     ) -> Result<String, Error> {
         let messages = visit
             .session
-            .shift_remove("_flashes")
+            .pop("_flashes")
             .unwrap_or_else(|| JsonValue::Array(Vec::new()));
-        let csrf_token = issue_csrf_token(visit.session, &mut *visit.new_csrf_token);
+        let csrf_token = security::issue_csrf_token(visit.session, &mut *visit.new_csrf_token);
+        self.draw(
+            page,
+            visit.session.data(),
+            messages,
+            &csrf_token,
+            visit.is_embedded,
+            ctx,
+        )
+    }
+
+    /// 知らせと印を用意したあとの描き方（Python の `render()` の後半）。
+    ///
+    /// 経路の値（`ctx`）に `is_embedded` が無ければ足し、`session`（知らせを取り出し、印を入れたあとのもの）・
+    /// `messages`・`csrf_token` で上書きしてから描く。
+    fn draw(
+        &self,
+        page: Page,
+        session: &Map<String, JsonValue>,
+        messages: JsonValue,
+        csrf_token: &str,
+        is_embedded: bool,
+        mut ctx: Map<String, JsonValue>,
+    ) -> Result<String, Error> {
         ctx.entry("is_embedded")
-            .or_insert(JsonValue::Bool(visit.is_embedded));
-        ctx.insert(
-            "session".to_string(),
-            JsonValue::Object(visit.session.clone()),
-        );
+            .or_insert(JsonValue::Bool(is_embedded));
+        ctx.insert("session".to_string(), JsonValue::Object(session.clone()));
         ctx.insert("messages".to_string(), messages);
-        ctx.insert("csrf_token".to_string(), csrf_token);
+        ctx.insert("csrf_token".to_string(), JsonValue::from(csrf_token));
         self.env.get_template(page.template())?.render(&ctx)
     }
 
@@ -406,22 +415,36 @@ impl Pages {
     pub fn shell(&self, visit: &mut Visit<'_>) -> Result<String, Error> {
         self.render(Page::Shell, visit, Map::new())
     }
+}
 
-    /// エラーのページ。Python の `_error_response` の HTML の枝（`code`・`message`・`description`）。
-    ///
-    /// 文言（`message`）と補足（`description`）の決め方は、エラーの係（A1）が持つ。
-    pub fn error(
-        &self,
-        visit: &mut Visit<'_>,
-        code: u16,
-        message: &str,
-        description: Option<&str>,
-    ) -> Result<String, Error> {
+/// 本文を描けなかったときの答え（Python では例外の係の中でテンプレートが落ち、starlette の
+/// `ServerErrorMiddleware` が返す素の文）。テンプレートは起動のときに全部読んで確かめてあるので、ここに来るのは
+/// 秘密鍵を知っている人が作った壊れたセッション（知らせが `[種類, 文]` の並びでない など）のときだけ。
+pub const RENDER_FAILED: &str = "Internal Server Error";
+
+/// エラーのページ（`error.html`）。骨組みの差し込み口。Python の `_error_response` の HTML の枝
+/// （`render(request, "error.html", status_code=code, code=…, message=…, description=…)`）。
+///
+/// 知らせの取り出しと CSRF の印は、骨組みの層が `render()` と同じ順で済ませてから渡す（[`ErrorPage`]）。文言と
+/// 補足の決め方も骨組みのもの。ここは描くだけ。
+impl crate::errors::Pages for Pages {
+    fn error_page(&self, page: &ErrorPage<'_>) -> String {
         let mut ctx = Map::new();
-        ctx.insert("code".to_string(), JsonValue::from(code));
-        ctx.insert("message".to_string(), JsonValue::from(message));
-        ctx.insert("description".to_string(), optional_text(description));
-        self.render(Page::Error, visit, ctx)
+        ctx.insert("code".to_string(), JsonValue::from(page.code));
+        ctx.insert("message".to_string(), JsonValue::from(page.message));
+        ctx.insert("description".to_string(), optional_text(page.description));
+        self.draw(
+            Page::Error,
+            page.session.data(),
+            page.messages.clone(),
+            page.csrf_token,
+            page.is_embedded,
+            ctx,
+        )
+        .unwrap_or_else(|error| {
+            tracing::error!("エラーのページを描けませんでした: {error}");
+            RENDER_FAILED.to_string()
+        })
     }
 }
 
@@ -442,8 +465,8 @@ mod tests {
         Pages::load(&config).unwrap()
     }
 
-    fn session(value: serde_json::Value) -> Map<String, JsonValue> {
-        value.as_object().unwrap().clone()
+    fn session(value: serde_json::Value) -> Session {
+        Session::loaded(value.as_object().unwrap().clone())
     }
 
     /// 知らせは描くときに取り出し、CSRF の印は無いときだけ作って入れること（Python の `render`）。
@@ -465,9 +488,10 @@ mod tests {
         let body = pages.login(&mut visit, None).unwrap();
         assert!(body.contains("<div class=\"grow\">x&lt;y</div>"));
         assert_eq!(
-            serde_json::to_string(&stored).unwrap(),
+            serde_json::to_string(stored.data()).unwrap(),
             format!(r#"{{"a":1,"b":2,"_csrf_token":"{}"}}"#, "t".repeat(64))
         );
+        assert!(stored.modified());
         let mut visit = Visit {
             session: &mut stored,
             is_embedded: false,
@@ -477,27 +501,38 @@ mod tests {
         assert_eq!(issued, 1);
     }
 
-    /// 偽の印は、鍵の位置のまま作り直すこと（Python の dict の上書き）。
+    /// 知らせが無く印もあれば、描いてもセッションを書き換えないこと（starlette 1.x は Cookie を書き直さない）。
     #[test]
-    fn a_falsy_token_is_replaced_in_place() {
-        let mut stored = session(serde_json::json!({"_csrf_token": "", "z": 1}));
-        let token = issue_csrf_token(&mut stored, &mut || "n".to_string());
-        assert_eq!(token, JsonValue::from("n"));
+    fn render_leaves_a_settled_session_unmodified() {
+        let pages = pages();
+        let mut stored = session(serde_json::json!({"_csrf_token": "c"}));
+        let mut token = || "never".to_string();
+        let mut visit = Visit {
+            session: &mut stored,
+            is_embedded: true,
+            new_csrf_token: &mut token,
+        };
+        pages.document(Page::Guide, &mut visit, None).unwrap();
+        assert!(!stored.modified());
         assert_eq!(
-            serde_json::to_string(&stored).unwrap(),
-            r#"{"_csrf_token":"n","z":1}"#
+            serde_json::to_string(stored.data()).unwrap(),
+            r#"{"_csrf_token":"c"}"#
         );
     }
 
-    /// 知らせは `[種類, 文]` で末尾に積み、一覧でなければ断ること。
+    /// 知らせは `[種類, 文]` で末尾に積み、一覧でなければ断ること。書き換えた印は、一覧を作ったときだけ立つ
+    /// （Python の `setdefault(…).append(…)`）。
     #[test]
     fn flash_appends_and_refuses_a_broken_list() {
-        let mut stored = Map::new();
+        let mut stored = Session::new();
         flash(&mut stored, "ログアウトしました。", "info").unwrap();
-        flash(&mut stored, "b", "danger").unwrap();
+        assert!(stored.modified());
+        let mut existing = session(serde_json::json!({"_flashes": [["info", "a"]]}));
+        flash(&mut existing, "b", "danger").unwrap();
+        assert!(!existing.modified());
         assert_eq!(
-            JsonValue::Object(stored),
-            serde_json::json!({"_flashes": [["info", "ログアウトしました。"], ["danger", "b"]]})
+            JsonValue::Object(existing.data().clone()),
+            serde_json::json!({"_flashes": [["info", "a"], ["danger", "b"]]})
         );
         let mut broken = session(serde_json::json!({"_flashes": null}));
         assert_eq!(flash(&mut broken, "x", "info"), Err(FlashesNotAList));

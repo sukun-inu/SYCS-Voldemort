@@ -120,6 +120,26 @@ class AdminTemplatesFixtureTests(unittest.TestCase):
         self.assertEqual([call["fn"] for call in case["calls"]], ["get_bot_guild_count", "token_hex"])
         self.assertEqual(case["session_after"], {"_csrf_token": self.document["issued_token"]})
 
+    def test_the_cookie_is_written_only_when_the_session_changes(self):
+        """セッションを書き換えなかった要求には Set-Cookie が出ないこと（starlette 1.x。Rust の層も同じに決める）。
+
+        知らせが無く CSRF の印もあり、admin_guilds（見張りの層が入れ直す）も無いセッションで描いても、Cookie は
+        書き直さない。印を作ったときと、admin_guilds があるときは書く。ここが変われば、Rust のセッションの層の
+        「書き換えた」の決め方も変える。
+        """
+
+        def wrote(name: str) -> bool:
+            """その例の応答に Set-Cookie があるか。"""
+            headers = self._named("cases", name)["response"]["headers"]
+            return any(header == "set-cookie" for header, _ in headers)
+
+        self.assertFalse(wrote("guide_in_iframe"))
+        self.assertFalse(wrote("guild_select_without_list"))
+        self.assertFalse(wrote("shell_null_user"))
+        self.assertTrue(wrote("guide_anonymous"))
+        self.assertTrue(wrote("shell_full"))
+        self.assertTrue(wrote("landing_consumes_flashes"))
+
     def test_flashes_are_taken_out_by_the_page(self):
         """描いたページが知らせを取り出し、描いたあとのセッションから消えていること。"""
         case = self._named("cases", "login_with_flashes")

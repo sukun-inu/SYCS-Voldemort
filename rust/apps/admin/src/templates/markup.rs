@@ -97,20 +97,6 @@ pub fn python_float_repr(number: f64) -> String {
     }
 }
 
-/// Python の真偽（`if value:`）と同じに、JSON の値が真かを返す。
-///
-/// `None`・`False`・0・空の文字・空の一覧・空の辞書は偽。`render()` の `issue_csrf_token` の `if not token:` に使う。
-pub fn json_truthy(value: &serde_json::Value) -> bool {
-    match value {
-        serde_json::Value::Null => false,
-        serde_json::Value::Bool(flag) => *flag,
-        serde_json::Value::Number(number) => number.as_f64().is_some_and(|n| n != 0.0),
-        serde_json::Value::String(text) => !text.is_empty(),
-        serde_json::Value::Array(items) => !items.is_empty(),
-        serde_json::Value::Object(map) => !map.is_empty(),
-    }
-}
-
 /// minijinja の書き出しの係（`Environment::set_formatter` に渡す）。Jinja2 が `{{ value }}` で書くものと同じものを書く。
 ///
 /// - 未定義は何も書かない（Jinja2 の `Undefined` の `str()` は空）
@@ -186,25 +172,6 @@ mod tests {
             (f64::NAN, "nan"),
         ] {
             assert_eq!(python_float_repr(number), want, "{number:?}");
-        }
-    }
-
-    /// JSON の真偽が Python の `if value:` と同じであること。
-    #[test]
-    fn truthiness_is_python() {
-        for (value, want) in [
-            (serde_json::json!(null), false),
-            (serde_json::json!(""), false),
-            (serde_json::json!("x"), true),
-            (serde_json::json!(0), false),
-            (serde_json::json!(0.0), false),
-            (serde_json::json!(3), true),
-            (serde_json::json!([]), false),
-            (serde_json::json!({}), false),
-            (serde_json::json!({"a": 1}), true),
-            (serde_json::json!(false), false),
-        ] {
-            assert_eq!(json_truthy(&value), want, "{value}");
         }
     }
 }

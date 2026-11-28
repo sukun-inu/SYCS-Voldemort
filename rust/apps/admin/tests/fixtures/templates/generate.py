@@ -14,7 +14,8 @@ minijinja で描く。minijinja は Jinja2 と同じ書き方を読むが、エ�
     pages      templating.render を直に呼んだもの（テンプレート・セッション・経路の値 → 本文と描いたあとのセッション）
     cases      本物の管理画面（webapp_admin/app.py の app）に TestClient で送った要求（/・/guide・/privacy・/terms・
                旧 URL の 301・ログイン画面・ログアウトの確認・サーバー選択・シェル・エラーのページ）の応答と、
-               Set-Cookie から読んだ、描いたあとのセッション
+               Set-Cookie が運んだセッション（session_after。starlette 1.x は書き換えたときだけ書くので、
+               書かなかった例は空。そのときの中身は送ったセッションのまま）
 
 2 回作ってバイトまで同じにするために決めてあること:
 
@@ -237,9 +238,11 @@ def _route_patches(document: dict[str, Any]) -> Callable[..., list[Any]]:
 
 
 def _session_after(response: dict[str, Any]) -> dict[str, Any]:
-    """応答の Set-Cookie から、描いたあとのセッションを読む（Set-Cookie が無い・消す Cookie なら空）。
+    """応答の Set-Cookie が運んだセッションを読む（Set-Cookie が無い・消す Cookie なら空）。
 
-    starlette の SessionMiddleware は、セッションが空でなければどの応答でも Cookie を書き直す。値の先頭
+    starlette 1.x の SessionMiddleware は、セッションを書き換えたときだけ Cookie を書き直す（読んだだけでは書かない。
+    管理画面の見張りの層は admin_guilds があれば入れ直すので、それも書き換えに数える）。Set-Cookie が無い例の中身は、
+    送ったセッションのまま（Rust のテストは、書いたかどうかと、書かなかったときは送ったものと比べる）。値の先頭
     （最初の . まで）が JSON の base64。
     """
     values = [value for name, value in response["headers"] if name == "set-cookie" and value.startswith(COOKIE_PREFIX)]

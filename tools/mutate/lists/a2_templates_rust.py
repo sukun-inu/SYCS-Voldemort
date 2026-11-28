@@ -83,19 +83,12 @@ MUTS = [
         "if filename.contains('\\0') {",
         "if false {",
     ),
-    ("知らせを取り出さない", T, '.shift_remove("_flashes")', '.get("_flashes").cloned()'),
+    ("知らせを取り出さない", T, '.pop("_flashes")', '.get("_flashes").cloned()'),
     (
-        "知らせを swap_remove で取り出す（Cookie の鍵の並びが変わる）",
+        "知らせが無くても書き換えた印を立てる（starlette 1.x は Cookie を書き直さない）",
         T,
-        '.shift_remove("_flashes")',
-        '.swap_remove("_flashes")',
-    ),
-    ("CSRF の印をいつも作り直す", T, ".filter(|token| markup::json_truthy(token))", ".filter(|_| false)"),
-    (
-        "空の CSRF の印もそのまま使う",
-        T,
-        ".filter(|token| markup::json_truthy(token))",
-        ".filter(|token| !token.is_null())",
+        '.pop("_flashes")',
+        '.remove("_flashes")',
     ),
     (
         "最後の改行を残す",

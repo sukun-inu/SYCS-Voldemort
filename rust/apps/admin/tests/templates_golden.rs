@@ -8,14 +8,23 @@
 //! - functions: `admin_asset_url`・`icon`・`url_for`・招待リンク・エスケープ・小数の形
 //! - snippets: 短いテンプレートの文字（minijinja と Jinja2 の違いを 1 つずつ）
 //! - pages: `render` を直に呼んだもの（本文・描いたあとのセッション・CSRF の印を作った回数）
-//! - cases: 本物の管理画面の経路が返した本文と、Set-Cookie から読んだセッション。経路の値（招待リンク・サーバー数・
-//!   エラーの文言）は例に書いてあるものを、ページの関数に渡す。状態のコード・見出しの全部は、経路をつないでから比べる
+//! - cases: 本物の管理画面の経路が返した本文と、Cookie を書き直したか・書いた中身。経路の値（招待リンク・
+//!   サーバー数・エラーの文言）は例に書いてあるものを、ページの関数（エラーのページは骨組みの差し込み口）に渡す。
+//!   状態のコード・見出しの全部は、経路をつないでから比べる
+//!
+//! starlette 1.x の `SessionMiddleware` は、セッションを書き換えたときだけ `Set-Cookie` を出す（読んだだけでは
+//! 書き直さない）。そこで cases では、Python が Cookie を書いたかと、Rust のセッションの「書き換えた」の印（と、
+//! 骨組みの見張りの層が `admin_guilds` を入れ直すこと）が同じかを見て、書いたときはその中身と、書かなかったときは
+//! 送ったセッションのままであることと比べる。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, UNIX_EPOCH};
 
 use serde_json::{Map, Value};
+use sycs_admin::errors::{ErrorPage, Pages as _};
+use sycs_admin::security::issue_csrf_token;
+use sycs_admin::session::Session;
 use sycs_admin::templates::globals::{Assets, DEFAULT_ASSET_VERSION, icon_markup, url_for};
 use sycs_admin::templates::markup::{markupsafe_escape, python_float_repr};
 use sycs_admin::templates::{
@@ -113,6 +122,14 @@ fn pair_value<'a>(pairs: &'a Value, name: &str) -> Option<&'a str> {
     None
 }
 
+/// Rust のセッションの層が Cookie を書き直すか（骨組みの見張りの層と `finish_session` の決め方を、基準を読むために
+/// 写したもの）。見張りの層は `admin_guilds` があれば削って入れ直す（Python の `session["admin_guilds"] = …`。
+/// 書き換えた印が立つ）。書き換えて空でなければ書き、読んだときは空でなかったのに空になったら消す Cookie を書く。
+fn writes_cookie(session: &Session) -> bool {
+    let modified = session.modified() || session.contains_key("admin_guilds");
+    modified && (!session.is_empty() || session.was_loaded())
+}
+
 /// Python が CSRF の印を作った回数（`token_hex` の呼び出しの数）。
 fn issued_in(calls: &Value) -> usize {
     calls
@@ -128,7 +145,7 @@ fn issued_in(calls: &Value) -> usize {
 
 /// 描く。CSRF の印は基準の issued_token を返し、作った回数を数える。
 fn draw<E: std::fmt::Display>(
-    session: &mut Map<String, Value>,
+    session: &mut Session,
     embedded: bool,
     token: &str,
     render: impl FnOnce(&mut Visit<'_>) -> Result<String, E>,
@@ -346,7 +363,7 @@ fn pages_render_like_python() {
                 item["content_type"]
             ));
         }
-        let mut session = object(&item["session"]);
+        let mut session = Session::loaded(object(&item["session"]));
         let embedded = is_embedded(pair_value(&item["headers"], "sec-fetch-dest"));
         let ctx = object(&item["ctx"]);
         let (body, issued) = draw(&mut session, embedded, token, |visit| {
@@ -356,7 +373,7 @@ fn pages_render_like_python() {
             &format!("「{name}」（{template}）"),
             &body,
             &item["body"],
-            &session,
+            session.data(),
             &item["session_after"],
             issued,
             issued_in(&item["calls"]),
@@ -406,10 +423,10 @@ fn routes_render_like_python() {
         if pair_value(&response["headers"], "content-type") != Some(HTML_CONTENT_TYPE) {
             wrong.push(format!("「{name}」: Content-Type が HTML でない"));
         }
-        let mut session = case["session"]
+        let sent = case["session"]
             .as_str()
-            .map(|session| object(&fx.data["sessions"][session]))
-            .unwrap_or_default();
+            .map(|session| object(&fx.data["sessions"][session]));
+        let mut session = sent.clone().map_or_else(Session::new, Session::loaded);
         let embedded = is_embedded(pair_value(&case["request"]["headers"], "sec-fetch-dest"));
         let invite = invite.as_deref();
         let (body, issued) = draw(&mut session, embedded, token, |visit| match kind {
@@ -427,18 +444,47 @@ fn routes_render_like_python() {
             "guild_select" => pages.guild_select(visit),
             "shell" => pages.shell(visit),
             "error" => {
+                // 骨組みの層（`AdminApp::error_response`）と同じ順で、知らせを取り出し印を入れてから差し込み口へ渡す。
                 let code = u16::try_from(spec["code"].as_u64().unwrap()).unwrap();
-                let message = spec["message"].as_str().unwrap();
-                pages.error(visit, code, message, spec["description"].as_str())
+                let messages = visit
+                    .session
+                    .pop("_flashes")
+                    .unwrap_or_else(|| Value::Array(Vec::new()));
+                let csrf_token = issue_csrf_token(visit.session, &mut *visit.new_csrf_token);
+                let snapshot = visit.session.clone();
+                Ok(pages.error_page(&ErrorPage {
+                    code,
+                    message: spec["message"].as_str().unwrap(),
+                    description: spec["description"].as_str(),
+                    messages: &messages,
+                    csrf_token: &csrf_token,
+                    session: &snapshot,
+                    is_embedded: visit.is_embedded,
+                }))
             }
             other => panic!("「{name}」: 知らないページの種類 {other}"),
         });
+        let label = format!("「{name}」（{} {target}）", case["request"]["method"]);
+        let python_wrote = pair_value(&response["headers"], "set-cookie").is_some();
+        if python_wrote != writes_cookie(&session) {
+            wrong.push(format!(
+                "{label}: Cookie を書き直すかが違う（Python {python_wrote} / Rust {}。書き換えた印 {}）",
+                !python_wrote,
+                session.modified()
+            ));
+        }
+        // 書かなかったときは、送ったセッションのまま（基準の session_after は Cookie が運んだ中身なので、空）。
+        let want_session = if python_wrote {
+            case["session_after"].clone()
+        } else {
+            Value::Object(sent.unwrap_or_default())
+        };
         wrong.extend(compare(
-            &format!("「{name}」（{} {target}）", case["request"]["method"]),
+            &label,
             &body,
             &response["body"],
-            &session,
-            &case["session_after"],
+            session.data(),
+            &want_session,
             issued,
             issued_in(&case["calls"]),
         ));
