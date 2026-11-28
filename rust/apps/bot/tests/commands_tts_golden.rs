@@ -224,3 +224,161 @@ async fn voice_choices_match_python() {
     }
     report("voices", results);
 }
+
+/// 合成の API を、Python と同じ場所に同じ本文で呼び、同じ音声の場所を返すこと（`generate_synth.py` の基準）。
+#[tokio::test]
+async fn synthesis_is_requested_like_python() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/tts");
+    let cases: Vec<Value> =
+        serde_json::from_str(&std::fs::read_to_string(format!("{dir}/synth_cases.json")).unwrap())
+            .unwrap();
+    let expected: Vec<Value> = std::fs::read_to_string(format!("{dir}/synth_expected.jsonl"))
+        .unwrap()
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(cases.len(), expected.len(), "基準と例の数が違う");
+    let mut wrong = Vec::new();
+    for (case, want) in cases.iter().zip(&expected) {
+        let (base, seen) = start_fake_synth(case["reply"].clone()).await;
+        // Python の基準は、末尾に `/` を付けた場所で作った（設定で落とされる）。
+        let api = speech::TtsApi::new(&format!("{base}/"));
+        let (url, _) = api
+            .synthesize(
+                case["text"].as_str().unwrap(),
+                case["voice"].as_str().unwrap(),
+                case["rate"].as_i64().unwrap(),
+            )
+            .await;
+        let url = url.map(|u| u.replacen(&base, "http://127.0.0.1:18090", 1));
+        let seen = seen.lock().unwrap().clone();
+        let got = json!([case["id"], seen, url]);
+        if &got != want {
+            wrong.push(format!("{}\n  py {want}\n  rs {got}", case["id"]));
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "{} 例が Python と違う:\n{}",
+        wrong.len(),
+        wrong.join("\n")
+    );
+}
+
+/// 台本どおりに答える偽物の合成の API。受けた要求（場所と本文の JSON）を覚える。
+async fn start_fake_synth(reply: Value) -> (String, Arc<Mutex<Vec<Value>>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let seen: Arc<Mutex<Vec<Value>>> = Arc::default();
+    let shared = Arc::clone(&seen);
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut sock, _)) = listener.accept().await else {
+                return;
+            };
+            let mut buf = Vec::new();
+            let mut tmp = [0u8; 4096];
+            let header_end = loop {
+                let n = sock.read(&mut tmp).await.unwrap_or(0);
+                if n == 0 {
+                    return;
+                }
+                buf.extend_from_slice(&tmp[..n]);
+                if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                    break i + 4;
+                }
+            };
+            let head = String::from_utf8_lossy(&buf[..header_end]).to_string();
+            let length: usize = head
+                .lines()
+                .find_map(|l| {
+                    let (k, v) = l.split_once(':')?;
+                    k.eq_ignore_ascii_case("content-length")
+                        .then(|| v.trim().parse().ok())?
+                })
+                .unwrap_or(0);
+            while buf.len() < header_end + length {
+                let n = sock.read(&mut tmp).await.unwrap_or(0);
+                if n == 0 {
+                    break;
+                }
+                buf.extend_from_slice(&tmp[..n]);
+            }
+            let path = head.split(' ').nth(1).unwrap_or("").to_string();
+            let body: Value = serde_json::from_slice(&buf[header_end..]).unwrap_or(Value::Null);
+            shared
+                .lock()
+                .unwrap()
+                .push(json!({"path": path, "body": body}));
+            let text = match reply.get("json") {
+                Some(v) => v.to_string(),
+                None => reply["body"].as_str().unwrap_or("").to_string(),
+            };
+            let status = reply["status"].as_u64().unwrap_or(200);
+            let kind = reply["type"].as_str().unwrap_or("application/json");
+            let response = format!(
+                "HTTP/1.1 {status} X\r\nConnection: close\r\nContent-Type: {kind}\r\nContent-Length: {}\r\n\r\n{text}",
+                text.len()
+            );
+            let _ = sock.write_all(response.as_bytes()).await;
+        }
+    });
+    (base, seen)
+}
+
+/// VC の出入りに応じた読み上げの決め方が、Python と同じであること（`generate_voice.py` の基準）。
+#[test]
+fn voice_events_are_handled_like_python() {
+    use sycs_bot::tts_voice::{VoiceEvent, VoiceSettings, VoiceStep, voice_plan};
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/tts");
+    let cases: Vec<Value> =
+        serde_json::from_str(&std::fs::read_to_string(format!("{dir}/voice_cases.json")).unwrap())
+            .unwrap();
+    let expected: Vec<Value> = std::fs::read_to_string(format!("{dir}/voice_expected.jsonl"))
+        .unwrap()
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(cases.len(), expected.len(), "基準と例の数が違う");
+    let mut wrong = Vec::new();
+    for (case, want) in cases.iter().zip(&expected) {
+        let guild = json!({"tts": case["settings"]});
+        let tts = speech::settings(Some(&guild)).unwrap();
+        let temp = case["temp"].as_u64();
+        let settings = VoiceSettings {
+            enabled: sycs_bot::commands::settings::python_truthy(tts.get("enabled")),
+            notify: sycs_bot::commands::settings::python_truthy(tts.get("vc_notify")),
+            watched: speech::effective_vc_watch(tts, temp).ok().map(|(vc, _)| vc),
+            configured: speech::vc_channel_id(tts).ok(),
+            has_temp: temp.is_some(),
+        };
+        let event = VoiceEvent {
+            is_bot: case["bot"] == true,
+            before: case["before"].as_u64(),
+            after: case["after"].as_u64(),
+            before_has_no_humans: case["humans_before"].as_u64().unwrap_or(0) == 0,
+        };
+        let steps: Vec<Value> = voice_plan(&event, &settings)
+            .into_iter()
+            .map(|step| match step {
+                VoiceStep::Disconnect => json!(["disconnect"]),
+                VoiceStep::Announce { joined } => {
+                    json!(["announce", if joined { "join" } else { "leave" }])
+                }
+                VoiceStep::AutoJoin(vc) => json!(["auto_join", vc]),
+            })
+            .collect();
+        let got = json!([case["id"], steps]);
+        if &got != want {
+            wrong.push(format!("py {want}\n  rs {got}"));
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "{} 例が Python と違う:\n{}",
+        wrong.len(),
+        wrong.join("\n")
+    );
+}

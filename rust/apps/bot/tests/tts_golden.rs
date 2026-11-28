@@ -82,6 +82,7 @@ fn messages_are_spoken_like_python() {
         let guild = json!({"tts": settings});
         let found = tts::message_utterance(
             Some(&guild),
+            None,
             USER,
             case["name"].as_str().unwrap(),
             case["text"].as_str().unwrap(),
@@ -97,6 +98,7 @@ fn vc_events_are_spoken_like_python() {
         let guild = json!({"tts": case["settings"]});
         let found = tts::vc_event_utterance(
             Some(&guild),
+            None,
             case["name"].as_str().unwrap(),
             // Python の `str(member)`（`generate_text.py` の `Member.__str__`）。
             "nelly",

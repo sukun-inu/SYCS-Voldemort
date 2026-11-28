@@ -1,0 +1,12 @@
+[
+  {"id": "ok", "text": "ネリー。やあ", "voice": "Kyoko", "rate": 200, "reply": {"json": {"url": "/audio/abc.wav"}}},
+  {"id": "ok-with-other-keys", "text": "a", "voice": "Otoya", "rate": 400, "reply": {"json": {"id": 5, "url": "/audio/x.wav", "ms": 120}}},
+  {"id": "url-without-a-slash", "text": "a", "voice": "Kyoko", "rate": 100, "reply": {"json": {"url": "audio/x.wav"}}},
+  {"id": "url-is-a-number", "text": "a", "voice": "Kyoko", "rate": 200, "reply": {"json": {"url": 5}}},
+  {"id": "no-url", "text": "a", "voice": "Kyoko", "rate": 200, "reply": {"json": {"path": "/audio/x.wav"}}},
+  {"id": "server-error", "text": "a", "voice": "Kyoko", "rate": 200, "reply": {"status": 500, "body": "boom"}},
+  {"id": "not-found", "text": "a", "voice": "Kyoko", "rate": 200, "reply": {"status": 404, "json": {"url": "/audio/x.wav"}}},
+  {"id": "not-json", "text": "a", "voice": "Kyoko", "rate": 200, "reply": {"type": "text/plain", "body": "{\"url\": \"/audio/x.wav\"}"}},
+  {"id": "json-list", "text": "a", "voice": "Kyoko", "rate": 200, "reply": {"json": ["/audio/x.wav"]}},
+  {"id": "emoji-and-newlines", "text": "😀\n改行", "voice": "Kyoko", "rate": 200, "reply": {"json": {"url": "/a.wav"}}}
+]

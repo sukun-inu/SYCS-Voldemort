@@ -15,6 +15,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serenity::Client;
+use songbird::SerenityInit;
 use sqlx::postgres::PgPoolOptions;
 use sycs_core::env::Env;
 use sycs_core::metrics::Reporter;
@@ -81,6 +82,7 @@ async fn main() -> ExitCode {
     ));
     let mut client = match Client::builder(&config.token, config::intents())
         .event_handler(Handler::new(Arc::clone(&state)))
+        .register_songbird_with(Arc::clone(&state.songbird))
         .await
     {
         Ok(client) => client,
@@ -90,6 +92,7 @@ async fn main() -> ExitCode {
         }
     };
     state.set_shard_manager(Arc::clone(&client.shard_manager));
+    state.voice_out.set_cache(Arc::clone(&client.cache));
     tokio::spawn(shutdown_on_signal(Arc::clone(&client.shard_manager)));
 
     match client.start().await {

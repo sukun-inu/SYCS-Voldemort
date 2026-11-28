@@ -39,7 +39,7 @@ pub fn update_guild(
 }
 
 /// Python の真偽（`if value:`）。設定に入りうる値について。
-pub(crate) fn python_truthy(value: Option<&Value>) -> bool {
+pub fn python_truthy(value: Option<&Value>) -> bool {
     match value {
         None | Some(Value::Null) => false,
         Some(Value::Bool(b)) => *b,

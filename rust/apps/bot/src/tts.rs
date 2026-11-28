@@ -257,7 +257,22 @@ pub fn watch_channel_ids(tts: &Map<String, Value>) -> Result<Vec<i64>, CommandEr
     }
 }
 
-/// 読み上げる VC。Python の `get_effective_vc_watch` の 1 つ目（一時参加の上書きは B9b で足す）。
+/// 読み上げる VC と、読み上げるテキストチャンネル。Python の `get_effective_vc_watch`。
+///
+/// 一時参加（/tts join）中なら、その VC だけ（テキストチャンネルの並びは読まない）。そうでなければ設定の VC と並び
+/// （読めなければ `Err`）。
+pub fn effective_vc_watch(
+    tts: &Map<String, Value>,
+    temp_override: Option<u64>,
+) -> Result<(Option<i64>, Vec<i64>), CommandError> {
+    if let Some(vc) = temp_override {
+        return Ok((i64::try_from(vc).ok(), Vec::new()));
+    }
+    let vc = vc_channel_id(tts)?;
+    Ok((vc, watch_channel_ids(tts)?))
+}
+
+/// 設定の VC。Python の `get_effective_vc_watch` の 1 つ目（一時参加の上書きの無いとき）。
 pub fn vc_channel_id(tts: &Map<String, Value>) -> Result<Option<i64>, CommandError> {
     match tts.get("vc_channel_id") {
         Some(value) if python_truthy(Some(value)) => Ok(Some(python_int(value, "vc_channel_id")?)),
@@ -293,6 +308,7 @@ pub struct Utterance {
 /// （Python では例外で、そのメッセージは読まれない）。
 pub fn message_utterance(
     guild: Option<&Value>,
+    temp_override: Option<u64>,
     user_id: u64,
     display_name: &str,
     text: &str,
@@ -301,9 +317,8 @@ pub fn message_utterance(
     if !python_truthy(tts.get("enabled")) {
         return Ok(None);
     }
-    let vc = vc_channel_id(tts)?;
     // Python は VC と一緒に読み上げるチャンネルの並びも読む（読めなければ、ここで例外）。
-    watch_channel_ids(tts)?;
+    let (vc, _) = effective_vc_watch(tts, temp_override)?;
     let Some(vc) = vc else {
         return Ok(None);
     };
@@ -367,6 +382,7 @@ fn python_head(text: &str, n: i64) -> String {
 /// VC が未設定なら `Ok(None)`。
 pub fn vc_event_utterance(
     guild: Option<&Value>,
+    temp_override: Option<u64>,
     display_name: &str,
     name: &str,
     joined: bool,
@@ -375,8 +391,7 @@ pub fn vc_event_utterance(
     if !python_truthy(tts.get("enabled")) || !python_truthy(tts.get("vc_notify")) {
         return Ok(None);
     }
-    let vc = vc_channel_id(tts)?;
-    watch_channel_ids(tts)?;
+    let (vc, _) = effective_vc_watch(tts, temp_override)?;
     let Some(vc) = vc else {
         return Ok(None);
     };
@@ -458,6 +473,65 @@ impl TtsApi {
         }
         let data: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
         voice_names(&data)
+    }
+}
+
+/// 合成を待つ時間（Python の `_synthesize` の 30 秒）。
+pub const SYNTH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+impl TtsApi {
+    /// 文を合成して、音声の場所と、かかったミリ秒を返す。Python の `_synthesize`。
+    ///
+    /// `POST {TTS_BASE_URL}/api/v1/synthesize`（`{"text","voice","rate","format":"wav"}`）。200 以外・応答が読めない・
+    /// つながらないときは場所なし（理由はログに残す。失敗までにかかった時間も返す）。成功したら
+    /// `{TTS_BASE_URL}{応答の url}`。
+    pub async fn synthesize(&self, text: &str, voice: &str, rate: i64) -> (Option<String>, u64) {
+        let started = std::time::Instant::now();
+        let ms = || u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        let body = serde_json::json!({"text": text, "voice": voice, "rate": rate, "format": "wav"});
+        let sent = self
+            .http
+            .post(format!("{}/api/v1/synthesize", self.base_url))
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(body.to_string())
+            .timeout(SYNTH_TIMEOUT)
+            .send()
+            .await;
+        let response = match sent {
+            Ok(response) => response,
+            Err(e) => {
+                tracing::error!("[TTS] synthesize error（{}ms）: {}", ms(), e.without_url());
+                return (None, ms());
+            }
+        };
+        let status = response.status();
+        // aiohttp の `resp.json()` が読む種類でなければ、Python は例外になる（場所なし）。
+        let is_json = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| crate::metal::is_json_content_type(&v.to_ascii_lowercase()));
+        let bytes = response.bytes().await.unwrap_or_default();
+        if status != reqwest::StatusCode::OK {
+            let text = String::from_utf8_lossy(&bytes);
+            let head: String = text.chars().take(200).collect();
+            tracing::error!("[TTS] API {}（{}ms）: {head}", status.as_u16(), ms());
+            return (None, ms());
+        }
+        let url = serde_json::from_slice::<Value>(&bytes)
+            .ok()
+            .filter(|_| is_json)
+            .and_then(|data| data.get("url").map(python_str));
+        let Some(url) = url else {
+            tracing::error!("[TTS] synthesize error（{}ms）: 応答に url が無い", ms());
+            return (None, ms());
+        };
+        tracing::info!(
+            "[TTS] 合成 {}ms（{}文字 / voice={voice}）",
+            ms(),
+            text.chars().count()
+        );
+        (Some(format!("{}{url}", self.base_url)), ms())
     }
 }
 

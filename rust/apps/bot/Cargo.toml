@@ -31,11 +31,16 @@ serenity = { workspace = true, features = [
     "gateway",
     "model",
     "rustls_backend",
+    "voice",
 ] }
+# 読み上げの音声（VC への接続と再生）。版は tools/voice-check で DAVE 必須の VC に音が届くことを確かめたもの。
+songbird = { workspace = true }
 sqlx = { workspace = true, features = ["runtime-tokio", "postgres"] }
 sycs-core = { workspace = true }
 sycs-imaging = { workspace = true }
 sycs-text = { workspace = true }
+# 合成した wav を songbird に読ませる（symphonia の wav / pcm の復号器）。
+symphonia = { workspace = true, features = ["wav", "pcm"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
 tokio-tungstenite = { workspace = true, features = ["connect", "handshake", "rustls-tls-webpki-roots"] }
 tracing = { workspace = true }

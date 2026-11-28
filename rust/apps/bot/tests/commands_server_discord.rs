@@ -27,6 +27,7 @@ use sycs_bot::log_channel::AvatarColours;
 use sycs_bot::metal::{MetalConfig, MetalPrices};
 use sycs_bot::sticky::StickyLocks;
 use sycs_bot::tts::TtsApi;
+use sycs_bot::tts_voice::{NoVoice, Speaker};
 use sycs_core::env::Env;
 use sycs_core::settings::SettingsCache;
 
@@ -99,6 +100,7 @@ struct Stage {
     metal: MetalPrices,
     colours: AvatarColours,
     tts: TtsApi,
+    speaker: Speaker,
     seen: Arc<Mutex<Vec<Seen>>>,
 }
 
@@ -123,6 +125,7 @@ impl Stage {
             metal: MetalPrices::new(MetalConfig::from_env(&Env::from_fn(|_| None))),
             colours: AvatarColours::new(),
             tts: TtsApi::new("http://127.0.0.1:9"),
+            speaker: Speaker::new(Arc::new(NoVoice)),
             seen,
         }
     }
@@ -140,6 +143,7 @@ impl Stage {
             colours: &self.colours,
             metals_site_url: "https://metals.example/",
             tts: &self.tts,
+            speaker: &self.speaker,
         }
     }
 
