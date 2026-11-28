@@ -1,6 +1,6 @@
 name: 整形
 
-# rustfmt（rust/）と black（Python）で整形し直した差分を作る。整形がずれていたら、差分を成果物 format に置いて落ちる。
+# rustfmt（rust/）と black（Python）で整形し直し、管理画面の文書（docs/ADMIN.ja.md）を作り直した差分を作る。整形がずれていたら、差分を成果物 format に置いて落ちる。
 # 取ってきて当てる:
 #   gh run download <run の ID> -n format && git apply format.patch
 #
@@ -24,17 +24,20 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: black を入れる（requirements-dev.txt と同じ版）
-        run: pip install -q "$(grep -E '^black==' requirements-dev.txt)"
+      - name: black と、管理画面の文書を作るのに要る依存を入れる（requirements-dev.txt と同じ版）
+        run: pip install -q -r requirements.txt "$(grep -E '^black==' requirements-dev.txt)"
 
       - name: Rust（rustfmt）を入れる
         working-directory: rust
         run: rustup toolchain install
 
-      - name: 整形し直す
+      - name: 整形し直す（あわせて、設定の一覧から作る管理画面の文書も作り直す）
+        # docs/ADMIN.ja.md の設定の表は webapp_admin/schema/panels/ から作る（「テスト」の generate_admin_docs.py --check
+        # がずれを落とす）。設定を足したときの文書の直しも、ここで返す。
         run: |
           (cd rust && cargo fmt --all)
           python -m black -q .
+          python tools/generate_admin_docs.py
 
       - name: 差分を見る
         id: diff
