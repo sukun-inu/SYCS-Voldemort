@@ -1,0 +1,482 @@
+{
+ "about": "利用者の状態の一覧と詳細の API の例。書き方は ../admin_harness.py と generate.py の先頭。基準は expected.json（generate.py が作る）",
+ "secret": "w2-admin-fixture-secret-0123456789abcdef0123456789abcdef",
+ "now": 1798761600,
+ "sessions": {
+  "guild": {
+   "user": {"id": "111111111111111111", "username": "tester", "global_name": "テスター😀", "avatar": "a_0123456789abcdef"},
+   "admin_guilds": [
+    {"id": "123456789012345678", "name": "テスト鯖", "icon": null, "permissions": "2147483647", "owner": true},
+    {"id": 222222222222222222, "name": null, "icon": 5},
+    {"id": "not-a-number", "name": "壊れた行"},
+    "not-a-dict"
+   ],
+   "admin_guilds_at": 1798761000.25,
+   "_csrf_token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "guild_id": 123456789012345678,
+   "guild_name": "テスト鯖",
+   "guild_icon": null
+  },
+  "no_guild": {
+   "user": {"id": "111111111111111111", "username": "tester", "global_name": null, "avatar": null},
+   "admin_guilds": [{"id": "123456789012345678", "name": "テスト鯖", "icon": null}],
+   "admin_guilds_at": 1798761000.25,
+   "_csrf_token": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  "minimal": {"user": {"id": "1"}, "guild_id": 999}
+ },
+ "library": {
+  "row_banned": {
+   "guild_id": 123456789012345678,
+   "user_id": 555555555555555555,
+   "username": "member",
+   "display_name": "メンバー",
+   "avatar_url": "https://cdn.discordapp.com/avatars/555555555555555555/abc.png",
+   "status": "banned",
+   "is_in_guild": false,
+   "is_banned": true,
+   "is_timed_out": false,
+   "timed_out_until": null,
+   "roles": [{"id": 1, "name": "常連"}, {"id": 2, "name": "VIP"}],
+   "abilities": {"administrator": false, "trusted_user": true, "ban_members": true},
+   "last_event_type": "member_ban",
+   "last_event_at": {"$datetime": "2026-08-21T03:30:00+00:00"},
+   "first_seen_at": {"$datetime": "2025-01-02T03:04:05.678901+00:00"},
+   "last_joined_at": {"$datetime": "2026-08-01T00:00:00+00:00"},
+   "last_left_at": {"$datetime": "2026-08-21T03:29:59+00:00"},
+   "updated_at": {"$datetime": "2026-08-21T03:30:00.500000+00:00"}
+  },
+  "row_active": {
+   "guild_id": 123456789012345678,
+   "user_id": 666666666666666666,
+   "username": "Active_User",
+   "display_name": null,
+   "avatar_url": null,
+   "status": "active",
+   "is_in_guild": true,
+   "is_banned": false,
+   "is_timed_out": false,
+   "timed_out_until": null,
+   "roles": [],
+   "abilities": {},
+   "last_event_type": "member_join",
+   "last_event_at": {"$datetime": "2026-08-20T22:30:00-05:00"},
+   "first_seen_at": null,
+   "last_joined_at": null,
+   "last_left_at": null,
+   "updated_at": null
+  },
+  "detail_current": {
+   "$ref": "row_banned",
+   "with": {
+    "timed_out_until": {"$datetime": "2999-01-01T00:00:00+00:00"},
+    "roles": [{"id": 1234567890123456789, "name": "大きいID", "color": 0}, {"id": 1, "name": "常連"}, "壊れた要素"]
+   }
+  },
+  "event_sync": {
+   "id": 7,
+   "event_type": "sync_member_on_ready",
+   "status_after": "active",
+   "actor_user_id": null,
+   "actor_name": "管理者",
+   "reason": "定期同期",
+   "event_at": {"$datetime": "2026-08-21T00:00:00+00:00"},
+   "payload": {"source": "on_ready"}
+  },
+  "event_ban": {
+   "id": 8,
+   "event_type": "member_ban",
+   "status_after": "banned",
+   "actor_user_id": 999999999999999999,
+   "actor_name": "mod",
+   "reason": null,
+   "event_at": {"$datetime": "2026-08-21T03:30:00+00:00"},
+   "payload": {
+    "channel_id": 1234567890123456789,
+    "nested": {"ids": [9007199254740991, 9007199254740992, -9007199254740993]},
+    "flag": true,
+    "ratio": 0.5
+   }
+  },
+  "event_odd": {
+   "id": null,
+   "event_type": null,
+   "status_after": "weird",
+   "actor_name": null,
+   "reason": "x",
+   "event_at": "not a datetime",
+   "payload": ["not", "a", "dict"]
+  }
+ },
+ "cases": [
+  {
+   "name": "list_without_cookie",
+   "method": "GET",
+   "target": "/admin/api/users/state",
+   "expect_status": 303
+  },
+  {
+   "name": "list_with_tampered_cookie",
+   "method": "GET",
+   "target": "/admin/api/users/state",
+   "session": "guild",
+   "cookie": "tampered",
+   "expect_status": 303
+  },
+  {
+   "name": "list_with_expired_cookie",
+   "method": "GET",
+   "target": "/admin/api/users/state",
+   "session": "guild",
+   "cookie": "expired",
+   "expect_status": 303
+  },
+  {
+   "name": "list_with_cookie_at_max_age",
+   "method": "GET",
+   "target": "/admin/api/users/state",
+   "session": "guild",
+   "cookie": "edge",
+   "service": {"list": [], "count": 0},
+   "expect_status": 200
+  },
+  {
+   "name": "list_with_cookie_from_the_future",
+   "method": "GET",
+   "target": "/admin/api/users/state",
+   "session": "guild",
+   "cookie": "future",
+   "expect_status": 303
+  },
+  {
+   "name": "list_without_guild",
+   "method": "GET",
+   "target": "/admin/api/users/state",
+   "session": "no_guild"
+  },
+  {
+   "name": "list_without_cookie_and_bad_limit",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=9999"
+  },
+  {
+   "name": "list_default",
+   "method": "GET",
+   "target": "/admin/api/users/state",
+   "session": "guild",
+   "service": {"list": [{"$ref": "row_banned"}], "count": 1},
+   "expect_status": 200
+  },
+  {
+   "name": "list_with_minimal_session",
+   "method": "GET",
+   "target": "/admin/api/users/state",
+   "session": "minimal",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_search_is_trimmed_and_paged",
+   "method": "GET",
+   "target": "/admin/api/users/state?q=%20abc%20&limit=25&offset=50",
+   "session": "guild",
+   "service": {"list": [], "count": 120}
+  },
+  {
+   "name": "list_blank_search_is_no_search",
+   "method": "GET",
+   "target": "/admin/api/users/state?q=%20%20%20",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_search_in_japanese",
+   "method": "GET",
+   "target": "/admin/api/users/state?q=%E3%83%A1%E3%83%B3",
+   "session": "guild",
+   "service": {"list": [{"$ref": "row_banned"}], "count": 1}
+  },
+  {
+   "name": "list_search_of_128_characters",
+   "method": "GET",
+   "target": "/admin/api/users/state?q=%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_search_of_129_characters",
+   "method": "GET",
+   "target": "/admin/api/users/state?q=%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82%E3%81%82",
+   "session": "guild"
+  },
+  {
+   "name": "list_has_more",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=2",
+   "session": "guild",
+   "service": {"list": [{"$ref": "row_active"}, {"$ref": "row_banned"}], "count": 5}
+  },
+  {
+   "name": "list_last_page",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=2&offset=4",
+   "session": "guild",
+   "service": {"list": [{"$ref": "row_active"}], "count": 5}
+  },
+  {
+   "name": "list_count_behind_rows",
+   "method": "GET",
+   "target": "/admin/api/users/state",
+   "session": "guild",
+   "service": {"list": [{"$ref": "row_active"}], "count": 0}
+  },
+  {
+   "name": "list_limit_200",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=200",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_limit_0",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=0",
+   "session": "guild"
+  },
+  {
+   "name": "list_limit_201",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=201",
+   "session": "guild"
+  },
+  {
+   "name": "list_limit_not_a_number",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=abc",
+   "session": "guild"
+  },
+  {
+   "name": "list_offset_negative",
+   "method": "GET",
+   "target": "/admin/api/users/state?offset=-1",
+   "session": "guild"
+  },
+  {
+   "name": "list_repeated_limit",
+   "method": "GET",
+   "target": "/admin/api/users/state?limit=5&limit=10",
+   "session": "guild",
+   "service": {"list": [], "count": 0}
+  },
+  {
+   "name": "list_row_variants",
+   "method": "GET",
+   "target": "/admin/api/users/state",
+   "session": "guild",
+   "service": {
+    "list": [
+     {
+      "$ref": "row_active",
+      "with": {
+       "user_id": 9223372036854775807,
+       "status": null,
+       "last_event_type": null,
+       "last_event_at": null,
+       "roles": "not-a-list",
+       "abilities": "not-a-dict",
+       "is_in_guild": 1
+      }
+     },
+     {
+      "$ref": "row_active",
+      "with": {
+       "user_id": 7,
+       "status": "weird",
+       "last_event_type": "sync_member_on_ready",
+       "last_event_at": {"$datetime": "2026-08-21T03:30:00"},
+       "roles": [{"id": 1, "name": "A"}, "x", {"id": 2}, {"id": 3, "name": ""}, {"name": "B"}],
+       "abilities": {"kick_members": true, "manage_roles": 1, "is_bot": 0, "custom_ability": true, "moderate_members": null}
+      }
+     },
+     {
+      "$ref": "row_active",
+      "with": {
+       "user_id": 8,
+       "status": "left",
+       "is_in_guild": false,
+       "last_event_type": "sync_ban_auto_repair",
+       "last_event_at": "2026-08-21 broken"
+      }
+     },
+     {
+      "$ref": "row_active",
+      "with": {"user_id": 9, "status": "kicked", "last_event_type": "sync_left_somewhere", "last_event_at": 1700000000}
+     },
+     {
+      "$ref": "row_active",
+      "with": {
+       "user_id": 10,
+       "status": "unbanned",
+       "last_event_type": "sync_member_",
+       "last_event_at": {"$datetime": "2026-12-31T23:59:59.999999+00:00"}
+      }
+     },
+     {
+      "$ref": "row_active",
+      "with": {
+       "user_id": 11,
+       "last_event_type": "custom_event",
+       "is_timed_out": true,
+       "timed_out_until": {"$datetime": "2001-01-01T00:00:00+00:00"}
+      }
+     },
+     {
+      "$ref": "row_active",
+      "with": {
+       "user_id": 12,
+       "last_event_type": "member_timeout_set",
+       "is_timed_out": false,
+       "timed_out_until": {"$datetime": "2999-01-01T00:00:00+00:00"}
+      }
+     },
+     {
+      "$ref": "row_active",
+      "with": {"user_id": 13, "is_timed_out": false, "timed_out_until": {"$datetime": "2999-01-01T00:00:00"}}
+     },
+     {
+      "$ref": "row_active",
+      "with": {"user_id": 14, "is_timed_out": true, "timed_out_until": {"$datetime": "2001-01-01T00:00:00"}}
+     },
+     {"$ref": "row_active", "with": {"user_id": 15, "is_timed_out": true, "timed_out_until": "2026-01-01 broken"}},
+     {"$ref": "row_active", "with": {"user_id": 16, "is_timed_out": false, "timed_out_until": "2026-01-01 broken"}},
+     {"$ref": "row_active", "with": {"user_id": 17, "is_timed_out": true, "timed_out_until": null}},
+     {"guild_id": 123456789012345678, "username": null}
+    ],
+    "count": 13
+   }
+  },
+  {
+   "name": "list_service_fails",
+   "method": "GET",
+   "target": "/admin/api/users/state",
+   "session": "guild",
+   "service": {"list": {"$raise": "RuntimeError", "message": "db down"}}
+  },
+  {
+   "name": "list_post_is_not_allowed",
+   "method": "POST",
+   "target": "/admin/api/users/state"
+  },
+  {
+   "name": "list_with_trailing_slash",
+   "method": "GET",
+   "target": "/admin/api/users/state/",
+   "session": "guild"
+  },
+  {
+   "name": "unknown_users_path",
+   "method": "GET",
+   "target": "/admin/api/users/nope",
+   "session": "guild"
+  },
+  {
+   "name": "detail_default",
+   "method": "GET",
+   "target": "/admin/api/users/state/555555555555555555",
+   "session": "guild",
+   "service": {
+    "detail": {
+     "current": {"$ref": "detail_current"},
+     "events": [{"$ref": "event_sync"}, {"$ref": "event_ban"}, "junk", {"$ref": "event_odd"}]
+    }
+   },
+   "expect_status": 200
+  },
+  {
+   "name": "detail_event_limit",
+   "method": "GET",
+   "target": "/admin/api/users/state/555555555555555555?event_limit=10",
+   "session": "guild",
+   "service": {"detail": {"current": null, "events": [{"$ref": "event_sync"}]}}
+  },
+  {
+   "name": "detail_event_limit_500",
+   "method": "GET",
+   "target": "/admin/api/users/state/555555555555555555?event_limit=500",
+   "session": "guild",
+   "service": {"detail": {"current": {"$ref": "row_active"}, "events": []}}
+  },
+  {
+   "name": "detail_event_limit_0",
+   "method": "GET",
+   "target": "/admin/api/users/state/555555555555555555?event_limit=0",
+   "session": "guild"
+  },
+  {
+   "name": "detail_event_limit_501",
+   "method": "GET",
+   "target": "/admin/api/users/state/555555555555555555?event_limit=501",
+   "session": "guild"
+  },
+  {
+   "name": "detail_not_found",
+   "method": "GET",
+   "target": "/admin/api/users/state/1",
+   "session": "guild",
+   "service": {"detail": null}
+  },
+  {
+   "name": "detail_current_not_an_object",
+   "method": "GET",
+   "target": "/admin/api/users/state/2",
+   "session": "guild",
+   "service": {"detail": {"current": "broken", "events": []}}
+  },
+  {
+   "name": "detail_without_events_key",
+   "method": "GET",
+   "target": "/admin/api/users/state/3",
+   "session": "guild",
+   "service": {"detail": {"current": {"$ref": "row_active"}}}
+  },
+  {
+   "name": "detail_id_with_leading_zeros",
+   "method": "GET",
+   "target": "/admin/api/users/state/0012",
+   "session": "guild",
+   "service": {"detail": null}
+  },
+  {
+   "name": "detail_negative_id",
+   "method": "GET",
+   "target": "/admin/api/users/state/-5",
+   "session": "guild",
+   "service": {"detail": null}
+  },
+  {
+   "name": "detail_id_not_a_number",
+   "method": "GET",
+   "target": "/admin/api/users/state/abc",
+   "session": "guild"
+  },
+  {
+   "name": "detail_id_beyond_64_bits",
+   "method": "GET",
+   "target": "/admin/api/users/state/99999999999999999999",
+   "session": "guild",
+   "service": {"detail": null}
+  },
+  {
+   "name": "detail_without_cookie",
+   "method": "GET",
+   "target": "/admin/api/users/state/555555555555555555",
+   "expect_status": 303
+  },
+  {
+   "name": "detail_service_fails",
+   "method": "GET",
+   "target": "/admin/api/users/state/555555555555555555",
+   "session": "guild",
+   "service": {"detail": {"$raise": "RuntimeError", "message": "db down"}}
+  }
+ ]
+}
