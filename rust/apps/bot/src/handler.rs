@@ -84,8 +84,14 @@ pub struct AppState {
     pub quake_screens: commands::quake::Screens,
     /// 貴金属の値段の取り口（/metal。取った値段をしばらく覚える）。
     pub metal: MetalPrices,
-    /// 合成の API（声の一覧）。
+    /// 合成の API（声の一覧・合成）。
     pub tts: crate::tts::TtsApi,
+    /// songbird の管理役（Discord のクライアントにも登録する）。
+    pub songbird: Arc<songbird::Songbird>,
+    /// VC への接続と再生（songbird）。
+    pub voice_out: Arc<crate::voice_session::SongbirdOut>,
+    /// 読み上げの係（サーバーごとの順番待ちと一時参加）。
+    pub speaker: crate::tts_voice::Speaker,
     shard_manager: OnceLock<Arc<ShardManager>>,
 }
 
@@ -111,6 +117,11 @@ impl AppState {
         let user_state = user_state::Recorder::new(pool.clone(), config.user_state.clone());
         let metal = MetalPrices::new(config.metal.clone());
         let tts = crate::tts::TtsApi::new(&config.tts_base_url);
+        let songbird = songbird::Songbird::serenity();
+        let voice_out = Arc::new(crate::voice_session::SongbirdOut::new(Arc::clone(
+            &songbird,
+        )));
+        let speaker = crate::tts_voice::Speaker::new(voice_out.clone());
         Self {
             config,
             pool,
@@ -136,6 +147,9 @@ impl AppState {
             quake_screens: commands::quake::Screens::default(),
             metal,
             tts,
+            songbird,
+            voice_out,
+            speaker,
             shard_manager: OnceLock::new(),
         }
     }
@@ -420,6 +434,139 @@ impl Handler {
         message_security::check_message(&fx, &cx, post).await;
     }
 
+    /// 監視チャンネル（か、読み上げる VC のチャット欄）への投稿を読み上げる。Python の `_tts_dispatch` と
+    /// `enqueue_message`。作者がメンバーのとき（Webhook でないとき）だけ。
+    async fn tts_message(&self, guild_id: GuildId, message: &Message) {
+        let Some(member) = message.member.as_deref() else {
+            return;
+        };
+        let gid = guild_id.get();
+        let temp = self.state.speaker.temp_override(gid);
+        let decided = {
+            let snapshot = self.state.settings.snapshot();
+            let guild = snapshot.guild(gid);
+            let channel = i64::try_from(message.channel_id.get()).unwrap_or(-1);
+            let display = vc_notify::display_name(
+                member.nick.as_deref(),
+                message.author.global_name.as_deref(),
+                &message.author.name,
+            )
+            .to_string();
+            crate::tts::settings(guild)
+                .and_then(|tts| crate::tts::effective_vc_watch(tts, temp))
+                .and_then(|(vc, watch)| {
+                    if !(watch.contains(&channel) || vc == Some(channel)) {
+                        return Ok(None);
+                    }
+                    crate::tts::message_utterance(
+                        guild,
+                        temp,
+                        message.author.id.get(),
+                        &display,
+                        &message.content,
+                    )
+                })
+        };
+        match decided {
+            Ok(Some(utterance)) => self.speak(gid, utterance).await,
+            Ok(None) => {}
+            Err(e) => warn!("[TTS] 読み上げを決められませんでした guild={gid}: {e}"),
+        }
+    }
+
+    /// 合成して、読み上げの係に積む。合成に失敗したら積まない（Python と同じ）。
+    async fn speak(&self, guild: u64, utterance: crate::tts::Utterance) {
+        let (url, synth_ms) = self
+            .state
+            .tts
+            .synthesize(&utterance.text, &utterance.voice, utterance.rate)
+            .await;
+        let (Some(audio_url), Ok(vc)) = (url, u64::try_from(utterance.vc_channel_id)) else {
+            return;
+        };
+        self.state.speaker.enqueue(
+            guild,
+            crate::tts_voice::Item {
+                audio_url,
+                vc_channel_id: vc,
+                synth_ms,
+                queued_at: std::time::Instant::now(),
+            },
+        );
+    }
+
+    /// VC の出入りに応じた読み上げ。Python の `_tts_vc_announce`（Bot を含む全員）と、`_maybe_tts_auto_join`・
+    /// `_maybe_tts_auto_leave`（人間だけ）。何をするかは [`crate::tts_voice::voice_plan`] が決める。
+    async fn tts_voice_state(
+        &self,
+        guild_id: GuildId,
+        member: &Member,
+        before: Option<u64>,
+        after: Option<u64>,
+    ) {
+        use crate::commands::settings::python_truthy;
+        use crate::tts_voice::{VoiceEvent, VoiceSettings, VoiceStep, voice_plan};
+        let gid = guild_id.get();
+        let temp = self.state.speaker.temp_override(gid);
+        let settings = {
+            let snapshot = self.state.settings.snapshot();
+            let tts = match crate::tts::settings(snapshot.guild(gid)) {
+                Ok(tts) => tts.clone(),
+                Err(e) => {
+                    warn!("[BOT_SETUP] TTS vc_notify error: {e}");
+                    return;
+                }
+            };
+            VoiceSettings {
+                enabled: python_truthy(tts.get("enabled")),
+                notify: python_truthy(tts.get("vc_notify")),
+                watched: crate::tts::effective_vc_watch(&tts, temp)
+                    .ok()
+                    .map(|(vc, _)| vc),
+                configured: crate::tts::vc_channel_id(&tts).ok(),
+                has_temp: temp.is_some(),
+            }
+        };
+        let event = VoiceEvent {
+            is_bot: member.user.bot,
+            before,
+            after,
+            before_has_no_humans: before.is_some_and(|b| {
+                use crate::tts_voice::VoiceOut;
+                self.state.voice_out.humans_in(gid, b) == Some(0)
+            }),
+        };
+        for step in voice_plan(&event, &settings) {
+            match step {
+                VoiceStep::Disconnect => self.state.speaker.disconnect(gid).await,
+                VoiceStep::AutoJoin(vc) => self.state.speaker.auto_join(gid, vc).await,
+                VoiceStep::Announce { joined } => {
+                    let display = vc_notify::display_name(
+                        member.nick.as_deref(),
+                        member.user.global_name.as_deref(),
+                        &member.user.name,
+                    )
+                    .to_string();
+                    let decided = {
+                        let snapshot = self.state.settings.snapshot();
+                        crate::tts::vc_event_utterance(
+                            snapshot.guild(gid),
+                            temp,
+                            &display,
+                            &compat::user_tag(&member.user),
+                            joined,
+                        )
+                    };
+                    match decided {
+                        Ok(Some(utterance)) => self.speak(gid, utterance).await,
+                        Ok(None) => {}
+                        Err(e) => warn!("[BOT_SETUP] TTS vc_notify error: {e}"),
+                    }
+                }
+            }
+        }
+    }
+
     /// 応答チャンネルへの投稿に、AI の返事を書く。Python の `handle_chatgpt_message`。
     async fn chat(
         &self,
@@ -677,6 +824,7 @@ impl EventHandler for Handler {
             colours: &self.state.colours,
             metals_site_url: &self.state.config.metals_site_url,
             tts: &self.state.tts,
+            speaker: &self.state.speaker,
         };
         match &interaction {
             Interaction::Command(command) => commands::dispatch(&deps, command).await,
@@ -730,7 +878,8 @@ impl EventHandler for Handler {
             &new_message,
             post.as_ref().map(|p| &p.author),
         );
-        tokio::join!(security, sticky, chat);
+        let speak = self.tts_message(guild_id, &new_message);
+        tokio::join!(security, sticky, chat, speak);
     }
 
     async fn message_delete(
@@ -870,7 +1019,18 @@ impl EventHandler for Handler {
         let Some(member) = new.member.clone() else {
             return;
         };
-        if member.user.bot || !self.handles(guild_id) {
+        if !self.handles(guild_id) {
+            return;
+        }
+        // 読み上げ（Bot 自身の出入りも見るので、Bot を外す前に。Python の _dispatch_voice_state と同じ）。
+        self.tts_voice_state(
+            guild_id,
+            &member,
+            old.as_ref().and_then(|o| o.channel_id).map(ChannelId::get),
+            new.channel_id.map(ChannelId::get),
+        )
+        .await;
+        if member.user.bot {
             return;
         }
         // discord.py は前後のチャンネルをキャッシュから引く（無いチャンネルは「VC に居ない」になる）。

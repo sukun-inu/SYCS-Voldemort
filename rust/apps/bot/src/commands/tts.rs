@@ -74,6 +74,10 @@ pub enum TtsRoute {
     DictRemove,
     /// `/dict list`
     DictList,
+    /// `/tts join`（VC に一時参加する。考え中を返してから、つないで答える）
+    Join,
+    /// `/tts leave`（読み上げを止めて VC から抜ける）
+    Leave,
 }
 
 impl TtsRoute {
@@ -320,6 +324,8 @@ pub fn plan(route: TtsRoute, input: &Input<'_>) -> Result<Plan, CommandError> {
             })))
         }
         R::DictList => dict_list(stored()?),
+        // VC につなぐので、[`run_voice`] が片付ける。
+        R::Join | R::Leave => Err(CommandError::NotPlanned),
     }
 }
 
@@ -559,12 +565,98 @@ fn dict_list(stored: &Map<String, Value>) -> Result<Plan, CommandError> {
     })))
 }
 
-/// 振り分けの先から、読み上げの設定のコマンドを引く。
+/// 振り分けの先から、読み上げの設定のコマンドを引く（VC につなぐ /tts join・leave は除く）。
 pub fn route_of(route: Route) -> Option<TtsRoute> {
     match route {
+        Route::Tts(TtsRoute::Join | TtsRoute::Leave) => None,
         Route::Tts(route) => Some(route),
         _ => None,
     }
+}
+
+/// VC につなぐコマンド（/tts join・leave）か。
+pub fn voice_route_of(route: Route) -> Option<TtsRoute> {
+    match route {
+        Route::Tts(route @ (TtsRoute::Join | TtsRoute::Leave)) => Some(route),
+        _ => None,
+    }
+}
+
+/// /tts join が無効のときの文。
+pub const JOIN_DISABLED: &str = "❌ TTS が無効。先に `/tts enable` で有効にせよ。";
+/// /tts leave の返事。
+pub const LEFT: &str = "✅ 読み上げを止めた。";
+
+/// /tts join の返事。
+pub fn joined_text(channel: u64) -> String {
+    format!(
+        "✅ <#{channel}> に参加した。このVCのコメント欄を優先読み上げ中。\n`/tts leave` で退出・元の設定に戻る。"
+    )
+}
+
+/// /tts join・leave を片付ける（応答まで済ませる）。Python の `tts_join`・`tts_leave`（どちらも権限は見ない）。
+///
+/// join は VC への接続が 3 秒を超えうるので、先に本人にだけ見える「考え中」を返し、あとから答える。つながらなくても、
+/// Python と同じく「参加した」と答える（一時参加の上書きは外れる）。`Err` はコマンドの中で失敗したとき（ほかの
+/// コマンドと同じ断りの文を送ってから返す）。
+pub async fn run_voice(
+    deps: &Deps<'_>,
+    command: &CommandInteraction,
+    options: &[CommandDataOption],
+    route: TtsRoute,
+) -> Result<(), String> {
+    let respond = |reply: Reply| super::respond(deps.http, command, reply);
+    let follow = |text: String| {
+        command.create_followup(
+            deps.http,
+            super::metal::followup_message(Reply::ephemeral(text)),
+        )
+    };
+    let Some(guild_id) = command.guild_id else {
+        // Python は `assert interaction.guild` で落ちる（受け皿が断る）。
+        let _ = respond(Reply::ephemeral(reply::FAILED)).await;
+        return Err("サーバーの外で打たれた".into());
+    };
+    let guild = guild_id.get();
+    if route == TtsRoute::Leave {
+        deps.speaker.disconnect(guild).await;
+        return respond(Reply::ephemeral(LEFT))
+            .await
+            .map_err(|e| e.to_string());
+    }
+    let Some(channel) = channel_option(options, "channel") else {
+        let _ = respond(Reply::ephemeral(reply::FAILED)).await;
+        return Err(CommandError::MissingOption("channel").to_string());
+    };
+    let thinking = CreateInteractionResponse::Defer(
+        serenity::all::CreateInteractionResponseMessage::new().ephemeral(true),
+    );
+    command
+        .create_response(deps.http, thinking)
+        .await
+        .map_err(|e| e.to_string())?;
+    let enabled = {
+        let snapshot = deps.settings.snapshot();
+        tts::settings(snapshot.guild(guild)).map(|tts| python_truthy(tts.get("enabled")))
+    };
+    let enabled = match enabled {
+        Ok(enabled) => enabled,
+        Err(e) => {
+            let _ = follow(reply::FAILED.to_string()).await;
+            return Err(e.to_string());
+        }
+    };
+    if !enabled {
+        follow(JOIN_DISABLED.to_string())
+            .await
+            .map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    deps.speaker.temp_join(guild, channel).await;
+    follow(joined_text(channel))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// 打たれた読み上げの設定のコマンドを実行して、返事を作る。読み上げのコマンドでなければ `None`。

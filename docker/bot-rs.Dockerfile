@@ -25,10 +25,11 @@ RUN cargo build --release --locked -p sycs-bot
 FROM debian:bookworm-slim AS runtime
 # tzdata が無いと TZ=Asia/Tokyo が効かず、ログの時刻が UTC になる（Python のログと
 # 並べて読むと 9 時間ずれる）。ca-certificates は Discord・Postgres・Valkey への TLS 用。
+# libopus0 は読み上げの音声（songbird が Opus に符号化する。ビルドの段の libopus-dev と対）。
 # fonts-noto-cjk は地震の震度の札の文字（NotoSansCJK-Bold.ttc）。Python の本番のイメージの apt と
 # 同じファイル（bookworm と trixie で同じハッシュ。crates/sycs-text の tests/golden.rs が確かめる）。
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates tzdata fonts-noto-cjk \
+    && apt-get install -y --no-install-recommends ca-certificates tzdata fonts-noto-cjk libopus0 \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /src/target/release/sycs-bot /usr/local/bin/sycs-bot
 ENV TZ=Asia/Tokyo

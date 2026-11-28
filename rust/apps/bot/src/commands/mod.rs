@@ -218,17 +218,13 @@ pub const PORTED: &[(&str, Route)] = &[
     ("dict add", Route::Tts(tts::TtsRoute::DictAdd)),
     ("dict remove", Route::Tts(tts::TtsRoute::DictRemove)),
     ("dict list", Route::Tts(tts::TtsRoute::DictList)),
+    ("tts join", Route::Tts(tts::TtsRoute::Join)),
+    ("tts leave", Route::Tts(tts::TtsRoute::Leave)),
 ];
 
 /// 定義にはあるが、中身をまだ移していないコマンド。移したら [`PORTED`] へ動かす
 /// （テストが、定義・[`PORTED`]・ここの 3 つが食い違っていないことを確かめる）。
-pub const NOT_PORTED_YET: &[&str] = &[
-    "djaudio channel",
-    "djaudio output",
-    "djaudio status",
-    "tts join",
-    "tts leave",
-];
+pub const NOT_PORTED_YET: &[&str] = &["djaudio channel", "djaudio output", "djaudio status"];
 
 /// 道すじから、移した中身を引く。
 pub fn route(path: &str) -> Option<Route> {
@@ -479,6 +475,8 @@ pub struct Deps<'a> {
     pub metals_site_url: &'a str,
     /// 合成の API（/tts default_voice・/voice set の声の補完）。
     pub tts: &'a crate::tts::TtsApi,
+    /// 読み上げの係（/tts join・leave）。
+    pub speaker: &'a crate::tts_voice::Speaker,
 }
 
 /// 移した中身を実行して、返事を作る。
@@ -564,6 +562,16 @@ pub async fn dispatch(deps: &Deps<'_>, command: &CommandInteraction) {
         command.channel_id,
     );
     // 貴金属のコマンドは応答のしかたが違う（先に「考え中」を返し、あとから本文を送る）ので、応答まで任せる。
+    // VC につなぐコマンド（/tts join・leave）も、応答まで任せる。
+    if let Some(voice) = route(&path).and_then(tts::voice_route_of) {
+        let outcome = tts::run_voice(deps, command, options, voice).await;
+        let ms = started.elapsed().as_millis();
+        match outcome {
+            Ok(()) => info!("{}", activity::completed_line(&path, &who, ms)),
+            Err(e) => error!("{}", activity::failed_line(&path, &who, ms, &e)),
+        }
+        return;
+    }
     if let Some(kind) = route(&path).and_then(metal::kind_of) {
         let outcome = metal::run(deps, command, options, kind).await;
         let ms = started.elapsed().as_millis();
@@ -768,7 +776,7 @@ mod tests {
         for (path, r) in PORTED {
             assert_eq!(route(path), Some(*r));
         }
-        assert_eq!(route("tts join"), None);
+        assert_eq!(route("djaudio status"), None);
     }
 
     fn options(value: Value) -> Vec<CommandDataOption> {

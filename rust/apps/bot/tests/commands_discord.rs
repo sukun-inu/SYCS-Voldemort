@@ -21,6 +21,7 @@ use sycs_bot::log_channel::AvatarColours;
 use sycs_bot::metal::{MetalConfig, MetalPrices};
 use sycs_bot::sticky::StickyLocks;
 use sycs_bot::tts::TtsApi;
+use sycs_bot::tts_voice::{NoVoice, Speaker};
 use sycs_core::env::Env;
 use sycs_core::settings::SettingsCache;
 
@@ -103,6 +104,7 @@ struct Stage {
     metal: MetalPrices,
     colours: AvatarColours,
     tts: TtsApi,
+    speaker: Speaker,
     seen: Arc<Mutex<Vec<Seen>>>,
 }
 
@@ -122,6 +124,7 @@ impl Stage {
             metal: MetalPrices::new(MetalConfig::from_env(&Env::from_fn(|_| None))),
             colours: AvatarColours::new(),
             tts: TtsApi::new("http://127.0.0.1:9"),
+            speaker: Speaker::new(Arc::new(NoVoice)),
             seen,
         }
     }
@@ -139,6 +142,7 @@ impl Stage {
             colours: &self.colours,
             metals_site_url: "https://metals.example/",
             tts: &self.tts,
+            speaker: &self.speaker,
         }
     }
 
@@ -249,8 +253,8 @@ async fn only_administrators_may_change_settings() {
 #[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
 async fn commands_not_ported_yet_say_so() {
     let data = json!({
-        "id": "8001", "name": "tts", "type": 1,
-        "options": [{"name": "leave", "type": 1, "options": []}],
+        "id": "8001", "name": "djaudio", "type": 1,
+        "options": [{"name": "status", "type": 1, "options": []}],
     });
     let before = json!({"sticky": {}});
     let (seen, after) = dispatch(interaction(OWNER, json!([]), data), before.clone()).await;
@@ -569,6 +573,60 @@ async fn metal_defers_then_follows_up() {
         seen[0].body["data"]["content"],
         "グラム数は正の値で指定せよ。"
     );
+}
+
+/// 打たれた /tts join・leave。
+fn tts_voice_command(sub: &str, options: Value) -> Value {
+    json!({
+        "id": "8006", "name": "tts", "type": 1,
+        "options": [{"name": sub, "type": 1, "options": options}],
+    })
+}
+
+/// /tts leave は最初の応答（種類 4）で本人にだけ答える。/tts join は、先に本人にだけ見える考え中（種類 5・
+/// flags 64）を返し、あとから Webhook で答える（無効なら断る。つながらなくても「参加した」と答える。Python と同じ）。
+#[tokio::test]
+#[ignore = "Postgres が要る（SYCS_TEST_DATABASE_URL）"]
+async fn tts_join_defers_and_leave_answers_at_once() {
+    let stage = Stage::new(&json!({})).await;
+    commands::dispatch(
+        &stage.deps(),
+        &interaction(SOMEONE, json!([]), tts_voice_command("leave", json!([]))),
+    )
+    .await;
+    assert_eq!(only_reply(&stage.seen()), "✅ 読み上げを止めた。");
+
+    let join = || {
+        tts_voice_command(
+            "join",
+            json!([{"name": "channel", "type": 7, "value": CHANNEL}]),
+        )
+    };
+    for (before, want) in [
+        (
+            json!({}),
+            "❌ TTS が無効。先に `/tts enable` で有効にせよ。".to_string(),
+        ),
+        (
+            json!({"tts": {"enabled": true}}),
+            format!(
+                "✅ <#{CHANNEL}> に参加した。このVCのコメント欄を優先読み上げ中。\n`/tts leave` で退出・元の設定に戻る。"
+            ),
+        ),
+    ] {
+        let stage = Stage::new(&before).await;
+        stage
+            .http
+            .set_application_id(ApplicationId::new(APP.parse().unwrap()));
+        commands::dispatch(&stage.deps(), &interaction(SOMEONE, json!([]), join())).await;
+        let seen = stage.seen();
+        assert_eq!(seen.len(), 2, "{seen:#?}");
+        assert_eq!(seen[0].body["type"], 5, "考え中");
+        assert_eq!(seen[0].body["data"]["flags"], 64, "考え中も本人にだけ");
+        assert_eq!(seen[1].path, format!("/api/v10/webhooks/{APP}/tok"));
+        assert_eq!(seen[1].body["content"], want.as_str());
+        assert_eq!(seen[1].body["flags"], 64);
+    }
 }
 
 /// /bot settings は Embed と管理画面へのリンクのボタンを、/bot help は誰にでもコマンドの一覧を返すこと。
